@@ -189,7 +189,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     CommandListResourceStateHandoff finalStateStorage(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(recordedGraph.copyTaskFinalStateSeed(compiledGraph, views.compiled, copyTask, finalStateStorage));
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

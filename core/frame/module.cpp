@@ -47,7 +47,7 @@ void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Frame::Frame(void* inst, u16 width, u16 height, const Alloc::CpuTaskSchedulerConfig& cpuTaskConfig)
+Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cpuTaskConfig)
     : m_cpuTasks(cpuTaskConfig)
     , m_graphicsObjectArena(FrameArenaScope::s_GraphicsObjectArena)
     , m_appliedWindowTitle(m_graphicsObjectArena)

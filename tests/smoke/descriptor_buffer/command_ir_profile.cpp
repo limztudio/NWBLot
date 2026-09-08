@@ -15,7 +15,7 @@
 #include <core/common/application_entry.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/graphics/api.h>
 #include <core/graphics/capture/command_ir.h>
 #include <core/graphics/module.h>
@@ -949,7 +949,7 @@ static void EmitResult(const Result& result){
     static constexpr Name s_ArenaName{"tests/ab/command_ir/profile_arena"};
     Alloc::GlobalArena arena(s_ArenaName);
     GraphicsAllocator allocator(arena);
-    Alloc::CpuTaskScheduler cpuScheduler(2u);
+    CpuTaskScheduler cpuScheduler(2u);
     Perf::TimingRecorder gpuTiming(arena);
     Graphics graphics(allocator, cpuScheduler, gpuTiming);
 

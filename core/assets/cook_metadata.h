@@ -13,7 +13,7 @@
 
 #include "cook_entry_registry.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include "expanded_metadata.h"
 #include "metadata_extension.h"
 
@@ -190,7 +190,7 @@ public:
     CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 );
 

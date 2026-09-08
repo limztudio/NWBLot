@@ -130,7 +130,7 @@ private:
 struct PruneContext{
     Core::Alloc::GlobalArena arena{ Name("tests/runtime_mesh_pruning/owner") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::ECS::World world{ arena, cpuScheduler };

@@ -67,7 +67,7 @@ namespace __hidden_gpu_packet_runtime_submission_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
+bool GpuTaskScheduler::submitPacketRangeInCompileOrder(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -105,7 +105,7 @@ bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrder(
 }
 
 
-bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
+bool GpuTaskScheduler::submitTaskRangeInCompileOrder(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -152,7 +152,7 @@ bool GpuTaskGraphSubmitter::submitTaskRangeInCompileOrder(
 }
 
 
-bool GpuTaskGraphSubmitter::submitPacketRangeInCompileOrderWithOperationPolicy(
+bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,

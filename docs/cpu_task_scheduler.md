@@ -1,6 +1,8 @@
 # Shared CPU task scheduling
 
-NWB's runtime owns one `Core::Alloc::CpuTaskScheduler`, constructed before Graphics and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
+NWB's runtime owns one `Core::CpuTaskScheduler`, constructed before Graphics and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
+
+The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu_task.h>` and link `nwb_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task` under `nwb_task_tests`; processor topology coverage remains in `tests/unit/global`.
 
 ## Initialization and heterogeneous CPUs
 
@@ -44,7 +46,7 @@ Ordinary task handles and task scopes are the completion boundaries. A scope inc
 
 Normal scope and scheduler destruction joins outstanding work through a throwing wait. `drain()` is reserved for terminal cleanup: it stops admission across the shared scheduler and skips queued callbacks before joining active work and retiring captures. Scope `drain()` also aborts the shared service, because application unwind is terminal under the engine exception policy. Use `cancel()` followed by `wait()` for ordinary scope-local cancellation. During an existing exception, destructors use terminal drain so cleanup cannot invoke another queued throwing callback. Owners that store task scopes behind a non-throwing smart-pointer destructor must explicitly join before resetting the pointer; project world shutdown already does this through `World::clear()`.
 
-Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `GlobalArena`. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
+Task nodes, dependency storage, and worker metadata belong to the scheduler's tracked `Alloc::GlobalArena`. The task domain owns its arena identities in `core/task/arena_names.h`: `core/task/cpu_task_scheduler` and `core/task/cpu_task_dependencies`. Storage grows with the task graph and reuses completed node slots. There is no small fixed arena limit on ordinary task bursts. Search storage grows geometrically and is reserved before publishing nodes, keeping completion cleanup allocation-free.
 
 ## Parallel loops and main-thread work
 
@@ -58,7 +60,7 @@ ECS preparation remains a serial caller phase because existing preparation can c
 
 Graphics owns a scope for async resource setup and resource-lifetime joins. The loader owns a project scope and joins it before project callbacks are unloaded. Normal world clearing joins only its world scope. GPU recording uses the shared CPU scheduler while retaining worker-local command storage, serial command-IR capture, and the current skinning preparation/submission ordering.
 
-The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
+`Core::GpuTaskScheduler`, declared in `core/graphics/task_graph/packet_runtime.h`, coordinates GPU graph recording, submission, and recovery. It remains in the graphics domain alongside the graph compiler and recorder. `Graphics` owns the broader device, resource, and presentation lifecycle. The GPU graph continues to own resource barriers, physical queues, acceptance, rollback, and device-completion tokens. CPU submission completion does not imply GPU completion. Resource destruction still requires its existing GPU join in addition to CPU scope retirement.
 
 ## Verification and delivery steps
 

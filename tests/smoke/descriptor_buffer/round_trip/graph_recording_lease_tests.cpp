@@ -610,7 +610,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecordedGraphRevokesRejectedRetainedComman
             GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
             transaction.reset(compiledGraph);
             if(testCase.acceptNativeSubmission){
-                const GpuTaskGraphSubmitter submitter(device);
+                const GpuTaskScheduler submitter(device);
                 ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
                     graph,
                     compiledGraph,
@@ -635,7 +635,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecordedGraphRevokesRejectedRetainedComman
                 VulkanTestQueueSubmit2Observer submissionObserver(device);
                 ASSERT_TRUE(submissionObserver.valid());
                 ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeRejectedQueue));
-                const GpuTaskGraphSubmitter submitter(device);
+                const GpuTaskScheduler submitter(device);
                 EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
                     graph,
                     compiledGraph,

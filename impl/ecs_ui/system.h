@@ -85,8 +85,8 @@ public:
     virtual ~UiSystem()override;
 
 public:
-    [[nodiscard]] virtual Core::Alloc::CpuTaskOptions taskOptions()const override{
-        return { .cost = Core::Alloc::CpuTaskCost::Light, .target = Core::Alloc::CpuTaskTarget::MainThread };
+    [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const override{
+        return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
 
     virtual void update(Core::ECS::World& world, f32 delta)override;

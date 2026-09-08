@@ -47,7 +47,7 @@ private:
 
 
 public:
-    World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler);
+    World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler);
     ~World()noexcept(false);
 
 
@@ -190,8 +190,8 @@ public:
 
 
 public:
-    [[nodiscard]] Alloc::CpuTaskScope& taskScope(){ return m_tasks; }
-    [[nodiscard]] Alloc::CpuTaskScheduler& taskScheduler(){ return m_tasks.scheduler(); }
+    [[nodiscard]] CpuTaskScope& taskScope(){ return m_tasks; }
+    [[nodiscard]] CpuTaskScheduler& taskScheduler(){ return m_tasks.scheduler(); }
 
     void tick(f32 delta);
     void clear();
@@ -251,7 +251,7 @@ private:
 
 private:
     Alloc::GlobalArena& m_arena;
-    Alloc::CpuTaskScope m_tasks;
+    CpuTaskScope m_tasks;
 
     EntityManager m_entityManager;
     Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;

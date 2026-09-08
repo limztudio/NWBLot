@@ -3,7 +3,7 @@
 
 
 #include <pipeline/asset_builder/build_inputs.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 #include <global/timer.h>
@@ -68,7 +68,7 @@ protected:
 
 protected:
     NWB::Tests::TestArena<> m_testArena;
-    NWB::Core::Alloc::CpuTaskScheduler m_cpuScheduler{ 1u };
+    NWB::Core::CpuTaskScheduler m_cpuScheduler{ 1u };
     NWB::Tests::CapturingLogger m_logger;
     NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
     NWB::Path m_root{ m_testArena.arena };

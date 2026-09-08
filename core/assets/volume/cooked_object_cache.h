@@ -13,7 +13,7 @@
 
 #include "pack_manifest.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +39,7 @@ struct CookedObjectPayloadView{
 
 [[nodiscard]] bool BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,

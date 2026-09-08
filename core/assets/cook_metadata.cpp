@@ -75,7 +75,7 @@ struct AutoMetadataParser{
     const Core::Metascript::Value& asset,
     ParsedAssetMetadata& outMetadata,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     AssetValueMetadataParseContext metadataParseContext{
@@ -114,7 +114,7 @@ struct AutoMetadataParser{
     const Core::Metascript::Document& doc,
     ParsedAssetMetadata& outMetadata,
     CookEntryPathHashSet& seenPropertyAssetPathHashes,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     const AStringView rawAssetTypeText(doc.assetType().data(), doc.assetType().size());
@@ -347,7 +347,7 @@ bool ParseAssetMetadata(
     CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,
     ParsedAssetMetadata& outMetadata,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     ScratchArena& scratchArena
 ){
     CookEntryPathHashSet seenPropertyAssetPathHashes(

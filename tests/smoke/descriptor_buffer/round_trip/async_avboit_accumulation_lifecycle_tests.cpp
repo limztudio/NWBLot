@@ -842,7 +842,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
         GpuTaskGraphTaskTimingTicket{ .task = producerTask, .timingTicket = &accumulationTimingTicket },
         GpuTaskGraphTaskTimingTicket{ .task = rasterTask, .timingTicket = &accumulationTimingTicket },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,

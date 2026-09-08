@@ -264,7 +264,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
         .completion = completion,
         .token = futureToken,
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

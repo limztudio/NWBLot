@@ -27,10 +27,11 @@ namespace ECS{
     class World;
 };
 
+class CpuTaskScheduler;
+class CpuTaskScope;
+
 namespace Alloc{
     class GlobalArena;
-    class CpuTaskScheduler;
-    class CpuTaskScope;
 };
 
 namespace Assets{
@@ -83,8 +84,8 @@ struct ProjectRuntimeContext{
     Core::Graphics& graphics;
     Core::InputDispatcher& input;
     Core::Alloc::GlobalArena& objectArena;
-    Core::Alloc::CpuTaskScheduler& cpuTasks;
-    Core::Alloc::CpuTaskScope& tasks;
+    Core::CpuTaskScheduler& cpuTasks;
+    Core::CpuTaskScope& tasks;
     Core::Assets::AssetManager& assetManager;
     Core::Filesystem::IFilesystem& filesystem;
     Core::Telemetry::FrameGraphRegistry& frameGraphRegistry;

@@ -118,7 +118,7 @@ public:
         NWB::Core::Alloc::GlobalArena& arena,
         InitializerList<NWB::Core::ECS::ComponentAccess> accesses,
         Function<void()> update,
-        NWB::Core::Alloc::CpuTaskOptions options = {}
+        NWB::Core::CpuTaskOptions options = {}
     )
         : NWB::Core::ECS::ISystem(arena)
         , m_update(Move(update))
@@ -136,12 +136,12 @@ public:
         m_update();
     }
 
-    [[nodiscard]] virtual NWB::Core::Alloc::CpuTaskOptions taskOptions()const override{ return m_options; }
+    [[nodiscard]] virtual NWB::Core::CpuTaskOptions taskOptions()const override{ return m_options; }
 
 
 private:
     Function<void()> m_update;
-    NWB::Core::Alloc::CpuTaskOptions m_options;
+    NWB::Core::CpuTaskOptions m_options;
 };
 
 
@@ -521,7 +521,7 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
 TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::CpuTaskScheduler taskScheduler(3u);
     NWB::Core::ECS::World world(arena, taskScheduler);
 
     static constexpr u32 s_EntityCount = 512u;
@@ -571,7 +571,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
 
 TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::CpuTaskScheduler taskScheduler(3u);
     NWB::Core::ECS::World world(arena, taskScheduler);
 
     static constexpr u32 s_EntityCount = 64u;
@@ -657,7 +657,7 @@ TEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents){
 
 TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(3u);
+    NWB::Core::CpuTaskScheduler taskScheduler(3u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     Atomic<bool> dependentCompleted{ false };
@@ -686,7 +686,7 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
 
 TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     s_EcsCallerThread = true;
@@ -698,7 +698,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
         executedOnCaller = s_EcsCallerThread;
         EXPECT_EQ(value, 23);
         value = 29;
-    }, { .target = NWB::Core::Alloc::CpuTaskTarget::MainThread });
+    }, { .target = NWB::Core::CpuTaskTarget::MainThread });
     ScheduledSystem consumer(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){ EXPECT_EQ(value, 29); });
 
     NWB::Core::ECS::SystemScheduler scheduler(arena);
@@ -712,7 +712,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
 
 TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     static constexpr usize s_EntityCount = 512u;
     for(usize i = 0u; i < s_EntityCount; ++i)
@@ -741,7 +741,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
 
 TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     Atomic<i32> value{ 0 };
@@ -767,8 +767,8 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
 
 TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::Alloc::CpuTaskScheduler taskScheduler(2u);
-    NWB::Core::Alloc::CpuTaskScope unrelatedTasks(taskScheduler);
+    NWB::Core::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScope unrelatedTasks(taskScheduler);
     NWB::Core::ECS::World world(arena, taskScheduler);
     Atomic<bool> started{ false };
     Atomic<bool> release{ false };

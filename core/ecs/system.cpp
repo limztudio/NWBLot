@@ -135,12 +135,12 @@ void SystemScheduler::execute(World& world, f32 delta){
     if(m_allSystems.empty())
         return;
 
-    using TaskHandle = Alloc::CpuTaskScheduler::TaskHandle;
+    using TaskHandle = CpuTaskScheduler::TaskHandle;
     Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerExecutionScratch);
     Vector<TaskHandle, Alloc::ScratchArena> handles(m_allSystems.size(), TaskHandle{}, scratchArena);
     Vector<TaskHandle, Alloc::ScratchArena> dependencies(scratchArena);
     dependencies.reserve(m_allSystems.size());
-    Alloc::CpuTaskScope& tasks = world.taskScope();
+    CpuTaskScope& tasks = world.taskScope();
 
     // Keep world/system data alive if publishing a later node throws after earlier work has started.
     ScopeExit drainSubmitted([&]()noexcept{ tasks.drain(); });

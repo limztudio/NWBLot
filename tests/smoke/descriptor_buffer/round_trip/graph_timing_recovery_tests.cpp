@@ -241,7 +241,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
             .invoke = ObserveNativeTaskAcceptance,
         },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     const GpuTaskGraphTaskTimingTicket duplicateTaskTimingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
         GpuTaskGraphTaskTimingTicket{ .task = beginTask, .timingTicket = &beginTicket },
@@ -563,7 +563,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

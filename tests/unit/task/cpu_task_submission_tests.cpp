@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/common/terminal_entry.h>
 
 #include <global/platform.h>
@@ -27,7 +27,7 @@ namespace __hidden_cpu_task_submission_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB::Core::Alloc;
+using namespace NWB::Core;
 using NWB::Core::Common::InvokeTerminalEntry;
 
 inline constexpr u32 s_ConstructionException = 0xE101u;

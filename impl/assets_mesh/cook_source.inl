@@ -235,7 +235,7 @@ static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);

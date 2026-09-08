@@ -41,7 +41,7 @@ inline constexpr Name s_TextureClearScratchArena("tests/graphics/texture_clear_t
 struct TextureClearTestContext{
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator;
-    Core::Alloc::CpuTaskScheduler cpuScheduler;
+    Core::CpuTaskScheduler cpuScheduler;
     Graphics::GraphicsBackend::VulkanContext context;
     Graphics::GraphicsBackend::VulkanAllocator allocator;
 

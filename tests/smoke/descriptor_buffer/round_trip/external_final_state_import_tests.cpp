@@ -151,7 +151,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     ));
     EXPECT_TRUE(sourceMip0Recorded);
     EXPECT_TRUE(sourceMip1Recorded);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         sourceGraph,
         sourceCompiledGraph,
@@ -680,7 +680,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     EXPECT_TRUE(graphicsRecorded);
     EXPECT_TRUE(computeRecorded);
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

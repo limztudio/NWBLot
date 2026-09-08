@@ -30,7 +30,7 @@ struct NativeRecordedCallbackOperationContext{
     const GpuRecordedGraph* recordedGraph = nullptr;
     GpuTaskId task;
     GpuGraphSubmissionTransaction* transaction = nullptr;
-    const GpuTaskGraphSubmitter* submitter = nullptr;
+    const GpuTaskScheduler* submitter = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
     AtomicFlag callbackEntered;
     AtomicFlag releaseCallback;
@@ -178,7 +178,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     NativeTaskAcceptancePublicationBlocker publicationBlocker;
     const GpuTaskGraphTaskAcceptedCallback firstAcceptedCallback{
         .task = firstTask,
@@ -353,7 +353,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackRejectionOwnsCros
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 

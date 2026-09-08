@@ -36,7 +36,7 @@ struct NativeTaskSubmissionSerializationContext{
     const GpuRecordedGraph* recordedGraph = nullptr;
     GpuTaskId task;
     GpuGraphSubmissionTransaction* transaction = nullptr;
-    const GpuTaskGraphSubmitter* submitter = nullptr;
+    const GpuTaskScheduler* submitter = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
     NativeTaskAcceptanceOrder* acceptanceOrder = nullptr;
     u32 taskCallbackOrderMarker = 0u;
@@ -176,7 +176,7 @@ struct NativeCrossTransactionSubmissionContext{
     const GpuRecordedGraph* recordedGraph = nullptr;
     GpuTaskId nestedTask;
     GpuGraphSubmissionTransaction* transaction = nullptr;
-    const GpuTaskGraphSubmitter* submitter = nullptr;
+    const GpuTaskScheduler* submitter = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
     AtomicFlag callbackEntered;
     AtomicFlag callbackReturned;
@@ -381,7 +381,7 @@ TEST_F(DescriptorBufferRoundTripTest, CrossTransactionAcceptanceReentryReturnsWh
     GpuGraphSubmissionTransaction secondTransaction(DescriptorBufferRoundTripTest::arena());
     firstTransaction.reset(firstCompiledGraph);
     secondTransaction.reset(secondCompiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     NativeCrossTransactionSubmissionContext firstContext;
     firstContext.graph = &secondGraph;
     firstContext.compiledGraph = &secondCompiledGraph;
@@ -714,7 +714,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     ));
     EXPECT_TRUE(suffixRecorded);
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     serializationContext.graph = &graph;
     serializationContext.compiledGraph = &compiledGraph;
     serializationContext.recordedGraph = &recordedGraph;

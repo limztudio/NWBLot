@@ -1601,7 +1601,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_deferredFrameRecoveryArmed = true;
         m_deferredFrameRecoveryRetiresTiming = retireTiming;
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskGraphSubmitter submitter(device);
+        const Core::GpuTaskScheduler submitter(device);
         const bool recoveryAccepted = submitter.recordAndSubmitAcceptedFrontierTask(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
@@ -2477,7 +2477,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         : 0u
     ;
 
-    const Core::GpuTaskGraphSubmitter normalSubmitter(device);
+    const Core::GpuTaskScheduler normalSubmitter(device);
     const bool normalGraphAccepted = normalSubmitter.recordAndSubmitNormalGraph(
         m_deferredLightingTaskGraph,
         m_deferredLightingCompiledGraph,
@@ -2771,7 +2771,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptReadbackFinalState,
             };
             const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskGraphSubmitter submitter(device);
+            const Core::GpuTaskScheduler submitter(device);
             const bool readbackAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
@@ -2953,7 +2953,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .invoke = acceptHistoryCopyFinalState,
             };
             const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskGraphSubmitter submitter(device);
+            const Core::GpuTaskScheduler submitter(device);
             const bool historyCopyAccepted = submitter.recordAndSubmitTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,

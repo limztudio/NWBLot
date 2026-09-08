@@ -148,7 +148,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphAttemptHasOneSubmissionTransactionOwn
     GpuGraphSubmissionTransaction competingTransaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(ownerTransaction.tryReset(compiledGraph));
     ASSERT_TRUE(competingTransaction.tryReset(compiledGraph));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
@@ -444,7 +444,7 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedObserverExceptionPreservesTokenAnd
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     Alloc::ScratchArena submissionScratch(Name("tests/descriptor_buffer/accepted_exception_submission_scratch"));
     NativeTaskAcceptanceObserver observer;
     const GpuTaskGraphTaskAcceptedCallback callback{
@@ -552,7 +552,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeTimingPreflightFailureRetainsClea
     const GpuNativePacketRecorder recorderWithoutTiming(device);
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
     Alloc::ScratchArena submissionScratch(
@@ -670,7 +670,7 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentTransactionsClaimOneGraphAttempt
     GpuGraphSubmissionTransaction secondTransaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(firstTransaction.tryReset(compiledGraph));
     ASSERT_TRUE(secondTransaction.tryReset(compiledGraph));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 

@@ -440,7 +440,7 @@ bool SubmitGraphOwnedStandaloneTask(
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
-    Alloc::CpuTaskScheduler* const readyFrontierScheduler
+    CpuTaskScheduler* const readyFrontierScheduler
 ){
     outSubmissionToken = {};
     if(!declareTask)
@@ -508,7 +508,7 @@ bool SubmitGraphOwnedStandaloneTask(
 
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary
     // supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides
     // whether it can safely opt into ready-frontier worker recording.

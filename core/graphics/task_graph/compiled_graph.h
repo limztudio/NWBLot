@@ -27,7 +27,7 @@ class GpuGraphSubmissionBinding;
 class GpuGraphSubmissionTransaction;
 class GpuNativePacketRecorder;
 class GpuRecordedGraph;
-class GpuTaskGraphSubmitter;
+class GpuTaskScheduler;
 class GpuTaskGraphExternalResourceHandoffSnapshot;
 struct GpuTaskGraphExternalCompletionToken;
 struct GpuTaskGraphRuntimeStatistics;
@@ -404,7 +404,7 @@ class GpuCompiledGraph final : NoCopy{
     friend class GpuNativePacketRecorder;
     friend class GpuRecordedGraph;
     friend class GpuTaskGraphQueueAssignmentTelemetryTracker;
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
     friend class GpuTaskGraphExternalResourceHandoffSnapshot;
     friend struct GpuTaskGraphExternalCompletionToken;
 

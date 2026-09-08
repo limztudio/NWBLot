@@ -7,7 +7,7 @@
 
 #include "module.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include "command_buffer_resource_references.h"
 #include "heap_binding_contract.h"
 #include "host_readback_sync.h"
@@ -31,7 +31,7 @@ NWB_CORE_BEGIN
 class GpuTimingMeasure;
 class GpuTimingSubmissionTicket;
 class GpuRecordedGraph;
-class GpuTaskGraphSubmitter;
+class GpuTaskScheduler;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -572,7 +572,7 @@ void ConfigurePipelineDepthStencilState(const DepthStencilState& state, Pipeline
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
 
 inline void CopyHostMemory(
-    Alloc::CpuTaskScheduler& cpuScheduler,
+    CpuTaskScheduler& cpuScheduler,
     void* dst,
     const void* src,
     usize size,
@@ -641,7 +641,7 @@ struct VulkanContext{
 
     Alloc::GlobalArena& objectArena;
     GraphicsAllocator& allocator;
-    Alloc::CpuTaskScheduler& cpuScheduler;
+    CpuTaskScheduler& cpuScheduler;
 
     VkPhysicalDeviceProperties physicalDeviceProperties{};
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -719,7 +719,7 @@ struct VulkanContext{
     } extensions;
 
 
-    explicit VulkanContext(GraphicsAllocator& allocatorRef, Alloc::CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
         : deviceGeneration(generation)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
@@ -727,7 +727,7 @@ struct VulkanContext{
     {}
     VulkanContext(
         GraphicsAllocator& allocatorRef,
-        Alloc::CpuTaskScheduler& cpuSchedulerRef,
+        CpuTaskScheduler& cpuSchedulerRef,
         VkInstance inst,
         VkPhysicalDevice physDev,
         VkDevice dev,
@@ -1327,7 +1327,7 @@ private:
 
 
         BufferChunk(
-            Alloc::CpuTaskScheduler& pool,
+            CpuTaskScheduler& pool,
             BufferHandle buf,
             TrackedCommandBuffer* chunkOwner,
             u64 chunkNativeRecordingID,
@@ -1532,7 +1532,7 @@ private:
 
 
 inline UploadManager::BufferChunk::BufferChunk(
-    Alloc::CpuTaskScheduler& pool,
+    CpuTaskScheduler& pool,
     BufferHandle buf,
     TrackedCommandBuffer* chunkOwner,
     u64 chunkNativeRecordingID,
@@ -2956,7 +2956,7 @@ class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
     friend class ::NWB::Core::GpuTimingMeasure;
     friend class ::NWB::Core::GpuTimingSubmissionTicket;
     friend class ::NWB::Core::GpuNativePacketRecorder;
-    friend class ::NWB::Core::GpuTaskGraphSubmitter;
+    friend class ::NWB::Core::GpuTaskScheduler;
     friend class Device;
     friend class GpuDescriptorHeap;
     friend class Queue;
@@ -3045,7 +3045,7 @@ private:
     };
 
     class GraphSubmissionOwnership final : NoCopy{
-        friend class ::NWB::Core::GpuTaskGraphSubmitter;
+        friend class ::NWB::Core::GpuTaskScheduler;
 
 
     public:
@@ -3613,7 +3613,7 @@ private:
 
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend DeviceHandle CreateDevice(const DeviceDesc& desc);
-    friend class ::NWB::Core::GpuTaskGraphSubmitter;
+    friend class ::NWB::Core::GpuTaskScheduler;
     friend class VulkanTestDispatchAccess;
     friend class BackendContext;
     friend class Buffer;

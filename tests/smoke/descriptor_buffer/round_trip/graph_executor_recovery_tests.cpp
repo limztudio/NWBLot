@@ -88,7 +88,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsBeforeRejectedReco
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
     EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
         graph,
@@ -212,7 +212,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorPreservesRecoveryOwners
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
 
     const GpuPhysicalQueueId rejectedQueue = views.compiled.packet(rejectedPacket).plan->queue;
@@ -376,7 +376,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorRejectsNonTerminalFront
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = normalTask;
     GpuSubmissionPacketId failedPacket;
@@ -497,8 +497,8 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    Alloc::CpuTaskScheduler recordingWorkers(2u);
-    const GpuTaskGraphSubmitter submitter(device);
+    CpuTaskScheduler recordingWorkers(2u);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
 
     // Invalid and reversed semantic endpoints preserve the packet helper's empty failure result and do not record.

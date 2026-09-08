@@ -163,7 +163,7 @@ TEST_F(DescriptorBufferRoundTripTest, PublishedGraphListReaderSerializesSubmissi
     };
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     AtomicFlag readerEntered;
     AtomicFlag releaseReader;
     Atomic<bool> submissionStarted{ false };

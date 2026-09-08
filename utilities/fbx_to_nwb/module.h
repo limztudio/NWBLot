@@ -7,7 +7,7 @@
 
 #include "global.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -213,7 +213,7 @@ bool BuildMesh(
     const ImportOptions& options,
     bool wantsSkinning,
     const Vec4& defaultColor,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     SourceMeshStreams& outMesh,
     UtilityVector<ufbx_node*>& outSkeletonJoints,
     UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
@@ -224,8 +224,8 @@ bool BuildMesh(
 );
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh);
-[[nodiscard]] bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* outReport);
-[[nodiscard]] bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport);
+[[nodiscard]] bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* outReport);
+[[nodiscard]] bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport);
 
 bool WriteNwbAsset(
     const Path& outputPath,
@@ -238,7 +238,7 @@ bool WriteNwbAsset(
     const UtilityVector<JointMatrix>& inverseBindMatrices
 );
 
-int Run(int argc, char** argv, Core::Alloc::CpuTaskScheduler& cpuScheduler, bool& prompted);
+int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -7,7 +7,7 @@
 
 #include "global.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 #include <core/assets/global.h>
 
@@ -22,9 +22,9 @@ NWB_ASSET_BUILDER_BEGIN
 
 
 struct AssetBuildServices{
-    Core::Alloc::CpuTaskScheduler& cpuScheduler;
+    Core::CpuTaskScheduler& cpuScheduler;
 
-    explicit AssetBuildServices(Core::Alloc::CpuTaskScheduler& cpuScheduler)
+    explicit AssetBuildServices(Core::CpuTaskScheduler& cpuScheduler)
         : cpuScheduler(cpuScheduler)
     {}
 };
@@ -54,7 +54,7 @@ struct AssetBuildOptions{
     Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
     bool useExplicitInputs = false;
 
-    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::Alloc::CpuTaskScheduler& cpuScheduler)
+    explicit AssetBuildOptions(Core::Assets::AssetArena& arena, Core::CpuTaskScheduler& cpuScheduler)
         : repoRoot(arena)
         , assetRoots(arena)
         , outputDirectory(arena)

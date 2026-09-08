@@ -1051,7 +1051,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationCsgAlia
     const GpuTaskGraphTaskTimingTicket timingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = preTask, .timingTicket = &preTimingTicket },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,

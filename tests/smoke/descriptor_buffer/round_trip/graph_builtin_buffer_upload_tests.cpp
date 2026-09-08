@@ -264,7 +264,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         duplicateRecordedGraph
     ));
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -524,7 +524,7 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     const auto submitAndVerify = [&](const GpuSubmissionPacketId packet, QueueSubmissionToken& acceptedToken, const u32* const expectedWords){
         ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             graph,

@@ -8,7 +8,7 @@
 #include <global/global.h>
 #include <global/thread.h>
 #include <core/alloc/general.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/graphics/module.h>
 #include <core/perf/timing.h>
 #include <impl/assets/graphics/bindless/runtime_abi.h>
@@ -123,7 +123,7 @@ private:
 
     Core::Alloc::GlobalArena m_objectArena;
     Core::GraphicsAllocator m_allocator;
-    Core::Alloc::CpuTaskScheduler m_cpuScheduler;
+    Core::CpuTaskScheduler m_cpuScheduler;
     Core::Perf::TimingRecorder m_gpuTiming;
     Core::Graphics m_graphics;
 };

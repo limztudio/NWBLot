@@ -209,7 +209,7 @@ static void ExpectImportedFinalStateExportAfterTaskLocalTransition(
     while(handoffQueryCount.load(MemoryOrder::acquire) < 64u)
         YieldThread();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     const bool submitted = submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -402,7 +402,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
     ));
     EXPECT_FALSE(handoffSnapshot.valid());
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

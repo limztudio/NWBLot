@@ -31,7 +31,7 @@ using ScratchTextureVector = Vector<Core::TextureHandle, Core::Alloc::ScratchAre
 struct CollectionContext{
     TestArena testArena;
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     TextureVector textures{ testArena.arena };

@@ -114,7 +114,7 @@ struct DeclarationMutationRangeSubmissionPreflightState{
     GpuTaskGraph* graph = nullptr;
     const GpuCompiledGraph* compiledGraph = nullptr;
     const GpuRecordedGraph* recordedGraph = nullptr;
-    const GpuTaskGraphSubmitter* submitter = nullptr;
+    const GpuTaskScheduler* submitter = nullptr;
     GpuGraphSubmissionTransaction* transaction = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
     GpuSubmissionPacketRange range;
@@ -171,7 +171,7 @@ struct DeclarationMutationSubmitterPreflightState{
     const GpuCompiledGraph* compiledGraph = nullptr;
     const GpuNativePacketRecorder* recorder = nullptr;
     GpuRecordedGraph* recordedGraph = nullptr;
-    const GpuTaskGraphSubmitter* submitter = nullptr;
+    const GpuTaskScheduler* submitter = nullptr;
     GpuGraphSubmissionTransaction* transaction = nullptr;
     Alloc::ScratchArena* scratchArena = nullptr;
     GpuTaskGraphNormalExecutionDesc execution;
@@ -464,7 +464,7 @@ TEST_F(DescriptorBufferRoundTripTest, DeclarationMutationRejectsRuntimeReadPrefl
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     const GpuNativePacketRecorder recorder(device, timing);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     const GpuTimingRecorderStatistics initialTimingStatistics = timing.statistics(device);
     u64 initialRevision = 0u;
     usize initialTaskCount = 0u;

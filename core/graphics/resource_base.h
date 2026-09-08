@@ -8,7 +8,7 @@
 #include <core/global.h>
 
 #include <core/alloc/module.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ class GraphicsResource{
 
 
 protected:
-    inline explicit GraphicsResource(Alloc::CpuTaskScheduler& scheduler)noexcept
+    inline explicit GraphicsResource(CpuTaskScheduler& scheduler)noexcept
         : m_cpuScheduler(scheduler)
     {}
     virtual ~GraphicsResource()noexcept = default;
@@ -80,7 +80,7 @@ public:
 
 
 protected:
-    [[nodiscard]] Alloc::CpuTaskScheduler& taskScheduler()const noexcept{ return m_cpuScheduler; }
+    [[nodiscard]] CpuTaskScheduler& taskScheduler()const noexcept{ return m_cpuScheduler; }
 
     template<typename Func>
     void scheduleParallelFor(usize begin, usize end, const Func& func){
@@ -94,7 +94,7 @@ protected:
 
 
 private:
-    Alloc::CpuTaskScheduler& m_cpuScheduler;
+    CpuTaskScheduler& m_cpuScheduler;
 };
 
 

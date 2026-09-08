@@ -83,8 +83,8 @@
 
 ## Scheduler Architecture
 
-1. `Frame` owns one `Alloc::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.
-2. ECS worlds and graphics own `Alloc::CpuTaskScope` task lifetimes and borrow the scheduler. Vulkan recording, data preparation, and cooking use the same scheduler through dependencies and synchronous task batches; subsystems must not create private thread pools.
+1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.
+2. ECS worlds and graphics own `Core::CpuTaskScope` task lifetimes and borrow the scheduler. Vulkan recording, data preparation, and cooking use the same scheduler through dependencies and synchronous task batches; subsystems must not create private thread pools.
 3. Engine, renderer, asset, and cooker work uses `CpuTaskScheduler`/`CpuTaskScope`. The retired per-subsystem pool/job implementations and scheduler facades have been removed; do not restore them as compatibility APIs.
 4. Declare CPU cost (`Heavy`, `Light`, `Any`), priority, and required main-thread execution through `CpuTaskOptions`. The scheduler owns processor placement and worker identity. Heavy/light cost is independent of task priority.
 5. Task completion includes the callback, its submitted descendants, and capture retirement. A CPU completion handle does not imply GPU completion; GPU resource readiness continues to use the GPU runtime's submission/completion contracts.
@@ -93,6 +93,8 @@
 8. ECS system update dependencies preserve registration order for every component read/write hazard. System preparation remains a serial phase before updates because preparation may change entity/component storage. UI updates explicitly target the main-thread queue.
 9. Native worker exceptions remain terminal. Inline failures unwind to terminal application handling; capture retirement and scope draining remain responsible for lifetime cleanup during that unwind.
 10. CPU task submission supports multiple producers from any thread, including external OS threads sharing one scope. Ready queues support multiple worker consumers under the scheduler mutex. Producer threads must stop before scope/scheduler destruction; a task wait does not close admission or join external producers.
+11. CPU scheduling belongs to `core/task`, exposed by `<core/task/cpu_task.h>` and target `nwb_task` under `Core`. Scheduler arena identities belong to `core/task/arena_names.h` with `core/task/cpu_task_scheduler` and `core/task/cpu_task_dependencies` paths; allocator primitives remain in `core/alloc`. CPU scheduler tests belong to `tests/unit/task` and target `nwb_task_tests`, while processor topology tests remain in `tests/unit/global`.
+12. `Core::GpuTaskScheduler` belongs to `core/graphics/task_graph/packet_runtime.h` and coordinates GPU graph recording, submission, and recovery. `Graphics` remains the broader device/resource/presentation owner; graph compilation and command recording retain their distinct types.
 
 ## Project Bootstrap Invariants
 

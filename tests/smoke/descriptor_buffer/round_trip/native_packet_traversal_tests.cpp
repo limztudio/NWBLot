@@ -209,7 +209,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     // Each one-packet ready call deliberately takes the serial fallback while preserving incremental graph-owned
     // recording and compiler state propagation.
     const GpuNativePacketRecorder recorder(device);
-    Alloc::CpuTaskScheduler recordingWorkers(1u);
+    CpuTaskScheduler recordingWorkers(1u);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
         graph,
         compiledGraph,
@@ -295,7 +295,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         transaction
     ).valid());
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     NativeTaskAcceptanceObserver writerAcceptance;
     writerAcceptance.continueSubmission = false;
     const GpuTaskGraphTaskAcceptedCallback writerAcceptedCallback{
@@ -684,12 +684,12 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
     EXPECT_EQ(consumerStateSeeds[0u].resource, recordedStateResource);
     EXPECT_EQ(consumerStateSeeds[0u].sourcePacket, producerPacket);
 
-    Alloc::CpuTaskScheduler recordingWorkers(1u);
+    CpuTaskScheduler recordingWorkers(1u);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.terminalTask = independentTask;
     normalExecution.readyFrontierScheduler = &recordingWorkers;

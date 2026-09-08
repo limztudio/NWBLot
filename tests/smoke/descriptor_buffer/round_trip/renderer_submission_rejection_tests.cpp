@@ -538,7 +538,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
             transaction.reset(compiledGraph);
             const GpuNativePacketRecorder recorder(device);
-            const GpuTaskGraphSubmitter submitter(device);
+            const GpuTaskScheduler submitter(device);
             GpuSubmissionPacketId failedPacket;
             const bool normalAccepted = submitter.recordAndSubmitNormalGraph(
                 graph,
@@ -910,7 +910,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
     EXPECT_FALSE(submitter.recordAndSubmitNormalGraph(
         graph,

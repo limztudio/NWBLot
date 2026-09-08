@@ -249,7 +249,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& outRecordedGraph,
-    Alloc::CpuTaskScheduler& cpuScheduler,
+    CpuTaskScheduler& cpuScheduler,
     GpuSubmissionPacketId* const outFailedPacket,
     GpuCommandIrCapture* const commandIrCapture
 )const{

@@ -3,7 +3,7 @@
 
 
 #include <core/assets/cook_metadata.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>
@@ -151,7 +151,7 @@ static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 val
 static void BenchmarkMetadataParsing(const usize pairCount, const usize iterations){
     AssetArena fixtureArena(Name("tests/metadata_extension/parse_fixture"));
     AssetArena parseArena(Name("tests/metadata_extension/parse_output"));
-    Alloc::CpuTaskScheduler cpuScheduler(0u);
+    CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const AssetString caseName = StringFormat(fixtureArena, "pairs_{}", pairCount);
@@ -479,7 +479,7 @@ TEST(MetadataExtensionOwnership, PublicShaderAndIncludeParsingRetiresAllMetadata
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){
     AssetArena fixtureArena(Name("tests/metadata_registry/fixture"));
     AssetArena parseArena(Name("tests/metadata_registry/output"));
-    Alloc::CpuTaskScheduler cpuScheduler(0u);
+    CpuTaskScheduler cpuScheduler(0u);
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()

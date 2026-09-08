@@ -5,6 +5,8 @@
 #include "cpu_task.h"
 #include "arena_names.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/exception.h>
 #include <global/termination.h>
 
@@ -12,13 +14,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_BEGIN
+NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::TaskNode::TaskNode(GlobalArena& arena)
+CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)
     : dependents(arena)
 {}
 
@@ -74,7 +76,7 @@ CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(allocateDomainIdentity())
     , m_mainThread(QueryCurrentThreadId())
-    , m_arena(ArenaScope::s_CpuTaskScheduler)
+    , m_arena(TaskArenaScope::s_CpuTaskScheduler)
     , m_nodes(m_arena)
     , m_placements(m_arena)
     , m_workerDepth(m_arena)
@@ -276,9 +278,9 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
             return {};
         ContainerDetail::ReserveGrowingCapacity(m_canceledHandles, AddSize(AddSize(m_canceledHandles.size(), m_outstanding), 1u));
         if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
-            ScratchArena scratch(ArenaScope::s_CpuTaskDependencies, 4096u);
-            Vector<TaskHandle, ScratchArena> frontier(scratch);
-            Vector<u8, ScratchArena> visited(m_nodes.size(), 0u, scratch);
+            Alloc::ScratchArena scratch(TaskArenaScope::s_CpuTaskDependencies, 4096u);
+            Vector<TaskHandle, Alloc::ScratchArena> frontier(scratch);
+            Vector<u8, Alloc::ScratchArena> visited(m_nodes.size(), 0u, scratch);
             frontier.push_back(s_execution->task);
             for(usize cursor = 0u; cursor < frontier.size(); ++cursor){
                 const TaskHandle candidate = frontier[cursor];
@@ -770,7 +772,7 @@ void CpuTaskScope::cancel()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_END
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

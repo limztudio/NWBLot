@@ -17,7 +17,7 @@ NWB_ECS_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-World::World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler)
+World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     : m_arena(arena)
     , m_tasks(taskScheduler)
     , m_entityManager(m_arena)

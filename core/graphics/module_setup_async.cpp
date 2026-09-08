@@ -81,10 +81,10 @@ struct MeshSetupTaskData{
     return bytes;
 }
 
-[[nodiscard]] static Alloc::CpuTaskOptions SetupUploadTaskOptions(const usize firstUploadBytes, const usize secondUploadBytes = 0u)noexcept{
+[[nodiscard]] static CpuTaskOptions SetupUploadTaskOptions(const usize firstUploadBytes, const usize secondUploadBytes = 0u)noexcept{
     const bool heavy = firstUploadBytes >= s_HeavySetupUploadBytes
         || secondUploadBytes >= s_HeavySetupUploadBytes - firstUploadBytes;
-    return Alloc::CpuTaskOptions{ .cost = heavy ? Alloc::CpuTaskCost::Heavy : Alloc::CpuTaskCost::Light };
+    return CpuTaskOptions{ .cost = heavy ? CpuTaskCost::Heavy : CpuTaskCost::Light };
 }
 
 
@@ -92,7 +92,7 @@ template<typename TaskData, typename Desc, typename Output, typename Validate, t
 [[nodiscard]] static Graphics::TaskHandle SubmitSetupUploadTask(
     Graphics& graphics,
     Alloc::GlobalArena& arena,
-    Alloc::CpuTaskScope& tasks,
+    CpuTaskScope& tasks,
     const Desc& desc,
     Output& output,
     Validate&& validate,
@@ -106,7 +106,7 @@ template<typename TaskData, typename Desc, typename Output, typename Validate, t
 
     auto payload = MakeGlobalUnique<TaskData>(arena, arena, desc, output);
     configurePayload(*payload, arena);
-    const Alloc::CpuTaskOptions options = SetupUploadTaskOptions(payload->uploadBytes.size());
+    const CpuTaskOptions options = SetupUploadTaskOptions(payload->uploadBytes.size());
 
     return tasks.submit([&graphics, payload = Move(payload), executePayload = Forward<ExecutePayload>(executePayload)]() mutable{
         executePayload(graphics, *payload);
@@ -192,7 +192,7 @@ Graphics::TaskHandle Graphics::setupMeshAsync(const MeshSetupDesc& desc, MeshRes
     payload->setupDesc.indexData = nullptr;
     payload->setupDesc.indexDataSize = payload->indexBytes.size();
 
-    const Alloc::CpuTaskOptions options = __hidden_graphics_setup_async::SetupUploadTaskOptions(
+    const CpuTaskOptions options = __hidden_graphics_setup_async::SetupUploadTaskOptions(
         payload->vertexBytes.size(),
         payload->indexBytes.size()
     );

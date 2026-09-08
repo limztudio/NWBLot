@@ -56,7 +56,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook_meshlet_build.inl"
         "${CMAKE_CURRENT_LIST_DIR}/cook_source.inl"
     )
-    target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types)
+    target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types nwb_task)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)
 
     nwb_declare_static_library(nwb_assets_mesh_volume_entries)

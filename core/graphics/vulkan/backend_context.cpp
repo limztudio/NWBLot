@@ -18,7 +18,7 @@ BackendContext::BackendContext(
     const DeviceCreationParameters& params,
     SwapChainRuntimeState& swapChainState,
     GraphicsAllocator& allocator,
-    Alloc::CpuTaskScheduler& cpuScheduler
+    CpuTaskScheduler& cpuScheduler
 )
     : m_deviceParams(params)
     , m_swapChainState(swapChainState)

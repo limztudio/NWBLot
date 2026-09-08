@@ -463,7 +463,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
         GpuTaskGraphTaskTimingTicket{ .task = producerTask, .timingTicket = &occupancyTimingTicket },
         GpuTaskGraphTaskTimingTicket{ .task = occupancyTask, .timingTicket = &occupancyTimingTicket },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,

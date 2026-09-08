@@ -381,7 +381,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedSubmissionPacket;
     GpuTimingSubmissionTicket resolvedCompanionTicket(timing);
     resolvedCompanionTicket.discard();

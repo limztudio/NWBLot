@@ -27,7 +27,7 @@ class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
 class GpuGraphSubmissionTransaction;
 class GpuRecordedGraph;
-class GpuTaskGraphSubmitter;
+class GpuTaskScheduler;
 
 struct GpuTimingScope{
     Name scopeName = NAME_NONE;
@@ -611,7 +611,7 @@ private:
 class GpuTimingSubmissionTicket final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
     friend class GpuTimingRecorder;
 
 private:

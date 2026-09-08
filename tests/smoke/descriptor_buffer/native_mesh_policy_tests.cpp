@@ -175,7 +175,7 @@ TEST(NativeMeshPolicy, RawOptionalExtensionCannotBypassDisabledPolicy){
     {
         Alloc::GlobalArena arena(__hidden_native_mesh_policy_tests::s_BackendArenaName);
         GraphicsAllocator allocator(arena);
-        Alloc::CpuTaskScheduler cpuScheduler(2u);
+        CpuTaskScheduler cpuScheduler(2u);
         DeviceCreationParameters parameters(arena);
         parameters.headlessDevice = true;
         parameters.enableGpuCrashDiagnostics = false;

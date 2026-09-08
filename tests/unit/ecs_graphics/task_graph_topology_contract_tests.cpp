@@ -464,7 +464,7 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(avboitSubmission, "if(!validation.valid() || !bindings || bindingCount > bindingCapacity)"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "requiredBindingCount > s_AvboitTaskGraphTimingTicketCapacity"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "requiredBindingCount > bindingCapacity - bindingCount"));
-    EXPECT_FALSE(ContainsText(avboitSubmission, "GpuTaskGraphSubmitter"));
+    EXPECT_FALSE(ContainsText(avboitSubmission, "GpuTaskScheduler"));
     EXPECT_FALSE(ContainsText(avboitSubmission, "GpuGraphSubmissionTransaction"));
     EXPECT_TRUE(ContainsText(avboitSubmission, "if(validation.stage().hasTransparentTasks){"));
     EXPECT_TRUE(ContainsText(

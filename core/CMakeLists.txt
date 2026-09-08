@@ -1,4 +1,5 @@
 add_subdirectory(alloc)
+add_subdirectory(task)
 add_subdirectory(common)
 add_subdirectory(crash)
 add_subdirectory(telemetry)

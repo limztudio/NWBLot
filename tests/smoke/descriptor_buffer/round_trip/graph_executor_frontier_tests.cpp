@@ -117,7 +117,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     struct NormalGraphRecordedContext{
         GpuGraphSubmissionTransaction* transaction = nullptr;
         bool* firstRecorded = nullptr;
@@ -309,7 +309,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
     EXPECT_EQ(views.compiled.packetIdAt(3u), frontierPacket);
 
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuTaskGraphNormalExecutionDesc staleExecution;
     staleExecution.terminalTask = terminalTask;
     ++staleExecution.terminalTask.generation;

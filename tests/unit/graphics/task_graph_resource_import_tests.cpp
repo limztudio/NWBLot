@@ -190,7 +190,7 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -436,7 +436,7 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
 TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwnership){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -717,7 +717,7 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -812,7 +812,7 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -1065,7 +1065,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
 
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext sourceContext(
         graphicsAllocator,
         cpuScheduler,

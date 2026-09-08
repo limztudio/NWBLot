@@ -400,7 +400,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     EXPECT_EQ(stateProbe->getTextureSubresourceState(additionalTexture.get(), 0u, 0u), ResourceStates::CopyDest);
     stateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     NativePacketSubmissionHookObserver hookObserver;
     const QueueSubmissionPreSubmitHook rejectedHook{
         .context = &hookObserver,

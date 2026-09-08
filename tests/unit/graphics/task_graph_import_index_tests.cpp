@@ -61,7 +61,7 @@ static void ExpectUnchanged(const Core::GpuTaskGraph& graph, const GraphStamp& b
 struct ImportContext{
     Core::Alloc::GlobalArena inputArena{ Name("tests/graph_import_index/inputs") };
     Core::GraphicsAllocator graphicsAllocator{ inputArena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 17u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::Alloc::GlobalArena graphArena{ Name("tests/graph_import_index/graph") };

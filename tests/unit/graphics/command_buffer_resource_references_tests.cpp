@@ -32,7 +32,7 @@ using TestArena = NWB::Tests::TestArena<struct CommandBufferResourceReferencesTe
 struct ReferencesContext{
     TestArena testArena;
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Graphics::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Graphics::VulkanAllocator allocator{ context };
     Graphics::CommandBufferResourceReferences references{ testArena.arena };

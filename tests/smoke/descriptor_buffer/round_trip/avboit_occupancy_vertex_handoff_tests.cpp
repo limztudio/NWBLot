@@ -257,7 +257,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
     EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), ResourceStates::VertexBuffer);
     stateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

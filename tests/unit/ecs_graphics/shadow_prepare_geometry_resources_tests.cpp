@@ -30,7 +30,7 @@ using ResourceVector = Vector<Core::GpuGraphResourceId, Core::Alloc::GlobalArena
 struct GeometryContext{
     TestArena testArena;
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::GpuTaskGraph graph{ testArena.arena };

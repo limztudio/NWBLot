@@ -151,7 +151,7 @@ template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     const MeshletScoreState& scoreState,
     const MeshletDesc& meshlet,
     const VertexRefVectorT& localVertexRefs,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Assets::AssetVector<MeshletCandidateSearchResult>& parallelCandidates,
     MeshletFrontierCandidate& outCandidate
 ){

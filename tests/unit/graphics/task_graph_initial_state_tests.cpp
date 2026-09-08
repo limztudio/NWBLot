@@ -161,7 +161,7 @@ TEST(GpuTaskGraph, MarksAndMaterializesDeclaredInitialResourceStates){
 TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -227,7 +227,7 @@ TEST(GpuStateTracker, DistinguishesRetainedDescriptorFallbackFromExplicitState){
 TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 
@@ -450,7 +450,7 @@ TEST(GpuTaskGraph, MarksUnknownTypedFirstReadsForExplicitNativeStateValidation){
 TEST(GpuTaskGraph, AccelStructImportsInheritBackingBufferStateKnowledge){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
 

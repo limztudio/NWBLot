@@ -14,7 +14,7 @@
 #include "asset.h"
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/metascript/parser.h>
 
 
@@ -77,7 +77,7 @@ struct MeshCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
 [[nodiscard]] bool ParseMeshCookMetadata(
@@ -85,7 +85,7 @@ struct MeshCookEntry{
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
 

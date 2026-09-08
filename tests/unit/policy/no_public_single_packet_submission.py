@@ -13,11 +13,11 @@ RETIRED_SUBMISSION_LEASE = re.compile(r"\bGpuTaskPacketSubmissionLease\b")
 RETIRED_PACKET_RUNTIME_TYPES = re.compile(r"\b(?:GpuPacketRuntimeState|GpuPacketRuntime)\b")
 TARGET_CLASS_OPEN = re.compile(
     r"\b(class|struct)\s+"
-    r"(GpuTaskGraphSubmitter|GpuTaskGraph|GpuGraphSubmissionTransaction)\b"
+    r"(GpuTaskScheduler|GpuTaskGraph|GpuGraphSubmissionTransaction)\b"
     r"(?!\s*::)[^;{]*\{"
 )
 PRIVATE_SUBMISSION_MEMBERS = {
-    "GpuTaskGraphSubmitter": ("submitPacket",),
+    "GpuTaskScheduler": ("submitPacket",),
     "GpuTaskGraph": (
         "PacketSubmissionLease",
         "beginPacketSubmission",
@@ -163,44 +163,44 @@ def run_self_test() -> int:
         ),
         (
             "public packet submitter",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "public:\n"
             "    bool submitPacket(int packet);\n"
             "};",
-            ((3, "GpuTaskGraphSubmitter/public submitPacket"),),
+            ((3, "GpuTaskScheduler/public submitPacket"),),
         ),
         (
             "protected packet submitter",
-            "class GpuTaskGraphSubmitter{\n"
+            "class GpuTaskScheduler{\n"
             "protected:\n"
             "    bool submitPacket(int packet);\n"
             "};",
-            ((3, "GpuTaskGraphSubmitter/protected submitPacket"),),
+            ((3, "GpuTaskScheduler/protected submitPacket"),),
         ),
         (
             "reopened public section",
-            "class GpuTaskGraphSubmitter{\n"
+            "class GpuTaskScheduler{\n"
             "private:\n"
             "    bool prepare();\n"
             "public:\n"
             "    bool submitPacket(int packet);\n"
             "};",
-            ((5, "GpuTaskGraphSubmitter/public submitPacket"),),
+            ((5, "GpuTaskScheduler/public submitPacket"),),
         ),
         (
             "default public packet submitter struct",
-            "struct GpuTaskGraphSubmitter final{\n"
+            "struct GpuTaskScheduler final{\n"
             "    bool submitPacket(int packet);\n"
             "};",
-            ((2, "GpuTaskGraphSubmitter/public submitPacket"),),
+            ((2, "GpuTaskScheduler/public submitPacket"),),
         ),
         (
             "public inherited packet submitter",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "public:\n"
             "    using Base::submitPacket;\n"
             "};",
-            ((3, "GpuTaskGraphSubmitter/public submitPacket"),),
+            ((3, "GpuTaskScheduler/public submitPacket"),),
         ),
         (
             "public task graph submission lifecycle",
@@ -391,7 +391,7 @@ def run_self_test() -> int:
         ),
         (
             "private packet submitter",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "private:\n"
             "    bool submitPacket(int packet);\n"
             "};",
@@ -399,14 +399,14 @@ def run_self_test() -> int:
         ),
         (
             "default private packet submitter",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "    bool submitPacket(int packet);\n"
             "};",
             (),
         ),
         (
             "private inherited packet submitter",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "private:\n"
             "    using Base::submitPacket;\n"
             "};",
@@ -414,7 +414,7 @@ def run_self_test() -> int:
         ),
         (
             "public range submitters",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "public:\n"
             "    bool submitPacketRangeInCompileOrder();\n"
             "    bool submitTaskRangeInCompileOrder();\n"
@@ -470,7 +470,7 @@ def run_self_test() -> int:
         ),
         (
             "private native primitive",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "private:\n"
             "    bool submitPacketWithinSubmissionOperation();\n"
             "};",
@@ -478,7 +478,7 @@ def run_self_test() -> int:
         ),
         (
             "nested fixture method",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "public:\n"
             "    struct Fixture{\n"
             "    public:\n"
@@ -553,7 +553,7 @@ def run_self_test() -> int:
         ),
         (
             "inline implementation detail",
-            "class GpuTaskGraphSubmitter final{\n"
+            "class GpuTaskScheduler final{\n"
             "public:\n"
             "    bool submit(){\n"
             "        return helper.submitPacket();\n"
@@ -565,14 +565,14 @@ def run_self_test() -> int:
         ),
         (
             "comment and literal",
-            "// class GpuTaskGraphSubmitter{ public: bool submitPacket(); };\n"
+            "// class GpuTaskScheduler{ public: bool submitPacket(); };\n"
             "// GpuTaskPacketSubmissionLease\n"
             "// GpuPacketRuntimeState GpuPacketRuntime\n"
             "// class GpuTaskGraph{ public: class PacketSubmissionLease; };\n"
             "// class GpuGraphSubmissionTransaction{ public: void rejectPacket(); };\n"
             "// void rejectTask(GpuTaskGraph&, const GpuCompiledGraph&, GpuTaskId);\n"
             "// bool appendAcceptedQueueFrontierWaitTokens();\n"
-            'const char* text = "GpuTaskGraphSubmitter GpuPacketRuntime submitPacket discardUnacceptedPacket discardUnaccepted(a, b) appendAcceptedQueueFrontierWaitTokens";\n'
+            'const char* text = "GpuTaskScheduler GpuPacketRuntime submitPacket discardUnacceptedPacket discardUnaccepted(a, b) appendAcceptedQueueFrontierWaitTokens";\n'
             'const char* raw = R"tag(GpuTaskPacketSubmissionLease GpuPacketRuntimeState rejectPacket rejectTask(a, b, c) appendAcceptedQueueFrontierWaitTokens)tag";',
             (),
         ),
@@ -581,8 +581,8 @@ def run_self_test() -> int:
             "GpuTaskPacketSubmissionLeaseFactory lease;\n"
             "GpuPacketRuntimeStates state;\n"
             "GpuPacketRuntimes runtime;\n"
-            "class GpuTaskGraphSubmitterFactory{ public: bool submitPacket(); };\n"
-            "class GpuTaskGraphSubmitter{ public: bool submitPackets(); };\n"
+            "class GpuTaskSchedulerFactory{ public: bool submitPacket(); };\n"
+            "class GpuTaskScheduler{ public: bool submitPackets(); };\n"
             "class GpuTaskGraphFactory{ public: bool discardUnacceptedPacket(); };\n"
             "class GpuTaskGraph{ public: class PacketSubmissionLeases; bool discardUnacceptedPackets(); };\n"
             "class GpuGraphSubmissionTransactionFactory{ public: struct PacketRuntime; bool rejectPacket(); bool appendAcceptedQueueFrontierWaitTokens(); };\n"

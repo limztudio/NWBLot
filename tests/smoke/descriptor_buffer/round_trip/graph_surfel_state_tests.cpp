@@ -707,7 +707,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     EXPECT_EQ(freeListClearCapture->destination, freeListResource);
     EXPECT_EQ(freeListClearCapture->uintClearValue, UIntColor(0u));
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuGraphSubmissionTransaction staleTransaction(DescriptorBufferRoundTripTest::arena());
     staleTransaction.reset(compiledGraph);
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
@@ -1594,7 +1594,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

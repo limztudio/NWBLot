@@ -7,7 +7,7 @@
 
 #include "api.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 #include "gpu_timing.h"
 #include "render_pass.h"
@@ -134,7 +134,7 @@ public:
         bool fp32TrainingSupported = false;
     };
 
-    using TaskHandle = Alloc::CpuTaskScheduler::TaskHandle;
+    using TaskHandle = CpuTaskScheduler::TaskHandle;
     using PointerScaleChangedCallback = void(*)(void* userData, f32 scaleX, f32 scaleY);
     // A synchronous caller may declare one isolated graph through this callback. The graph owns all native command
     // recording and submission; the callback must only retain declaration-time inputs and return its terminal task.
@@ -150,12 +150,12 @@ private:
 public:
     Graphics(
         GraphicsAllocator& allocator,
-        Alloc::CpuTaskScheduler& cpuScheduler,
+        CpuTaskScheduler& cpuScheduler,
         Perf::TimingSink& gpuTiming
     );
     Graphics(
         GraphicsAllocator& allocator,
-        Alloc::CpuTaskScheduler& cpuScheduler,
+        CpuTaskScheduler& cpuScheduler,
         Perf::TimingSink& gpuTiming,
         Perf::TimingSink* cpuTiming
     );
@@ -336,8 +336,8 @@ private:
 
 private:
     GraphicsAllocator& m_allocator;
-    Alloc::CpuTaskScheduler& m_cpuScheduler;
-    Alloc::CpuTaskScope m_tasks;
+    CpuTaskScheduler& m_cpuScheduler;
+    CpuTaskScope m_tasks;
     DeviceCreationParameters m_deviceCreationParams;
     SwapChainRuntimeState m_swapChainState;
     GpuTimingRecorder m_gpuTiming;

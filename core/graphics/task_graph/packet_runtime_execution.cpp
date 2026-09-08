@@ -135,7 +135,7 @@ namespace __hidden_gpu_packet_runtime_execution{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
+bool GpuTaskScheduler::recordAndSubmitNormalGraph(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -289,13 +289,13 @@ bool GpuTaskGraphSubmitter::recordAndSubmitNormalGraph(
 }
 
 
-bool GpuTaskGraphSubmitter::recordPacketRange(
+bool GpuTaskScheduler::recordPacketRange(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     const GpuSubmissionPacketRange& range,
     GpuRecordedGraph& recordedGraph,
-    Alloc::CpuTaskScheduler* const readyFrontierScheduler,
+    CpuTaskScheduler* const readyFrontierScheduler,
     GpuCommandIrCapture* const commandIrCapture,
     GpuSubmissionPacketId* const outFailedPacket
 )const{
@@ -321,7 +321,7 @@ bool GpuTaskGraphSubmitter::recordPacketRange(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
+bool GpuTaskScheduler::recordAndSubmitTaskRangeInCompileOrder(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -347,12 +347,12 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInCompileOrder(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
+bool GpuTaskScheduler::recordAndSubmitTaskRangeInReadyFrontiers(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
-    Alloc::CpuTaskScheduler& cpuScheduler,
+    CpuTaskScheduler& cpuScheduler,
     const GpuTaskId firstTask,
     const GpuTaskId lastTask,
     GpuGraphSubmissionTransaction& transaction,
@@ -374,12 +374,12 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRangeInReadyFrontiers(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitTaskRange(
+bool GpuTaskScheduler::recordAndSubmitTaskRange(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
     GpuRecordedGraph& recordedGraph,
-    Alloc::CpuTaskScheduler* const readyFrontierScheduler,
+    CpuTaskScheduler* const readyFrontierScheduler,
     const GpuTaskId firstTask,
     const GpuTaskId lastTask,
     GpuGraphSubmissionTransaction& transaction,
@@ -489,7 +489,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskRange(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
+bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -615,7 +615,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitAcceptedFrontierTask(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitTask(
+bool GpuTaskScheduler::recordAndSubmitTask(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuNativePacketRecorder& recorder,
@@ -692,7 +692,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTask(
 }
 
 
-bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
+bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,
@@ -806,7 +806,7 @@ bool GpuTaskGraphSubmitter::recordAndSubmitTaskWithinSubmissionOperation(
 }
 
 
-bool GpuTaskGraphSubmitter::prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
+bool GpuTaskScheduler::prepareRecordingAttemptAndBindTransactionWithinSubmissionOperation(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuSubmissionPacketId packet,

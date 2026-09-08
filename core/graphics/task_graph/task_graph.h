@@ -149,7 +149,7 @@ class GpuTaskGraph;
 class GpuNativePacketRecorder;
 class GpuGraphSubmissionTransaction;
 class GpuRecordedGraph;
-class GpuTaskGraphSubmitter;
+class GpuTaskScheduler;
 
 
 // Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a
@@ -303,7 +303,7 @@ class GpuTaskGraph final : NoCopy{
     friend class GpuNativePacketRecorder;
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
 
 
 public:
@@ -433,7 +433,7 @@ private:
         friend class GpuTaskGraph;
         friend class GpuGraphSubmissionTransaction;
         friend class GpuNativePacketRecorder;
-        friend class GpuTaskGraphSubmitter;
+        friend class GpuTaskScheduler;
 
     public:
         RecordingAttemptScope() = default;

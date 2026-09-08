@@ -43,7 +43,7 @@ bool BuildMesh(
     const ImportOptions& options,
     const bool wantsSkinning,
     const Vec4& defaultColor,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     SourceMeshStreams& outMesh,
     UtilityVector<ufbx_node*>& outSkeletonJoints,
     UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,

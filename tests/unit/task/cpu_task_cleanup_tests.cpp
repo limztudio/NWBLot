@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/common/terminal_entry.h>
 
 #include <global/timer.h>
@@ -19,7 +19,7 @@ namespace __hidden_cpu_task_cleanup_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB::Core::Alloc;
+using namespace NWB::Core;
 using NWB::Core::Common::InvokeTerminalEntry;
 
 inline constexpr u32 s_TaskTimeoutMS = 4000u;

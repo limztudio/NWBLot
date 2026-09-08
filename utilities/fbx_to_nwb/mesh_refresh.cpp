@@ -117,7 +117,7 @@ struct StreamSortEntry{
 template<typename Value>
 [[nodiscard]] bool DeduplicateStream(
     UtilityVector<Value>& stream,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     UtilityVector<u32>& outRemap,
     const char* streamName
 ){
@@ -233,7 +233,7 @@ template<typename Value>
 [[nodiscard]] bool CanonicalizeSkinnedMeshStreams(
     SourceMeshStreams& mesh,
     UtilityVector<MeshSkinInfluence>& skinInfluences,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     SourceMeshCanonicalizeReport* const outReport
 ){
     if(mesh.positions.size() != skinInfluences.size()){
@@ -1103,7 +1103,7 @@ SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh){
     return counts;
 }
 
-bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* const outReport){
+bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* const outReport){
     if(outReport)
         outReport->before = CountSourceMeshStreams(mesh);
 
@@ -1134,7 +1134,7 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::Alloc::CpuTask
     return true;
 }
 
-bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Alloc::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport){
+bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport){
     outReport = SourceMeshCanonicalizeReport{};
 
     AString source;

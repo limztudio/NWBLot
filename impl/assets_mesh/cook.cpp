@@ -17,7 +17,7 @@
 #include "meshlet_payload_packing.h"
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/assets/paths.h>
 #include <global/math/frame.h>
 #include <core/metascript/parser.h>
@@ -49,7 +49,7 @@ static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
 static bool ValidateMeshAssetFields(
@@ -69,7 +69,7 @@ static bool ParseMeshMeta(
     const Core::Metascript::Value& asset,
     const Name& virtualPath,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
@@ -93,7 +93,7 @@ static bool ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Name virtualPath = NAME_NONE;
@@ -150,7 +150,7 @@ bool ParseMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
@@ -164,7 +164,7 @@ bool ParseMeshCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     MeshCookEntry& outEntry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());

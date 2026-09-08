@@ -236,7 +236,7 @@ TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
     const GpuSubmissionPacketRange range{ .first = views.compiled.packetForTask(first), .packetCount = 3u };
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInCompileOrder(graph, compiled, range, recorded));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph, compiled, recorded, range, nullptr, 0u, nullptr, 0u, transaction, scratchArena
     ));

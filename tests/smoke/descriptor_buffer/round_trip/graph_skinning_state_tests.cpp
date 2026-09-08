@@ -295,7 +295,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     EXPECT_EQ(graphStateProbe->getBufferState(staticInputBuffer.get()), ResourceStates::ShaderResource);
     graphStateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -661,7 +661,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     EXPECT_EQ(graphStateProbe->getBufferState(skinnedTangent.get()), ResourceStates::ShaderResource);
     graphStateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -858,7 +858,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
     EXPECT_EQ(stateProbe->getBufferState(generatedOutput.get()), ResourceStates::ShaderResource);
     stateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,

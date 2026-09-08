@@ -7,7 +7,7 @@
 
 #include <core/global.h>
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 #include <core/common/module.h>
 #include <core/input/module.h>
@@ -37,7 +37,7 @@ private:
 
 
 public:
-    Frame(void* inst, u16 width, u16 height, const Alloc::CpuTaskSchedulerConfig& cpuTaskConfig = {});
+    Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cpuTaskConfig = {});
     ~Frame()noexcept(false);
 
 
@@ -76,7 +76,7 @@ public:
     [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena(){ return m_projectObjectArena; }
     [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const{ return m_projectObjectArena; }
 
-    [[nodiscard]] inline Alloc::CpuTaskScheduler& cpuTasks(){ return m_cpuTasks; }
+    [[nodiscard]] inline CpuTaskScheduler& cpuTasks(){ return m_cpuTasks; }
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
@@ -109,7 +109,7 @@ private:
 
 
 private:
-    Alloc::CpuTaskScheduler m_cpuTasks;
+    CpuTaskScheduler m_cpuTasks;
     Common::FrameData m_data;
 
     Alloc::GlobalArena m_graphicsObjectArena;

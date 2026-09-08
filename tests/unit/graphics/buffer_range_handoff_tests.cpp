@@ -32,7 +32,7 @@ inline constexpr Core::GpuPhysicalQueueId s_Destination{ 7u, s_DeviceGeneration 
 struct RangeContext{
     Core::Alloc::GlobalArena arena{ Name("tests/buffer_range_handoff/inputs") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, s_DeviceGeneration };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     Core::BufferHandle buffer{

@@ -5,8 +5,7 @@
 #pragma once
 
 
-#include "general.h"
-#include "scratch.h"
+#include <core/alloc/general.h>
 
 #include <global/cpu_topology.h>
 #include <global/scope_exit.h>
@@ -15,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_BEGIN
+NWB_CORE_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,7 +116,7 @@ private:
 
     struct TaskNode{
         TaskFunction function;
-        Vector<TaskHandle, GlobalArena> dependents;
+        Vector<TaskHandle, Alloc::GlobalArena> dependents;
         CpuTaskScope* scope = nullptr;
         TaskHandle parent;
         CpuTaskOptions options;
@@ -128,7 +127,7 @@ private:
         TaskState state = TaskState::Free;
         bool canceled = false;
 
-        explicit TaskNode(GlobalArena& arena);
+        explicit TaskNode(Alloc::GlobalArena& arena);
     };
 
     struct ReadyQueue{
@@ -258,13 +257,13 @@ private:
 private:
     const u64 m_domainIdentity;
     const ThreadId m_mainThread;
-    GlobalArena m_arena;
-    Deque<TaskNode, GlobalArena> m_nodes;
-    Vector<CpuWorkerPlacement, GlobalArena> m_placements;
-    Vector<u32, GlobalArena> m_workerDepth;
-    Vector<u32, GlobalArena> m_searchStack;
-    Vector<u64, GlobalArena> m_searchVisits;
-    Vector<TaskHandle, GlobalArena> m_canceledHandles;
+    Alloc::GlobalArena m_arena;
+    Deque<TaskNode, Alloc::GlobalArena> m_nodes;
+    Vector<CpuWorkerPlacement, Alloc::GlobalArena> m_placements;
+    Vector<u32, Alloc::GlobalArena> m_workerDepth;
+    Vector<u32, Alloc::GlobalArena> m_searchStack;
+    Vector<u64, Alloc::GlobalArena> m_searchVisits;
+    Vector<TaskHandle, Alloc::GlobalArena> m_canceledHandles;
     ReadyQueue m_ready[s_QueueCount];
     u32 m_readyWorkerCosts[3u]{};
     u32 m_sleepingWorkers[3u]{};
@@ -280,7 +279,7 @@ private:
     usize m_outstanding = 0u;
     bool m_aborting = false;
     CpuTaskSchedulerStatistics m_statistics;
-    Vector<JoiningThread, GlobalArena> m_workers;
+    Vector<JoiningThread, Alloc::GlobalArena> m_workers;
 };
 
 
@@ -395,7 +394,7 @@ void CpuTaskScheduler::parallelFor(usize begin, usize end, usize grainSize, cons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ALLOC_END
+NWB_CORE_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

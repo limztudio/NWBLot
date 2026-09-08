@@ -219,7 +219,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_TRUE(prefixRecorded);
     EXPECT_TRUE(finalRecorded);
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     const GpuTaskGraphTaskTimingTicket prefixTimingBinding{
         .task = prefixTask,
         .timingTicket = &prefixTimingTicket,
@@ -431,7 +431,7 @@ TEST_F(DescriptorBufferRoundTripTest, TaskRangeHelperPreservesRecoveryOwnership)
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
 
     EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInCompileOrder(

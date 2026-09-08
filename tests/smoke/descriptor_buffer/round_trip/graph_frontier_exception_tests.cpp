@@ -29,7 +29,7 @@ inline constexpr u32 s_ParallelRecordingException = 0xE101u;
 
 
 struct ParallelRecordingExceptionState{
-    Alloc::CpuTaskScheduler& workers;
+    CpuTaskScheduler& workers;
     Latch recordingStarted{ 3u };
     Atomic<u32> discardCount{ 0u };
     Atomic<u32> activeCallbacks{ 0u };
@@ -38,7 +38,7 @@ struct ParallelRecordingExceptionState{
     GpuSubmissionPacketId failedWorkerPacket;
     bool throwOnWorker = false;
 
-    explicit ParallelRecordingExceptionState(Alloc::CpuTaskScheduler& recordingWorkers, const bool workerThrows = false)noexcept
+    explicit ParallelRecordingExceptionState(CpuTaskScheduler& recordingWorkers, const bool workerThrows = false)noexcept
         : workers(recordingWorkers)
         , throwOnWorker(workerThrows)
     {}
@@ -112,7 +112,7 @@ struct NativeAcceptedFrontierWithoutPrefixTask{
 
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedClaimsWithoutInvokingDiscardObservers){
     auto& device = DescriptorBufferRoundTripTest::device();
-    Alloc::CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(2u);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -250,7 +250,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedCla
 // must consume successful, false, and throwing packet states without invoking any discard observer.
 TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResolvesWholeAttemptWithoutDiscardCallbacks){
     auto& device = DescriptorBufferRoundTripTest::device();
-    Alloc::CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(2u);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -323,7 +323,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResol
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     Alloc::ScratchArena submissionScratch(Name("tests/descriptor_buffer/composite_parallel_exception_submission"));
     GpuSubmissionPacketId failedPacket;
     bool exceptionObserved = false;
@@ -372,7 +372,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResol
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierWorkerExceptionIsTerminal){
     const auto recordWithFailingWorker = [](){
         auto& device = DescriptorBufferRoundTripTest::device();
-        Alloc::CpuTaskScheduler recordingWorkers(2u);
+        CpuTaskScheduler recordingWorkers(2u);
         ParallelRecordingExceptionState state(recordingWorkers, true);
         GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
         GpuTaskSchedulingHint scheduling;
@@ -535,7 +535,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackExceptionResolves
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     Alloc::ScratchArena submissionScratch(Name("tests/descriptor_buffer/recorded_callback_exception_submission"));
     GpuSubmissionPacketId failedPacket;
     bool exceptionObserved = false;
@@ -634,7 +634,7 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedFrontierWithoutAcceptedPrefixRejec
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
     EXPECT_FALSE(submitter.recordAndSubmitAcceptedFrontierTask(
         graph,
@@ -736,7 +736,7 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedFrontierRejectionExceptionResolves
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     const GpuNativePacketRecorder recorder(device);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     Alloc::ScratchArena submissionScratch(Name("tests/descriptor_buffer/frontier_rejection_exception_submission"));
     GpuSubmissionPacketId failedPacket;
     bool exceptionObserved = false;

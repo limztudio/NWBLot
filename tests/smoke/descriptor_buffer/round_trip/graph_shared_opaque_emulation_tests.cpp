@@ -281,7 +281,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
     stateProbe->close();
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -604,7 +604,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
         GpuTaskGraphTaskTimingTicket{ .task = dispatchB, .timingTicket = &timingTicket },
         GpuTaskGraphTaskTimingTicket{ .task = rasterB, .timingTicket = &timingTicket },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -902,7 +902,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
             .timingTicket = pairTimingTickets[taskIndex / 2u],
         };
     }
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuTimingSubmissionTicket resolvedTimingTicket(timing);
     resolvedTimingTicket.discard();
     const GpuTaskGraphTaskTimingTicket retryableTimingTickets[] = {
@@ -1215,7 +1215,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
             .timingTicket = &timingTicket,
         };
     }
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,

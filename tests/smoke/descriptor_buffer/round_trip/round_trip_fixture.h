@@ -15,8 +15,8 @@
 #include <global/thread.h>
 #include <core/common/module.h>
 #include <core/alloc/general.h>
-#include <core/alloc/cpu_task.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/frame/module.h>
 #include <core/graphics/module.h>
 #include <core/graphics/api.h>

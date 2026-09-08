@@ -1041,7 +1041,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
     const Core::GpuNativePacketRecorder recorder(device);
-    const Core::GpuTaskGraphSubmitter submitter(device);
+    const Core::GpuTaskScheduler submitter(device);
     const bool skinningSubmitted = submitter.recordAndSubmitNormalGraph(
         graph,
         compiledGraph,

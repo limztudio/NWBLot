@@ -8,7 +8,7 @@ static bool BuildMeshlets(
     const tchar* metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     CookEntryT& entry,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler
+    Core::CpuTaskScheduler& cpuScheduler
 ){
     entry.meshlets.clear();
     entry.meshletBounds.clear();

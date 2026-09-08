@@ -98,7 +98,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecordedGraphResetRefusesWhilePreSubmitOpe
     };
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
     bool submissionResult = false;
     Thread submissionThread([&](){

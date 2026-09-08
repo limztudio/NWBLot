@@ -458,13 +458,13 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer*
-    GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::s_activeFinalizer = nullptr
+thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer*
+    GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::s_activeFinalizer = nullptr
 ;
 
 
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer*
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::activeFor(
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer*
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::activeFor(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -487,7 +487,7 @@ GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::activeFor(
 }
 
 
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptionFinalizer(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -511,7 +511,7 @@ GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExc
     s_activeFinalizer = this;
     m_installed = true;
 }
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExceptionFinalizer()noexcept{
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExceptionFinalizer()noexcept{
     if(!m_installed)
         return;
     if(s_activeFinalizer != this)
@@ -633,7 +633,7 @@ GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptEx
 }
 
 
-void GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::beginClosingWithinSubmissionOperation()noexcept{
+void GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::beginClosingWithinSubmissionOperation()noexcept{
     SubmissionAttemptExceptionFinalizer* const owner = m_owner;
     if(!owner || owner->m_armed)
         return;
@@ -658,7 +658,7 @@ void GpuTaskGraphSubmitter::SubmissionAttemptExceptionFinalizer::beginClosingWit
 }
 
 
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionScope::SubmissionAttemptExceptionScope(
+GpuTaskScheduler::SubmissionAttemptExceptionScope::SubmissionAttemptExceptionScope(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -669,7 +669,7 @@ GpuTaskGraphSubmitter::SubmissionAttemptExceptionScope::SubmissionAttemptExcepti
     , m_outFailedPacket(outFailedPacket)
     , m_uncaughtExceptionCount(UncaughtExceptionCount())
 {}
-GpuTaskGraphSubmitter::SubmissionAttemptExceptionScope::~SubmissionAttemptExceptionScope()noexcept{
+GpuTaskScheduler::SubmissionAttemptExceptionScope::~SubmissionAttemptExceptionScope()noexcept{
     if(!m_active || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
         return;
     if(m_outFailedPacket && m_failedPacket.valid() && !m_outFailedPacket->valid())

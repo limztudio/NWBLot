@@ -60,7 +60,7 @@ class CallbackShutdownGuard : NoCopy{
 public:
     explicit CallbackShutdownGuard(
         NWB::IProjectEntryCallbacks& callbacks,
-        NWB::Core::Alloc::CpuTaskScope& tasks)
+        NWB::Core::CpuTaskScope& tasks)
         : m_callbacks(callbacks)
         , m_tasks(tasks)
     {}
@@ -92,7 +92,7 @@ public:
 
 private:
     NWB::IProjectEntryCallbacks& m_callbacks;
-    NWB::Core::Alloc::CpuTaskScope& m_tasks;
+    NWB::Core::CpuTaskScope& m_tasks;
     bool m_active = false;
 };
 
@@ -370,7 +370,7 @@ static int RunProjectRuntime(
                 return -1;
             }
 
-            NWB::Core::Alloc::CpuTaskScope projectTasks(frame.cpuTasks());
+            NWB::Core::CpuTaskScope projectTasks(frame.cpuTasks());
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),

@@ -110,7 +110,7 @@ public:
 
 Graphics::Graphics(
     GraphicsAllocator& allocator,
-    Alloc::CpuTaskScheduler& cpuScheduler,
+    CpuTaskScheduler& cpuScheduler,
     Perf::TimingSink& gpuTiming
 )
     : Graphics(allocator, cpuScheduler, gpuTiming, nullptr)
@@ -118,7 +118,7 @@ Graphics::Graphics(
 
 Graphics::Graphics(
     GraphicsAllocator& allocator,
-    Alloc::CpuTaskScheduler& cpuScheduler,
+    CpuTaskScheduler& cpuScheduler,
     Perf::TimingSink& gpuTiming,
     Perf::TimingSink* const cpuTiming
 )
@@ -667,10 +667,10 @@ void Graphics::render(){
 
     // Each task pairs preparation with rendering. The dependency chain preserves skinning publication before the
     // next pass prepares dependent meshes, while main-thread execution preserves the platform and UI contracts.
-    Alloc::CpuTaskScope frameTasks(m_cpuScheduler);
-    const Alloc::CpuTaskOptions options{
-        .priority = Alloc::CpuTaskPriority::Critical,
-        .target = Alloc::CpuTaskTarget::MainThread,
+    CpuTaskScope frameTasks(m_cpuScheduler);
+    const CpuTaskOptions options{
+        .priority = CpuTaskPriority::Critical,
+        .target = CpuTaskTarget::MainThread,
     };
     TaskHandle previous;
     for(auto* renderPass : m_renderPasses){

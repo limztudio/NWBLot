@@ -291,7 +291,7 @@ void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalize
     WriteRefreshCount(report, "indices", canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
-int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::Alloc::CpuTaskScheduler& cpuScheduler, bool& prompted){
+int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
     if(options.listMeshes){
         NWB_LOGGER_WARNING(NWB_TEXT("--list-meshes is only valid for FBX input."));
         return 1;
@@ -339,7 +339,7 @@ int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int Run(int argc, char** argv, Core::Alloc::CpuTaskScheduler& cpuScheduler, bool& prompted){
+int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
 

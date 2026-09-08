@@ -436,10 +436,10 @@ TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWor
     ASSERT_NE(firstBuffer.get(), nullptr);
     ASSERT_NE(secondBuffer.get(), nullptr);
 
-    Alloc::CpuTaskScheduler firstWorkers(1u);
-    Alloc::CpuTaskScheduler secondWorkers(1u);
-    Alloc::CpuTaskScope firstTasks(firstWorkers);
-    Alloc::CpuTaskScope secondTasks(secondWorkers);
+    CpuTaskScheduler firstWorkers(1u);
+    CpuTaskScheduler secondWorkers(1u);
+    CpuTaskScope firstTasks(firstWorkers);
+    CpuTaskScope secondTasks(secondWorkers);
     ASSERT_NE(firstWorkers.domainIdentity(), 0u);
     ASSERT_NE(secondWorkers.domainIdentity(), 0u);
     ASSERT_NE(firstWorkers.domainIdentity(), secondWorkers.domainIdentity());

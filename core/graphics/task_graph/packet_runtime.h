@@ -10,7 +10,7 @@
 #include "task_graph.h"
 
 #include <core/alloc/scratch.h>
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 #include <core/graphics/rhi/device.h>
 #include <global/sync.h>
 
@@ -26,7 +26,7 @@ NWB_CORE_BEGIN
 
 class GpuTimingRecorder;
 class GpuTimingSubmissionTicket;
-class GpuTaskGraphSubmitter;
+class GpuTaskScheduler;
 class GpuCommandIrCapture;
 class GpuGraphSubmissionTransactionGateTestAccess;
 struct GpuTaskGraphRuntimeStatistics;
@@ -144,7 +144,7 @@ class GpuRecordedGraph final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuGraphSubmissionTransactionGateTestAccess;
     friend class GpuNativePacketRecorder;
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
 
 private:
     struct ArtifactStorage;
@@ -410,7 +410,7 @@ private:
 
 
 class GpuNativePacketRecorder final : NoCopy{
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
 
 private:
     class PacketRecordingExceptionScope;
@@ -459,7 +459,7 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& outRecordedGraph,
-        Alloc::CpuTaskScheduler& cpuScheduler,
+        CpuTaskScheduler& cpuScheduler,
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
@@ -598,7 +598,7 @@ struct GpuTaskGraphNormalExecutionDesc{
     usize taskRecordedCallbackCount = 0u;
     // A null scheduler preserves serial compile-order recording. A supplied scheduler enables the recorder's
     // per-packet ready-frontier policy; packets without declaration opt-in still record serially.
-    Alloc::CpuTaskScheduler* readyFrontierScheduler = nullptr;
+    CpuTaskScheduler* readyFrontierScheduler = nullptr;
     GpuCommandIrCapture* commandIrCapture = nullptr;
     const GpuTaskGraphExternalCompletionToken* externalCompletionTokens = nullptr;
     usize externalCompletionTokenCount = 0u;
@@ -740,7 +740,7 @@ class GpuGraphSubmissionTransaction final : NoCopy{
     )noexcept;
     friend class GpuRecordedGraph;
     friend class GpuGraphSubmissionTransactionGateTestAccess;
-    friend class GpuTaskGraphSubmitter;
+    friend class GpuTaskScheduler;
 
 
 private:
@@ -1127,7 +1127,7 @@ struct GpuTaskGraphRuntimeStatistics{
 )noexcept;
 
 
-class GpuTaskGraphSubmitter final : NoCopy{
+class GpuTaskScheduler final : NoCopy{
 private:
     class PreparedTimingTicketsUnwindScope;
     class SubmittingPacketUnwindScope;
@@ -1206,7 +1206,7 @@ private:
 
 
 public:
-    explicit GpuTaskGraphSubmitter(Device& device)
+    explicit GpuTaskScheduler(Device& device)
         : m_device(device)
     {}
 
@@ -1288,7 +1288,7 @@ public:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
-        Alloc::CpuTaskScheduler& cpuScheduler,
+        CpuTaskScheduler& cpuScheduler,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
         GpuGraphSubmissionTransaction& transaction,
@@ -1334,7 +1334,7 @@ private:
         const GpuNativePacketRecorder& recorder,
         const GpuSubmissionPacketRange& range,
         GpuRecordedGraph& recordedGraph,
-        Alloc::CpuTaskScheduler* readyFrontierScheduler,
+        CpuTaskScheduler* readyFrontierScheduler,
         GpuCommandIrCapture* commandIrCapture,
         GpuSubmissionPacketId* outFailedPacket
     )const;
@@ -1343,7 +1343,7 @@ private:
         const GpuCompiledGraph& compiledGraph,
         const GpuNativePacketRecorder& recorder,
         GpuRecordedGraph& recordedGraph,
-        Alloc::CpuTaskScheduler* readyFrontierScheduler,
+        CpuTaskScheduler* readyFrontierScheduler,
         GpuTaskId firstTask,
         GpuTaskId lastTask,
         GpuGraphSubmissionTransaction& transaction,

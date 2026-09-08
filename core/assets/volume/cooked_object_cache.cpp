@@ -372,7 +372,7 @@ namespace AssetsVolumeCookDetail{
 
 bool BuildRegistryObjectManifestEntries(
     Core::Alloc::GlobalArena& arena,
-    Core::Alloc::CpuTaskScheduler& cpuScheduler,
+    Core::CpuTaskScheduler& cpuScheduler,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
     ParsedAssetMetadata& parsedMetadata,

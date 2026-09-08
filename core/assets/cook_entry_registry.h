@@ -13,7 +13,7 @@
 
 #include "module.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 #include <core/alloc/scratch.h>
 
@@ -54,7 +54,7 @@ class ICookedAssetWriter;
 
 struct CookEntryParseContext{
     CookArena& cookArena;
-    Core::Alloc::CpuTaskScheduler& cpuScheduler;
+    Core::CpuTaskScheduler& cpuScheduler;
     ScratchArena& scratchArena;
     CookEntryPathHashSet& seenVirtualPathHashes;
 };

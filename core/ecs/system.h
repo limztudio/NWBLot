@@ -7,7 +7,7 @@
 
 #include "component.h"
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -66,8 +66,8 @@ public:
     virtual void prepare(World& world){ static_cast<void>(world); }
     // The scheduler keeps this task incomplete until update and its submitted descendants finish.
     virtual void update(World& world, f32 delta) = 0;
-    [[nodiscard]] virtual Alloc::CpuTaskOptions taskOptions()const{
-        return { .cost = Alloc::CpuTaskCost::Heavy };
+    [[nodiscard]] virtual CpuTaskOptions taskOptions()const{
+        return { .cost = CpuTaskCost::Heavy };
     }
 
 

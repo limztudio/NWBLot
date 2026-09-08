@@ -32,7 +32,7 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -218,7 +218,7 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
 TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -280,7 +280,7 @@ TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -632,7 +632,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
 TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
@@ -932,7 +932,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
 TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuringFinalization){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -1033,7 +1033,7 @@ TEST(GpuTaskGraph, RejectsPresentationEndpointUsersOnDifferentGraphicsQueuesDuri
 TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     Graphics::GpuTaskGraph graph(testArena.arena);

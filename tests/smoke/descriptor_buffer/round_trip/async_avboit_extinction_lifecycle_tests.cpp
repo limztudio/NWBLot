@@ -566,7 +566,7 @@ for(u32 seedIndex = 0u; compiledTask.valid() && seeds && seedIndex < compiledTas
         GpuTaskGraphTaskTimingTicket{ .task = producerTask, .timingTicket = &extinctionTimingTicket },
         GpuTaskGraphTaskTimingTicket{ .task = extinctionTask, .timingTicket = &extinctionTimingTicket },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -880,7 +880,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
     };
     GpuGraphSubmissionTransaction transaction(asyncScope.arena());
     transaction.reset(compiledGraph);
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitTaskRangeInCompileOrder(
         graph,
         compiledGraph,

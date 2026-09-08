@@ -115,7 +115,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
     ));
     EXPECT_TRUE(taskRecorded);
 
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -251,7 +251,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionUsesStoredToke
         .completion = completion,
         .token = producerToken,
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     EXPECT_FALSE(submitter.submitPacketRangeInCompileOrder(
         graph,
         compiledGraph,
@@ -584,7 +584,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             .token = producerToken,
         },
     };
-    const GpuTaskGraphSubmitter submitter(device);
+    const GpuTaskScheduler submitter(device);
     QueueSubmissionToken wrongPhysicalToken = producerToken;
     wrongPhysicalToken.physicalQueueIndex = graphicsQueue.index;
     const GpuTaskGraphExternalCompletionToken wrongExternalTokens[] = {

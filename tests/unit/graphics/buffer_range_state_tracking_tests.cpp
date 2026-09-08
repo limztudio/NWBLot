@@ -25,7 +25,7 @@ namespace Backend = Core::GraphicsBackend;
 struct RangeContext{
     Core::Alloc::GlobalArena arena{ Name("tests/buffer_range_state_tracking") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Backend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Backend::VulkanAllocator allocator{ context };
     Core::BufferHandle buffer;

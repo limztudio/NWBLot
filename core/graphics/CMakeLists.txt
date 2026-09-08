@@ -195,7 +195,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/aftermath.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
 )
-target_link_libraries(nwb_graphics PUBLIC nwb_common)
+target_link_libraries(nwb_graphics PUBLIC nwb_common nwb_task)
 target_link_libraries(nwb_graphics PUBLIC nwb_perf)
 target_link_libraries(nwb_graphics PUBLIC nwb_telemetry)
 target_link_libraries(nwb_graphics PUBLIC nwb::volk)

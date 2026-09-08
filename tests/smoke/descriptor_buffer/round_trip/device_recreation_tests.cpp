@@ -243,7 +243,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     retiredTransaction.reset(retiredCompiledGraph);
     {
-        const GpuTaskGraphSubmitter submitter(firstDevice);
+        const GpuTaskScheduler submitter(firstDevice);
         ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             retiredGraph,
             retiredCompiledGraph,
@@ -446,7 +446,7 @@ TEST_F(DescriptorBufferRoundTripTest, RecreatesGraphPacketRecordingStateAcrossAc
 
     replacementTransaction.reset(replacementCompiledGraph);
     {
-        const GpuTaskGraphSubmitter submitter(secondDevice);
+        const GpuTaskScheduler submitter(secondDevice);
         ASSERT_TRUE(submitter.submitPacketRangeInCompileOrder(
             replacementGraph,
             replacementCompiledGraph,

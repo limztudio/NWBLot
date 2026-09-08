@@ -114,7 +114,7 @@ namespace __hidden_gpu_packet_runtime_submission{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class GpuTaskGraphSubmitter::PreparedTimingTicketsUnwindScope final : NoCopy{
+class GpuTaskScheduler::PreparedTimingTicketsUnwindScope final : NoCopy{
 private:
     enum class Mode : u8{
         Rollback,
@@ -158,7 +158,7 @@ private:
 };
 
 
-class GpuTaskGraphSubmitter::SubmittingPacketUnwindScope final : NoCopy{
+class GpuTaskScheduler::SubmittingPacketUnwindScope final : NoCopy{
 public:
     SubmittingPacketUnwindScope(
         GpuTaskGraph& graph,
@@ -211,7 +211,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraphSubmitter::submitPacketWithinSubmissionOperation(
+bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess,

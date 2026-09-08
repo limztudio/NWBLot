@@ -2,7 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/alloc/cpu_task.h>
+#include <core/task/cpu_task.h>
+#include <core/alloc/scratch.h>
 
 #include <global/platform.h>
 #include <global/termination.h>
@@ -20,7 +21,7 @@ namespace __hidden_cpu_task_fanin_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace NWB::Core::Alloc;
+using namespace NWB::Core;
 
 inline constexpr u32 s_GateTimeoutMS = 20000u;
 inline constexpr u32 s_TestTimeoutMS = 60000u;
@@ -57,7 +58,7 @@ private:
 }
 
 
-void VerifyFanIn(ScratchArena& scratchArena, const usize uniqueDependencyCount, const usize repetitionCount){
+void VerifyFanIn(Alloc::ScratchArena& scratchArena, const usize uniqueDependencyCount, const usize repetitionCount){
     DeadlineGuard deadline;
     Atomic<bool> rootEntered{ false };
     Atomic<bool> releaseRoot{ false };
@@ -65,7 +66,7 @@ void VerifyFanIn(ScratchArena& scratchArena, const usize uniqueDependencyCount, 
     Atomic<u32> dependencyCompletionCount{ 0u };
     Atomic<u32> completionCountObservedByJoin{ 0u };
     Atomic<u32> joinInvocationCount{ 0u };
-    Vector<u32, ScratchArena> dependencyInvocations(uniqueDependencyCount, 0u, scratchArena);
+    Vector<u32, Alloc::ScratchArena> dependencyInvocations(uniqueDependencyCount, 0u, scratchArena);
     CpuTaskSchedulerConfig config;
     config.workerCount = 1u;
     config.heterogeneous = false;
@@ -86,8 +87,8 @@ void VerifyFanIn(ScratchArena& scratchArena, const usize uniqueDependencyCount, 
     EXPECT_TRUE(scheduler.isComplete(completed));
     EXPECT_FALSE(scheduler.isComplete(root));
 
-    Vector<CpuTaskHandle, ScratchArena> tasks(scratchArena);
-    Vector<CpuTaskHandle, ScratchArena> dependencies(scratchArena);
+    Vector<CpuTaskHandle, Alloc::ScratchArena> tasks(scratchArena);
+    Vector<CpuTaskHandle, Alloc::ScratchArena> dependencies(scratchArena);
     tasks.reserve(uniqueDependencyCount);
     dependencies.reserve(uniqueDependencyCount * repetitionCount + 2u);
     for(usize index = 0u; index < uniqueDependencyCount; ++index){

@@ -32,7 +32,7 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){
@@ -428,7 +428,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
 TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapabilities){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::Alloc::CpuTaskScheduler cpuScheduler(0u);
+    Core::CpuTaskScheduler cpuScheduler(0u);
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const auto createTexture = [&](const Graphics::TextureDesc& sourceDescription){

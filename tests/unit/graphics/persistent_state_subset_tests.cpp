@@ -38,7 +38,7 @@ inline constexpr Core::GpuPhysicalQueueId s_ReleaseQueue{ .index = 7u, .deviceGe
 struct SubsetContext{
     Core::Alloc::GlobalArena arena{ Name("tests/persistent_state_subset/inputs") };
     Core::GraphicsAllocator graphicsAllocator{ arena };
-    Core::Alloc::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, s_DeviceGeneration };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
     BufferVector buffers{ arena };

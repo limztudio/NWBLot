@@ -56,7 +56,7 @@ The GPU graph continues to own resource barriers, physical queues, acceptance, r
 2. Runtime migration: ECS, Frame, Graphics/Vulkan recording, loader/project scopes, tools and cook APIs; targeted ECS/graphics tests and native Vulkan smoke.
 3. Final integration: supported local build configurations, policy checks, repeated concurrency regressions, and a measured CPU workload comparison. Record actual host coverage and any unavailable platform validation.
 
-Each completed step is committed and pushed to `main` after its checks pass. The legacy allocator pool/job primitives remain isolated for their regression coverage; production consumers use the CPU task service.
+Each completed step is committed and pushed to `main` after its checks pass. The legacy allocator pool/job implementations, scheduler facades, arena names, and 64-bit affinity-mask APIs have been removed. Large distinct and repeated dependency fan-in regressions now exercise the shared CPU task service. Topology tests cover actual allowed processor identities and restrictions.
 
 ## Local integration verification
 
@@ -73,6 +73,8 @@ The final CPU scheduler source was integrated with the GPU buffer-range synchron
 The subsequent GPU active-buffer-range change, `aec212c4`, integrated without CPU source changes. A focused Optimize rebuild of ECS rendering, ECS graphics tests, placed-resource memory tests, native descriptor tests, and Testbed passed. ECS graphics and placed-resource memory suites passed again, as did all 18 native scheduler/render cases. Explicit native buffer-range coverage passed four cases and skipped one requiring a separate transfer queue; the new UAV-prefix, indirect-dispatch, and material active-frame-prefix cases passed. A fresh Testbed window capture passed in 3.93 seconds. All 50 source-policy checks and self-tests also passed against this integrated source.
 
 Linux and Windows x64 were not built or run on this ARM64 host. Local test and benchmark artifacts are retained in the ignored build/artifact directories; the device-capability skips above are not counted as executed tests.
+
+After legacy code removal, the 11 selected Optimize engine, renderer, loader, tool, test, and Testbed targets rebuilt successfully. All 58 selected Optimize checks passed: seven primary suites, 50 source-policy checks and self-tests, and the fresh Testbed window capture (4.11 seconds). The global suite also rebuilt and passed in Debug and Final. The current global suite contains 169 tests, including migrated large fan-in, callable-construction, lvalue-invocation, and native-worker terminal-failure coverage; tests specific to the retired pool/job implementation were removed.
 
 ## Measurement method
 

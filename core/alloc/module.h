@@ -12,8 +12,7 @@
 #include "general.h"
 #include "scratch.h"
 #include "persistent.h"
-#include "thread.h"
-#include "job.h"
+#include "cpu_task.h"
 
 #include <global/arena_base.h>
 #include <global/arena_object.h>

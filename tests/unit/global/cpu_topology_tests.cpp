@@ -61,7 +61,6 @@ TEST(CpuTopologyTests, EnumeratesUniqueUsableProcessorsAndAccountsForEveryCapaci
 TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{}));
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{ 0u, Limit<u32>::s_Max, 0u, CpuAffinity::Any }));
-    EXPECT_EQ(QueryCpuAffinityMask(CpuAffinity::Any), 0u);
 }
 
 

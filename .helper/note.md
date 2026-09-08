@@ -85,7 +85,7 @@
 
 1. `Frame` owns one `Alloc::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.
 2. ECS worlds and graphics own `Alloc::CpuTaskScope` task lifetimes and borrow the scheduler. Vulkan recording, data preparation, and cooking use the same scheduler through dependencies and synchronous task batches; subsystems must not create private thread pools.
-3. `Alloc::ThreadPool` and `Alloc::JobSystem` remain low-level compatibility implementations and test coverage. New engine, renderer, asset, and cooker work uses `CpuTaskScheduler`/`CpuTaskScope`.
+3. Engine, renderer, asset, and cooker work uses `CpuTaskScheduler`/`CpuTaskScope`. The retired per-subsystem pool/job implementations and scheduler facades have been removed; do not restore them as compatibility APIs.
 4. Declare CPU cost (`Heavy`, `Light`, `Any`), priority, and required main-thread execution through `CpuTaskOptions`. The scheduler owns processor placement and worker identity. Heavy/light cost is independent of task priority.
 5. Task completion includes the callback, its submitted descendants, and capture retirement. A CPU completion handle does not imply GPU completion; GPU resource readiness continues to use the GPU runtime's submission/completion contracts.
 6. Join a scope before releasing data referenced by its tasks. Stop external producers before destroying their scope or scheduler. Do not join a scope containing the current task or a structured ancestor, and do not create dependencies that wait on such an ancestor.

@@ -27,9 +27,6 @@ namespace __hidden_cpu_topology{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr u32 s_AffinityMaskBitCount = sizeof(u64) * 8u;
-
-
 void classifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
     u32 minimumClass = Limit<u32>::s_Max;
     u32 maximumClass = 0u;
@@ -292,31 +289,6 @@ bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
 }
 
 
-u64 QueryCpuAffinityMask(CpuAffinity::Enum type){
-    if(type == CpuAffinity::Any)
-        return 0u;
-    InteropVector<CpuWorkerPlacement> placements;
-    if(!QueryCpuWorkerPlacements(placements))
-        return 0u;
-    u32 primaryGroup = 0u;
-#if defined(NWB_PLATFORM_WINDOWS)
-    GROUP_AFFINITY affinity{};
-    if(!GetThreadGroupAffinity(GetCurrentThread(), &affinity))
-        return 0u;
-    primaryGroup = affinity.Group;
-#endif
-    u64 mask = 0u;
-    for(const CpuWorkerPlacement& placement : placements){
-        if(
-            placement.affinity == type && placement.processorGroup == primaryGroup
-            && placement.logicalProcessorIndex < __hidden_cpu_topology::s_AffinityMaskBitCount
-        )
-            mask |= 1ULL << placement.logicalProcessorIndex;
-    }
-    return mask;
-}
-
-
 u32 QueryCpuCoreCount(CpuAffinity::Enum type){
     InteropVector<CpuWorkerPlacement> placements;
     if(!QueryCpuWorkerPlacements(placements))
@@ -327,28 +299,6 @@ u32 QueryCpuCoreCount(CpuAffinity::Enum type){
             ++count;
     }
     return count;
-}
-
-
-void SetCurrentThreadCpuAffinity(u64 mask){
-    if(mask == 0u)
-        return;
-#if defined(NWB_PLATFORM_WINDOWS)
-    if(SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(mask)) == 0u)
-        return;
-#elif defined(NWB_PLATFORM_LINUX)
-    InteropVector<usize> affinityWords;
-    if(!__hidden_cpu_topology::queryLinuxAffinity(affinityWords))
-        return;
-    const usize byteCount = affinityWords.size() * sizeof(usize);
-    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords.data());
-    for(usize processorIndex = 0u; processorIndex < byteCount * 8u; ++processorIndex){
-        if(processorIndex >= __hidden_cpu_topology::s_AffinityMaskBitCount || (mask & (1ULL << processorIndex)) == 0u)
-            CPU_CLR_S(processorIndex, byteCount, affinity);
-    }
-    if(::sched_setaffinity(0, byteCount, affinity) != 0)
-        return;
-#endif
 }
 
 

@@ -245,6 +245,8 @@ Eight scope-guard regressions and four terminal-entry regressions pass in dbg, o
 
 ## Terminal scheduler failures
 
+This section records the earlier pool/job implementation and its measurements. Those implementations have since been removed after the [shared CPU task scheduler migration](cpu_task_scheduler.md); the large fan-in regressions now exercise that scheduler.
+
 ThreadPool and JobSystem no longer capture, store, compare, or defer worker exceptions. Unexpected native-worker failures terminate at the native thread boundary. Inline failures unwind to terminal application handling. RAII owns prepared task nodes, partial queue publication, parallel chunk completion, active-worker retirement, and dependent-job cancellation. A failed running job publishes cancellation before its capture is destroyed, preventing reentrant destruction from admitting replacement work. Queue capture destruction remains outside scheduler locks, and descriptor storage survives until all claimed callbacks retire. Obsolete exception-pointer helpers are removed; direct users include the remaining unwind-count utility explicitly.
 
 | Public job submission workload | dbg before → after | opt before → after |

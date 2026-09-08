@@ -10,13 +10,12 @@ target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpu_topology_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_scheduler_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task_cleanup_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/job_system_fanin_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/job_system_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_fanin_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_submission_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scratch_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/sync_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/tangent_frame_tests.inl"
-    "${CMAKE_CURRENT_LIST_DIR}/thread_pool_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/terminal_entry_tests.cpp"
 )
 target_link_libraries(nwb_global_tests PRIVATE

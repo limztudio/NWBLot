@@ -45,10 +45,7 @@ struct CpuWorkerPlacement{
 // Applies one actual processor identity, including Windows groups and Linux indices beyond 63. Failure leaves OS scheduling active.
 [[nodiscard]] bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
 
-// Legacy masks are limited to the calling thread's primary Windows group, or Linux CPU indices 0-63. Any is unpinned (zero).
-[[nodiscard]] u64 QueryCpuAffinityMask(CpuAffinity::Enum type);
 [[nodiscard]] u32 QueryCpuCoreCount(CpuAffinity::Enum type);
-void SetCurrentThreadCpuAffinity(u64 mask);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

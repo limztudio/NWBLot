@@ -11,8 +11,6 @@ target_sources(nwb_alloc PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/general.h"
     "${CMAKE_CURRENT_LIST_DIR}/persistent.h"
     "${CMAKE_CURRENT_LIST_DIR}/scratch.h"
-    "${CMAKE_CURRENT_LIST_DIR}/thread.h"
-    "${CMAKE_CURRENT_LIST_DIR}/job.h"
 )
 target_link_libraries(nwb_alloc PUBLIC nwb_global nwb::tbbmalloc)
 target_compile_definitions(nwb_alloc PRIVATE __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)

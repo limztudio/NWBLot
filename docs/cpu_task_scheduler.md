@@ -149,3 +149,11 @@ A join caches only exhausted searches that prove a node cannot contribute to its
 The zero-worker scope benchmark (128 unrelated roots feeding a shared 64-task chain ahead of 32 joined tasks) improved from median 2865.730 → 29.494 µs and p95 2898.091 → 32.984 µs. This is a deliberately dependency-heavy microbenchmark. Three ABBA epochs produced 48 samples per design; output/lifetime checks all passed. Other workload medians remained similar or improved, while some worker-based p95 values varied between runs. Raw results and the baseline binary are under ignored `__cmake/cpu_scheduler_followup/step3/`.
 
 Debug/Optimize CPU suites and all 52 policy checks passed. Eight wait cases passed 50 repetitions (400 cases), including a newly published prerequisite, recycled node slots, nested scope identities, and concurrent waiters traversing unscoped prerequisites.
+
+### Step 4: index canceled generations by task slot
+
+Each slot retains its newest canceled generation inline and a sorted vector of older canceled generations. Late dependencies select the slot directly, then check its latest generation or binary-search its older history. Histories survive node reuse. Capacity for a possible older entry is reserved before ordinary or batched publication, so canceled retirement remains allocation-free. The first cancellation of a slot needs no history allocation. Old handles retain their existing lifetime semantics; this is not history eviction.
+
+The 512-lookup benchmark with 4096 canceled handles improved from median 525.350 → 61.685 µs and p95 561.969 → 100.058 µs over three ABBA epochs (48 samples/design). Other median controls stayed similar, with the coarse control varying by about 4%. Raw results and baseline are under ignored `__cmake/cpu_scheduler_followup/step4/`.
+
+Debug/Optimize CPU suites and all 52 policy checks passed. Added coverage alternates successful/canceled generations through 1024 slot reuses, checks independent slots with matching generation numbers, and verifies original cancellation results after both successful and canceled parallel ranges reuse those slots.

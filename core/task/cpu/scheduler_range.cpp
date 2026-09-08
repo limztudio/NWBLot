@@ -63,12 +63,14 @@ void CpuTaskScheduler::parallelRange(
             else
                 reservedHead = handle.index;
             reservedTail = handle.index;
+            TaskNode& node = m_nodes[handle.index];
+            if(node.latestCanceledGeneration != 0u)
+                ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
             const usize first = begin + chunk * chunkSize + Min(chunk, remainder);
             const usize last = first + chunkSize + (chunk < remainder ? 1u : 0u);
             // These internal captures are trivial pointers and bounds. No user callable is copied or invoked under the lock.
-            m_nodes[handle.index].function = [context, invoke, first, last](){ invoke(context, first, last); };
+            node.function = [context, invoke, first, last](){ invoke(context, first, last); };
         }
-        ContainerDetail::ReserveGrowingCapacity(m_canceledHandles, AddSize(AddSize(m_canceledHandles.size(), m_outstanding), chunkCount));
         const usize outstanding = AddSize(m_outstanding, chunkCount);
         const TaskHandle parentHandle = s_execution && &s_execution->scheduler == this ? s_execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);

@@ -118,12 +118,14 @@ private:
     struct TaskNode{
         TaskFunction function;
         Vector<TaskHandle, Alloc::GlobalArena> dependents;
+        Vector<u32, Alloc::GlobalArena> olderCanceledGenerations;
         CpuTaskScope* scope = nullptr;
         TaskHandle parent;
         CpuTaskOptions options;
         usize dependencies = 0u;
         usize children = 0u;
         u32 generation = 1u;
+        u32 latestCanceledGeneration = 0u;
         u32 next = TaskHandle::s_InvalidIndex;
         TaskState state = TaskState::Free;
         bool canceled = false;
@@ -232,6 +234,7 @@ private:
     void parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, const void* context, RangeFunction invoke);
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)const noexcept;
+    [[nodiscard]] bool wasCanceledLocked(TaskHandle handle)const noexcept;
     void enqueueLocked(u32 index)noexcept;
     [[nodiscard]] TaskHandle claimLocked(
         CpuAffinity::Enum affinity,
@@ -274,7 +277,6 @@ private:
     Vector<u32, Alloc::GlobalArena> m_searchStack;
     Vector<u64, Alloc::GlobalArena> m_searchVisits;
     Vector<u64, Alloc::GlobalArena> m_scopeNegativeVisits;
-    Vector<TaskHandle, Alloc::GlobalArena> m_canceledHandles;
     ReadyQueue m_ready[s_QueueCount];
     u32 m_readyWorkerCosts[3u]{};
     u32 m_sleepingWorkers[3u]{};

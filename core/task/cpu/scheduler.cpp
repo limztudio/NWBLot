@@ -22,6 +22,7 @@ NWB_CORE_BEGIN
 
 CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)
     : dependents(arena)
+    , olderCanceledGenerations(arena)
 {}
 
 
@@ -83,7 +84,6 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_searchStack(m_arena)
     , m_searchVisits(m_arena)
     , m_scopeNegativeVisits(m_arena)
-    , m_canceledHandles(m_arena)
     , m_workers(m_arena)
 {
     InteropVector<CpuWorkerPlacement> topology;
@@ -214,7 +214,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         ScopedLock lock(m_mutex);
         if(m_aborting || (scope && scope->m_canceled))
             return {};
-        ContainerDetail::ReserveGrowingCapacity(m_canceledHandles, AddSize(AddSize(m_canceledHandles.size(), m_outstanding), 1u));
+        if(node->latestCanceledGeneration != 0u)
+            ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
         if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
             Alloc::ScratchArena scratch(TaskArenaScope::s_CpuTaskDependencies, 4096u);
             Vector<TaskHandle, Alloc::ScratchArena> frontier(scratch);
@@ -275,17 +276,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
                 ++node->dependencies;
                 node->canceled = node->canceled || dependency->canceled;
             }
-            else{
-                for(const TaskHandle canceled : m_canceledHandles){
-                    if(
-                        canceled.domainIdentity == dependencies[index].domainIdentity
-                        && canceled.index == dependencies[index].index && canceled.generation == dependencies[index].generation
-                    ){
-                        node->canceled = true;
-                        break;
-                    }
-                }
-            }
+            else
+                node->canceled = node->canceled || wasCanceledLocked(dependencies[index]);
         }
         ++m_outstanding;
         m_statistics.peakOutstandingTasks = Max(m_statistics.peakOutstandingTasks, m_outstanding);
@@ -321,6 +313,16 @@ CpuTaskScheduler::TaskNode* CpuTaskScheduler::resolveLocked(const TaskHandle han
         return nullptr;
     TaskNode& node = const_cast<TaskNode&>(m_nodes[handle.index]);
     return node.generation == handle.generation && node.state != TaskState::Free ? &node : nullptr;
+}
+
+bool CpuTaskScheduler::wasCanceledLocked(const TaskHandle handle)const noexcept{
+    if(!handle.valid() || handle.domainIdentity != m_domainIdentity || handle.index >= m_nodes.size())
+        return false;
+    const TaskNode& node = m_nodes[handle.index];
+    if(handle.generation == node.latestCanceledGeneration)
+        return true;
+    const auto found = LowerBound(node.olderCanceledGenerations.begin(), node.olderCanceledGenerations.end(), handle.generation);
+    return found != node.olderCanceledGenerations.end() && *found == handle.generation;
 }
 
 void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
@@ -582,7 +584,10 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
             if(node->scope)
                 node->scope->m_pending.fetch_sub(1u, MemoryOrder::acq_rel);
             if(node->canceled){
-                m_canceledHandles.push_back(handle);
+                // Generations retire in increasing order. Capacity was reserved before publishing this task.
+                if(node->latestCanceledGeneration != 0u)
+                    node->olderCanceledGenerations.push_back(node->latestCanceledGeneration);
+                node->latestCanceledGeneration = handle.generation;
                 ++m_statistics.canceledTasks;
             }
             else

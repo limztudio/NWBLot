@@ -28,7 +28,7 @@ Matching-class workers get first opportunity. When all matching-class workers ar
 
 `CpuTaskScheduler::submit()` and `CpuTaskScope::submit()` accept concurrent calls from the engine main thread, scheduler callbacks, and external OS threads. Producers do not register with the scheduler or own a worker lane. Multiple producers may share one task scope.
 
-The ready queues are MPMC (multiple producer, multiple consumer), protected by the engine `Futex`. Task reservation, dependency publication, queue insertion, and consumer claims synchronize through the scheduler mutex. A ready task is claimed once; its callback runs after releasing the mutex. Callable construction and capture retirement also stay outside that mutex. The implementation is mutex-protected, not lock-free.
+The ready queues are MPMC (multiple producer, multiple consumer), protected by the engine `Futex`. Task reservation, dependency publication, queue insertion, and consumer claims synchronize through the scheduler mutex. A ready task is claimed once; its callback runs after releasing the mutex. User callable construction and capture retirement also stay outside that mutex. The implementation is mutex-protected, not lock-free.
 
 Submission thread and execution target are independent. Worker tasks run on the configured workers or an eligible cooperative caller; `MainThread` tasks submitted anywhere still execute only on the scheduler owner. External waiters do not become extra worker consumers or borrow a GPU recording slot. With zero workers, the owner must pump or wait to execute submitted work.
 
@@ -123,3 +123,21 @@ The initial shared implementation took 30.75 ms for the tiny queue case because 
 Scope joins now reject direct and transitive dependents of the current execution or its structured ancestors, matching task-handle joins. Cooperative work and wakeups recheck the graph so later dependency publication cannot silently introduce this wait cycle. Wait and cycle logic live together in `core/task/cpu/scheduler_wait.cpp`. Regression coverage includes direct, transitive, newly published dependencies, and valid independent joins.
 
 Validation: the direct-cycle regression timed out against the original implementation. All four new wait cases, the full Linux Debug CPU task suite, and all 52 source-policy checks/self-tests passed after the fix.
+
+### Step 2: batched parallel ranges
+
+`parallelFor()` reserves and publishes its chunk nodes under one scheduler lock, with one publication notification. Internal captures contain only the caller-context pointer, an invocation pointer, and range bounds; user callables are neither copied nor invoked under that lock. A single chunk runs directly through the ordinary execution/retirement machinery when the caller is an eligible owner or worker. External producers and off-owner main-thread work remain queued. Descendants, cancellation boundaries, and exception cleanup still use task nodes and scopes.
+
+Seven opt-in `CpuTaskProfile.DISABLED_*` cases record raw samples and validate deterministic outputs. They are excluded from normal tests and have no timing pass threshold. On Linux x64 Optimize, AMD BC-250 (6 cores / 12 logical processors), three ABBA epochs gave 48 measured samples per design with zero placement failures. Builds and other tests were stopped during measurement. Times below are complete benchmark-case medians in microseconds, not per-element costs or application frame times:
+
+| Workload | Before | After |
+| --- | ---: | ---: |
+| 128 single-chunk ranges, one worker | 76.340 | 31.815 |
+| 32 tiny batched ranges, four workers | 1337.584 | 945.188 |
+| Two coarse ranges, four workers | 1102.427 | 1082.951 |
+| Nested ranges, one worker | 101.128 | 90.746 |
+| Nested ranges, four workers | 1245.630 | 1091.935 |
+
+The one-worker nested tail varied in the first combined run. A focused six-epoch ABBA confirmation (96 samples/design) measured median 100.751 → 91.421 µs and p95 131.455 → 121.088 µs. Unrelated-scope and cancellation-history controls stayed similar; their optimizations are later steps. Raw XML, summaries, and the baseline binary are retained under ignored `__cmake/cpu_scheduler_followup/step2/`.
+
+Validation includes Debug and Optimize CPU suites, an inline exception/descendant-retirement case, caller/worker identity, external producer routing, cancellation, nested ranges, and all 52 source-policy checks/self-tests. Physical heterogeneous-class cases skip on this homogeneous host.

@@ -101,6 +101,7 @@ public:
 
 private:
     using TaskFunction = InplaceFunction<384u>;
+    using RangeFunction = void(*)(const void*, usize, usize);
 
 
 private:
@@ -215,6 +216,7 @@ public:
 
 
 private:
+    [[nodiscard]] TaskHandle reserveTaskLocked();
     TaskHandle submitTask(
         TaskFunction&& function,
         CpuTaskScope* scope,
@@ -222,6 +224,7 @@ private:
         const TaskHandle* dependencies,
         usize dependencyCount
     );
+    void parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, const void* context, RangeFunction invoke);
     void releaseReservation(TaskHandle handle)noexcept;
     [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)const noexcept;
     void enqueueLocked(u32 index)noexcept;
@@ -363,32 +366,13 @@ void CpuTaskScheduler::parallelFor(usize begin, usize end, usize grainSize, cons
     if(begin >= end)
         return;
 
-    CpuTaskScope chunks(*this);
-    chunks.m_allowCallerWork = true;
-    const usize count = end - begin;
-    const usize grain = Max(grainSize, static_cast<usize>(1u));
-    const usize chunkCount = Min(DivideUp(count, grain), Max(static_cast<usize>(m_workerCount), static_cast<usize>(1u)) * s_ChunksPerWorker);
-    const usize chunkSize = count / chunkCount;
-    const usize remainder = count % chunkCount;
-    bool submitted = false;
-    ScopeExit cancelIncomplete([&]()noexcept{
-        if(!submitted)
-            chunks.cancel();
+    const auto range = [&function](const usize first, const usize last){
+        for(usize index = first; index < last; ++index)
+            function(index);
+    };
+    parallelRange(begin, end, grainSize, options, &range, [](const void* context, const usize first, const usize last){
+        (*static_cast<const decltype(range)*>(context))(first, last);
     });
-    for(usize chunk = 0u; chunk < chunkCount; ++chunk){
-        const usize first = begin + chunk * chunkSize + Min(chunk, remainder);
-        const usize last = first + chunkSize + (chunk < remainder ? 1u : 0u);
-        if(!chunks.submit(
-            [&function, first, last](){
-                for(usize index = first; index < last; ++index)
-                    function(index);
-            },
-            options
-        ).valid())
-            throw RuntimeException("CPU task scheduler rejected a parallel range");
-    }
-    chunks.wait();
-    submitted = true;
 }
 
 

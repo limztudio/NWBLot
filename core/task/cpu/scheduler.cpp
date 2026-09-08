@@ -158,6 +158,24 @@ CpuTaskSchedulerStatistics CpuTaskScheduler::statistics()const{
 }
 
 
+CpuTaskScheduler::TaskHandle CpuTaskScheduler::reserveTaskLocked(){
+    u32 index = m_freeNode;
+    if(index == TaskHandle::s_InvalidIndex){
+        if(m_nodes.size() >= TaskHandle::s_InvalidIndex)
+            return {};
+        index = static_cast<u32>(m_nodes.size());
+        ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
+        m_searchVisits.resize(m_nodes.size() + 1u, 0u);
+        m_nodes.emplace_back(m_arena);
+    }
+    else
+        m_freeNode = m_nodes[index].next;
+    TaskNode& node = m_nodes[index];
+    node.state = TaskState::Preparing;
+    node.next = TaskHandle::s_InvalidIndex;
+    return { m_domainIdentity, index, node.generation };
+}
+
 CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
     TaskFunction&& function,
     CpuTaskScope* const scope,
@@ -182,21 +200,10 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
             if(dependencies[index].valid() && dependencies[index].domainIdentity != m_domainIdentity)
                 return {};
         }
-        u32 index = m_freeNode;
-        if(index == TaskHandle::s_InvalidIndex){
-            if(m_nodes.size() >= TaskHandle::s_InvalidIndex)
-                return {};
-            index = static_cast<u32>(m_nodes.size());
-            ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
-            m_searchVisits.resize(m_nodes.size() + 1u, 0u);
-            m_nodes.emplace_back(m_arena);
-        }
-        else
-            m_freeNode = m_nodes[index].next;
-        node = &m_nodes[index];
-        node->state = TaskState::Preparing;
-        node->next = TaskHandle::s_InvalidIndex;
-        handle = { m_domainIdentity, index, node->generation };
+        handle = reserveTaskLocked();
+        if(!handle.valid())
+            return {};
+        node = &m_nodes[handle.index];
     }
     ScopeExit release([&]()noexcept{ releaseReservation(handle); });
 

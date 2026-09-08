@@ -732,5 +732,40 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
 }
 
 
+TEST(CpuTaskSchedulerTests, WorkerCannotWaitForAnIndependentlySubmittedDependent){
+    EXPECT_DEATH({
+        using namespace __hidden_cpu_task_scheduler_tests;
+        DeadlineGuard deadline(true);
+        TaskGate start;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        CpuTaskHandle dependent;
+        const auto running = scheduler.submit([&](){ start.block(); scheduler.wait(dependent); });
+        dependent = scheduler.submit([](){}, running);
+        start.open();
+        scheduler.wait();
+    }, "");
+}
+
+
+TEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAncestor){
+    EXPECT_DEATH({
+        using namespace __hidden_cpu_task_scheduler_tests;
+        DeadlineGuard deadline(true);
+        TaskGate start;
+        CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
+        CpuTaskHandle dependent;
+        const auto parent = scheduler.submit([&](){
+            start.block();
+            EXPECT_TRUE(scheduler.submit([&](){ scheduler.wait(dependent); }).valid());
+        });
+        dependent = parent;
+        for(u32 depth = 0u; depth < 3u; ++depth)
+            dependent = scheduler.submit([](){}, dependent);
+        start.open();
+        scheduler.wait();
+    }, "");
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

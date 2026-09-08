@@ -112,7 +112,7 @@ int RunPipelineTool(const int argc, char** argv){
         if(!__hidden_asset_builder::ResolveRoots(parsed, options))
             return 1;
         const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
-        cpuScheduler.drain();
+        cpuScheduler.wait();
         return built ? 0 : 1;
     }, [&](const CLI::ParseError& error){ return commandLine.exit(error); }, [](){ return -1; });
 }

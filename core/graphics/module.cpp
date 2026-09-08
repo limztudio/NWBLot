@@ -144,10 +144,13 @@ Graphics::~Graphics()noexcept(false){
         return;
     }
 
+    ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });
+
     NWB_FATAL_ASSERT_MSG(
         destroy(),
         NWB_TEXT("Graphics destruction requires either a completed device join or terminal device loss")
     );
+    drainOnFailure.release();
 }
 
 bool Graphics::init(const Common::FrameData& data){

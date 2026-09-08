@@ -79,9 +79,16 @@ Frame::~Frame()noexcept(false){
         return;
     }
 
+    ScopeExit drainOnFailure([this]()noexcept{
+        m_cpuTasks.drain();
+        cleanupPlatform();
+    });
+
+    m_cpuTasks.wait();
     cleanup();
     m_cpuTasks.drain();
     cleanupPlatform();
+    drainOnFailure.release();
 }
 
 

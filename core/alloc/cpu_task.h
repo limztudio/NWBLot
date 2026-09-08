@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "persistent.h"
+#include "general.h"
 #include "scratch.h"
 
 #include <global/cpu_topology.h>
@@ -117,7 +117,7 @@ private:
 
     struct TaskNode{
         TaskFunction function;
-        Vector<TaskHandle, PersistentArena> dependents;
+        Vector<TaskHandle, GlobalArena> dependents;
         CpuTaskScope* scope = nullptr;
         TaskHandle parent;
         CpuTaskOptions options;
@@ -128,7 +128,7 @@ private:
         TaskState state = TaskState::Free;
         bool canceled = false;
 
-        explicit TaskNode(PersistentArena& arena);
+        explicit TaskNode(GlobalArena& arena);
     };
 
     struct ReadyQueue{
@@ -163,7 +163,7 @@ private:
 public:
     explicit CpuTaskScheduler(u32 workerCount = CpuTaskSchedulerConfig::s_AutomaticWorkerCount);
     explicit CpuTaskScheduler(const CpuTaskSchedulerConfig& config);
-    ~CpuTaskScheduler()noexcept;
+    ~CpuTaskScheduler()noexcept(false);
 
 
 public:
@@ -186,6 +186,7 @@ public:
 public:
     void wait(TaskHandle handle);
     void wait();
+    // Terminal cleanup: stop admission and skip queued callbacks before joining active work.
     void drain()noexcept;
     void pumpMainThread();
     [[nodiscard]] bool isComplete(TaskHandle handle)const;
@@ -242,23 +243,29 @@ private:
     void retire(TaskHandle handle)noexcept;
     void workerLoop(const StopToken& stop, usize workerIndex);
     [[nodiscard]] bool executeOne(bool cooperative, CpuTaskScope* preferredScope = nullptr);
+    void drainTask(TaskHandle handle)noexcept;
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] bool isMainThread()const noexcept;
     [[nodiscard]] bool isExecuting()const noexcept{ return s_execution && &s_execution->scheduler == this; }
+    [[nodiscard]] u32 workerWakeMaskLocked()const noexcept;
+    void notifyWorkers(u32 wakeMask)noexcept;
+    void notifyProgress(u32 wakeMask)noexcept;
     void notifyProgress()noexcept;
 
 
 private:
     const u64 m_domainIdentity;
     const ThreadId m_mainThread;
-    PersistentArena m_arena;
-    Deque<TaskNode, PersistentArena> m_nodes;
-    Vector<CpuWorkerPlacement, PersistentArena> m_placements;
-    Vector<u32, PersistentArena> m_workerDepth;
-    Vector<u32, PersistentArena> m_searchStack;
-    Vector<u64, PersistentArena> m_searchVisits;
-    Vector<TaskHandle, PersistentArena> m_canceledHandles;
+    GlobalArena m_arena;
+    Deque<TaskNode, GlobalArena> m_nodes;
+    Vector<CpuWorkerPlacement, GlobalArena> m_placements;
+    Vector<u32, GlobalArena> m_workerDepth;
+    Vector<u32, GlobalArena> m_searchStack;
+    Vector<u64, GlobalArena> m_searchVisits;
+    Vector<TaskHandle, GlobalArena> m_canceledHandles;
     ReadyQueue m_ready[s_QueueCount];
+    u32 m_readyWorkerCosts[3u]{};
+    u32 m_sleepingWorkers[3u]{};
     u32 m_freeNode = TaskHandle::s_InvalidIndex;
     u32 m_workerCount = 0u;
     u32 m_busyPerformance = 0u;
@@ -267,10 +274,11 @@ private:
     u64 m_dispatchCount = 0u;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;
+    ConditionVariableAny m_workerChanged[3u];
     usize m_outstanding = 0u;
     bool m_aborting = false;
     CpuTaskSchedulerStatistics m_statistics;
-    Vector<JoiningThread, PersistentArena> m_workers;
+    Vector<JoiningThread, GlobalArena> m_workers;
 };
 
 
@@ -289,7 +297,7 @@ public:
     explicit CpuTaskScope(CpuTaskScheduler& scheduler)noexcept
         : m_scheduler(scheduler)
     {}
-    ~CpuTaskScope()noexcept;
+    ~CpuTaskScope()noexcept(false);
 
 
 public:
@@ -311,6 +319,7 @@ public:
 
 public:
     void wait();
+    // Terminal cleanup aborts the shared service; use cancel() for ordinary scope cancellation.
     void drain()noexcept;
     void cancel()noexcept;
     [[nodiscard]] CpuTaskScheduler& scheduler()const noexcept{ return m_scheduler; }
@@ -326,11 +335,15 @@ public:
     void parallelFor(usize begin, usize end, usize grainSize, const Func& function, CpuTaskOptions options = {}){
         if(begin >= end)
             return;
-        const TaskHandle parent = submit([this, begin, end, grainSize, &function, options](){
+        TaskHandle parent;
+        ScopeExit drainOnFailure([this, &parent]()noexcept{ m_scheduler.drainTask(parent); });
+
+        parent = submit([this, begin, end, grainSize, &function, options](){
             m_scheduler.parallelFor(begin, end, grainSize, function, options);
         }, options);
         if(parent.valid())
             m_scheduler.wait(parent);
+        drainOnFailure.release();
     }
 
 

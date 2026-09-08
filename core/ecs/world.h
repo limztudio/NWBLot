@@ -48,7 +48,7 @@ private:
 
 public:
     World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler);
-    ~World();
+    ~World()noexcept(false);
 
 
 public:

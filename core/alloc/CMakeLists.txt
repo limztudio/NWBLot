@@ -2,6 +2,7 @@ nwb_declare_static_library(nwb_alloc)
 target_sources(nwb_alloc PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/core.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/cpu_task_notify.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_task.h"
     "${CMAKE_CURRENT_LIST_DIR}/tlsf.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"

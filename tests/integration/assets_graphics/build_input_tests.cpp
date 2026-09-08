@@ -24,15 +24,13 @@ namespace Assets = NWB::Core::Assets;
 namespace Builder = NWB::Pipeline::AssetBuilder;
 
 class BuildInputSelection : public testing::Test{
+public:
+    virtual ~BuildInputSelection()noexcept override{
+        m_cpuScheduler.drain();
+    }
+
+
 protected:
-    NWB::Tests::TestArena<> m_testArena;
-    NWB::Core::Alloc::CpuTaskScheduler m_cpuScheduler{ 1u };
-    NWB::Tests::CapturingLogger m_logger;
-    NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
-    NWB::Path m_root{ m_testArena.arena };
-    Assets::ResolvedCookPaths m_paths{ m_testArena.arena };
-    Assets::DiscoveredNwbFileVector m_files{ m_testArena.arena };
-    Builder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 
     virtual void SetUp()override{
         m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()
@@ -41,6 +39,10 @@ protected:
         ASSERT_TRUE(EnsureDirectories(m_root / "assets" / "empty", error));
         m_paths.repoRoot = m_root;
         m_paths.assetRoots.emplace_back(m_root / "assets", ACompactString("project"));
+    }
+
+    virtual void TearDown()override{
+        m_cpuScheduler.wait();
     }
 
     void addFile(AStringView relativePath){
@@ -62,6 +64,17 @@ protected:
         NWB::Core::Alloc::ScratchArena scratch(Name("tests/assets/build_inputs"));
         return Builder::SelectBuildInputs(m_options, m_paths, m_files, scratch);
     }
+
+
+protected:
+    NWB::Tests::TestArena<> m_testArena;
+    NWB::Core::Alloc::CpuTaskScheduler m_cpuScheduler{ 1u };
+    NWB::Tests::CapturingLogger m_logger;
+    NWB::Core::Common::LoggerRegistrationGuard m_loggerGuard{ m_logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal };
+    NWB::Path m_root{ m_testArena.arena };
+    Assets::ResolvedCookPaths m_paths{ m_testArena.arena };
+    Assets::DiscoveredNwbFileVector m_files{ m_testArena.arena };
+    Builder::AssetBuildOptions m_options{ m_testArena.arena, m_cpuScheduler };
 };
 
 TEST_F(BuildInputSelection, ExactInputsPreserveDiscoveredOrderAndDuplicateRecords){

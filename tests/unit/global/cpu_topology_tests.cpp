@@ -33,8 +33,10 @@ TEST(CpuTopologyTests, EnumeratesUniqueUsableProcessorsAndAccountsForEveryCapaci
         minimumClass = Min(minimumClass, placement.performanceClass);
         maximumClass = Max(maximumClass, placement.performanceClass);
         for(usize j = 0u; j < i; ++j){
-            EXPECT_FALSE(placements[j].processorGroup == placement.processorGroup
-                && placements[j].logicalProcessorIndex == placement.logicalProcessorIndex);
+            EXPECT_FALSE(
+                placements[j].processorGroup == placement.processorGroup
+                && placements[j].logicalProcessorIndex == placement.logicalProcessorIndex
+            );
         }
     }
     for(const CpuWorkerPlacement& placement : placements){
@@ -77,8 +79,7 @@ TEST(CpuTopologyTests, EveryEnumeratedPlacementCanPinAnIndependentWorker){
             GROUP_AFFINITY actual{};
             if(!GetThreadGroupAffinity(GetCurrentThread(), &actual))
                 return;
-            verified = actual.Group == placement.processorGroup
-                && actual.Mask == (static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex);
+            verified = actual.Group == placement.processorGroup && actual.Mask == (static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex);
 #elif defined(NWB_PLATFORM_LINUX)
             const int processor = ::sched_getcpu();
             verified = processor >= 0 && static_cast<u32>(processor) == placement.logicalProcessorIndex;

@@ -33,7 +33,7 @@ int Run(const int argc, char** argv){
 
     bool prompted = false;
     const int result = NWB::FbxToNwb::Run(argc, argv, cpuScheduler, prompted);
-    cpuScheduler.drain();
+    cpuScheduler.wait();
     if(prompted && result >= 0){
         NWB_COUT << "Press Enter to exit...";
         NWB::FbxToNwb::AString line;

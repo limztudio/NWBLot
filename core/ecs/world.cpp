@@ -5,6 +5,8 @@
 #include "world.h"
 #include "entity.h"
 
+#include <global/exception.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,8 +29,11 @@ World::World(Alloc::GlobalArena& arena, Alloc::CpuTaskScheduler& taskScheduler)
     , m_scheduler(m_arena)
     , m_messageBus(m_arena)
 {}
-World::~World(){
+World::~World()noexcept(false){
+    ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });
+
     clear();
+    drainOnFailure.release();
 }
 
 
@@ -72,7 +77,10 @@ void World::tick(f32 delta){
 }
 
 void World::clear(){
-    m_tasks.drain();
+    if(UncaughtExceptionCount() > 0)
+        m_tasks.drain();
+    else
+        m_tasks.wait();
     m_messageBus.clear();
     m_scheduler.clear();
     m_systems.clear();

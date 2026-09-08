@@ -5,6 +5,7 @@
 #include "cpu_task.h"
 #include "arena_names.h"
 
+#include <global/exception.h>
 #include <global/termination.h>
 
 
@@ -17,7 +18,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScheduler::TaskNode::TaskNode(PersistentArena& arena)
+CpuTaskScheduler::TaskNode::TaskNode(GlobalArena& arena)
     : dependents(arena)
 {}
 
@@ -73,7 +74,7 @@ CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     : m_domainIdentity(allocateDomainIdentity())
     , m_mainThread(QueryCurrentThreadId())
-    , m_arena(ArenaScope::s_CpuTaskScheduler, 65536u)
+    , m_arena(ArenaScope::s_CpuTaskScheduler)
     , m_nodes(m_arena)
     , m_placements(m_arena)
     , m_workerDepth(m_arena)
@@ -122,8 +123,15 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
         });
     }
 }
-CpuTaskScheduler::~CpuTaskScheduler()noexcept{
-    drain();
+CpuTaskScheduler::~CpuTaskScheduler()noexcept(false){
+    if(UncaughtExceptionCount() > 0){
+        drain();
+        return;
+    }
+    ScopeExit drainOnFailure([this]()noexcept{ drain(); });
+
+    wait();
+    drainOnFailure.release();
 }
 
 
@@ -134,15 +142,31 @@ void CpuTaskScheduler::wait(const TaskHandle handle){
         ScopedLock lock(m_mutex);
         if(handle.domainIdentity != m_domainIdentity)
             throw RuntimeException("CPU task wait belongs to another scheduler");
-        for(Execution* current = s_execution; current; current = current->previous){
-            if(&current->scheduler != this || !current->task.valid())
-                continue;
-            TaskHandle ancestor = current->task;
-            while(TaskNode* node = resolveLocked(ancestor)){
-                if(ancestor.index == handle.index && ancestor.generation == handle.generation)
-                    throw RuntimeException("CPU task cannot wait for itself or an ancestor");
-                ancestor = node->parent;
+        if(++m_searchGeneration == 0u){
+            for(u64& visit : m_searchVisits)
+                visit = 0u;
+            ++m_searchGeneration;
+        }
+        m_searchStack.clear();
+        const auto visit = [this](const TaskHandle candidate){
+            if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
+                m_searchVisits[candidate.index] = m_searchGeneration;
+                m_searchStack.push_back(candidate.index);
             }
+        };
+        for(Execution* current = s_execution; current; current = current->previous){
+            if(&current->scheduler == this)
+                visit(current->task);
+        }
+        // Dependent tasks and structured parents cannot complete until the current execution finishes.
+        for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
+            const u32 index = m_searchStack[cursor];
+            const TaskNode& node = m_nodes[index];
+            if(index == handle.index && node.generation == handle.generation)
+                throw RuntimeException("CPU task cannot wait for itself, an ancestor, or dependent work");
+            visit(node.parent);
+            for(const TaskHandle dependent : node.dependents)
+                visit(dependent);
         }
     }
     while(!isComplete(handle)){
@@ -174,6 +198,11 @@ void CpuTaskScheduler::wait(){
 }
 
 void CpuTaskScheduler::drain()noexcept{
+    {
+        ScopedLock lock(m_mutex);
+        m_aborting = true;
+    }
+    notifyProgress();
     wait();
 }
 
@@ -213,6 +242,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
 
     TaskHandle handle;
     TaskNode* node;
+    u32 wakeMask;
     {
         ScopedLock lock(m_mutex);
         if(m_aborting || (scope && scope->m_canceled))
@@ -226,7 +256,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
             if(m_nodes.size() >= TaskHandle::s_InvalidIndex)
                 return {};
             index = static_cast<u32>(m_nodes.size());
-            m_searchStack.reserve(m_nodes.size() + 1u);
+            ContainerDetail::ReserveGrowingCapacity(m_searchStack, m_nodes.size() + 1u);
             m_searchVisits.resize(m_nodes.size() + 1u, 0u);
             m_nodes.emplace_back(m_arena);
         }
@@ -324,9 +354,10 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         node->state = TaskState::Waiting;
         if(node->dependencies == 0u)
             enqueueLocked(handle.index);
+        wakeMask = workerWakeMaskLocked();
     }
     release.release();
-    notifyProgress();
+    notifyProgress(wakeMask);
     return handle;
 }
 
@@ -355,6 +386,8 @@ void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     TaskNode& node = m_nodes[index];
     ReadyQueue& queue = m_ready[queueIndex(node.options)];
     node.state = TaskState::Ready;
+    if(node.options.target == CpuTaskTarget::Worker)
+        ++m_readyWorkerCosts[node.options.cost];
     node.next = TaskHandle::s_InvalidIndex;
     if(queue.tail != TaskHandle::s_InvalidIndex)
         m_nodes[queue.tail].next = index;
@@ -400,6 +433,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
                 queue.tail = previous;
             node.next = TaskHandle::s_InvalidIndex;
             node.state = TaskState::Running;
+            if(node.options.target == CpuTaskTarget::Worker)
+                --m_readyWorkerCosts[node.options.cost];
             ++m_dispatchCount;
             return { m_domainIdentity, nodeIndex, node.generation };
         }
@@ -475,6 +510,7 @@ void CpuTaskScheduler::execute(
     const bool cooperative){
     TaskNode* node;
     bool invoke;
+    u32 wakeMask;
     {
         ScopedLock lock(m_mutex);
         node = resolveLocked(handle);
@@ -502,8 +538,9 @@ void CpuTaskScheduler::execute(
             default: ++m_statistics.unclassifiedTasks; break;
             }
         }
+        wakeMask = workerWakeMaskLocked();
     }
-    notifyProgress();
+    notifyWorkers(wakeMask);
     bool succeeded = false;
     ScopeExit finish([&]()noexcept{
         {
@@ -543,7 +580,6 @@ void CpuTaskScheduler::finishBody(const TaskHandle handle, const bool succeeded)
     }
     if(readyToRetire)
         retire(handle);
-    notifyProgress();
 }
 
 void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
@@ -558,6 +594,7 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
         // A task retains its callable until every descendant completes. Capture destruction precedes dependent publication.
         node->function.reset();
         TaskHandle parentToRetire;
+        u32 wakeMask;
         {
             ScopedLock lock(m_mutex);
             node->canceled = node->canceled || m_aborting || (node->scope && node->scope->m_canceled);
@@ -597,8 +634,9 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
                 node->next = m_freeNode;
                 m_freeNode = handle.index;
             }
+            wakeMask = workerWakeMaskLocked();
         }
-        notifyProgress();
+        notifyProgress(wakeMask);
         handle = parentToRetire;
     }
 }
@@ -622,8 +660,14 @@ void CpuTaskScheduler::workerLoop(const StopToken& stop, const usize workerIndex
         TaskHandle handle;
         {
             UniqueLock lock(m_mutex);
-            if(!m_changed.wait(lock, stop, [this, affinity](){ return hasReadyLocked(affinity, false, false); }))
+            if(stop.stop_requested())
                 return;
+            if(!hasReadyLocked(affinity, false, false)){
+                ++m_sleepingWorkers[affinity];
+                ScopeExit unpark([this, affinity]()noexcept{ --m_sleepingWorkers[affinity]; });
+                if(!m_workerChanged[affinity].wait(lock, stop, [this, affinity](){ return hasReadyLocked(affinity, false, false); }))
+                    return;
+            }
             handle = claimLocked(affinity, false, false);
         }
         if(handle.valid())
@@ -643,6 +687,15 @@ bool CpuTaskScheduler::executeOne(const bool cooperative, CpuTaskScope* const pr
         return false;
     execute(handle, workerIndex, affinity, cooperative);
     return true;
+}
+
+void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
+    {
+        ScopedLock lock(m_mutex);
+        m_aborting = true;
+    }
+    notifyProgress();
+    wait(handle);
 }
 
 void CpuTaskScheduler::waitScope(CpuTaskScope& scope){
@@ -676,16 +729,19 @@ bool CpuTaskScheduler::isMainThread()const noexcept{
     return QueryCurrentThreadId() == m_mainThread;
 }
 
-void CpuTaskScheduler::notifyProgress()noexcept{
-    m_changed.notify_all();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CpuTaskScope::~CpuTaskScope()noexcept{
-    drain();
+CpuTaskScope::~CpuTaskScope()noexcept(false){
+    if(UncaughtExceptionCount() > 0){
+        drain();
+        return;
+    }
+    ScopeExit drainOnFailure([this]()noexcept{ drain(); });
+
+    wait();
+    drainOnFailure.release();
 }
 
 
@@ -694,12 +750,19 @@ void CpuTaskScope::wait(){
 }
 
 void CpuTaskScope::drain()noexcept{
+    {
+        ScopedLock lock(m_scheduler.m_mutex);
+        m_scheduler.m_aborting = true;
+    }
+    m_scheduler.notifyProgress();
     m_scheduler.waitScope(*this);
 }
 
 void CpuTaskScope::cancel()noexcept{
-    ScopedLock lock(m_scheduler.m_mutex);
-    m_canceled = true;
+    {
+        ScopedLock lock(m_scheduler.m_mutex);
+        m_canceled = true;
+    }
     m_scheduler.notifyProgress();
 }
 

@@ -29,6 +29,7 @@
 #include <global/filesystem/volume_naming.h>
 
 #include "project_entry.h"
+#include "profile_names.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -49,7 +50,6 @@ using CrashArena = NWB::Core::Alloc::PersistentArena;
 inline constexpr usize s_CrashArenaPayloadSize = 256u * 1024u;
 inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
-constexpr Name s_ProjectTaskProfileName("cpu.task.project");
 inline constexpr AStringView s_ResourceDirectoryName = "res";
 inline constexpr AStringView s_GraphicsVolumeName = "graphics";
 
@@ -373,7 +373,7 @@ static int RunProjectRuntime(
 
             NWB::Core::CpuTaskScope projectTasks(
                 frame.cpuTasks(),
-                frame.cpuTasks().registerProfileLabel(__hidden_loader::s_ProjectTaskProfileName)
+                frame.cpuTasks().registerProfileLabel(NWB::LoaderProfileScope::s_ProjectTaskProfileName)
             );
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),

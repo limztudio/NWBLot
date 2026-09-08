@@ -5,6 +5,7 @@
 
 #include "runtime.h"
 #include "runtime_internal.h"
+#include "profile_names.h"
 
 #include <core/graphics/backend_selection.h>
 
@@ -41,9 +42,6 @@ private:
     AcquiredPresentationFrame& m_frame;
 };
 
-
-constexpr Name s_GraphicsSetupTaskProfileName("cpu.task.graphics.setup");
-constexpr Name s_GraphicsFrameTaskProfileName("cpu.task.graphics.frame");
 
 inline constexpr Name s_GraphicsFrameCpuTimingScope("graphics.frame");
 inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
@@ -132,8 +130,8 @@ GraphicsRuntime::GraphicsRuntime(
     : m_allocator(allocator)
     , m_cpuScheduler(cpuScheduler)
     , m_gpuTasks(gpuTasks)
-    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(__hidden_graphics_lifecycle::s_GraphicsSetupTaskProfileName))
-    , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(__hidden_graphics_lifecycle::s_GraphicsFrameTaskProfileName))
+    , m_tasks(cpuScheduler, cpuScheduler.registerProfileLabel(GraphicsProfileScope::s_GraphicsSetupTaskProfileName))
+    , m_frameTaskProfileLabel(cpuScheduler.registerProfileLabel(GraphicsProfileScope::s_GraphicsFrameTaskProfileName))
     , m_deviceCreationParams(m_allocator.getObjectArena())
     , m_gpuTiming(m_allocator.getObjectArena(), gpuTiming)
     , m_cpuTiming(cpuTiming)

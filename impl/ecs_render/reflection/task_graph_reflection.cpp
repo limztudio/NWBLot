@@ -85,6 +85,8 @@ struct UploadParametersTask{
         Core::BufferHandle buffer;
         ReflectionFrameParameters parameters;
         ReflectionHistoryPlan history;
+        ReflectionFeedbackPlan feedback;
+        bool feedbackReserved = false;
         const bool* hardwarePreparationReady = nullptr;
     };
 
@@ -93,6 +95,14 @@ struct UploadParametersTask{
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             parameters.hardwareEnabled = 0u;
         const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, parameters.hardwareEnabled != 0u);
+        const ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(payload.feedback, parameters.hardwareEnabled != 0u);
+        parameters.feedbackFlags = 0u;
+        parameters.feedbackProbeIndex = feedback.probeIndex;
+        if(payload.feedbackReserved && feedback.eligible){
+            parameters.feedbackFlags = NWB_REFLECTION_FEEDBACK_WRITE_ENABLED;
+            if(feedback.reused)
+                parameters.feedbackFlags |= NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID;
+        }
         parameters.sampleIndex = history.sampleIndex;
         const ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
         parameters.sampleBaseX = sampleBase.x;
@@ -151,6 +161,7 @@ struct DispatchTask{
         Core::GraphicsRuntime& graphics;
         ReflectionFrameSnapshot resources;
         DispatchStage::Enum stage;
+        ReflectionFeedbackReservation feedbackReservation;
         const bool* hardwarePreparationReady = nullptr;
         bool* hardwareDispatchLogged = nullptr;
         bool* fallbackDispatchLogged = nullptr;
@@ -201,9 +212,12 @@ struct DispatchTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken&){
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         const bool hardware = payload.resources.parameters.hardwareEnabled != 0u && payload.resources.parameters.maxHardwareRays > 0u
             && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const bool sceneReady = payload.resources.parameters.hardwareEnabled != 0u
+            && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        payload.feedbackReservation.accept(token, sceneReady);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
                 NWB_LOGGER_INFO(NWB_TEXT("Reflection resolve: hardware"));
@@ -222,6 +236,10 @@ struct DispatchTask{
             }
         }
     }
+
+    static void discarded(Payload& payload){
+        payload.feedbackReservation.discard();
+    }
 };
 
 struct StatisticsReadbackTask{
@@ -232,6 +250,8 @@ struct StatisticsReadbackTask{
         Core::GpuGraphResourceId destinationResource;
         ReflectionStatisticsReservation reservation;
         ReflectionHistoryPlan history;
+        ReflectionFeedbackPlan feedback;
+        bool feedbackReserved = false;
         const bool* hardwarePreparationReady = nullptr;
         bool hardwareEnabled = false;
     };
@@ -258,9 +278,12 @@ struct StatisticsReadbackTask{
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, hardwareReady);
-        payload.reservation.accept(
-            token, hardwareReady, &history
-        );
+        ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(payload.feedback, hardwareReady);
+        if(!payload.feedbackReserved){
+            feedback.eligible = false;
+            feedback.reused = false;
+        }
+        payload.reservation.accept(token, hardwareReady, &history, &feedback);
     }
 
     static void discarded(Payload& payload){
@@ -304,6 +327,21 @@ ReflectionGraphResult DeclareReflectionTasks(
         || resources.parameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
     if(screen && (!inputs.opaqueDepth.valid() || !inputs.opaqueColor.valid()))
         return {};
+    ReflectionFeedbackReservation feedbackReservation(resources.feedback.control, resources.feedback.plan);
+    const bool feedbackReserved = feedbackReservation.valid();
+    const bool feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
+    const bool buildArguments = resources.parameters.hardwareEnabled != 0u && resources.parameters.maxHardwareRays > 0u;
+    const DispatchStage::Enum feedbackPublicationStage = buildArguments ? DispatchStage::BuildArgs : DispatchStage::Classify;
+    // A stale or quarantined feedback lease disables this optional optimization; reflection rendering remains available.
+    Core::GpuGraphResourceId feedbackCurrent;
+    Core::GpuGraphResourceId feedbackPrevious;
+    if(feedbackWrites){
+        feedbackCurrent = ImportBuffer(graph, resources.feedback.current.buffer);
+        if(resources.feedback.plan.reused)
+            feedbackPrevious = ImportBuffer(graph, resources.feedback.previous.buffer);
+        if(!feedbackCurrent.valid() || (resources.feedback.plan.reused && !feedbackPrevious.valid()))
+            return {};
+    }
     ReflectionGraphResult result;
     result.opaqueRadiance = ImportTexture(graph, resources.opaqueRadiance);
     result.glassRadiance = ImportTexture(graph, resources.glassRadiance);
@@ -324,7 +362,8 @@ ReflectionGraphResult DeclareReflectionTasks(
     dependency = graph.addTask<UploadParametersTask>(
         desc,
         UploadParametersTask::Payload{
-            resources.frameParameters, resources.parameters, resources.postprocess.history, inputs.hardwarePreparationReady,
+            resources.frameParameters, resources.parameters, resources.postprocess.history,
+            resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady,
         }
     );
     if(!dependency.valid())
@@ -373,7 +412,7 @@ ReflectionGraphResult DeclareReflectionTasks(
     }
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + 10u);
+    uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + 12u);
     const auto appendSurfaceReads = [&](){
         uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
         uses.push_back(ReadUse(result.frameParameters, Core::ResourceStates::ConstantBuffer));
@@ -384,10 +423,13 @@ ReflectionGraphResult DeclareReflectionTasks(
         dispatchDesc.setTimingMetadata(Core::GpuTaskTimingMetadata{.policy = Core::GpuTaskTimingPolicy::PacketOnly});
         if(stage == DispatchStage::Hardware)
             dispatchDesc.setResourceSetUses(inputs.hardwareSetReads, inputs.hardwareSetReadCount);
+        ReflectionFeedbackReservation dispatchFeedback(nullptr, {});
+        if(stage == feedbackPublicationStage)
+            dispatchFeedback = Move(feedbackReservation);
         dependency = graph.addTask<DispatchTask>(
             dispatchDesc,
             DispatchTask::Payload{
-                graphics, resources, stage, inputs.hardwarePreparationReady,
+                graphics, resources, stage, Move(dispatchFeedback), inputs.hardwarePreparationReady,
                 inputs.hardwareDispatchLogged, inputs.fallbackDispatchLogged,
             }
         );
@@ -398,6 +440,15 @@ ReflectionGraphResult DeclareReflectionTasks(
         uses.push_back(ReadTextureUse(depthPyramid, Core::TextureSubresourceSet(0u, resources.depthPyramid.mipCount, 0u, 1u)));
         uses.push_back(ReadUse(inputs.opaqueColor));
     }
+    if(feedbackWrites){
+        Core::GpuTaskResourceUse entryWrite = WriteUse(feedbackCurrent, Core::ResourceStates::UnorderedAccess);
+        entryWrite.range.bufferRange = Core::BufferRange(
+            NWB_REFLECTION_FEEDBACK_HEADER_BYTES, resources.feedback.extent.byteCount - NWB_REFLECTION_FEEDBACK_HEADER_BYTES
+        );
+        uses.push_back(entryWrite);
+        if(feedbackPrevious.valid())
+            uses.push_back(ReadUse(feedbackPrevious));
+    }
     uses.push_back(WriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess));
     uses.push_back(WriteUse(result.glassRadiance, Core::ResourceStates::UnorderedAccess));
     uses.push_back(WriteUse(queue, Core::ResourceStates::UnorderedAccess));
@@ -405,11 +456,16 @@ ReflectionGraphResult DeclareReflectionTasks(
     if(!appendDispatch(Name("render.reflection.classify"), "Reflection Classify", DispatchStage::Classify))
         return {};
 
-    if(resources.parameters.hardwareEnabled != 0u && resources.parameters.maxHardwareRays > 0u){
+    if(buildArguments){
         uses.clear();
         uses.push_back(ReadUse(result.frameParameters, Core::ResourceStates::ConstantBuffer));
         uses.push_back(ReadUse(result.counters));
         uses.push_back(WriteUse(args, Core::ResourceStates::UnorderedAccess));
+        if(feedbackWrites){
+            Core::GpuTaskResourceUse headerWrite = WriteUse(feedbackCurrent, Core::ResourceStates::UnorderedAccess);
+            headerWrite.range.bufferRange = Core::BufferRange(0u, NWB_REFLECTION_FEEDBACK_HEADER_BYTES);
+            uses.push_back(headerWrite);
+        }
         if(!appendDispatch(Name("render.reflection.build_args"), "Reflection Build Arguments", DispatchStage::BuildArgs))
             return {};
         if(!resources.hardwarePipeline || !resources.scene.valid() || inputs.hardwareReadCount == 0u)
@@ -431,7 +487,9 @@ ReflectionGraphResult DeclareReflectionTasks(
         return {};
 
     if(resources.parameters.diagnosticsEnabled != 0u && resources.statistics.control){
-        ReflectionStatisticsReservation reservation(resources.statistics.control, resources.statistics.metadata);
+        ReflectionStatistics metadata = resources.statistics.metadata;
+        metadata.feedbackSequence = feedbackReserved ? resources.feedback.plan.sequence : 0u;
+        ReflectionStatisticsReservation reservation(resources.statistics.control, metadata);
         if(reservation.valid()){
             const Core::BufferHandle readback = resources.statistics.buffers[reservation.slotIndex()];
             if(!readback)
@@ -459,7 +517,7 @@ ReflectionGraphResult DeclareReflectionTasks(
                 copyDesc,
                 StatisticsReadbackTask::Payload{
                     resources.counters, readback, result.counters, readbackResource, Move(reservation), resources.postprocess.history,
-                    inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u,
+                    resources.feedback.plan, feedbackReserved, inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u,
                 }
             );
             if(!dependency.valid())

@@ -6,6 +6,7 @@
 #define NWB_GRAPHICS_REFLECTION_FRAME_CONSTANTS_H
 
 #include "../raytrace/optical_transport_constants.h"
+#include "feedback_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,7 +20,7 @@
 #define NWB_REFLECTION_MODE_HARDWARE 2u
 #define NWB_REFLECTION_MODE_HYBRID 3u
 
-// Counter byte offsets. The candidate count drives bounded indirect work; the other counters describe executed work.
+// Counter byte offsets. Candidates and the feedback receiver bound drive scheduling; remaining counters describe executed work.
 #define NWB_REFLECTION_COUNTER_CANDIDATES 0u
 #define NWB_REFLECTION_COUNTER_HARDWARE_RAYS 4u
 #define NWB_REFLECTION_COUNTER_HARDWARE_HITS 8u
@@ -36,14 +37,24 @@
 #define NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS 52u
 #define NWB_REFLECTION_COUNTER_TIR_EVENTS 56u
 #define NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS 60u
-#define NWB_REFLECTION_COUNTER_SIZE 64u
+#define NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS 64u
+#define NWB_REFLECTION_COUNTER_SCREEN_RETURNS 68u
+#define NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS 72u
+#define NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES 76u
+#define NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW 80u
+#define NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH 84u
+#define NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES 88u
+#define NWB_REFLECTION_COUNTER_RESERVED 92u
+#define NWB_REFLECTION_COUNTER_SIZE 96u
 
-// Eleven std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
-#define NWB_REFLECTION_FRAME_UINT_FIELDS(FIELD) \
+// Twelve std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
+#define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
     FIELD(width, 0u) \
     FIELD(height, 0u) \
     FIELD(traceMode, 0u) \
-    FIELD(hardwareEnabled, 0u) \
+    FIELD(hardwareEnabled, 0u)
+
+#define NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD) \
     FIELD(opaqueSpecularSlot, 0u) \
     FIELD(glassSpecularSlot, 0u) \
     FIELD(opaqueOutputSlot, 0u) \
@@ -67,7 +78,15 @@
     FIELD(samplingSeed, 0u) \
     FIELD(sampleBaseX, 0u) \
     FIELD(sampleBaseY, 0u) \
-    FIELD(maxOpticalQueries, NWB_OPTICAL_DEFAULT_QUERIES)
+    FIELD(maxOpticalQueries, NWB_OPTICAL_DEFAULT_QUERIES) \
+    FIELD(feedbackReadSlot, 0u) \
+    FIELD(feedbackWriteSlot, 0u) \
+    FIELD(feedbackFlags, 0u) \
+    FIELD(feedbackProbeIndex, 0u)
+
+#define NWB_REFLECTION_FRAME_UINT_FIELDS(FIELD) \
+    NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
+    NWB_REFLECTION_FRAME_RESOURCE_UINT_FIELDS(FIELD)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
     FIELD(maxRayDistance, 100.f) \

@@ -52,6 +52,7 @@ RendererReflectionSystem::RendererReflectionSystem(
     , m_shaders(shaders)
     , m_statistics(arena, graphics)
     , m_postprocess(arena, graphics, shaders)
+    , m_feedback(arena, graphics)
 {}
 
 void RendererReflectionSystem::invalidateResources(){
@@ -89,7 +90,11 @@ bool RendererReflectionSystem::prepareResources(
         m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
         && (!prepareHardware || (m_resources.hardwarePipeline && m_plainHardwarePipeline))
     )
-        return prepareQueue(capacity) && m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
+        return
+            prepareQueue(capacity) && m_statistics.prepareResources()
+            && m_postprocess.prepareResources(width, height, settings)
+            && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled)
+        ;
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !preparePipelines(prepareHardware))
@@ -108,7 +113,11 @@ bool RendererReflectionSystem::prepareResources(
     ))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
-        return prepareQueue(capacity) && m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
+        return
+            prepareQueue(capacity) && m_statistics.prepareResources()
+            && m_postprocess.prepareResources(width, height, settings)
+            && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled)
+        ;
     releaseTargets();
 
     const auto createOutput = [&](const Name name){
@@ -273,7 +282,10 @@ bool RendererReflectionSystem::prepareResources(
     m_resources.parameters.depthPyramidSlot = depthPyramid.sampledSlot;
     m_resources.parameters.depthMipCount = depthPyramid.mipCount;
     m_resources.frameParametersSlot = m_descriptors[Parameters].slot();
-    return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
+    return
+        m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings)
+        && m_feedback.prepareResources(width, height, settings, settings.screenFeedbackEnabled)
+    ;
 }
 
 void RendererReflectionSystem::pollStatistics(){
@@ -311,6 +323,9 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     );
     if(!snapshot.postprocess.control || !snapshot.postprocess.current.texture)
         return {};
+    snapshot.feedback = m_feedback.snapshot(stamp, settings, settings.screenFeedbackEnabled, m_graphics.getFrameIndex());
+    if(!snapshot.feedback.valid())
+        return {};
     snapshot.opaqueRadiance = snapshot.postprocess.current.texture;
     ReflectionFrameParameters& parameters = snapshot.parameters;
     parameters.traceMode = static_cast<u32>(settings.traceMode);
@@ -343,6 +358,11 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
     parameters.screenEdgeFade = settings.screenEdgeFade;
     parameters.diagnosticsEnabled = settings.diagnosticsEnabled ? 1u : 0u;
+    // Recording resolves the actual hardware outcome and a successful reservation before enabling any bank access.
+    parameters.feedbackFlags = 0u;
+    parameters.feedbackProbeIndex = snapshot.feedback.plan.probeIndex;
+    parameters.feedbackReadSlot = snapshot.feedback.previous.valid() ? snapshot.feedback.previous.descriptor.slot() : 0u;
+    parameters.feedbackWriteSlot = snapshot.feedback.current.valid() ? snapshot.feedback.current.descriptor.slot() : 0u;
     snapshot.postprocess.deferredResourcesSlot = parameters.deferredResourcesSlot;
     snapshot.postprocess.opaqueSpecularSlot = parameters.opaqueSpecularSlot;
     snapshot.postprocess.viewSlot = parameters.viewSlot;
@@ -352,6 +372,9 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     if(settings.diagnosticsEnabled){
         ReflectionStatistics metadata;
         metadata.frameIndex = frameIndex;
+        metadata.feedbackRequested = settings.screenFeedbackEnabled;
+        // Diagnostics also populate the bound when feedback is disabled; an unused cleared zero is never published as fact.
+        metadata.schedulingCounterValid = settings.diagnosticsEnabled;
         metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
         metadata.samplingSeed = settings.samplingSeed;
         metadata.width = parameters.width;
@@ -372,6 +395,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
 
 void RendererReflectionSystem::releaseTargets(){
     m_postprocess.invalidateResources();
+    m_feedback.invalidateResources();
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     const auto retireDescriptor = [&](Core::GpuDescriptorHandle& descriptor){
         if(descriptor.valid() && heap.isInitialized())
@@ -396,6 +420,7 @@ void RendererReflectionSystem::releaseTargets(){
     m_resources.scene = {};
     m_resources.statistics = {};
     m_resources.postprocess = {};
+    m_resources.feedback = {};
     m_resources.depthPyramid.texture = nullptr;
     m_resources.depthPyramid.mipCount = 0u;
     m_resources.depthPyramid.sampledSlot = 0u;

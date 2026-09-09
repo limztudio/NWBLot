@@ -186,6 +186,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_reflection_smoke)
         target_sources(nwb_reflection_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_scene.cpp"
@@ -214,14 +216,15 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             SKIP_RETURN_CODE 77
             TIMEOUT 600
         )
-        foreach(_nwb_reflection_suite IN ITEMS rough temporal optical)
+        foreach(_nwb_reflection_suite IN ITEMS rough temporal optical feedback feedback_diagnostics_off)
+            string(REPLACE "_" "-" _nwb_reflection_suite_argument "${_nwb_reflection_suite}")
             add_test(
                 NAME "nwb_reflection_${_nwb_reflection_suite}_capture_smoke"
                 COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke.py"
                     "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
                     "--working-directory" "${_nwb_transparent_multi_runtime_root}"
                     "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_${_nwb_reflection_suite}"
-                    "--suite" "${_nwb_reflection_suite}"
+                    "--suite" "${_nwb_reflection_suite_argument}"
                     ${_nwb_reflection_logserver_args}
             )
             set_tests_properties("nwb_reflection_${_nwb_reflection_suite}_capture_smoke" PROPERTIES

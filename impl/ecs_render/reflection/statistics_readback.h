@@ -71,7 +71,8 @@ public:
         const ReflectionStatisticsReservationKey& key,
         const Core::QueueSubmissionToken& token,
         bool hardwareReady,
-        const ReflectionHistoryOutcome* history = nullptr
+        const ReflectionHistoryOutcome* history = nullptr,
+        const ReflectionFeedbackOutcome* feedback = nullptr
     )noexcept;
     [[nodiscard]] bool pending(
         u32 slot,
@@ -117,7 +118,12 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr)noexcept;
+    void accept(
+        const Core::QueueSubmissionToken& token,
+        bool hardwareReady,
+        const ReflectionHistoryOutcome* history = nullptr,
+        const ReflectionFeedbackOutcome* feedback = nullptr
+    )noexcept;
     void discard()noexcept;
 
 private:

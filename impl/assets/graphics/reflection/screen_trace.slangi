@@ -73,7 +73,7 @@ bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbRefl
     const float3 screenEnd = float3(lastNdc.x * 0.5 + 0.5, 0.5 - lastNdc.y * 0.5, lastNdc.z);
     ray.screenDirection = screenEnd - ray.screenOrigin;
     const float2 projectedExtent = abs(ray.screenDirection.xy)
-        * float2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+        * float2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
     const float projectedLength = max(projectedExtent.x, projectedExtent.y);
     if(!all(isfinite(ray.screenOrigin)) || !all(isfinite(ray.screenDirection)) || projectedLength <= 2.0)
         return false;
@@ -134,7 +134,7 @@ bool nwbReflectionValidateScreenHit(
     const float2 uv = float2(intersectionNdc.x * 0.5 + 0.5, 0.5 - intersectionNdc.y * 0.5);
     if(any(uv < 0.0) || any(uv >= 1.0))
         return false;
-    const uint2 dimensions = uint2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    const uint2 dimensions = uint2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
     if(any(uint2(uv * float2(dimensions)) != candidatePixel))
         return false;
     const float parameter = abs(ray.screenDirection.x) >= abs(ray.screenDirection.y)
@@ -216,16 +216,20 @@ bool nwbReflectionTraceScreen(
     const uint2 pixel,
     const NwbReflectionSurface surface,
     out float3 radiance,
-    out float confidence){
+    out float confidence,
+    out uint iterations,
+    out bool limited){
     radiance = float3(0.0);
     confidence = 0.0;
+    iterations = 0u;
+    limited = false;
     if(g_NwbReflectionParameters.depthMipCount == 0u || g_NwbReflectionParameters.screenMaxSteps == 0u)
         return false;
     NwbReflectionScreenRay ray;
     if(!nwbReflectionBuildScreenRay(surface, ray))
         return false;
 
-    const uint2 fullDimensions = uint2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    const uint2 fullDimensions = uint2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
     const uint lastMip = min(g_NwbReflectionParameters.depthMipCount, NWB_REFLECTION_MAX_DEPTH_MIPS) - 1u;
     const uint steps = min(g_NwbReflectionParameters.screenMaxSteps, s_NwbReflectionScreenMaximumSteps);
     const uint2 firstCell = min(uint2(saturate(ray.screenOrigin.xy) * float2(fullDimensions)), fullDimensions - 1u);
@@ -244,6 +248,8 @@ bool nwbReflectionTraceScreen(
         const float cellExit = nwbReflectionScreenCellExit(ray, cell, dimensions);
         if(!isfinite(cellExit) || cellExit <= parameter)
             return false;
+        // Count represented-depth accesses, not projection rejection or an already completed ray's final guard.
+        iterations = stepIndex + 1u;
         const float2 depthInterval = NwbHeapSampledImage2D(g_NwbReflectionParameters.depthPyramidSlot).Load(int3(cell, mip)).xy;
         if(!all(isfinite(depthInterval)))
             return false;
@@ -271,6 +277,9 @@ bool nwbReflectionTraceScreen(
             mip = min(1u, lastMip);
         }
     }
+    const float3 remainingPosition = ray.screenOrigin + ray.screenDirection * parameter;
+    limited = isfinite(parameter) && parameter < 1.0 && all(isfinite(remainingPosition))
+        && all(remainingPosition.xy >= 0.0) && all(remainingPosition.xy < 1.0);
     return false;
 }
 

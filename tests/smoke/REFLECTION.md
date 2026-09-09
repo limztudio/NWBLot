@@ -549,3 +549,120 @@ existing static fallback; all 342 ECS tests pass. All 12 temporal captures pass
 under `Testing/smoke/dbg/reflection_stage6_mesh_temporal_gpudbg`, including the
 posed red model's reflected footprint changing from 729 to 4,604 pixels with the
 4,422-pixel green control retained.
+
+## Stage7: accepted screen-trace feedback
+
+The optional typed `screenFeedbackEnabled` setting defaults to false. It records
+smooth opaque/glass tile classes whose screen traces repeatedly miss, and reuses
+only compatible accepted observations. Any positive-confidence screen return
+keeps a class active, including provisional results. Dormant classes receive
+periodic probes on a 16-observation cadence. A conservative previous receiver
+upper bound must fit the current hardware budget before the GPU may bypass a
+screen trace. Changes in scene, view, settings, resources or hardware readiness
+reset the accepted feedback state. Image history remains independent.
+
+Two banks of 8x8 tile/surface-class entries occupy 172,832 bytes at 960x720,
+including their 16-byte headers, about 168.8 KiB. The 953x713 NPOT fixture has the
+same rounded tile extent. Existing classification and argument-building tasks
+write disjoint entry/header ranges; feedback adds no separate GPU dispatch.
+The shared parameter block is 192 bytes and diagnostic counters are 96 bytes.
+
+The leading parameter lane is an explicit `uint4` containing width, height,
+trace mode and hardware-enabled state, preserving the 192-byte ABI. GPU probes
+isolated incorrect leading-field reads in the production classification path:
+the CPU upload and a minimal GPU reader agreed, while that path observed
+incorrect mode/width values and performed no reflection work. The explicit lane
+restores the contract. Offset checks cover all four fields. This evidence does
+not identify a particular compiler or driver stage as the cause.
+
+Run the separate 24-capture suite through
+`reflection_smoke.py --suite feedback`, using the same executable, Testing
+working directory, output directory and logserver arguments as the other
+suites. `--feedback-cases offscreen_baseline,offscreen_feedback` selects a bounded
+pilot. New cases are `feedback_boundary`, `feedback_mutation` and
+`feedback_long_miss`; interactive launch accepts `--reflection-feedback on|off`,
+`--reflection-screen-steps 8..256` and `--reflection-extent native|npot`. The
+ordinary framebuffer is 960x720; the fixed NPOT preset is 953x713.
+
+All 24 captures pass with GPU debugging enabled. The nine smooth off/on image
+pairs are byte-identical, including opaque plus primary glass, provisional
+results, zero/64-ray budgets, ScreenSpace routing and the NPOT floor. The rough
+guard issues no bypass and passes its independent furnace energy check, with
+mean linear albedo error 0.012654. Completed counters preserve all 179,684
+accepted floor SSR hits per frame, and all 175,784 NPOT floor hits. The
+provisional wall preserves 3,352 positive-confidence returns with zero accepted
+SSR hits; its 64-ray budget prevents feedback bypass. Zero and 64-ray floor
+budgets, rough receivers and ScreenSpace-only routing also report zero bypass.
+
+The completed steady observations measure the following work. Each row averages
+36 completed source-frame observations; the means include periodic probe phases
+and are not GPU timing publication-window averages.
+
+| Scene | Mean SSR attempts, off → on | Mean actual hierarchy loads, off → on |
+| --- | ---: | ---: |
+| Offscreen markers, 96 steps | 217,668 → 13,586 | 1,950,558 → 121,742.39 |
+| Productive floor, 96 steps | 243,336 → 186,402.44 | 8,761,038 → 6,905,624.22 |
+| Opaque plus primary glass | 64,250 → 13,421.42 | 1,047,400 → 352,956.06 |
+| NPOT floor, 953x713 | 238,910 → 182,812.83 | 10,108,494 → 7,826,166.72 |
+| Long floor, 16 steps | 253,978 → 22,896.19 | 4,045,736 → 348,848.31 |
+
+The offscreen pair retains 217,668 hardware paths and 5,322 hits per steady
+frame; the long-floor pair retains 251,266 paths and 153,594 hits. Both issue
+actual periodic probes. The long-floor baseline independently qualifies as
+costly unsuccessful traversal: 9,143,208 attempts perform 145,646,496 hierarchy
+loads across 36 observations, averaging 15.92947 loads per attempt under the
+16-step bound. Of those attempts, 98.61484% exhaust the step budget. A separate
+96-step ScreenSpace capture verifies the direct/reflected panel positions near
+`(392,246)/(568,246)` and `(392,620)/(568,620)`.
+
+The first-mutation image is byte-identical to the fresh final scene. The green
+reflection moves 90 pixels left, against the independent prediction of
+90.06664 pixels, while the stationary red direct/reflected controls remain
+unchanged. Both changed/fresh images capture Graphics source frame 67, exactly
+matching their new feedback epoch's start. Both have exact completed-frame
+evidence: epoch 2, probe index 0, reset true, reused false and zero bypass.
+The scene mutation reports `SceneChanged`; the fresh scene's deliberate seed
+reset reports `SettingsChanged`. Positive screen returns increase from 1,410
+before the move to 3,352 on the first changed frame.
+
+Completed metadata distinguishes requested/enabled/reused control from actual
+bypass. The prior compatible potential-receiver bound must fit the hardware
+budget; `feedbackReused` alone does not prove that the GPU guard passed.
+Counters separately report potential receivers, any screen returns, bypassed
+pixels, probed surface classes, actual 64-bit hierarchy loads and exhausted-step
+misses. A latest-only completion query can skip an exact image frame. The
+epoch-start anchor still identifies a reset, but the report explicitly marks
+that exact-frame counter evidence unavailable. The changed/fresh captures in
+this run did include the exact source observations.
+
+The separate `--suite feedback-diagnostics-off` also passes all six captures
+under GPU debugging: offscreen, floor and opaque/glass with feedback off/on.
+All three image pairs are byte-identical. These frozen smooth cases disable
+reflection diagnostics and its statistics-based capture predicate, then use the
+ordinary readback after 65 prepared Graphics frames. Every completed readback
+identifies Graphics source frame 64, and the harness rejects all reflection
+statistics/history/feedback/optics logs. This establishes image equivalence
+without claiming unavailable feedback counter observations. The same
+`--feedback-cases` subset control is supported.
+
+Both suites explicitly use optical query limit 16. Their manifests record
+executable and authored packed-volume hashes, excluding only exact contiguous
+canonical runtime pipeline-cache segments through the shared identity helper.
+Raw BMPs, lossless PNGs, per-launch logs and self-contained galleries are under
+`Testing/smoke/dbg/reflection_stage7_feedback_gpudbg` and
+`Testing/smoke/dbg/reflection_stage7_diagnostics_off_gpudbg`. CTest entries are
+`nwb_reflection_feedback_capture_smoke` and
+`nwb_reflection_feedback_diagnostics_off_capture_smoke`.
+
+These results establish image preservation and reduced measured traversal work
+in the tested scenes. They do not establish a GPU speedup. Optimized
+diagnostics-off benchmarks with stable unrelated control scopes remain required
+before changing the default. The older reflection, roughness, optical and
+combined-caustic regression coverage remains separate: all 358 ECS unit tests
+and six CPU test targets pass. The final 22 baseline, 14 roughness, 30 optical
+and four combined-caustic captures also pass under GPU debugging. Together
+with the 30 feedback captures, this completes 100 final GPU framebuffer checks.
+The combined sphere retains its exterior reflection contribution with no missing
+reflection samples in the independent geometric oracle. Final regression evidence
+is under `Testing/smoke/dbg/reflection_stage7_{all,rough,optical}_gpudbg` and
+`Testing/smoke/dbg/caustic_stage7_gpudbg`.

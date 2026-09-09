@@ -52,7 +52,8 @@ struct ReflectionGraphResult{
 };
 
 // Input arrays are copied by graph declaration; their scratch lifetime need not reach recording. The preparation
-// outcome and diagnostic latches are frame-owned and must outlive the accepted/discarded packet.
+// outcome and diagnostic latches are frame-owned and must outlive the accepted/discarded packet. Feedback imports,
+// frozen selectors and accepted/discarded publication stay inside this reflection graph domain.
 [[nodiscard]] ReflectionGraphResult DeclareReflectionTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,

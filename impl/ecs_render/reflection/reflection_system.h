@@ -8,6 +8,7 @@
 #include "settings.h"
 #include "statistics_readback.h"
 #include "postprocess_resources.h"
+#include "feedback_resources.h"
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
@@ -56,7 +57,7 @@ struct ReflectionFrameParameters{
     NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_CPU_FLOAT_FIELD)
 #undef NWB_REFLECTION_CPU_FLOAT_FIELD
 };
-static_assert(sizeof(ReflectionFrameParameters) == 176u);
+static_assert(sizeof(ReflectionFrameParameters) == 192u);
 
 struct ReflectionDepthPyramidMip{
     Name taskIdentity = NAME_NONE;
@@ -99,6 +100,7 @@ struct ReflectionFrameSnapshot{
     RayTracingSceneGraphResources scene;
     ReflectionStatisticsReadbackSnapshot statistics;
     ReflectionPostprocessSnapshot postprocess;
+    ReflectionFeedbackSnapshot feedback;
     u32 frameParametersSlot = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -139,6 +141,7 @@ private:
     RendererShaderSystem& m_shaders;
     ReflectionStatisticsReadback m_statistics;
     RendererReflectionPostprocess m_postprocess;
+    RendererReflectionFeedback m_feedback;
     ReflectionFrameSnapshot m_resources;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::BindingLayoutHandle m_depthBindingLayout;

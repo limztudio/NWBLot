@@ -6,6 +6,7 @@
 
 
 #include "settings.h"
+#include "feedback.h"
 
 #include <core/graphics/rhi/command.h>
 
@@ -59,6 +60,18 @@ struct ReflectionStatistics{
     bool historyReused = false;
     bool historyReset = false;
     ReflectionHistoryResetReason::Enum historyResetReason = ReflectionHistoryResetReason::None;
+    // Enabled is the accepted complete writer's actual eligibility; reused is the CPU previous-valid flag.
+    // GPU budget/header checks may still reject bypass, which is reported by the executed-work counters below.
+    u64 feedbackSequence = 0u;
+    u64 feedbackEpoch = 0u;
+    u64 feedbackStartGraphicsFrame = 0u;
+    u32 feedbackProbeIndex = 0u;
+    bool feedbackRequested = false;
+    bool feedbackEnabled = false;
+    bool feedbackReused = false;
+    bool feedbackReset = false;
+    bool schedulingCounterValid = false;
+    ReflectionFeedbackResetReason::Enum feedbackResetReason = ReflectionFeedbackResetReason::None;
     Core::QueueSubmissionToken acceptedToken;
     u32 candidates = 0u;
     u32 hardwareRays = 0u;
@@ -78,6 +91,13 @@ struct ReflectionStatistics{
     u32 ambiguousPaths = 0u;
     u32 tirEvents = 0u;
     u32 mediumOverflowPaths = 0u;
+    u32 potentialReceivers = 0u;
+    u32 screenReturns = 0u;
+    u32 feedbackBypassedPixels = 0u;
+    u32 feedbackProbeTiles = 0u;
+    // Actual hierarchy loads, excluding projection rejection and bypass. May exceed u32 at large native extents.
+    u64 screenIterations = 0u;
+    u32 screenLimitMisses = 0u;
 };
 
 

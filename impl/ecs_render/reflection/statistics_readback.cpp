@@ -67,7 +67,8 @@ void ReflectionStatisticsState::accept(
     const ReflectionStatisticsReservationKey& key,
     const Core::QueueSubmissionToken& token,
     const bool hardwareReady,
-    const ReflectionHistoryOutcome* history)noexcept{
+    const ReflectionHistoryOutcome* history,
+    const ReflectionFeedbackOutcome* feedback)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -87,6 +88,15 @@ void ReflectionStatisticsState::accept(
         slot->metadata.historyReused = history->reused;
         slot->metadata.historyReset = history->reset;
         slot->metadata.historyResetReason = history->resetReason;
+    }
+    if(feedback){
+        slot->metadata.feedbackEpoch = feedback->epoch;
+        slot->metadata.feedbackStartGraphicsFrame = feedback->startGraphicsFrame;
+        slot->metadata.feedbackProbeIndex = feedback->probeIndex;
+        slot->metadata.feedbackEnabled = feedback->eligible;
+        slot->metadata.feedbackReused = feedback->reused;
+        slot->metadata.feedbackReset = feedback->reset;
+        slot->metadata.feedbackResetReason = feedback->resetReason;
     }
     // An accepted copy with an invalid token remains quarantined until owner invalidation. Never recycle memory
     // whose GPU completion cannot be proved, even when a caller violates the accepted-token contract.
@@ -145,6 +155,14 @@ void ReflectionStatisticsState::complete(
         m_latest.ambiguousPaths = counters[NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS / sizeof(u32)];
         m_latest.tirEvents = counters[NWB_REFLECTION_COUNTER_TIR_EVENTS / sizeof(u32)];
         m_latest.mediumOverflowPaths = counters[NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS / sizeof(u32)];
+        m_latest.potentialReceivers = counters[NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS / sizeof(u32)];
+        m_latest.screenReturns = counters[NWB_REFLECTION_COUNTER_SCREEN_RETURNS / sizeof(u32)];
+        m_latest.feedbackBypassedPixels = counters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
+        m_latest.feedbackProbeTiles = counters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
+        m_latest.screenIterations = static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)])
+            | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << 32u)
+        ;
+        m_latest.screenLimitMisses = counters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
     }
     *slot = {};
 }
@@ -214,9 +232,10 @@ ReflectionStatisticsReservation& ReflectionStatisticsReservation::operator=(Refl
 void ReflectionStatisticsReservation::accept(
     const Core::QueueSubmissionToken& token,
     const bool hardwareReady,
-    const ReflectionHistoryOutcome* history)noexcept{
+    const ReflectionHistoryOutcome* history,
+    const ReflectionFeedbackOutcome* feedback)noexcept{
     if(m_control && m_key.valid())
-        m_control->accept(m_key, token, hardwareReady, history);
+        m_control->accept(m_key, token, hardwareReady, history, feedback);
     m_key = {};
     m_control = nullptr;
 }

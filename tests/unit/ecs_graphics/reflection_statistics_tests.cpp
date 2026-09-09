@@ -108,7 +108,7 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
     EXPECT_EQ(accepted.value, 21u);
 }
 
-TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllSixteenCountersOnlyAtCompletion){
+TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnlyAtCompletion){
     StatisticsContext context;
     ReflectionStatistics metadata = Metadata();
     const auto key = context.control->reserve(metadata);
@@ -118,7 +118,10 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllSixteenCount
     context.control->discard(key);
     ReflectionStatistics statistics;
     EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
-    const u32 counters[] = {100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u};
+    const u32 counters[] = {
+        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u,
+        123u, 25u, 70u, 2u, 17u, 3u, 6u, 0u,
+    };
     static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
     context.control->complete(key, Token(), counters);
     ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
@@ -153,6 +156,41 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllSixteenCount
     EXPECT_EQ(statistics.ambiguousPaths, 3u);
     EXPECT_EQ(statistics.tirEvents, 4u);
     EXPECT_EQ(statistics.mediumOverflowPaths, 5u);
+    EXPECT_EQ(statistics.potentialReceivers, 123u);
+    EXPECT_EQ(statistics.screenReturns, 25u);
+    EXPECT_EQ(statistics.feedbackBypassedPixels, 70u);
+    EXPECT_EQ(statistics.feedbackProbeTiles, 2u);
+    EXPECT_EQ(statistics.screenIterations, (static_cast<u64>(3u) << 32u) | 17u);
+    EXPECT_EQ(statistics.screenLimitMisses, 6u);
+}
+
+TEST(ReflectionStatistics, FeedbackMetadataUsesTheFrozenAcceptedHardwareOutcome){
+    StatisticsContext context;
+    ReflectionStatistics metadata = Metadata();
+    metadata.feedbackRequested = true;
+    metadata.feedbackSequence = 12u;
+    metadata.schedulingCounterValid = true;
+    const auto key = context.control->reserve(metadata);
+    ReflectionFeedbackOutcome feedback;
+    feedback.epoch = 4u;
+    feedback.startGraphicsFrame = 90u;
+    feedback.probeIndex = 7u;
+    feedback.eligible = true;
+    feedback.reused = true;
+    context.control->accept(key, Token(), true, nullptr, &feedback);
+    feedback.epoch = 999u;
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
+    context.control->complete(key, Token(), counters);
+    ReflectionStatistics statistics;
+    ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
+    EXPECT_TRUE(statistics.feedbackRequested);
+    EXPECT_TRUE(statistics.feedbackEnabled);
+    EXPECT_TRUE(statistics.feedbackReused);
+    EXPECT_TRUE(statistics.schedulingCounterValid);
+    EXPECT_EQ(statistics.feedbackSequence, 12u);
+    EXPECT_EQ(statistics.feedbackEpoch, 4u);
+    EXPECT_EQ(statistics.feedbackStartGraphicsFrame, 90u);
+    EXPECT_EQ(statistics.feedbackProbeIndex, 7u);
 }
 
 TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){

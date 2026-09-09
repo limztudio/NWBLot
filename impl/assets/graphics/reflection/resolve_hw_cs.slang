@@ -76,10 +76,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     if(rayIndex >= rayCount)
         return;
     const uint packedPixel = g_NwbReflectionQueue.Load(rayIndex * 4u);
-    const uint pixelCount = g_NwbReflectionParameters.width * g_NwbReflectionParameters.height;
+    const uint pixelCount = g_NwbReflectionParameters.dimensionsAndRoute.x * g_NwbReflectionParameters.dimensionsAndRoute.y;
     const bool glass = packedPixel >= pixelCount;
     const uint linearPixel = glass ? packedPixel - pixelCount : packedPixel;
-    const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.width, linearPixel / g_NwbReflectionParameters.width);
+    const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.dimensionsAndRoute.x, linearPixel / g_NwbReflectionParameters.dimensionsAndRoute.x);
     NwbReflectionSurface surface;
     if(
         !nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > 0.0)

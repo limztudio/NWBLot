@@ -22,10 +22,12 @@ using namespace NWB::Impl;
 TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
     ReflectionSettings settings;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
+    EXPECT_FALSE(settings.screenFeedbackEnabled);
     EXPECT_TRUE(settings.temporalEnabled);
     EXPECT_TRUE(settings.spatialFilterEnabled);
     EXPECT_EQ(settings.temporalMaxSamples, 16u);
     EXPECT_EQ(settings.spatialRadius, 2u);
+    settings.screenFeedbackEnabled = true;
     settings.maxHardwareRaysPerFrame = 0u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
     settings.traceMode = ReflectionTraceMode::ScreenSpace;

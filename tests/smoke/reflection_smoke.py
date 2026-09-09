@@ -256,7 +256,8 @@ def parse_statistics(log_text):
     return samples
 
 
-def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_zero_samples=False):
+def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_zero_samples=False, extent=(960, 720)):
+    width, height = extent
     stable = []
     previous = None
     for sample in samples:
@@ -265,10 +266,10 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_ze
         wide_fields = ("sequence", "generation", "token_value")
         if any(value > (0xffffffffffffffff if name in wide_fields else 0xffffffff) for name, value in sample.items()):
             raise SmokeFailure("completed reflection statistics exceed their integer field widths")
-        if sample["mode"] != MODES.index(mode) or (sample["width"], sample["height"]) != (960, 720):
+        if sample["mode"] != MODES.index(mode) or (sample["width"], sample["height"]) != (width, height):
             raise SmokeFailure("completed reflection statistics do not match the requested mode and dimensions")
         capacity = sample["queue_capacity"]
-        if capacity <= 0 or capacity > 2 * 960 * 720 or sample["requested_budget"] != budget \
+        if capacity <= 0 or capacity > 2 * width * height or sample["requested_budget"] != budget \
             or sample["effective_budget"] != min(budget, capacity):
             raise SmokeFailure("completed reflection statistics do not match the requested budget and capacity")
         if not sample["sequence"] or not sample["generation"] or not sample["token_value"] \
@@ -287,7 +288,7 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_ze
                 raise SmokeFailure("completed reflection statistics are stale or out of order")
         previous = sample
         eligible = sample["opaque_pixels"] + sample["glass_pixels"]
-        if sample["opaque_pixels"] > 960 * 720 or sample["glass_pixels"] > 960 * 720 \
+        if sample["opaque_pixels"] > width * height or sample["glass_pixels"] > width * height \
             or sample["candidates"] > eligible or sample["screen_attempts"] > eligible \
             or sample["screen_hits"] > sample["screen_attempts"]:
             raise SmokeFailure("reflection counters exceed their eligible pixel population")
@@ -448,12 +449,13 @@ def parse_args(argv):
     parser.add_argument("--working-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget", "rough", "temporal", "optical"), default="all",
-        help="Capture the original 22 comparisons, a subset, or the separate roughness/history suites.")
+    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget", "rough", "temporal", "optical", "feedback", "feedback-diagnostics-off"), default="all",
+        help="Capture the original 22 comparisons, a subset, or the separate roughness, history, optical and feedback suites.")
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--require-hardware", action="store_true")
     parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument("--feedback-cases", help="Optional comma-separated feedback capture names for a bounded pilot.")
     args = parser.parse_args(argv)
     if args.frames <= 0 or args.timeout <= 0:
         parser.error("frames and timeout must be positive")
@@ -466,6 +468,9 @@ def main(argv):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     if args.suite in ("rough", "temporal"):
         from reflection_roughness_smoke import run_suite
+        return run_suite(args)
+    if args.suite in ("feedback", "feedback-diagnostics-off"):
+        from reflection_feedback_smoke import run_suite
         return run_suite(args)
     if args.suite == "optical":
         from reflection_optical_smoke import run_suite

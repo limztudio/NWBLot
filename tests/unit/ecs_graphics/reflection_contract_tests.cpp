@@ -177,10 +177,13 @@ TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCa
     EXPECT_FALSE(ContainsText(graph, "foregroundAccumExtinction"));
 }
 
-TEST(EcsGraphics, ReflectionFrameSelectorsMatchElevenStd140LanesAndSeparateCounterBytes){
+TEST(EcsGraphics, ReflectionFrameSelectorsMatchTwelveStd140LanesAndSeparateCounterBytes){
     using Parameters = NWB::Impl::ReflectionFrameParameters;
-    EXPECT_EQ(sizeof(Parameters), 176u);
+    EXPECT_EQ(sizeof(Parameters), 192u);
     EXPECT_EQ(offsetof(Parameters, width), 0u);
+    EXPECT_EQ(offsetof(Parameters, height), 4u);
+    EXPECT_EQ(offsetof(Parameters, traceMode), 8u);
+    EXPECT_EQ(offsetof(Parameters, hardwareEnabled), 12u);
     EXPECT_EQ(offsetof(Parameters, opaqueSpecularSlot), 16u);
     EXPECT_EQ(offsetof(Parameters, opaqueRadianceSlot), 32u);
     EXPECT_EQ(offsetof(Parameters, argsSlot), 48u);
@@ -191,11 +194,24 @@ TEST(EcsGraphics, ReflectionFrameSelectorsMatchElevenStd140LanesAndSeparateCount
     EXPECT_EQ(offsetof(Parameters, sampleBaseX), 100u);
     EXPECT_EQ(offsetof(Parameters, sampleBaseY), 104u);
     EXPECT_EQ(offsetof(Parameters, maxOpticalQueries), 108u);
-    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 112u);
-    EXPECT_EQ(offsetof(Parameters, environmentTopR), 128u);
-    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 144u);
-    EXPECT_EQ(offsetof(Parameters, screenThickness), 160u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
+    EXPECT_EQ(offsetof(Parameters, feedbackReadSlot), 112u);
+    EXPECT_EQ(offsetof(Parameters, feedbackWriteSlot), 116u);
+    EXPECT_EQ(offsetof(Parameters, feedbackFlags), 120u);
+    EXPECT_EQ(offsetof(Parameters, feedbackProbeIndex), 124u);
+    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 128u);
+    EXPECT_EQ(offsetof(Parameters, environmentTopR), 144u);
+    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 160u);
+    EXPECT_EQ(offsetof(Parameters, screenThickness), 176u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS + sizeof(u32), 64u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_POTENTIAL_RECEIVERS, 64u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_RETURNS, 68u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS, 72u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES, 76u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW, 80u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH, 84u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES, 88u);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_RESERVED + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_SIZE, 96u);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Disabled), NWB_REFLECTION_MODE_DISABLED);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::ScreenSpace), NWB_REFLECTION_MODE_SCREEN);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hardware), NWB_REFLECTION_MODE_HARDWARE);

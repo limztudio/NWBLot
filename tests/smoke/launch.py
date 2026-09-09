@@ -160,11 +160,12 @@ def build_smoke_environment(args) -> Dict[str, str]:
     if getattr(args, "reflection_ray_budget", None) is not None:
         env["NWB_REFLECTION_SMOKE_RAY_BUDGET"] = str(args.reflection_ray_budget)
     for option, name in (("roughness", "ROUGHNESS"), ("history_samples", "HISTORY_SAMPLES"),
-        ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED"), ("optical_queries", "OPTICAL_QUERIES")):
+        ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED"), ("optical_queries", "OPTICAL_QUERIES"),
+        ("screen_steps", "SCREEN_STEPS"), ("extent", "EXTENT")):
         value = getattr(args, "reflection_" + option, None)
         if value is not None:
             env["NWB_REFLECTION_SMOKE_" + name] = str(value)
-    for option in ("temporal", "spatial", "diagnostics", "final_state"):
+    for option in ("temporal", "spatial", "diagnostics", "final_state", "feedback"):
         value = getattr(args, "reflection_" + option, None)
         if value is not None:
             env["NWB_REFLECTION_SMOKE_" + option.upper()] = "1" if value == "on" else "0"
@@ -251,6 +252,7 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
     parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor",
+        "feedback_boundary", "feedback_mutation", "feedback_long_miss",
         "rough", "rough_furnace", "rough_glass", "rough_deform", "temporal_camera", "temporal_transform", "temporal_material", "temporal_light", "temporal_deform",
         "optical_reference", "optical_clear", "optical_tinted", "optical_tilted", "optical_nested2", "optical_nested3",
         "optical_priority_a", "optical_priority_b", "optical_alpha_before", "optical_alpha_after", "optical_duplicate_identical",
@@ -272,7 +274,11 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reflection-seed", type=reflection_ray_budget, help="Deterministic u32 sampling seed.")
     parser.add_argument("--reflection-optical-queries", type=int, choices=range(1, 17), metavar="1..16",
         help="Typed maximum scene queries per reflected optical path, including bootstrap and continuations.")
-    for option in ("temporal", "spatial", "diagnostics", "final-state"):
+    parser.add_argument("--reflection-screen-steps", type=int, choices=range(8, 257), metavar="8..256",
+        help="Typed bound on actual screen traversal iterations.")
+    parser.add_argument("--reflection-extent", choices=("native", "npot"),
+        help="Use the 960x720 standard framebuffer or the fixed 953x713 partial-workgroup fixture.")
+    for option in ("temporal", "spatial", "diagnostics", "final-state", "feedback"):
         parser.add_argument("--reflection-" + option, choices=("on", "off"),
             help="Set the test fixture's typed " + option + " control.")
     parser.add_argument("--refraction-case", choices=(

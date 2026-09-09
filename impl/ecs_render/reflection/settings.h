@@ -39,6 +39,8 @@ struct ReflectionSettings{
     ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Hybrid;
     ReflectionDebugView::Enum debugView = ReflectionDebugView::None;
     bool diagnosticsEnabled = false;
+    // Stable smooth Hybrid tiles may bypass proven screen misses. Default remains off until measured.
+    bool screenFeedbackEnabled = false;
     bool temporalEnabled = true;
     bool spatialFilterEnabled = true;
     u32 temporalMaxSamples = 16u;

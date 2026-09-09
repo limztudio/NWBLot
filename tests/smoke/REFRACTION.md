@@ -12,7 +12,7 @@ python tests/smoke/launch.py refraction --config dbg
 Run `nwb_refraction_capture_smoke` through CTest after building
 `nwb_refraction_smoke`. `nwb_refraction_gpudbg_capture_smoke` runs the same sequence
 with Vulkan validation enabled in `dbg`. Each test captures three swapchain images
-after the same accepted frame count: refraction disabled, automatic tracing, and
+after the same graphics frame count: refraction disabled, automatic tracing, and
 explicit screen-space tracing. The latter uses the renderer's normal hardware
 tracing preference, leaving device capability reporting intact.
 
@@ -61,7 +61,7 @@ python tests/smoke/refraction_gallery_smoke.py `
 Use the matching executable and runtime paths for another architecture or build
 configuration. `--cases nested,torus,prism` limits the scenes;
 `--variants geometry,automatic,screen,disabled` selects the captures. Both options
-accept comma-separated values. Each child run captures sixteen accepted frames by
+accept comma-separated values. Each child run captures after sixteen graphics frames by
 default and has a sixty-second capture timeout. `--application-arg=--gpudbg` enables
 GPU validation. The runner clears inherited case, geometry, capture, and freeze
 settings so a previous interactive launch does not alter its cases.
@@ -84,3 +84,25 @@ Each case includes its relevant limitation. `--require-hardware` confirms that a
 hardware resolve was dispatched; it does not imply every pixel stayed on that
 path. The original single-sphere smoke remains the stricter regression test for
 stripe displacement and foreground transparency preservation.
+
+The caustic-sphere fixture also explicitly enables camera refraction while keeping
+its original glass material, light, receiver, and photon caustics. Launch it with:
+
+```powershell
+python tests/smoke/launch.py caustic-sphere --config dbg
+```
+
+`NWB_REFRACTION_SMOKE_ENABLED=0` disables only camera refraction for a comparison;
+the glass continues casting its refractive shadow and photon caustic. Set
+`NWB_REFRACTION_SMOKE_HARDWARE=0` to compare screen-space camera refraction while
+leaving the caustic producer on the device's natural route. Both preferences
+default to enabled when the environment variables are absent.
+
+`nwb_caustic_sphere_capture_smoke` reads back the application framebuffer after
+360 graphics presentation frames, once GPU readback has completed, with a fixed
+1/60-second simulation delta. It requires both
+a refraction resolve and a caustic producer dispatch, clean runtime logs, a
+nonempty image, and orderly shutdown. Its output is
+`Testing/smoke/<config>/caustic_sphere_capture.bmp`. The existing renderer-baseline
+freeze remains available for interactive/reference captures; an active framebuffer
+observer takes precedence so a stale freeze setting cannot stop its readback.

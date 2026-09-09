@@ -21,6 +21,9 @@
 #include "gpu_pass_timing_probe.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+#include "framebuffer_capture.h"
+#endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 #include "csg_smoke_helpers.h"
 #endif
@@ -312,6 +315,19 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("FrameLaggedAsyncLightingSmoke: requested frame-lagged async lighting; F1 toggles the current-frame path")
         );
+#elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        auto& rendererSystem = AddSmokeRenderSystems(*world, context);
+        f32 refractionSetting = 1.0f;
+        const bool refractionEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", refractionSetting)
+            || refractionSetting != 0.0f;
+        f32 hardwareSetting = 1.0f;
+        const bool hardwareEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE", hardwareSetting)
+            || hardwareSetting != 0.0f;
+        rendererSystem.setRefractionEnabled(refractionEnabled);
+        rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
+            , refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        );
 #else
         AddSmokeRenderSystems(*world, context);
 #endif
@@ -320,8 +336,45 @@ private:
     }
 
     void destroyWorld(){
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(m_framebufferCapture){
+            m_framebufferCapture->stop();
+            m_framebufferCapture.reset();
+        }
+#endif
         DestroySmokeRenderWorld(m_context, m_world);
     }
+
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    [[nodiscard]] bool configureFramebufferCapture(){
+        NWB::Tests::Smoke::SmokeEnvironmentString outputPath(m_context.objectArena);
+        if(!NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
+            return true;
+
+        u32 captureFrameCount = 360u;
+        NWB::Tests::Smoke::SmokeEnvironmentString frameCountText(m_context.objectArena);
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
+            u64 parsedFrameCount = 0u;
+            if(
+                !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
+                || parsedFrameCount == 0u
+                || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: capture frame count must be a positive u32"));
+                return false;
+            }
+            captureFrameCount = static_cast<u32>(parsedFrameCount);
+        }
+
+        auto capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(
+            m_context, AStringView(outputPath.data(), outputPath.size()), captureFrameCount
+        );
+        if(!capture || !capture->start())
+            return false;
+        m_framebufferCapture = Move(capture);
+        return true;
+    }
+#endif
 
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     void removeFrameLaggedAsyncLightingUnfocusedPass(){
@@ -355,6 +408,11 @@ public:
         // Opt into per-pass GPU timing: flips the GPU-timing double gate (perf-session sink + graphics query
         // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(!configureFramebufferCapture())
+            return false;
+#endif
 
         // Arrow keys (Left/Right) drive a manual yaw scrub; the live angle is shown in the title bar so the exact
         // orientation an artifact appears at can be read off and reproduced (via NWB_TRANSPARENT_MULTI_SPIN_ANGLE).
@@ -511,7 +569,14 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(m_framebufferCapture)
+            m_framebufferCapture->update();
+        // The observer counts graphics presentation frames; a baseline update-count freeze must not stop it early.
+        const u32 captureFreezeFrame = m_framebufferCapture ? 0u : rendererBaselineCaptureFreezeFrame();
+#else
         const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+#endif
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
                 // The harness captures only after the last requested render submission has completed. Keeping the
@@ -621,6 +686,9 @@ private:
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     bool m_rendererBaselineCapturePaused = false;
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+    UniquePtr<NWB::Tests::Smoke::FramebufferCapture> m_framebufferCapture;
+#endif
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     FrameLaggedAsyncLightingToggleInputHandler m_frameLaggedAsyncLightingToggleInput;
     FrameLaggedAsyncLightingUnfocusedPass m_frameLaggedAsyncLightingUnfocusedPass{ m_context.graphics };

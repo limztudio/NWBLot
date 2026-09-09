@@ -21,7 +21,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     set(_nwb_smoke_capture_early_settle_seconds "0.75")
     set(_nwb_smoke_capture_mid_settle_seconds "2.0")
     set(_nwb_smoke_capture_late_settle_seconds "3.25")
-    set(_nwb_caustic_sphere_capture_settle_seconds "3.0")
     set(_nwb_skinned_caustic_capture_late_settle_seconds "4.0")
     # CTest budgets include process startup and orderly teardown around the script timeout.
     set(_nwb_window_capture_smoke_ctest_timeout_seconds 60)
@@ -364,9 +363,11 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_caustic_sphere_smoke)
         target_sources(nwb_caustic_sphere_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE
             NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE=1
+            NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1
         )
         nwb_configure_runtime_smoke_target(nwb_caustic_sphere_smoke "${_nwb_transparent_multi_runtime_root}")
         add_dependencies(nwb_caustic_sphere_smoke nwb_transparent_multi_smoke_assets)
@@ -377,9 +378,16 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
             "${_nwb_transparent_multi_runtime_root}"
             "NWB Caustic Sphere Smoke"
-            "--settle-seconds" "${_nwb_caustic_sphere_capture_settle_seconds}"
+            "--application-capture"
+            "--application-capture-frame-count" "360"
+            "--expect-log-message" "AVBOIT refraction resolve:"
+            "--expect-log-message" "caustic producer ("
+            "--expect-log-message" "TransparentMultiSmokeProject: shutdown"
             "--reject-log-message" "[ERROR]"
             "--reject-log-message" "failed to resolve shader"
+        )
+        set_tests_properties(nwb_caustic_sphere_capture_smoke PROPERTIES
+            ENVIRONMENT "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=0.016666667;NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME=0;NWB_REFRACTION_SMOKE_ENABLED=1;NWB_REFRACTION_SMOKE_HARDWARE=1"
         )
 
         unset(_nwb_transparent_multi_asset_stamp)

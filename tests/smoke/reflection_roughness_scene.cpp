@@ -25,12 +25,20 @@ NWB_BEGIN
 
 namespace __hidden_reflection_roughness_scene{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace Tests::Smoke;
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMaterialRef s_Opaque("project/smoke/reflection/materials/opaque");
 static constexpr SmokeMaterialRef s_Lit("project/smoke/reflection/materials/roughness_lit");
 static constexpr SmokeModelRef s_Model("project/characters/body/model");
 static constexpr AStringView s_Interface = "project/shaders/smoke_surface";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 
@@ -192,6 +200,10 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     m_skeleton = FindSpawnedModelObject(m_world, m_red, Name("skeleton"), Impl::ModelObjectKind::Skeleton);
     return m_skeleton.valid();
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

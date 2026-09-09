@@ -14,6 +14,9 @@
 namespace __hidden_presentation_settings_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace NWB::Impl;
 
 TEST(PresentationSettings, DefaultsAndExplicitLinearClampAreValid){
@@ -51,6 +54,9 @@ TEST(PresentationSettings, RejectsInvalidToneMapAndNonPositiveOrNonFiniteShoulde
     settings.shoulder = Limit<f32>::s_Infinity;
     EXPECT_FALSE(ValidatePresentationSettings(settings));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

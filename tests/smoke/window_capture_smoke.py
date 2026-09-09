@@ -537,6 +537,11 @@ def write_capture_rows(handle, width, height, rows_rgb, output_path):
 
 
 def read_bmp_24(path, handle=0):
+    width, height, rows_rgb = read_bmp_24_rows(path)
+    return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
+
+
+def read_bmp_24_rows(path):
     try:
         data = path.read_bytes()
     except OSError as error:
@@ -591,7 +596,7 @@ def read_bmp_24(path, handle=0):
         stored_rows.append(row)
 
     rows_rgb = stored_rows if signed_height < 0 else list(reversed(stored_rows))
-    return capture_result_from_rgb_rows(handle, width, height, rows_rgb)
+    return width, height, rows_rgb
 
 
 def analyze_rgb_rows(rows_rgb):

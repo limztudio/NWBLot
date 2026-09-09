@@ -177,7 +177,8 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
     const bool hdr10OutputActive,
-    const u32 csgContextHeapSlot = 0u
+    const u32 csgContextHeapSlot = 0u,
+    const bool refractionCapture = false
 ){
     TransparentDrawPushConstants pushConstants;
     pushConstants.mesh = BuildShaderDrivenPushConstants(
@@ -190,6 +191,8 @@ NWB_INLINE TransparentDrawPushConstants BuildTransparentDrawPushConstants(
     );
     pushConstants.avboit = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     pushConstants.avboit.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT] = csgContextHeapSlot;
+    if(refractionCapture)
+        pushConstants.avboit.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] = NWB_AVBOIT_REFRACTION_CAPTURE;
     return pushConstants;
 }
 
@@ -223,7 +226,8 @@ NWB_INLINE void SetTransparentDrawPushConstants(
     const MeshFrameHeapSlots& frameHeapSlots,
     const u32 dispatchFlags,
     const bool hdr10OutputActive,
-    const u32 csgContextHeapSlot = 0u
+    const u32 csgContextHeapSlot = 0u,
+    const bool refractionCapture = false
 ){
     const TransparentDrawPushConstants pushConstants = BuildTransparentDrawPushConstants(
         meshletCount,
@@ -234,7 +238,8 @@ NWB_INLINE void SetTransparentDrawPushConstants(
         frameHeapSlots,
         dispatchFlags,
         hdr10OutputActive,
-        csgContextHeapSlot
+        csgContextHeapSlot,
+        refractionCapture
     );
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 }

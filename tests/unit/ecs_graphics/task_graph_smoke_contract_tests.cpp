@@ -342,7 +342,8 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ));
     EXPECT_GE(CountText(smokeCmake, "\"--skip-blocking-log-message\" \"VUID-\""), 4u);
 
-    EXPECT_EQ(CountText(smokeLauncher, "\"native\": SmokeExecutable("), 14u);
+    EXPECT_EQ(CountText(smokeLauncher, "\"native\": SmokeExecutable("), 15u);
+    EXPECT_TRUE(ContainsText(smokeLauncher, "\"native\": SmokeExecutable(\"nwb_refraction_smoke\", \"refraction_smoke\")"));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"hw\": SmokeExecutable("));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"sw\": SmokeExecutable("));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"compute\": SmokeExecutable("));

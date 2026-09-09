@@ -233,7 +233,8 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(
             frameHeapSlots,
             dispatchFlags,
             m_graphics.isHDR10OutputActive(),
-            csgContextHeapSlot
+            csgContextHeapSlot,
+            context.pass == MaterialPipelinePass::AvboitRefractionCapture
         );
         return true;
     }

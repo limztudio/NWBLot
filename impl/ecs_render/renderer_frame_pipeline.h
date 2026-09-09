@@ -141,6 +141,10 @@ public:
     // This explicitly trades one frame of shadow/caustic/surfel latency for overlap: Graphics lights the current G-buffer from
     // an accepted prior shadow/caustic/surfel snapshot while AsyncCompute produces the next one. It is off by default
     // and self-bootstraps through the normal current-frame path after every toggle or target recreation.
+    void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
+    void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
+        m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
+    }
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
@@ -575,6 +579,9 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
+    bool m_refractionEnabled = true;
+    bool m_refractionHardwareLogged = false;
+    bool m_refractionScreenLogged = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     u64 m_laggedLightingReportGeneration = 0u;
     bool m_laggedLightingCurrentFrameAcceptancePending = false;

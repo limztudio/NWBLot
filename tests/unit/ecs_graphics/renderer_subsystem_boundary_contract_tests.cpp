@@ -355,9 +355,10 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "structRtSoftShadowState{"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "structRtCausticState{"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "structRtSurfelGiState{"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "structRtRefractionState{"));
     EXPECT_TRUE(ContainsText(
         compactStateHeader,
-        "classRendererRayTracingStatefinal:NoCopy,publicRtSceneBvhState,publicRtShadowState,publicRtSoftShadowState,publicRtCausticState,publicRtSurfelGiState{friendclassRendererRayTracingSystem;"
+        "classRendererRayTracingStatefinal:NoCopy,publicRtSceneBvhState,publicRtShadowState,publicRtSoftShadowState,publicRtCausticState,publicRtSurfelGiState,publicRtRefractionState{friendclassRendererRayTracingSystem;"
     ));
     EXPECT_EQ(CountText(compactStateHeader, "friendclassRenderer"), 1u);
     EXPECT_TRUE(ContainsText(compactStateHeader, "explicitRtShadowState(Core::Alloc::GlobalArena&arena):m_shadowMeshIndexBuffers(arena)"));
@@ -374,7 +375,14 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 109u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 114u);
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionBindingLayout.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionScreenShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionHwShader.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionScreenPipeline.reset();"));
+    EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionHwPipeline.reset();"));
+    // Resource recreation preserves the user's traversal preference.
+    EXPECT_FALSE(ContainsText(compactStateSystem, "m_refractionHardwareTracingEnabled="));
     EXPECT_EQ(CountText(compactStateSystem, ".clear();"), 16u);
     EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 25u);
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_tlasBackingFresh=false;m_tlasBackingStateHandoffPending=false;"));

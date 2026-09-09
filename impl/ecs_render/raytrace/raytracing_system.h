@@ -314,6 +314,25 @@ struct RayTracingSurfelPersistentResourceSnapshot{
     Core::QueueSubmissionToken countReadbackSubmissionToken;
 };
 
+// Prepared once before graph compilation. Recording only consumes these retained handles and slot values, so a
+// hardware failure cannot switch the graph to a different resource set after its dependencies have been declared.
+struct RayTracingRefractionGraphResources{
+    Core::ComputePipelineHandle pipeline;
+    Core::ComputePipelineHandle screenFallbackPipeline;
+    Core::BufferHandle materialContextSlotsBuffer;
+    Core::BufferHandle viewBuffer;
+    Core::RayTracingAccelStructHandle sceneTlas;
+    Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    u32 materialContextSlotsHeapSlot = 0u;
+    u32 viewHeapSlot = 0u;
+    bool usesHardwareTrace = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return pipeline && viewBuffer
+            && (!usesHardwareTrace || (sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer));
+    }
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -372,6 +391,15 @@ public:
 
 public:
     void logCapabilityOnce();
+
+    [[nodiscard]] bool prepareRefractionResources();
+    void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
+    [[nodiscard]] RayTracingRefractionGraphResources snapshotRefractionGraphResources()const;
+    [[nodiscard]] bool recordRefractionResolve(
+        Core::CommandList& commandList,
+        const DeferredFrameTargets& targets,
+        const RayTracingRefractionGraphResources& resources
+    )const;
 
     // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph
     // compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.

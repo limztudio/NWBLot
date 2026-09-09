@@ -1,0 +1,221 @@
+// limztudio@gmail.com
+#include "resolve_common.slangi"
+#include "../raytrace/material_context_slots.slangi"
+#include "../raytrace/constants.h"
+#include "../bvh/ray_vertex_attrib.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
+
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapRefractionMaterialContexts[];
+#pragma warning(pop)
+#define g_NwbRefractionMaterialContext g_NwbHeapRefractionMaterialContexts[g_NwbRefractionPush.materialContextSlotsHeapSlot]
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbRefractionMaterialContext.sceneSlots.w; }
+uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbRefractionMaterialContext.materialSlots.x; }
+uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
+#include "../bindless/bindless_heap_mesh.slangi"
+
+#define NWB_SCENE_SHADING_HEAP_SLOT g_NwbRefractionResources.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbRefractionResources.avboitSlots.w
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+#include "../scene/lighting.slangi"
+
+struct NwbRefractionHit{
+    bool hit;
+    bool frontFace;
+    uint instance;
+    float distance;
+    float3 position;
+    float3 geometricNormal;
+    NwbMeshSurface surface;
+};
+
+float3 nwbRefractionTransformNormal(const float3x4 worldToObject, const float3 normal){
+    return nwbSafeNormalize(float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), normal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), normal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), normal)
+    ), float3(0.0, 0.0, 1.0));
+}
+
+NwbRefractionHit nwbRefractionTrace(const float3 origin, const float3 direction, const float minDistance, const float maxDistance){
+    NwbRefractionHit hit = (NwbRefractionHit)0;
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = minDistance;
+    ray.TMax = maxDistance;
+    // Nearest geometric intersections are required at the exit. An accept-first query is incorrect for overlapping
+    // BLAS triangles, and filtering by instance during traversal would silently jump over nested volumes.
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    while(query.Proceed()){}
+    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
+        return hit;
+
+    hit.hit = true;
+    hit.frontFace = query.CommittedTriangleFrontFace();
+    hit.instance = query.CommittedInstanceID();
+    hit.distance = query.CommittedRayT();
+    hit.position = origin + direction * hit.distance;
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbRefractionMaterialContext.sceneSlots.z)[hit.instance];
+    const uint triangleBase = query.CommittedPrimitiveIndex() * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const uint3 triangle = NwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    hit.geometricNormal = nwbRefractionTransformNormal(query.CommittedWorldToObject3x4(), cross(v1 - v0, v2 - v0));
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float2 bary = query.CommittedTriangleBarycentrics();
+    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
+
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.worldPosition = hit.position;
+    surfaceHit.worldNormal = nwbRefractionTransformNormal(query.CommittedWorldToObject3x4(),
+        float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z);
+    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.rayDirection = direction;
+    hit.surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+    return hit;
+}
+
+float3 nwbRefractionShadeHit(const NwbRefractionHit hit, const float3 direction){
+    float3 normal = nwbSafeNormalize(hit.surface.normal, hit.geometricNormal);
+    if(dot(normal, direction) > 0.0)
+        normal = -normal;
+    float3 radiance = float3(0.0);
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint lightIndex = 0u; lightIndex < lightCount; ++lightIndex){
+        float3 lightVector;
+        half3 lightRadiance;
+        nwbSceneResolveLight(g_NwbSceneLights[lightIndex], hit.position, lightVector, lightRadiance);
+        radiance += float3(lightRadiance) * max(dot(normal, lightVector), 0.0);
+    }
+    // Offscreen hits have no camera lighting cache. This deliberately bounded diffuse approximation shares the
+    // authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
+    return radiance * float3(hit.surface.baseColor);
+}
+
+bool nwbRefractionCachedHit(const NwbRefractionHit hit, const NwbRefractionEntry entry, const bool includeTransparency, out float3 radiance){
+    radiance = float3(0.0);
+    uint2 pixel;
+    float projectedDepth;
+    if(!nwbRefractionProject(hit.position, pixel, projectedDepth))
+        return false;
+    const float opaqueDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
+    if(opaqueDepth >= 1.0)
+        return false;
+    const float3 opaqueWorld = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
+    const float cameraDistance = length(hit.position - g_NwbRefractionView.cameraPosition.xyz);
+    // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field
+    // and incorrectly returns an opaque foreground object's lighting for a hidden RT hit.
+    if(abs(projectedDepth - opaqueDepth) > 0.0002 || length(opaqueWorld - hit.position) > max(0.01, cameraDistance * 0.002))
+        return false;
+    radiance = includeTransparency ? nwbRefractionBackgroundForEntry(pixel, entry)
+        : NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(int3(pixel, 0)).rgb;
+    return true;
+}
+
+float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
+    // Raster capture respects CSG cuts, but the shared triangle TLAS contains the original uncut mesh. Its exit
+    // would produce the wrong optical thickness, so CSG primaries use the bounded screen-space approximation.
+    if(entry.csgPrimary)
+        return nwbRefractionResolveScreen(pixel, entry);
+    const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
+    const float entryDistance = length(entry.position - camera);
+    const float associationTolerance = max(entry.bias * 8.0, entryDistance * 0.0002);
+    const NwbRefractionHit entryHit = nwbRefractionTrace(camera, entry.incident,
+        max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance);
+    if(!entryHit.hit || !entryHit.frontFace || float(entryHit.surface.refractionIor) <= 1.001
+        || abs(float(entryHit.surface.refractionIor) - entry.ior) > 0.02)
+        return nwbRefractionResolveScreen(pixel, entry);
+
+    float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / entry.ior);
+    if(dot(internalDirection, internalDirection) < 0.5)
+        return float4(0.0, 0.0, 0.0, 1.0);
+    NwbRefractionHit exitHit = (NwbRefractionHit)0;
+    float3 internalOrigin = entryHit.position;
+    float3 outgoingDirection = float3(0.0);
+    float exitCosine = 0.0;
+    float pathLength = 0.0;
+    // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel
+    // reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
+    for(uint internalBounce = 0u; internalBounce <= 2u; ++internalBounce){
+        exitHit = nwbRefractionTrace(internalOrigin + internalDirection * entry.bias,
+            internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
+        // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and
+        // pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
+        if(!exitHit.hit || exitHit.instance != entryHit.instance || exitHit.frontFace)
+            return nwbRefractionResolveScreen(pixel, entry);
+        pathLength += length(exitHit.position - internalOrigin);
+        float3 exitNormal = nwbSafeNormalize(exitHit.surface.normal, exitHit.geometricNormal);
+        if(dot(exitNormal, internalDirection) < 0.0)
+            exitNormal = -exitNormal;
+        exitCosine = saturate(dot(internalDirection, exitNormal));
+        outgoingDirection = refract(internalDirection, -exitNormal, entry.ior);
+        if(dot(outgoingDirection, outgoingDirection) >= 0.5)
+            break;
+        internalDirection = reflect(internalDirection, exitNormal);
+        internalOrigin = exitHit.position;
+    }
+    // Residual internally reflected energy at the fixed cap is discarded. Returning a straight-through leak here
+    // would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
+    if(dot(outgoingDirection, outgoingDirection) < 0.5)
+        return float4(0.0, 0.0, 0.0, 1.0);
+    const float3 attenuation = nwbRefractionAttenuation(entry.tint,
+        pathLength, entry.ior, entry.cosine, exitCosine);
+
+    float3 origin = exitHit.position + outgoingDirection * entry.bias;
+    float3 accumulated = float3(0.0);
+    float transmittance = 1.0;
+    // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query;
+    // further glass interfaces deliberately take the bounded screen fallback instead of spawning another path.
+    for(uint layer = 0u; layer < 3u; ++layer){
+        const NwbRefractionHit background = nwbRefractionTrace(origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
+        if(!background.hit){
+            if(layer > 0u)
+                return nwbRefractionResolveScreen(pixel, entry);
+            float3 screenRadiance;
+            NwbRefractionEntry screenEntry = entry;
+            screenEntry.position = exitHit.position;
+            const float3 missRadiance = nwbRefractionScreenBackground(screenEntry, outgoingDirection, screenRadiance)
+                ? screenRadiance : nwbRefractionBackground(pixel);
+            return float4((accumulated + transmittance * missRadiance) * attenuation, 1.0);
+        }
+        if(float(background.surface.refractionIor) > 1.001)
+            return nwbRefractionResolveScreen(pixel, entry);
+        const float coverage = saturate(float(background.surface.renderCoverage));
+        if(coverage >= 0.999){
+            float3 radiance;
+            if(!nwbRefractionCachedHit(background, entry, layer == 0u, radiance))
+                radiance = nwbRefractionShadeHit(background, outgoingDirection);
+            return float4((accumulated + transmittance * radiance) * attenuation, 1.0);
+        }
+        accumulated += transmittance * coverage * nwbRefractionShadeHit(background, outgoingDirection);
+        transmittance *= 1.0 - coverage;
+        origin = background.position + outgoingDirection * entry.bias;
+    }
+    return nwbRefractionResolveScreen(pixel, entry);
+}
+
+[numthreads(NWB_REFRACTION_GROUP_SIZE, NWB_REFRACTION_GROUP_SIZE, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint2 pixel = dispatchThreadID.xy;
+    if(pixel.x >= g_NwbRefractionPush.width || pixel.y >= g_NwbRefractionPush.height)
+        return;
+    NwbRefractionEntry entry;
+    if(!nwbRefractionLoadEntry(pixel, entry)){
+        g_NwbRefractionOutput[pixel] = float4(0.0);
+        return;
+    }
+    g_NwbRefractionOutput[pixel] = nwbRefractionResolveHardware(pixel, entry);
+}

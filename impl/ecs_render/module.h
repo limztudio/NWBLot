@@ -78,6 +78,8 @@ public:
     virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
 
     void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
+    void setRefractionEnabled(bool enabled)noexcept;
+    void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;

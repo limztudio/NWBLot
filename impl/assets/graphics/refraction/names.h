@@ -1,0 +1,12 @@
+// limztudio@gmail.com
+#pragma once
+
+#include <impl/global.h>
+#include <global/name.h>
+
+NWB_IMPL_BEGIN
+namespace AssetsGraphicsRefraction{
+inline constexpr Name s_ScreenResolveShaderName("engine/graphics/refraction/resolve_screen_cs");
+inline constexpr Name s_HwResolveShaderName("engine/graphics/refraction/resolve_hw_cs");
+}
+NWB_IMPL_END

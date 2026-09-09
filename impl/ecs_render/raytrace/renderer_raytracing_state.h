@@ -423,7 +423,19 @@ struct RtSurfelGiState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState{
+struct RtRefractionState{
+    Core::BindingLayoutHandle m_refractionBindingLayout;
+    Core::ShaderHandle m_refractionScreenShader;
+    Core::ShaderHandle m_refractionHwShader;
+    Core::ComputePipelineHandle m_refractionScreenPipeline;
+    Core::ComputePipelineHandle m_refractionHwPipeline;
+    bool m_refractionScreenPipelineFailed = false;
+    bool m_refractionHwPipelineFailed = false;
+    bool m_refractionUseHardwareTrace = false;
+    bool m_refractionHardwareTracingEnabled = true;
+};
+
+class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState, public RtRefractionState{
     friend class RendererRayTracingSystem;
 
 public:

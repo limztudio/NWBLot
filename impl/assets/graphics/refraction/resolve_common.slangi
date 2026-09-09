@@ -1,0 +1,187 @@
+// limztudio@gmail.com
+#ifndef NWB_GRAPHICS_REFRACTION_RESOLVE_COMMON_SLANGI
+#define NWB_GRAPHICS_REFRACTION_RESOLVE_COMMON_SLANGI
+
+#include "push_constants.h"
+#include "../deferred/bindless_resources.slangi"
+#include "../avboit/constants.h"
+#include "../common/math.slangi"
+
+struct NwbRefractionPushConstants{
+#define NWB_REFRACTION_SHADER_FIELD(name, defaultValue) uint name;
+    NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_SHADER_FIELD)
+#undef NWB_REFRACTION_SHADER_FIELD
+};
+[[vk::push_constant]] NwbRefractionPushConstants g_NwbRefractionPush;
+
+// Prefix of the renderer's mesh view CB. The omitted frustum planes are never read by this pass.
+struct NwbRefractionView{
+    row_major float4x4 worldToClip;
+    row_major float4x4 clipToWorld;
+    float4 cameraPosition;
+};
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbRefractionView, Std140DataLayout> g_NwbHeapRefractionViews[];
+#pragma warning(pop)
+
+#define g_NwbRefractionResources g_NwbHeapDeferredBindlessResources[g_NwbRefractionPush.deferredResourcesHeapSlot]
+#define g_NwbRefractionView g_NwbHeapRefractionViews[g_NwbRefractionPush.viewHeapSlot]
+#define g_NwbRefractionOutput NwbHeapStorageImage2DFloat4(g_NwbRefractionResources.refractionSlots0.w)
+
+static const float NWB_REFRACTION_MAX_DISTANCE = 10000.0;
+static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
+// Without a geometric exit, treat the captured boundary as a unit-thickness sheet. This fallback is explicit and
+// stable; it must not use the distance to the background as glass thickness, which would darken distant backgrounds.
+static const float NWB_REFRACTION_FALLBACK_THICKNESS = 1.0;
+
+float3 nwbRefractionReconstruct(const uint2 pixel, const float depth){
+    const float2 uv = (float2(pixel) + 0.5) / float2(g_NwbRefractionPush.width, g_NwbRefractionPush.height);
+    const float4 world = mul(g_NwbRefractionView.clipToWorld, float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0));
+    return world.xyz / world.w;
+}
+
+bool nwbRefractionProject(const float3 world, out uint2 pixel, out float depth){
+    pixel = uint2(0u, 0u);
+    depth = 1.0;
+    const float4 clip = mul(g_NwbRefractionView.worldToClip, float4(world, 1.0));
+    if(clip.w <= 1e-6)
+        return false;
+    const float3 ndc = clip.xyz / clip.w;
+    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if(any(uv < 0.0) || any(uv >= 1.0) || ndc.z < 0.0 || ndc.z >= 1.0)
+        return false;
+    pixel = uint2(uv * float2(g_NwbRefractionPush.width, g_NwbRefractionPush.height));
+    depth = ndc.z;
+    return true;
+}
+
+float3 nwbRefractionBackground(const uint2 pixel){
+    const int3 texel = int3(pixel, 0);
+    const float3 opaque = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(texel).rgb;
+    const float3 behind = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb;
+    const float behindExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r;
+    const float frontExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r;
+    const float frontTransmittance = exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
+    const float backTransmittance = exp(-min(behindExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
+    // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix
+    // here; the final compositor applies it once. Clamp only the ill-conditioned, visually occluded tail.
+    return behind / max(frontTransmittance, 1e-4) + opaque * backTransmittance;
+}
+
+float nwbRefractionFresnelTransmission(const float ior, const float cosine){
+    const float ratio = (ior - 1.0) / (ior + 1.0);
+    const float r0 = ratio * ratio;
+    return 1.0 - (r0 + (1.0 - r0) * pow(1.0 - saturate(cosine), 5.0));
+}
+
+float3 nwbRefractionAttenuation(const float3 tint, const float thickness, const float ior, const float entryCosine, const float exitCosine){
+    return exp(log(clamp(tint, float3(1e-4), float3(1.0))) * max(thickness, 0.0))
+        * nwbRefractionFresnelTransmission(ior, entryCosine)
+        * nwbRefractionFresnelTransmission(ior, exitCosine);
+}
+
+struct NwbRefractionEntry{
+    uint primaryRasterInstance;
+    bool csgPrimary;
+    float depth;
+    float3 position;
+    float3 incident;
+    float3 normal;
+    float3 tint;
+    float ior;
+    float cosine;
+    float bias;
+};
+
+bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
+    entry = (NwbRefractionEntry)0;
+    entry.depth = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
+    if(entry.depth >= 1.0)
+        return false;
+    entry.primaryRasterInstance = uint(NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    const float4 normalIor = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
+    const float4 tintCoverage = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0));
+    entry.csgPrimary = tintCoverage.w < 0.0;
+    entry.position = nwbRefractionReconstruct(pixel, entry.depth);
+    const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
+    entry.incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
+    entry.normal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
+    if(dot(entry.incident, entry.normal) > 0.0)
+        entry.normal = -entry.normal;
+    entry.ior = clamp(normalIor.w, 1.0, 4.0);
+    entry.tint = saturate(tintCoverage.xyz);
+    entry.cosine = saturate(-dot(entry.incident, entry.normal));
+    entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, length(cameraRay) * 1e-5);
+    // Coverage is intentionally not an optical mask: perfectly clear glass may author zero AVBOIT opacity.
+    return true;
+}
+
+float3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntry entry){
+    const uint samplePrimary = uint(NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    // A displaced pixel outside this primary's silhouette has a different AVBOIT depth partition. Reusing its
+    // transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is
+    // reusable there; the hardware path can still evaluate transparent geometry actually intersected by its ray.
+    return samplePrimary == entry.primaryRasterInstance ? nwbRefractionBackground(pixel)
+        : NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(int3(pixel, 0)).rgb;
+}
+
+float3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){
+    return nwbRefractionBackground(pixel) * nwbRefractionAttenuation(
+        entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine
+    );
+}
+
+// Fixed-cost screen-space continuation, also used when hardware cannot recover a closed primary volume. It is a
+// single-boundary approximation; no guessed second normal or unbounded march is used. Depth crossing must lie close
+// to the ray, otherwise foreground silhouettes and offscreen rays keep the stable straight-through fallback.
+bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 direction, out float3 radiance){
+    radiance = float3(0.0);
+    uint2 sourcePixel;
+    float unusedDepth;
+    if(!nwbRefractionProject(entry.position, sourcePixel, unusedDepth))
+        return false;
+    const float sourceOpaqueDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(sourcePixel, 0)).r;
+    if(sourceOpaqueDepth >= 1.0)
+        return false;
+    const float3 sourceOpaque = nwbRefractionReconstruct(sourcePixel, sourceOpaqueDepth);
+    const float maxDistance = min(max(length(sourceOpaque - entry.position) * 2.0, entry.bias * 32.0), NWB_REFRACTION_MAX_DISTANCE);
+    float previousT = entry.bias;
+    for(uint step = 1u; step <= 24u; ++step){
+        const float t = maxDistance * float(step * step) / (24.0 * 24.0);
+        const float3 sampleWorld = entry.position + direction * t;
+        uint2 samplePixel;
+        float rayDepth;
+        if(!nwbRefractionProject(sampleWorld, samplePixel, rayDepth))
+            return false;
+        const float sceneDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(samplePixel, 0)).r;
+        if(sceneDepth < 1.0 && rayDepth >= sceneDepth){
+            const float3 sceneWorld = nwbRefractionReconstruct(samplePixel, sceneDepth);
+            const float3 delta = sceneWorld - entry.position;
+            const float alongRay = dot(delta, direction);
+            const float tolerance = max(entry.bias * 8.0, (t - previousT) * 1.5);
+            if(alongRay > entry.bias && length(delta - direction * alongRay) < tolerance
+                && length(sceneWorld - g_NwbRefractionView.cameraPosition.xyz) > length(entry.position - g_NwbRefractionView.cameraPosition.xyz)){
+                radiance = nwbRefractionBackgroundForEntry(samplePixel, entry);
+                return true;
+            }
+            return false;
+        }
+        previousT = t;
+    }
+    return false;
+}
+
+float4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry entry){
+    float3 background;
+    const float3 direction = refract(entry.incident, entry.normal, 1.0 / entry.ior);
+    if(dot(direction, direction) > 0.5 && nwbRefractionScreenBackground(entry, direction, background)){
+        return float4(background * nwbRefractionAttenuation(
+            entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine
+        ), 1.0);
+    }
+    return float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
+}
+
+#endif

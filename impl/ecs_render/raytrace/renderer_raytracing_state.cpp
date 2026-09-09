@@ -15,6 +15,14 @@ NWB_IMPL_BEGIN
 
 
 void RendererRayTracingState::invalidateResources(){
+    m_refractionBindingLayout.reset();
+    m_refractionScreenShader.reset();
+    m_refractionHwShader.reset();
+    m_refractionScreenPipeline.reset();
+    m_refractionHwPipeline.reset();
+    m_refractionScreenPipelineFailed = false;
+    m_refractionHwPipelineFailed = false;
+    m_refractionUseHardwareTrace = false;
     // The scene TLAS is GPU state and must be released on device/resource teardown; per-mesh BLAS
     // handles live on MeshResources and are released with the mesh cache. Ray tracing capability
     // persists across resource invalidation.

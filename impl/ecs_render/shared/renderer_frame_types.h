@@ -53,6 +53,14 @@ struct AvboitFrameTargets{
     Core::TextureHandle transmittanceTexture;
     Core::FramebufferHandle lowFramebuffer;
     Core::FramebufferHandle accumulationFramebuffer;
+    Core::TextureHandle refractionDepth;
+    Core::TextureHandle refractionNormalIor;
+    Core::TextureHandle refractionTintCoverage;
+    Core::TextureHandle refractionInstance;
+    Core::TextureHandle refractionResolve;
+    Core::TextureHandle foregroundAccumColor;
+    Core::TextureHandle foregroundAccumExtinction;
+    Core::FramebufferHandle refractionFramebuffer;
     Core::BufferHandle coverageBuffer;
     Core::BufferHandle depthWarpBuffer;
     Core::BufferHandle controlBuffer;
@@ -95,7 +103,7 @@ struct AvboitFrameTargets{
 #endif
     }
 };
-static_assert(sizeof(AvboitFrameTargets) == 232u, "AvboitFrameTargets should keep its compact CPU-only layout");
+static_assert(sizeof(AvboitFrameTargets) == 232u + 7u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;
@@ -168,7 +176,7 @@ struct RayTraceMaterialContextSlots{
 };
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
 
-// Nine std140 uint4 lanes of ordinary-pass heap slots.
+// Eleven std140 uint4 lanes of ordinary-pass heap slots.
 struct DeferredBindlessResourceSlots{
     u32 gbufferBaseColor = 0u;
     u32 gbufferNormal = 0u;
@@ -216,8 +224,17 @@ struct DeferredBindlessResourceSlots{
     u32 csgRemovedIntervalData = 0u;
     u32 csgRemovedIntervalCount = 0u;
     u32 _csgPad = 0u;
+
+    u32 refractionDepth = 0u;
+    u32 refractionNormalIor = 0u;
+    u32 refractionTintCoverage = 0u;
+    u32 refractionResolveStorage = 0u;
+    u32 refractionResolve = 0u;
+    u32 avboitForegroundColor = 0u;
+    u32 avboitForegroundExtinction = 0u;
+    u32 refractionInstance = 0u;
 };
-static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 36u, "Deferred bindless slots must match nine std140 uint4 lanes");
+static_assert(sizeof(DeferredBindlessResourceSlots) == sizeof(u32) * 44u, "Deferred bindless slots must match eleven std140 uint4 lanes");
 
 // Deferred target generation owns these heap registrations and retires them before target release.
 struct DeferredBindlessFrameResources{
@@ -245,6 +262,14 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle compositeColorStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitAccumExtinction = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionDepth = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionNormalIor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionTintCoverage = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionInstance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionResolve = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionResolveStorage = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitForegroundColor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle avboitForegroundExtinction = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitTransmittance = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitLinearSampler = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle sceneShading = Core::GpuDescriptorHandle::invalid();

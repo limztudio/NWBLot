@@ -163,6 +163,23 @@ float2 nwbAvboitFullUvFromLowFragCoord(float2 fragCoord){
     return clamp(fragCoord / lowSize, float2(0.0), float2(1.0));
 }
 
+bool nwbAvboitPrimaryRefractionInstance(float2 fullUv, uint instanceIndex){
+    if(!nwbAvboitRefractionEnabled())
+        return false;
+    // All transparent passes gather the same instance ordering. Zero denotes no selected refractor; the +1
+    // encoding preserves instance zero while allowing a single-channel float render target on all backends.
+    const float encodedInstance = NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w)
+        .SampleLevel(NwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
+    return encodedInstance >= 0.5 && uint(encodedInstance + 0.5) == instanceIndex + 1u;
+}
+
+float nwbAvboitPrimaryRefractionDepth(float2 fragCoord){
+    if(!nwbAvboitRefractionEnabled())
+        return NWB_SCENE_BACKGROUND_DEPTH;
+    return NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x)
+        .Load(int3(int2(fragCoord), 0)).r;
+}
+
 float4 nwbAvboitFullRasterPositionFromLowFragCoord(float4 fragCoord){
     const float2 fullSize = float2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight()));
     return float4(nwbAvboitFullUvFromLowFragCoord(fragCoord.xy) * fullSize, fragCoord.zw);

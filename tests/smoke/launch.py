@@ -40,6 +40,12 @@ SMOKE_REQUIRED_DEFINES = {
 
 
 SMOKE_SCENES = {
+    "refraction": SmokeScene(
+        runtime="smoke_runtime",
+        backends={
+            "native": SmokeExecutable("nwb_refraction_smoke", "refraction_smoke"),
+        },
+    ),
     "transparent-multi": SmokeScene(
         runtime="smoke_runtime",
         backends={

@@ -70,6 +70,8 @@ struct NwbAvboitAccumulatePixelInput{
 struct NwbAvboitAccumulatePixelOutput{
     [[vk::location(NWB_AVBOIT_ACCUM_COLOR_LOCATION)]] float4 accumColor : SV_Target0;
     [[vk::location(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION)]] float4 accumExtinction : SV_Target1;
+    [[vk::location(NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION)]] float4 foregroundColor : SV_Target2;
+    [[vk::location(NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION)]] float4 foregroundExtinction : SV_Target3;
 };
 
 
@@ -100,7 +102,33 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     const NwbMeshSurface surface = nwbMaterialSurface();
 
     const half alpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
+
+    if(nwbAvboitRefractionCapture()){
+        const float ior = float(surface.refractionIor);
+        if(!isfinite(ior) || ior <= 1.0001)
+            discard;
+        // Capture owns a separate depth attachment. Opaque visibility must therefore be tested explicitly.
+        const float opaqueDepth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w)
+            .Load(int3(int2(input.position.xy), 0)).r;
+        if(input.position.z > opaqueDepth)
+            discard;
+
+        NwbAvboitAccumulatePixelOutput capture;
+        capture.accumColor = float4(nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0)), ior);
+        capture.accumExtinction = float4(clamp(float3(surface.shadowAbsorptionTint), float3(0.0), float3(1.0)), float(alpha));
+#if NWB_CSG_ENABLED
+        // The triangle TLAS does not contain boolean-cut exits. Resolve this primary through the raster-aware
+        // screen fallback instead of tracing the original uncut volume. Coverage is not used for optical masking.
+        capture.accumExtinction.w = -1.0;
+#endif
+        capture.foregroundColor = float4(float(nwbMeshInstanceIndex()) + 1.0, 0.0, 0.0, 0.0);
+        capture.foregroundExtinction = float4(0.0);
+        return capture;
+    }
+
     if(alpha <= half(0.0))
+        discard;
+    if(nwbAvboitPrimaryRefractionInstance(nwbAvboitFullUvFromFragCoord(input.position.xy), nwbMeshInstanceIndex()))
         discard;
 
     const half volumeTransmittance = nwbAvboitLinearBiasedTransmittance(input.position.xy, input.position.z);
@@ -129,6 +157,17 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
     NwbAvboitAccumulatePixelOutput output;
     output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);
     output.accumExtinction = float4(nwbAvboitExtinctionFromAlpha(alpha), 0.0, 0.0, 0.0);
+    output.foregroundColor = float4(0.0);
+    output.foregroundExtinction = float4(0.0);
+    // Preserve foreground transparency at its camera pixel. Background accumulation is resolved separately
+    // through the bent path; a cleared capture depth leaves ordinary AVBOIT's original outputs unchanged.
+    const float refractionDepth = nwbAvboitPrimaryRefractionDepth(input.position.xy);
+    if(refractionDepth < NWB_SCENE_BACKGROUND_DEPTH && input.position.z < refractionDepth){
+        output.foregroundColor = output.accumColor;
+        output.foregroundExtinction = output.accumExtinction;
+        output.accumColor = float4(0.0);
+        output.accumExtinction = float4(0.0);
+    }
     return output;
 }
 

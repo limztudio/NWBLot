@@ -1,0 +1,15 @@
+// limztudio@gmail.com
+#include "resolve_common.slangi"
+
+[numthreads(NWB_REFRACTION_GROUP_SIZE, NWB_REFRACTION_GROUP_SIZE, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID){
+    const uint2 pixel = dispatchThreadID.xy;
+    if(pixel.x >= g_NwbRefractionPush.width || pixel.y >= g_NwbRefractionPush.height)
+        return;
+    NwbRefractionEntry entry;
+    if(!nwbRefractionLoadEntry(pixel, entry)){
+        g_NwbRefractionOutput[pixel] = float4(0.0);
+        return;
+    }
+    g_NwbRefractionOutput[pixel] = nwbRefractionResolveScreen(pixel, entry);
+}

@@ -75,6 +75,14 @@ bool RendererSystem::appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builde
     return m_pipeline->appendFrameGraph(builder);
 }
 
+void RendererSystem::setRefractionEnabled(const bool enabled)noexcept{
+    m_pipeline->setRefractionEnabled(enabled);
+}
+
+void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
+    m_pipeline->setRefractionHardwareTracingEnabled(enabled);
+}
+
 void RendererSystem::setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
     m_pipeline->setFrameLaggedAsyncLightingEnabled(enabled);
 }

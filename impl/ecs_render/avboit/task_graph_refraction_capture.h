@@ -1,0 +1,43 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+#include <impl/global.h>
+#include <core/task/gpu/task_graph.h>
+
+NWB_IMPL_BEGIN
+
+class RendererMaterialSystem;
+class RendererCsgSystem;
+struct DeferredFrameTargets;
+struct CsgFrameState;
+
+namespace ECSRenderDetail{
+    struct CsgGraphResourceSnapshot;
+    struct MeshFrameBindingSnapshot;
+    struct MeshViewGpuData;
+};
+
+namespace RendererTaskGraphDetail{
+
+// Runs after transparent CSG intervals and before the first AVBOIT material-stream upload. Even a disabled
+// capture clears its selection so previously visible refractors cannot affect the current frame.
+[[nodiscard]] Core::GpuTaskId DeclareAvboitRefractionCapture(
+    Core::GpuTaskGraph& graph,
+    Core::Alloc::GlobalArena& arena,
+    RendererMaterialSystem& materialSystem,
+    RendererCsgSystem& csgSystem,
+    DeferredFrameTargets& targets,
+    const CsgFrameState& csgFrameState,
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
+    const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    Core::GpuTaskId dependency,
+    bool enabled
+);
+
+};
+
+NWB_IMPL_END

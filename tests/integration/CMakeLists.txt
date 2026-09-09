@@ -20,6 +20,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke_tests.py"
     )
+    add_test(
+        NAME nwb_refraction_capture_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_capture_smoke_tests.py"
+    )
 endif()
 
 if(TARGET nwb_tex_conv)

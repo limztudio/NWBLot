@@ -53,6 +53,14 @@ float nwbAvboitExtinctionFixedScale(){
     return max(NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE], 1.0);
 }
 
+bool nwbAvboitRefractionCapture(){
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] == NWB_AVBOIT_REFRACTION_CAPTURE;
+}
+
+bool nwbAvboitRefractionEnabled(){
+    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] == NWB_AVBOIT_REFRACTION_ACCUMULATE;
+}
+
 // Coverage alpha is always clamped to [0, 1], but HDR radiance must survive AVBOIT's premultiplied color path.
 // The value is present on both the compute and transparent-draw layouts so their shared prefix stays intact.
 bool nwbAvboitPresentationIsHdr10(){

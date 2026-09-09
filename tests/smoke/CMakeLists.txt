@@ -184,6 +184,50 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
+        nwb_declare_executable(nwb_refraction_smoke)
+        target_sources(nwb_refraction_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+        )
+        target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_refraction_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_refraction_smoke nwb_transparent_multi_smoke_assets)
+
+        if(TARGET nwb_logserver)
+            set(_nwb_refraction_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+        else()
+            set(_nwb_refraction_logserver_args)
+        endif()
+        add_test(
+            NAME nwb_refraction_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_capture_smoke.py"
+                "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction"
+                ${_nwb_refraction_logserver_args}
+        )
+        set_tests_properties(nwb_refraction_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 240
+        )
+        add_test(
+            NAME nwb_refraction_gpudbg_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_capture_smoke.py"
+                "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_gpudbg"
+                "--application-arg=--gpudbg"
+                ${_nwb_refraction_logserver_args}
+            CONFIGURATIONS dbg
+        )
+        set_tests_properties(nwb_refraction_gpudbg_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 240
+        )
+        unset(_nwb_refraction_logserver_args)
+
         nwb_declare_executable(nwb_transparent_csg_smoke)
         target_sources(nwb_transparent_csg_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"

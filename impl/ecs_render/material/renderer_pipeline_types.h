@@ -38,6 +38,7 @@ namespace MaterialPipelinePass{
         AvboitOccupancy,
         AvboitExtinction,
         AvboitAccumulate,
+        AvboitRefractionCapture,
     };
 };
 
@@ -60,6 +61,7 @@ namespace MaterialPipelineCsgMode{
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
     case MaterialPipelinePass::AvboitAccumulate:
+    case MaterialPipelinePass::AvboitRefractionCapture:
         return true;
     default:
         return false;

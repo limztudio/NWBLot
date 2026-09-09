@@ -37,8 +37,9 @@ namespace __hidden_deferred_composite{
 
 struct CompositePushConstants{
     u32 resourceSlots = 0u;
+    u32 refractionResources = 0u;
 };
-static_assert(sizeof(CompositePushConstants) == sizeof(u32));
+static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 2u);
 
 struct PresentPushConstants{
     u32 resourceSlots = 0u;
@@ -239,7 +240,8 @@ bool RendererDeferredSystem::renderDeferredComposite(
     commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_compositeComputePipeline);
     const __hidden_deferred_composite::CompositePushConstants pushConstants{
-        targets.bindless.slotsBufferDescriptor.slot()
+        targets.bindless.slotsBufferDescriptor.slot(),
+        targets.avboit.refractionFramebuffer ? 1u : 0u
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     const u32 groupCountX = (targets.width + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;

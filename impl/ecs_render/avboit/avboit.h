@@ -50,6 +50,7 @@ static_assert(
 [[nodiscard]] Core::Format::Enum SelectRendererAvboitLowRasterFormat(Core::Device& device);
 [[nodiscard]] Core::RenderState BuildRendererAvboitVoxelRenderState();
 [[nodiscard]] Core::RenderState BuildRendererAvboitAccumulateRenderState();
+[[nodiscard]] Core::RenderState BuildRendererAvboitRefractionCaptureRenderState();
 [[nodiscard]] RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTargets& targets, bool hdr10OutputActive);
 
 

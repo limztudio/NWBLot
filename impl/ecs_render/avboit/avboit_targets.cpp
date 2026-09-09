@@ -126,6 +126,7 @@ void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
 
     targets.lowFramebuffer.reset();
     targets.accumulationFramebuffer.reset();
+    targets.refractionFramebuffer.reset();
 
     targets.lowRasterTarget.reset();
     targets.accumColor.reset();
@@ -223,6 +224,52 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         return false;
     }
 
+    // Capture a concrete primary interface; color/coverage accumulation cannot reconstruct one after blending.
+    avboitTargets.foregroundAccumColor = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, accumColorFormat,
+        "engine/avboit/foreground_color", transparentBlack, true);
+    avboitTargets.foregroundAccumExtinction = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, accumExtinctionFormat,
+        "engine/avboit/foreground_extinction", transparentBlack, true);
+    avboitTargets.refractionNormalIor = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
+        "engine/avboit/refraction_normal_ior", transparentBlack, true);
+    avboitTargets.refractionTintCoverage = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
+        "engine/avboit/refraction_tint_coverage", transparentBlack, true);
+    avboitTargets.refractionInstance = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, Core::Format::R32_FLOAT,
+        "engine/avboit/refraction_instance", transparentBlack, true);
+    Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
+    refractionDepthDesc.setName("engine/avboit/refraction_depth")
+        .setInitialState(Core::ResourceStates::Common)
+        .setKeepInitialState(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    avboitTargets.refractionDepth = m_graphics.createTexture(refractionDepthDesc);
+    Core::TextureDesc refractionResolveDesc;
+    refractionResolveDesc.setWidth(createdTargets.width).setHeight(createdTargets.height)
+        .setFormat(Core::Format::RGBA16_FLOAT).setInUAV(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName("engine/avboit/refraction_resolve").setClearValue(transparentBlack)
+        .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true);
+    avboitTargets.refractionResolve = m_graphics.createTexture(refractionResolveDesc);
+    if(!avboitTargets.foregroundAccumColor || !avboitTargets.foregroundAccumExtinction
+        || !avboitTargets.refractionNormalIor || !avboitTargets.refractionTintCoverage
+        || !avboitTargets.refractionInstance || !avboitTargets.refractionDepth || !avboitTargets.refractionResolve)
+        return false;
+    Core::FramebufferDesc refractionFramebufferDesc;
+    refractionFramebufferDesc
+        .addColorAttachment(avboitTargets.refractionNormalIor.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionTintCoverage.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .addColorAttachment(avboitTargets.refractionInstance.get(), ECSRenderDetail::s_FramebufferSubresources)
+        // The shared PS declares four outputs. Bind the existing foreground target for a complete interface;
+        // capture masks its writes and AVBOIT clears it before accumulation.
+        .addColorAttachment(avboitTargets.foregroundAccumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources)
+        .setDepthAttachment(avboitTargets.refractionDepth.get(), ECSRenderDetail::s_FramebufferSubresources);
+    avboitTargets.refractionFramebuffer = device.createFramebuffer(refractionFramebufferDesc);
+    if(!avboitTargets.refractionFramebuffer)
+        return false;
+
     Core::FramebufferDesc lowFramebufferDesc;
     lowFramebufferDesc.addColorAttachment(avboitTargets.lowRasterTarget.get(), ECSRenderDetail::s_FramebufferSubresources);
     avboitTargets.lowFramebuffer = device.createFramebuffer(lowFramebufferDesc);
@@ -240,6 +287,12 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         .setTexture(avboitTargets.accumExtinction.get())
         .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
     ;
+    accumulationAttachments[NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION]
+        .setTexture(avboitTargets.foregroundAccumColor.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources);
+    accumulationAttachments[NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION]
+        .setTexture(avboitTargets.foregroundAccumExtinction.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources);
 
     Core::FramebufferDesc accumulationFramebufferDesc;
     for(const Core::FramebufferAttachment& attachment : accumulationAttachments)

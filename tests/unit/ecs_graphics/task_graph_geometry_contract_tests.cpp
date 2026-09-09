@@ -465,11 +465,12 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         "const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();"
     ));
     EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\").setInitialState(sceneTlasInitialState)"));
-    EXPECT_EQ(CountText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")"), 4u);
-    EXPECT_EQ(CountText(taskGraph, "sceneTlasBackingInitialState()"), 4u);
+    // Refraction shares the same generation-aware scene TLAS as shadows, GI, and caustics.
+    EXPECT_EQ(CountText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")"), 5u);
+    EXPECT_EQ(CountText(taskGraph, "sceneTlasBackingInitialState()"), 5u);
     EXPECT_EQ(
         CountText(taskGraph, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())"),
-        3u
+        4u
     );
 
     const usize clearPreparedSceneTlasOffset = rayTracing.find("void RendererRayTracingSystem::clearPreparedSceneTlasBuild()noexcept");

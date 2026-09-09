@@ -1,0 +1,10 @@
+// Ordinary AVBOIT transparency in front of and behind the refractive interface.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const half4 tinted = surface.base_color * runtime.color_tint;
+    NwbMeshSurface result = nwbMakeMeshSurface(tinted.rgb, inNormal);
+    result.renderCoverage = tinted.a;
+    return result;
+}

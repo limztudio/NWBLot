@@ -66,6 +66,8 @@ inline Core::RenderState BuildRenderStateForPass(const MaterialPipelinePass::Enu
         return applyTwoSided(BuildRendererAvboitVoxelRenderState());
     case MaterialPipelinePass::AvboitAccumulate:
         return applyTwoSided(BuildRendererAvboitAccumulateRenderState());
+    case MaterialPipelinePass::AvboitRefractionCapture:
+        return applyTwoSided(BuildRendererAvboitRefractionCaptureRenderState());
     default:
         return applyTwoSided(BuildMeshRenderState());
     }

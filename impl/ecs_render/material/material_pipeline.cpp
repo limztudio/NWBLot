@@ -121,6 +121,11 @@ struct MaterialPipelineAvboitPixelShaderSelection{
         selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
         selection.debugName = "ECSRender_AvboitAccumulatePS";
         break;
+    case MaterialPipelinePass::AvboitRefractionCapture:
+        // The draw mode selects optical capture in the existing material-authored accumulation shader.
+        selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
+        selection.debugName = "ECSRender_AvboitRefractionCapturePS";
+        break;
     default:
         break;
     }
@@ -296,6 +301,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
     case MaterialPipelinePass::AvboitAccumulate:
+    case MaterialPipelinePass::AvboitRefractionCapture:
         passPixelShaderName = avboitPixelShaderSelection.shaderName();
         passPixelShaderDebugName = avboitPixelShaderSelection.debugName;
         break;

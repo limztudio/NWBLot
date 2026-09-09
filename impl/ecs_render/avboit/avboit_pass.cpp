@@ -134,7 +134,23 @@ Core::RenderState BuildRendererAvboitAccumulateRenderState(){
     renderState.blendState
         .setRenderTarget(NWB_AVBOIT_ACCUM_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
         .setRenderTarget(NWB_AVBOIT_ACCUM_EXTINCTION_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
+        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_COLOR_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget())
+        .setRenderTarget(NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION, __hidden_avboit::BuildAdditiveBlendTarget(Core::ColorMask::Red))
     ;
+    return renderState;
+}
+
+Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
+    Core::RenderState renderState;
+    renderState.depthStencilState
+        .enableDepthTest()
+        .enableDepthWrite()
+        .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
+    ;
+    renderState.rasterState.enableDepthClip().setCullBack();
+    // The nearest surviving fragment replaces all optical fields together; no attachment blends.
+    renderState.blendState.targets[NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION]
+        .setColorWriteMask(Core::ColorMask::None);
     return renderState;
 }
 
@@ -160,6 +176,10 @@ RendererAvboitPushConstants BuildRendererAvboitPushConstants(const AvboitFrameTa
     ;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE] = ECSRenderAvboitDetail::s_AvboitExtinctionFixedScale;
     pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS] = ECSRenderAvboitDetail::s_AvboitSelfOcclusionSliceBias;
+    pushConstants.params.raw[NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE] = targets.refractionFramebuffer
+        ? NWB_AVBOIT_REFRACTION_ACCUMULATE
+        : NWB_AVBOIT_REFRACTION_DISABLED
+    ;
     pushConstants.heapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES] = targets.deferredSlotsBufferDescriptor.slot();
     return pushConstants;
 }
@@ -207,6 +227,13 @@ bool RendererAvboitSystem::prepareAvboitPassResources(
             csgFrameState,
             &avboitTargets
         )
+        && (!avboitTargets.refractionFramebuffer || m_materialSystem.prepareMaterialPassResources(
+            avboitTargets.refractionFramebuffer.get(),
+            MaterialPipelinePass::AvboitRefractionCapture,
+            true,
+            csgFrameState,
+            &avboitTargets
+        ))
     ;
 }
 

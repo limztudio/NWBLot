@@ -50,6 +50,11 @@
 #define NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT 3u
 #define NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE 1u
 #define NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS 2u
+// w selects optical capture or enables primary-layer sampling without growing the transparent-draw ABI.
+#define NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE 3u
+#define NWB_AVBOIT_REFRACTION_DISABLED 0.0
+#define NWB_AVBOIT_REFRACTION_CAPTURE 1.0
+#define NWB_AVBOIT_REFRACTION_ACCUMULATE 2.0
 // x is deliberately reserved for per-frame presentation policy.  AVBOIT needs this on the transparent draw so
 // HDR10 can keep linear radiance above one, while coverage alpha stays physically bounded.
 #define NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE 0u

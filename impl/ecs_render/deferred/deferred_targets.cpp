@@ -235,6 +235,14 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.compositeColorStorage, targets.compositeColor.get(), targets.compositeColorFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitAccumExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.accumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionDepth, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionDepth.get(), targets.depthFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionNormalIor, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionNormalIor.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionTintCoverage, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionTintCoverage.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionInstance, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionInstance.get(), Core::Format::R32_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionResolve, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionResolve.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.avboitForegroundColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.foregroundAccumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.avboitForegroundExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.foregroundAccumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerStorageTexture(bindless.refractionResolveStorage, targets.avboit.refractionResolve.get(), Core::Format::RGBA16_FLOAT, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, &avboitLinearSampler)
         // Scene-shading cbuffer (uniform-buffer table) + light-list storage buffer (structured-buffer table): the two
@@ -314,6 +322,14 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
     bindless.slots.compositeColorStorage = bindless.compositeColorStorage.slot();
     bindless.slots.avboitAccumColor = bindless.avboitAccumColor.slot();
     bindless.slots.avboitAccumExtinction = bindless.avboitAccumExtinction.slot();
+    bindless.slots.refractionDepth = bindless.refractionDepth.slot();
+    bindless.slots.refractionNormalIor = bindless.refractionNormalIor.slot();
+    bindless.slots.refractionTintCoverage = bindless.refractionTintCoverage.slot();
+    bindless.slots.refractionInstance = bindless.refractionInstance.slot();
+    bindless.slots.refractionResolve = bindless.refractionResolve.slot();
+    bindless.slots.avboitForegroundColor = bindless.avboitForegroundColor.slot();
+    bindless.slots.avboitForegroundExtinction = bindless.avboitForegroundExtinction.slot();
+    bindless.slots.refractionResolveStorage = bindless.refractionResolveStorage.slot();
     bindless.slots.avboitTransmittance = bindless.avboitTransmittance.slot();
     bindless.slots.avboitLinearSampler = bindless.avboitLinearSampler.slot();
     bindless.slots.sceneShading = bindless.sceneShading.slot();
@@ -389,6 +405,14 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
         heap.free(targets.bindless.compositeColorStorage);
         heap.free(targets.bindless.avboitAccumColor);
         heap.free(targets.bindless.avboitAccumExtinction);
+        heap.free(targets.bindless.refractionDepth);
+        heap.free(targets.bindless.refractionNormalIor);
+        heap.free(targets.bindless.refractionTintCoverage);
+        heap.free(targets.bindless.refractionInstance);
+        heap.free(targets.bindless.refractionResolve);
+        heap.free(targets.bindless.avboitForegroundColor);
+        heap.free(targets.bindless.avboitForegroundExtinction);
+        heap.free(targets.bindless.refractionResolveStorage);
         heap.free(targets.bindless.avboitTransmittance);
         heap.free(targets.bindless.avboitLinearSampler);
         heap.free(targets.bindless.sceneShading);

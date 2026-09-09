@@ -1,0 +1,8 @@
+// Clear optical glass deliberately has zero AVBOIT opacity. Refraction must retain
+// its interface independently of the color/coverage accumulation.
+NwbMeshSurface nwbMaterialSurface(){
+    return nwbMakeGlassSurface(
+        half3(0.0h), inNormal, NWB_SURFACE_IOR_GLASS,
+        NWB_SURFACE_ABSORPTION_NONE, half(0.0)
+    );
+}

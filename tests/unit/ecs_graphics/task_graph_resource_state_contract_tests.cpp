@@ -280,9 +280,18 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        ;\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, " = importAvboitTexture("), 4u);
-    EXPECT_EQ(CountText(avboitTargets, ".setInitialState(Core::ResourceStates::Common)"), 2u);
-    EXPECT_EQ(CountText(avboitTargets, ".setKeepInitialState(true)"), 2u);
+    EXPECT_EQ(CountText(deferredLighting, " = importAvboitTexture("), 11u);
+    for(const AStringView resource : {
+        AStringView("refractionDepth"), AStringView("refractionNormalIor"), AStringView("refractionTintCoverage"),
+        AStringView("refractionInstance"), AStringView("refractionResolve"),
+        AStringView("avboitForegroundColor"), AStringView("avboitForegroundExtinction"),
+    }){
+        AString declaration(resource.data(), resource.size());
+        declaration += " = importAvboitTexture(";
+        EXPECT_TRUE(ContainsText(deferredLighting, AStringView(declaration.data(), declaration.size())));
+    }
+    EXPECT_EQ(CountText(avboitTargets, ".setInitialState(Core::ResourceStates::Common)"), 4u);
+    EXPECT_EQ(CountText(avboitTargets, ".setKeepInitialState(true)"), 4u);
     EXPECT_EQ(CountText(
         avboitTargets,
         ".enableAutomaticStateTracking(Core::ResourceStates::Common)"

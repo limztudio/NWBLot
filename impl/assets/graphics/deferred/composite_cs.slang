@@ -12,6 +12,7 @@
 
 struct NwbDeferredCompositePushConstants{
     uint resourceSlots;
+    uint refractionResources;
 };
 
 [[vk::push_constant]]
@@ -47,7 +48,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half4 transparentColorAccum = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
     const half transparentExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.z).Load(texel).r);
     const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    const half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
+    half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
+    if(g_NwbDeferredCompositePushConstants.refractionResources != 0u){
+        const float3 frontColor = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb;
+        const float frontExtinction = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r;
+        const float frontTransmittance = exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
+        const float4 transmitted = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel);
+        compositeColor = half3(transmitted.a > 0.0
+            ? frontColor + frontTransmittance * transmitted.rgb
+            : frontColor + float3(transparentColorAccum.rgb) + float3(opaqueColor) * frontTransmittance * float(totalTransmittance));
+    }
     g_NwbDeferredCompositeOutput[pixel] = float4(float3(compositeColor), 1.0);
 }
 

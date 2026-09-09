@@ -9,6 +9,8 @@
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
+#include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
+#include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -829,6 +831,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         Name("render.avboit.accum_extinction"),
         "AVBOIT Accumulated Extinction"
     );
+    const Core::GpuGraphResourceId refractionDepth = importAvboitTexture(
+        deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
+    const Core::GpuGraphResourceId refractionNormalIor = importAvboitTexture(
+        deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
+    const Core::GpuGraphResourceId refractionTintCoverage = importAvboitTexture(
+        deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
+    const Core::GpuGraphResourceId refractionInstance = importAvboitTexture(
+        deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
+    const Core::GpuGraphResourceId refractionResolve = importAvboitTexture(
+        deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
+    const Core::GpuGraphResourceId avboitForegroundColor = importAvboitTexture(
+        deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
+    const Core::GpuGraphResourceId avboitForegroundExtinction = importAvboitTexture(
+        deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
     const Core::GpuGraphResourceId avboitTransmittance = importAvboitTexture(
         deferredTargets.avboit.transmittanceTexture,
         Name("render.avboit.transmittance"),
@@ -2774,7 +2790,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.csgResources = csgResources;
     avboitOccupancyComputeEmulationPayload.csgResources = csgResources;
 
-    Core::GpuTaskId occupancyUploadTask = avboitIntervalCompletionTask;
+    const bool refractionActive = m_refractionEnabled && hasTransparentRenderers
+        && m_raytracingSystem.prepareRefractionResources();
+    const RayTracingRefractionGraphResources refractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    const Core::GpuTaskId refractionCaptureTask = DeclareAvboitRefractionCapture(
+        m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
+        csgFrameState, csgResources, frameBindings, meshViewState, avboitIntervalCompletionTask,
+        refractionActive && refractionResources.valid());
+    if(!refractionCaptureTask.valid())
+        return;
+    Core::GpuTaskId occupancyUploadTask = refractionCaptureTask;
     bool occupancyCsgStreamsUploaded = false;
     bool occupancyRegularComputeEmulationPlanCaptured = false;
     bool occupancyCsgComputeEmulationPlanCaptured = false;
@@ -3211,6 +3236,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT accumulation-extinction clear"));
             return;
         }
+        const Core::GpuGraphResourceId foregroundClearTargets[] = { avboitForegroundColor, avboitForegroundExtinction };
+        for(const auto target : foregroundClearTargets){
+            avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
+                makeAvboitClearTaskDesc(target == avboitForegroundColor
+                    ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"),
+                    "AVBOIT Clear Foreground", avboitClearTask),
+                makeAvboitFloatClearDesc(target, transparentBlack));
+            if(!avboitClearTask.valid())
+                return;
+        }
         const auto appendAvboitBufferClear = [&](
             const Name identity,
             const AStringView markerLabel,
@@ -3403,6 +3438,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitPreResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
     avboitPreResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
     avboitPreResourceUses.push_back(ReadUse(depth));
+    avboitPreResourceUses.push_back(ReadUse(refractionInstance));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitLowRaster, Core::ResourceStates::RenderTarget));
     avboitPreResourceUses.push_back(ReadWriteUse(avboitCoverage, Core::ResourceStates::UnorderedAccess));
     if(avboitOccupancyPayload.occupancyStreamsUploaded){
@@ -4341,6 +4377,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     // Queue placement cannot change native descriptor access. Keep the complete raster resource contract on every
     // route so compiler-selected crossings retain the same hazards and state lowering.
     extinctionResourceUses.push_back(ReadUse(albedo));
+    extinctionResourceUses.push_back(ReadUse(refractionInstance));
     extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
     extinctionResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
     extinctionResourceUses.push_back(ReadUse(depth));
@@ -5288,6 +5325,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     accumulationResourceUses.push_back(ReadUse(avboitTransmittance));
     accumulationResourceUses.push_back(ReadUse(avboitDepthWarp));
     accumulationResourceUses.push_back(ReadUse(avboitControl));
+    accumulationResourceUses.push_back(ReadUse(refractionInstance));
+    accumulationResourceUses.push_back(ReadUse(refractionDepth));
+    accumulationResourceUses.push_back(ReadWriteUse(avboitForegroundColor, Core::ResourceStates::RenderTarget));
+    accumulationResourceUses.push_back(ReadWriteUse(avboitForegroundExtinction, Core::ResourceStates::RenderTarget));
     accumulationResourceUses.push_back(ReadWriteUse(avboitAccumColor, Core::ResourceStates::RenderTarget));
     accumulationResourceUses.push_back(ReadWriteUse(avboitAccumExtinction, Core::ResourceStates::RenderTarget));
     if(accumulationStreamsUploaded){
@@ -5702,6 +5743,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const Core::GpuTaskResourceUse accumulationFinalizeResourceUses[] = {
         ReadUse(avboitAccumColor, Core::ResourceStates::ShaderResource),
+        ReadUse(avboitForegroundColor),
+        ReadUse(avboitForegroundExtinction),
         ReadUse(avboitAccumExtinction, Core::ResourceStates::ShaderResource),
         ReadUse(depth, Core::ResourceStates::ShaderResource),
     };
@@ -5896,6 +5939,102 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
+    Core::GpuTaskId refractionResolveTask;
+    if(refractionActive && refractionResources.valid()){
+        Core::Alloc::ScratchArena refractionScratch(RendererArenaScope::s_TaskGraphArena);
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{refractionScratch};
+        const Core::GpuGraphResourceId refractionInputs[] = {
+            refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
+            opaqueColor, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
+            avboitForegroundColor, avboitForegroundExtinction
+        };
+        for(const auto input : refractionInputs)
+            refractionUses.push_back(ReadUse(input));
+        refractionUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
+        refractionUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        refractionUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        refractionUses.push_back(ReadUse(lights));
+        refractionUses.push_back(WriteUse(refractionResolve, Core::ResourceStates::UnorderedAccess));
+        Core::GpuTaskResourceSetUse refractionSets[3] = {};
+        usize refractionSetCount = 0;
+        if(refractionResources.usesHardwareTrace){
+            const auto importRefractionBuffer = [&](const Core::BufferHandle& buffer){
+                if(!buffer)
+                    return Core::GpuGraphResourceId{};
+                {
+                    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+                    const auto existing = declarations.findImportedBuffer(buffer);
+                    if(existing.valid())
+                        return existing;
+                }
+                return importBuffer(buffer, buffer->getCreationDescription().debugName, "Refraction Trace Buffer");
+            };
+            const auto tlas = m_deferredLightingTaskGraph.importAccelStruct(refractionResources.sceneTlas,
+                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
+                    .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState()));
+            const auto contextSlots = importRefractionBuffer(refractionResources.materialContextSlotsBuffer);
+            if(!tlas.valid() || !contextSlots.valid())
+                return;
+            refractionUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
+            refractionUses.push_back(ReadUse(contextSlots, Core::ResourceStates::ConstantBuffer));
+            const Core::BufferHandle traceBuffers[] = {
+                rayTracingGraphResources.shadowInstanceMaterialBuffer,
+                rayTracingGraphResources.shadowMaterialTypedBuffer,
+                rayTracingGraphResources.shadowInstanceBuffer
+            };
+            for(const auto& buffer : traceBuffers){
+                if(!buffer)
+                    return;
+                const auto resource = importRefractionBuffer(buffer);
+                if(!resource.valid())
+                    return;
+                refractionUses.push_back(ReadUse(resource));
+            }
+            const Core::GpuGraphResourceSetId sets[] = {
+                hardwareTraceGeometrySet, traceMaterialSampledTextureSet
+            };
+            for(const auto set : sets){
+                if(set.valid())
+                    refractionSets[refractionSetCount++] = Core::GpuTaskResourceSetUse{
+                        .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource,
+                        .access = Core::GpuTaskResourceAccess::Read,
+                    };
+            }
+        }
+        const Core::GpuTaskId refractionDependencies[] = {
+            m_deferredLightingTask, avboitFinalTask, m_deferredSurfelGiTask
+        };
+        Core::GpuTaskDesc refractionDesc;
+        refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
+            .setMarkerLabel("AVBOIT Refraction Resolve").setQueue(ComputeQueueRequest())
+            .setDependencies(refractionDependencies, LengthOf(refractionDependencies))
+            .setResourceUses(refractionUses.data(), refractionUses.size())
+            .setResourceSetUses(refractionSets, refractionSetCount);
+        refractionResolveTask = m_deferredLightingTaskGraph.addTask<RefractionResolveGraphTask>(refractionDesc,
+            RefractionResolveGraphTask::Payload{
+                .system = &m_raytracingSystem, .targets = &deferredTargets, .resources = refractionResources,
+                .hardwarePreparationReady = &m_shadowPreparationOutcome.ready,
+                .dispatchLogged = refractionResources.usesHardwareTrace
+                    ? &m_refractionHardwareLogged : &m_refractionScreenLogged,
+                .screenFallbackDispatchLogged = &m_refractionScreenLogged,
+            });
+    }
+    else{
+        Core::GpuTaskDesc clearDesc;
+        clearDesc.setIdentity(Name("render.avboit.refraction_resolve_clear"))
+            .setMarkerLabel("AVBOIT Refraction Resolve Clear").setQueue(GraphicsUploadQueueRequest())
+            .setDependencies(&avboitFinalTask, 1u);
+        Core::GpuClearTextureTaskDesc clear;
+        clear.destination = refractionResolve;
+        clear.subresources = ECSRenderDetail::s_FramebufferSubresources;
+        clear.valueType = Core::GpuClearTextureTaskValueType::Float;
+        clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
+        refractionResolveTask = m_deferredLightingTaskGraph.addClearTextureTask(
+            clearDesc, clear);
+    }
+    if(!refractionResolveTask.valid())
+        return;
+
     // Composite remains a distinct packet and joins both graph-owned AVBOIT and Lighting. It retains the current
     // bindless selector in lagged mode rather than inheriting Lighting's history selector.
     const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(
@@ -5918,6 +6057,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ReadUse(opaqueColor),
         ReadUse(avboitAccumColor),
         ReadUse(avboitAccumExtinction),
+        ReadUse(avboitForegroundColor),
+        ReadUse(avboitForegroundExtinction),
+        ReadUse(refractionResolve),
         ReadUse(
             compositeBindlessSlots,
             Core::ResourceStates::ConstantBuffer
@@ -5932,6 +6074,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const Core::GpuTaskId compositeDependencies[] = {
         m_deferredLightingTask,
         avboitFinalTask,
+        refractionResolveTask,
     };
     Core::GpuTaskDesc compositeDesc;
     compositeDesc

@@ -22,6 +22,11 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
     // Initialize alpha so the CSG early return satisfies the out-parameter contract.
     outAlpha = half(0.0);
 
+    // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
+    // Removing that complete instance here keeps full-coverage glass from extinguishing its own background.
+    if(nwbAvboitPrimaryRefractionInstance(nwbAvboitFullUvFromLowFragCoord(position.xy), nwbMeshInstanceIndex()))
+        return false;
+
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = color;
     surfaceInputs.normal = normal;

@@ -33,6 +33,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_smoke_tests.py"
     )
     add_test(
+        NAME nwb_reflection_benchmark_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_benchmark_tests.py"
+    )
+    add_test(
         NAME nwb_reflection_optical_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke_tests.py"
     )

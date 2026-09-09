@@ -1,14 +1,24 @@
-Stage-four smooth reflection and completed-frame diagnostics passed the validation
-gate recorded below. The additional stage-five roughness and strict-history
-suites are implemented; their GPU validation is in progress.
-It combines hierarchical screen-space tracing with bounded hardware continuation
-and composites reflection on opaque surfaces and primary glass with AVBOIT.
-All 22 smoke captures passed on the Qualcomm Adreno X2-90 with required hardware
-ray queries and `--gpudbg`; every capture completed normally with clean runtime
-and GPU validation logs. The smoke asset set contains 170 cooked assets, and all
-301 ECS graphics tests, 36 reflection analysis tests, and 51 capture-harness tests
-passed. The GPU-debug refraction comparison and caustic/refraction capture also
-passed again after the stage-four changes.
+Reflection stages one through seven are implemented and passed their final
+validation gates. The renderer combines hierarchical screen-space tracing with
+bounded hardware continuation and composites reflection on opaque surfaces and
+primary glass with AVBOIT. It supports opaque GGX roughness, strict static-scene
+temporal accumulation, separate spatial filtering, bounded secondary transmission
+through authored optical volumes, and optional screen-miss feedback.
+
+The final stage-seven run passed 100 actual-framebuffer checks on the Qualcomm
+Adreno X2-90 with required hardware ray queries and `--gpudbg`: 22 baseline and
+budget captures, 14 roughness captures, 30 optical captures, four combined
+caustic/refraction/reflection captures, 24 feedback captures, and six captures
+with reflection diagnostics disabled. All captures completed normally with clean
+runtime and GPU validation logs. All 358 ECS graphics tests and the six selected
+CPU test targets also passed. Stage-specific validation counts below describe
+their original gates.
+
+The optimized benchmark methodology and GPU timing evidence are documented
+separately in [Reflection performance](REFLECTION_PERFORMANCE.md). Completed
+traversal counters establish work performed; they do not establish a GPU speedup.
+Screen-miss feedback remains disabled by default.
+
 The refraction fixture explicitly disables reflection to isolate its transmission
 comparisons. The 33-capture exact-duplicate gallery passed at the stage-two gate;
 that earlier run is separate evidence.
@@ -655,10 +665,12 @@ Raw BMPs, lossless PNGs, per-launch logs and self-contained galleries are under
 `nwb_reflection_feedback_diagnostics_off_capture_smoke`.
 
 These results establish image preservation and reduced measured traversal work
-in the tested scenes. They do not establish a GPU speedup. Optimized
-diagnostics-off benchmarks with stable unrelated control scopes remain required
-before changing the default. The older reflection, roughness, optical and
-combined-caustic regression coverage remains separate: all 358 ECS unit tests
+in the tested scenes. They do not establish a GPU speedup. See
+[Reflection performance](REFLECTION_PERFORMANCE.md) for the separate optimized
+diagnostics-off timing methodology and analysis of unrelated control scopes.
+Traversal counters alone do not justify changing the default. The older
+reflection, roughness, optical and combined-caustic regression coverage remains
+separate: all 358 ECS unit tests
 and six CPU test targets pass. The final 22 baseline, 14 roughness, 30 optical
 and four combined-caustic captures also pass under GPU debugging. Together
 with the 30 feedback captures, this completes 100 final GPU framebuffer checks.

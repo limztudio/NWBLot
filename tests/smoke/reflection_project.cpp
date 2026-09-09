@@ -6,11 +6,15 @@
 
 #include <core/common/log.h>
 #include <core/ecs/entity.h>
+#include <core/graphics/runtime/render_pass.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/math/constant.h>
 #include <global/math/convert.h>
 #include <global/math/frame.h>
+#include <impl/assets/graphics/reflection/depth_constants.h>
+#include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/module.h>
+#include <impl/ecs_render/reflection/timing_names.h>
 #include <impl/ecs_scene/module.h>
 
 #include "framebuffer_capture.h"
@@ -57,6 +61,72 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     }
     return AddSmokeRenderSystems(world, context);
 }
+
+// Timed fixtures need continued submissions when Windows denies foreground ownership. This pass opts into the
+// existing per-project policy without adding GPU work or changing production focus throttling.
+class ReflectionTimingRenderPass final : public NWB::Core::IRenderPass{
+private:
+    static constexpr u32 s_InFlightRanges = 32u;
+
+
+public:
+    explicit ReflectionTimingRenderPass(NWB::Core::GraphicsRuntime& graphics)
+        : IRenderPass(graphics)
+    {}
+
+
+public:
+    [[nodiscard]] bool prepareQueries(const u32 width, const u32 height){
+        u32 mipCount = 0u;
+        for(u32 extent = Max(width, height); extent > 0u; extent >>= 1u)
+            ++mipCount;
+        if(width == 0u || height == 0u || mipCount > NWB_REFLECTION_MAX_DEPTH_MIPS){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: invalid extent for depth timing capacity"));
+            return false;
+        }
+        const Name singleRangeScopes[] = {
+            NWB::Impl::RendererGpuTimingScope::s_Frame.identity,
+            NWB::Impl::RendererGpuTimingScope::s_OpaqueRegular.identity,
+            NWB::Impl::RendererGpuTimingScope::s_ShadowVisibility.identity,
+            NWB::Impl::RendererGpuTimingScope::s_DeferredLighting.identity,
+            NWB::Impl::RendererGpuTimingScope::s_DeferredComposite.identity,
+            NWB::Impl::RendererGpuTimingScope::s_DeferredPresent.identity,
+            NWB::Impl::ReflectionGpuTimingScope::s_Classify.identity,
+            NWB::Impl::ReflectionGpuTimingScope::s_BuildArgs.identity,
+            NWB::Impl::ReflectionGpuTimingScope::s_Hardware.identity,
+            NWB::Impl::ReflectionGpuTimingScope::s_Temporal.identity,
+            NWB::Impl::ReflectionGpuTimingScope::s_Spatial.identity,
+        };
+        auto& graphics = getGraphics();
+        auto& timing = graphics.gpuTiming();
+        auto& device = graphics.getDevice();
+        // One TimerQuery owns both timestamps for a complete range. Reserve complete in-flight ranges, including
+        // every native depth mip, to cover expected completion latency. The benchmark still checks sample coverage.
+        for(const Name& scope : singleRangeScopes){
+            if(!timing.prepareScopeQueries(scope, device, s_InFlightRanges)){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare timing scope '{}'"), StringConvert(scope.c_str()));
+                return false;
+            }
+        }
+        if(!timing.prepareScopeQueries(
+            NWB::Impl::ReflectionGpuTimingScope::s_DepthPyramid.identity,
+            device,
+            s_InFlightRanges * mipCount
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: failed to prepare depth timing capacity"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing in-flight ranges {}"), s_InFlightRanges);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing depth mip count {}"), mipCount);
+        return true;
+    }
+
+    virtual bool shouldRenderUnfocused()override{ return true; }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 class ReflectionSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
@@ -126,8 +196,14 @@ public:
             createMirrorScene(caseName == "moved");
         if(!configureFramebufferCapture())
             return false;
-        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING"))
+        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING")){
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+            if(!m_timingRenderPass.prepareQueries(extent.width, extent.height))
+                return false;
+            m_context.graphics.addRenderPassToBack(m_timingRenderPass);
+            m_timingRenderPassRegistered = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: timing render unfocused 1"));
+        }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), StringConvert(caseName));
         return true;
     }
@@ -429,6 +505,10 @@ private:
     }
 
     void destroyWorld(){
+        if(m_timingRenderPassRegistered){
+            m_context.graphics.removeRenderPass(m_timingRenderPass);
+            m_timingRenderPassRegistered = false;
+        }
         if(m_world.owner() && m_world->getSystem<NWB::Impl::MeshSkinningSystem>())
             DestroySmokeSkinnedRenderWorld(m_context, m_world);
         else
@@ -535,6 +615,7 @@ private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Impl::RendererSystem& m_renderer;
+    ReflectionTimingRenderPass m_timingRenderPass{ m_context.graphics };
     UniquePtr<FramebufferCapture> m_framebufferCapture;
     FpsProbe m_fpsProbe{ NWB_TEXT("ReflectionSmokeProject") };
     GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
@@ -559,6 +640,7 @@ private:
     bool m_glassRoughnessCase = false;
     bool m_freshFinalState = false;
     bool m_mutationApplied = false;
+    bool m_timingRenderPassRegistered = false;
 };
 
 

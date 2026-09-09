@@ -13,6 +13,9 @@
 namespace __hidden_ray_surface_lighting_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
@@ -59,6 +62,9 @@ TEST(EcsGraphics, LinearSceneTransportDefersDisplayMappingUntilPresentation){
     EXPECT_TRUE(ContainsText(presentation, "exposedColor / (exposedColor + g_NwbDeferredCompositePushConstants.shoulder)"));
     EXPECT_TRUE(ContainsText(presentation, "nwbHdr10EncodeScene(exposedColor)"));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

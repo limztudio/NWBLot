@@ -337,6 +337,19 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
             with self.subTest(field=field), self.assertRaises(SmokeFailure):
                 validate_statistics([sample], "floor", "hybrid")
 
+    def test_rough_opaque_zero_samples_preserve_ray_budget_and_cannot_mask_excess_outcomes(self):
+        sample = self.sample("hardware")
+        sample.update(candidates=600, hardware_rays=600, hardware_hits=300, fallback_pixels=300)
+        validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
+        with self.assertRaisesRegex(SmokeFailure, "partition"):
+            validate_statistics([sample], "rough", "hardware")
+        sample["hardware_rays"] = 599
+        with self.assertRaisesRegex(SmokeFailure, "bounded candidate queue"):
+            validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
+        sample.update(hardware_rays=600, fallback_pixels=701)
+        with self.assertRaisesRegex(SmokeFailure, "partition"):
+            validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
+
     def test_screen_route_cannot_issue_hardware_work(self):
         sample = self.sample("screen")
         sample.update(candidates=1, hardware_rays=1, hardware_ready=1)

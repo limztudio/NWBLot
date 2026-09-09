@@ -1024,6 +1024,9 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 ){
     using namespace __hidden_rt_swbvh;
 
+    if(!commandList)
+        m_preparedSceneContentStamp = {};
+
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
@@ -1083,6 +1086,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     // Gates hybrid software transparent-shadow work.
     m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
+    bool contentComplete = true;
 
     Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
     if(!commandList)
@@ -1101,8 +1105,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             resolvedMesh,
             mesh
         );
-        if(!meshReady || !mesh.blas || !mesh.triangleIndexBuffer || !mesh.attributeBuffer || !mesh.positionBuffer)
+        if(!meshReady || !mesh.blas || !mesh.triangleIndexBuffer || !mesh.attributeBuffer || !mesh.positionBuffer){
+            contentComplete = false;
             continue;
+        }
         // Runtime mesh updates disable static TLAS reuse.
         if(resolvedMesh.runtime || mesh.runtimeMesh)
             staticScene = false;
@@ -1188,6 +1194,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
+        if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
+            contentComplete = false;
         instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
@@ -1332,6 +1340,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         && m_preparedShadowMaterialContextReady
         && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
     ;
+    u64 gatheredMaterialContentHash = 0u;
     if(!hybridSoftwareMaterialContextGraphOwned){
         // Preserve a valid typed buffer and hash the descriptor-slot representation.
         if(shadowMaterialTypedBytes.empty())
@@ -1356,6 +1365,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             shadowInstanceData,
             shadowMaterialTypedBytes
         );
+        gatheredMaterialContentHash = hwMaterialContextHash;
         const bool canReuseHwMaterialContext =
             staticScene
             && !m_rayTracingState.m_sceneHasTransparentOccluder
@@ -1452,6 +1462,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasStaticSceneHash = tlasStaticSceneHash;
         m_rayTracingState.m_tlasStaticSceneHashValid = true;
     }
+    // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or
+    // an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
+    if(!commandList)
+        m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
     return true;
 }
 
@@ -1588,6 +1602,9 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
 ){
     using namespace __hidden_rt_swbvh;
 
+    if(!commandList)
+        m_preparedSceneContentStamp = {};
+
     // Software scene BVH and material context share hardware instance ordering.
     auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
     if(!meshSystem)
@@ -1647,6 +1664,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
     m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
+    bool contentComplete = true;
 
     Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
     if(!commandList)
@@ -1684,8 +1702,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             || !mesh.triangleIndexBuffer
             || !mesh.attributeBuffer
             || !mesh.csgLocalBounds.valid()
-        )
+        ){
+            contentComplete = false;
             continue;
+        }
         // Runtime mesh updates disable static scene-BVH reuse.
         if(resolvedMesh.runtime || mesh.runtimeMesh)
             staticScene = false;
@@ -1772,8 +1792,10 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         const SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
         SIMDVector worldMin{};
         SIMDVector worldMax{};
-        if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
+        if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax)){
+            contentComplete = false;
             continue;
+        }
         RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
@@ -1807,6 +1829,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 return false;
             instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
         }
+        if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
+            contentComplete = false;
         instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
@@ -2110,6 +2134,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         else
             clearPreparedSceneSwBvhTraversal();
     }
+    if(!commandList)
+        m_preparedSceneContentStamp = { sceneStaticHash, swMaterialContextHash, staticScene && contentComplete };
     return true;
 }
 

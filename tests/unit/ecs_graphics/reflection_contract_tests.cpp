@@ -5,6 +5,8 @@
 #include "task_graph_contract_test_helpers.h"
 
 #include <impl/assets/graphics/mesh/runtime_constants.h>
+#include <impl/assets/graphics/reflection/temporal_constants.h>
+#include <impl/assets/graphics/reflection/spatial_constants.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
 
 
@@ -175,24 +177,43 @@ TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCa
     EXPECT_FALSE(ContainsText(graph, "foregroundAccumExtinction"));
 }
 
-TEST(EcsGraphics, ReflectionFrameSelectorsMatchTenStd140LanesAndSeparateCounterBytes){
+TEST(EcsGraphics, ReflectionFrameSelectorsMatchElevenStd140LanesAndSeparateCounterBytes){
     using Parameters = NWB::Impl::ReflectionFrameParameters;
-    EXPECT_EQ(sizeof(Parameters), 160u);
+    EXPECT_EQ(sizeof(Parameters), 176u);
     EXPECT_EQ(offsetof(Parameters, width), 0u);
     EXPECT_EQ(offsetof(Parameters, opaqueSpecularSlot), 16u);
     EXPECT_EQ(offsetof(Parameters, opaqueRadianceSlot), 32u);
     EXPECT_EQ(offsetof(Parameters, argsSlot), 48u);
     EXPECT_EQ(offsetof(Parameters, deferredResourcesSlot), 64u);
     EXPECT_EQ(offsetof(Parameters, depthPyramidSlot), 80u);
-    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 96u);
-    EXPECT_EQ(offsetof(Parameters, environmentTopR), 112u);
-    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 128u);
-    EXPECT_EQ(offsetof(Parameters, screenThickness), 144u);
+    EXPECT_EQ(offsetof(Parameters, sampleIndex), 60u);
+    EXPECT_EQ(offsetof(Parameters, samplingSeed), 96u);
+    EXPECT_EQ(offsetof(Parameters, sampleBaseX), 100u);
+    EXPECT_EQ(offsetof(Parameters, sampleBaseY), 104u);
+    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 112u);
+    EXPECT_EQ(offsetof(Parameters, environmentTopR), 128u);
+    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 144u);
+    EXPECT_EQ(offsetof(Parameters, screenThickness), 160u);
     EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_HITS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Disabled), NWB_REFLECTION_MODE_DISABLED);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::ScreenSpace), NWB_REFLECTION_MODE_SCREEN);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hardware), NWB_REFLECTION_MODE_HARDWARE);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hybrid), NWB_REFLECTION_MODE_HYBRID);
+}
+
+TEST(EcsGraphics, ReflectionPostprocessSelectorsKeepAcceptedSamplingSeparateFromHistoryCount){
+    struct TemporalParameters{
+#define NWB_REFLECTION_TEST_POST_FIELD(name) u32 name = 0u;
+        NWB_REFLECTION_TEMPORAL_UINT_FIELDS(NWB_REFLECTION_TEST_POST_FIELD)
+#undef NWB_REFLECTION_TEST_POST_FIELD
+    };
+    EXPECT_EQ(sizeof(TemporalParameters), NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
+    EXPECT_EQ(sizeof(TemporalParameters), 48u);
+    EXPECT_EQ(offsetof(TemporalParameters, previousSampleCount), 20u);
+    EXPECT_EQ(offsetof(TemporalParameters, historyValid), 28u);
+    EXPECT_EQ(offsetof(TemporalParameters, sampleIndex), 32u);
+    EXPECT_EQ(offsetof(TemporalParameters, samplingSeed), 36u);
+    EXPECT_LE(NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
 }
 
 TEST(EcsGraphics, ReflectionUnavailableHardwareDisablesQueueingAndSkipsTlasDispatch){

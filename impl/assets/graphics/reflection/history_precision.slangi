@@ -1,0 +1,64 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_REFLECTION_HISTORY_PRECISION_SLANGI
+#define NWB_GRAPHICS_REFLECTION_HISTORY_PRECISION_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "sampling.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Image-format conversion does not promise a rounding direction. Quantize the mean to an exact half value in
+// FP32 first, so a later storage conversion cannot accumulate directed rounding error.
+// https://docs.vulkan.org/spec/latest/chapters/fundamentals.html
+// Inputs are nonnegative finite half values blended with a count <=256. A positive mean is therefore >=2^-32
+// and <=65504; the subnormal case discards at most 31 bits. This narrow contract needs no native half conversion.
+float nwbReflectionRoundHistoryHalf(const float value, const uint random){
+    const uint bits = asuint(value);
+    if(bits == 0u)
+        return value;
+    if(bits >= 0x38800000u){
+        // A uniform 13-bit integer selects the upper neighbor with exactly the discarded fraction's probability.
+        const uint increment = (random & 0x1fffu) < (bits & 0x1fffu) ? 0x2000u : 0u;
+        return asfloat((bits & 0xffffe000u) + increment);
+    }
+    const uint shift = 126u - (bits >> 23u);
+    const uint significand = 0x800000u | (bits & 0x7fffffu);
+    const uint mask = (1u << shift) - 1u;
+    const uint increment = (random & mask) < (significand & mask) ? 1u : 0u;
+    // All half subnormals are exact normal FP32 values. Integer-to-float and scaling by 2^-24 are exact here.
+    return float((significand >> shift) + increment) * 0.000000059604644775390625;
+}
+
+float3 nwbReflectionRoundHistory(
+    const float3 radiance,
+    const uint2 pixel,
+    const uint sampleIndex,
+    const uint samplingSeed){
+    const uint pixelSeed = nwbReflectionSamplingHash(pixel.x ^ nwbReflectionSamplingHash(pixel.y ^ samplingSeed));
+    // Rounding has a separate domain from the VNDF sequence and each color channel. Its accepted sample index
+    // continues after the history count reaches its cap; repeating a rounding seed would introduce correlation.
+    const uint roundingSeed = pixelSeed ^ nwbReflectionSamplingHash(sampleIndex ^ 0xa511e9b3u);
+    return float3(
+        nwbReflectionRoundHistoryHalf(radiance.r, nwbReflectionSamplingHash(roundingSeed)),
+        nwbReflectionRoundHistoryHalf(radiance.g, nwbReflectionSamplingHash(roundingSeed ^ 0x63d83595u)),
+        nwbReflectionRoundHistoryHalf(radiance.b, nwbReflectionSamplingHash(roundingSeed ^ 0x9e3779b9u))
+    );
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

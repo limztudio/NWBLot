@@ -1,0 +1,20 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A deterministic test-owned diffuse source. Light-off means zero emitted hit radiance: no ambient, GI or rim terms.
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+    half3 result = half3(0.0h);
+    const uint lightCount = nwbSceneLightCount();
+    for(uint index = 0u; index < lightCount; ++index){
+        float3 direction;
+        half3 radiance;
+        nwbSceneResolveLight(g_NwbSceneLights[index], surface.worldPosition, direction, radiance);
+        result += surface.baseColor * radiance * half(abs(dot(surface.normal, direction)));
+    }
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

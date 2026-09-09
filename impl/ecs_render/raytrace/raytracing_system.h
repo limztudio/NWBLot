@@ -1597,6 +1597,7 @@ private:
     bool m_preparedMeshSwBvhBuildsReady = false;
     bool m_preparedMeshSwBvhBuildPlanFrozen = false;
     DeferredFrameTargets* m_shadowVisibilityPreparedTargets = nullptr;
+    RayTracingSceneContentStamp m_preparedSceneContentStamp;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;
     // Recording may only touch allocations selected before the shared graph is compiled. These flags distinguish a

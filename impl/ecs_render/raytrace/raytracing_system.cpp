@@ -1620,6 +1620,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedMeshSwBvhBuilds();
     m_rayTracingState.m_tlasBackingStateHandoffPending = false;
     m_shadowVisibilityPreparedTargets = nullptr;
+    m_preparedSceneContentStamp = {};
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
@@ -1650,6 +1651,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.  Full
     // invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
     m_shadowVisibilityPreparedTargets = nullptr;
+    m_preparedSceneContentStamp = {};
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;

@@ -16,9 +16,11 @@
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "reflection_roughness_scene.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,23 +43,38 @@ static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surfac
 static constexpr f32 s_GlassIor = 3.8f;
 static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / ((s_GlassIor + 1.0f) * (s_GlassIor + 1.0f));
 
+static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World& world, NWB::ProjectRuntimeContext& context){
+    SmokeEnvironmentString caseText(context.objectArena);
+    const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
+    const AStringView caseName(caseText.data(), caseText.size());
+    if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
+        AddSmokeSkinnedRenderSystems(world, context);
+        auto* renderer = world.getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT(renderer);
+        return *renderer;
+    }
+    return AddSmokeRenderSystems(world, context);
+}
+
 class ReflectionSmokeProject final : public NWB::IProjectEntryCallbacks{
 public:
     explicit ReflectionSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("ReflectionSmokeProject")))
-        , m_renderer(AddSmokeRenderSystems(*m_world, context)){}
+        , m_renderer(CreateReflectionRenderer(*m_world, context)){}
     virtual ~ReflectionSmokeProject()override{ destroyWorld(); }
 
     virtual bool onStartup()override{
-        if(!configureRenderer() || !configureFramebufferCapture())
-            return false;
-
         SmokeEnvironmentString caseText(m_context.objectArena);
         const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
         const AStringView caseName = hasCase ? AStringView(caseText.data(), caseText.size()) : AStringView("offscreen");
+        m_extendedCase = caseName.starts_with("rough") || caseName.starts_with("temporal_");
+        m_furnace = caseName == "rough_furnace";
+        m_glassRoughnessCase = caseName == "rough_glass";
+        if(!configureRenderer())
+            return false;
         const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
-        if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase){
+        if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase && !m_extendedCase){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
             return false;
         }
@@ -70,7 +87,21 @@ public:
         );
         NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
 
-        if(caseName == "opaque_glass")
+        if(m_extendedCase && !m_glassRoughnessCase){
+            m_roughnessScene = MakeUnique<ReflectionRoughnessScene>(m_context, *m_world, cameraId, light, m_authoredRoughness);
+            if(!m_roughnessScene->create(caseName, m_freshFinalState))
+                return false;
+            if(
+                m_roughnessScene->mutationCase()
+                && !m_roughnessScene->deforming()
+                && m_reflectionSettings.temporalEnabled
+                && (m_targetSamples < 32u || m_postResetSamples > m_targetSamples)
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: mutation history cap must cover warm-up and post-reset samples"));
+                return false;
+            }
+        }
+        else if(caseName == "opaque_glass" || m_glassRoughnessCase)
             createOpaqueGlassScene();
         else if(caseName == "floor")
             createFloorMirrorScene();
@@ -78,6 +109,8 @@ public:
             createOnscreenMirrorScene(caseName == "onscreen_moved", caseName == "boundary");
         else
             createMirrorScene(caseName == "moved");
+        if(!configureFramebufferCapture())
+            return false;
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING"))
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: case {} created"), StringConvert(caseName));
@@ -92,6 +125,7 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         if(m_framebufferCapture)
             m_framebufferCapture->update();
+        updateRoughnessScene();
         m_fpsProbe.recordFrame(delta);
         m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
         const f32 fixedDelta = RendererBaselineFixedDelta();
@@ -102,13 +136,112 @@ public:
 
 
 private:
+    bool readFlag(const char* name, bool& value){
+        SmokeEnvironmentString text(m_context.objectArena);
+        if(!ReadSmokeEnvironmentText(name, text))
+            return true;
+        if(text == "0")
+            value = false;
+        else if(text == "1")
+            value = true;
+        else{
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), StringConvert(name));
+            return false;
+        }
+        return true;
+    }
+
+    bool readU32(const char* name, u32& value, const u32 minimum, const u32 maximum){
+        SmokeEnvironmentString text(m_context.objectArena);
+        if(!ReadSmokeEnvironmentText(name, text))
+            return true;
+        u64 parsed = 0u;
+        if(!ParseU64(AStringView(text.data(), text.size()), parsed) || parsed < minimum || parsed > maximum){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), StringConvert(name), minimum, maximum);
+            return false;
+        }
+        value = static_cast<u32>(parsed);
+        return true;
+    }
+
+    void updateRoughnessScene(){
+        if(!m_roughnessScene || !m_roughnessScene->mutationCase() || m_mutationApplied || m_latestStatistics.sequence == 0u)
+            return;
+        const bool warmed = m_roughnessScene->deforming() || !m_reflectionSettings.temporalEnabled
+            ? m_latestStatistics.frameIndex >= 32u : m_latestStatistics.historySampleCount >= 32u;
+        if(!warmed)
+            return;
+        m_mutationGraphicsFrame = m_context.graphics.getFrameIndex();
+        if(m_freshFinalState){
+            m_reflectionSettings.samplingSeed = m_requestedSeed;
+            NWB_FATAL_ASSERT_MSG(m_renderer.setReflectionSettings(m_reflectionSettings), NWB_TEXT("ReflectionSmokeProject: fresh seed reset failed"));
+        }
+        else
+            NWB_FATAL_ASSERT_MSG(m_roughnessScene->applyMutation(), NWB_TEXT("ReflectionSmokeProject: scene mutation failed"));
+        m_mutationApplied = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeMutation: graphics_frame={} fresh_final={} seed={}")
+            , m_mutationGraphicsFrame, m_freshFinalState ? 1u : 0u, m_requestedSeed
+        );
+    }
+
+    bool shouldCapture(const u64 graphicsFrame)const{
+        if(m_roughnessScene && m_roughnessScene->mutationCase()){
+            if(!m_mutationApplied)
+                return false;
+            if(m_postResetSamples == 1u)
+                return graphicsFrame == m_mutationGraphicsFrame;
+            return
+                m_latestStatistics.historyStartGraphicsFrame == m_mutationGraphicsFrame
+                && m_latestStatistics.historySampleCount >= m_postResetSamples
+            ;
+        }
+        return m_reflectionSettings.temporalEnabled && !(m_roughnessScene && m_roughnessScene->deforming())
+            ? m_latestStatistics.historySampleCount >= m_targetSamples
+            : m_latestStatistics.frameIndex >= Max(m_targetSamples, 3u)
+        ;
+    }
+
     bool configureRenderer(){
-        NWB::Impl::ReflectionSettings settings;
+        auto& settings = m_reflectionSettings;
         settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
         settings.environmentTop = Float3U(0.0f, 0.0f, 0.0f);
         settings.environmentBottom = Float3U(0.0f, 0.0f, 0.0f);
         settings.maxHardwareRaysPerFrame = 2u * 960u * 720u;
         settings.diagnosticsEnabled = true;
+        settings.temporalEnabled = m_extendedCase;
+        settings.spatialFilterEnabled = false;
+        m_targetSamples = m_extendedCase ? 64u : 16u;
+        if(
+            !readFlag("NWB_REFLECTION_SMOKE_DIAGNOSTICS", settings.diagnosticsEnabled)
+            || !readFlag("NWB_REFLECTION_SMOKE_TEMPORAL", settings.temporalEnabled)
+            || !readFlag("NWB_REFLECTION_SMOKE_SPATIAL", settings.spatialFilterEnabled)
+            || !readFlag("NWB_REFLECTION_SMOKE_FINAL_STATE", m_freshFinalState)
+            || !readU32("NWB_REFLECTION_SMOKE_HISTORY_SAMPLES", m_targetSamples, 1u, 256u)
+            || !readU32("NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES", m_postResetSamples, 1u, 256u)
+            || !readU32("NWB_REFLECTION_SMOKE_SEED", m_requestedSeed, 0u, Limit<u32>::s_Max)
+        )
+            return false;
+        settings.temporalMaxSamples = m_targetSamples;
+        settings.samplingSeed = m_freshFinalState ? m_requestedSeed + 1u : m_requestedSeed;
+        if(m_extendedCase){
+            m_authoredRoughness = 0.4f;
+            SmokeEnvironmentString roughnessText(m_context.objectArena);
+            if(
+                ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_ROUGHNESS", roughnessText)
+                && (!ParseF32FromChars(roughnessText.data(), roughnessText.data() + roughnessText.size(), m_authoredRoughness)
+                    || !IsFinite(m_authoredRoughness) || m_authoredRoughness < 0.f || m_authoredRoughness > 1.f)
+            )
+                return false;
+            NWB::Impl::PresentationSettings presentation;
+            presentation.shoulder = 1.f;
+            if(!m_renderer.setPresentationSettings(presentation))
+                return false;
+        }
+        if(m_furnace){
+            settings.environmentTop = Float3U(1.f, 1.f, 1.f);
+            settings.environmentBottom = Float3U(1.f, 1.f, 1.f);
+            settings.roughnessCutoff = 1.f;
+        }
         SmokeEnvironmentString budgetText(m_context.objectArena);
         if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_RAY_BUDGET", budgetText)){
             u64 parsed = 0u;
@@ -165,6 +298,7 @@ private:
             return;
         m_statisticsSequence = statistics.sequence;
         m_statisticsGeneration = statistics.generation;
+        m_latestStatistics = statistics;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
             NWB_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
             NWB_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
@@ -178,6 +312,18 @@ private:
             , statistics.candidates, statistics.hardwareRays, statistics.hardwareHits, statistics.opaquePixels, statistics.glassPixels
             , statistics.fallbackPixels, statistics.screenAttempts, statistics.screenHits
         );
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeHistory: sequence={} generation={} graphics_frame={} epoch={}")
+            NWB_TEXT(" start_graphics_frame={} count={} sample_index={} seed={} eligible={} reused={} reset={} reason={}")
+            , statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
+            , statistics.historyStartGraphicsFrame, statistics.historySampleCount, statistics.sampleIndex, statistics.samplingSeed
+            , statistics.historyEligible ? 1u : 0u, statistics.historyReused ? 1u : 0u, statistics.historyReset ? 1u : 0u
+            , static_cast<u32>(statistics.historyResetReason)
+        );
+        if(
+            m_extendedCase && m_framebufferCapture && m_framebufferCapture->captureReady()
+            && statistics.graphicsFrameIndex >= m_framebufferCapture->capturedGraphicsFrameIndex()
+        )
+            m_framebufferCapture->finish();
     }
 
     bool configureFramebufferCapture(){
@@ -194,7 +340,19 @@ private:
             }
             frameCount = static_cast<u32>(parsed);
         }
-        auto capture = MakeUnique<FramebufferCapture>(m_context, AStringView(outputPath.data(), outputPath.size()), frameCount);
+        FramebufferCaptureOptions options;
+        if(m_extendedCase){
+            if(!m_reflectionSettings.diagnosticsEnabled){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled history capture requires diagnostics"));
+                return false;
+            }
+            options.quitWhenReady = false;
+            options.predicateContext = this;
+            options.shouldCapture = [](void* owner, const u64 graphicsFrame){
+                return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
+            };
+        }
+        auto capture = MakeUnique<FramebufferCapture>(m_context, AStringView(outputPath.data(), outputPath.size()), frameCount, options);
         if(!capture || !capture->start())
             return false;
         m_framebufferCapture = Move(capture);
@@ -202,7 +360,10 @@ private:
     }
 
     void destroyWorld(){
-        DestroySmokeRenderWorld(m_context, m_world);
+        if(m_world.owner() && m_world->getSystem<NWB::Impl::MeshSkinningSystem>())
+            DestroySmokeSkinnedRenderWorld(m_context, m_world);
+        else
+            DestroySmokeRenderWorld(m_context, m_world);
         if(m_framebufferCapture){
             m_framebufferCapture->stop();
             m_framebufferCapture.reset();
@@ -217,7 +378,7 @@ private:
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("ReflectionSmokeProject: mesh creation failed"));
         const Name materialInterface(s_MaterialInterface);
         const Half4U f0 = MakeHalf4U(specularF0, specularF0, specularF0, 0.0f);
-        const Half roughness = ConvertFloatToHalf(0.0f);
+        const Half roughness = ConvertFloatToHalf(m_glassRoughnessCase && specularF0 == s_GlassF0 ? m_authoredRoughness : 0.f);
         NWB_FATAL_ASSERT_MSG(NWB::Impl::SetMaterialMutableParameter(
             *m_world, entity, materialInterface, "runtime.specular_f0", NWB::Impl::MaterialLayoutFieldType::Half3,
             NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)
@@ -309,6 +470,19 @@ private:
     GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
     u64 m_statisticsSequence = 0u;
     u64 m_statisticsGeneration = 0u;
+    NWB::Impl::ReflectionSettings m_reflectionSettings;
+    NWB::Impl::ReflectionStatistics m_latestStatistics;
+    UniquePtr<ReflectionRoughnessScene> m_roughnessScene;
+    u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
+    u32 m_targetSamples = 16u;
+    u32 m_postResetSamples = 1u;
+    u32 m_requestedSeed = 0u;
+    f32 m_authoredRoughness = 0.f;
+    bool m_extendedCase = false;
+    bool m_furnace = false;
+    bool m_glassRoughnessCase = false;
+    bool m_freshFinalState = false;
+    bool m_mutationApplied = false;
 };
 
 

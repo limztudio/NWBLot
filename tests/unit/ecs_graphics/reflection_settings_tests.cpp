@@ -22,9 +22,31 @@ using namespace NWB::Impl;
 TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
     ReflectionSettings settings;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
+    EXPECT_TRUE(settings.temporalEnabled);
+    EXPECT_TRUE(settings.spatialFilterEnabled);
+    EXPECT_EQ(settings.temporalMaxSamples, 16u);
+    EXPECT_EQ(settings.spatialRadius, 2u);
     settings.maxHardwareRaysPerFrame = 0u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
     settings.traceMode = ReflectionTraceMode::ScreenSpace;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+}
+
+TEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius){
+    ReflectionSettings settings;
+    settings.temporalMaxSamples = 0u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.temporalMaxSamples = 257u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.temporalMaxSamples = 256u;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+    settings.temporalMaxSamples = 1u;
+    settings.spatialRadius = 4u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.spatialRadius = 3u;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+    settings.spatialRadius = 0u;
+    settings.samplingSeed = Limit<u32>::s_Max;
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 

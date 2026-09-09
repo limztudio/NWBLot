@@ -1,5 +1,6 @@
-Stage-four smooth reflection and completed-frame diagnostics are implemented and
-validated for the cases below.
+Stage-four smooth reflection and completed-frame diagnostics passed the validation
+gate recorded below. The additional stage-five roughness and strict-history
+suites are implemented; their GPU validation is in progress.
 It combines hierarchical screen-space tracing with bounded hardware continuation
 and composites reflection on opaque surfaces and primary glass with AVBOIT.
 All 22 smoke captures passed on the Qualcomm Adreno X2-90 with required hardware
@@ -259,8 +260,9 @@ illustrated or generated replacement images.
 
 Remaining work and limits are explicit:
 
-- Only smooth single-bounce reflection is validated. Roughness currently gates
-  trace eligibility; rough lobe sampling and reconstruction remain future work.
+- The completed stage-five gate validates opaque GGX reflection and strict static
+  history in addition to the original smooth single-bounce cases. Camera or
+  content changes reject history; moving-camera reprojection is not implemented.
 - Hardware hits use the authored BXDF with linear radiance and bounded lighting
   inputs. Additional reflection, shadow, GI, and transparent-volume transport at
   a secondary hit are not traced. A second transparent glass surface can therefore
@@ -271,7 +273,7 @@ Remaining work and limits are explicit:
 - The stage-three cases distinguish on-screen reflection, uncertain back-facing
   hits, front-facing floor hits, and offscreen continuation. They do not prove
   screen visibility for hidden geometry or reflected secondary transparent
-  transport, and they do not test temporal disocclusion or history rejection.
+  transport. The separate stage-five mutation suite validates history rejection.
 - The strict refraction and caustic tests passed again at the stage-four gate;
   exact-duplicate tests passed at stage two. Combined reflection/duplicate and more complex
   reflected secondary transport cases remain part of the subsequent matrix.
@@ -285,8 +287,8 @@ For subsequent performance runs, enable `NWB_REFLECTION_SMOKE_TIMING=1` and use
 `GpuPassTimingProbe`, while fixed simulation delta remains separate. The current
 reflection scopes are `render.reflection_depth_pyramid`,
 `render.reflection_classify` (including screen tracing),
-`render.reflection_build_args`, and `render.reflection_hardware`; additional
-scopes will accompany filtering.
+`render.reflection_build_args`, and `render.reflection_hardware`; stage-five
+filtering adds `render.reflection_temporal` and `render.reflection_spatial`.
 The probe has a 64-scope cap, so the benchmark must require all expected scopes
 rather than silently accepting missing timings. Decode opt/fin scope hashes with
 the matching `.namesym` file using `tests/ab/gpu_timing_parse.py`.
@@ -316,3 +318,89 @@ caustic scopes; do not sum overlapping packet envelopes. CPU-visible counters
 must retain their originating frame/route and come only from completed accepted
 submissions. Ray savings require actual ray-count evidence, and timing changes
 that also appear in unaffected controls indicate system variance.
+
+The stage-five fixture has two separate bounded suites, leaving the original
+22-capture suite as the default regression. `--suite rough` adds 14 captures:
+opaque roughness 0, 0.2, 0.4 and 0.6, a second independent seed at roughness 0.4,
+accepted sample caps 8/64/256, an unfiltered
+smooth reference, separate spatial filtering, accumulated and raw white-furnace roughness 0/1, and
+authored glass roughness 0/0.6. Clear glass keeps a smooth reflection lobe until
+rough dielectric transmission is paired with it. `--suite temporal` adds 12
+captures: first post-change images and fresh final-scene references for camera,
+offscreen object transform, mutable material tint, directional lighting, and
+runtime skeletal pose; further captures verify camera history rebuilding and
+the reflected model's bind-pose footprint before skeletal mutation.
+
+The roughness scene uses a planar black receiver, F0 0.95, and pure red/green
+unlit rectangular emitters behind the camera. The reference integrates the
+correlated Smith GGX BRDF over each emitter's area; it does not use the production
+VNDF sampler. Image analysis reverses the fixture's pinned sRGB/Reinhard
+presentation (exposure 1, shoulder 1), then checks linear integrated radiance,
+color position, lobe spread, and an independent spatial grid. The furnace case
+uses F0 1 and unit environment radiance. At roughness 1 its single-scatter
+directional albedo is `1 - NdotV * ln(1 + 1/NdotV)`, which rejects incorrectly
+renormalized below-horizon samples. Below-horizon samples are valid zero radiance;
+their opaque population is counted without a hardware hit or fallback. Actual
+hardware rays must still equal the bounded accepted candidate queue.
+
+The 256-sample reference is only accepted after completed metadata proves that
+the cap was reached before the captured frame. The fixture queries completed
+statistics without blocking and arms its framebuffer observer at that plateau.
+For mutation tests, the observer captures the exact first graphics frame after
+the change and defers quitting until completed metadata covers that frame. A
+matching `historyStartGraphicsFrame` and a newer epoch prove rejection of prior
+history even if asynchronous publication skips the first completed sample. The
+fresh comparison starts in the final scene, warms with seed 1, then resets to
+seed 0 at its own capture boundary. This gives the same sample index and seed
+without assuming a relation between scheduler updates and GPU frame indices.
+The lighting mutation sets the authored light color to black while retaining its
+positive intensity. This removes its radiance while keeping the light in the
+scene, avoiding the scene gatherer's implicit default light when no authored
+positive-intensity light remains. Runtime deformation must retain zero history count and never reuse history;
+the deformation comparison uses roughness zero so independent raw sample indices
+cannot hide stale geometry. Removing red content must remove its reflection
+while retaining an unchanged green control. Spatial filtering is independently
+enabled and its output must never feed temporal accumulation.
+
+Run these additional suites using the same executable/working-directory and
+logserver arguments as the existing capture command, replacing `--suite all`
+with `--suite rough` or `--suite temporal`. CTest entries are
+`nwb_reflection_rough_capture_smoke` and
+`nwb_reflection_temporal_capture_smoke`; both share the display resource lock.
+The analysis tests are available as
+`python tests/integration/reflection_roughness_smoke_tests.py`.
+The interactive launcher also accepts `--reflection-case rough`,
+`--reflection-roughness`, `--reflection-history-samples`,
+`--reflection-post-reset-samples`, `--reflection-seed`, and on/off controls
+`--reflection-temporal`, `--reflection-spatial`, `--reflection-diagnostics`, and
+`--reflection-final-state`. Diagnostics can be disabled for later timing runs;
+source-anchored acceptance captures require it enabled.
+
+Stage five passed 14 roughness and 12 temporal GPU-debug captures at 960x720 on
+this host, alongside the original 22-capture reflection regression. Completed
+manifests and actual framebuffer images are under
+`Testing/smoke/dbg/reflection_roughness_gpudbg`,
+`Testing/smoke/dbg/reflection_temporal_gpudbg`, and
+`Testing/smoke/dbg/reflection_stage5_regression_gpudbg` in the build directory.
+The ECS graphics target passed 323 tests; the baseline and roughness analysis
+suites passed 37 and 32 tests respectively. The refraction GPU-debug and caustic
+sphere capture regressions passed again after the final stage-five build.
+
+The independent GGX reference error at roughness 0.4 decreased from 0.06200 at
+8 accepted samples to 0.01872 at 64 and 0.00682 at 256. The rough white-furnace
+mean linear albedo error was 0.000215. The separate radius-2 spatial filter
+reduced the fixture's high-frequency energy from 579.647 to 10.665 at 8 samples.
+These are image-quality measurements, not GPU time or frame-rate measurements.
+Smooth mirror history/raw and both authored glass-roughness cases were
+pixel-identical. Every first mutation image matched its fresh final-scene
+reference exactly. Skeletal deformation changed 3,875 red footprint pixels
+while preserving all 4,422 green control pixels.
+
+History remains RGBA16F. Before writing an accumulated mean, the temporal shader
+stochastically rounds RGB to exact half-representable FP32 values using an
+independent pixel/channel/accepted-sample-index hash. This removes accumulated
+directed storage-rounding bias without another buffer or dispatch. The owned
+raw writer establishes nonnegative radiance, finite inputs are checked, and the
+validated 256-sample maximum bounds the integer rounding implementation. The
+sample index continues beyond the bounded history count. The spatial result is
+stored separately and cannot bias future temporal samples.

@@ -19,11 +19,26 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace ReflectionHistoryResetReason{
+    enum Enum : u8{
+        None,
+        FirstSample,
+        SceneChanged,
+        ViewChanged,
+        SettingsChanged,
+        HardwareChanged,
+        UntrustedScene,
+        Disabled,
+        ResourcesChanged,
+    };
+};
+
 // A completed accepted reflection copy, independently of whether later presentation work succeeded.
 struct ReflectionStatistics{
     u64 sequence = 0u;
     u64 generation = 0u;
     u32 frameIndex = 0u;
+    u64 graphicsFrameIndex = 0u;
     u32 width = 0u;
     u32 height = 0u;
     u32 requestedHardwareBudget = 0u;
@@ -33,6 +48,15 @@ struct ReflectionStatistics{
     bool hardwareRequested = false;
     bool hardwareAvailable = false;
     bool hardwareReady = false;
+    u64 historyEpoch = 0u;
+    u64 historyStartGraphicsFrame = 0u;
+    u32 historySampleCount = 0u;
+    u32 sampleIndex = 0u;
+    u32 samplingSeed = 0u;
+    bool historyEligible = false;
+    bool historyReused = false;
+    bool historyReset = false;
+    ReflectionHistoryResetReason::Enum historyResetReason = ReflectionHistoryResetReason::None;
     Core::QueueSubmissionToken acceptedToken;
     u32 candidates = 0u;
     u32 hardwareRays = 0u;

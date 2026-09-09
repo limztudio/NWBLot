@@ -51,6 +51,7 @@ RendererReflectionSystem::RendererReflectionSystem(
     , m_graphics(graphics)
     , m_shaders(shaders)
     , m_statistics(arena, graphics)
+    , m_postprocess(arena, graphics, shaders)
 {}
 
 void RendererReflectionSystem::invalidateResources(){
@@ -72,13 +73,13 @@ bool RendererReflectionSystem::prepareResources(
     const u32 width,
     const u32 height,
     const bool prepareHardware,
-    const u32 maxHardwareRays){
+    const ReflectionSettings& settings){
     using namespace __hidden_reflection_resources;
     const u64 pixelCount = static_cast<u64>(width) * height;
     // Packed pixels cover both surface families; queue addresses additionally require u32 byte offsets.
     if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / 2u)
         return false;
-    const u64 boundedCapacity = Max(static_cast<u64>(1u), Min(pixelCount * 2u, static_cast<u64>(maxHardwareRays)));
+    const u64 boundedCapacity = Max(static_cast<u64>(1u), Min(pixelCount * 2u, static_cast<u64>(settings.maxHardwareRaysPerFrame)));
     if(boundedCapacity > static_cast<u64>(s_MaxU32) / sizeof(u32))
         return false;
     const u32 capacity = static_cast<u32>(boundedCapacity);
@@ -86,7 +87,7 @@ bool RendererReflectionSystem::prepareResources(
         m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
         && (!prepareHardware || m_resources.hardwarePipeline)
     )
-        return prepareQueue(capacity) && m_statistics.prepareResources();
+        return prepareQueue(capacity) && m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !preparePipelines(prepareHardware))
@@ -105,7 +106,7 @@ bool RendererReflectionSystem::prepareResources(
     ))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
-        return prepareQueue(capacity) && m_statistics.prepareResources();
+        return prepareQueue(capacity) && m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
     releaseTargets();
 
     const auto createOutput = [&](const Name name){
@@ -270,7 +271,7 @@ bool RendererReflectionSystem::prepareResources(
     m_resources.parameters.depthPyramidSlot = depthPyramid.sampledSlot;
     m_resources.parameters.depthMipCount = depthPyramid.mipCount;
     m_resources.frameParametersSlot = m_descriptors[Parameters].slot();
-    return m_statistics.prepareResources();
+    return m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
 }
 
 void RendererReflectionSystem::pollStatistics(){
@@ -286,7 +287,8 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     const ECSRenderDetail::MeshViewBufferSnapshot& view,
     const RayTracingSceneGraphResources& scene,
     const ReflectionSettings& settings,
-    const u32 frameIndex)const{
+    const u32 frameIndex,
+    const ReflectionSceneContentStamp& stamp)const{
     if(
         !m_resources.valid() || !view.bindingValid() || !ValidateReflectionSettings(settings)
         || targets.width != m_resources.parameters.width || targets.height != m_resources.parameters.height
@@ -296,6 +298,15 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     )
         return {};
     ReflectionFrameSnapshot snapshot = m_resources;
+    const ReflectionRadianceBinding base{
+        m_resources.opaqueRadiance, m_resources.parameters.opaqueRadianceSlot, m_resources.parameters.opaqueOutputSlot,
+    };
+    snapshot.postprocess = m_postprocess.snapshot(
+        base, stamp, settings, m_graphics.getFrameIndex()
+    );
+    if(!snapshot.postprocess.control || !snapshot.postprocess.current.texture)
+        return {};
+    snapshot.opaqueRadiance = snapshot.postprocess.current.texture;
     ReflectionFrameParameters& parameters = snapshot.parameters;
     parameters.traceMode = static_cast<u32>(settings.traceMode);
     const bool hardwareRequested = settings.traceMode == ReflectionTraceMode::Hardware || settings.traceMode == ReflectionTraceMode::Hybrid;
@@ -303,7 +314,11 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.opaqueSpecularSlot = targets.bindless.gbufferSpecularRoughness.slot();
     parameters.glassSpecularSlot = targets.bindless.refractionSpecularRoughness.slot();
     parameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, parameters.queueCapacity);
-    parameters.frameIndex = frameIndex;
+    parameters.sampleIndex = snapshot.postprocess.history.sampleIndex;
+    parameters.samplingSeed = settings.samplingSeed;
+    parameters.opaqueOutputSlot = snapshot.postprocess.current.storageSlot;
+    parameters.opaqueRadianceSlot = snapshot.postprocess.spatialEnabled
+        ? snapshot.postprocess.spatial.sampledSlot : snapshot.postprocess.current.sampledSlot;
     parameters.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
     parameters.viewSlot = view.heapHandle.slot();
     parameters.materialContextSlot = parameters.hardwareEnabled != 0u ? scene.materialContextSlotsHeapSlot : 0u;
@@ -322,12 +337,17 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
     parameters.screenEdgeFade = settings.screenEdgeFade;
     parameters.diagnosticsEnabled = settings.diagnosticsEnabled ? 1u : 0u;
+    snapshot.postprocess.deferredResourcesSlot = parameters.deferredResourcesSlot;
+    snapshot.postprocess.opaqueSpecularSlot = parameters.opaqueSpecularSlot;
+    snapshot.postprocess.viewSlot = parameters.viewSlot;
     snapshot.depthPyramid.sourceDepthSlot = targets.bindless.gbufferDepth.slot();
     if(parameters.hardwareEnabled != 0u)
         snapshot.scene = scene;
     if(settings.diagnosticsEnabled){
         ReflectionStatistics metadata;
         metadata.frameIndex = frameIndex;
+        metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
+        metadata.samplingSeed = settings.samplingSeed;
         metadata.width = parameters.width;
         metadata.height = parameters.height;
         metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
@@ -343,6 +363,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
 
 
 void RendererReflectionSystem::releaseTargets(){
+    m_postprocess.invalidateResources();
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     const auto retireDescriptor = [&](Core::GpuDescriptorHandle& descriptor){
         if(descriptor.valid() && heap.isInitialized())
@@ -366,6 +387,7 @@ void RendererReflectionSystem::releaseTargets(){
     m_resources.frameParametersSlot = 0u;
     m_resources.scene = {};
     m_resources.statistics = {};
+    m_resources.postprocess = {};
     m_resources.depthPyramid.texture = nullptr;
     m_resources.depthPyramid.mipCount = 0u;
     m_resources.depthPyramid.sampledSlot = 0u;

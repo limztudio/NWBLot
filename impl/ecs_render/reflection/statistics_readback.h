@@ -6,6 +6,7 @@
 
 
 #include "statistics.h"
+#include "history.h"
 
 #include <core/alloc/global.h>
 #include <global/arena_object.h>
@@ -69,7 +70,8 @@ public:
     void accept(
         const ReflectionStatisticsReservationKey& key,
         const Core::QueueSubmissionToken& token,
-        bool hardwareReady
+        bool hardwareReady,
+        const ReflectionHistoryOutcome* history = nullptr
     )noexcept;
     [[nodiscard]] bool pending(
         u32 slot,
@@ -115,7 +117,7 @@ public:
 
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
-    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
+    void accept(const Core::QueueSubmissionToken& token, bool hardwareReady, const ReflectionHistoryOutcome* history = nullptr)noexcept;
     void discard()noexcept;
 
 private:

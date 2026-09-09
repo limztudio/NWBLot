@@ -87,6 +87,7 @@ struct FramebufferCapture::ReadbackTask{
         Core::StagingTextureHandle destination;
         Core::TextureSlice destinationSlice;
         RefCountPtr<CompletionState> completionState;
+        u64 graphicsFrameIndex = 0u;
     };
 
     [[nodiscard]] static bool record(
@@ -107,8 +108,10 @@ struct FramebufferCapture::ReadbackTask{
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.completionState)
+        if(payload.completionState){
             payload.completionState->acceptedToken = token;
+            payload.completionState->graphicsFrameIndex = payload.graphicsFrameIndex;
+        }
     }
 
     static void discarded(Payload& payload){
@@ -124,10 +127,12 @@ struct FramebufferCapture::ReadbackTask{
 FramebufferCapture::FramebufferCapture(
     ProjectRuntimeContext& context,
     const AStringView outputPath,
-    const u32 captureFrameCount
+    const u32 captureFrameCount,
+    const FramebufferCaptureOptions options
 )
     : Core::IRenderPass(context.graphics)
     , m_context(context)
+    , m_options(options)
     , m_outputPath(context.objectArena, outputPath)
     , m_completionState(MakeRefCount<CompletionState>())
     , m_captureFrameCount(captureFrameCount)
@@ -235,6 +240,13 @@ void FramebufferCapture::update(){
 
     m_captureReady = true;
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: capture ready"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FramebufferCapture: graphics source frame {}"), m_completionState->graphicsFrameIndex);
+    if(m_options.quitWhenReady)
+        requestTerminalQuit();
+}
+
+void FramebufferCapture::finish(){
+    NWB_ASSERT(m_captureReady);
     requestTerminalQuit();
 }
 
@@ -287,6 +299,8 @@ bool FramebufferCapture::prepareTaskGraphPresentation(const Core::AcquiredPresen
             ++m_preparedFrameCount;
     }
     if(m_preparedFrameCount < m_captureFrameCount)
+        return true;
+    if(m_options.shouldCapture && !m_options.shouldCapture(m_options.predicateContext, graphicsFrame))
         return true;
 
     const Core::TextureDesc& description = frame.backBuffer.texture->getCreationDescription();
@@ -400,6 +414,7 @@ Core::GpuTaskId FramebufferCapture::declareTaskGraphPresentation(
             .destination = m_readback,
             .destinationSlice = {},
             .completionState = m_completionState,
+            .graphicsFrameIndex = m_lastCountedGraphicsFrame,
         }
     );
     if(!readbackTask.valid()){

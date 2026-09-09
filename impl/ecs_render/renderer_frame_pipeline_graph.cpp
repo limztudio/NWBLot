@@ -3,6 +3,9 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/reflection/scene_content_stamp.h>
+
+#include <global/hash_utils.h>
 
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
@@ -1007,6 +1010,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
+    ReflectionSceneContentStamp reflectionContentStamp;
+    reflectionContentStamp.view = ComputeFnv64Bytes(&meshViewState, sizeof(meshViewState));
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
         shadowPrepareHandoffTask,
@@ -1055,7 +1060,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         opaqueRegularSharedComputeEmulationTiming,
         opaqueCsgIntervalSampleComputeEmulationTiming,
         graphicsPrefixTimingTickets,
-        asyncPrefixTimingSpansOnePacket
+        asyncPrefixTimingSpansOnePacket,
+        reflectionContentStamp.lighting
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graphics-prefix packet"));
         return;
@@ -5959,10 +5965,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
+    reflectionContentStamp.geometry = sceneResources.contentStamp.geometry;
+    reflectionContentStamp.material = sceneResources.contentStamp.material;
+    // CSG evaluation and lagged screen lighting do not have a matching content stamp for this first history policy.
+    reflectionContentStamp.trusted = sceneResources.contentStamp.trusted && csgFrameState.empty() && !useLaggedLightingHistory;
     const ReflectionFrameSnapshot reflectionResources = m_reflectionSystem.snapshotFrameResources(
         deferredTargets, meshViewBufferSnapshot,
         m_preparedReflectionSceneAvailable ? sceneResources : RayTracingSceneGraphResources{},
-        m_reflectionSettings, m_reflectionFrameIndex
+        m_reflectionSettings, m_reflectionFrameIndex, reflectionContentStamp
     );
     if(!reflectionResources.valid())
         return;
@@ -6402,7 +6412,12 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         scratchArena,
         compileOptions
     )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not compile deferred AVBOIT/lighting/composite/present task graph"));
+        const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
+        const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph compilation failed: analysis={} task={} resource={} queue={} queueTask={}")
+            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
+            , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
+        );
         return;
     }
     const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);

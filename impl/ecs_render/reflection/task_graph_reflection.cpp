@@ -4,6 +4,8 @@
 
 #include "task_graph_reflection.h"
 #include "timing_names.h"
+#include "task_graph_postprocess.h"
+#include "sampling_sequence.h"
 
 #include <core/graphics/vulkan/backend.h>
 
@@ -82,6 +84,7 @@ struct UploadParametersTask{
     struct Payload{
         Core::BufferHandle buffer;
         ReflectionFrameParameters parameters;
+        ReflectionHistoryPlan history;
         const bool* hardwarePreparationReady = nullptr;
     };
 
@@ -89,6 +92,11 @@ struct UploadParametersTask{
         ReflectionFrameParameters parameters = payload.parameters;
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             parameters.hardwareEnabled = 0u;
+        const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, parameters.hardwareEnabled != 0u);
+        parameters.sampleIndex = history.sampleIndex;
+        const ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
+        parameters.sampleBaseX = sampleBase.x;
+        parameters.sampleBaseY = sampleBase.y;
         // The immutable frame value is copied into command-list staging here, after the shared scene preparation
         // outcome is known. An unavailable scene cannot enqueue work or bind its stale TLAS generation.
         commandList.writeBuffer(payload.buffer.get(), &parameters, sizeof(parameters));
@@ -223,6 +231,7 @@ struct StatisticsReadbackTask{
         Core::GpuGraphResourceId sourceResource;
         Core::GpuGraphResourceId destinationResource;
         ReflectionStatisticsReservation reservation;
+        ReflectionHistoryPlan history;
         const bool* hardwarePreparationReady = nullptr;
         bool hardwareEnabled = false;
     };
@@ -247,8 +256,10 @@ struct StatisticsReadbackTask{
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, hardwareReady);
         payload.reservation.accept(
-            token, payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady
+            token, hardwareReady, &history
         );
     }
 
@@ -313,7 +324,7 @@ ReflectionGraphResult DeclareReflectionTasks(
     dependency = graph.addTask<UploadParametersTask>(
         desc,
         UploadParametersTask::Payload{
-            resources.frameParameters, resources.parameters, inputs.hardwarePreparationReady,
+            resources.frameParameters, resources.parameters, resources.postprocess.history, inputs.hardwarePreparationReady,
         }
     );
     if(!dependency.valid())
@@ -415,6 +426,10 @@ ReflectionGraphResult DeclareReflectionTasks(
             return {};
     }
 
+    dependency = DeclareReflectionPostprocessTasks(graph, graphics, scratchArena, resources, inputs, result, dependency);
+    if(!dependency.valid())
+        return {};
+
     if(resources.parameters.diagnosticsEnabled != 0u && resources.statistics.control){
         ReflectionStatisticsReservation reservation(resources.statistics.control, resources.statistics.metadata);
         if(reservation.valid()){
@@ -443,7 +458,7 @@ ReflectionGraphResult DeclareReflectionTasks(
             dependency = graph.addTask<StatisticsReadbackTask>(
                 copyDesc,
                 StatisticsReadbackTask::Payload{
-                    resources.counters, readback, result.counters, readbackResource, Move(reservation),
+                    resources.counters, readback, result.counters, readbackResource, Move(reservation), resources.postprocess.history,
                     inputs.hardwarePreparationReady, resources.parameters.hardwareEnabled != 0u,
                 }
             );

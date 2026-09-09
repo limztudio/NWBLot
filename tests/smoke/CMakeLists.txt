@@ -186,10 +186,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_reflection_smoke)
         target_sources(nwb_reflection_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
-        nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}")
+        nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}" nwb_ecs_model nwb_ecs_mesh_skinning)
         add_dependencies(nwb_reflection_smoke nwb_transparent_multi_smoke_assets)
 
         if(TARGET nwb_logserver)
@@ -210,6 +212,22 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             SKIP_RETURN_CODE 77
             TIMEOUT 600
         )
+        foreach(_nwb_reflection_suite IN ITEMS rough temporal)
+            add_test(
+                NAME "nwb_reflection_${_nwb_reflection_suite}_capture_smoke"
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke.py"
+                    "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
+                    "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                    "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_${_nwb_reflection_suite}"
+                    "--suite" "${_nwb_reflection_suite}"
+                    ${_nwb_reflection_logserver_args}
+            )
+            set_tests_properties("nwb_reflection_${_nwb_reflection_suite}_capture_smoke" PROPERTIES
+                RESOURCE_LOCK nwb_display
+                SKIP_RETURN_CODE 77
+                TIMEOUT 600
+            )
+        endforeach()
 
         nwb_declare_executable(nwb_refraction_smoke)
         target_sources(nwb_refraction_smoke PRIVATE

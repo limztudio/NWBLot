@@ -44,7 +44,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const uint linearPixel = glass ? packedPixel - pixelCount : packedPixel;
     const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.width, linearPixel / g_NwbReflectionParameters.width);
     NwbReflectionSurface surface;
-    if(!nwbReflectionLoadSurface(pixel, glass, surface) || surface.bias >= g_NwbReflectionParameters.maxRayDistance)
+    if(
+        !nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > 0.0)
+        || surface.bias >= g_NwbReflectionParameters.maxRayDistance
+    )
         return;
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_RAYS, 1u);
     const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(

@@ -66,7 +66,8 @@ void ReflectionStatisticsState::discard(const ReflectionStatisticsReservationKey
 void ReflectionStatisticsState::accept(
     const ReflectionStatisticsReservationKey& key,
     const Core::QueueSubmissionToken& token,
-    const bool hardwareReady)noexcept{
+    const bool hardwareReady,
+    const ReflectionHistoryOutcome* history)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -76,6 +77,16 @@ void ReflectionStatisticsState::accept(
     slot->inFlight = true;
     slot->metadata.acceptedToken = token;
     slot->metadata.hardwareReady = hardwareReady;
+    if(history){
+        slot->metadata.historyEpoch = history->epoch;
+        slot->metadata.historyStartGraphicsFrame = history->historyStartGraphicsFrame;
+        slot->metadata.historySampleCount = history->sampleCount;
+        slot->metadata.sampleIndex = history->sampleIndex;
+        slot->metadata.historyEligible = history->eligible;
+        slot->metadata.historyReused = history->reused;
+        slot->metadata.historyReset = history->reset;
+        slot->metadata.historyResetReason = history->resetReason;
+    }
     // An accepted copy with an invalid token remains quarantined until owner invalidation. Never recycle memory
     // whose GPU completion cannot be proved, even when a caller violates the accepted-token contract.
 }
@@ -191,9 +202,12 @@ ReflectionStatisticsReservation& ReflectionStatisticsReservation::operator=(Refl
     return *this;
 }
 
-void ReflectionStatisticsReservation::accept(const Core::QueueSubmissionToken& token, const bool hardwareReady)noexcept{
+void ReflectionStatisticsReservation::accept(
+    const Core::QueueSubmissionToken& token,
+    const bool hardwareReady,
+    const ReflectionHistoryOutcome* history)noexcept{
     if(m_control && m_key.valid())
-        m_control->accept(m_key, token, hardwareReady);
+        m_control->accept(m_key, token, hardwareReady, history);
     m_key = {};
     m_control = nullptr;
 }

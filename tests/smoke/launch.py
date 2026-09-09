@@ -159,6 +159,15 @@ def build_smoke_environment(args) -> Dict[str, str]:
         env["NWB_REFLECTION_SMOKE_DEBUG"] = args.reflection_debug
     if getattr(args, "reflection_ray_budget", None) is not None:
         env["NWB_REFLECTION_SMOKE_RAY_BUDGET"] = str(args.reflection_ray_budget)
+    for option, name in (("roughness", "ROUGHNESS"), ("history_samples", "HISTORY_SAMPLES"),
+        ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED")):
+        value = getattr(args, "reflection_" + option, None)
+        if value is not None:
+            env["NWB_REFLECTION_SMOKE_" + name] = str(value)
+    for option in ("temporal", "spatial", "diagnostics", "final_state"):
+        value = getattr(args, "reflection_" + option, None)
+        if value is not None:
+            env["NWB_REFLECTION_SMOKE_" + option.upper()] = "1" if value == "on" else "0"
     if args.spin_angle is not None:
         env["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"] = args.spin_angle
     if args.spin_speed is not None:
@@ -241,7 +250,8 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--backend", default="native", help="Backend variant for the scene; currently native.")
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
-    parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor"),
+    parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor",
+        "rough", "rough_furnace", "rough_glass", "rough_deform", "temporal_camera", "temporal_transform", "temporal_material", "temporal_light", "temporal_deform"),
         help="Select the reflection fixture; defaults to offscreen mirror markers.")
     parser.add_argument("--reflection-mode", choices=("disabled", "screen", "hardware", "hybrid"),
         help="Select the typed reflection trace mode; the fixture defaults to hardware.")
@@ -249,6 +259,15 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
         help="Select a reflection debug view for interactive inspection; capture assertions use normal radiance.")
     parser.add_argument("--reflection-ray-budget", type=reflection_ray_budget,
         help="Set the typed maximum hardware reflection rays per frame, including zero.")
+    parser.add_argument("--reflection-roughness", type=float, help="Authored perceptual roughness in [0,1] for the rough fixture.")
+    parser.add_argument("--reflection-history-samples", type=int, choices=range(1, 257), metavar="1..256",
+        help="Accepted temporal sample cap for the rough fixture.")
+    parser.add_argument("--reflection-post-reset-samples", type=int, choices=range(1, 257), metavar="1..256",
+        help="Capture at the first reset frame or after this many accepted post-reset samples.")
+    parser.add_argument("--reflection-seed", type=reflection_ray_budget, help="Deterministic u32 sampling seed.")
+    for option in ("temporal", "spatial", "diagnostics", "final-state"):
+        parser.add_argument("--reflection-" + option, choices=("on", "off"),
+            help="Set the test fixture's typed " + option + " control.")
     parser.add_argument("--refraction-case", choices=(
         "single", "separate", "stacked", "intersecting", "nested", "coincident",
         "coincident_tinted", "torus", "same_mesh", "prism",

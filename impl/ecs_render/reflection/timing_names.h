@@ -23,6 +23,8 @@ namespace ReflectionGpuTimingScope{
     inline constexpr Core::GpuTimingScopeDefinition s_Classify("render.reflection_classify");
     inline constexpr Core::GpuTimingScopeDefinition s_BuildArgs("render.reflection_build_args");
     inline constexpr Core::GpuTimingScopeDefinition s_Hardware("render.reflection_hardware");
+    inline constexpr Core::GpuTimingScopeDefinition s_Temporal("render.reflection_temporal");
+    inline constexpr Core::GpuTimingScopeDefinition s_Spatial("render.reflection_spatial");
 };
 
 

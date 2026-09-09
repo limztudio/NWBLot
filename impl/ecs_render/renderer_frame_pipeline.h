@@ -247,7 +247,8 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets,
-        const bool* asyncPrefixTimingSpansOnePacket
+        const bool* asyncPrefixTimingSpansOnePacket,
+        u64& outSceneLightingContentHash
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,

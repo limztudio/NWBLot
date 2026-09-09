@@ -1,0 +1,48 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "lighting_content_stamp.h"
+
+#include <impl/ecs_render/shared/renderer_push_constants_private.h>
+
+#include <global/hash_utils.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+u64 ComputeSceneLightingContentHash(
+    const ECSRenderDetail::SceneShadingGpuData& shading,
+    const ECSRenderDetail::SceneLightGpuData* lights,
+    const u32 lightCount){
+    NWB_ASSERT(lightCount == 0u || lights);
+    u64 hash = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(hash, shading.cameraPositionLightCount);
+    Fnv64AppendValue(hash, lightCount);
+    for(u32 index = 0u; index < lightCount; ++index){
+        const ECSRenderDetail::SceneLightGpuData& light = lights[index];
+        Fnv64AppendValue(hash, light.position);
+        Fnv64AppendValue(hash, light.direction);
+        Fnv64AppendValue(hash, light.colorIntensity);
+        Fnv64AppendValue(hash, light.params);
+        Fnv64AppendValue(hash, light.params2);
+    }
+    return hash;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

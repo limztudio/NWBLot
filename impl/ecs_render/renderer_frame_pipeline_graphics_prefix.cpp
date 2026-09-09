@@ -22,6 +22,7 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
+#include <impl/ecs_render/deferred/lighting_content_stamp.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
@@ -91,8 +92,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
-    const bool* const asyncPrefixTimingSpansOnePacket
-){
+    const bool* const asyncPrefixTimingSpansOnePacket,
+    u64& outSceneLightingContentHash){
     using namespace RendererTaskGraphDetail;
     using PrefixTimingSlot = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
 
@@ -210,6 +211,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable scene-shading upload data"));
         return false;
     }
+
+    outSceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, sceneLightData, sceneLightCount);
 
     Core::GpuTaskSchedulingHint meshViewSetupScheduling;
     meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;

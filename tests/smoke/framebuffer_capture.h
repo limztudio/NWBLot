@@ -29,6 +29,13 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct FramebufferCaptureOptions{
+    bool quitWhenReady = true;
+    // Optional borrowed predicate context must remain alive until stop() completes.
+    bool (*shouldCapture)(void*, u64) = nullptr;
+    void* predicateContext = nullptr;
+};
+
 // One-shot framebuffer observer for unattended smoke acceptance. Completion state is ref-counted independently so
 // graph rejection/teardown can resolve an old payload after the owning project has stopped the observer.
 class FramebufferCapture final
@@ -38,6 +45,7 @@ class FramebufferCapture final
 private:
     struct CompletionStateData{
         Core::QueueSubmissionToken acceptedToken;
+        u64 graphicsFrameIndex = Limit<u64>::s_Max;
     };
     using CompletionState = RefCounter<CompletionStateData>;
 
@@ -47,7 +55,7 @@ private:
 
 
 public:
-    FramebufferCapture(ProjectRuntimeContext& context, AStringView outputPath, u32 captureFrameCount);
+    FramebufferCapture(ProjectRuntimeContext& context, AStringView outputPath, u32 captureFrameCount, FramebufferCaptureOptions options = {});
     virtual ~FramebufferCapture()override;
 
 
@@ -55,6 +63,9 @@ public:
     [[nodiscard]] bool start();
     void stop();
     void update();
+    [[nodiscard]] bool captureReady()const{ return m_captureReady; }
+    [[nodiscard]] u64 capturedGraphicsFrameIndex()const{ return m_completionState->graphicsFrameIndex; }
+    void finish();
 
 
 public:
@@ -89,6 +100,7 @@ private:
 
 private:
     ProjectRuntimeContext& m_context;
+    FramebufferCaptureOptions m_options;
     ::Path<Core::Alloc::GlobalArena> m_outputPath;
     RefCountPtr<CompletionState> m_completionState;
     Core::StagingTextureHandle m_readback;

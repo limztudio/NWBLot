@@ -28,7 +28,7 @@
 #define NWB_REFLECTION_COUNTER_SCREEN_HITS 28u
 #define NWB_REFLECTION_COUNTER_SIZE 32u
 
-// Ten std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
+// Eleven std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
 #define NWB_REFLECTION_FRAME_UINT_FIELDS(FIELD) \
     FIELD(width, 0u) \
     FIELD(height, 0u) \
@@ -45,7 +45,7 @@
     FIELD(argsSlot, 0u) \
     FIELD(queueCapacity, 0u) \
     FIELD(maxHardwareRays, 0u) \
-    FIELD(frameIndex, 0u) \
+    FIELD(sampleIndex, 0u) \
     FIELD(deferredResourcesSlot, 0u) \
     FIELD(viewSlot, 0u) \
     FIELD(materialContextSlot, 0u) \
@@ -53,7 +53,11 @@
     FIELD(depthPyramidSlot, 0u) \
     FIELD(depthMipCount, 0u) \
     FIELD(screenMaxSteps, 96u) \
-    FIELD(diagnosticsEnabled, 0u)
+    FIELD(diagnosticsEnabled, 0u) \
+    FIELD(samplingSeed, 0u) \
+    FIELD(sampleBaseX, 0u) \
+    FIELD(sampleBaseY, 0u) \
+    FIELD(_samplingPad2, 0u)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
     FIELD(maxRayDistance, 100.f) \

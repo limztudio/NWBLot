@@ -256,7 +256,7 @@ def parse_statistics(log_text):
     return samples
 
 
-def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET):
+def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_zero_samples=False):
     stable = []
     previous = None
     for sample in samples:
@@ -294,7 +294,9 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET):
         if sample["hardware_rays"] > min(sample["effective_budget"], sample["candidates"]) \
             or sample["hardware_hits"] > sample["hardware_rays"]:
             raise SmokeFailure("actual hardware rays or hits exceeded the completed frame budget")
-        if eligible != sample["screen_hits"] + sample["hardware_hits"] + sample["fallback_pixels"]:
+        zero_samples = eligible - sample["screen_hits"] - sample["hardware_hits"] - sample["fallback_pixels"]
+        # GGX samples below the geometric horizon are valid zero radiance, with no trace or fallback.
+        if not (0 <= zero_samples <= sample["opaque_pixels"] if allow_zero_samples else zero_samples == 0):
             raise SmokeFailure("reflection outcome counters do not partition eligible pixels")
         if mode in ("disabled", "screen") and (sample["hardware_rays"] or sample["hardware_hits"] or sample["candidates"]):
             raise SmokeFailure("a non-hardware reflection route issued hardware work")
@@ -446,8 +448,8 @@ def parse_args(argv):
     parser.add_argument("--working-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget"), default="all",
-        help="Capture all 22 comparisons, 8 baseline captures, 12 screen captures, or 2 budget captures.")
+    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget", "rough", "temporal"), default="all",
+        help="Capture the original 22 comparisons, a subset, or the separate roughness/history suites.")
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--require-hardware", action="store_true")
@@ -462,6 +464,9 @@ def parse_args(argv):
 def main(argv):
     args = parse_args(argv)
     args.output_directory.mkdir(parents=True, exist_ok=True)
+    if args.suite in ("rough", "temporal"):
+        from reflection_roughness_smoke import run_suite
+        return run_suite(args)
     completed = []
     statistics = {}
     try:

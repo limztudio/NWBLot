@@ -12,6 +12,7 @@
 #include "frame_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../common/math.slangi"
+#include "sampling.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -141,12 +142,22 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
         originUncertainty = length(nextPosition - surface.position);
     }
     surface.direction = reflect(incident, surface.normal);
-    surface.roughness = saturate(specularRoughness.a);
+    // Rough glass requires paired microfacet transmission; retain the existing complementary smooth interface.
+    surface.roughness = glass ? 0.0 : saturate(specularRoughness.a);
     const float cosine = saturate(-dot(incident, surface.normal));
     surface.weight = f0 + (1.0 - f0) * pow(1.0 - cosine, 5.0);
+    if(!glass && surface.roughness > 0.0){
+        const float2 randomSample = nwbReflectionSample2D(
+            pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY),
+            g_NwbReflectionParameters.samplingSeed
+        );
+        nwbReflectionSampleGgx(
+            surface.normal, -incident, f0, surface.roughness, randomSample, surface.direction, surface.weight
+        );
+    }
     surface.bias = max(0.001, originUncertainty + length(cameraRay) * 1e-5);
     // Clear glass has zero AVBOIT coverage; coverage never scales its Fresnel reflection.
-    return isfinite(surface.bias) && all(isfinite(surface.direction))
+    return isfinite(surface.bias) && all(isfinite(surface.direction)) && all(isfinite(surface.weight))
         && all(isfinite(surface.position + surface.normal * surface.bias));
 }
 

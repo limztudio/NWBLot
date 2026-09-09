@@ -60,6 +60,8 @@ bool RendererRayTracingSystem::prepareSceneQueryResources(){
 RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResources()const{
     const auto& state = m_rayTracingState;
     RayTracingSceneGraphResources resources;
+    if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted)
+        resources.contentStamp = m_preparedSceneContentStamp;
     if(
         !m_shadowVisibilityHardwareSupported
         || !m_shadowVisibilityTraceResourcesPreflighted

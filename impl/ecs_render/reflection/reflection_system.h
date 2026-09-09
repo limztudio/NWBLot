@@ -7,6 +7,7 @@
 
 #include "settings.h"
 #include "statistics_readback.h"
+#include "postprocess_resources.h"
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
@@ -55,7 +56,7 @@ struct ReflectionFrameParameters{
     NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_CPU_FLOAT_FIELD)
 #undef NWB_REFLECTION_CPU_FLOAT_FIELD
 };
-static_assert(sizeof(ReflectionFrameParameters) == 160u);
+static_assert(sizeof(ReflectionFrameParameters) == 176u);
 
 struct ReflectionDepthPyramidMip{
     Name taskIdentity = NAME_NONE;
@@ -97,6 +98,7 @@ struct ReflectionFrameSnapshot{
     ReflectionDepthPyramidSnapshot depthPyramid;
     RayTracingSceneGraphResources scene;
     ReflectionStatisticsReadbackSnapshot statistics;
+    ReflectionPostprocessSnapshot postprocess;
     u32 frameParametersSlot = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -114,7 +116,7 @@ public:
 
     // The caller joins submitted work and discards pending graph snapshots before invalidation/device teardown.
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, u32 maxHardwareRays);
+    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, const ReflectionSettings& settings);
     void pollStatistics();
     [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
@@ -122,7 +124,8 @@ public:
         const ECSRenderDetail::MeshViewBufferSnapshot& view,
         const RayTracingSceneGraphResources& scene,
         const ReflectionSettings& settings,
-        u32 frameIndex
+        u32 frameIndex,
+        const ReflectionSceneContentStamp& stamp
     )const;
 
 private:
@@ -135,6 +138,7 @@ private:
     Core::GraphicsRuntime& m_graphics;
     RendererShaderSystem& m_shaders;
     ReflectionStatisticsReadback m_statistics;
+    RendererReflectionPostprocess m_postprocess;
     ReflectionFrameSnapshot m_resources;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::BindingLayoutHandle m_depthBindingLayout;

@@ -97,7 +97,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
     }
 
-    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings.maxHardwareRaysPerFrame))
+    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings))
         return false;
 
     if(!m_avboitSystem.createAvboitPipelines())
@@ -415,7 +415,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         deferredTargets.width,
         deferredTargets.height,
         m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
-        m_reflectionSettings.maxHardwareRaysPerFrame
+        m_reflectionSettings
     ))
         return false;
 

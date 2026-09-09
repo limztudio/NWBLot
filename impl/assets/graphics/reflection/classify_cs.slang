@@ -22,17 +22,21 @@
 groupshared uint g_NwbReflectionCandidateMasks[4];
 groupshared uint g_NwbReflectionCandidateBase;
 
-bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass){
+bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass, out float4 result){
+    result = float4(0.0);
     NwbReflectionSurface surface;
-    if(g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_DISABLED || !nwbReflectionLoadSurface(pixel, glass, surface)){
-        nwbReflectionStore(pixel, glass, float3(0.0), 0.0);
+    if(g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_DISABLED || !nwbReflectionLoadSurface(pixel, glass, surface))
         return false;
-    }
     nwbReflectionRecordDiagnostic(
         glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u
     );
+    if(!any(surface.weight > 0.0)){
+        // Below-horizon VNDF samples remain true zeros in both filters and never enter the hardware queue.
+        result.a = 1.0;
+        return false;
+    }
     const float3 environment = nwbReflectionEnvironment(surface.direction);
-    nwbReflectionStore(pixel, glass, surface.weight * environment, 1.0);
+    result = float4(surface.weight * environment, 1.0);
     const bool traceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff
         && surface.bias < g_NwbReflectionParameters.maxRayDistance;
     const bool screen = g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_SCREEN
@@ -44,7 +48,7 @@ bool nwbReflectionClassifySurface(const uint2 pixel, const bool glass){
         if(nwbReflectionTraceScreen(pixel, surface, radiance, confidence)){
             // The alpha lane retains both route and confidence without a separate full-resolution texture.
             // The hardware continuation replaces this provisional radiance when confidence is insufficient.
-            nwbReflectionStore(pixel, glass, surface.weight * lerp(environment, radiance, confidence), 2.0 + 0.5 * confidence);
+            result = float4(surface.weight * lerp(environment, radiance, confidence), 2.0 + 0.5 * confidence);
             if(confidence >= g_NwbReflectionParameters.screenConfidenceThreshold){
                 nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
                 return false;
@@ -73,8 +77,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
     bool opaqueCandidate = false;
     bool glassCandidate = false;
     if(pixel.x < g_NwbReflectionParameters.width && pixel.y < g_NwbReflectionParameters.height){
-        opaqueCandidate = nwbReflectionClassifySurface(pixel, false);
-        glassCandidate = nwbReflectionClassifySurface(pixel, true);
+        float4 opaqueResult;
+        float4 glassResult;
+        opaqueCandidate = nwbReflectionClassifySurface(pixel, false, opaqueResult);
+        glassCandidate = nwbReflectionClassifySurface(pixel, true, glassResult);
+        // Initialization belongs to the dispatch: every surface receives exactly one write, including invalid
+        // surfaces and valid zero samples. Provisional screen radiance is selected before this store boundary.
+        nwbReflectionStore(pixel, false, opaqueResult.rgb, opaqueResult.a);
+        nwbReflectionStore(pixel, true, glassResult.rgb, glassResult.a);
     }
 
     // This frame-uniform guard skips shared work on screen-only routes. A zero budget still counts candidates.

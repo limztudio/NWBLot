@@ -53,13 +53,10 @@ struct RefractionResolveGraphTask{
     static void accepted(Payload& payload, const Core::QueueSubmissionToken&){
         // Only an accepted packet may publish a dispatch diagnostic. Rejected recording retries leave the latch
         // untouched, and the resource-selection/recording path remains free of mutable renderer state.
-        const bool usedHardware = payload.resources.usesHardwareTrace
-            && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
-        bool* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware
-            ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
+        const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
+        bool* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
         if(dispatchLogged && !*dispatchLogged){
-            NWB_LOGGER_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"),
-                usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
+            NWB_LOGGER_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
             *dispatchLogged = true;
         }
     }

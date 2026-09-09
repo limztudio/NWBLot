@@ -55,6 +55,10 @@ void nwbReflectionClassifySurface(const uint2 pixel, const bool glass){
     }
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_REFLECTION_CLASSIFY_GROUP_SIZE, NWB_REFLECTION_CLASSIFY_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint2 pixel = dispatchThreadId.xy;

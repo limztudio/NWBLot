@@ -112,6 +112,8 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
         command.append("--application-arg=" + argument)
 
     env = os.environ.copy()
+    env.pop("NWB_REFRACTION_SMOKE_CASE", None)
+    env.pop("NWB_REFRACTION_SMOKE_GEOMETRY", None)
     env["NWB_REFRACTION_SMOKE_ENABLED"] = "1" if enabled else "0"
     env["NWB_REFRACTION_SMOKE_HARDWARE"] = "1" if hardware else "0"
     env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"

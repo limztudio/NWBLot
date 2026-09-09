@@ -187,6 +187,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_refraction_smoke)
         target_sources(nwb_refraction_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/refraction_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_refraction_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
@@ -225,6 +227,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT 240
+        )
+        add_test(
+            NAME nwb_refraction_gallery_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke.py"
+                "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_gallery"
+                ${_nwb_refraction_logserver_args}
+        )
+        set_tests_properties(nwb_refraction_gallery_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 600
         )
         unset(_nwb_refraction_logserver_args)
 

@@ -13,6 +13,7 @@
 #include <impl/ecs_render/module.h>
 
 #include "framebuffer_capture.h"
+#include "refraction_gallery_scene.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
@@ -107,6 +108,14 @@ public:
     virtual bool onStartup()override{
         if(!configureFramebufferCapture())
             return false;
+
+        SmokeEnvironmentString galleryCase(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_REFRACTION_SMOKE_CASE", galleryCase))
+            return CreateRefractionGalleryScene(
+                m_context, *m_world, AStringView(galleryCase.data(), galleryCase.size()),
+                ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY")
+            );
+
         const auto camera = CreateSmokeCamera(*m_world, 1.4f, 6.0f, 0.0f);
         // The production TLAS is shared with shadow preparation. A light exercises
         // that normal preparation path; the unlit material ignores its radiance.

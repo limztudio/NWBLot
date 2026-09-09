@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Runtime alpha controls only legacy AVBOIT coverage. Optical tint remains authored at zero coverage.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    NwbMeshSurface result = nwbMakeGlassSurface(
+        runtime.color_tint.rgb, inNormal, NWB_SURFACE_IOR_GLASS, runtime.color_tint.rgb, runtime.color_tint.a
+    );
+    result.shadowAbsorptionTint = runtime.color_tint.rgb;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

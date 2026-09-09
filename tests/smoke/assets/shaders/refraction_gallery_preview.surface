@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Actual geometry rendered with ordinary AVBOIT, without optical interfaces. Shading exposes curved/flat faces.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const float3 normal = nwbSafeNormalize(inNormal, float3(0.0, 0.0, -1.0));
+    const half shade = half(0.3 + 0.7 * abs(dot(normal, normalize(float3(-0.45, 0.65, -0.60)))));
+    NwbMeshSurface result = nwbMakeMeshSurface(runtime.color_tint.rgb * shade, normal);
+    result.renderCoverage = runtime.color_tint.a;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -138,6 +138,13 @@ SMOKE_SCENES = {
 
 def build_smoke_environment(args) -> Dict[str, str]:
     env = os.environ.copy()
+    if getattr(args, "refraction_case", None):
+        env["NWB_REFRACTION_SMOKE_CASE"] = args.refraction_case
+        env["NWB_REFRACTION_SMOKE_GEOMETRY"] = "1" if getattr(args, "refraction_geometry", False) else "0"
+        if getattr(args, "refraction_geometry", False):
+            env["NWB_REFRACTION_SMOKE_ENABLED"] = "0"
+    elif getattr(args, "refraction_geometry", False):
+        raise SystemExit("--refraction-geometry requires --refraction-case")
     if args.spin_angle is not None:
         env["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"] = args.spin_angle
     if args.spin_speed is not None:
@@ -210,6 +217,12 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--backend", default="native", help="Backend variant for the scene; currently native.")
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
+    parser.add_argument("--refraction-case", choices=(
+        "single", "separate", "stacked", "intersecting", "nested", "coincident",
+        "coincident_tinted", "torus", "same_mesh", "prism",
+    ), help="Select a visual refraction case; omit to run the original regression scene.")
+    parser.add_argument("--refraction-geometry", action="store_true",
+        help="Show the selected case with colored, nonrefractive translucent surfaces.")
 
 
 def make_parser() -> argparse.ArgumentParser:

@@ -18,6 +18,10 @@ NWB_IMPL_BEGIN
 
 namespace __hidden_reflection_history{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool SameEstimatorSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
     // Presentation diagnostics and the spatial filter do not affect the unfiltered temporal estimator.
     return
@@ -32,6 +36,10 @@ namespace __hidden_reflection_history{
         && a.environmentBottom.y == b.environmentBottom.y && a.environmentBottom.z == b.environmentBottom.z
     ;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

@@ -5,6 +5,10 @@
 #include "common.slangi"
 #include "screen_trace.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if NWB_REFLECTION_CLASSIFY_GROUP_SIZE * NWB_REFLECTION_CLASSIFY_GROUP_SIZE != 64
 #error "Reflection candidate compaction requires a 64-lane workgroup"
 #endif

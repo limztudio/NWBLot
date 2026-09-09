@@ -148,6 +148,7 @@ public:
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)

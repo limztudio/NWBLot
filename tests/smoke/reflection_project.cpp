@@ -96,6 +96,7 @@ public:
         m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
         const f32 fixedDelta = RendererBaselineFixedDelta();
         m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
+        reportReflectionStatistics();
         return true;
     }
 
@@ -107,6 +108,16 @@ private:
         settings.environmentTop = Float3U(0.0f, 0.0f, 0.0f);
         settings.environmentBottom = Float3U(0.0f, 0.0f, 0.0f);
         settings.maxHardwareRaysPerFrame = 2u * 960u * 720u;
+        settings.diagnosticsEnabled = true;
+        SmokeEnvironmentString budgetText(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_RAY_BUDGET", budgetText)){
+            u64 parsed = 0u;
+            if(!ParseU64(AStringView(budgetText.data(), budgetText.size()), parsed) || parsed > Limit<u32>::s_Max){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: ray budget must be a nonnegative u32"));
+                return false;
+            }
+            settings.maxHardwareRaysPerFrame = static_cast<u32>(parsed);
+        }
         SmokeEnvironmentString routeText(m_context.objectArena);
         const bool hasRoute = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_MODE", routeText);
         const AStringView route = hasRoute ? AStringView(routeText.data(), routeText.size()) : AStringView("hardware");
@@ -142,7 +153,31 @@ private:
             , hardwareAvailable ? NWB_TEXT("available") : NWB_TEXT("unavailable")
         );
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
         return true;
+    }
+
+    void reportReflectionStatistics(){
+        NWB::Impl::ReflectionStatistics statistics;
+        if(!m_renderer.tryGetLatestReflectionStatistics(statistics))
+            return;
+        if(statistics.sequence == m_statisticsSequence && statistics.generation == m_statisticsGeneration)
+            return;
+        m_statisticsSequence = statistics.sequence;
+        m_statisticsGeneration = statistics.generation;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeStatistics: sequence={} generation={} frame={} mode={} width={} height={}")
+            NWB_TEXT(" requested_budget={} effective_budget={} queue_capacity={} hardware_requested={} hardware_available={} hardware_ready={}")
+            NWB_TEXT(" token_queue={} token_value={} physical_queue={} device_generation={}")
+            NWB_TEXT(" candidates={} hardware_rays={} hardware_hits={} opaque_pixels={} glass_pixels={} fallback_pixels={}")
+            NWB_TEXT(" screen_attempts={} screen_hits={}")
+            , statistics.sequence, statistics.generation, statistics.frameIndex, static_cast<u32>(statistics.traceMode)
+            , statistics.width, statistics.height, statistics.requestedHardwareBudget, statistics.effectiveHardwareBudget
+            , statistics.queueCapacity, statistics.hardwareRequested ? 1u : 0u, statistics.hardwareAvailable ? 1u : 0u
+            , statistics.hardwareReady ? 1u : 0u, static_cast<u32>(statistics.acceptedToken.queue), statistics.acceptedToken.value
+            , statistics.acceptedToken.physicalQueueIndex, statistics.acceptedToken.deviceGeneration
+            , statistics.candidates, statistics.hardwareRays, statistics.hardwareHits, statistics.opaquePixels, statistics.glassPixels
+            , statistics.fallbackPixels, statistics.screenAttempts, statistics.screenHits
+        );
     }
 
     bool configureFramebufferCapture(){
@@ -272,6 +307,8 @@ private:
     UniquePtr<FramebufferCapture> m_framebufferCapture;
     FpsProbe m_fpsProbe{ NWB_TEXT("ReflectionSmokeProject") };
     GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("ReflectionSmokeProject") };
+    u64 m_statisticsSequence = 0u;
+    u64 m_statisticsGeneration = 0u;
 };
 
 

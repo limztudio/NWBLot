@@ -2166,6 +2166,10 @@ def launch_and_capture_application(args):
         if logserver_process is not None:
             terminate_process(logserver_process, "logserver")
 
+    log_output = getattr(args, "log_output", None)
+    if log_output:
+        log_output.parent.mkdir(parents=True, exist_ok=True)
+        log_output.write_bytes(log_text.encode("utf-8"))
     if wait_failure:
         raise wait_failure
     if testbed_exit_code != 0:
@@ -2215,6 +2219,8 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", help="Path to nwb_logserver/logserver. Defaults to a sibling of --executable.")
     parser.add_argument("--no-logserver", action="store_true", help="Do not start a logserver; launch with standalone log output.")
     parser.add_argument("--log-port", type=int, default=0, help="Logserver port. Defaults to an available localhost port.")
+    parser.add_argument("--log-output", type=Path,
+        help="For application capture, save the exact collected per-launch log text before validation.")
     parser.add_argument("--expect-log-message", action="append", default=[], help="Required substring in the logserver output.")
     parser.add_argument(
         "--reject-log-message",
@@ -2265,6 +2271,8 @@ def parse_args(argv):
 
     if args.application_capture and args.window_handle is not None:
         parser.error("--application-capture cannot be combined with --window-handle")
+    if args.log_output and not args.application_capture:
+        parser.error("--log-output requires --application-capture")
     if args.window_handle is None and not args.executable:
         parser.error("--executable is required unless --window-handle is provided")
     require_positive_arg(parser, "--timeout", args.timeout)

@@ -13,6 +13,8 @@
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/vulkan/backend.h>
 
+#include <global/basic_string.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -48,9 +50,11 @@ RendererReflectionSystem::RendererReflectionSystem(
     : m_arena(arena)
     , m_graphics(graphics)
     , m_shaders(shaders)
+    , m_statistics(arena, graphics)
 {}
 
 void RendererReflectionSystem::invalidateResources(){
+    m_statistics.invalidateResources();
     releaseTargets();
     m_resources.classifyPipeline = nullptr;
     m_resources.buildArgsPipeline = nullptr;
@@ -64,12 +68,25 @@ void RendererReflectionSystem::invalidateResources(){
     m_depthBindingLayout = nullptr;
 }
 
-bool RendererReflectionSystem::prepareResources(const u32 width, const u32 height, const bool prepareHardware){
+bool RendererReflectionSystem::prepareResources(
+    const u32 width,
+    const u32 height,
+    const bool prepareHardware,
+    const u32 maxHardwareRays){
     using namespace __hidden_reflection_resources;
     const u64 pixelCount = static_cast<u64>(width) * height;
-    // Raw shader buffer addresses are u32 byte offsets, even when the host allocation size is wider.
-    if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / (2u * sizeof(u32)))
+    // Packed pixels cover both surface families; queue addresses additionally require u32 byte offsets.
+    if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / 2u)
         return false;
+    const u64 boundedCapacity = Max(static_cast<u64>(1u), Min(pixelCount * 2u, static_cast<u64>(maxHardwareRays)));
+    if(boundedCapacity > static_cast<u64>(s_MaxU32) / sizeof(u32))
+        return false;
+    const u32 capacity = static_cast<u32>(boundedCapacity);
+    if(
+        m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
+        && (!prepareHardware || m_resources.hardwarePipeline)
+    )
+        return prepareQueue(capacity) && m_statistics.prepareResources();
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !preparePipelines(prepareHardware))
@@ -88,7 +105,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     ))
         return false;
     if(m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height)
-        return true;
+        return prepareQueue(capacity) && m_statistics.prepareResources();
     releaseTargets();
 
     const auto createOutput = [&](const Name name){
@@ -121,7 +138,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     };
     m_resources.opaqueRadiance = createOutput(Name("engine/reflection/opaque_radiance"));
     m_resources.glassRadiance = createOutput(Name("engine/reflection/glass_radiance"));
-    m_resources.queue = createBuffer(Name("engine/reflection/ray_queue"), pixelCount * 2u * sizeof(u32), false, false);
+    m_resources.queue = createBuffer(Name("engine/reflection/ray_queue"), static_cast<u64>(capacity) * sizeof(u32), false, false);
     m_resources.counters = createBuffer(Name("engine/reflection/counters"), NWB_REFLECTION_COUNTER_SIZE, false, false);
     m_resources.indirectArgs = createBuffer(Name("engine/reflection/indirect_args"), 3u * sizeof(u32), false, true);
     m_resources.frameParameters = createBuffer(
@@ -132,6 +149,8 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     u32 mipHeight = height;
     do{
         ReflectionDepthPyramidMip& mip = depthPyramid.mips[depthPyramid.mipCount++];
+        const auto taskIdentity = StringFormat(m_arena, "render.reflection.depth_reduce_{}", depthPyramid.mipCount - 1u);
+        mip.taskIdentity = ToName(taskIdentity);
         mip.width = mipWidth;
         mip.height = mipHeight;
         if(mipWidth == 1u && mipHeight == 1u)
@@ -240,7 +259,7 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     }
     m_resources.parameters.width = width;
     m_resources.parameters.height = height;
-    m_resources.parameters.queueCapacity = static_cast<u32>(pixelCount * 2u);
+    m_resources.parameters.queueCapacity = capacity;
     m_resources.parameters.opaqueOutputSlot = m_descriptors[OpaqueStorage].slot();
     m_resources.parameters.glassOutputSlot = m_descriptors[GlassStorage].slot();
     m_resources.parameters.opaqueRadianceSlot = m_descriptors[OpaqueSampled].slot();
@@ -251,7 +270,15 @@ bool RendererReflectionSystem::prepareResources(const u32 width, const u32 heigh
     m_resources.parameters.depthPyramidSlot = depthPyramid.sampledSlot;
     m_resources.parameters.depthMipCount = depthPyramid.mipCount;
     m_resources.frameParametersSlot = m_descriptors[Parameters].slot();
-    return true;
+    return m_statistics.prepareResources();
+}
+
+void RendererReflectionSystem::pollStatistics(){
+    m_statistics.pollCompleted();
+}
+
+bool RendererReflectionSystem::tryGetLatestStatistics(ReflectionStatistics& outStatistics)const{
+    return m_statistics.tryGetLatestStatistics(outStatistics);
 }
 
 ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
@@ -294,9 +321,23 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.screenThickness = settings.screenThickness;
     parameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
     parameters.screenEdgeFade = settings.screenEdgeFade;
+    parameters.diagnosticsEnabled = settings.diagnosticsEnabled ? 1u : 0u;
     snapshot.depthPyramid.sourceDepthSlot = targets.bindless.gbufferDepth.slot();
     if(parameters.hardwareEnabled != 0u)
         snapshot.scene = scene;
+    if(settings.diagnosticsEnabled){
+        ReflectionStatistics metadata;
+        metadata.frameIndex = frameIndex;
+        metadata.width = parameters.width;
+        metadata.height = parameters.height;
+        metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
+        metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
+        metadata.queueCapacity = parameters.queueCapacity;
+        metadata.traceMode = settings.traceMode;
+        metadata.hardwareRequested = hardwareRequested;
+        metadata.hardwareAvailable = scene.valid() && snapshot.hardwarePipeline;
+        snapshot.statistics = m_statistics.snapshot(metadata);
+    }
     return snapshot;
 }
 
@@ -324,12 +365,48 @@ void RendererReflectionSystem::releaseTargets(){
     m_resources.parameters = {};
     m_resources.frameParametersSlot = 0u;
     m_resources.scene = {};
+    m_resources.statistics = {};
     m_resources.depthPyramid.texture = nullptr;
     m_resources.depthPyramid.mipCount = 0u;
     m_resources.depthPyramid.sampledSlot = 0u;
     m_resources.depthPyramid.sourceDepthSlot = 0u;
     for(ReflectionDepthPyramidMip& mip : m_resources.depthPyramid.mips)
         mip = {};
+}
+
+bool RendererReflectionSystem::prepareQueue(const u32 capacity){
+    using namespace __hidden_reflection_resources;
+    if(m_resources.queue && m_resources.parameters.queueCapacity == capacity)
+        return true;
+    Core::BufferDesc desc;
+    desc
+        .setByteSize(static_cast<u64>(capacity) * sizeof(u32))
+        .setCanHaveUAVs(true)
+        .setCanHaveRawViews(true)
+        .setDebugName(Name("engine/reflection/ray_queue"))
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
+        .enableAutomaticStateTracking(Core::ResourceStates::Common)
+    ;
+    Core::BufferHandle queue = m_graphics.createBuffer(desc);
+    if(!queue)
+        return false;
+    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+    if(!descriptor.valid())
+        return false;
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBuffer_UAV(0u, queue.get()))){
+        heap.free(descriptor);
+        return false;
+    }
+    // Publish the replacement only after allocation and descriptor writing succeeded. Accepted command lists and
+    // frozen graph snapshots retain the old buffer; descriptor retirement protects its old selector independently.
+    if(m_descriptors[Queue].valid())
+        heap.free(m_descriptors[Queue]);
+    m_descriptors[Queue] = descriptor;
+    m_resources.queue = Move(queue);
+    m_resources.parameters.queueCapacity = capacity;
+    m_resources.parameters.queueSlot = descriptor.slot();
+    return true;
 }
 
 bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){

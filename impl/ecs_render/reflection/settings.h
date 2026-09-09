@@ -37,6 +37,7 @@ namespace ReflectionDebugView{
 struct ReflectionSettings{
     ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Hybrid;
     ReflectionDebugView::Enum debugView = ReflectionDebugView::None;
+    bool diagnosticsEnabled = false;
     // Distance limits the reflected path in world units, not the camera-to-receiver distance.
     f32 maxRayDistance = 100.f;
     f32 distanceFadeStart = 80.f;

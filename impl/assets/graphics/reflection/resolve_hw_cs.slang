@@ -46,8 +46,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     NwbReflectionSurface surface;
     if(!nwbReflectionLoadSurface(pixel, glass, surface) || surface.bias >= g_NwbReflectionParameters.maxRayDistance)
         return;
-    uint previousCount;
-    g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_HARDWARE_RAYS, 1u, previousCount);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_RAYS, 1u);
     const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(
         g_NwbReflectionMaterialContext.sceneSlots.z,
         surface.position + surface.normal * surface.bias,
@@ -64,8 +63,8 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const float rangeWeight = 1.0 - smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance);
     const float3 radiance = lerp(nwbReflectionEnvironment(surface.direction), hitRadiance, rangeWeight);
     nwbReflectionStore(pixel, glass, radiance * surface.weight, 3.0);
-    g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u, previousCount);
-    g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu, previousCount);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);
 }
 
 

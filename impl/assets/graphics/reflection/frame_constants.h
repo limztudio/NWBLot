@@ -53,7 +53,7 @@
     FIELD(depthPyramidSlot, 0u) \
     FIELD(depthMipCount, 0u) \
     FIELD(screenMaxSteps, 96u) \
-    FIELD(_screenPad, 0u)
+    FIELD(diagnosticsEnabled, 0u)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
     FIELD(maxRayDistance, 100.f) \

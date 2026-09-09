@@ -674,6 +674,8 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             directory = Path(temp_dir)
             args = self.make_args(directory)
+            args.log_output = directory / "evidence" / "capture.log"
+            captured_log = window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE + "\ncompleted sample\r\nUTF-8: \u03bb\n"
             logserver_process = object()
             testbed_process = object()
             capture = SimpleNamespace(width=3, height=2)
@@ -702,11 +704,12 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
 
             def shutdown_and_collect(*_args):
                 events.append("logserver shutdown and log collect")
-                return window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE
+                return captured_log
 
             def validate_logs(log_text, _args):
                 events.append("log validation")
-                self.assertEqual(log_text, window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE)
+                self.assertEqual(log_text, captured_log)
+                self.assertEqual(args.log_output.read_bytes(), captured_log.encode("utf-8"))
 
             def read_bmp(path):
                 events.append("BMP parse")
@@ -779,6 +782,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
     def test_application_timeout_terminates_then_collects_logs_before_failing(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             args = self.make_args(Path(temp_dir))
+            args.log_output = Path(temp_dir) / "timeout.log"
             events = []
 
             def terminate(*_args):
@@ -809,6 +813,7 @@ class ApplicationCaptureLifecycleTests(unittest.TestCase):
                  ):
                 with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "timed out waiting for self-exit"):
                     window_capture_smoke.launch_and_capture_application(args)
+            self.assertEqual(args.log_output.read_bytes(), b"ordinary startup")
 
         self.assertEqual(events, ["application terminated", "logs collected"])
 

@@ -144,6 +144,10 @@ bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& sett
     return true;
 }
 
+bool RendererFramePipeline::tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const{
+    return m_reflectionSystem.tryGetLatestStatistics(statistics);
+}
+
 bool RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings){
     return m_deferredSystem.setPresentationSettings(settings);
 }

@@ -49,7 +49,8 @@ TEST(EcsGraphics, RendererModuleKeepsFramePipelineBehindSingleAdapterOwner){
     EXPECT_TRUE(ContainsText(module, "m_pipeline->setRefractionHardwareTracingEnabled(enabled);"));
     EXPECT_TRUE(ContainsText(module, "return m_pipeline->setReflectionSettings(settings);"));
     EXPECT_TRUE(ContainsText(module, "return m_pipeline->setPresentationSettings(settings);"));
-    EXPECT_EQ(CountText(module, "m_pipeline->"), 14u);
+    EXPECT_TRUE(ContainsText(module, "return m_pipeline->tryGetLatestReflectionStatistics(statistics);"));
+    EXPECT_EQ(CountText(module, "m_pipeline->"), 15u);
     EXPECT_FALSE(ContainsText(module, "m_deferredLightingTaskGraph"));
     EXPECT_FALSE(ContainsText(module, "Core::GpuTaskId"));
 }

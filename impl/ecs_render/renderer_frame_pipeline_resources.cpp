@@ -97,7 +97,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
     }
 
-    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery)))
+    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery), m_reflectionSettings.maxHardwareRaysPerFrame))
         return false;
 
     if(!m_avboitSystem.createAvboitPipelines())
@@ -409,6 +409,15 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(!m_frameTargets.valid())
         return true;
     DeferredFrameTargets& deferredTargets = m_frameTargets;
+
+    m_reflectionSystem.pollStatistics();
+    if(!m_reflectionSystem.prepareResources(
+        deferredTargets.width,
+        deferredTargets.height,
+        m_graphics.queryFeatureSupport(Core::Feature::RayQuery),
+        m_reflectionSettings.maxHardwareRaysPerFrame
+    ))
+        return false;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
     if(m_preparedHasTransparentRenderers)

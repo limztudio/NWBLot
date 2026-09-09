@@ -13,6 +13,9 @@ nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.h"
+    "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics.h"
+    "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics_readback.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics_readback.h"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/composite_inputs.h"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/reflection_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/reflection_system.h"

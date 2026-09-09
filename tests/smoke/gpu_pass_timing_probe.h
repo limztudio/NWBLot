@@ -25,22 +25,28 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Live per-pass GPU-timing readout, the GPU-side analog of FpsProbe. The renderer already brackets every pass with a
-// Core::GpuTimingMeasure scope, so when perf capture is enabled (ProjectRuntimeContext::setPerfCapture) the per-pass
-// GPU timestamps land in the Perf::Session's gpu TimingRecorder. This probe is handed that recorder's TimingView each
-// frame; it folds each published per-frame per-scope total over a fixed interval and then logs one line per pass with
-// the interval average / min / max in milliseconds (NWB_LOGGER_ESSENTIAL_INFO, mirroring FpsProbe's cadence + style).
-//
-// Notes:
-//  - gpu timing is async: GpuTimingRecorder::collect publishes the PREVIOUS frame's queries at the top of render(), so
-//    the view a project reads from onUpdate reflects work a frame or more old. That is expected for timestamp queries.
-//  - a TimingStats published window is one frame; .seconds is the SUM of that scope's samples that frame (so a pass
-//    opened multiple times per frame, e.g. per-draw, reports its total). We average that per-frame total over the
-//    interval, and de-dupe by publishFrameIndex so a window is folded at most once even if onUpdate runs without a new
-//    gpu publish (e.g. a skipped/occluded frame).
-//  - scope names come back as Names; Name::c_str() is the readable source text in a debug build but a hash off debug,
-//    so the per-pass labels are readable where GPU perf is normally measured (dbg) and hashed in opt/fin.
+// Published GPU timing is asynchronous: a window can contain samples from several source frames or only part of
+// one frame. Legacy avg/min/max fields describe totals per published window. The file sink also exports total_ms,
+// gpu_samples and sample_avg_ms so benchmarks can normalize by actual dispatches instead of publication cadence.
+// A multi-dispatch pass must account for its known dispatches per frame; window counts are not frame counts.
 class GpuPassTimingProbe final{
+private:
+    static constexpr f64 s_WarmupSeconds = 0.25;
+    static constexpr f64 s_ReportIntervalSeconds = 0.5;
+    static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
+    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
+    static constexpr int s_TimingFilePrecision = 4;
+    static constexpr usize s_MaxScopes = 64u;
+
+    struct ScopeAccum{
+        f64 sumSeconds = 0.0;
+        f64 minSeconds = 0.0;
+        f64 maxSeconds = 0.0;
+        u32 frames = 0u;
+        u64 samples = 0u;
+    };
+
+
 public:
     explicit GpuPassTimingProbe(const tchar* label)
         : m_label(label)
@@ -72,6 +78,15 @@ public:
 
 
 private:
+    static void OpenTimingFile(OutputFileStream& timingFile){
+        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
+        SmokeEnvironmentString timingPath(arena);
+        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
+            return;
+
+        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
+    }
+
     void accumulate(const Core::Perf::TimingView& gpuTiming){
         const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
         for(usize i = 0u; i < scopeCount; ++i){
@@ -98,6 +113,7 @@ private:
                 accum.maxSeconds = Max(accum.maxSeconds, stats.seconds);
             }
             accum.sumSeconds += stats.seconds;
+            accum.samples += stats.sampleCount;
             ++accum.frames;
         }
     }
@@ -130,7 +146,7 @@ private:
             const Name scopeName = gpuTiming.scopeNameAt(i);
             const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * s_MillisecondsPerSecond;
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("  {}: gpu_ms avg={} min={} max={} samples={}")
+                NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
                 , StringConvert(scopeName.c_str())
                 , averageMs
                 , accum.minSeconds * s_MillisecondsPerSecond
@@ -144,19 +160,13 @@ private:
                     << " min=" << accum.minSeconds * s_MillisecondsPerSecond
                     << " max=" << accum.maxSeconds * s_MillisecondsPerSecond
                     << " samples=" << static_cast<unsigned>(accum.frames)
+                    << " total_ms=" << accum.sumSeconds * s_MillisecondsPerSecond
+                    << " gpu_samples=" << accum.samples
+                    << " sample_avg_ms=" << accum.sumSeconds * s_MillisecondsPerSecond / static_cast<f64>(accum.samples)
                     << '\n'
                 ;
             }
         }
-    }
-
-    static void OpenTimingFile(OutputFileStream& timingFile){
-        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-        SmokeEnvironmentString timingPath(arena);
-        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
-            return;
-
-        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
     }
 
     void resetInterval(){
@@ -168,20 +178,6 @@ private:
 
 
 private:
-    static constexpr f64 s_WarmupSeconds = 0.25;
-    static constexpr f64 s_ReportIntervalSeconds = 0.5;
-    static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
-    static constexpr f64 s_MillisecondsPerSecond = 1000.0;
-    static constexpr int s_TimingFilePrecision = 4;
-    static constexpr usize s_MaxScopes = 64u;
-
-    struct ScopeAccum{
-        f64 sumSeconds = 0.0;
-        f64 minSeconds = 0.0;
-        f64 maxSeconds = 0.0;
-        u32 frames = 0u;
-    };
-
     const tchar* m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;

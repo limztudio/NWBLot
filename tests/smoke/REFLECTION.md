@@ -1,14 +1,21 @@
-Stage-three smooth reflection is implemented and validated for the cases below.
+Stage-four smooth reflection and completed-frame diagnostics are implemented and
+validated for the cases below.
 It combines hierarchical screen-space tracing with bounded hardware continuation
 and composites reflection on opaque surfaces and primary glass with AVBOIT.
-All 20 smoke captures passed on the Qualcomm Adreno X2-90 with required hardware
+All 22 smoke captures passed on the Qualcomm Adreno X2-90 with required hardware
 ray queries and `--gpudbg`; every capture completed normally with clean runtime
-and GPU validation logs. The build cooked 170 assets, and all 287 ECS graphics
-tests and 22 reflection analysis tests passed. The GPU-debug refraction comparison
-and caustic/refraction capture also passed again after the stage-three changes.
+and GPU validation logs. The smoke asset set contains 170 cooked assets, and all
+301 ECS graphics tests, 36 reflection analysis tests, and 51 capture-harness tests
+passed. The GPU-debug refraction comparison and caustic/refraction capture also
+passed again after the stage-four changes.
 The refraction fixture explicitly disables reflection to isolate its transmission
 comparisons. The 33-capture exact-duplicate gallery passed at the stage-two gate;
 that earlier run is separate evidence.
+
+The stage-four diagnostics extension records completed-frame statistics for every
+capture and adds hybrid floor captures with hardware budgets of zero and 64 rays.
+The accepted-token measurements establish bounded hardware work and lower
+hardware ray counts in the floor fixture. They do not establish a GPU speedup.
 
 The public `ReflectionSettings` contract is declared in
 `impl/ecs_render/reflection/settings.h` and applied through
@@ -98,18 +105,61 @@ The cases are:
   centers at `y=-2`, near screen `y=596`, with the same `x=362/598` centers.
   Camera and reflected rays approach the marker fronts, providing a separate
   fixture for confident SSR. Image agreement establishes visible behavior;
-  completed GPU counters are still required to establish hardware ray savings.
+  the completed GPU counters below separately establish hardware ray savings.
 
 `reflection_smoke.py` keeps the seven original captures and adds hybrid
 `offscreen`. These eight form `--suite baseline`. The twelve captures in
 `--suite screen` are all four routes for `onscreen` and `floor`, screen
-`onscreen_moved`, and disabled/screen/hybrid `boundary`. The default `--suite all`
-runs all 20. It requires the matching accepted-route diagnostic, normal
+`onscreen_moved`, and disabled/screen/hybrid `boundary`. The two additional
+`--suite budget` captures use the same floor geometry in hybrid mode with zero
+and 64 hardware rays per frame. The default `--suite all` runs all 22.
+It requires the matching accepted-route diagnostic, normal
 shutdown, nonempty actual framebuffer data, and strict runtime/validation logs.
 Unsupported required hardware is a skip unless `--require-hardware` was selected.
 The application must self-exit within each capture timeout. The outer runner
 allows an additional 90 seconds for bounded child startup and process/logserver
 cleanup, rather than interrupting that cleanup at the capture deadline.
+
+The fixture enables `ReflectionSettings::diagnosticsEnabled` and polls
+`RendererSystem::tryGetLatestReflectionStatistics` without waiting. It logs each
+new completed sequence once as `ReflectionSmokeStatistics: key=value ...`.
+Statistics preserve their source frame, requested mode, dimensions, requested and
+effective budgets, queue capacity, resource generation, and accepted submission
+token including physical queue/device generation. The counters describe eligible
+opaque/glass pixels, hardware candidates/rays/hits, screen attempts/accepted hits,
+and fallback pixels. A screen hit is counted only when it meets the configured
+confidence threshold; provisional wall-mirror color is not an accepted hit.
+
+The runner saves the exact collected per-launch log delta beside every BMP using
+the capture harness's `--log-output` option. Logs are written before validation
+so timeout and validation failures retain their collected evidence. Each completed
+sample must match its capture's mode, 960x720 dimensions, budget and queue
+capacity, and have an accepted token/device identity. Static captures reject
+mixed generations, stale or out-of-order sequence/frame/token values. Hardware
+rays may never exceed either effective budget or candidate count, including on
+warm-up frames, and the outcomes must satisfy:
+
+```text
+opaquePixels + glassPixels = screenHits + hardwareHits + fallbackPixels
+```
+
+At least one completed sample must come from frame three or later. Stable screen
+captures must attempt screen tracing and issue no hardware rays. Offscreen
+hardware/hybrid captures need actual hardware hits; active opaque/glass captures
+need both receiver populations. The floor comparison requires accepted screen
+hits and fewer hardware rays throughout the stable hybrid sample range than in
+the matched hardware range. Eligible populations must agree within 1% (with a
+16-pixel minimum tolerance), preventing reduced visible coverage from passing as
+ray savings. This is a fixture-specific ray-count comparison, not a timing claim.
+
+Both budget captures must retain visible floor markers, have more candidates than
+their effective budget, and leave valid fallback outcomes. With ready hardware,
+actual rays must equal the minimum of candidates and effective budget: zero or
+64 for these cases. A zero budget keeps hardware capability and candidate
+classification truthful; it does not simulate an unsupported adapter. Queue
+storage is bounded by the configured budget, pixel population and dispatch limit,
+with a minimal valid allocation for zero budget. Capture filenames include their
+budget so they cannot overwrite the ordinary hybrid reference.
 
 The image assertions require each mirror marker to cover at least 25% of its
 analytically projected disk area: 659 pixels at 960x720. At least 95% of each
@@ -122,11 +172,15 @@ to 0.5% of the sampled exterior regions. Panel direct images must cover at least
 thresholds permit visible provisional SSR radiance. Their centroids must follow
 the separate geometric projections, with at most 3% of each marker color outside
 the expected direct/reflected regions. The boundary source and reflection masks
-must match their mode-specific visibility. Twenty-two independent synthetic analysis
+must match their mode-specific visibility. Thirty-six independent synthetic analysis
 tests reject flat tint, missing or stationary markers, sparse correctly located
 patches, missing glass reflection, expanded/lost foreground, exterior corruption,
 malformed frames, direct-image substitution, incorrect floor or boundary images,
-incorrect direct/reflected motion scales, and inherited fixture controls.
+incorrect direct/reflected motion scales, and inherited fixture controls. The
+statistics tests also reject malformed logs, wrong configurations, invalid tokens,
+stale generations/samples, missing warm-up completion, budget overruns, invalid
+outcome partitions, false accepted-screen evidence, and apparent ray savings
+caused by a smaller eligible population.
 
 The completed stage-two hardware captures contained 2,643-2,687 pixels per mirror
 marker, with no marker pixels outside the predicted regions. The measured
@@ -162,12 +216,27 @@ where the camera source image cannot supply the occluded backdrop. Hybrid fills
 those regions through hardware continuation. Matching marker areas does not
 establish complete image equivalence or remove this screen-only visibility limit.
 
+The completed stage-four statistics used exactly 243,336 eligible floor samples
+in both routes. Hardware mode issued 243,336 rays; hybrid accepted 179,684 screen
+hits and issued 63,652 hardware rays. Every stable sample had those counts,
+establishing approximately 73.84% fewer actual hardware rays in this fixture.
+This is a ray-count reduction at the stated settings and scene, not a measured
+frame-time improvement.
+
+Each limited-budget capture supplied 13 completed samples from frame three or
+later. Both counted 63,652 hardware candidates and 179,684 accepted screen hits.
+The zero-budget case issued zero hardware rays with a one-entry queue allocation.
+The 64-ray case allocated 64 queue entries and issued exactly 64 rays. Those
+64 rays missed in this capture, so both controls retained 63,652 fallback pixels;
+zero hardware hits is valid when the budget selects rays that miss. Their visible
+floor markers and outcome partitions passed the same checks.
+
 Build and run on the Windows ARM64 debug preset:
 
 ```powershell
 cmake --build --preset windows-clang-arm64-dbg --target nwb_reflection_smoke
 ctest --test-dir __cmake/build/windows-clang-arm64 -C dbg --output-on-failure -R '^nwb_reflection_capture_analysis_unit$'
-python tests/smoke/reflection_smoke.py --executable __exec/windows/arm64/full/dbg/reflection_smoke.exe --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg --output-directory __cmake/build/windows-clang-arm64/Testing/smoke/dbg/reflection_hybrid_gpudbg --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe --require-hardware --application-arg=--gpudbg
+python tests/smoke/reflection_smoke.py --executable __exec/windows/arm64/full/dbg/reflection_smoke.exe --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg --output-directory __cmake/build/windows-clang-arm64/Testing/smoke/dbg/reflection_statistics_gpudbg --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe --require-hardware --application-arg=--gpudbg
 ```
 
 The portable CTest entry is `nwb_reflection_capture_smoke`. The launcher scene is
@@ -175,15 +244,17 @@ The portable CTest entry is `nwb_reflection_capture_smoke`. The launcher scene i
 offscreen|moved|opaque_glass|onscreen|onscreen_moved|boundary|floor` and
 `--reflection-mode disabled|screen|hardware|hybrid`. Optional
 `--reflection-debug none|source|confidence` forwards the typed debug view for
-manual inspection. The comparison runner clears inherited debug and timing
+manual inspection. `--reflection-ray-budget` sets a nonnegative u32 hardware ray
+budget through the typed settings API, preserving an explicit zero. The comparison
+runner clears inherited debug, budget and timing
 controls so ordinary captures always measure rendered radiance. All controls
 remain test-local and forward to the typed renderer API.
 
-Artifacts include the original BMPs, PNG conversions with identical RGB pixels,
+Artifacts include the original BMPs, exact per-capture logs, PNG conversions with identical RGB pixels,
 `reflection_manifest.json`, and a self-contained offline `reflection.html`.
 Images and an unvalidated report are saved before the final image assertions so
 failed visual comparisons remain inspectable. A passing report records the
-resulting metrics. The report uses actual rendered pixels; it contains no
+resulting image metrics and completed statistics. The report uses actual rendered pixels; it contains no
 illustrated or generated replacement images.
 
 Remaining work and limits are explicit:
@@ -201,13 +272,13 @@ Remaining work and limits are explicit:
   hits, front-facing floor hits, and offscreen continuation. They do not prove
   screen visibility for hidden geometry or reflected secondary transparent
   transport, and they do not test temporal disocclusion or history rejection.
-- The strict refraction and caustic tests passed again at the stage-three gate;
+- The strict refraction and caustic tests passed again at the stage-four gate;
   exact-duplicate tests passed at stage two. Combined reflection/duplicate and more complex
   reflected secondary transport cases remain part of the subsequent matrix.
-- No reflection performance improvement has been measured. The GPU counter buffer
-  counts candidates, actual hardware rays/hits, eligible opaque/glass samples,
-  screen attempts/hits, and fallback samples; completion-associated CPU publication and benchmark assertions
-  remain future work.
+- No reflection speed improvement has been measured. The completion-associated
+  statistics provide frame/route-specific ray and outcome evidence, with optional
+  diagnostics enabled in this fixture. End-to-end timing benchmarks and the cost
+  of diagnostics must be evaluated separately before making a performance claim.
 
 For subsequent performance runs, enable `NWB_REFLECTION_SMOKE_TIMING=1` and use
 `NWB_GPU_TIMING_FILE`. The fixture forwards real frame delta to `FpsProbe` and
@@ -219,6 +290,14 @@ scopes will accompany filtering.
 The probe has a 64-scope cap, so the benchmark must require all expected scopes
 rather than silently accepting missing timings. Decode opt/fin scope hashes with
 the matching `.namesym` file using `tests/ab/gpu_timing_parse.py`.
+
+Timing-file records retain the legacy `avg/min/max/samples` fields, whose sample
+count is the number of folded publication windows. They also expose `total_ms`
+(summed GPU duration), `gpu_samples` (actual timed samples), and `sample_avg_ms`
+(`total_ms / gpu_samples`). These raw fields allow normalization by known timed
+work instead of treating asynchronous publication cadence as a frame rate. A
+sample average for a multi-dispatch pass is still not the full pass cost per
+frame; the benchmark must account for that pass's dispatch structure.
 
 `render.reflection_depth_pyramid` records each mip dispatch under the same scope.
 The accumulator sums those dispatch GPU durations per published collection

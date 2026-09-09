@@ -8,6 +8,7 @@
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/reflection/statistics.h>
 #include <impl/ecs_render/deferred/presentation_settings.h>
 
 #include <core/alloc/general.h>
@@ -79,11 +80,12 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder)override;
 
-    void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
+    void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;

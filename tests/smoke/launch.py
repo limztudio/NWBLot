@@ -157,6 +157,8 @@ def build_smoke_environment(args) -> Dict[str, str]:
         env["NWB_REFLECTION_SMOKE_MODE"] = args.reflection_mode
     if getattr(args, "reflection_debug", None):
         env["NWB_REFLECTION_SMOKE_DEBUG"] = args.reflection_debug
+    if getattr(args, "reflection_ray_budget", None) is not None:
+        env["NWB_REFLECTION_SMOKE_RAY_BUDGET"] = str(args.reflection_ray_budget)
     if args.spin_angle is not None:
         env["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"] = args.spin_angle
     if args.spin_speed is not None:
@@ -223,6 +225,16 @@ def profiles_command(_args) -> int:
     return 0
 
 
+def reflection_ray_budget(value: str) -> int:
+    try:
+        budget = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("reflection ray budget must be a nonnegative u32") from error
+    if budget < 0 or budget > 0xffffffff:
+        raise argparse.ArgumentTypeError("reflection ray budget must be a nonnegative u32")
+    return budget
+
+
 def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("scene_name", nargs="?", help="Smoke scene name.")
     parser.add_argument("--scene", choices=sorted(SMOKE_SCENES), default="transparent-multi")
@@ -235,6 +247,8 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
         help="Select the typed reflection trace mode; the fixture defaults to hardware.")
     parser.add_argument("--reflection-debug", choices=("none", "source", "confidence"),
         help="Select a reflection debug view for interactive inspection; capture assertions use normal radiance.")
+    parser.add_argument("--reflection-ray-budget", type=reflection_ray_budget,
+        help="Set the typed maximum hardware reflection rays per frame, including zero.")
     parser.add_argument("--refraction-case", choices=(
         "single", "separate", "stacked", "intersecting", "nested", "coincident",
         "coincident_tinted", "torus", "same_mesh", "prism",

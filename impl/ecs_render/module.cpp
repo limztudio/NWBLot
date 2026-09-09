@@ -88,6 +88,10 @@ bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings){
     return m_pipeline->setReflectionSettings(settings);
 }
 
+bool RendererSystem::tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const{
+    return m_pipeline->tryGetLatestReflectionStatistics(statistics);
+}
+
 bool RendererSystem::setPresentationSettings(const PresentationSettings& settings){
     return m_pipeline->setPresentationSettings(settings);
 }

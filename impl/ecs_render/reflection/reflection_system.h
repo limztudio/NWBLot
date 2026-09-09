@@ -6,6 +6,7 @@
 
 
 #include "settings.h"
+#include "statistics_readback.h"
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/assets/graphics/reflection/depth_constants.h>
@@ -57,6 +58,7 @@ struct ReflectionFrameParameters{
 static_assert(sizeof(ReflectionFrameParameters) == 160u);
 
 struct ReflectionDepthPyramidMip{
+    Name taskIdentity = NAME_NONE;
     u32 sampledSlot = 0u;
     u32 storageSlot = 0u;
     u32 width = 0u;
@@ -94,6 +96,7 @@ struct ReflectionFrameSnapshot{
     Core::ComputePipelineHandle hardwarePipeline;
     ReflectionDepthPyramidSnapshot depthPyramid;
     RayTracingSceneGraphResources scene;
+    ReflectionStatisticsReadbackSnapshot statistics;
     u32 frameParametersSlot = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -111,7 +114,9 @@ public:
 
     // The caller joins submitted work and discards pending graph snapshots before invalidation/device teardown.
     void invalidateResources();
-    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware);
+    [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, u32 maxHardwareRays);
+    void pollStatistics();
+    [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
         const DeferredFrameTargets& targets,
         const ECSRenderDetail::MeshViewBufferSnapshot& view,
@@ -122,12 +127,14 @@ public:
 
 private:
     void releaseTargets();
+    [[nodiscard]] bool prepareQueue(u32 capacity);
     [[nodiscard]] bool preparePipelines(bool prepareHardware);
 
 private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     RendererShaderSystem& m_shaders;
+    ReflectionStatisticsReadback m_statistics;
     ReflectionFrameSnapshot m_resources;
     Core::BindingLayoutHandle m_bindingLayout;
     Core::BindingLayoutHandle m_depthBindingLayout;

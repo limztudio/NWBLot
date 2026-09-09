@@ -8,6 +8,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -25,6 +26,13 @@ SCREEN_CAPTURES = (("onscreen", "disabled"), ("onscreen", "screen"), ("onscreen"
     ("boundary", "screen"), ("boundary", "hybrid"), ("floor", "disabled"), ("floor", "screen"),
     ("floor", "hardware"), ("floor", "hybrid"))
 CAPTURES = BASELINE_CAPTURES + SCREEN_CAPTURES
+DEFAULT_RAY_BUDGET = 2 * 960 * 720
+BUDGET_CAPTURES = (("floor", "hybrid", 0), ("floor", "hybrid", 64))
+STATISTICS_FIELDS = ("sequence", "generation", "frame", "mode", "width", "height", "requested_budget",
+    "effective_budget", "queue_capacity", "hardware_requested", "hardware_available", "hardware_ready",
+    "token_queue", "token_value", "physical_queue", "device_generation", "candidates", "hardware_rays",
+    "hardware_hits", "opaque_pixels", "glass_pixels", "fallback_pixels", "screen_attempts", "screen_hits")
+COUNTER_FIELDS = STATISTICS_FIELDS[-8:]
 OPAQUE_REGION = (0.28, 0.36, 0.43, 0.57)
 GLASS_REGION = (0.57, 0.36, 0.72, 0.57)
 FOREGROUND_REGION = (0.21, 0.59, 0.79, 0.65)
@@ -227,7 +235,121 @@ def compare_opaque_glass(reference, reflected):
     return metrics
 
 
-def capture_environment(case, mode):
+def parse_statistics(log_text):
+    samples = []
+    prefix = "ReflectionSmokeStatistics:"
+    for line in log_text.splitlines():
+        if prefix not in line:
+            continue
+        fields = line.split(prefix, 1)[1].split()
+        if len(fields) != len(STATISTICS_FIELDS):
+            raise SmokeFailure("completed reflection statistics have missing or duplicate fields")
+        sample = {}
+        for field in fields:
+            match = re.fullmatch(r"([a-z_]+)=([0-9]+)", field)
+            if not match or match[1] not in STATISTICS_FIELDS or match[1] in sample:
+                raise SmokeFailure("completed reflection statistics contain a malformed field")
+            sample[match[1]] = int(match[2])
+        samples.append(sample)
+    if not samples:
+        raise SmokeFailure("no completed reflection statistics were published")
+    return samples
+
+
+def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET):
+    stable = []
+    previous = None
+    for sample in samples:
+        if set(sample) != set(STATISTICS_FIELDS) or any(type(value) is not int or value < 0 for value in sample.values()):
+            raise SmokeFailure("completed reflection statistics are malformed")
+        wide_fields = ("sequence", "generation", "token_value")
+        if any(value > (0xffffffffffffffff if name in wide_fields else 0xffffffff) for name, value in sample.items()):
+            raise SmokeFailure("completed reflection statistics exceed their integer field widths")
+        if sample["mode"] != MODES.index(mode) or (sample["width"], sample["height"]) != (960, 720):
+            raise SmokeFailure("completed reflection statistics do not match the requested mode and dimensions")
+        capacity = sample["queue_capacity"]
+        if capacity <= 0 or capacity > 2 * 960 * 720 or sample["requested_budget"] != budget \
+            or sample["effective_budget"] != min(budget, capacity):
+            raise SmokeFailure("completed reflection statistics do not match the requested budget and capacity")
+        if not sample["sequence"] or not sample["generation"] or not sample["token_value"] \
+            or not 0 < sample["device_generation"] <= 0xffff or not 0 <= sample["physical_queue"] < 0xffff \
+            or sample["token_queue"] > 2:
+            raise SmokeFailure("reflection statistics lack an accepted token and device identity")
+        if any(sample[name] not in (0, 1) for name in ("hardware_requested", "hardware_available", "hardware_ready")) \
+            or sample["hardware_requested"] != int(mode in ("hardware", "hybrid")):
+            raise SmokeFailure("reflection statistics have inconsistent hardware route metadata")
+        if previous:
+            identity = ("generation", "device_generation", "physical_queue", "token_queue")
+            if any(sample[name] != previous[name] for name in identity):
+                raise SmokeFailure("static reflection capture mixed statistics generations or physical queues")
+            if sample["sequence"] <= previous["sequence"] or sample["frame"] <= previous["frame"] \
+                or sample["token_value"] <= previous["token_value"]:
+                raise SmokeFailure("completed reflection statistics are stale or out of order")
+        previous = sample
+        eligible = sample["opaque_pixels"] + sample["glass_pixels"]
+        if sample["opaque_pixels"] > 960 * 720 or sample["glass_pixels"] > 960 * 720 \
+            or sample["candidates"] > eligible or sample["screen_attempts"] > eligible \
+            or sample["screen_hits"] > sample["screen_attempts"]:
+            raise SmokeFailure("reflection counters exceed their eligible pixel population")
+        if sample["hardware_rays"] > min(sample["effective_budget"], sample["candidates"]) \
+            or sample["hardware_hits"] > sample["hardware_rays"]:
+            raise SmokeFailure("actual hardware rays or hits exceeded the completed frame budget")
+        if eligible != sample["screen_hits"] + sample["hardware_hits"] + sample["fallback_pixels"]:
+            raise SmokeFailure("reflection outcome counters do not partition eligible pixels")
+        if mode in ("disabled", "screen") and (sample["hardware_rays"] or sample["hardware_hits"] or sample["candidates"]):
+            raise SmokeFailure("a non-hardware reflection route issued hardware work")
+        if mode == "disabled" and any(sample[name] for name in COUNTER_FIELDS):
+            raise SmokeFailure("disabled reflection produced nonzero counters")
+        if mode == "hardware" and (sample["screen_attempts"] or sample["screen_hits"]):
+            raise SmokeFailure("hardware-only reflection attempted screen tracing")
+        if not sample["hardware_ready"] and (sample["hardware_rays"] or sample["hardware_hits"]):
+            raise SmokeFailure("reflection issued hardware rays without a ready hardware route")
+        if sample["frame"] < 3:
+            continue
+        if mode != "disabled" and not sample["opaque_pixels"]:
+            raise SmokeFailure("stable reflection statistics are missing the opaque fixture")
+        if mode in ("screen", "hybrid") and not sample["screen_attempts"]:
+            raise SmokeFailure("stable screen route did not attempt screen tracing")
+        if mode in ("hardware", "hybrid"):
+            if not sample["hardware_available"] or not sample["hardware_ready"]:
+                raise SmokeFailure("stable hardware capture has no ready hardware route")
+            if sample["hardware_rays"] != min(sample["candidates"], sample["effective_budget"]):
+                raise SmokeFailure("ready hardware route did not execute its bounded candidate queue")
+        if case == "opaque_glass" and mode != "disabled" and not sample["glass_pixels"]:
+            raise SmokeFailure("stable reflection statistics are missing primary glass")
+        if case == "offscreen" and mode in ("hardware", "hybrid") and not sample["hardware_hits"]:
+            raise SmokeFailure("offscreen reflection has no completed hardware hits")
+        if case == "floor" and mode in ("screen", "hybrid") and not sample["screen_hits"]:
+            raise SmokeFailure("floor reflection has no accepted screen hits")
+        if budget < DEFAULT_RAY_BUDGET and (sample["candidates"] <= sample["effective_budget"] or not sample["fallback_pixels"]):
+            raise SmokeFailure("limited-budget reflection did not exercise excess candidates and fallback")
+        stable.append(sample)
+    if not stable:
+        raise SmokeFailure("no completed reflection statistics reached stable frame 3")
+    return stable
+
+
+def compare_hybrid_statistics(hardware, hybrid):
+    populations = [sample["opaque_pixels"] + sample["glass_pixels"] for sample in hardware + hybrid]
+    if not populations or min(populations) <= 0 or max(populations) - min(populations) > max(16, min(populations) * 0.01):
+        raise SmokeFailure("floor hardware and hybrid statistics do not represent matched eligible populations")
+    hardware_rays = [sample["hardware_rays"] for sample in hardware]
+    hybrid_rays = [sample["hardware_rays"] for sample in hybrid]
+    if not hardware_rays or not hybrid_rays or min(sample["screen_hits"] for sample in hybrid) <= 0 \
+        or max(hybrid_rays) >= min(hardware_rays):
+        raise SmokeFailure("floor hybrid did not reduce completed hardware rays while accepting screen hits")
+    return {"hardware_ray_range": [min(hardware_rays), max(hardware_rays)],
+        "hybrid_hardware_ray_range": [min(hybrid_rays), max(hybrid_rays)],
+        "eligible_pixel_range": [min(populations), max(populations)],
+        "hybrid_accepted_screen_hit_range": [min(sample["screen_hits"] for sample in hybrid),
+            max(sample["screen_hits"] for sample in hybrid)]}
+
+
+def capture_stem(case, mode, budget=DEFAULT_RAY_BUDGET):
+    return f"{case}_{mode}" + (f"_budget_{budget}" if budget != DEFAULT_RAY_BUDGET else "")
+
+
+def capture_environment(case, mode, budget=DEFAULT_RAY_BUDGET):
     env = os.environ.copy()
     for name in tuple(env):
         if name.startswith("NWB_REFLECTION_SMOKE_") or name.startswith("NWB_REFRACTION_SMOKE_"):
@@ -236,24 +358,33 @@ def capture_environment(case, mode):
     env.pop("NWB_GPU_TIMING_FILE", None)
     env["NWB_REFLECTION_SMOKE_CASE"] = case
     env["NWB_REFLECTION_SMOKE_MODE"] = mode
+    env["NWB_REFLECTION_SMOKE_RAY_BUDGET"] = str(budget)
     env["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"] = "0.016666667"
     return env
 
 
-def capture(args, case, mode):
-    output = args.output_directory / f"{case}_{mode}.bmp"
+def capture(args, case, mode, budget=DEFAULT_RAY_BUDGET):
+    output = args.output_directory / (capture_stem(case, mode, budget) + ".bmp")
+    log_output = output.with_suffix(".log")
     command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
         "--executable", str(args.executable), "--working-directory", str(args.working_directory),
         "--output", str(output), "--application-capture", "--application-capture-frame-count", str(args.frames),
         "--timeout", str(args.timeout), "--expect-log-message", f"ReflectionSmokeProject: case {case} created",
         "--expect-log-message", f"ReflectionSmokeProject: reflection mode {mode}",
-        "--expect-log-message", "ReflectionSmokeProject: shutdown"]
+        "--expect-log-message", "ReflectionSmokeProject: shutdown",
+        "--expect-log-message", f"ReflectionSmokeProject: hardware ray budget {budget}",
+        "--expect-log-message", "ReflectionSmokeStatistics:", "--log-output", str(log_output)]
     if args.logserver_executable:
         command += ["--logserver-executable", str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
     if mode in ("hardware", "hybrid"):
-        command += ["--expect-log-message", "Reflection resolve: hardware"]
+        if budget == 0:
+            route = "screen-space" if mode == "hybrid" else "environment"
+            command += ["--expect-log-message", "Reflection resolve: " + route,
+                "--reject-log-message", "Reflection resolve: hardware"]
+        else:
+            command += ["--expect-log-message", "Reflection resolve: hardware"]
         command += ["--expect-log-message" if args.require_hardware else "--skip-log-message",
             "ReflectionSmokeProject: hardware available" if args.require_hardware else "ReflectionSmokeProject: hardware unavailable"]
     elif mode == "disabled":
@@ -265,9 +396,9 @@ def capture(args, case, mode):
     if case == "opaque_glass":
         command += ["--expect-log-message", "AVBOIT refraction resolve:"]
     command.extend("--application-arg=" + argument for argument in args.application_arg)
-    print(f"Capturing {case}/{mode} ({args.frames} presentation frames)...", flush=True)
+    print(f"Capturing {case}/{mode} budget={budget} ({args.frames} presentation frames)...", flush=True)
     # The child owns app/logserver cleanup: leave time for startup, graceful exit, kill fallback, and log drain.
-    result = subprocess.run(command, env=capture_environment(case, mode), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment(case, mode, budget), check=False, timeout=args.timeout + 90)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
@@ -276,25 +407,30 @@ def capture(args, case, mode):
     validate_frame(frame)
     if frame[:2] != (960, 720):
         raise SmokeFailure(f"expected actual 960x720 framebuffer, got {frame[0]}x{frame[1]}")
-    return frame
+    samples = parse_statistics(log_output.read_text(encoding="utf-8"))
+    validate_statistics(samples, case, mode, budget)
+    return frame, samples
 
 
-def write_report(args, captures, metrics=None):
+def write_report(args, captures, metrics=None, statistics=None):
     metadata = {"frames": args.frames, "frame_source": "actual application framebuffer readback", "size": [960, 720],
         "hardware_required": args.require_hardware, "application_args": args.application_arg,
         "settings": {"environment_top": [0, 0, 0], "environment_bottom": [0, 0, 0],
             "max_hardware_rays_per_frame": 1382400, "roughness": 0, "glass_ior": 3.8},
         "suite": args.suite,
-        "captures": [{"case": case, "mode": mode, "file": f"{case}_{mode}.bmp"} for case, mode in captures],
-        "metrics": metrics, "limitations": "Smooth single-bounce reflection with on-screen and offscreen geometric marker checks. Wall-mirror screen hits approach marker backs and have provisional confidence; the floor case approaches their fronts. Images alone do not prove hybrid ray savings. Hardware secondary-hit lighting is approximate; roughness reconstruction, temporal history, and performance are not validated here."}
+        "captures": [{"case": case, "mode": mode, "hardware_budget": budget,
+            "file": capture_stem(case, mode, budget) + ".bmp", "log": capture_stem(case, mode, budget) + ".log"}
+            for case, mode, budget in captures], "statistics": statistics,
+        "metrics": metrics, "limitations": "Smooth single-bounce reflection with on-screen and offscreen geometric marker checks. Wall-mirror screen hits approach marker backs and have provisional confidence; the floor case approaches their fronts. Completed per-frame counters separately check floor hybrid ray reduction and bounded budgets; they do not establish GPU speed. Hardware secondary-hit lighting is approximate; roughness reconstruction and temporal history are not validated here."}
     (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     cards = []
     for item in metadata["captures"]:
         bmp = args.output_directory / item["file"]
         png = png_rgb_bytes(read_bmp_24_rows(bmp))
         bmp.with_suffix(".png").write_bytes(png)
-        label = html.escape(item["case"] + " / " + item["mode"])
+        label = html.escape(item["case"] + " / " + item["mode"] + " / budget " + str(item["hardware_budget"]))
         cards.append(f'<article><h2>{label}</h2><a href="{html.escape(item["file"])}">Raw BMP</a>'
+            f' / <a href="{html.escape(item["log"])}">Completed-frame log</a>'
             f'<img alt="Actual {label} framebuffer" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
     document = '<!doctype html><html lang="en"><meta charset="utf-8"><title>Reflection smoke captures</title>'
     document += '<style>body{background:#141922;color:#e7edf5;font:16px system-ui;margin:28px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:20px}article{background:#202937;padding:16px}img{display:block;width:100%;margin-top:12px}a{color:#88c9ff}pre{white-space:pre-wrap}h2{font-size:19px}</style>'
@@ -310,8 +446,8 @@ def parse_args(argv):
     parser.add_argument("--working-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--suite", choices=("all", "baseline", "screen"), default="all",
-        help="Capture all 20 comparisons, the 8 baseline captures, or the 12 on-screen/boundary/floor captures.")
+    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget"), default="all",
+        help="Capture all 22 comparisons, 8 baseline captures, 12 screen captures, or 2 budget captures.")
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--require-hardware", action="store_true")
@@ -327,16 +463,23 @@ def main(argv):
     args = parse_args(argv)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     completed = []
+    statistics = {}
     try:
-        selected = BASELINE_CAPTURES if args.suite == "baseline" else SCREEN_CAPTURES if args.suite == "screen" else CAPTURES
-        for case, mode in selected:
-            frame = capture(args, case, mode)
-            if frame is None:
+        visual = BASELINE_CAPTURES if args.suite == "baseline" else SCREEN_CAPTURES if args.suite == "screen" else CAPTURES
+        selected = [(case, mode, DEFAULT_RAY_BUDGET) for case, mode in visual] if args.suite != "budget" else []
+        if args.suite in ("all", "budget"):
+            selected.extend(BUDGET_CAPTURES)
+        for case, mode, budget in selected:
+            result = capture(args, case, mode, budget)
+            if result is None:
                 print("SKIP: required reflection hardware or framebuffer readback is unavailable", file=sys.stderr)
                 return SKIP_EXIT_CODE
-            completed.append((case, mode))
+            frame, samples = result
+            del result
+            completed.append((case, mode, budget))
+            statistics[capture_stem(case, mode, budget)] = samples
             del frame
-        write_report(args, completed)
+        write_report(args, completed, statistics=statistics)
         metrics = {}
         if args.suite in ("all", "baseline"):
             for case, mode in (("offscreen", "disabled"), ("offscreen", "screen"), ("moved", "disabled")):
@@ -354,7 +497,14 @@ def main(argv):
             metrics["panel_motion"] = compare_panel_motion(
                 read_bmp_24_rows(args.output_directory / "onscreen_screen.bmp"),
                 read_bmp_24_rows(args.output_directory / "onscreen_moved_screen.bmp"))
-        write_report(args, completed, metrics)
+            metrics["floor_completed_ray_comparison"] = compare_hybrid_statistics(
+                validate_statistics(statistics["floor_hardware"], "floor", "hardware"),
+                validate_statistics(statistics["floor_hybrid"], "floor", "hybrid"))
+        if args.suite in ("all", "budget"):
+            for case, mode, budget in BUDGET_CAPTURES:
+                stem = capture_stem(case, mode, budget)
+                metrics[stem] = analyze_panels(read_bmp_24_rows(args.output_directory / (stem + ".bmp")), case, mode)
+        write_report(args, completed, metrics, statistics)
         print(f"PASS: reflection {args.suite} geometric marker, route, and composition checks\n"
             + json.dumps(metrics, indent=2), flush=True)
         return 0

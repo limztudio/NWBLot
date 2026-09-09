@@ -1,9 +1,16 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "resolve_common.slangi"
 #include "../raytrace/material_context_slots.slangi"
 #include "../raytrace/constants.h"
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #pragma warning(push)
 #pragma warning(disable: 39001)
@@ -23,6 +30,10 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 #include "../scene/lighting.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct NwbRefractionHit{
     bool hit;
@@ -207,6 +218,10 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     return nwbRefractionResolveScreen(pixel, entry);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [numthreads(NWB_REFRACTION_GROUP_SIZE, NWB_REFRACTION_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 pixel = dispatchThreadID.xy;
@@ -219,3 +234,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
     g_NwbRefractionOutput[pixel] = nwbRefractionResolveHardware(pixel, entry);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+

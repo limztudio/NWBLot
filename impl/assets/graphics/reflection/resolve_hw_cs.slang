@@ -5,6 +5,10 @@
 #include "common.slangi"
 #include "../raytrace/material_context_slots.slangi"
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #pragma warning(push)
 #pragma warning(disable: 39001)
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -21,6 +25,10 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbReflectionParameters.viewSlot; }
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbReflectionResources.avboitSlots.w
 #include "../raytrace/surface_hit.slangi"
 #include "../raytrace/surface_lighting.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 [numthreads(NWB_REFLECTION_TRACE_GROUP_SIZE, 1, 1)]
 void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){

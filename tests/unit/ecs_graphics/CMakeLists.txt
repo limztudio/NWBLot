@@ -1,5 +1,7 @@
 nwb_declare_gtest_executable(nwb_ecs_graphics_tests)
 target_sources(nwb_ecs_graphics_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/reflection_settings_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/reflection_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/coincident_optical_volumes_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_graphics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/refraction_contract_tests.cpp"

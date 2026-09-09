@@ -12,6 +12,10 @@ struct NwbSmokeSurfaceMaterial{
 struct NwbSmokeRuntimeMaterial{
     [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 color_tint;
+    [default("half3(0.0h, 0.0h, 0.0h)")]
+    half3 specular_f0;
+    [default("half(1.0h)")]
+    half perceptual_roughness;
 };
 
 NwbSmokeSurfaceMaterial surface;

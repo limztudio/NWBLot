@@ -15,12 +15,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Neutral optical and AVBOIT coverage defaults.
+// Neutral optical, reflection, and AVBOIT coverage defaults.
 #define NWB_SURFACE_IOR_VACUUM        half(1.0)              // no refraction / no Fresnel
 #define NWB_SURFACE_IOR_GLASS         half(1.5)              // typical glass Fresnel -- a convenience preset a material MAY author
 #define NWB_SURFACE_ABSORPTION_NONE   half3(1.0h, 1.0h, 1.0h) // per-unit survival = perfectly clear -> casts no shadow
 #define NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN 1e-4
 #define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)              // render coverage = fully opaque
+#define NWB_SURFACE_SPECULAR_F0_NONE half3(0.0h, 0.0h, 0.0h)
+#define NWB_SURFACE_ROUGHNESS_MAX    half(1.0)
 
 // Material hooks populate this shared G-buffer, shadow/caustic, and AVBOIT contract.
 // Optical trace parameters and AVBOIT render coverage deliberately remain separate.
@@ -32,6 +34,10 @@ struct NwbMeshSurface{
     half   refractionIor;
     half3  shadowAbsorptionTint;
     half   renderCoverage;
+    // Explicit reflection inputs. The material's BXDF retains ownership of param0/param1 meanings.
+    // F0 is linear RGB reflectance at normal incidence; perceptual roughness ranges from smooth (0) to rough (1).
+    half3  specularF0;
+    half   perceptualRoughness;
 };
 
 NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, half param1){
@@ -43,6 +49,8 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal, half param0, h
     surface.refractionIor = NWB_SURFACE_IOR_VACUUM;
     surface.shadowAbsorptionTint = NWB_SURFACE_ABSORPTION_NONE;
     surface.renderCoverage = NWB_SURFACE_COVERAGE_OPAQUE;
+    surface.specularF0 = NWB_SURFACE_SPECULAR_F0_NONE;
+    surface.perceptualRoughness = NWB_SURFACE_ROUGHNESS_MAX;
     return surface;
 }
 
@@ -50,10 +58,21 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
     return nwbMakeMeshSurface(baseColor, normal, half(0.0), half(0.0));
 }
 
+// Authored reflection inputs remain independent of legacy BXDF parameters and optical absorption/coverage.
+// Reject nonfinite inputs to the neutral defaults before clamping, so later filtering never spreads NaNs.
+void nwbSetMeshSurfaceReflection(inout NwbMeshSurface surface, half3 specularF0, half perceptualRoughness){
+    surface.specularF0 = all(isfinite(float3(specularF0))) ? saturate(specularF0) : NWB_SURFACE_SPECULAR_F0_NONE;
+    surface.perceptualRoughness = isfinite(float(perceptualRoughness))
+        ? saturate(perceptualRoughness) : NWB_SURFACE_ROUGHNESS_MAX;
+}
+
 // Glass density seeds matching render coverage and shadow absorption.
 NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refractionIor, half3 tint, half density){
     NwbMeshSurface surface = nwbMakeMeshSurface(baseColor, normal);
-    surface.refractionIor = refractionIor;
+    const float validIor = isfinite(float(refractionIor)) ? max(float(refractionIor), 1.0) : 1.0;
+    const float dielectricRatio = (validIor - 1.0) / (validIor + 1.0);
+    surface.refractionIor = half(validIor);
+    nwbSetMeshSurfaceReflection(surface, half3(dielectricRatio * dielectricRatio), half(0.0));
     surface.renderCoverage = clamp(density, half(0.0), half(1.0));
     surface.shadowAbsorptionTint = lerp(NWB_SURFACE_ABSORPTION_NONE, clamp(tint, half3(0.0h), half3(1.0h)), surface.renderCoverage);
     return surface;

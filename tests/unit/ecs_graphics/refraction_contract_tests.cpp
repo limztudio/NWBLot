@@ -44,6 +44,35 @@ TEST(EcsGraphics, RefractionSelectorAppendsTwoLanesWithoutMovingExistingResource
     EXPECT_EQ(CountText(AStringView(shaderSource.data(), shaderSource.size()), "    uint4 "), 11u);
 }
 
+TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialContext){
+    TestArena testArena;
+    const TestPath graphics = RepoRoot(testArena) / "impl" / "assets" / "graphics";
+    AString helperSource;
+    AString resolverSource;
+    ASSERT_TRUE(ReadTextFile(graphics / "raytrace" / "surface_hit.slangi", helperSource));
+    ASSERT_TRUE(ReadTextFile(graphics / "refraction" / "resolve_hw_cs.slang", resolverSource));
+    const AStringView helper(helperSource.data(), helperSource.size());
+    const AStringView resolver(resolverSource.data(), resolverSource.size());
+    EXPECT_FALSE(ContainsText(helper, "g_NwbRefraction"));
+    EXPECT_FALSE(ContainsText(helper, "RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH"));
+    EXPECT_TRUE(ContainsText(helper, "RayQuery<RAY_FLAG_FORCE_OPAQUE> query"));
+    EXPECT_TRUE(ContainsText(helper, "NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance]"));
+    const usize completeQuery = helper.find("while(query.Proceed()){}");
+    const usize committedGuard = helper.find("if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)");
+    const usize materialRead = helper.find("const NwbRtInstanceMaterial material");
+    ASSERT_NE(completeQuery, AStringView::npos);
+    ASSERT_NE(committedGuard, AStringView::npos);
+    ASSERT_NE(materialRead, AStringView::npos);
+    EXPECT_LT(completeQuery, committedGuard);
+    EXPECT_LT(committedGuard, materialRead);
+    EXPECT_TRUE(ContainsText(helper, "return hit;"));
+    EXPECT_TRUE(ContainsText(helper, "nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit)"));
+    EXPECT_TRUE(ContainsText(resolver, "#include \"../raytrace/surface_hit.slangi\""));
+    EXPECT_EQ(CountText(resolver, "nwbRayTraceClosestSurfaceHit("), 3u);
+    EXPECT_EQ(CountText(resolver, "g_NwbRefractionMaterialContext.sceneSlots.z,"), 3u);
+    EXPECT_FALSE(ContainsText(resolver, "RayQuery<"));
+}
+
 TEST(EcsGraphics, RefractionCaptureWritesOneNearestSurfaceWithoutBlendingOpticalFields){
     const auto capture = NWB::Impl::BuildRendererAvboitRefractionCaptureRenderState();
     EXPECT_TRUE(capture.depthStencilState.depthTestEnable);

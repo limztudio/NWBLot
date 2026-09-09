@@ -1,0 +1,105 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_SURFACE_HIT_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_SURFACE_HIT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.h"
+#include "../common/math.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
+#include "../shadow/shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The caller supplies mesh-frame material accessors for its frozen ray material context. The explicit instance
+// material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path
+// decisions belong in this geometric hit reconstruction helper.
+struct NwbRayTraceSurfaceHit{
+    bool hit;
+    bool frontFace;
+    uint instance;
+    float distance;
+    float3 position;
+    float3 geometricNormal;
+    NwbMeshSurface surface;
+};
+
+float3 nwbRayTraceTransformSurfaceNormal(const float3x4 worldToObject, const float3 normal){
+    return nwbSafeNormalize(float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), normal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), normal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), normal)
+    ), float3(0.0, 0.0, 1.0));
+}
+
+NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
+    const uint instanceMaterialHeapSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minDistance,
+    const float maxDistance){
+    NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = minDistance;
+    ray.TMax = maxDistance;
+    // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering
+    // can skip a closer boundary; the caller decides how to handle that boundary after reconstruction.
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    while(query.Proceed()){}
+    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
+        return hit;
+
+    hit.hit = true;
+    hit.frontFace = query.CommittedTriangleFrontFace();
+    hit.instance = query.CommittedInstanceID();
+    hit.distance = query.CommittedRayT();
+    hit.position = origin + direction * hit.distance;
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance];
+    const uint triangleBase = query.CommittedPrimitiveIndex() * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const uint3 triangle = NwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    hit.geometricNormal = nwbRayTraceTransformSurfaceNormal(query.CommittedWorldToObject3x4(), cross(v1 - v0, v2 - v0));
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float2 bary = query.CommittedTriangleBarycentrics();
+    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
+
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.worldPosition = hit.position;
+    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(
+        query.CommittedWorldToObject3x4(),
+        float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z
+    );
+    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.rayDirection = direction;
+    hit.surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+    return hit;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

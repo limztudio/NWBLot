@@ -9,7 +9,9 @@ NwbMeshSurface nwbMaterialSurface(){
     const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
     const half3 baseColor = clamp((surface.base_color * runtime.color_tint).rgb, half3(0.0h), half3(1.0h));
-    return nwbMakeMeshSurface(baseColor, inNormal);
+    NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal);
+    nwbSetMeshSurfaceReflection(result, runtime.specular_f0, runtime.perceptual_roughness);
+    return result;
 }
 
 

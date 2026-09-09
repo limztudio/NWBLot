@@ -32,6 +32,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_external_final_state_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_frontier_packetization_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_geometry_preparation_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_hazard_tracking_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_import_index_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_ownership_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_initial_state_tests.cpp"

@@ -47,8 +47,11 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         surface.bias,
         g_NwbReflectionParameters.maxRayDistance
     );
-    if(!hit.hit)
+    if(!hit.hit){
+        // A completed miss supersedes the provisional low-confidence screen hit.
+        nwbReflectionStore(pixel, glass, nwbReflectionEnvironment(surface.direction) * surface.weight, 1.0);
         return;
+    }
     const float3 hitRadiance = nwbRayTraceSurfaceRadiance(hit, -surface.direction);
     const float rangeWeight = 1.0 - smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance);
     const float3 radiance = lerp(nwbReflectionEnvironment(surface.direction), hitRadiance, rangeWeight);

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate offscreen ray-traced reflection from actual application framebuffer readbacks."""
+"""Validate screen-space and hardware reflection from actual application framebuffer readbacks."""
 
 import argparse
 import base64
@@ -15,10 +15,16 @@ from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
 
-CASES = ("offscreen", "moved", "opaque_glass")
+CASES = ("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor")
 MODES = ("disabled", "screen", "hardware", "hybrid")
-CAPTURES = (("offscreen", "disabled"), ("offscreen", "screen"), ("offscreen", "hardware"),
-    ("moved", "disabled"), ("moved", "hardware"), ("opaque_glass", "disabled"), ("opaque_glass", "hardware"))
+BASELINE_CAPTURES = (("offscreen", "disabled"), ("offscreen", "screen"), ("offscreen", "hardware"),
+    ("moved", "disabled"), ("moved", "hardware"), ("opaque_glass", "disabled"), ("opaque_glass", "hardware"),
+    ("offscreen", "hybrid"))
+SCREEN_CAPTURES = (("onscreen", "disabled"), ("onscreen", "screen"), ("onscreen", "hardware"),
+    ("onscreen", "hybrid"), ("onscreen_moved", "screen"), ("boundary", "disabled"),
+    ("boundary", "screen"), ("boundary", "hybrid"), ("floor", "disabled"), ("floor", "screen"),
+    ("floor", "hardware"), ("floor", "hybrid"))
+CAPTURES = BASELINE_CAPTURES + SCREEN_CAPTURES
 OPAQUE_REGION = (0.28, 0.36, 0.43, 0.57)
 GLASS_REGION = (0.57, 0.36, 0.72, 0.57)
 FOREGROUND_REGION = (0.21, 0.59, 0.79, 0.65)
@@ -102,6 +108,86 @@ def compare_marker_motion(original, moved):
     return {"original": before, "moved": after}
 
 
+def panel_projection(width, height, color, case, reflected):
+    focal_length = height / (2.0 * math.tan(math.pi / 6.0))
+    source_x, source_y, half_height = (-1.7, 1.0, 0.25) if color == "red" else (1.7, 2.0, 0.35)
+    if case == "onscreen_moved":
+        source_x += 0.25 if color == "red" else -0.25
+    elif case == "boundary" and color == "green":
+        source_x = 3.0
+    # Source z=-3 is three units from the camera. Its virtual image at z=+3 is nine units away.
+    distance = 9.0 if reflected else 3.0
+    if case == "floor":
+        source_y = -2.0 if reflected else 2.0
+        distance = 9.0
+    return (width * 0.5 + focal_length * source_x / distance,
+        height * 0.5 - focal_length * (source_y - 1.4) / distance,
+        focal_length * 0.3 / distance, focal_length * half_height / distance)
+
+
+def in_panel_rectangle(point, projection, margin):
+    x, y = point
+    cx, cy, half_width, half_height = projection
+    return abs(x - cx) <= half_width + margin and abs(y - cy) <= half_height + margin
+
+
+def analyze_panels(frame, case, mode):
+    width, height, rows = validate_frame(frame)
+    results = {}
+    for color in ("red", "green"):
+        points = [(x, y) for y, row in enumerate(rows) for x, pixel in enumerate(row) if marker_color(pixel, color)]
+        allowed_regions = []
+        color_results = {}
+        for label, reflected in (("direct", False), ("reflection", True)):
+            expected = not (case == "boundary" and color == "green") if not reflected else (
+                mode != "disabled" and not (case == "boundary" and color == "green" and mode == "screen"))
+            projection = panel_projection(width, height, color, case, reflected)
+            region_points = [point for point in points if in_panel_rectangle(point, projection, height * 0.008)]
+            if not expected:
+                if len(region_points) > 16:
+                    raise SmokeFailure(f"{case}/{mode}: unexpected {color} {label} panel ({len(region_points)} pixels)")
+                color_results[label] = {"pixels": len(region_points), "expected": False}
+                continue
+            minimum = max(32, 4.0 * projection[2] * projection[3] * (0.25 if reflected else 0.5))
+            if len(region_points) < minimum:
+                raise SmokeFailure(f"{case}/{mode}: missing {color} {label} panel "
+                    f"({len(region_points)} pixels; projected area requires {math.ceil(minimum)})")
+            cx = sum(x for x, _ in region_points) / len(region_points)
+            cy = sum(y for _, y in region_points) / len(region_points)
+            if math.hypot(cx - projection[0], cy - projection[1]) > max(2.0, height * 0.012):
+                raise SmokeFailure(f"{case}/{mode}: {color} {label} centroid does not match its geometric projection")
+            allowed_regions.append(projection)
+            color_results[label] = {"pixels": len(region_points), "expected": True,
+                "centroid": [cx, cy], "expected_centroid": list(projection[:2]),
+                "minimum_projected_area_pixels": math.ceil(minimum)}
+        outside = sum(not any(in_panel_rectangle(point, region, height * 0.008) for region in allowed_regions)
+            for point in points)
+        if outside > max(16, len(points) * 0.03):
+            raise SmokeFailure(f"{case}/{mode}: {color} pixels appeared outside direct/reflected panel regions ({outside})")
+        color_results["outside_predicted_regions"] = outside
+        results[color] = color_results
+    return results
+
+
+def compare_panel_motion(original, moved):
+    if original[:2] != moved[:2]:
+        raise SmokeFailure("panel motion captures have different framebuffer dimensions")
+    before = analyze_panels(original, "onscreen", "screen")
+    after = analyze_panels(moved, "onscreen_moved", "screen")
+    focal_length = original[1] / (2.0 * math.tan(math.pi / 6.0))
+    for color in ("red", "green"):
+        direction = 1.0 if color == "red" else -1.0
+        for label, distance in (("direct", 3.0), ("reflection", 9.0)):
+            expected_dx = focal_length * direction * 0.25 / distance
+            dx = after[color][label]["centroid"][0] - before[color][label]["centroid"][0]
+            dy = after[color][label]["centroid"][1] - before[color][label]["centroid"][1]
+            if abs(dx - expected_dx) > max(1.5, original[1] * 0.006) or abs(dy) > max(1.5, original[1] * 0.006):
+                raise SmokeFailure(f"{color} {label} panel did not follow the authored inward movement")
+            after[color][label]["measured_motion"] = [dx, dy]
+            after[color][label]["expected_motion_x"] = expected_dx
+    return {"original": before, "moved": after}
+
+
 def compare_opaque_glass(reference, reflected):
     width, height, before = validate_frame(reference)
     validate_frame(reflected)
@@ -174,7 +260,7 @@ def capture(args, case, mode):
         command += ["--expect-log-message", "Reflection resolve: disabled",
             "--reject-log-message", "Reflection resolve: hardware"]
     elif mode == "screen":
-        command += ["--expect-log-message", "Reflection resolve: environment",
+        command += ["--expect-log-message", "Reflection resolve: screen-space",
             "--reject-log-message", "Reflection resolve: hardware"]
     if case == "opaque_glass":
         command += ["--expect-log-message", "AVBOIT refraction resolve:"]
@@ -198,8 +284,9 @@ def write_report(args, captures, metrics=None):
         "hardware_required": args.require_hardware, "application_args": args.application_arg,
         "settings": {"environment_top": [0, 0, 0], "environment_bottom": [0, 0, 0],
             "max_hardware_rays_per_frame": 1382400, "roughness": 0, "glass_ior": 3.8},
+        "suite": args.suite,
         "captures": [{"case": case, "mode": mode, "file": f"{case}_{mode}.bmp"} for case, mode in captures],
-        "metrics": metrics, "limitations": "Single-bounce smooth reflection baseline. Hardware hit shading is approximate; no SSR hit, roughness, history, or performance claim is established here."}
+        "metrics": metrics, "limitations": "Smooth single-bounce reflection with on-screen and offscreen geometric marker checks. Wall-mirror screen hits approach marker backs and have provisional confidence; the floor case approaches their fronts. Images alone do not prove hybrid ray savings. Hardware secondary-hit lighting is approximate; roughness reconstruction, temporal history, and performance are not validated here."}
     (args.output_directory / "reflection_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     cards = []
     for item in metadata["captures"]:
@@ -223,6 +310,8 @@ def parse_args(argv):
     parser.add_argument("--working-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--logserver-executable", type=Path)
+    parser.add_argument("--suite", choices=("all", "baseline", "screen"), default="all",
+        help="Capture all 20 comparisons, the 8 baseline captures, or the 12 on-screen/boundary/floor captures.")
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
     parser.add_argument("--require-hardware", action="store_true")
@@ -239,7 +328,8 @@ def main(argv):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     completed = []
     try:
-        for case, mode in CAPTURES:
+        selected = BASELINE_CAPTURES if args.suite == "baseline" else SCREEN_CAPTURES if args.suite == "screen" else CAPTURES
+        for case, mode in selected:
             frame = capture(args, case, mode)
             if frame is None:
                 print("SKIP: required reflection hardware or framebuffer readback is unavailable", file=sys.stderr)
@@ -248,16 +338,24 @@ def main(argv):
             del frame
         write_report(args, completed)
         metrics = {}
-        for case, mode in (("offscreen", "disabled"), ("offscreen", "screen"), ("moved", "disabled")):
-            metrics[f"{case}_{mode}"] = analyze_markers(read_bmp_24_rows(args.output_directory / f"{case}_{mode}.bmp"), required=False)
-        metrics["marker_motion"] = compare_marker_motion(
-            read_bmp_24_rows(args.output_directory / "offscreen_hardware.bmp"),
-            read_bmp_24_rows(args.output_directory / "moved_hardware.bmp"))
-        metrics["opaque_glass"] = compare_opaque_glass(
-            read_bmp_24_rows(args.output_directory / "opaque_glass_disabled.bmp"),
-            read_bmp_24_rows(args.output_directory / "opaque_glass_hardware.bmp"))
+        if args.suite in ("all", "baseline"):
+            for case, mode in (("offscreen", "disabled"), ("offscreen", "screen"), ("moved", "disabled")):
+                metrics[f"{case}_{mode}"] = analyze_markers(read_bmp_24_rows(args.output_directory / f"{case}_{mode}.bmp"), required=False)
+            metrics["marker_motion"] = compare_marker_motion(
+                read_bmp_24_rows(args.output_directory / "offscreen_hardware.bmp"),
+                read_bmp_24_rows(args.output_directory / "moved_hardware.bmp"))
+            metrics["offscreen_hybrid"] = analyze_markers(read_bmp_24_rows(args.output_directory / "offscreen_hybrid.bmp"))
+            metrics["opaque_glass"] = compare_opaque_glass(
+                read_bmp_24_rows(args.output_directory / "opaque_glass_disabled.bmp"),
+                read_bmp_24_rows(args.output_directory / "opaque_glass_hardware.bmp"))
+        if args.suite in ("all", "screen"):
+            for case, mode in SCREEN_CAPTURES:
+                metrics[f"{case}_{mode}"] = analyze_panels(read_bmp_24_rows(args.output_directory / f"{case}_{mode}.bmp"), case, mode)
+            metrics["panel_motion"] = compare_panel_motion(
+                read_bmp_24_rows(args.output_directory / "onscreen_screen.bmp"),
+                read_bmp_24_rows(args.output_directory / "onscreen_moved_screen.bmp"))
         write_report(args, completed, metrics)
-        print("PASS: offscreen marker geometry and movement, opaque/glass reflection, foreground AVBOIT and exterior stability\n"
+        print(f"PASS: reflection {args.suite} geometric marker, route, and composition checks\n"
             + json.dumps(metrics, indent=2), flush=True)
         return 0
     except (SmokeFailure, OSError, subprocess.TimeoutExpired) as exc:

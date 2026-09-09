@@ -8,6 +8,7 @@
 #include "settings.h"
 
 #include <impl/assets/graphics/reflection/frame_constants.h>
+#include <impl/assets/graphics/reflection/depth_constants.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
@@ -47,7 +48,30 @@ struct ReflectionFrameParameters{
     NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_CPU_FLOAT_FIELD)
 #undef NWB_REFLECTION_CPU_FLOAT_FIELD
 };
-static_assert(sizeof(ReflectionFrameParameters) == 128u);
+static_assert(sizeof(ReflectionFrameParameters) == 160u);
+
+struct ReflectionDepthPyramidMip{
+    u32 sampledSlot = 0u;
+    u32 storageSlot = 0u;
+    u32 width = 0u;
+    u32 height = 0u;
+};
+
+struct ReflectionDepthPyramidSnapshot{
+    // A native mip chain for u32 extents cannot contain more than 32 levels.
+    static constexpr u32 s_MaxMipCount = NWB_REFLECTION_MAX_DEPTH_MIPS;
+
+    Core::TextureHandle texture;
+    Core::ComputePipelineHandle pipeline;
+    ReflectionDepthPyramidMip mips[s_MaxMipCount];
+    u32 mipCount = 0u;
+    u32 sampledSlot = 0u;
+    u32 sourceDepthSlot = 0u;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return texture && pipeline && mipCount > 0u && mipCount <= s_MaxMipCount;
+    }
+};
 
 // Resource handles and descriptor slots are copied together before graph declaration. Only the parameter value
 // varies per frame; no recording callback consults the live resource owner or creates descriptors/pipelines.
@@ -62,6 +86,7 @@ struct ReflectionFrameSnapshot{
     Core::ComputePipelineHandle classifyPipeline;
     Core::ComputePipelineHandle buildArgsPipeline;
     Core::ComputePipelineHandle hardwarePipeline;
+    ReflectionDepthPyramidSnapshot depthPyramid;
     RayTracingSceneGraphResources scene;
     u32 frameParametersSlot = 0u;
 
@@ -69,6 +94,7 @@ struct ReflectionFrameSnapshot{
         return
             parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance
             && queue && counters && indirectArgs && frameParameters && classifyPipeline && buildArgsPipeline
+            && depthPyramid.valid()
         ;
     }
 };
@@ -98,10 +124,15 @@ private:
     RendererShaderSystem& m_shaders;
     ReflectionFrameSnapshot m_resources;
     Core::BindingLayoutHandle m_bindingLayout;
+    Core::BindingLayoutHandle m_depthBindingLayout;
     Core::ShaderHandle m_classifyShader;
     Core::ShaderHandle m_buildArgsShader;
     Core::ShaderHandle m_hardwareShader;
+    Core::ShaderHandle m_depthShader;
     Core::GpuDescriptorHandle m_descriptors[8];
+    Core::GpuDescriptorHandle m_depthSampledDescriptor;
+    Core::GpuDescriptorHandle m_depthMipSampledDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];
+    Core::GpuDescriptorHandle m_depthMipStorageDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];
 };
 
 

@@ -1,0 +1,282 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_REFLECTION_SCREEN_TRACE_SLANGI
+#define NWB_GRAPHICS_REFLECTION_SCREEN_TRACE_SLANGI
+
+
+#include "common.slangi"
+#include "depth_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static const uint s_NwbReflectionScreenMaximumSteps = 256u;
+static const float s_NwbReflectionScreenDepthRoundoff = 0.0000002384185791015625;
+
+struct NwbReflectionScreenRay{
+    float3 worldOrigin;
+    float3 screenOrigin;
+    float3 screenDirection;
+    float parameterEpsilon;
+};
+
+bool nwbReflectionClipScreenHalfspace(const float origin, const float direction, inout float first, inout float last){
+    if(abs(direction) < 1e-20)
+        return origin >= 0.0;
+    const float crossing = -origin / direction;
+    if(direction > 0.0)
+        first = max(first, crossing);
+    else
+        last = min(last, crossing);
+    return first <= last;
+}
+
+bool nwbReflectionBuildScreenRay(const NwbReflectionSurface surface, out NwbReflectionScreenRay ray){
+    ray = (NwbReflectionScreenRay)0;
+    ray.worldOrigin = surface.position + surface.normal * surface.bias;
+    const float4 firstClip = mul(g_NwbReflectionView.worldToClip, float4(ray.worldOrigin, 1.0));
+    const float4 lastClip = mul(
+        g_NwbReflectionView.worldToClip,
+        float4(ray.worldOrigin + surface.direction * g_NwbReflectionParameters.maxRayDistance, 1.0)
+    );
+    if(!all(isfinite(firstClip)) || !all(isfinite(lastClip)))
+        return false;
+
+    // Clip in homogeneous coordinates before division. The reflected ray may point toward the camera, through
+    // the near plane, or out a side plane; either sign of projected depth direction remains valid.
+    const float4 delta = lastClip - firstClip;
+    float first = surface.bias / g_NwbReflectionParameters.maxRayDistance;
+    float last = 1.0;
+    if(
+        !nwbReflectionClipScreenHalfspace(firstClip.w - 1e-5, delta.w, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.x + firstClip.w, delta.x + delta.w, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.w - firstClip.x, delta.w - delta.x, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.y + firstClip.w, delta.y + delta.w, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.w - firstClip.y, delta.w - delta.y, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.z, delta.z, first, last)
+        || !nwbReflectionClipScreenHalfspace(firstClip.w - firstClip.z, delta.w - delta.z, first, last)
+    )
+        return false;
+    const float4 clippedFirst = firstClip + delta * first;
+    const float4 clippedLast = firstClip + delta * last;
+    if(first >= last || clippedFirst.w <= 0.0 || clippedLast.w <= 0.0)
+        return false;
+    const float3 firstNdc = clippedFirst.xyz / clippedFirst.w;
+    const float3 lastNdc = clippedLast.xyz / clippedLast.w;
+    ray.screenOrigin = float3(firstNdc.x * 0.5 + 0.5, 0.5 - firstNdc.y * 0.5, firstNdc.z);
+    const float3 screenEnd = float3(lastNdc.x * 0.5 + 0.5, 0.5 - lastNdc.y * 0.5, lastNdc.z);
+    ray.screenDirection = screenEnd - ray.screenOrigin;
+    const float2 projectedExtent = abs(ray.screenDirection.xy)
+        * float2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    const float projectedLength = max(projectedExtent.x, projectedExtent.y);
+    if(!all(isfinite(ray.screenOrigin)) || !all(isfinite(ray.screenDirection)) || projectedLength <= 2.0)
+        return false;
+    // Move a small fraction of a pixel beyond a cell edge, also exceeding UV arithmetic roundoff.
+    ray.parameterEpsilon = max(0.0000002, 0.002 / projectedLength);
+    return true;
+}
+
+float nwbReflectionScreenCellExit(const NwbReflectionScreenRay ray, const uint2 cell, const uint2 dimensions){
+    const float2 edge = (float2(cell) + float2(ray.screenDirection.x > 0.0 ? 1.0 : 0.0,
+        ray.screenDirection.y > 0.0 ? 1.0 : 0.0)) / float2(dimensions);
+    const float exitX = abs(ray.screenDirection.x) > 1e-20
+        ? (edge.x - ray.screenOrigin.x) / ray.screenDirection.x : 1e30;
+    const float exitY = abs(ray.screenDirection.y) > 1e-20
+        ? (edge.y - ray.screenOrigin.y) / ray.screenDirection.y : 1e30;
+    return min(1.0, min(exitX, exitY));
+}
+
+bool nwbReflectionValidateScreenHit(
+    const uint2 sourcePixel,
+    const uint2 candidatePixel,
+    const NwbReflectionSurface surface,
+    const NwbReflectionScreenRay ray,
+    const float intervalFirst,
+    const float intervalLast,
+    out float3 radiance,
+    out float confidence,
+    out bool crossedSurface){
+    radiance = float3(0.0);
+    confidence = 0.0;
+    crossedSurface = false;
+    if(all(abs(int2(candidatePixel) - int2(sourcePixel)) < 2))
+        return false;
+    const int3 texel = int3(candidatePixel, 0);
+    const float depth = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.w).Load(texel).x;
+    if(!isfinite(depth) || depth < 0.0 || depth >= 1.0)
+        return false;
+    const float3 position = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
+    const float3 packedNormal = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.y).Load(texel).xyz;
+    if(!all(isfinite(position)) || !all(isfinite(packedNormal)))
+        return false;
+    const float3 normal = nwbSafeNormalize(packedNormal * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
+    const float incidence = dot(normal, surface.direction);
+    if(abs(incidence) < 0.02)
+        return false;
+
+    // The depth hierarchy is only a rejection bound, never a hit. Intersect the captured surface's local plane
+    // in world units, then require that crossing to project into this exact finest-level interval. In particular,
+    // starting behind a coarse cell does not manufacture a hit or forbid a ray traveling toward the camera.
+    const float distance = dot(position - ray.worldOrigin, normal) / incidence;
+    if(!isfinite(distance) || distance <= surface.bias || distance > g_NwbReflectionParameters.maxRayDistance)
+        return false;
+    const float3 intersection = ray.worldOrigin + surface.direction * distance;
+    const float4 intersectionClip = mul(g_NwbReflectionView.worldToClip, float4(intersection, 1.0));
+    if(!all(isfinite(intersectionClip)) || intersectionClip.w <= 0.0)
+        return false;
+    const float2 intersectionNdc = intersectionClip.xy / intersectionClip.w;
+    const float2 uv = float2(intersectionNdc.x * 0.5 + 0.5, 0.5 - intersectionNdc.y * 0.5);
+    if(any(uv < 0.0) || any(uv >= 1.0))
+        return false;
+    const uint2 dimensions = uint2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    if(any(uint2(uv * float2(dimensions)) != candidatePixel))
+        return false;
+    const float parameter = abs(ray.screenDirection.x) >= abs(ray.screenDirection.y)
+        ? (uv.x - ray.screenOrigin.x) / ray.screenDirection.x
+        : (uv.y - ray.screenOrigin.y) / ray.screenDirection.y;
+    if(parameter < intervalFirst - ray.parameterEpsilon || parameter > intervalLast + ray.parameterEpsilon)
+        return false;
+    crossedSurface = true;
+
+    // World positions are stored in FP16. Bound their projection error instead of unprojecting the tiny-near D32
+    // value and comparing that unstable position against a world-space thickness setting.
+    const float3 positionError = max(abs(position) * 0.0009765625, float3(0.00001));
+    const float4 positionClip = mul(g_NwbReflectionView.worldToClip, float4(position, 1.0));
+    const float4 clipError = float4(
+        dot(abs(g_NwbReflectionView.worldToClip[0].xyz), positionError),
+        dot(abs(g_NwbReflectionView.worldToClip[1].xyz), positionError),
+        dot(abs(g_NwbReflectionView.worldToClip[2].xyz), positionError),
+        dot(abs(g_NwbReflectionView.worldToClip[3].xyz), positionError)
+    ) + abs(positionClip) * 0.0000002;
+    if(!all(isfinite(positionClip)) || positionClip.w <= clipError.w)
+        return false;
+    const float3 positionNdc = positionClip.xyz / positionClip.w;
+    const float3 ndcError = (clipError.xyz + abs(positionNdc) * clipError.w) / (positionClip.w - clipError.w);
+    const float2 positionUv = float2(positionNdc.x * 0.5 + 0.5, 0.5 - positionNdc.y * 0.5);
+    const float2 sampleUv = (float2(candidatePixel) + 0.5) / float2(dimensions);
+    if(
+        any(abs(positionUv - sampleUv) * float2(dimensions) > 1.0 + ndcError.xy * float2(dimensions) * 0.5)
+        || abs(positionNdc.z - depth) > ndcError.z + s_NwbReflectionScreenDepthRoundoff
+    )
+        return false;
+
+    const float3 cameraObserver = nwbSafeNormalize(g_NwbReflectionView.cameraPosition.xyz - position, normal);
+    const float2 projectionScale = float2(
+        length(g_NwbReflectionView.worldToClip[0].xyz), length(g_NwbReflectionView.worldToClip[1].xyz)
+    );
+    const float pixelRadius = positionClip.w * length(1.0 / (float2(dimensions) * max(projectionScale, float2(0.00001))));
+    const float footprint = pixelRadius / max(abs(dot(normal, cameraObserver)), 0.1);
+    const float residual = max(length(intersection - position) - footprint - length(positionError), 0.0);
+    if(residual >= g_NwbReflectionParameters.screenThickness)
+        return false;
+    const float geometryConfidence = 1.0 - smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual);
+    const float2 edgeDistance = min(uv, 1.0 - uv);
+    const float2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0
+        ? smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance)
+        : float2(1.0);
+    confidence = geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y;
+    confidence *= smoothstep(0.02, 0.2, abs(incidence));
+
+    // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the
+    // reflected observer differs; roughness relaxes the directional match but does not prove a custom BXDF invariant.
+    const float4 specular = NwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
+    if(!all(isfinite(specular)))
+        return false;
+    const float strength = saturate(max(specular.x, max(specular.y, specular.z)) * 8.0);
+    const float alignment = dot(cameraObserver, -surface.direction);
+    const float requiredAlignment = lerp(0.995, 0.5, saturate(specular.w) * saturate(specular.w));
+    confidence *= lerp(1.0, smoothstep(requiredAlignment - 0.1, requiredAlignment, alignment), strength);
+    // The G-buffer does not identify a thin, two-sided surface versus a solid volume's visible front boundary.
+    // Keep a back-facing crossing provisional; Hybrid's default threshold sends this ambiguity to the real scene.
+    if(incidence > 0.0)
+        confidence = min(confidence, 0.5);
+    confidence *= 1.0 - smoothstep(
+        g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, distance
+    );
+    radiance = NwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb;
+    if(!all(isfinite(radiance)) || !isfinite(confidence) || confidence <= 0.0)
+        return false;
+    radiance = max(radiance, float3(0.0));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The caller applies the receiver's Fresnel once and blends the raw cached radiance with its environment by
+// confidence. A failed or uncertain screen query may enter the caller's existing bounded hardware queue.
+bool nwbReflectionTraceScreen(
+    const uint2 pixel,
+    const NwbReflectionSurface surface,
+    out float3 radiance,
+    out float confidence){
+    radiance = float3(0.0);
+    confidence = 0.0;
+    if(g_NwbReflectionParameters.depthMipCount == 0u || g_NwbReflectionParameters.screenMaxSteps == 0u)
+        return false;
+    NwbReflectionScreenRay ray;
+    if(!nwbReflectionBuildScreenRay(surface, ray))
+        return false;
+
+    const uint2 fullDimensions = uint2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    const uint lastMip = min(g_NwbReflectionParameters.depthMipCount, NWB_REFLECTION_MAX_DEPTH_MIPS) - 1u;
+    const uint steps = min(g_NwbReflectionParameters.screenMaxSteps, s_NwbReflectionScreenMaximumSteps);
+    const uint2 firstCell = min(uint2(saturate(ray.screenOrigin.xy) * float2(fullDimensions)), fullDimensions - 1u);
+    float parameter = nwbReflectionScreenCellExit(ray, firstCell, fullDimensions) + ray.parameterEpsilon;
+    uint mip = 0u;
+    for(uint stepIndex = 0u; stepIndex < steps; ++stepIndex){
+        if(!isfinite(parameter) || parameter >= 1.0)
+            return false;
+        const float3 position = ray.screenOrigin + ray.screenDirection * parameter;
+        if(any(position.xy < 0.0) || any(position.xy >= 1.0))
+            return false;
+        // Native NPOT mip dimensions floor-halve. The reduction includes their overlapping edge footprint, so
+        // each fetched interval conservatively bounds the complete normalized cell used for this traversal.
+        const uint2 dimensions = max(uint2(1u), fullDimensions >> mip);
+        const uint2 cell = min(uint2(position.xy * float2(dimensions)), dimensions - 1u);
+        const float cellExit = nwbReflectionScreenCellExit(ray, cell, dimensions);
+        if(!isfinite(cellExit) || cellExit <= parameter)
+            return false;
+        const float2 depthInterval = NwbHeapSampledImage2D(g_NwbReflectionParameters.depthPyramidSlot).Load(int3(cell, mip)).xy;
+        if(!all(isfinite(depthInterval)))
+            return false;
+        const float exitDepth = ray.screenOrigin.z + ray.screenDirection.z * cellExit;
+        // Both ray directions can skip cells disjoint from the represented visible-depth interval. The maximum
+        // permits camera-facing rays to cross a panel's interior efficiently without inferring hidden geometry.
+        const bool empty = depthInterval.x >= 1.0
+            || max(position.z, exitDepth) < depthInterval.x - s_NwbReflectionScreenDepthRoundoff
+            || min(position.z, exitDepth) > depthInterval.y + s_NwbReflectionScreenDepthRoundoff;
+        if(empty){
+            parameter = cellExit + ray.parameterEpsilon;
+            mip = min(mip + 1u, lastMip);
+        }
+        else if(mip > 0u)
+            --mip;
+        else{
+            bool crossedSurface;
+            if(nwbReflectionValidateScreenHit(pixel, cell, surface, ray, parameter, cellExit, radiance, confidence, crossedSurface))
+                return true;
+            // Do not march through a crossing whose captured position/radiance failed validation and then report
+            // a farther layer as visible. Hardware or the environment resolves that missing screen information.
+            if(crossedSurface)
+                return false;
+            parameter = cellExit + ray.parameterEpsilon;
+            mip = min(1u, lastMip);
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

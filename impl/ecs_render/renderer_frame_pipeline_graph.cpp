@@ -5999,6 +5999,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
     }
     const ReflectionGraphInputs reflectionInputs{
+        .opaqueDepth = depth,
+        .opaqueColor = opaqueColor,
         .surfaceReads = reflectionSurfaceReads, .surfaceReadCount = LengthOf(reflectionSurfaceReads),
         .hardwareReads = reflectionHardwareReads.data(), .hardwareReadCount = reflectionHardwareReads.size(),
         .hardwareSetReads = reflectionSets, .hardwareSetReadCount = reflectionSetCount,

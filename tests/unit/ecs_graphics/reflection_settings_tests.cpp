@@ -44,6 +44,34 @@ TEST(ReflectionSettings, RejectsNonFiniteAndUnorderedDistanceControls){
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
+TEST(ReflectionSettings, BoundsScreenTraversalAndFiniteConfidenceInputs){
+    ReflectionSettings settings;
+    settings.screenMaxSteps = 0u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenMaxSteps = 257u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenMaxSteps = 256u;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+    settings.screenThickness = 0.f;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenThickness = Limit<f32>::s_Infinity;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings = ReflectionSettings{};
+    settings.screenConfidenceThreshold = 0.f;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenConfidenceThreshold = 1.01f;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenConfidenceThreshold = Limit<f32>::s_QuietNaN;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings = ReflectionSettings{};
+    settings.screenEdgeFade = -0.1f;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenEdgeFade = 0.26f;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.screenEdgeFade = 0.f;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+}
+
 TEST(ReflectionSettings, RejectsInvalidMaterialThresholdsModesAndEnvironmentRadiance){
     ReflectionSettings settings;
     settings.roughnessCutoff = -0.1f;

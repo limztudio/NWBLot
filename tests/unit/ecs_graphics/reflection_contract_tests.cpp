@@ -175,17 +175,19 @@ TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCa
     EXPECT_FALSE(ContainsText(graph, "foregroundAccumExtinction"));
 }
 
-TEST(EcsGraphics, ReflectionFrameSelectorsMatchEightStd140LanesAndSeparateCounterBytes){
+TEST(EcsGraphics, ReflectionFrameSelectorsMatchTenStd140LanesAndSeparateCounterBytes){
     using Parameters = NWB::Impl::ReflectionFrameParameters;
-    EXPECT_EQ(sizeof(Parameters), 128u);
+    EXPECT_EQ(sizeof(Parameters), 160u);
     EXPECT_EQ(offsetof(Parameters, width), 0u);
     EXPECT_EQ(offsetof(Parameters, opaqueSpecularSlot), 16u);
     EXPECT_EQ(offsetof(Parameters, opaqueRadianceSlot), 32u);
     EXPECT_EQ(offsetof(Parameters, argsSlot), 48u);
     EXPECT_EQ(offsetof(Parameters, deferredResourcesSlot), 64u);
-    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 80u);
-    EXPECT_EQ(offsetof(Parameters, environmentTopR), 96u);
-    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 112u);
+    EXPECT_EQ(offsetof(Parameters, depthPyramidSlot), 80u);
+    EXPECT_EQ(offsetof(Parameters, maxRayDistance), 96u);
+    EXPECT_EQ(offsetof(Parameters, environmentTopR), 112u);
+    EXPECT_EQ(offsetof(Parameters, environmentBottomR), 128u);
+    EXPECT_EQ(offsetof(Parameters, screenThickness), 144u);
     EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_HITS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Disabled), NWB_REFLECTION_MODE_DISABLED);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::ScreenSpace), NWB_REFLECTION_MODE_SCREEN);

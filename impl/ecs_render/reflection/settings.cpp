@@ -24,6 +24,14 @@ bool ValidateReflectionSettings(const ReflectionSettings& settings){
         || !IsFinite(settings.roughnessCutoff) || settings.roughnessCutoff < 0.f || settings.roughnessCutoff > 1.f
     )
         return false;
+    if(
+        settings.screenMaxSteps < 8u || settings.screenMaxSteps > 256u
+        || !IsFinite(settings.screenThickness) || settings.screenThickness <= 0.f
+        || !IsFinite(settings.screenConfidenceThreshold)
+        || settings.screenConfidenceThreshold <= 0.f || settings.screenConfidenceThreshold > 1.f
+        || !IsFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.f || settings.screenEdgeFade > 0.25f
+    )
+        return false;
     const SIMDVector top = LoadFloat(settings.environmentTop);
     const SIMDVector bottom = LoadFloat(settings.environmentBottom);
     return VectorIsFinite(top, VectorComponentMask::s_XYZ) && VectorIsFinite(bottom, VectorComponentMask::s_XYZ)

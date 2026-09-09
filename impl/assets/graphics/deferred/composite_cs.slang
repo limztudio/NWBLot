@@ -74,7 +74,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             : reflectionSource > 0.0 ? half3(1.0h, 0.25h, 0.1h) : half3(0.0h);
     }
     else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 2u)
-        compositeColor = half3(reflectionSource >= 2.0 ? 1.0h : 0.0h);
+        compositeColor = half3(reflectionSource >= 3.0 ? 1.0 : saturate((reflectionSource - 2.0) * 2.0));
     g_NwbDeferredCompositeOutput[pixel] = float4(float3(compositeColor), 1.0);
 }
 

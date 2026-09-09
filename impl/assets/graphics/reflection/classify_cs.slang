@@ -3,6 +3,11 @@
 
 
 #include "common.slangi"
+#include "screen_trace.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 void nwbReflectionClassifySurface(const uint2 pixel, const bool glass){
     NwbReflectionSurface surface;
@@ -11,13 +16,34 @@ void nwbReflectionClassifySurface(const uint2 pixel, const bool glass){
         return;
     }
     uint previousCount;
-    g_NwbReflectionCounters.InterlockedAdd(glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u, previousCount);
-    const float3 fallback = surface.weight * nwbReflectionEnvironment(surface.direction);
-    nwbReflectionStore(pixel, glass, fallback, 1.0);
+    g_NwbReflectionCounters.InterlockedAdd(
+        glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u, previousCount
+    );
+    const float3 environment = nwbReflectionEnvironment(surface.direction);
+    nwbReflectionStore(pixel, glass, surface.weight * environment, 1.0);
+    const bool traceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff
+        && surface.bias < g_NwbReflectionParameters.maxRayDistance;
+    const bool screen = g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_SCREEN
+        || g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_HYBRID;
+    if(screen && traceEligible){
+        g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS, 1u, previousCount);
+        float3 radiance;
+        float confidence;
+        if(nwbReflectionTraceScreen(pixel, surface, radiance, confidence)){
+            // The alpha lane retains both route and confidence without a separate full-resolution texture.
+            // The hardware continuation replaces this provisional radiance when confidence is insufficient.
+            nwbReflectionStore(pixel, glass, surface.weight * lerp(environment, radiance, confidence), 2.0 + 0.5 * confidence);
+            if(confidence >= g_NwbReflectionParameters.screenConfidenceThreshold){
+                g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u, previousCount);
+                return;
+            }
+        }
+    }
     g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 1u, previousCount);
     const bool hardware = g_NwbReflectionParameters.hardwareEnabled != 0u
-        && (g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_HARDWARE || g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_HYBRID);
-    if(!hardware || surface.roughness > g_NwbReflectionParameters.roughnessCutoff)
+        && (g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_HARDWARE
+            || g_NwbReflectionParameters.traceMode == NWB_REFLECTION_MODE_HYBRID);
+    if(!hardware || !traceEligible)
         return;
     uint queueIndex;
     g_NwbReflectionCounters.InterlockedAdd(NWB_REFLECTION_COUNTER_CANDIDATES, 1u, queueIndex);

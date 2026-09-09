@@ -56,7 +56,8 @@ public:
         SmokeEnvironmentString caseText(m_context.objectArena);
         const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
         const AStringView caseName = hasCase ? AStringView(caseText.data(), caseText.size()) : AStringView("offscreen");
-        if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass"){
+        const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
+        if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
             return false;
         }
@@ -71,6 +72,10 @@ public:
 
         if(caseName == "opaque_glass")
             createOpaqueGlassScene();
+        else if(caseName == "floor")
+            createFloorMirrorScene();
+        else if(screenCase)
+            createOnscreenMirrorScene(caseName == "onscreen_moved", caseName == "boundary");
         else
             createMirrorScene(caseName == "moved");
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING"))
@@ -114,6 +119,18 @@ private:
         else if(route != "hardware"){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
             return false;
+        }
+        SmokeEnvironmentString debugText(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_DEBUG", debugText)){
+            const AStringView debugView(debugText.data(), debugText.size());
+            if(debugView == "source")
+                settings.debugView = NWB::Impl::ReflectionDebugView::TraceSource;
+            else if(debugView == "confidence")
+                settings.debugView = NWB::Impl::ReflectionDebugView::Confidence;
+            else if(debugView != "none"){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown debug view '{}'"), StringConvert(debugView));
+                return false;
+            }
         }
         if(!m_renderer.setReflectionSettings(settings))
             return false;
@@ -184,11 +201,15 @@ private:
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), &transform.rotation);
     }
 
-    void createMirrorScene(const bool moved){
+    void createMirrorBackdrop(){
         createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f),
             Float4(0.0f, 1.4f, 2.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
         createPanel(s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
             Float4(0.0f, 1.4f, 0.0f, 0.0f), Float4(2.8f, 1.0f, 1.8f, 0.0f), 0.95f);
+    }
+
+    void createMirrorScene(const bool moved){
+        createMirrorBackdrop();
         const f32 shift = moved ? 0.9f : 0.0f;
         // Both marker spheres are behind the camera. Reflecting them through z=0 gives virtual images at z=+8.
         const auto red = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
@@ -196,6 +217,31 @@ private:
         const auto green = createMesh(s_SphereMesh, s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
             Float4(1.6f + shift, 2.0f, -8.0f, 0.0f), Float4(0.65f, 0.65f, 0.65f, 0.0f));
         NWB_FATAL_ASSERT_MSG(red.valid() && green.valid(), NWB_TEXT("ReflectionSmokeProject: offscreen markers failed"));
+    }
+
+    void createOnscreenMirrorScene(const bool moved, const bool boundary){
+        createMirrorBackdrop();
+        const f32 redX = moved ? -1.45f : -1.7f;
+        const f32 greenX = boundary ? 3.0f : (moved ? 1.45f : 1.7f);
+        // Rays approach these two-sided markers from the back. Screen hits are provisional; hybrid must resolve the ambiguity.
+        // Direct images are three times larger than their virtual images at z=+3, and occupy separate screen regions.
+        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
+            Float4(redX, 1.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
+            Float4(greenX, 2.0f, -3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
+    }
+
+    void createFloorMirrorScene(){
+        createPanel(s_OpaqueMaterial, Float4(0.12f, 0.12f, 0.12f, 1.0f),
+            Float4(0.0f, 1.4f, 5.0f, 0.0f), Float4(6.0f, 1.0f, 4.5f, 0.0f));
+        const auto floor = createMesh(s_PlaneMesh, s_OpaqueMaterial, Float4(0.008f, 0.008f, 0.008f, 1.0f),
+            Float4(0.0f, 0.0f, 0.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f), 0.95f);
+        NWB_FATAL_ASSERT_MSG(floor.valid(), NWB_TEXT("ReflectionSmokeProject: floor mirror creation failed"));
+        // Camera and reflected rays both approach the marker fronts. Reflection through y=0 moves their virtual centers to y=-2.
+        createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
+            Float4(-1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.25f, 0.0f));
+        createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
+            Float4(1.7f, 2.0f, 3.0f, 0.0f), Float4(0.3f, 1.0f, 0.35f, 0.0f));
     }
 
     void createOpaqueGlassScene(){

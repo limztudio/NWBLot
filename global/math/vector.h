@@ -70,10 +70,7 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
     return integer + 1.0f;
 }
 
-NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
+NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
         quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
@@ -95,8 +92,8 @@ NWB_INLINE void ScalarSinCos(f32* outSin, f32* outCos, f32 value)noexcept{
     }
 
     const f32 y2 = y * y;
-    *outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
-    *outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
+    outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
+    outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
 }
 
 NWB_INLINE u32 TruncateBits(f32 value)noexcept{
@@ -238,34 +235,32 @@ NWB_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
 }
 
 template<u32 Lane>
-NWB_INLINE void SIMDCALL StoreLane(f32* out, SIMDVector value)noexcept{
+NWB_INLINE void SIMDCALL StoreLane(f32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-    NWB_ASSERT(out != nullptr);
 #if defined(NWB_HAS_SCALAR)
-    *out = value.f[Lane];
+    out = value.f[Lane];
 #elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(out, value, Lane);
+    vst1q_lane_f32(&out, value, Lane);
 #else
     if constexpr(Lane == 0u)
-        _mm_store_ss(out, value);
+        _mm_store_ss(&out, value);
     else
-        *reinterpret_cast<i32*>(out) = _mm_extract_ps(value, Lane);
+        *reinterpret_cast<i32*>(&out) = _mm_extract_ps(value, Lane);
 #endif
 }
 
 template<u32 Lane>
-NWB_INLINE void SIMDCALL StoreIntLane(u32* out, SIMDVector value)noexcept{
+NWB_INLINE void SIMDCALL StoreIntLane(u32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-    NWB_ASSERT(out != nullptr);
 #if defined(NWB_HAS_SCALAR)
-    *out = value.u[Lane];
+    out = value.u[Lane];
 #elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(out, vreinterpretq_u32_f32(value), Lane);
+    vst1q_lane_u32(&out, vreinterpretq_u32_f32(value), Lane);
 #else
     if constexpr(Lane == 0u)
-        _mm_store_ss(reinterpret_cast<f32*>(out), value);
+        _mm_store_ss(reinterpret_cast<f32*>(&out), value);
     else
-        *out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
+        out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
 #endif
 }
 
@@ -455,7 +450,7 @@ NWB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
     const SIMDMatrix transposedMatrix = MatrixTransposeForTransform(matrix);
     for(usize i = 0; i < vectorCount; ++i){
         const SIMDVector value = LoadFloat(*StridePointer(inputStream, inputStride, i));
-        StoreFloat(transform(value, transposedMatrix), StridePointer(outputStream, outputStride, i));
+        StoreFloat(transform(value, transposedMatrix), *StridePointer(outputStream, outputStride, i));
     }
 
     return outputStream;
@@ -523,16 +518,15 @@ NWB_INLINE SIMDVector SIMDCALL VectorReplicate(f32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorReplicatePtr(const f32* value)noexcept{
-    NWB_ASSERT(value != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorReplicatePtr(const f32& value)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorReplicate(*value);
+    return VectorReplicate(value);
 #elif defined(NWB_HAS_NEON)
-    return vld1q_dup_f32(value);
+    return vld1q_dup_f32(&value);
 #elif defined(NWB_HAS_AVX2)
-    return _mm_broadcast_ss(value);
+    return _mm_broadcast_ss(&value);
 #else
-    return _mm_load_ps1(value);
+    return _mm_load_ps1(&value);
 #endif
 }
 
@@ -546,14 +540,13 @@ NWB_INLINE SIMDVector SIMDCALL VectorReplicateInt(u32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorReplicateIntPtr(const u32* value)noexcept{
-    NWB_ASSERT(value != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorReplicateIntPtr(const u32& value)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    return VectorReplicateInt(*value);
+    return VectorReplicateInt(value);
 #elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_dup_u32(value));
+    return vreinterpretq_f32_u32(vld1q_dup_u32(&value));
 #else
-    return _mm_castsi128_ps(_mm_set1_epi32(static_cast<i32>(*value)));
+    return _mm_castsi128_ps(_mm_set1_epi32(static_cast<i32>(value)));
 #endif
 }
 
@@ -592,16 +585,15 @@ NWB_INLINE f32 SIMDCALL VectorGetByIndex(SIMDVector value, usize index)noexcept{
     }
 }
 
-NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32* out, SIMDVector value, usize index)noexcept{
-    NWB_ASSERT(out != nullptr);
+NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32& out, SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
-    *out = VectorGetByIndex(value, index);
+    out = VectorGetByIndex(value, index);
 }
 
-NWB_INLINE void SIMDCALL VectorGetXPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<0u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetYPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<1u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetZPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<2u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetWPtr(f32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<3u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetXPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<0u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetYPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<1u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetZPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<2u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetWPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<3u>(out, value); }
 
 NWB_INLINE u32 SIMDCALL VectorGetIntX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<0u>(value); }
 NWB_INLINE u32 SIMDCALL VectorGetIntY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<1u>(value); }
@@ -618,16 +610,15 @@ NWB_INLINE u32 SIMDCALL VectorGetIntByIndex(SIMDVector value, usize index)noexce
     }
 }
 
-NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32* out, SIMDVector value, usize index)noexcept{
-    NWB_ASSERT(out != nullptr);
+NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32& out, SIMDVector value, usize index)noexcept{
     NWB_ASSERT(index < 4);
-    *out = VectorGetIntByIndex(value, index);
+    out = VectorGetIntByIndex(value, index);
 }
 
-NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<0u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<1u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<2u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32* out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<3u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<0u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<1u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<2u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<3u>(out, value); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetX(SIMDVector value, f32 x)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -683,57 +674,52 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetByIndex(SIMDVector value, f32 component,
     }
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32* component, usize index)noexcept{
-    NWB_ASSERT(component != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32& component, usize index)noexcept{
     NWB_ASSERT(index < 4);
-    return VectorSetByIndex(value, *component, index);
+    return VectorSetByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetXPtr(SIMDVector value, const f32* x)noexcept{
-    NWB_ASSERT(x != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetXPtr(SIMDVector value, const f32& x)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.f[0] = *x;
+    value.f[0] = x;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(x, value, 0);
+    return vld1q_lane_f32(&x, value, 0);
 #else
-    return _mm_move_ss(value, _mm_load_ss(x));
+    return _mm_move_ss(value, _mm_load_ss(&x));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetYPtr(SIMDVector value, const f32* y)noexcept{
-    NWB_ASSERT(y != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetYPtr(SIMDVector value, const f32& y)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.f[1] = *y;
+    value.f[1] = y;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(y, value, 1);
+    return vld1q_lane_f32(&y, value, 1);
 #else
-    return _mm_insert_ps(value, _mm_load_ss(y), 0x10);
+    return _mm_insert_ps(value, _mm_load_ss(&y), 0x10);
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetZPtr(SIMDVector value, const f32* z)noexcept{
-    NWB_ASSERT(z != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetZPtr(SIMDVector value, const f32& z)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.f[2] = *z;
+    value.f[2] = z;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(z, value, 2);
+    return vld1q_lane_f32(&z, value, 2);
 #else
-    return _mm_insert_ps(value, _mm_load_ss(z), 0x20);
+    return _mm_insert_ps(value, _mm_load_ss(&z), 0x20);
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetWPtr(SIMDVector value, const f32* w)noexcept{
-    NWB_ASSERT(w != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetWPtr(SIMDVector value, const f32& w)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.f[3] = *w;
+    value.f[3] = w;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(w, value, 3);
+    return vld1q_lane_f32(&w, value, 3);
 #else
-    return _mm_insert_ps(value, _mm_load_ss(w), 0x30);
+    return _mm_insert_ps(value, _mm_load_ss(&w), 0x30);
 #endif
 }
 
@@ -791,57 +777,52 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndex(SIMDVector value, u32 compone
     }
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndexPtr(SIMDVector value, const u32* component, usize index)noexcept{
-    NWB_ASSERT(component != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndexPtr(SIMDVector value, const u32& component, usize index)noexcept{
     NWB_ASSERT(index < 4);
-    return VectorSetIntByIndex(value, *component, index);
+    return VectorSetIntByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntXPtr(SIMDVector value, const u32* x)noexcept{
-    NWB_ASSERT(x != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntXPtr(SIMDVector value, const u32& x)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.u[0] = *x;
+    value.u[0] = x;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(x, vreinterpretq_u32_f32(value), 0));
+    return vreinterpretq_f32_u32(vld1q_lane_u32(&x, vreinterpretq_u32_f32(value), 0));
 #else
-    return _mm_move_ss(value, _mm_load_ss(reinterpret_cast<const f32*>(x)));
+    return _mm_move_ss(value, _mm_load_ss(reinterpret_cast<const f32*>(&x)));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntYPtr(SIMDVector value, const u32* y)noexcept{
-    NWB_ASSERT(y != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntYPtr(SIMDVector value, const u32& y)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.u[1] = *y;
+    value.u[1] = y;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(y, vreinterpretq_u32_f32(value), 1));
+    return vreinterpretq_f32_u32(vld1q_lane_u32(&y, vreinterpretq_u32_f32(value), 1));
 #else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(*y), 1));
+    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(y), 1));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntZPtr(SIMDVector value, const u32* z)noexcept{
-    NWB_ASSERT(z != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntZPtr(SIMDVector value, const u32& z)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.u[2] = *z;
+    value.u[2] = z;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(z, vreinterpretq_u32_f32(value), 2));
+    return vreinterpretq_f32_u32(vld1q_lane_u32(&z, vreinterpretq_u32_f32(value), 2));
 #else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(*z), 2));
+    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(z), 2));
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntWPtr(SIMDVector value, const u32* w)noexcept{
-    NWB_ASSERT(w != nullptr);
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntWPtr(SIMDVector value, const u32& w)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    value.u[3] = *w;
+    value.u[3] = w;
     return value;
 #elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(w, vreinterpretq_u32_f32(value), 3));
+    return vreinterpretq_f32_u32(vld1q_lane_u32(&w, vreinterpretq_u32_f32(value), 3));
 #else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(*w), 3));
+    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(w), 3));
 #endif
 }
 
@@ -1449,33 +1430,28 @@ NWB_INLINE u32 SIMDCALL VectorInBoundsR(SIMDVector value, SIMDVector bounds)noex
     return SIMDVectorDetail::BoundsMaskR(VectorMoveMask(VectorInBounds(value, bounds)), VectorComponentMask::s_XYZW);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorEqualR(u32* outCR, SIMDVector v0, SIMDVector v1)noexcept{
-    NWB_ASSERT(outCR != nullptr);
-    *outCR = VectorEqualR(v0, v1);
+NWB_INLINE SIMDVector SIMDCALL VectorEqualR(u32& outCR, SIMDVector v0, SIMDVector v1)noexcept{
+    outCR = VectorEqualR(v0, v1);
     return VectorEqual(v0, v1);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorEqualIntR(u32* outCR, SIMDVector v0, SIMDVector v1)noexcept{
-    NWB_ASSERT(outCR != nullptr);
-    *outCR = VectorEqualIntR(v0, v1);
+NWB_INLINE SIMDVector SIMDCALL VectorEqualIntR(u32& outCR, SIMDVector v0, SIMDVector v1)noexcept{
+    outCR = VectorEqualIntR(v0, v1);
     return VectorEqualInt(v0, v1);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorGreaterR(u32* outCR, SIMDVector v0, SIMDVector v1)noexcept{
-    NWB_ASSERT(outCR != nullptr);
-    *outCR = VectorGreaterR(v0, v1);
+NWB_INLINE SIMDVector SIMDCALL VectorGreaterR(u32& outCR, SIMDVector v0, SIMDVector v1)noexcept{
+    outCR = VectorGreaterR(v0, v1);
     return VectorGreater(v0, v1);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorGreaterOrEqualR(u32* outCR, SIMDVector v0, SIMDVector v1)noexcept{
-    NWB_ASSERT(outCR != nullptr);
-    *outCR = VectorGreaterOrEqualR(v0, v1);
+NWB_INLINE SIMDVector SIMDCALL VectorGreaterOrEqualR(u32& outCR, SIMDVector v0, SIMDVector v1)noexcept{
+    outCR = VectorGreaterOrEqualR(v0, v1);
     return VectorGreaterOrEqual(v0, v1);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorInBoundsR(u32* outCR, SIMDVector value, SIMDVector bounds)noexcept{
-    NWB_ASSERT(outCR != nullptr);
-    *outCR = VectorInBoundsR(value, bounds);
+NWB_INLINE SIMDVector SIMDCALL VectorInBoundsR(u32& outCR, SIMDVector value, SIMDVector bounds)noexcept{
+    outCR = VectorInBoundsR(value, bounds);
     return VectorInBounds(value, bounds);
 }
 
@@ -2244,18 +2220,15 @@ NWB_INLINE SIMDVector SIMDCALL VectorCos(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
-NWB_INLINE void SIMDCALL VectorSinCos(SIMDVector* outSin, SIMDVector* outCos, SIMDVector value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
+NWB_INLINE void SIMDCALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
 
-    *outSin = VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
-    *outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
+    outSin = VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
+    outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTan(SIMDVector value)noexcept{
@@ -2478,18 +2451,15 @@ NWB_INLINE SIMDVector SIMDCALL VectorCosEst(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
-NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector* outSin, SIMDVector* outCos, SIMDVector value)noexcept{
-    NWB_ASSERT(outSin != nullptr);
-    NWB_ASSERT(outCos != nullptr);
-
+NWB_INLINE void SIMDCALL VectorSinCosEst(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
 
     SIMDVector x2 = VectorMultiply(x, x);
 
-    *outSin = VectorMultiply(SIMDVectorDetail::VectorSinEstPolynomial(x2), x);
-    *outCos = VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
+    outSin = VectorMultiply(SIMDVectorDetail::VectorSinEstPolynomial(x2), x);
+    outCos = VectorMultiply(SIMDVectorDetail::VectorCosEstPolynomial(x2), sign);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTanEst(SIMDVector value)noexcept{
@@ -3121,12 +3091,10 @@ NWB_INLINE SIMDVector SIMDCALL Vector3LinePointDistance(SIMDVector linePoint0, S
     return Vector3Length(VectorSubtract(pointVector, VectorMultiply(line, projectionScale)));
 }
 
-NWB_INLINE void SIMDCALL Vector3ComponentsFromNormal(SIMDVector* outParallel, SIMDVector* outPerpendicular, SIMDVector value, SIMDVector normal)noexcept{
-    NWB_ASSERT(outParallel != nullptr);
-    NWB_ASSERT(outPerpendicular != nullptr);
+NWB_INLINE void SIMDCALL Vector3ComponentsFromNormal(SIMDVector& outParallel, SIMDVector& outPerpendicular, SIMDVector value, SIMDVector normal)noexcept{
     const SIMDVector scale = Vector3Dot(value, normal);
-    *outParallel = VectorMultiply(normal, scale);
-    *outPerpendicular = VectorSubtract(value, *outParallel);
+    outParallel = VectorMultiply(normal, scale);
+    outPerpendicular = VectorSubtract(value, outParallel);
 }
 
 NWB_INLINE SIMDVector SIMDCALL Vector3Transform(SIMDVector value, const SIMDMatrix& matrix)noexcept;

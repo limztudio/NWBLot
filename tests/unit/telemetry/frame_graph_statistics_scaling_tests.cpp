@@ -22,11 +22,11 @@ namespace __hidden_frame_graph_statistics_scaling_tests{
 
 using namespace TelemetryTestDetail;
 
-void RecordUnsignedProperty(const char* key, const u64 value){
+void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char buffer[32u] = {};
     const AStringView formatted = FormatDecimal(value, buffer);
     buffer[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key, buffer);
+    testing::Test::RecordProperty(key.get(), buffer);
 }
 
 struct StatisticsFixture{
@@ -184,9 +184,9 @@ void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
     }
     testing::Test::RecordProperty("packet_count", packetCount);
     testing::Test::RecordProperty("owner_count", ownerCount);
-    RecordUnsignedProperty("builder_ns", appendNanoseconds);
-    RecordUnsignedProperty("encode_ns", encodeNanoseconds);
-    RecordUnsignedProperty("decode_ns", decodeNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("builder_ns"), appendNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("encode_ns"), encodeNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("decode_ns"), decodeNanoseconds);
 }
 
 TEST(Telemetry, PacketStatisticsInterleavedOwnersRoundTrip){

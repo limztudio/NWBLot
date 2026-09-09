@@ -117,7 +117,7 @@ private:
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(!transform)
                 continue;
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), &transform->rotation);
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
         }
     }
 

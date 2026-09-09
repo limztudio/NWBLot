@@ -6,7 +6,7 @@
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
-    const tchar* contextText,
+    const NotNull<const tchar*> contextText,
     const TStringView meshPathText
 ){
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_MeshletAttributeSkinSharingArena);
@@ -78,7 +78,7 @@
     const usize uv0Count,
     const usize colorCount,
     const bool skinRequired,
-    const tchar* contextText,
+    const NotNull<const tchar*> contextText,
     const TStringView meshPathText
 ){
     if(meshlets.empty() || meshletBounds.size() != meshlets.size()){

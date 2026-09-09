@@ -303,11 +303,11 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     EXPECT_EQ(acceptedToken.value, packetToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(uploadedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_ExpectedWords); ++wordIndex)
         EXPECT_EQ(uploadedWords[wordIndex], s_ExpectedWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -545,11 +545,11 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
         EXPECT_EQ(acceptedToken.value, packetToken.value);
         ASSERT_TRUE(device.waitForIdle());
 
-        const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(materialInstances.get(), CpuAccessMode::Read));
+        const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(*materialInstances, CpuAccessMode::Read));
         ASSERT_NE(uploadedWords, nullptr);
         for(usize wordIndex = 0u; wordIndex < LengthOf(s_OccupancyWords); ++wordIndex)
             EXPECT_EQ(uploadedWords[wordIndex], expectedWords[wordIndex]);
-        device.unmapBuffer(materialInstances.get());
+        device.unmapBuffer(*materialInstances);
     };
     submitAndVerify(occupancyPacket, occupancyAcceptedToken, s_OccupancyWords);
     submitAndVerify(extinctionPacket, extinctionAcceptedToken, s_ExtinctionWords);

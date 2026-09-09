@@ -58,7 +58,7 @@ struct UploadBufferTask{
         const BufferRange uploadRange(payload.destinationOffsetBytes, byteSize);
         commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest, false, uploadRange);
         commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(payload.destination.get(), bytes, byteSize, payload.destinationOffsetBytes))
+        if(!commandList.tryWriteBuffer(*payload.destination, bytes, byteSize, payload.destinationOffsetBytes))
             return false;
         if(payload.finalState != ResourceStates::CopyDest){
             commandList.setBufferState(payload.destination.get(), payload.finalState, false, uploadRange);
@@ -113,7 +113,7 @@ struct UploadTextureTask{
         commandList.setTextureState(payload.destination.get(), subresources, ResourceStates::CopyDest);
         commandList.commitBarriers();
         if(!commandList.tryWriteTexture(
-            payload.destination.get(),
+            *payload.destination,
             payload.arraySlice,
             payload.mipLevel,
             bytes,

@@ -394,7 +394,7 @@ private:
         const Float4& scale, const f32 specularF0 = 0.0f){
         const auto entity = createMesh(s_PlaneMesh, material, color, position, scale, specularF0);
         auto& transform = m_world->entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), &transform.rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);
     }
 
     void createMirrorBackdrop(){

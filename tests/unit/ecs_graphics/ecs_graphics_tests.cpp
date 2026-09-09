@@ -314,7 +314,7 @@ TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
     );
 
     Float44 matrix = {};
-    StoreFloat(worldToClip, &matrix);
+    StoreFloat(worldToClip, matrix);
     EXPECT_FLOAT_EQ(matrix._11, 2.0f);
     EXPECT_FLOAT_EQ(matrix._14, -6.0f);
     EXPECT_FLOAT_EQ(matrix._22, 3.0f);
@@ -325,7 +325,7 @@ TEST(EcsGraphics, MeshViewWorldToClipMatrixKeepsVectorLanesIntact){
     EXPECT_FLOAT_EQ(matrix._44, -4.25f);
 
     Float4 clipPosition;
-    StoreFloat(Vector4Transform(VectorSet(3.0f, -2.0f, 5.0f, 1.0f), worldToClip), &clipPosition);
+    StoreFloat(Vector4Transform(VectorSet(3.0f, -2.0f, 5.0f, 1.0f), worldToClip), clipPosition);
     EXPECT_FLOAT_EQ(clipPosition.x, 0.0f);
     EXPECT_FLOAT_EQ(clipPosition.y, 0.0f);
     EXPECT_FLOAT_EQ(clipPosition.z, 2.0f);

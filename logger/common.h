@@ -257,8 +257,8 @@ protected:
 
 
 public:
-    explicit Base(const char* allocationLog)
-        : m_arena(allocationLog)
+    explicit Base(const NotNull<const char*> allocationLog)
+        : m_arena(allocationLog.get())
         , m_msgQueue(m_arena)
         , m_exit(false)
     {}
@@ -367,7 +367,7 @@ private:
 
 
 public:
-    explicit BaseUpdateOrdinary(const char* allocationLog)
+    explicit BaseUpdateOrdinary(const NotNull<const char*> allocationLog)
         : Base<T, NAME>(allocationLog)
         , m_lastTime(TimerNow())
     {}
@@ -412,7 +412,7 @@ private:
 
 
 public:
-    explicit BaseUpdateIfQueued(const char* allocationLog)
+    explicit BaseUpdateIfQueued(const NotNull<const char*> allocationLog)
         : Base<T, NAME>(allocationLog)
         , m_semaphore(0)
     {}

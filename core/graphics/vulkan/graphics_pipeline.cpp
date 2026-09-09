@@ -88,7 +88,7 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         );
         const SIMDVector viewportXYWH = VectorPermute<0, 1, 4, 5>(viewportOrigin, signedViewportExtent);
         Float4U viewportValues;
-        StoreFloat(viewportXYWH, &viewportValues);
+        StoreFloat(viewportXYWH, viewportValues);
 
         VkViewport viewport{};
         viewport.x = viewportValues.x;
@@ -380,17 +380,14 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params){
-    auto* fb = framebuffer;
-    NWB_ASSERT(fb);
-
-    if(fb->m_framebufferInfo.width == 0 || fb->m_framebufferInfo.height == 0 || fb->m_framebufferInfo.arraySize == 0){
+bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params){
+    if(framebuffer.m_framebufferInfo.width == 0 || framebuffer.m_framebufferInfo.height == 0 || framebuffer.m_framebufferInfo.arraySize == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to begin dynamic rendering: framebuffer dimensions are invalid"));
         return false;
     }
 
-    const FramebufferDesc& fbDesc = fb->m_desc;
+    const FramebufferDesc& fbDesc = framebuffer.m_desc;
 
     // Dynamic rendering (VK_KHR_dynamic_rendering)
     constexpr u32 kMaxColorAttachments = s_MaxRenderTargets;
@@ -492,8 +489,8 @@ bool CommandList::beginDynamicRendering(Framebuffer* framebuffer, const RenderPa
 
     auto renderingInfo = VulkanDetail::MakeVkStruct<VkRenderingInfo>(VK_STRUCTURE_TYPE_RENDERING_INFO);
     renderingInfo.renderArea.offset = { 0, 0 };
-    renderingInfo.renderArea.extent = { fb->m_framebufferInfo.width, fb->m_framebufferInfo.height };
-    renderingInfo.layerCount = fb->m_framebufferInfo.arraySize;
+    renderingInfo.renderArea.extent = { framebuffer.m_framebufferInfo.width, framebuffer.m_framebufferInfo.height };
+    renderingInfo.layerCount = framebuffer.m_framebufferInfo.arraySize;
     renderingInfo.colorAttachmentCount = numColorAttachments;
     renderingInfo.pColorAttachments = colorAttachments;
     if(hasDepth)
@@ -509,18 +506,18 @@ void CommandList::endDynamicRendering(){
     m_context.deviceDispatch.vkCmdEndRendering(m_currentCmdBuf->m_cmdBuf);
 }
 
-void CommandList::beginRenderPass(Framebuffer* const framebuffer, const RenderPassParameters& params){
+void CommandList::beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params){
     constexpr const tchar* s_OperationName = NWB_TEXT("begin render pass");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
     if(!validateRenderPassBegin(framebuffer, params, s_OperationName))
         return;
-    if(!prepareFramebufferForRendering(framebuffer, s_OperationName))
+    if(!prepareFramebufferForRendering(&framebuffer, s_OperationName))
         return;
 
     // Match automatic graphics-state passes: compiler-owned recording may supply exact attachment barriers.
     if(m_enableAutomaticBarriers){
-        setResourceStatesForFramebuffer(*framebuffer);
+        setResourceStatesForFramebuffer(framebuffer);
         if(m_commandRecordingFailed)
             return;
         commitBarriers();
@@ -532,13 +529,13 @@ void CommandList::beginRenderPass(Framebuffer* const framebuffer, const RenderPa
         return;
     }
 
-    retainResource(framebuffer);
+    retainResource(&framebuffer);
     m_currentGraphicsState = {};
     m_currentComputeState = {};
     m_currentMeshletState = {};
     m_currentRayTracingState = {};
     m_renderPassActive = true;
-    m_renderPassFramebuffer = framebuffer;
+    m_renderPassFramebuffer = &framebuffer;
 }
 
 void CommandList::endRenderPass(){
@@ -568,7 +565,7 @@ bool CommandList::ensureGraphicsRenderPass(Framebuffer* framebuffer){
     }
 
     RenderPassParameters params = {};
-    if(!beginDynamicRendering(framebuffer, params)){
+    if(!beginDynamicRendering(*framebuffer, params)){
         rejectCommandRecording(NWB_TEXT("begin graphics render pass"), NWB_TEXT("dynamic rendering could not begin"));
         return false;
     }

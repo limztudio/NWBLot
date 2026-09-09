@@ -155,8 +155,8 @@ inline constexpr usize s_MaxNameSymbolUploadBytes = s_MaxNameSymbolUploadMebibyt
     }
 }
 
-static void EnqueueServerMessage(Server& server, const tchar* message, const Type::Enum type){
-    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message, SERVER_NAME), type);
+static void EnqueueServerMessage(Server& server, const NotNull<const tchar*> message, const Type::Enum type){
+    server.enqueue(StringFormat(server.arena(), NWB_TEXT("{} on {}"), message.get(), SERVER_NAME), type);
 }
 
 [[nodiscard]] MHD_Result QueueEmptyResponse(Server& server, MHD_Connection& connection, const unsigned int statusCode = MHD_HTTP_OK){
@@ -164,7 +164,7 @@ static void EnqueueServerMessage(Server& server, const tchar* message, const Typ
 
     auto* response = MHD_create_response_from_buffer(0, s_EmptyResponse, MHD_RESPMEM_PERSISTENT);
     if(!response){
-        EnqueueServerMessage(server, NWB_TEXT("Failed to create a response"), Type::Fatal);
+        EnqueueServerMessage(server, MakeNotNull(NWB_TEXT("Failed to create a response")), Type::Fatal);
         return MHD_NO;
     }
 
@@ -362,13 +362,13 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     if(!conCls){
         if(isCrashUpload && !thisPtr->crashUploadAuthorized(*connection)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Rejected unauthorized crash upload"), Type::Warning);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Rejected unauthorized crash upload")), Type::Warning);
             return __hidden_logger_server::QueueEmptyResponse(*thisPtr, *connection, MHD_HTTP_UNAUTHORIZED);
         }
 
         auto* info = __hidden_logger_server::CreateConnectionInfo(*thisPtr, uploadKind);
         if(!info){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to initialize connection upload state"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Failed to initialize connection upload state")), Type::Fatal);
             return MHD_NO;
         }
 
@@ -380,7 +380,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
     if(uploadDataSize){
         if(!upload_data){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received a malformed upload chunk"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Received a malformed upload chunk")), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
@@ -392,7 +392,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
             uploadDataSize > static_cast<size_t>(uploadSizeLimit)
             || info->size > uploadSizeLimit - static_cast<usize>(uploadDataSize)
         ){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an oversized message"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Received an oversized message")), Type::Error);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
@@ -400,7 +400,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
         const usize appendSize = static_cast<usize>(uploadDataSize);
         if(!info->append(uploadDataPtr, appendSize)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store upload chunk"), Type::Fatal);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Failed to store upload chunk")), Type::Fatal);
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
             __hidden_logger_server::DestroyConnectionInfo(info, conCls);
             return MHD_NO;
@@ -427,12 +427,12 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
                 ErrorCode error;
                 if(!RemoveFile(storedPath, error))
                     NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove unqueued crash upload file"));
-                __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Type::Error);
+                __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Discarded crash upload that could not be queued")), Type::Error);
             }
         }
         else{
             __hidden_logger_server::DiscardStoredCrashUpload(*thisPtr, *info);
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Failed to store crash upload"), Type::Error);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Failed to store crash upload")), Type::Error);
         }
     }
     else if(info->uploadKind == __hidden_logger_server::ConnectionUploadKind::Telemetry){
@@ -449,7 +449,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         // that client's debug-hash tokens back to readable names. Silent: symbol pushes are routine, not log-worthy.
         const AStringView nameSymbolBody(reinterpret_cast<const char*>(info->buffer), info->size);
         if(!Core::Common::NameSymbols::LoadFromMemory(nameSymbolBody)){
-            __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Received an empty or malformed name-symbol upload"), Type::Warning);
+            __hidden_logger_server::EnqueueServerMessage(*thisPtr, MakeNotNull(NWB_TEXT("Received an empty or malformed name-symbol upload")), Type::Warning);
         }
     }
     else{
@@ -460,7 +460,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
         else{
             __hidden_logger_server::EnqueueServerMessage(
                 *thisPtr,
-                error ? error : NWB_TEXT("Received a malformed message"),
+                MakeNotNull(error ? error : NWB_TEXT("Received a malformed message")),
                 Type::Error
             );
         }
@@ -471,7 +471,7 @@ MHD_Result Server::requestCallback(void* cls, MHD_Connection* connection, const 
 
 
 Server::Server()
-    : UpdateBaseType("NWB::Log::Server")
+    : UpdateBaseType(MakeNotNull("NWB::Log::Server"))
     , m_daemon(nullptr)
     , m_processedMsgFile(BaseType::arena())
     , m_crashIngestConfig(BaseType::arena())

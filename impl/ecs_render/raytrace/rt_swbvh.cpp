@@ -72,8 +72,8 @@ void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTracingIn
         const SceneSwBvhInstanceGpu& instance = instances[index];
         Float4 aabbMin{};
         Float4 aabbMax{};
-        StoreFloat(VectorSetW(primitives[index].aabbMin, 0.0f), &aabbMin);
-        StoreFloat(VectorSetW(primitives[index].aabbMax, 0.0f), &aabbMax);
+        StoreFloat(VectorSetW(primitives[index].aabbMin, 0.0f), aabbMin);
+        StoreFloat(VectorSetW(primitives[index].aabbMax, 0.0f), aabbMax);
 
         Fnv64AppendValue(hash, instance.worldToObject);
         Fnv64AppendValue(hash, instance.primitiveCount);
@@ -1161,7 +1161,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 LoadFloat(transform->rotation),
                 LoadFloat(transform->position)
             );
-            StoreFloat(instanceWorld, &instanceDesc.transform);
+            StoreFloat(instanceWorld, instanceDesc.transform);
         }
 
         // Build material context in InstanceID order; unresolved materials remain opaque.
@@ -1579,9 +1579,9 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
     commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
     if(
-        !commandList.tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)
-        || !commandList.tryWriteBuffer(instanceBuffer, instanceData, instanceByteCount)
-        || !commandList.tryWriteBuffer(materialTypedBuffer, materialTypedData, materialTypedByteCount)
+        !commandList.tryWriteBuffer(*instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)
+        || !commandList.tryWriteBuffer(*instanceBuffer, instanceData, instanceByteCount)
+        || !commandList.tryWriteBuffer(*materialTypedBuffer, materialTypedData, materialTypedByteCount)
     )
         return false;
     commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::ShaderResource);
@@ -1799,7 +1799,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
-        StoreFloat(worldToObject, &instance.worldToObject);
+        StoreFloat(worldToObject, instance.worldToObject);
         instance.primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
         // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
@@ -1937,11 +1937,11 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         nodes.reserve(buildNodes.size());
         for(const SceneBvhNodeCalculation& buildNode : buildNodes){
             NwbBvhNodeGpu node;
-            StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, &node.aabbMinLeftChild);
+            StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, node.aabbMinLeftChild);
             const u32 taggedRightChild = buildNode.rightChild
                 | (buildNode.containsTransparentOccluder ? BvhNodeIndex::TransparentSubtreeFlag : 0u)
             ;
-            StoreFloatInt(buildNode.aabbMax, taggedRightChild, &node.aabbMaxRightChild);
+            StoreFloatInt(buildNode.aabbMax, taggedRightChild, node.aabbMaxRightChild);
             nodes.push_back(node);
         }
 
@@ -2769,8 +2769,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
-    StoreFloat(VectorSetW(aabbMin, 0.0f), &pushConstants.aabbMin);
-    StoreFloat(VectorSetW(aabbMax, 0.0f), &pushConstants.aabbMax);
+    StoreFloat(VectorSetW(aabbMin, 0.0f), pushConstants.aabbMin);
+    StoreFloat(VectorSetW(aabbMax, 0.0f), pushConstants.aabbMax);
 
     // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct
     // and hybrid compatibility routes preserve their established native sentinel setup here.
@@ -2779,9 +2779,9 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
-        commandList.clearBufferUInt(keysBuffer, BvhNodeIndex::Invalid);
-        commandList.clearBufferUInt(meshParentBuffer, BvhNodeIndex::Invalid);
-        commandList.clearBufferUInt(visitCounterBuffer, 0u);
+        commandList.clearBufferUInt(*keysBuffer, BvhNodeIndex::Invalid);
+        commandList.clearBufferUInt(*meshParentBuffer, BvhNodeIndex::Invalid);
+        commandList.clearBufferUInt(*visitCounterBuffer, 0u);
     }
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
@@ -2881,7 +2881,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
-        commandList.clearBufferUInt(visitCounterBuffer, 0u);
+        commandList.clearBufferUInt(*visitCounterBuffer, 0u);
     }
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);

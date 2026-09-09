@@ -249,50 +249,50 @@ static void LowerOperation(
     switch(record.opcode){
     case GpuCommandIrOpcode::CopyBuffer:
         commandList.copyBuffer(
-            graph.bufferForResource(record.destination),
+            *graph.bufferForResource(record.destination),
             record.destinationOffsetBytes,
-            graph.bufferForResource(record.source),
+            *graph.bufferForResource(record.source),
             record.sourceOffsetBytes,
             record.dataSizeBytes
         );
         return;
     case GpuCommandIrOpcode::CopyTexture:
         commandList.copyTexture(
-            graph.textureForResource(record.destination),
+            *graph.textureForResource(record.destination),
             record.destinationSlice,
-            graph.textureForResource(record.source),
+            *graph.textureForResource(record.source),
             record.sourceSlice
         );
         return;
     case GpuCommandIrOpcode::ClearBuffer:
-        commandList.clearBufferUInt(graph.bufferForResource(record.destination), record.uintClearValue.r);
+        commandList.clearBufferUInt(*graph.bufferForResource(record.destination), record.uintClearValue.r);
         return;
     case GpuCommandIrOpcode::ClearTexture:
         switch(record.clearTextureValueType){
         case GpuClearTextureTaskValueType::Float:
             commandList.clearTextureFloat(
-                graph.textureForResource(record.destination),
+                *graph.textureForResource(record.destination),
                 record.destinationSubresources,
                 record.floatClearValue
             );
             return;
         case GpuClearTextureTaskValueType::UInt:
             commandList.clearTextureUInt(
-                graph.textureForResource(record.destination),
+                *graph.textureForResource(record.destination),
                 record.destinationSubresources,
                 record.uintClearValue
             );
             return;
         case GpuClearTextureTaskValueType::Int:
             commandList.clearTextureInt(
-                graph.textureForResource(record.destination),
+                *graph.textureForResource(record.destination),
                 record.destinationSubresources,
                 record.intClearValue
             );
             return;
         case GpuClearTextureTaskValueType::DepthStencil:
             commandList.clearDepthStencilTexture(
-                graph.textureForResource(record.destination),
+                *graph.textureForResource(record.destination),
                 record.destinationSubresources,
                 record.clearDepth,
                 record.depthClearValue,
@@ -306,7 +306,7 @@ static void LowerOperation(
         }
     case GpuCommandIrOpcode::ClearTextureRectUInt:
         commandList.clearTextureRectUInt(
-            graph.textureForResource(record.destination),
+            *graph.textureForResource(record.destination),
             record.destinationSubresources,
             record.clearRect,
             record.uintClearValue
@@ -611,9 +611,9 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             );
         }
         const bool lowered = commandList.recordPreflightedCopyBufferDirectVulkan(
-            graph.bufferForResource(record.destination),
+            *graph.bufferForResource(record.destination),
             record.destinationOffsetBytes,
-            graph.bufferForResource(record.source),
+            *graph.bufferForResource(record.source),
             record.sourceOffsetBytes,
             record.dataSizeBytes
         );

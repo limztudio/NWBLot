@@ -90,7 +90,7 @@ template<typename CookEntryT>
 template<typename CookEntryT>
 static void LogMeshletCookMetrics(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry
 ){
@@ -114,7 +114,7 @@ static void LogMeshletCookMetrics(
     const usize runtimeBytes = EstimateMeshletRuntimeBytes(entry);
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("{} meta '{}': meshlet cook metrics - meshlets {}, primitives avg {:.2f} min {} max {}, local vertices avg {:.2f} min {} max {}, deformed positions avg {:.2f}, attributes avg {:.2f}, sphere radius avg {:.4f}, cones disabled {:.2f}% ({}/{}), cone cutoff avg {:.4f} worst {:.4f}, bytes source {} runtime {}")
-        , metaKind
+        , metaKind.get()
         , PathToString<tchar>(nwbFilePath)
         , metrics.meshletCount
         , primitiveCountAverage

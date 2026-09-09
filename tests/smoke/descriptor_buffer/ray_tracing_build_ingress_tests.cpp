@@ -225,13 +225,13 @@ struct OpacityMicromapBuildInputs{
     )
         return false;
 
-    auto* inputData = static_cast<u8*>(device.mapBuffer(outInputs.input.get(), CpuAccessMode::Write));
+    auto* inputData = static_cast<u8*>(device.mapBuffer(*outInputs.input, CpuAccessMode::Write));
     if(!inputData)
         return false;
     inputData[outInputs.inputOffset] = 0u;
-    device.unmapBuffer(outInputs.input.get());
+    device.unmapBuffer(*outInputs.input);
 
-    auto* triangleData = static_cast<u8*>(device.mapBuffer(outInputs.triangleDescs.get(), CpuAccessMode::Write));
+    auto* triangleData = static_cast<u8*>(device.mapBuffer(*outInputs.triangleDescs, CpuAccessMode::Write));
     if(!triangleData)
         return false;
     VkMicromapTriangleEXT triangleDesc = {};
@@ -244,7 +244,7 @@ struct OpacityMicromapBuildInputs{
         &triangleDesc,
         sizeof(triangleDesc)
     );
-    device.unmapBuffer(outInputs.triangleDescs.get());
+    device.unmapBuffer(*outInputs.triangleDescs);
     return true;
 }
 

@@ -373,7 +373,7 @@ TEST_F(CommandListSubmissionProvenanceTest, UploadLedgerDiscardRequiresExactNati
     CommandListHandle copyCommandList = device().createCommandList(copyParameters);
     ASSERT_TRUE(copyCommandList);
     copyCommandList->open();
-    copyCommandList->copyBuffer(readback.get(), 0u, newBuffer, newOffset, sizeof(s_NewValue));
+    copyCommandList->copyBuffer(*readback, 0u, *newBuffer, newOffset, sizeof(s_NewValue));
     copyCommandList->close();
     ASSERT_FALSE(copyCommandList->commandRecordingFailed());
     ASSERT_TRUE(copyCommandList->hasCommandBuffer());
@@ -385,10 +385,10 @@ TEST_F(CommandListSubmissionProvenanceTest, UploadLedgerDiscardRequiresExactNati
         QueueSubmissionDesc{}
     ).valid());
     ASSERT_TRUE(device().waitForIdle());
-    const u32* const readbackValue = static_cast<const u32*>(device().mapBuffer(readback.get(), CpuAccessMode::Read));
+    const u32* const readbackValue = static_cast<const u32*>(device().mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(readbackValue, nullptr);
     EXPECT_EQ(*readbackValue, s_NewValue);
-    device().unmapBuffer(readback.get());
+    device().unmapBuffer(*readback);
 }
 
 
@@ -552,7 +552,7 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerO
     ASSERT_TRUE(reusedLease);
 
     oldLease->open();
-    ASSERT_TRUE(oldLease->tryWriteBuffer(oldDestination.get(), &s_OldValue, sizeof(s_OldValue)));
+    ASSERT_TRUE(oldLease->tryWriteBuffer(*oldDestination, &s_OldValue, sizeof(s_OldValue)));
     oldLease->close();
     ASSERT_TRUE(oldLease->hasCommandBuffer());
     const GpuCommandArenaWorkerStatistics workerStatsBefore = device().getCommandArenaWorkerStatistics(
@@ -588,7 +588,7 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerO
 
     reusedLease->open();
     ASSERT_TRUE(reusedLease->isRecording());
-    ASSERT_TRUE(reusedLease->tryWriteBuffer(reusedDestination.get(), &s_ReusedValue, sizeof(s_ReusedValue)));
+    ASSERT_TRUE(reusedLease->tryWriteBuffer(*reusedDestination, &s_ReusedValue, sizeof(s_ReusedValue)));
     reusedLease->close();
     ASSERT_TRUE(reusedLease->hasCommandBuffer());
     ASSERT_FALSE(reusedLease->commandRecordingFailed());
@@ -612,11 +612,11 @@ TEST_F(CommandListSubmissionProvenanceTest, InjectedNativeFailureRecyclesWorkerO
     ).valid());
     ASSERT_TRUE(device().waitForIdle());
     const u32* const readback = static_cast<const u32*>(
-        device().mapBuffer(reusedDestination.get(), CpuAccessMode::Read)
+        device().mapBuffer(*reusedDestination, CpuAccessMode::Read)
     );
     ASSERT_NE(readback, nullptr);
     EXPECT_EQ(*readback, s_ReusedValue);
-    device().unmapBuffer(reusedDestination.get());
+    device().unmapBuffer(*reusedDestination);
 }
 
 

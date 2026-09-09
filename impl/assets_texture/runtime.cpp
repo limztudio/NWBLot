@@ -41,16 +41,16 @@ using TextureFormat::ComputeMipSliceCount;
     const u32 height,
     const u32 depth,
     u64& outPrimaryPayloadByteCount,
-    const tchar* failureContext
+    const NotNull<const tchar*> failureContext
 ){
     outPrimaryPayloadByteCount = 0u;
     u32 expectedMipCount = 0u;
     if(!ComputeCompleteMipCount(dimension, width, height, depth, expectedMipCount)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: base resolution is invalid"), failureContext);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: base resolution is invalid"), failureContext.get());
         return false;
     }
     if(mipLevels.size() != expectedMipCount){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip count does not describe a complete chain"), failureContext);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip count does not describe a complete chain"), failureContext.get());
         return false;
     }
 
@@ -71,38 +71,38 @@ using TextureFormat::ComputeMipSliceCount;
             expectedBlockCountY,
             expectedSliceSizeBytes
         )){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext.get(), mipIndex);
             return false;
         }
         u32 expectedSliceCount = 0u;
         if(!ComputeMipSliceCount(dimension, expectedDepth, expectedSliceCount)){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext.get(), mipIndex);
             return false;
         }
         if(expectedSliceSizeBytes > Limit<u64>::s_Max / expectedSliceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte size overflows"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte size overflows"), failureContext.get(), mipIndex);
             return false;
         }
         const u64 expectedSizeBytes = expectedSliceSizeBytes * expectedSliceCount;
 
         if(mip.width != expectedWidth || mip.height != expectedHeight){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext.get(), mipIndex);
             return false;
         }
         if(mip.blockCountX != expectedBlockCountX || mip.blockCountY != expectedBlockCountY){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block grid is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block grid is invalid"), failureContext.get(), mipIndex);
             return false;
         }
         if(mip.sliceCount != expectedSliceCount){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext.get(), mipIndex);
             return false;
         }
         if(mip.offsetBytes != expectedOffsetBytes || mip.sizeBytes != expectedSizeBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext.get(), mipIndex);
             return false;
         }
         if(expectedSizeBytes > Limit<u64>::s_Max - expectedOffsetBytes){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte range overflows"), failureContext, mipIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte range overflows"), failureContext.get(), mipIndex);
             return false;
         }
 
@@ -223,7 +223,7 @@ bool Texture::validatePayload()const{
         m_height,
         m_depth,
         primaryPayloadByteCount,
-        NWB_TEXT("Texture::validatePayload")
+        MakeNotNull(NWB_TEXT("Texture::validatePayload"))
     ))
         return false;
 
@@ -272,8 +272,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         prefixCursor,
         headerPrefix,
         TextureBinaryPayload::s_TextureMagic,
-        NWB_TEXT("Texture::loadBinary"),
-        NWB_TEXT("texture")
+        MakeNotNull(NWB_TEXT("Texture::loadBinary")),
+        MakeNotNull(NWB_TEXT("texture"))
     ))
         return false;
     if(
@@ -302,8 +302,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
             cursor,
             header,
             TextureBinaryPayload::s_TextureMagic,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("texture")
+            MakeNotNull(NWB_TEXT("Texture::loadBinary")),
+            MakeNotNull(NWB_TEXT("texture"))
         ))
             return false;
         if(
@@ -331,8 +331,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
             cursor,
             header,
             TextureBinaryPayload::s_TextureMagic,
-            NWB_TEXT("Texture::loadBinary"),
-            NWB_TEXT("texture")
+            MakeNotNull(NWB_TEXT("Texture::loadBinary")),
+            MakeNotNull(NWB_TEXT("texture"))
         ))
             return false;
         if(
@@ -380,8 +380,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         mipCount,
         mipBinaries,
-        NWB_TEXT("Texture::loadBinary"),
-        NWB_TEXT("mip levels")
+        MakeNotNull(NWB_TEXT("Texture::loadBinary")),
+        MakeNotNull(NWB_TEXT("mip levels"))
     ))
         return false;
 
@@ -416,7 +416,7 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: texture payload is malformed"));
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Texture::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Texture::loadBinary"))))
         return false;
 
     m_colorSpace = static_cast<TextureColorSpace::Enum>(colorSpace);

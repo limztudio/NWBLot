@@ -309,7 +309,7 @@ private:
         if(!transform)
             return;
 
-        StoreFloat(receiverRotation, &transform->rotation);
+        StoreFloat(receiverRotation, transform->rotation);
     }
 
     void updateReceiverTransforms(const SIMDVector receiverRotation){
@@ -362,7 +362,7 @@ public:
         SyncSmokeModelRuntimes(*m_world);
         const bool receiverReady = installCsgReceiverOnSpawnedModelObject();
         const SIMDVector cutterLocalCenter = resolveCutterAnchorLocalCenter();
-        StoreFloat(cutterLocalCenter, &m_cutterLocalCenter);
+        StoreFloat(cutterLocalCenter, m_cutterLocalCenter);
         createCutter(cutterLocalCenter);
         NWB_FATAL_ASSERT_MSG(
             activeCamera.camera.valid() && directionalLight.valid()

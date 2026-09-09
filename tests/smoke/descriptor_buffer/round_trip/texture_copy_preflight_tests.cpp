@@ -144,8 +144,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     ASSERT_TRUE(lastAcceptedToken.valid());
 
     enum class Operation : u8{
-        NullDestination,
-        NullSource,
         SameResource,
         ForeignDestination,
         ForeignSource,
@@ -166,8 +164,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         const char* label;
     };
     const Case cases[] = {
-        { Operation::NullDestination, "null destination" },
-        { Operation::NullSource, "null source" },
         { Operation::SameResource, "same resource" },
         { Operation::ForeignDestination, "foreign destination" },
         { Operation::ForeignSource, "foreign source" },
@@ -197,12 +193,6 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         bool sourcePermanentConflict = false;
         bool destinationPermanentConflict = false;
         switch(testCase.operation){
-        case Operation::NullDestination:
-            caseDestination = nullptr;
-            break;
-        case Operation::NullSource:
-            caseSource = nullptr;
-            break;
         case Operation::SameResource:
             caseDestination = source.get();
             break;
@@ -258,7 +248,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         ASSERT_FALSE(commandList->commandRecordingFailed());
         commandList->setGraphicsState(GraphicsState().setFramebuffer(priorWorkFramebuffer.get()));
         commandList->clearTextureFloat(
-            priorWorkTarget.get(),
+            *priorWorkTarget,
             s_AllSubresources,
             Color(0.25f, 0.5f, 0.75f, 1.f)
         );
@@ -275,9 +265,9 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             0u,
             0u
         );
-        const usize sourceReferencesBefore = caseSource ? caseSource->getReferenceCount() : 0u;
-        const usize destinationReferencesBefore = caseDestination ? caseDestination->getReferenceCount() : 0u;
-        commandList->copyTexture(caseDestination, destinationSlice, caseSource, sourceSlice);
+        const usize sourceReferencesBefore = caseSource->getReferenceCount();
+        const usize destinationReferencesBefore = caseDestination->getReferenceCount();
+        commandList->copyTexture(*caseDestination, destinationSlice, *caseSource, sourceSlice);
         mutableSourceDesc = textureDesc;
         mutableDestinationDesc = textureDesc;
 
@@ -291,10 +281,8 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             commandList->getTextureSubresourceState(destination.get(), 0u, 0u),
             destinationStateBefore
         );
-        if(caseSource)
-            EXPECT_EQ(caseSource->getReferenceCount(), sourceReferencesBefore);
-        if(caseDestination)
-            EXPECT_EQ(caseDestination->getReferenceCount(), destinationReferencesBefore);
+        EXPECT_EQ(caseSource->getReferenceCount(), sourceReferencesBefore);
+        EXPECT_EQ(caseDestination->getReferenceCount(), destinationReferencesBefore);
 
         CommandListResourceStateHandoff invalidHandoff(DescriptorBufferRoundTripTest::arena());
         commandList->close(&invalidHandoff);
@@ -315,12 +303,12 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     copiedSlice.setOrigin(2u, 2u, 0u).setSize(4u, 4u, 1u);
     commandList->open();
     commandList->clearTextureFloat(
-        destination.get(),
+        *destination,
         s_AllSubresources,
         Color(1.f, 0.f, 0.f, 1.f)
     );
     commandList->setGraphicsState(GraphicsState().setFramebuffer(sourceFramebuffer.get()));
-    commandList->clearTextureFloat(source.get(), s_AllSubresources, Color(0.f, 1.f, 0.f, 1.f));
+    commandList->clearTextureFloat(*source, s_AllSubresources, Color(0.f, 1.f, 0.f, 1.f));
     commandList->endRenderPass();
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
@@ -333,14 +321,14 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     commandList->open();
     commandList->setGraphicsState(GraphicsState().setFramebuffer(priorWorkFramebuffer.get()));
     commandList->clearTextureFloat(
-        priorWorkTarget.get(),
+        *priorWorkTarget,
         s_AllSubresources,
         Color(0.75f, 0.5f, 0.25f, 1.f)
     );
     ASSERT_TRUE(commandList->isRenderPassActive());
     const usize sourceReferencesBeforeCopy = source->getReferenceCount();
     const usize destinationReferencesBeforeCopy = destination->getReferenceCount();
-    commandList->copyTexture(destination.get(), copiedSlice, source.get(), copiedSlice);
+    commandList->copyTexture(*destination, copiedSlice, *source, copiedSlice);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->isRenderPassActive());
     EXPECT_EQ(commandList->getTextureSubresourceState(source.get(), 0u, 0u), ResourceStates::CopySource);
@@ -350,7 +338,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     );
     EXPECT_EQ(source->getReferenceCount(), sourceReferencesBeforeCopy + 1u);
     EXPECT_EQ(destination->getReferenceCount(), destinationReferencesBeforeCopy + 1u);
-    commandList->copyTexture(readback.get(), TextureSlice{}, destination.get(), TextureSlice{});
+    commandList->copyTexture(*readback, TextureSlice{}, *destination, TextureSlice{});
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     const QueueSubmissionToken copyToken = submit();
@@ -360,7 +348,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
 
     usize rowPitch = 0u;
     const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        readback.get(),
+        *readback,
         TextureSlice{},
         CpuAccessMode::Read,
         &rowPitch
@@ -377,7 +365,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             EXPECT_EQ(readbackBytes[pixelOffset + 3u], 255u);
         }
     }
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 }
 
 

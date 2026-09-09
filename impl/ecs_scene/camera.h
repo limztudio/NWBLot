@@ -49,7 +49,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 
     SIMDVector sinHalfFovVector;
     SIMDVector cosHalfFovVector;
-    VectorSinCos(&sinHalfFovVector, &cosHalfFovVector, VectorScale(verticalFovRadians, 0.5f));
+    VectorSinCos(sinHalfFovVector, cosHalfFovVector, VectorScale(verticalFovRadians, 0.5f));
     if(
         !VectorIsFinite(sinHalfFovVector, VectorComponentMask::s_XYZW)
         || !VectorIsFinite(cosHalfFovVector, VectorComponentMask::s_XYZW)
@@ -206,7 +206,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ))
         return false;
 
-    StoreFloat(projectionParams, &outProjection.projectionParams);
+    StoreFloat(projectionParams, outProjection.projectionParams);
     outProjection.aspectRatio = VectorGetX(aspectRatio);
     outProjection.tanHalfVerticalFov = VectorGetX(tanHalfVerticalFov);
     outProjection.nearPlane = VectorGetX(resolvedNearPlane);

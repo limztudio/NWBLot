@@ -47,13 +47,17 @@ private:
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
         f32 enabled = 1.0f;
-        static_cast<void>(ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", enabled));
-        renderer.setRefractionEnabled(enabled != 0.0f);
+        const bool refractionEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", enabled)
+            || enabled != 0.0f
+        ;
+        renderer.setRefractionEnabled(refractionEnabled);
         f32 hardware = 1.0f;
-        static_cast<void>(ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE", hardware));
-        renderer.setRefractionHardwareTracingEnabled(hardware != 0.0f);
+        const bool hardwareEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE", hardware)
+            || hardware != 0.0f
+        ;
+        renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB_LOGGER_ESSENTIAL_INFO(
-            NWB_TEXT("RefractionSmokeProject: refraction {}"), enabled != 0.0f ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+            NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
         );
         return world;
     }
@@ -99,7 +103,7 @@ private:
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         // The plane starts in XZ with a +Y normal; face the camera along -Z.
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), &transform->rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
         return entity;
     }
 

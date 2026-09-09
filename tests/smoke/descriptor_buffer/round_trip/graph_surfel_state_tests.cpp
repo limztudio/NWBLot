@@ -743,11 +743,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     EXPECT_FALSE(initializationClearPending);
     EXPECT_TRUE(device.waitForIdle());
     const auto expectsClearValue = [&device](const BufferHandle& buffer, const u32 value){
-        const u32* const words = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+        const u32* const words = static_cast<const u32*>(device.mapBuffer(*buffer, CpuAccessMode::Read));
         ASSERT_NE(words, nullptr);
         for(usize wordIndex = 0u; wordIndex < 256u / sizeof(u32); ++wordIndex)
             EXPECT_EQ(words[wordIndex], value);
-        device.unmapBuffer(buffer.get());
+        device.unmapBuffer(*buffer);
     };
     expectsClearValue(pool, 0u);
     expectsClearValue(cellHeads, 0xffffffffu);
@@ -1610,12 +1610,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_TRUE(transaction.packetToken(surfelPacket).valid());
     EXPECT_TRUE(device.waitForIdle());
     const u32* const cellHeadWords = static_cast<const u32*>(
-        device.mapBuffer(uavBuffers[1u].get(), CpuAccessMode::Read)
+        device.mapBuffer(*uavBuffers[1u], CpuAccessMode::Read)
     );
     ASSERT_NE(cellHeadWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < 256u / sizeof(u32); ++wordIndex)
         EXPECT_EQ(cellHeadWords[wordIndex], 0xffffffffu);
-    device.unmapBuffer(uavBuffers[1u].get());
+    device.unmapBuffer(*uavBuffers[1u]);
 }
 
 

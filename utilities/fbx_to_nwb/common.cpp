@@ -197,7 +197,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
     if(!VectorIsFinite(color, VectorComponentMask::s_XYZW))
         return false;
 
-    StoreFloat(color, &outColor);
+    StoreFloat(color, outColor);
     return true;
 }
 

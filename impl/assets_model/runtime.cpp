@@ -177,8 +177,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         ModelBinaryPayload::s_ModelMagic,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("model")
+        MakeNotNull(NWB_TEXT("Model::loadBinary")),
+        MakeNotNull(NWB_TEXT("model"))
     ))
         return false;
 
@@ -191,8 +191,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skeletonObjectCount,
         skeletonObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("skeleton objects")
+        MakeNotNull(NWB_TEXT("Model::loadBinary")),
+        MakeNotNull(NWB_TEXT("skeleton objects"))
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -200,8 +200,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.staticMeshObjectCount,
         staticMeshObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("static mesh objects")
+        MakeNotNull(NWB_TEXT("Model::loadBinary")),
+        MakeNotNull(NWB_TEXT("static mesh objects"))
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -209,8 +209,8 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.skinnedMeshObjectCount,
         skinnedMeshObjectBinaries,
-        NWB_TEXT("Model::loadBinary"),
-        NWB_TEXT("skinned mesh objects")
+        MakeNotNull(NWB_TEXT("Model::loadBinary")),
+        MakeNotNull(NWB_TEXT("skinned mesh objects"))
     ))
         return false;
 
@@ -247,7 +247,7 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
         m_skinnedMeshObjects.push_back(object);
     }
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Model::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Model::loadBinary")))
         && validatePayload(scratchArena)
     ;
 }

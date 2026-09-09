@@ -65,7 +65,7 @@ public:
 
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
-        StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), &transform->rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), transform->rotation);
         if(!m_preview){
             auto& renderer = m_world.entity(entity).getComponent<Impl::RendererComponent>();
             renderer.opticalVolumeGroup = opticalGroup;
@@ -103,7 +103,7 @@ public:
         );
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
-        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), &transform->rotation);
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
     }
 
     void backdrop(){

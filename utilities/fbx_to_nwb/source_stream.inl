@@ -440,7 +440,7 @@ template<typename Value, typename Lookup>
 
         const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
-        StoreFloat(VectorSetW(tangent, handedness), &generatedTangent);
+        StoreFloat(VectorSetW(tangent, handedness), generatedTangent);
         if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
             return false;
     }

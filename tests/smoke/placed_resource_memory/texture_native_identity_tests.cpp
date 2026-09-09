@@ -293,7 +293,7 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
     EXPECT_FALSE(virtualDuplicate);
     EXPECT_FALSE(device.isTextureReadyForGpuUse(placed.get()));
 
-    const MemoryRequirements requirements = device.getTextureMemoryRequirements(placed.get());
+    const MemoryRequirements requirements = device.getTextureMemoryRequirements(*placed);
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
@@ -301,7 +301,7 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
         .debugName = Name("tests/texture_native_identity/virtual_heap"),
     });
     ASSERT_TRUE(heap);
-    if(!device.bindTextureMemory(placed.get(), heap.get(), 0u))
+    if(!device.bindTextureMemory(*placed, *heap, 0u))
         GTEST_SKIP() << "Texture native identity: DeviceLocal heap is incompatible with virtual textures.";
     EXPECT_TRUE(device.isTextureReadyForGpuUse(placed.get()));
 }

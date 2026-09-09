@@ -74,8 +74,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkinBinaryPayload::s_SkinMagic,
-        NWB_TEXT("Skin::loadBinary"),
-        NWB_TEXT("skin")
+        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
+        MakeNotNull(NWB_TEXT("skin"))
     ))
         return false;
 
@@ -87,8 +87,8 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.influenceCount,
         m_influences,
-        NWB_TEXT("Skin::loadBinary"),
-        NWB_TEXT("influences")
+        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
+        MakeNotNull(NWB_TEXT("influences"))
     ))
         return false;
     if(!Core::Assets::ReadVectorPayload(
@@ -96,12 +96,12 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.inverseBindMatrixCount,
         m_inverseBindMatrices,
-        NWB_TEXT("Skin::loadBinary"),
-        NWB_TEXT("inverse bind matrices")
+        MakeNotNull(NWB_TEXT("Skin::loadBinary")),
+        MakeNotNull(NWB_TEXT("inverse bind matrices"))
     ))
         return false;
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skin::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Skin::loadBinary")))
         && validatePayload()
     ;
 }

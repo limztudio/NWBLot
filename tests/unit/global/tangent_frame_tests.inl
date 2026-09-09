@@ -30,8 +30,8 @@ TEST(Global, ResolvesFrameMath){
 
     Float4U normalValue;
     Float4U bitangentValue;
-    StoreFloat(normal, &normalValue);
-    StoreFloat(bitangent, &bitangentValue);
+    StoreFloat(normal, normalValue);
+    StoreFloat(bitangent, bitangentValue);
 
     EXPECT_TRUE(NearlyEqual4(normalValue, 0.0f, 0.0f, 1.0f, 0.0f));
     EXPECT_TRUE(NearlyEqual(VectorGetX(Vector3LengthSq(tangent)), 1.0f));

@@ -383,7 +383,7 @@ TEST(EcsGraphics, GbufferClearsUseFirstTilePassAndContinuationLoads){
 
     const usize peelDispatch = gbufferTask.find("csgSystem.dispatchCsgIntervalPeels(");
     const usize beginRenderPass = gbufferTask.find(
-        "commandList.beginRenderPass(deferredTargets.framebuffer.get(), renderPassParameters);"
+        "commandList.beginRenderPass(*deferredTargets.framebuffer, renderPassParameters);"
     );
     ASSERT_NE(peelDispatch, AStringView::npos);
     ASSERT_NE(beginRenderPass, AStringView::npos);

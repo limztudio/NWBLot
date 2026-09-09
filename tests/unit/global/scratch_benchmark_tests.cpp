@@ -7,6 +7,7 @@
 #include <global/algorithm.h>
 #include <global/arena_memory.h>
 #include <global/containers.h>
+#include <global/not_null.h>
 #include <global/text_utils.h>
 #include <global/timer.h>
 
@@ -109,9 +110,9 @@ template<typename RunSampleT>
     return summary;
 }
 
-static void RecordUnsignedProperty(const char* const key, const u64 value){
+static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char text[32u] = {};
-    testing::Test::RecordProperty(key, FormatDecimal(value, text).data());
+    testing::Test::RecordProperty(key.get(), FormatDecimal(value, text).data());
 }
 
 static void VerifyAndRecord(
@@ -122,15 +123,15 @@ static void VerifyAndRecord(
     EXPECT_TRUE(summary.valid);
     EXPECT_GT(summary.checksum, 0u);
 
-    RecordUnsignedProperty("median_ns", summary.medianNanoseconds);
-    RecordUnsignedProperty("p95_ns", summary.p95Nanoseconds);
-    RecordUnsignedProperty("operations_per_sample", operationsPerSample);
-    RecordUnsignedProperty("arena_lifecycles_per_sample", arenaLifecyclesPerSample);
-    RecordUnsignedProperty("warmup_sample_count", s_WarmupSampleCount);
-    RecordUnsignedProperty("measured_sample_count", s_MeasuredSampleCount);
-    RecordUnsignedProperty("heap_allocation_count", summary.heapAllocationCount);
-    RecordUnsignedProperty("heap_deallocation_count", summary.heapDeallocationCount);
-    RecordUnsignedProperty("checksum", summary.checksum);
+    RecordUnsignedProperty(MakeNotNull("median_ns"), summary.medianNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("p95_ns"), summary.p95Nanoseconds);
+    RecordUnsignedProperty(MakeNotNull("operations_per_sample"), operationsPerSample);
+    RecordUnsignedProperty(MakeNotNull("arena_lifecycles_per_sample"), arenaLifecyclesPerSample);
+    RecordUnsignedProperty(MakeNotNull("warmup_sample_count"), s_WarmupSampleCount);
+    RecordUnsignedProperty(MakeNotNull("measured_sample_count"), s_MeasuredSampleCount);
+    RecordUnsignedProperty(MakeNotNull("heap_allocation_count"), summary.heapAllocationCount);
+    RecordUnsignedProperty(MakeNotNull("heap_deallocation_count"), summary.heapDeallocationCount);
+    RecordUnsignedProperty(MakeNotNull("checksum"), summary.checksum);
 }
 
 [[nodiscard]] static Sample RunColdArenaSample(){

@@ -123,7 +123,7 @@ TEST(Math, Float33UStorageConversion){
     EXPECT_TRUE(NearlyEqual4(loaded.v[3], 0.0f, 0.0f, 0.0f, 1.0f));
 
     Float33U roundTrip = {};
-    StoreFloat(loaded, &roundTrip);
+    StoreFloat(loaded, roundTrip);
     EXPECT_EQ(roundTrip, source);
 }
 
@@ -261,12 +261,12 @@ TEST(Math, DynamicVectorLanes){
     EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 3u), -19.0f));
 
     f32 component = 0.0f;
-    VectorGetByIndexPtr(&component, value, 2u);
+    VectorGetByIndexPtr(component, value, 2u);
     EXPECT_TRUE(NearlyEqual(component, 11.0f));
 
     SIMDVector updated = VectorSetByIndex(value, 5.0f, 1u);
     const f32 replacement = 13.0f;
-    updated = VectorSetByIndexPtr(updated, &replacement, 3u);
+    updated = VectorSetByIndexPtr(updated, replacement, 3u);
     EXPECT_TRUE(NearlyEqual4(updated, 3.0f, 5.0f, 11.0f, 13.0f));
 
     const SIMDVector integerValue = VectorSetInt(3u, 7u, 11u, 19u);
@@ -276,12 +276,12 @@ TEST(Math, DynamicVectorLanes){
     EXPECT_EQ(VectorGetIntByIndex(integerValue, 3u), 19u);
 
     u32 integerComponent = 0u;
-    VectorGetIntByIndexPtr(&integerComponent, integerValue, 1u);
+    VectorGetIntByIndexPtr(integerComponent, integerValue, 1u);
     EXPECT_EQ(integerComponent, 7u);
 
     SIMDVector updatedInteger = VectorSetIntByIndex(integerValue, 5u, 1u);
     const u32 integerReplacement = 13u;
-    updatedInteger = VectorSetIntByIndexPtr(updatedInteger, &integerReplacement, 3u);
+    updatedInteger = VectorSetIntByIndexPtr(updatedInteger, integerReplacement, 3u);
     EXPECT_EQ(VectorGetIntX(updatedInteger), 3u);
     EXPECT_EQ(VectorGetIntY(updatedInteger), 5u);
     EXPECT_EQ(VectorGetIntZ(updatedInteger), 11u);
@@ -640,7 +640,7 @@ TEST(Math, FloatIntStorageConversion){
     const SIMDVector xyz = VectorSet(1.25f, -2.5f, 3.75f, 99.0f);
 
     Float3Int signedValue = {};
-    StoreFloatInt(xyz, -17, &signedValue);
+    StoreFloatInt(xyz, -17, signedValue);
     EXPECT_EQ(signedValue, Float3Int(1.25f, -2.5f, 3.75f, -17));
 
     const SIMDVector loadedSigned = LoadFloatInt(signedValue);
@@ -648,7 +648,7 @@ TEST(Math, FloatIntStorageConversion){
     EXPECT_TRUE(NearlyEqual(VectorGetW(loadedSigned), 0.0f));
 
     Float3UInt unsignedValue = {};
-    StoreFloatInt(xyz, 42u, &unsignedValue);
+    StoreFloatInt(xyz, 42u, unsignedValue);
     EXPECT_EQ(unsignedValue, Float3UInt(1.25f, -2.5f, 3.75f, 42u));
 
     const SIMDVector loadedUnsigned = LoadFloatInt(unsignedValue);

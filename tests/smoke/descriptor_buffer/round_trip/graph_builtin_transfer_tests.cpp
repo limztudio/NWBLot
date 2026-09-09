@@ -230,7 +230,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     ASSERT_NE(readbackCommandList.get(), nullptr);
     readbackCommandList->open(finalState);
     ASSERT_TRUE(readbackCommandList->hasCommandBuffer());
-    readbackCommandList->copyTexture(readback.get(), TextureSlice{}, destination.get(), TextureSlice{});
+    readbackCommandList->copyTexture(*readback, TextureSlice{}, *destination, TextureSlice{});
     readbackCommandList->close();
     CommandList* const readbackLists[] = { readbackCommandList.get() };
     ASSERT_TRUE(device.executeCommandLists(
@@ -242,7 +242,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     ASSERT_TRUE(device.waitForIdle());
     usize readbackRowPitch = 0u;
     const auto* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        readback.get(),
+        *readback,
         TextureSlice{},
         CpuAccessMode::Read,
         &readbackRowPitch
@@ -257,7 +257,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
             );
         }
     }
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 }
 
 
@@ -299,16 +299,16 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     ASSERT_NE(destination.get(), nullptr);
     ASSERT_NE(secondDestination.get(), nullptr);
 
-    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
+    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(*source, CpuAccessMode::Write));
     ASSERT_NE(sourceWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         sourceWords[wordIndex] = s_SourceWords[wordIndex];
-    device.unmapBuffer(source.get());
-    u32* const secondSourceWords = static_cast<u32*>(device.mapBuffer(secondSource.get(), CpuAccessMode::Write));
+    device.unmapBuffer(*source);
+    u32* const secondSourceWords = static_cast<u32*>(device.mapBuffer(*secondSource, CpuAccessMode::Write));
     ASSERT_NE(secondSourceWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondSourceWords); ++wordIndex)
         secondSourceWords[wordIndex] = s_SecondSourceWords[wordIndex];
-    device.unmapBuffer(secondSource.get());
+    device.unmapBuffer(*secondSource);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId sourceResource = graph.importBuffer(
@@ -584,18 +584,18 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     EXPECT_EQ(acceptedToken.value, packetToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
     const u32* const secondCopiedWords = static_cast<const u32*>(
-        device.mapBuffer(secondDestination.get(), CpuAccessMode::Read)
+        device.mapBuffer(*secondDestination, CpuAccessMode::Read)
     );
     ASSERT_NE(secondCopiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondSourceWords); ++wordIndex)
         EXPECT_EQ(secondCopiedWords[wordIndex], s_SecondSourceWords[wordIndex]);
-    device.unmapBuffer(secondDestination.get());
+    device.unmapBuffer(*secondDestination);
 }
 
 

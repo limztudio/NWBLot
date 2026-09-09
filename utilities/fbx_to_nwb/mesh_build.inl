@@ -155,7 +155,7 @@ bool AppendInstanceMesh(
 
             SourceTriangleCorner corner;
             const SIMDVector position = BuildCornerOutputPositionVector(*mesh, *node, options, wantsSkinning, cornerIndex);
-            StoreFloat(position, &corner.position);
+            StoreFloat(position, corner.position);
 
             SIMDVector normal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
             if(normalMode == NormalMode::Imported){
@@ -172,7 +172,7 @@ bool AppendInstanceMesh(
                     return false;
                 }
             }
-            StoreFloat(normal, &corner.normal);
+            StoreFloat(normal, corner.normal);
 
             SIMDVector uv0 = VectorZero();
             if(importUvs){
@@ -188,7 +188,7 @@ bool AppendInstanceMesh(
             else{
                 inOutUsedDefaultUvs = true;
             }
-            StoreFloat(uv0, &corner.uv0);
+            StoreFloat(uv0, corner.uv0);
 
             SIMDVector color = defaultColorVector;
             if(importColors){
@@ -201,7 +201,7 @@ bool AppendInstanceMesh(
                 );
                 inOutSawVertexColors = true;
             }
-            StoreFloat(color, &corner.color);
+            StoreFloat(color, corner.color);
 
             SIMDVector tangent = VectorZero();
             if(importTangents){
@@ -215,14 +215,14 @@ bool AppendInstanceMesh(
                     tangent
                 );
                 if(corner.hasTangent)
-                    StoreFloat(tangent, &corner.tangent);
+                    StoreFloat(tangent, corner.tangent);
             }
 
             SIMDVector skinWeights = VectorZero();
             if(wantsSkinning){
                 if(!FbxSkinDetail::BuildInfluence(skin, clusterJoints, logicalVertex, corner.skin, skinWeights))
                     return false;
-                StoreFloat(skinWeights, &corner.skin.weight);
+                StoreFloat(skinWeights, corner.skin.weight);
             }
 
             if(!IsFiniteSourceTriangleCorner(
@@ -268,7 +268,7 @@ bool AppendInstanceMesh(
                 return false;
             }
             for(SourceTriangleCorner& corner : triangleCorners)
-                StoreFloat(normalizedFaceNormal, &corner.normal);
+                StoreFloat(normalizedFaceNormal, corner.normal);
         }
 
         for(const SourceTriangleCorner& corner : triangleCorners){

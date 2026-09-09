@@ -836,7 +836,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
         }
     }
 
-    StoreFloat(worldToReceiver, &outRange.worldToReceiver);
+    StoreFloat(worldToReceiver, outRange.worldToReceiver);
     outRange.localBounds = receiverBounds;
     outRange.firstCutter = static_cast<u32>(csgFrameData.cutters.size());
     const bool appended = __hidden_csg_resources::ForEachReceiverClipCutter(
@@ -860,7 +860,7 @@ bool RendererCsgSystem::appendCsgReceiverClipData(
             }
             const SIMDMatrix worldToShape = resolvedCutter.worldToShape;
             cutterGpuData = CsgCutterGpuData{};
-            StoreFloat(worldToShape, &cutterGpuData.worldToShape);
+            StoreFloat(worldToShape, cutterGpuData.worldToShape);
             __hidden_csg_resources::BuildResolvedClipCutterGpuData(
                 resolvedCutter,
                 VectorGetX(__hidden_csg_resources::ComputeWorldToShapeScaleBound(worldToShape)),

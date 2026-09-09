@@ -217,7 +217,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_EQ(CountText(hybridTailUses, "WriteUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource)"), 1u);
     EXPECT_TRUE(ContainsText(swBvh, "const void* const instanceMaterialData"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned hybrid hardware fallback bytes differ from preflight"));
-    EXPECT_TRUE(ContainsText(swBvh, "tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData"));
+    EXPECT_TRUE(ContainsText(swBvh, "tryWriteBuffer(*instanceMaterialBuffer, instanceMaterialData"));
     EXPECT_FALSE(ContainsText(swBvh, "bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList){"));
     const usize restoreOffset = swBvh.find("bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(");
     const usize restoreEndOffset = swBvh.find("bool RendererRayTracingSystem::buildSceneSwBvhImpl(", restoreOffset);
@@ -292,15 +292,15 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_EQ(CountText(restoreWrites, "commandList.tryWriteBuffer("), 3u);
     EXPECT_EQ(CountText(
         restoreWrites,
-        "commandList.tryWriteBuffer(instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)"
+        "commandList.tryWriteBuffer(*instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)"
     ), 1u);
     EXPECT_EQ(CountText(
         restoreWrites,
-        "commandList.tryWriteBuffer(instanceBuffer, instanceData, instanceByteCount)"
+        "commandList.tryWriteBuffer(*instanceBuffer, instanceData, instanceByteCount)"
     ), 1u);
     EXPECT_EQ(CountText(
         restoreWrites,
-        "commandList.tryWriteBuffer(materialTypedBuffer, materialTypedData, materialTypedByteCount)"
+        "commandList.tryWriteBuffer(*materialTypedBuffer, materialTypedData, materialTypedByteCount)"
     ), 1u);
     const usize finalRestoreCommitOffset = restore.find("commandList.commitBarriers();", finalRestoreStateOffset);
     ASSERT_NE(finalRestoreCommitOffset, AStringView::npos);

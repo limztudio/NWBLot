@@ -107,7 +107,7 @@ protected:
             return false;
 
         commandList->open();
-        if(!commandList->resetTimerQuery(&query))
+        if(!commandList->resetTimerQuery(query))
             return false;
         commandList->close();
         CommandList* const commandLists[] = { commandList.get() };
@@ -131,9 +131,9 @@ protected:
 
         commandList->open();
         commandList->setGraphicsState(GraphicsState().setFramebuffer(renderTarget.framebuffer.get()));
-        if(!commandList->isRenderPassActive() || !commandList->beginTimerQuery(&query, outRecording))
+        if(!commandList->isRenderPassActive() || !commandList->beginTimerQuery(query, outRecording))
             return false;
-        if(outRecording.resetAuthorizationGeneration == 0u || !commandList->endTimerQuery(&query, outRecording))
+        if(outRecording.resetAuthorizationGeneration == 0u || !commandList->endTimerQuery(query, outRecording))
             return false;
         commandList->endRenderPass();
         commandList->close();
@@ -153,12 +153,12 @@ protected:
 
         commandList->open();
         commandList->setGraphicsState(GraphicsState().setFramebuffer(renderTarget.framebuffer.get()));
-        if(!commandList->isRenderPassActive() || !commandList->beginTimerQuery(&query, outRecording))
+        if(!commandList->isRenderPassActive() || !commandList->beginTimerQuery(query, outRecording))
             return false;
         if(
             outRecording.resetAuthorizationGeneration == 0u
             || outRecording.resetAuthorizationGeneration == disallowedResetAuthorizationGeneration
-            || !commandList->endTimerQuery(&query, outRecording)
+            || !commandList->endTimerQuery(query, outRecording)
         )
             return false;
         commandList->endRenderPass();
@@ -175,7 +175,7 @@ protected:
             return false;
 
         TimerQueryResult result;
-        return device().getTimerQueryResult(&query, result);
+        return device().getTimerQueryResult(query, result);
     }
 
 
@@ -201,16 +201,16 @@ Optional<Common::LoggerRegistrationGuard> TimerQueryLifecycleTest::s_loggerGuard
 TEST_F(TimerQueryLifecycleTest, OutsideRenderPassBeginPreservesHostResetAuthorization){
     auto query = device().createTimerQuery();
     ASSERT_TRUE(query);
-    if(!device().resetTimerQuery(query.get()))
+    if(!device().resetTimerQuery(*query))
         GTEST_SKIP() << "Timer-query lifecycle: host query reset is unavailable.";
 
     auto abandoned = device().createCommandList(m_parameters);
     ASSERT_TRUE(abandoned);
     abandoned->open();
     TimerQueryRecordingToken abandonedRecording;
-    ASSERT_TRUE(abandoned->beginTimerQuery(query.get(), abandonedRecording));
+    ASSERT_TRUE(abandoned->beginTimerQuery(*query, abandonedRecording));
     EXPECT_EQ(abandonedRecording.resetAuthorizationGeneration, 0u);
-    ASSERT_TRUE(abandoned->endTimerQuery(query.get(), abandonedRecording));
+    ASSERT_TRUE(abandoned->endTimerQuery(*query, abandonedRecording));
     abandoned->close();
     abandoned.reset();
     ASSERT_TRUE(query->discardUnacceptedRecording(abandonedRecording));
@@ -225,12 +225,12 @@ TEST_F(TimerQueryLifecycleTest, OutsideRenderPassBeginPreservesHostResetAuthoriz
 TEST_F(TimerQueryLifecycleTest, StaleDiscardPreservesNewerHostResetAuthorization){
     auto query = device().createTimerQuery();
     ASSERT_TRUE(query);
-    if(!device().resetTimerQuery(query.get()))
+    if(!device().resetTimerQuery(*query))
         GTEST_SKIP() << "Timer-query lifecycle: host query reset is unavailable.";
 
     TimerQueryRecordingToken staleRecording;
     ASSERT_TRUE(recordAbandonedAuthorizedRenderPassCycle(*query, staleRecording));
-    if(!device().resetTimerQuery(query.get()))
+    if(!device().resetTimerQuery(*query))
         GTEST_SKIP() << "Timer-query lifecycle: second host query reset is unavailable.";
     ASSERT_TRUE(query->discardUnacceptedRecording(staleRecording));
 
@@ -256,7 +256,7 @@ TEST_F(TimerQueryLifecycleTest, StaleDiscardPreservesAcceptedCommandResetAuthori
     auto resetOnly = device().createCommandList(m_parameters);
     ASSERT_TRUE(resetOnly);
     resetOnly->open();
-    ASSERT_TRUE(resetOnly->resetTimerQuery(query.get()));
+    ASSERT_TRUE(resetOnly->resetTimerQuery(*query));
     resetOnly->close();
     CommandList* const commandLists[] = { resetOnly.get() };
     const QueueSubmissionToken resetSubmission = device().executeCommandLists(
@@ -291,7 +291,7 @@ TEST_F(TimerQueryLifecycleTest, StaleDiscardSurvivesRejectedCommandResetReservat
     auto resetOnly = device().createCommandList(m_parameters);
     ASSERT_TRUE(resetOnly);
     resetOnly->open();
-    ASSERT_TRUE(resetOnly->resetTimerQuery(query.get()));
+    ASSERT_TRUE(resetOnly->resetTimerQuery(*query));
     resetOnly->close();
 
     const VkQueue nativeGraphicsQueue = static_cast<VkQueue>(
@@ -317,7 +317,7 @@ TEST_F(TimerQueryLifecycleTest, StaleDiscardSurvivesRejectedCommandResetReservat
     EXPECT_FALSE(resetOnly->hasCommandBuffer());
     ASSERT_TRUE(query->discardUnacceptedRecording(staleRecording));
 
-    ASSERT_TRUE(device().resetTimerQuery(query.get()));
+    ASSERT_TRUE(device().resetTimerQuery(*query));
     TimerQueryRecordingToken acceptedRecording;
     EXPECT_TRUE(submitAuthorizedRenderPassCycle(
         *query,

@@ -105,8 +105,8 @@ static void ClearCsgIntervalTargets(
     //  - interval id is written sparsely by the peel pass (unwritten layers must read back as empty).
     // The bulk depth/normal/data layers and the span/removed counters are written before they are
     // read, so clearing them is wasted bandwidth (this clear dominated the CSG frame cost).
-    commandList.clearTextureRectUInt(targets.csgIntervalId.get(), subresources.peel, csgClearRect, 0u);
-    commandList.clearTextureRectUInt(targets.csgReceiverEventCount.get(), subresources.receiverEventCounter, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(*targets.csgIntervalId, subresources.peel, csgClearRect, 0u);
+    commandList.clearTextureRectUInt(*targets.csgReceiverEventCount, subresources.receiverEventCounter, csgClearRect, 0u);
 }
 
 

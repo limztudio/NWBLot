@@ -248,7 +248,7 @@ bool CommandList::validateFramebufferForRendering(
 }
 
 bool CommandList::validateRenderPassBegin(
-    Framebuffer* const framebuffer,
+    Framebuffer& framebuffer,
     const RenderPassParameters& params,
     const tchar* const operationName
 ){
@@ -256,14 +256,10 @@ bool CommandList::validateRenderPassBegin(
         rejectCommandRecording(operationName, NWB_TEXT("a render pass is already active"));
         return false;
     }
-    if(!framebuffer){
-        rejectCommandRecording(operationName, NWB_TEXT("framebuffer is null"));
-        return false;
-    }
-    if(!validateFramebufferForRendering(framebuffer, operationName))
+    if(!validateFramebufferForRendering(&framebuffer, operationName))
         return false;
 
-    const FramebufferDesc& framebufferDesc = framebuffer->m_desc;
+    const FramebufferDesc& framebufferDesc = framebuffer.m_desc;
     const u32 colorAttachmentCount = static_cast<u32>(framebufferDesc.colorAttachments.size());
     for(u32 colorIndex = 0u; colorIndex < s_MaxRenderTargets; ++colorIndex){
         const RenderPassAttachmentActions& actions = params.colorAttachmentActions[colorIndex];

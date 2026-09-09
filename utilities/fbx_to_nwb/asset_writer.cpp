@@ -426,7 +426,7 @@ bool BuildSkeletonOutputData(
             return false;
         }
         JointMatrix localBindPose{};
-        StoreFloat(localBindPoseMatrix, &localBindPose);
+        StoreFloat(localBindPoseMatrix, localBindPose);
 
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);

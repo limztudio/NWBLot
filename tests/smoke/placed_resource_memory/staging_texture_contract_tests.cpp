@@ -212,16 +212,6 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
         EXPECT_FALSE(operation());
 #endif
     };
-    const auto expectDiagnosticVoidRejection = [](auto&& operation){
-#if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
-        EXPECT_DEATH_IF_SUPPORTED({
-            operation();
-        }, "");
-#else
-        operation();
-#endif
-    };
-
     TextureDesc desc = TextureDesc()
         .setWidth(8u)
         .setHeight(8u)
@@ -240,7 +230,7 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     static constexpr usize s_UnchangedPitch = 0x5a5a5a5au;
     const auto mapWasAcceptedOrChangedPitch = [&](
         GraphicsBackend::Device& mapDevice,
-        StagingTexture* staging,
+        StagingTexture& staging,
         const TextureSlice& slice,
         const CpuAccessMode::Enum access
     ){
@@ -250,25 +240,21 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     };
 
     expectDiagnosticRejection([&](){
-        return mapWasAcceptedOrChangedPitch(device, nullptr, TextureSlice{}, CpuAccessMode::Read);
-    });
-    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(nullptr); });
-    expectDiagnosticRejection([&](){
-        return mapWasAcceptedOrChangedPitch(device, readback.get(), TextureSlice{}, CpuAccessMode::None);
+        return mapWasAcceptedOrChangedPitch(device, *readback, TextureSlice{}, CpuAccessMode::None);
     });
     expectDiagnosticRejection([&](){
         return mapWasAcceptedOrChangedPitch(
             device,
-            readback.get(),
+            *readback,
             TextureSlice{},
             static_cast<CpuAccessMode::Enum>(UINT8_MAX)
         );
     });
     expectDiagnosticRejection([&](){
-        return mapWasAcceptedOrChangedPitch(device, readback.get(), TextureSlice{}, CpuAccessMode::Write);
+        return mapWasAcceptedOrChangedPitch(device, *readback, TextureSlice{}, CpuAccessMode::Write);
     });
     expectDiagnosticRejection([&](){
-        return mapWasAcceptedOrChangedPitch(device, upload.get(), TextureSlice{}, CpuAccessMode::Read);
+        return mapWasAcceptedOrChangedPitch(device, *upload, TextureSlice{}, CpuAccessMode::Read);
     });
 
     const TextureSlice invalidSlices[] = {
@@ -289,20 +275,20 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     };
     for(const TextureSlice& invalidSlice : invalidSlices){
         expectDiagnosticRejection([&](){
-            return mapWasAcceptedOrChangedPitch(device, readback.get(), invalidSlice, CpuAccessMode::Read);
+            return mapWasAcceptedOrChangedPitch(device, *readback, invalidSlice, CpuAccessMode::Read);
         });
     }
 
     usize readbackPitch = s_UnchangedPitch;
     void* const readbackMemory = device.mapStagingTexture(
-        readback.get(),
+        *readback,
         TextureSlice{}.setOrigin(2u, 2u, 0u).setSize(3u, 3u, 1u).setArraySlice(1u),
         CpuAccessMode::Read,
         &readbackPitch
     );
     ASSERT_NE(readbackMemory, nullptr);
     EXPECT_NE(readbackPitch, s_UnchangedPitch);
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 
     const TextureDesc compressedDesc = TextureDesc()
         .setWidth(8u)
@@ -317,7 +303,7 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     expectDiagnosticRejection([&](){
         return mapWasAcceptedOrChangedPitch(
             device,
-            compressed.get(),
+            *compressed,
             TextureSlice{}.setOrigin(1u, 0u, 0u).setSize(4u, 4u, 1u),
             CpuAccessMode::Read
         );
@@ -325,7 +311,7 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     expectDiagnosticRejection([&](){
         return mapWasAcceptedOrChangedPitch(
             device,
-            compressed.get(),
+            *compressed,
             TextureSlice{}.setOrigin(0u, 1u, 0u).setSize(4u, 4u, 1u),
             CpuAccessMode::Read
         );
@@ -333,18 +319,18 @@ TEST_F(StagingTextureContractTest, MappingRejectsInvalidInputsWithoutMutatingPit
     expectDiagnosticRejection([&](){
         return mapWasAcceptedOrChangedPitch(
             device,
-            compressed.get(),
+            *compressed,
             TextureSlice{}.setSize(2u, 4u, 1u),
             CpuAccessMode::Read
         );
     });
     usize compressedPitch = s_UnchangedPitch;
     ASSERT_NE(
-        device.mapStagingTexture(compressed.get(), TextureSlice{}, CpuAccessMode::Read, &compressedPitch),
+        device.mapStagingTexture(*compressed, TextureSlice{}, CpuAccessMode::Read, &compressedPitch),
         nullptr
     );
     EXPECT_NE(compressedPitch, s_UnchangedPitch);
-    device.unmapStagingTexture(compressed.get());
+    device.unmapStagingTexture(*compressed);
 }
 
 
@@ -387,19 +373,19 @@ TEST_F(StagingTextureContractTest, MappingRejectsForeignDeviceAndOwnerRecovers){
     expectDiagnosticRejection([&](){
         usize rowPitch = 0x5a5a5a5au;
         void* const mapped = device.mapStagingTexture(
-            foreignReadback.get(),
+            *foreignReadback,
             TextureSlice{},
             CpuAccessMode::Read,
             &rowPitch
         );
         return mapped != nullptr || rowPitch != 0x5a5a5a5au;
     });
-    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(foreignReadback.get()); });
+    expectDiagnosticVoidRejection([&](){ device.unmapStagingTexture(*foreignReadback); });
 
     usize foreignPitch = 0x5a5a5a5au;
     ASSERT_NE(
         foreignDevice.mapStagingTexture(
-            foreignReadback.get(),
+            *foreignReadback,
             TextureSlice{},
             CpuAccessMode::Read,
             &foreignPitch
@@ -407,7 +393,7 @@ TEST_F(StagingTextureContractTest, MappingRejectsForeignDeviceAndOwnerRecovers){
         nullptr
     );
     EXPECT_NE(foreignPitch, 0x5a5a5a5au);
-    foreignDevice.unmapStagingTexture(foreignReadback.get());
+    foreignDevice.unmapStagingTexture(*foreignReadback);
 }
 
 
@@ -428,24 +414,24 @@ TEST_F(StagingTextureContractTest, UploadAndReadbackMappingsPreservePointersAndP
 
     const auto expectPersistentMappingLifecycle = [&](StagingTexture& staging, const CpuAccessMode::Enum access){
         usize firstPitch = 0u;
-        void* const firstMap = device.mapStagingTexture(&staging, TextureSlice{}, access, &firstPitch);
+        void* const firstMap = device.mapStagingTexture(staging, TextureSlice{}, access, &firstPitch);
         ASSERT_NE(firstMap, nullptr);
         EXPECT_NE(firstPitch, 0u);
 
         usize secondPitch = 0u;
-        void* const secondMap = device.mapStagingTexture(&staging, TextureSlice{}, access, &secondPitch);
+        void* const secondMap = device.mapStagingTexture(staging, TextureSlice{}, access, &secondPitch);
         ASSERT_NE(secondMap, nullptr);
         EXPECT_EQ(secondMap, firstMap);
         EXPECT_EQ(secondPitch, firstPitch);
 
-        device.unmapStagingTexture(&staging);
-        device.unmapStagingTexture(&staging);
+        device.unmapStagingTexture(staging);
+        device.unmapStagingTexture(staging);
 
         usize remapPitch = 0u;
-        void* const remap = device.mapStagingTexture(&staging, TextureSlice{}, access, &remapPitch);
+        void* const remap = device.mapStagingTexture(staging, TextureSlice{}, access, &remapPitch);
         ASSERT_EQ(remap, firstMap);
         EXPECT_EQ(remapPitch, firstPitch);
-        device.unmapStagingTexture(&staging);
+        device.unmapStagingTexture(staging);
     };
 
     expectPersistentMappingLifecycle(*upload, CpuAccessMode::Write);
@@ -489,7 +475,7 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
     ASSERT_TRUE(readback);
     usize uploadRowPitch = 0u;
     u8* const uploadBytes = static_cast<u8*>(
-        device.mapStagingTexture(upload.get(), TextureSlice{}, CpuAccessMode::Write, &uploadRowPitch)
+        device.mapStagingTexture(*upload, TextureSlice{}, CpuAccessMode::Write, &uploadRowPitch)
     );
     ASSERT_NE(uploadBytes, nullptr);
     ASSERT_GE(uploadRowPitch, static_cast<usize>(s_Width) * sizeof(u32));
@@ -498,14 +484,14 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
         for(u32 column = 0u; column < s_Width; ++column)
             uploadRow[column] = s_Pixels[row][column];
     }
-    device.unmapStagingTexture(upload.get());
+    device.unmapStagingTexture(*upload);
 
     CommandListParameters transferParameters;
     transferParameters.setQueueType(CommandQueue::Transfer);
     const CommandListHandle transferList = device.createCommandList(transferParameters);
     ASSERT_TRUE(transferList);
     transferList->open();
-    transferList->copyTexture(texture.get(), TextureSlice{}, upload.get(), TextureSlice{});
+    transferList->copyTexture(*texture, TextureSlice{}, *upload, TextureSlice{});
     transferList->close();
     ASSERT_FALSE(transferList->commandRecordingFailed());
     ASSERT_TRUE(transferList->hasCommandBuffer());
@@ -523,8 +509,8 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
     const CommandListHandle graphicsList = device.createCommandList();
     ASSERT_TRUE(graphicsList);
     graphicsList->open();
-    graphicsList->copyTexture(texture.get(), TextureSlice{}, upload.get(), TextureSlice{});
-    graphicsList->copyTexture(readback.get(), TextureSlice{}, texture.get(), TextureSlice{});
+    graphicsList->copyTexture(*texture, TextureSlice{}, *upload, TextureSlice{});
+    graphicsList->copyTexture(*readback, TextureSlice{}, *texture, TextureSlice{});
     graphicsList->close();
     ASSERT_FALSE(graphicsList->commandRecordingFailed());
     ASSERT_TRUE(graphicsList->hasCommandBuffer());
@@ -541,7 +527,7 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
 
     usize readbackRowPitch = 0u;
     const u8* const readbackBytes = static_cast<const u8*>(
-        device.mapStagingTexture(readback.get(), TextureSlice{}, CpuAccessMode::Read, &readbackRowPitch)
+        device.mapStagingTexture(*readback, TextureSlice{}, CpuAccessMode::Read, &readbackRowPitch)
     );
     ASSERT_NE(readbackBytes, nullptr);
     ASSERT_GE(readbackRowPitch, static_cast<usize>(s_Width) * sizeof(u32));
@@ -552,7 +538,7 @@ TEST_F(StagingTextureContractTest, GraphicsAndTransferStagingBufferIsUsedAcrossD
         for(u32 column = 0u; column < s_Width; ++column)
             EXPECT_EQ(readbackRow[column], s_Pixels[row][column]);
     }
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 }
 
 

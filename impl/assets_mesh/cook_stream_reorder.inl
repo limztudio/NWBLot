@@ -43,8 +43,8 @@ static void PrepareMeshStreamReorder(
 template<typename StreamVectorT>
 [[nodiscard]] static bool RemapMeshStreamRef(
     const Name& virtualPath,
-    const tchar* metaKind,
-    const tchar* streamName,
+    const NotNull<const tchar*> metaKind,
+    const NotNull<const tchar*> streamName,
     const StreamVectorT& source,
     ScratchVector<u32>& remap,
     StreamVectorT& reordered,
@@ -52,9 +52,9 @@ template<typename StreamVectorT>
 ){
     if(index == s_MeshMissingStreamIndex){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is missing")
-            , metaKind
+            , metaKind.get()
             , StringConvert(virtualPath.c_str())
-            , streamName
+            , streamName.get()
         );
         return false;
     }
@@ -62,9 +62,9 @@ template<typename StreamVectorT>
     const u32 sourceIndex = index;
     if(static_cast<usize>(sourceIndex) >= source.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} stream reference is out of range")
-            , metaKind
+            , metaKind.get()
             , StringConvert(virtualPath.c_str())
-            , streamName
+            , streamName.get()
         );
         return false;
     }
@@ -73,9 +73,9 @@ template<typename StreamVectorT>
     if(mappedIndex == s_MeshMissingStreamIndex){
         if(reordered.size() >= static_cast<usize>(s_MeshMissingStreamIndex)){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': reordered {} stream exceeds u32 index limits")
-                , metaKind
+                , metaKind.get()
                 , StringConvert(virtualPath.c_str())
-                , streamName
+                , streamName.get()
             );
             return false;
         }
@@ -103,7 +103,7 @@ static void PrepareCommonMeshStreamReorder(
 template<typename CookEntryT>
 [[nodiscard]] static bool RemapMeshletAttributeRefs(
     CookEntryT& entry,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     MeshCookCommonStreamReorder& reorder
 ){
     for(const MeshletDesc& meshlet : entry.meshlets){
@@ -112,7 +112,7 @@ template<typename CookEntryT>
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("normal"),
+                MakeNotNull(NWB_TEXT("normal")),
                 entry.normals,
                 reorder.normalRemap,
                 reorder.normals,
@@ -122,7 +122,7 @@ template<typename CookEntryT>
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("tangent"),
+                MakeNotNull(NWB_TEXT("tangent")),
                 entry.tangents,
                 reorder.tangentRemap,
                 reorder.tangents,
@@ -132,7 +132,7 @@ template<typename CookEntryT>
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("uv0"),
+                MakeNotNull(NWB_TEXT("uv0")),
                 entry.uv0,
                 reorder.uv0Remap,
                 reorder.uv0,
@@ -142,7 +142,7 @@ template<typename CookEntryT>
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("color"),
+                MakeNotNull(NWB_TEXT("color")),
                 entry.colors,
                 reorder.colorRemap,
                 reorder.colors,
@@ -158,7 +158,7 @@ template<typename CookEntryT>
 template<typename CookEntryT, typename SkinRemapperT>
 [[nodiscard]] static bool RemapMeshletPositionRefs(
     CookEntryT& entry,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     MeshCookCommonStreamReorder& reorder,
     SkinRemapperT remapSkin
 ){
@@ -168,7 +168,7 @@ template<typename CookEntryT, typename SkinRemapperT>
             if(!RemapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
-                NWB_TEXT("position"),
+                MakeNotNull(NWB_TEXT("position")),
                 entry.positions,
                 reorder.positionRemap,
                 reorder.positions,
@@ -208,7 +208,7 @@ static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStrea
                 return true;
 
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin")
-                , s_MeshMetaKind
+                , s_MeshMetaKind.get()
                 , StringConvert(entry.virtualPath.c_str())
             );
             return false;

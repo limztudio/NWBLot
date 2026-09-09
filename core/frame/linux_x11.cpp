@@ -324,7 +324,7 @@ static void ResetFrameData(Common::LinuxFrame& frameData){
 
 
 bool InitX11Frame(Frame& frame){
-    const tchar* AppName = frame.windowTitleOrDefault();
+    const tchar* AppName = frame.windowTitleOrDefault().get();
     constexpr long EventMask =
         ExposureMask
         | FocusChangeMask

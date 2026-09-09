@@ -193,7 +193,7 @@ private:
         const f32 timeSeconds = static_cast<f32>(m_animationTime);
         for(u32 jointIndex = 0u; jointIndex < pose->localJoints.size() && jointIndex < m_bindJoints.size(); ++jointIndex){
             const SIMDMatrix animatedJoint = BuildWaveJointMatrix(LoadFloat(m_bindJoints[jointIndex]), jointIndex, timeSeconds);
-            StoreFloat(animatedJoint, &pose->localJoints[jointIndex]);
+            StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
         }
     }
 

@@ -186,11 +186,11 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapStorageBufferDispatche
     ));
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const outputWords = static_cast<const u32*>(device.mapBuffer(storageBuffer.get(), CpuAccessMode::Read));
+    const u32* const outputWords = static_cast<const u32*>(device.mapBuffer(*storageBuffer, CpuAccessMode::Read));
     ASSERT_NE(outputWords, nullptr);
     for(u32 wordIndex = 0u; wordIndex < dispatchWordCount; ++wordIndex)
         EXPECT_EQ(outputWords[wordIndex], dispatchSeed + wordIndex);
-    device.unmapBuffer(storageBuffer.get());
+    device.unmapBuffer(*storageBuffer);
 
     heap.free(storageBufferHandle);
     heap.collectRetired();

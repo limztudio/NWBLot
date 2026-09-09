@@ -6,7 +6,7 @@ template<typename CookEntryT>
 [[nodiscard]] static bool EncodeMeshletRefs(
     CookEntryT& entry,
     const bool skinRequired,
-    const tchar* metaKind
+    const NotNull<const tchar*> metaKind
 ){
     return EncodeMeshletRefDeltas(
         entry.meshlets,
@@ -17,7 +17,7 @@ template<typename CookEntryT>
         skinRequired,
         [&](const usize meshletIndex, const tchar* reason){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet {} {}")
-                , metaKind
+                , metaKind.get()
                 , StringConvert(entry.virtualPath.c_str())
                 , meshletIndex
                 , reason

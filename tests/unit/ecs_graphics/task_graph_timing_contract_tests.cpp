@@ -159,7 +159,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_TRUE(ContainsText(timingAccumulator, "GpuTimingScopeSkipReason::QueryCapacityUnavailable"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "GpuTimingScopeSkipReason::RecordingPositionUnavailable"));
     EXPECT_TRUE(ContainsText(timingAccumulator, "const bool retirementPending = quarantineRecord("));
-    const usize queryResultOffset = timingAccumulator.find("if(!device.getTimerQueryResult(record.query.get(), result))");
+    const usize queryResultOffset = timingAccumulator.find("if(!device.getTimerQueryResult(*record.query, result))");
     const usize sampleStageOffset = timingAccumulator.find("completedSamples.push_back(SampleDispatch{", queryResultOffset);
     const usize performanceSampleStageOffset = timingAccumulator.find(
         "performanceSamples.push_back(GpuTimingSinkSample{",

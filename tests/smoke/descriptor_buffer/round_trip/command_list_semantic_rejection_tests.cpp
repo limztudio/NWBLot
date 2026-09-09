@@ -119,21 +119,17 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     };
 
     commandList->open();
-    commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(s_InitialWords));
+    commandList->writeBuffer(*buffer, s_InitialWords, sizeof(s_InitialWords));
     commandList->close();
     QueueSubmissionToken lastAcceptedToken = submit();
     ASSERT_TRUE(lastAcceptedToken.valid());
 
     enum class Operation : u8{
-        NullWriteBuffer,
         NullWriteData,
         WriteDestinationOutOfBounds,
         WriteOffsetUnaligned,
         WriteSizeUnaligned,
-        NullClearBuffer,
         ClearSizeUnaligned,
-        NullCopyDestination,
-        NullCopySource,
         CopyDestinationOutOfBounds,
         CopySourceOutOfBounds,
         CopyOffsetOverflow,
@@ -144,15 +140,11 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
         const char* label;
     };
     const Case cases[] = {
-        { Operation::NullWriteBuffer, "null write buffer" },
         { Operation::NullWriteData, "null write data" },
         { Operation::WriteDestinationOutOfBounds, "write destination out of bounds" },
         { Operation::WriteOffsetUnaligned, "write offset unaligned" },
         { Operation::WriteSizeUnaligned, "write size unaligned" },
-        { Operation::NullClearBuffer, "null clear buffer" },
         { Operation::ClearSizeUnaligned, "clear size unaligned" },
-        { Operation::NullCopyDestination, "null copy destination" },
-        { Operation::NullCopySource, "null copy source" },
         { Operation::CopyDestinationOutOfBounds, "copy destination out of bounds" },
         { Operation::CopySourceOutOfBounds, "copy source out of bounds" },
         { Operation::CopyOffsetOverflow, "copy offset overflow" },
@@ -164,48 +156,36 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
         commandList->open();
         ASSERT_TRUE(commandList->isRecording());
         ASSERT_FALSE(commandList->commandRecordingFailed());
-        commandList->clearBufferUInt(buffer.get(), s_DiscardedClearValue);
+        commandList->clearBufferUInt(*buffer, s_DiscardedClearValue);
         ASSERT_FALSE(commandList->commandRecordingFailed());
 
         switch(testCase.operation){
-        case Operation::NullWriteBuffer:
-            commandList->writeBuffer(nullptr, s_InitialWords, sizeof(s_InitialWords));
-            break;
         case Operation::NullWriteData:
-            commandList->writeBuffer(buffer.get(), nullptr, sizeof(u32));
+            commandList->writeBuffer(*buffer, nullptr, sizeof(u32));
             break;
         case Operation::WriteDestinationOutOfBounds:
-            commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(s_InitialWords), sizeof(u32));
+            commandList->writeBuffer(*buffer, s_InitialWords, sizeof(s_InitialWords), sizeof(u32));
             break;
         case Operation::WriteOffsetUnaligned:
-            commandList->writeBuffer(buffer.get(), s_InitialWords, sizeof(u32), 2u);
+            commandList->writeBuffer(*buffer, s_InitialWords, sizeof(u32), 2u);
             break;
         case Operation::WriteSizeUnaligned:
-            commandList->writeBuffer(buffer.get(), s_InitialWords, 2u);
-            break;
-        case Operation::NullClearBuffer:
-            commandList->clearBufferUInt(nullptr, s_DiscardedClearValue);
+            commandList->writeBuffer(*buffer, s_InitialWords, 2u);
             break;
         case Operation::ClearSizeUnaligned:
-            commandList->clearBufferUInt(unalignedSizeBuffer.get(), s_DiscardedClearValue);
-            break;
-        case Operation::NullCopyDestination:
-            commandList->copyBuffer(nullptr, 0u, buffer.get(), 0u, sizeof(u32));
-            break;
-        case Operation::NullCopySource:
-            commandList->copyBuffer(buffer.get(), 0u, nullptr, 0u, sizeof(u32));
+            commandList->clearBufferUInt(*unalignedSizeBuffer, s_DiscardedClearValue);
             break;
         case Operation::CopyDestinationOutOfBounds:
-            commandList->copyBuffer(buffer.get(), sizeof(s_InitialWords), otherBuffer.get(), 0u, sizeof(u32));
+            commandList->copyBuffer(*buffer, sizeof(s_InitialWords), *otherBuffer, 0u, sizeof(u32));
             break;
         case Operation::CopySourceOutOfBounds:
-            commandList->copyBuffer(buffer.get(), 0u, otherBuffer.get(), sizeof(s_InitialWords), sizeof(u32));
+            commandList->copyBuffer(*buffer, 0u, *otherBuffer, sizeof(s_InitialWords), sizeof(u32));
             break;
         case Operation::CopyOffsetOverflow:
-            commandList->copyBuffer(buffer.get(), Limit<u64>::s_Max, otherBuffer.get(), 0u, sizeof(u32));
+            commandList->copyBuffer(*buffer, Limit<u64>::s_Max, *otherBuffer, 0u, sizeof(u32));
             break;
         case Operation::OverlappingSelfCopy:
-            commandList->copyBuffer(buffer.get(), sizeof(u32), buffer.get(), 0u, sizeof(u32) * 2u);
+            commandList->copyBuffer(*buffer, sizeof(u32), *buffer, 0u, sizeof(u32) * 2u);
             break;
         }
 
@@ -227,8 +207,8 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     }
 
     commandList->open();
-    commandList->writeBuffer(nullptr, nullptr, 0u);
-    commandList->copyBuffer(nullptr, 0u, nullptr, 0u, 0u);
+    commandList->writeBuffer(*buffer, nullptr, 0u);
+    commandList->copyBuffer(*buffer, 0u, *buffer, 0u, 0u);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     const QueueSubmissionToken zeroWorkToken = submit();
@@ -237,7 +217,7 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     lastAcceptedToken = zeroWorkToken;
 
     commandList->open();
-    commandList->copyBuffer(buffer.get(), sizeof(u32) * 2u, buffer.get(), 0u, sizeof(u32) * 2u);
+    commandList->copyBuffer(*buffer, sizeof(u32) * 2u, *buffer, 0u, sizeof(u32) * 2u);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_EQ(commandList->getBufferState(buffer.get()), ResourceStates::CopySource | ResourceStates::CopyDest);
     commandList->close();
@@ -246,13 +226,13 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     EXPECT_EQ(selfCopyToken.value, lastAcceptedToken.value + 1u);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*buffer, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     EXPECT_EQ(copiedWords[0u], s_InitialWords[0u]);
     EXPECT_EQ(copiedWords[1u], s_InitialWords[1u]);
     EXPECT_EQ(copiedWords[2u], s_InitialWords[0u]);
     EXPECT_EQ(copiedWords[3u], s_InitialWords[1u]);
-    device.unmapBuffer(buffer.get());
+    device.unmapBuffer(*buffer);
 }
 
 
@@ -371,7 +351,7 @@ TEST_F(DescriptorBufferRoundTripTest, ComputeAndPushSemanticRejectionsDiscardPri
 
         SCOPED_TRACE(testCase.label);
         commandList->open();
-        commandList->clearBufferUInt(oracle.get(), 0x6e57424cu);
+        commandList->clearBufferUInt(*oracle, 0x6e57424cu);
         ASSERT_FALSE(commandList->commandRecordingFailed());
 
         switch(testCase.operation){
@@ -453,7 +433,7 @@ TEST_F(DescriptorBufferRoundTripTest, ComputeAndPushSemanticRejectionsDiscardPri
 
     const DispatchIndirectArguments indirectArguments;
     commandList->open();
-    commandList->writeBuffer(indirectBuffer.get(), &indirectArguments, sizeof(indirectArguments));
+    commandList->writeBuffer(*indirectBuffer, &indirectArguments, sizeof(indirectArguments));
     commandList->setComputeState(
         ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(indirectBuffer.get())
     );

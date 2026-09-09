@@ -17,17 +17,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum requestedAccess){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer is null"));
-        return nullptr;
-    }
+void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAccess){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: invalid CPU access mode"));
         return nullptr;
     }
 
-    Buffer& buffer = *bufferResource;
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer belongs to another device"));
         return nullptr;
@@ -134,13 +129,7 @@ void* Device::mapBuffer(Buffer* bufferResource, const CpuAccessMode::Enum reques
     return data;
 }
 
-void Device::unmapBuffer(Buffer* bufferResource){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap buffer: buffer is null"));
-        return;
-    }
-
-    Buffer& buffer = *bufferResource;
+void Device::unmapBuffer(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap buffer: buffer belongs to another device"));
         return;
@@ -203,13 +192,7 @@ void Device::unmapBuffer(Buffer* bufferResource){
     }
 }
 
-MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer is null"));
-        return {};
-    }
-
-    Buffer& buffer = *bufferResource;
+MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: buffer belongs to another device"));
         return {};
@@ -250,16 +233,7 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer* bufferResource){
     return result;
 }
 
-bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
-    if(!bufferResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer is null"));
-        return false;
-    }
-    if(!heap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is null"));
-        return false;
-    }
-    Buffer& buffer = *bufferResource;
+bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
     if(&buffer.m_context != &m_context || &buffer.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer belongs to another device"));
         return false;
@@ -273,7 +247,7 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
         return false;
     }
 
-    Heap& memoryHeap = *heap;
+    Heap& memoryHeap = heap;
     if(&memoryHeap.m_context != &m_context || &memoryHeap.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap belongs to another device"));
         return false;
@@ -282,7 +256,7 @@ bool Device::bindBufferMemory(Buffer* bufferResource, Heap* heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: heap is invalid"));
         return false;
     }
-    HeapHandle retainedHeap(heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
+    HeapHandle retainedHeap(&heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
     ScopedLock resourceLock(buffer.m_memoryBindingMutex);
     if(buffer.m_boundHeap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: buffer memory was already bound"));

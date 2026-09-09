@@ -492,9 +492,9 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     textureReadbackCommandList->open(clearTextureRectFinalState);
     ASSERT_TRUE(textureReadbackCommandList->hasCommandBuffer());
     textureReadbackCommandList->copyTexture(
-        textureReadback.get(),
+        *textureReadback,
         TextureSlice{},
-        texture.get(),
+        *texture,
         TextureSlice{}
     );
     textureReadbackCommandList->close();
@@ -508,7 +508,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ASSERT_TRUE(device.waitForIdle());
     usize textureReadbackRowPitch = 0u;
     const u8* const textureReadbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        textureReadback.get(),
+        *textureReadback,
         TextureSlice{},
         CpuAccessMode::Read,
         &textureReadbackRowPitch
@@ -531,13 +531,13 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
             EXPECT_EQ(pixel[3u], static_cast<u8>(expected.a));
         }
     }
-    device.unmapStagingTexture(textureReadback.get());
+    device.unmapStagingTexture(*textureReadback);
 
-    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(buffer.get(), CpuAccessMode::Read));
+    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(*buffer, CpuAccessMode::Read));
     ASSERT_NE(clearedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
         EXPECT_EQ(clearedWords[wordIndex], 0xdecafbadU);
-    device.unmapBuffer(buffer.get());
+    device.unmapBuffer(*buffer);
 }
 
 
@@ -772,12 +772,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
     ASSERT_TRUE(resolveList);
     resolveList->open();
     resolveList->resolveTexture(
-        resolvedColor.get(),
+        *resolvedColor,
         s_AllSubresources,
-        multisampleColor.get(),
+        *multisampleColor,
         s_AllSubresources
     );
-    resolveList->copyTexture(readback.get(), TextureSlice{}, resolvedColor.get(), TextureSlice{});
+    resolveList->copyTexture(*readback, TextureSlice{}, *resolvedColor, TextureSlice{});
     ASSERT_FALSE(resolveList->commandRecordingFailed());
     resolveList->close();
     CommandList* const resolveLists[] = { resolveList.get() };
@@ -791,7 +791,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
 
     usize rowPitch = 0u;
     const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        readback.get(),
+        *readback,
         TextureSlice{},
         CpuAccessMode::Read,
         &rowPitch
@@ -806,7 +806,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
                 EXPECT_EQ(pixel[channel], s_ExpectedColor[channel]);
         }
     }
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 }
 
 
@@ -1223,19 +1223,19 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
     ASSERT_TRUE(device.waitForIdle());
 
     const u32* const copiedWords = static_cast<const u32*>(
-        device.mapBuffer(copyDestination.get(), CpuAccessMode::Read)
+        device.mapBuffer(*copyDestination, CpuAccessMode::Read)
     );
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_UploadWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_UploadWords[wordIndex]);
-    device.unmapBuffer(copyDestination.get());
+    device.unmapBuffer(*copyDestination);
     const u32* const clearedWords = static_cast<const u32*>(
-        device.mapBuffer(clearDestination.get(), CpuAccessMode::Read)
+        device.mapBuffer(*clearDestination, CpuAccessMode::Read)
     );
     ASSERT_NE(clearedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_UploadWords); ++wordIndex)
         EXPECT_EQ(clearedWords[wordIndex], s_ClearValue);
-    device.unmapBuffer(clearDestination.get());
+    device.unmapBuffer(*clearDestination);
 
     const StagingTextureHandle clearTextureReadback = device.createStagingTexture(
         clearDestinationTexture->getDescription(),
@@ -1247,9 +1247,9 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
     clearTextureReadbackCommandList->open(finalState);
     ASSERT_TRUE(clearTextureReadbackCommandList->hasCommandBuffer());
     clearTextureReadbackCommandList->copyTexture(
-        clearTextureReadback.get(),
+        *clearTextureReadback,
         TextureSlice{},
-        clearDestinationTexture.get(),
+        *clearDestinationTexture,
         TextureSlice{}
     );
     clearTextureReadbackCommandList->close();
@@ -1263,7 +1263,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
     ASSERT_TRUE(device.waitForIdle());
     usize clearTextureReadbackRowPitch = 0u;
     const u8* const clearTextureReadbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        clearTextureReadback.get(),
+        *clearTextureReadback,
         TextureSlice{},
         CpuAccessMode::Read,
         &clearTextureReadbackRowPitch
@@ -1282,7 +1282,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
             EXPECT_EQ(pixel[3u], 0x44u);
         }
     }
-    device.unmapStagingTexture(clearTextureReadback.get());
+    device.unmapStagingTexture(*clearTextureReadback);
 }
 
 

@@ -175,7 +175,7 @@ private:
         for(const NWB::Core::ECS::EntityID owner : { m_characterOwner, m_glassOwner }){
             auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(owner);
             if(transform)
-                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), &transform->rotation);
+                StoreFloat(QuaternionRotationRollPitchYaw(0.0f, m_yaw.yaw(), 0.0f), transform->rotation);
         }
     }
 

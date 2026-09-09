@@ -296,7 +296,7 @@ bool RendererDeferredSystem::renderDeferredPresent(
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorAttachmentActions[0u].loadAction = Core::RenderPassLoadAction::Discard;
     renderPassParameters.colorAttachmentActions[0u].storeAction = Core::RenderPassStoreAction::Store;
-    commandList.beginRenderPass(&presentationFramebuffer, renderPassParameters);
+    commandList.beginRenderPass(presentationFramebuffer, renderPassParameters);
     if(!commandList.isRenderPassActive())
         return false;
 

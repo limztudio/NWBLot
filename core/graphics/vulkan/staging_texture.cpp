@@ -425,21 +425,16 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 }
 
 void* Device::mapStagingTexture(
-    StagingTexture* textureResource,
+    StagingTexture& staging,
     const TextureSlice& slice,
     const CpuAccessMode::Enum requestedAccess,
     usize* outRowPitch
 ){
-    if(!textureResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture is null"));
-        return nullptr;
-    }
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: invalid CPU access mode"));
         return nullptr;
     }
 
-    StagingTexture& staging = *textureResource;
     if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture belongs to another device"));
         return nullptr;
@@ -530,13 +525,7 @@ void* Device::mapStagingTexture(
     return static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range.byteOffset);
 }
 
-void Device::unmapStagingTexture(StagingTexture* textureResource){
-    if(!textureResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture is null"));
-        return;
-    }
-
-    StagingTexture& staging = *textureResource;
+void Device::unmapStagingTexture(StagingTexture& staging){
     if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap staging texture: texture belongs to another device"));
         return;

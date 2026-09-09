@@ -320,7 +320,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     if(!commandList->hasCommandBuffer())
         return false;
     for(u32 copyIndex = 0u; copyIndex < copyCount; ++copyIndex)
-        commandList->copyBuffer(destination.get(), 0u, source.get(), 0u, static_cast<u64>(byteSize));
+        commandList->copyBuffer(*destination, 0u, *source, 0u, static_cast<u64>(byteSize));
     commandList->close();
 
     CommandList* const commandLists[] = { commandList.get() };
@@ -359,7 +359,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     commandList->open();
     if(!commandList->hasCommandBuffer())
         return false;
-    commandList->copyBuffer(outReadback.get(), 0u, source, 0u, static_cast<u64>(byteSize));
+    commandList->copyBuffer(*outReadback, 0u, *source, 0u, static_cast<u64>(byteSize));
     commandList->close();
 
     CommandList* const commandLists[] = { commandList.get() };
@@ -373,11 +373,11 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     const usize byteSize,
     u64& outHash
 ){
-    const auto* const bytes = static_cast<const u8*>(device.mapBuffer(readback, CpuAccessMode::Read));
+    const auto* const bytes = static_cast<const u8*>(device.mapBuffer(*readback, CpuAccessMode::Read));
     if(!bytes)
         return false;
     outHash = UpdateFnv64(s_ChecksumHashSeed, bytes, byteSize);
-    device.unmapBuffer(readback);
+    device.unmapBuffer(*readback);
     return true;
 }
 
@@ -402,7 +402,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     commandList->open();
     if(!commandList->hasCommandBuffer())
         return false;
-    commandList->copyTexture(outReadback.get(), TextureSlice{}, source, TextureSlice{});
+    commandList->copyTexture(*outReadback, TextureSlice{}, *source, TextureSlice{});
     commandList->close();
 
     CommandList* const commandLists[] = { commandList.get() };
@@ -417,7 +417,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     u64& outHash
 ){
     usize rowPitch = 0u;
-    const auto* const bytes = static_cast<const u8*>(device.mapStagingTexture(readback, TextureSlice{}, CpuAccessMode::Read, &rowPitch));
+    const auto* const bytes = static_cast<const u8*>(device.mapStagingTexture(*readback, TextureSlice{}, CpuAccessMode::Read, &rowPitch));
     if(!bytes || rowPitch < static_cast<usize>(textureDesc.width) * sizeof(u32))
         return false;
 
@@ -425,7 +425,7 @@ static void FillUploadData(Vector<u8, Alloc::GlobalArena>& outBytes){
     const usize rowBytes = static_cast<usize>(textureDesc.width) * sizeof(u32);
     for(u32 row = 0u; row < textureDesc.height; ++row)
         outHash = UpdateFnv64(outHash, bytes + static_cast<usize>(row) * rowPitch, rowBytes);
-    device.unmapStagingTexture(readback);
+    device.unmapStagingTexture(*readback);
     return true;
 }
 

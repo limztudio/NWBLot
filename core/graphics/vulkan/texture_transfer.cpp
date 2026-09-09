@@ -104,15 +104,8 @@ namespace __hidden_texture_transfer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSlice, Texture* srcResource, const TextureSlice& srcSlice){
+void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice){
     constexpr const tchar* s_OperationName = NWB_TEXT("copy texture");
-    if(!destResource || !srcResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must be non-null"));
-        return;
-    }
-
-    Texture& dest = *destResource;
-    Texture& src = *srcResource;
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
         return;
@@ -121,19 +114,19 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native image handles must be non-null"));
         return;
     }
-    if(srcResource == destResource || src.m_image == dest.m_image){
+    if(&src == &dest || src.m_image == dest.m_image){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
     if(!validateTextureForGpuState(
-        srcResource,
+        &src,
         ResourceStates::CopySource,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT
     ))
         return;
     if(!validateTextureForGpuState(
-        destResource,
+        &dest,
         ResourceStates::CopyDest,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -270,14 +263,14 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
     if(m_commandRecordingFailed)
         return;
     setTextureState(
-        srcResource,
+        &src,
         TextureSubresourceSet(contract.sourceSlice.mipLevel, 1u, contract.sourceSlice.arraySlice, 1u),
         ResourceStates::CopySource
     );
     if(m_commandRecordingFailed)
         return;
     setTextureState(
-        destResource,
+        &dest,
         TextureSubresourceSet(contract.destinationSlice.mipLevel, 1u, contract.destinationSlice.arraySlice, 1u),
         ResourceStates::CopyDest
     );
@@ -286,12 +279,12 @@ void CommandList::copyTexture(Texture* destResource, const TextureSlice& destSli
 
     m_context.deviceDispatch.vkCmdCopyImage(m_currentCmdBuf->m_cmdBuf, src.m_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    retainResource(srcResource);
-    retainResource(destResource);
+    retainResource(&src);
+    retainResource(&dest);
 }
 
 bool CommandList::tryWriteTexture(
-    Texture* destResource,
+    Texture& dest,
     u32 arraySlice,
     u32 mipLevel,
     const void* data,
@@ -300,16 +293,11 @@ bool CommandList::tryWriteTexture(
     TextureUploadAspect::Enum aspect
 ){
     constexpr const tchar* s_OperationName = NWB_TEXT("write texture");
-    if(!destResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("destination texture is null"));
-        return false;
-    }
     if(!data){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source data is null"));
         return false;
     }
 
-    Texture& dest = *destResource;
     const TextureDesc& texDesc = dest.m_creationDesc;
     if(texDesc.sampleCount != 1){
         rejectCommandRecording(s_OperationName, NWB_TEXT("destination texture must be single-sampled"));
@@ -321,7 +309,7 @@ bool CommandList::tryWriteTexture(
         return false;
     }
     if(!validateTextureForGpuState(
-        destResource,
+        &dest,
         ResourceStates::CopyDest,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -434,7 +422,7 @@ bool CommandList::tryWriteTexture(
     }
 
     endActiveRenderPass();
-    setTextureState(destResource, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), ResourceStates::CopyDest);
+    setTextureState(&dest, TextureSubresourceSet(mipLevel, 1u, arraySlice, 1u), ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return false;
 
@@ -447,13 +435,13 @@ bool CommandList::tryWriteTexture(
 
     m_context.deviceDispatch.vkCmdCopyBufferToImage(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, dest.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-    retainResource(destResource);
+    retainResource(&dest);
     retainStagingBuffer(*stagingBuffer);
     return true;
 }
 
 void CommandList::writeTexture(
-    Texture* destResource,
+    Texture& dest,
     u32 arraySlice,
     u32 mipLevel,
     const void* data,
@@ -461,21 +449,14 @@ void CommandList::writeTexture(
     usize depthPitch,
     TextureUploadAspect::Enum aspect
 ){
-    if(!tryWriteTexture(destResource, arraySlice, mipLevel, data, rowPitch, depthPitch, aspect))
+    if(!tryWriteTexture(dest, arraySlice, mipLevel, data, rowPitch, depthPitch, aspect))
         return;
 }
 
-void CommandList::resolveTexture(Texture* destResource, const TextureSubresourceSet& dstSubresources, Texture* srcResource, const TextureSubresourceSet& srcSubresources){
+void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources){
     constexpr const tchar* s_OperationName = NWB_TEXT("resolve texture");
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
         return;
-    if(!destResource || !srcResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must be non-null"));
-        return;
-    }
-
-    Texture& dest = *destResource;
-    Texture& src = *srcResource;
     if(&src.m_context != &m_context || &dest.m_context != &m_context){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination textures must belong to this device"));
         return;
@@ -484,19 +465,19 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination native image handles must be non-null"));
         return;
     }
-    if(srcResource == destResource || src.m_image == dest.m_image){
+    if(&src == &dest || src.m_image == dest.m_image){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination must be distinct native images"));
         return;
     }
     if(!validateTextureForGpuState(
-        srcResource,
+        &src,
         ResourceStates::ResolveSource,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT
     ))
         return;
     if(!validateTextureForGpuState(
-        destResource,
+        &dest,
         ResourceStates::ResolveDest,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -673,10 +654,10 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
     endActiveRenderPass();
     if(m_commandRecordingFailed)
         return;
-    setTextureState(srcResource, resolvedSrc, ResourceStates::ResolveSource);
+    setTextureState(&src, resolvedSrc, ResourceStates::ResolveSource);
     if(m_commandRecordingFailed)
         return;
-    setTextureState(destResource, resolvedDst, ResourceStates::ResolveDest);
+    setTextureState(&dest, resolvedDst, ResourceStates::ResolveDest);
     if(m_commandRecordingFailed)
         return;
 
@@ -690,8 +671,8 @@ void CommandList::resolveTexture(Texture* destResource, const TextureSubresource
         regions.data()
     );
 
-    retainResource(srcResource);
-    retainResource(destResource);
+    retainResource(&src);
+    retainResource(&dest);
 }
 
 

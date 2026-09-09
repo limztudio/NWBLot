@@ -207,8 +207,8 @@ static void ApplyFlyCameraInputToMainCamera(
         resolvedRotation,
         resolvedPosition
     );
-    StoreFloat(resolvedRotation, &cameraView.transform->rotation);
-    StoreFloat(resolvedPosition, &cameraView.transform->position);
+    StoreFloat(resolvedRotation, cameraView.transform->rotation);
+    StoreFloat(resolvedPosition, cameraView.transform->position);
 }
 
 [[nodiscard]] static NWB::Core::ECS::EntityID CreateModelEntity(
@@ -300,7 +300,7 @@ bool ProjectTestbed::onStartup(){
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(activeCamera.camera.valid());
     NWB_ASSERT(cameraTransform);
-    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), &cameraTransform->rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
         __hidden_runtime::s_DefaultDirectionalLightPitch,

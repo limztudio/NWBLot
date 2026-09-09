@@ -237,7 +237,7 @@ private:
         );
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
-                StoreFloat(wallRotation, &transform->rotation);
+                StoreFloat(wallRotation, transform->rotation);
         }
         return entity;
     }
@@ -258,7 +258,7 @@ private:
         );
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
-                StoreFloat(ceilingRotation, &transform->rotation);
+                StoreFloat(ceilingRotation, transform->rotation);
         }
         return entity;
     }
@@ -281,7 +281,7 @@ private:
                 continue;
 
             const f32 phase = static_cast<f32>(index) * (s_TwoPi / static_cast<f32>(s_CharacterCount));
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yawBase + phase, 0.0f), &transform->rotation);
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yawBase + phase, 0.0f), transform->rotation);
         }
     }
 

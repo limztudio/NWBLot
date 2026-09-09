@@ -64,7 +64,7 @@ bool Client::globalInit(){
 
 
 Client::Client()
-    : ClientBaseType("NWB::Log::Client")
+    : ClientBaseType(MakeNotNull("NWB::Log::Client"))
     , m_curl(nullptr)
     , m_pendingPayload(BaseType::arena())
     , m_messageUrl(BaseType::arena())
@@ -227,7 +227,7 @@ bool ClientStandalone::globalInit(){
 
 
 ClientStandalone::ClientStandalone()
-    : ClientBaseType("NWB::Log::ClientStandalone")
+    : ClientBaseType(MakeNotNull("NWB::Log::ClientStandalone"))
     , m_processedMsgFile(BaseType::arena())
 {}
 ClientStandalone::~ClientStandalone(){

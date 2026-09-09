@@ -61,8 +61,8 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SamplerBinaryPayload::s_SamplerMagic,
-        NWB_TEXT("Sampler::loadBinary"),
-        NWB_TEXT("sampler")
+        MakeNotNull(NWB_TEXT("Sampler::loadBinary")),
+        MakeNotNull(NWB_TEXT("sampler"))
     ))
         return false;
     if(header.version != SamplerBinaryPayload::s_SamplerVersion){
@@ -99,7 +99,7 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: sampler description is invalid"));
         return false;
     }
-    if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Sampler::loadBinary")))
+    if(!Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Sampler::loadBinary"))))
         return false;
 
     m_description = description;

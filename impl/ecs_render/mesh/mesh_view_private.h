@@ -163,12 +163,12 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
     const SIMDVector farPlane = VectorReplicate(projection.farPlane);
 
     const SIMDMatrix worldToClip = BuildWorldToClipMatrix(positionDepthBias, right, up, forward, projectionParams);
-    StoreFloat(worldToClip, &state.worldToClip);
+    StoreFloat(worldToClip, state.worldToClip);
 
     SIMDVector determinant;
     const SIMDMatrix clipToWorld = MatrixInverse(&determinant, worldToClip);
     NWB_ASSERT(VectorIsFinite(determinant, VectorComponentMask::s_XYZW) && Vector4Greater(VectorAbs(determinant), VectorZero()));
-    StoreFloat(clipToWorld, &state.clipToWorld);
+    StoreFloat(clipToWorld, state.clipToWorld);
 
     SIMDVector cameraPosition;
     SIMDVector frustumPlanes[NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT];
@@ -184,9 +184,9 @@ inline MeshViewGpuData ResolveMeshViewState(Core::ECS::World& world, const f32 f
         nearPlane,
         farPlane
     );
-    StoreFloat(cameraPosition, &state.cameraPosition);
+    StoreFloat(cameraPosition, state.cameraPosition);
     for(usize planeIndex = 0u; planeIndex < NWB_MESH_VIEW_FRUSTUM_PLANE_COUNT; ++planeIndex)
-        StoreFloat(frustumPlanes[planeIndex], &state.frustumPlanes[planeIndex]);
+        StoreFloat(frustumPlanes[planeIndex], state.frustumPlanes[planeIndex]);
 
     return state;
 }

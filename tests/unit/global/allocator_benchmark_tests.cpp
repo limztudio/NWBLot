@@ -6,6 +6,7 @@
 #include <core/alloc/persistent.h>
 
 #include <global/algorithm.h>
+#include <global/not_null.h>
 #include <global/text_utils.h>
 #include <global/timer.h>
 
@@ -189,9 +190,9 @@ inline void RunMeasuredSample(
     return comparison;
 }
 
-void RecordUnsignedProperty(const char* const key, const u64 value){
+void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char text[32u] = {};
-    testing::Test::RecordProperty(key, FormatDecimal(value, text).data());
+    testing::Test::RecordProperty(key.get(), FormatDecimal(value, text).data());
 }
 
 void VerifyAndRecordComparison(const usize alignment){
@@ -205,14 +206,14 @@ void VerifyAndRecordComparison(const usize alignment){
     EXPECT_GT(comparison.global.checksum, 0u);
     EXPECT_EQ(comparison.global.checksum, comparison.persistent.checksum);
 
-    RecordUnsignedProperty("alignment", alignment);
-    RecordUnsignedProperty("global_median_ns", comparison.global.medianNanoseconds);
-    RecordUnsignedProperty("persistent_median_ns", comparison.persistent.medianNanoseconds);
-    RecordUnsignedProperty("global_p95_ns", comparison.global.p95Nanoseconds);
-    RecordUnsignedProperty("persistent_p95_ns", comparison.persistent.p95Nanoseconds);
-    RecordUnsignedProperty("operations_per_sample", s_BatchCount * s_BatchSize * 2u);
-    RecordUnsignedProperty("measured_sample_count", s_MeasuredSampleCount);
-    RecordUnsignedProperty("persistent_percent_of_global", comparison.global.medianNanoseconds != 0u
+    RecordUnsignedProperty(MakeNotNull("alignment"), alignment);
+    RecordUnsignedProperty(MakeNotNull("global_median_ns"), comparison.global.medianNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("persistent_median_ns"), comparison.persistent.medianNanoseconds);
+    RecordUnsignedProperty(MakeNotNull("global_p95_ns"), comparison.global.p95Nanoseconds);
+    RecordUnsignedProperty(MakeNotNull("persistent_p95_ns"), comparison.persistent.p95Nanoseconds);
+    RecordUnsignedProperty(MakeNotNull("operations_per_sample"), s_BatchCount * s_BatchSize * 2u);
+    RecordUnsignedProperty(MakeNotNull("measured_sample_count"), s_MeasuredSampleCount);
+    RecordUnsignedProperty(MakeNotNull("persistent_percent_of_global"), comparison.global.medianNanoseconds != 0u
         ? comparison.persistent.medianNanoseconds * 100u / comparison.global.medianNanoseconds
         : 0u
     );

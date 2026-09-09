@@ -63,21 +63,21 @@ concept DeviceApi = requires(
     T& device,
     const HeapDesc& heapDesc,
     const TextureDesc& textureDesc,
-    Texture* texture,
-    StagingTexture* stagingTexture,
-    Heap* heap,
+    Texture& texture,
+    StagingTexture& stagingTexture,
+    Heap& heap,
     const TextureSlice& textureSlice,
     usize* rowPitch,
     const BufferDesc& bufferDesc,
-    Buffer* buffer,
+    Buffer& buffer,
     const ShaderDesc& shaderDesc,
     const void* binary,
     const ShaderSpecialization* specializationConstants,
     const SamplerDesc& samplerDesc,
     const VertexAttributeDesc* vertexAttributeDescs,
     Shader* shader,
-    EventQuery* eventQuery,
-    TimerQuery* timerQuery,
+    EventQuery& eventQuery,
+    TimerQuery& timerQuery,
     TimerQueryResult& timerQueryResult,
     const FramebufferDesc& framebufferDesc,
     const GraphicsPipelineDesc& graphicsPipelineDesc,
@@ -117,7 +117,7 @@ concept DeviceApi = requires(
     requires (!requires{ device.createHandleForNativeBuffer(ObjectType{}, nativeObject, bufferDesc, u32{}); });
 
     { device.createShader(shaderDesc, binary, usize{}) }->SameAs<ShaderHandle>;
-    { device.createShaderSpecialization(shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
+    { device.createShaderSpecialization(*shader, specializationConstants, u32{}) }->SameAs<ShaderHandle>;
     { device.createShaderLibrary(binary, usize{}) }->SameAs<ShaderLibraryHandle>;
     { device.createSampler(samplerDesc) }->SameAs<SamplerHandle>;
     { device.createInputLayout(vertexAttributeDescs, u32{}, shader) }->SameAs<InputLayoutHandle>;
@@ -142,9 +142,9 @@ concept DeviceApi = requires(
 
     { device.createOpacityMicromap(opacityMicromapDesc) }->SameAs<RayTracingOpacityMicromapHandle>;
     { device.createAccelStruct(accelStructDesc) }->SameAs<RayTracingAccelStructHandle>;
-    { device.getAccelStructMemoryRequirements(accelStruct) }->SameAs<MemoryRequirements>;
+    { device.getAccelStructMemoryRequirements(*accelStruct) }->SameAs<MemoryRequirements>;
     { device.getClusterOperationSizeInfo(clusterOperationParams) }->SameAs<RayTracingClusterOperationSizeInfo>;
-    { device.bindAccelStructMemory(accelStruct, heap, u64{}) }->SameAs<bool>;
+    { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<bool>;
 
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
     { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
@@ -180,13 +180,13 @@ concept DeviceApi = requires(
 template<typename T>
 concept CommandListApi = requires(
     T& commandList,
-    Texture* texture,
-    StagingTexture* stagingTexture,
-    Buffer* buffer,
+    Texture& texture,
+    StagingTexture& stagingTexture,
+    Buffer& buffer,
     Framebuffer& framebuffer,
     RayTracingAccelStruct* accelStruct,
     RayTracingOpacityMicromap* opacityMicromap,
-    TimerQuery* timerQuery,
+    TimerQuery& timerQuery,
     TimerQueryRecordingToken& timerQueryRecordingToken,
     const TextureSlice& textureSlice,
     const TextureSubresourceSet& subresources,
@@ -219,7 +219,7 @@ concept CommandListApi = requires(
     resourceStateHandoff.reset();
     { resourceStateHandoff.valid() }->SameAs<bool>;
     commandList.clearState();
-    commandList.beginRenderPass(&framebuffer, renderPassParameters);
+    commandList.beginRenderPass(framebuffer, renderPassParameters);
     commandList.endRenderPass();
 
     commandList.clearTextureFloat(texture, subresources, color);
@@ -270,7 +270,7 @@ concept CommandListApi = requires(
     commandList.buildBottomLevelAccelStruct(accelStruct, geometries, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.buildTopLevelAccelStruct(accelStruct, instances, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.executeMultiIndirectClusterOperation(clusterOperationDesc);
-    commandList.buildTopLevelAccelStructFromBuffer(accelStruct, buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
+    commandList.buildTopLevelAccelStructFromBuffer(accelStruct, &buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
     { commandList.resetTimerQuery(timerQuery) }->SameAs<bool>;
     { commandList.beginTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
@@ -281,26 +281,26 @@ concept CommandListApi = requires(
     commandList.abandonMarker();
 
     commandList.setResourceStatesForFramebuffer(framebuffer);
-    commandList.setEnableUavBarriersForTexture(texture, bool{});
-    commandList.setEnableUavBarriersForBuffer(buffer, bool{});
-    commandList.beginTrackingTextureState(texture, subresources, ResourceStates::ShaderResource);
-    commandList.beginTrackingBufferState(buffer, ResourceStates::ShaderResource);
-    commandList.setTextureState(texture, subresources, ResourceStates::ShaderResource);
-    commandList.setBufferState(buffer, ResourceStates::ShaderResource);
+    commandList.setEnableUavBarriersForTexture(&texture, bool{});
+    commandList.setEnableUavBarriersForBuffer(&buffer, bool{});
+    commandList.beginTrackingTextureState(&texture, subresources, ResourceStates::ShaderResource);
+    commandList.beginTrackingBufferState(&buffer, ResourceStates::ShaderResource);
+    commandList.setTextureState(&texture, subresources, ResourceStates::ShaderResource);
+    commandList.setBufferState(&buffer, ResourceStates::ShaderResource);
     commandList.setAccelStructState(accelStruct, ResourceStates::AccelStructRead);
-    commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Compute);
-    commandList.releaseBufferOwnership(buffer, CommandQueue::Compute);
-    commandList.releaseTextureOwnership(texture, subresources, GpuPhysicalQueueId{});
-    commandList.releaseBufferOwnership(buffer, GpuPhysicalQueueId{});
-    commandList.releaseTextureOwnership(texture, subresources, CommandQueue::Transfer);
-    commandList.releaseBufferOwnership(buffer, CommandQueue::Transfer);
-    commandList.setPermanentTextureState(texture, ResourceStates::ShaderResource);
-    commandList.setPermanentBufferState(buffer, ResourceStates::ShaderResource);
+    commandList.releaseTextureOwnership(&texture, subresources, CommandQueue::Compute);
+    commandList.releaseBufferOwnership(&buffer, CommandQueue::Compute);
+    commandList.releaseTextureOwnership(&texture, subresources, GpuPhysicalQueueId{});
+    commandList.releaseBufferOwnership(&buffer, GpuPhysicalQueueId{});
+    commandList.releaseTextureOwnership(&texture, subresources, CommandQueue::Transfer);
+    commandList.releaseBufferOwnership(&buffer, CommandQueue::Transfer);
+    commandList.setPermanentTextureState(&texture, ResourceStates::ShaderResource);
+    commandList.setPermanentBufferState(&buffer, ResourceStates::ShaderResource);
     commandList.commitBarriers();
-    { commandList.getTextureSubresourceState(texture, ArraySlice{}, MipLevel{}) }->SameAs<ResourceStates::Mask>;
-    { commandList.getBufferState(buffer) }->SameAs<ResourceStates::Mask>;
-    { commandList.getPermanentTextureState(texture) }->SameAs<ResourceStates::Mask>;
-    { commandList.getPermanentBufferState(buffer) }->SameAs<ResourceStates::Mask>;
+    { commandList.getTextureSubresourceState(&texture, ArraySlice{}, MipLevel{}) }->SameAs<ResourceStates::Mask>;
+    { commandList.getBufferState(&buffer) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentTextureState(&texture) }->SameAs<ResourceStates::Mask>;
+    { commandList.getPermanentBufferState(&buffer) }->SameAs<ResourceStates::Mask>;
     commandList.getDevice();
     { commandList.getDevice() }->SameAs<Device&>;
     { commandList.getDescription() }->SameAs<const CommandListParameters&>;

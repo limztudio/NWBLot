@@ -480,11 +480,11 @@ struct Result{
     if(!device.waitForIdle())
         return false;
 
-    const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(destination, CpuAccessMode::Read));
+    const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     if(!bytesRead)
         return false;
     outResult.observedHash = UpdateFnv64(s_ChecksumHashSeed, bytesRead, byteCount);
-    device.unmapBuffer(destination);
+    device.unmapBuffer(*destination);
     outResult.checksumVerified = outResult.observedHash == outResult.expectedHash;
     return outResult.checksumVerified;
 }
@@ -536,11 +536,11 @@ struct Result{
     if(!device.waitForIdle())
         return false;
 
-    const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(destination, CpuAccessMode::Read));
+    const auto* const bytesRead = static_cast<const u8*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     if(!bytesRead)
         return false;
     outResult.directVulkanObservedHash = UpdateFnv64(s_ChecksumHashSeed, bytesRead, byteCount);
-    device.unmapBuffer(destination);
+    device.unmapBuffer(*destination);
     outResult.directVulkanChecksumVerified = outResult.directVulkanObservedHash == outResult.expectedHash;
     return outResult.directVulkanChecksumVerified;
 }
@@ -573,12 +573,12 @@ struct Result{
     if(!source || !destination)
         return false;
 
-    auto* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
+    auto* const sourceWords = static_cast<u32*>(device.mapBuffer(*source, CpuAccessMode::Write));
     if(!sourceWords)
         return false;
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         sourceWords[wordIndex] = s_SourceWords[wordIndex];
-    device.unmapBuffer(source.get());
+    device.unmapBuffer(*source);
     outResult.expectedHash = UpdateFnv64(s_ChecksumHashSeed, reinterpret_cast<const u8*>(s_SourceWords), sizeof(s_SourceWords));
 
     GpuTaskGraph graph(arena);

@@ -245,11 +245,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants){
-    if(!baseShader){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: base shader is null"));
-        return nullptr;
-    }
+ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants){
     if(numConstants > 0 && !constants){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader specialization: constants are null for {} entries"), numConstants);
         return nullptr;
@@ -259,12 +255,12 @@ ShaderHandle Device::createShaderSpecialization(Shader* baseShader, const Shader
         return nullptr;
     }
 
-    auto* base = static_cast<Shader*>(baseShader);
+    Shader& base = baseShader;
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
-    shader->m_desc = base->m_desc;
-    NWB_ASSERT(!base->m_spirvWords.empty());
-    shader->m_spirvWords = base->m_spirvWords;
-    shader->m_entryPointName = base->m_entryPointName;
+    shader->m_desc = base.m_desc;
+    NWB_ASSERT(!base.m_spirvWords.empty());
+    shader->m_spirvWords = base.m_spirvWords;
+    shader->m_entryPointName = base.m_entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

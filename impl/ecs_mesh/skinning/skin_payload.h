@@ -99,7 +99,7 @@ template<typename SkinInfluenceVector>
         MeshSkinningInfluenceGpu gpuSkin;
         for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex)
             gpuSkin.joint[influenceIndex] = static_cast<u32>(sourceSkin.joint[influenceIndex]);
-        StoreFloat(weights, &gpuSkin.weight);
+        StoreFloat(weights, gpuSkin.weight);
         outSkinInfluences.push_back(gpuSkin);
     }
     return true;
@@ -181,7 +181,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
 
         SkeletonJointMatrix storedJointMatrix{};
         if(!useDualQuaternionPayload){
-            StoreFloat(jointMatrix, &storedJointMatrix);
+            StoreFloat(jointMatrix, storedJointMatrix);
         }
         else{
             SIMDVector real = QuaternionIdentity();
@@ -193,8 +193,8 @@ template<typename SourceJointVector, typename JointPaletteVector>
                 real,
                 dual
             )){
-                StoreFloat(real, &storedJointMatrix.rows[0]);
-                StoreFloat(dual, &storedJointMatrix.rows[1]);
+                StoreFloat(real, storedJointMatrix.rows[0]);
+                StoreFloat(dual, storedJointMatrix.rows[1]);
             }
             else{
                 outJointPalette.clear();

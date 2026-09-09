@@ -486,8 +486,8 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_NE(queueClass.find("Futex m_mutex;"), AStringView::npos);
     EXPECT_EQ(queueClass.find("VkQueue m_queue;"), AStringView::npos);
     EXPECT_NE(fullBackendHeader.find("GraphicsVector<NativeQueueState*> m_nativeQueueStates;"), AStringView::npos);
-    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool setEventQuery(EventQuery* query"), AStringView::npos);
-    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool waitEventQuery(EventQuery* query"), AStringView::npos);
+    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool setEventQuery(EventQuery& query"), AStringView::npos);
+    EXPECT_NE(fullBackendHeader.find("[[nodiscard]] bool waitEventQuery(EventQuery& query"), AStringView::npos);
 
     AString queueSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "queue_submission.cpp", queueSource));
@@ -609,8 +609,8 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_LT(querySemanticLockOffset, queryHostLockOffset);
     EXPECT_LT(queryHostLockOffset, querySubmitOffset);
     EXPECT_NE(fullQuerySource.find("deviceLossContext = \"event query submit\";", querySubmitOffset), AStringView::npos);
-    EXPECT_NE(fullQuerySource.find("ScopedLock queryLock(query->m_mutex);"), AStringView::npos);
-    EXPECT_NE(fullQuerySource.find("if(query->m_started){"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("ScopedLock queryLock(query.m_mutex);"), AStringView::npos);
+    EXPECT_NE(fullQuerySource.find("if(query.m_started){"), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("deviceLossContext = \"event query reset\";"), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(deviceLossContext);", querySubmitOffset), AStringView::npos);
     EXPECT_NE(fullQuerySource.find("captureDeviceLoss(\"event query poll\")"), AStringView::npos);

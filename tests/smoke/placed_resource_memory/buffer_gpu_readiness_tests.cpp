@@ -1369,7 +1369,7 @@ TEST_F(BufferGpuReadinessTest, VirtualBufferBindsAfterRejectionAndFreshRecording
     rejected->close();
     ASSERT_FALSE(rejected->hasCommandBuffer());
 
-    const MemoryRequirements requirements = device.getBufferMemoryRequirements(placed.get());
+    const MemoryRequirements requirements = device.getBufferMemoryRequirements(*placed);
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
@@ -1377,7 +1377,7 @@ TEST_F(BufferGpuReadinessTest, VirtualBufferBindsAfterRejectionAndFreshRecording
         .debugName = Name("tests/buffer_gpu_readiness/placed_heap"),
     });
     ASSERT_TRUE(heap);
-    if(!device.bindBufferMemory(placed.get(), heap.get(), 0u))
+    if(!device.bindBufferMemory(*placed, *heap, 0u))
         GTEST_SKIP() << "Buffer GPU readiness: DeviceLocal heap is incompatible with virtual buffers.";
     ASSERT_TRUE(device.isBufferReadyForGpuUse(placed.get()));
 
@@ -1386,7 +1386,7 @@ TEST_F(BufferGpuReadinessTest, VirtualBufferBindsAfterRejectionAndFreshRecording
     ASSERT_TRUE(retry);
     retry->open();
     retry->beginTrackingBufferState(placed.get(), ResourceStates::Common);
-    retry->clearBufferUInt(placed.get(), 0u);
+    retry->clearBufferUInt(*placed, 0u);
     retry->close(&finalState);
     ASSERT_FALSE(retry->commandRecordingFailed());
     ASSERT_TRUE(retry->hasCommandBuffer());
@@ -1435,19 +1435,19 @@ TEST_F(BufferGpuReadinessTest, DirectBufferOperationsRejectUnboundOperandsWithou
     };
 
     expectRejectedWithoutPublication([&](CommandList& commandList){
-        EXPECT_FALSE(commandList.tryWriteBuffer(unbound.get(), &s_WriteValue, sizeof(s_WriteValue)));
+        EXPECT_FALSE(commandList.tryWriteBuffer(*unbound, &s_WriteValue, sizeof(s_WriteValue)));
     });
     expectRejectedWithoutPublication([&](CommandList& commandList){
-        commandList.clearBufferUInt(unbound.get(), s_WriteValue);
+        commandList.clearBufferUInt(*unbound, s_WriteValue);
     });
     expectRejectedWithoutPublication([&](CommandList& commandList){
-        commandList.copyBuffer(unbound.get(), 0u, readySource.get(), 0u, 64u);
+        commandList.copyBuffer(*unbound, 0u, *readySource, 0u, 64u);
     });
     expectRejectedWithoutPublication([&](CommandList& commandList){
         EXPECT_FALSE(commandList.recordPreflightedCopyBufferDirectVulkan(
-            unbound.get(),
+            *unbound,
             0u,
-            readySource.get(),
+            *readySource,
             0u,
             64u
         ));
@@ -1513,7 +1513,7 @@ TEST_F(BufferGpuReadinessTest, DuplicateNativeBufferWrapperIsRejectedWithoutDist
                         .setFormat(Format::R16_UINT)
                 )
         );
-        sameObjectList->copyBuffer(original.get(), 128u, original.get(), 0u, 64u);
+        sameObjectList->copyBuffer(*original, 128u, *original, 0u, 64u);
         sameObjectList->close();
         EXPECT_FALSE(sameObjectList->commandRecordingFailed());
         EXPECT_TRUE(sameObjectList->hasCommandBuffer());
@@ -1536,7 +1536,7 @@ TEST_F(BufferGpuReadinessTest, SameBufferCopyAggregatesPermanentStateAndFreshRec
     ASSERT_FALSE(commandList->commandRecordingFailed());
     const ResourceStates::Mask stateBeforeConflict = commandList->getBufferState(buffer.get());
     const u32 referencesBeforeConflict = buffer->getReferenceCount();
-    commandList->copyBuffer(buffer.get(), 128u, buffer.get(), 0u, 64u);
+    commandList->copyBuffer(*buffer, 128u, *buffer, 0u, 64u);
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_EQ(commandList->getPermanentBufferState(buffer.get()), ResourceStates::CopySource);
     EXPECT_EQ(commandList->getBufferState(buffer.get()), stateBeforeConflict);
@@ -1546,7 +1546,7 @@ TEST_F(BufferGpuReadinessTest, SameBufferCopyAggregatesPermanentStateAndFreshRec
     EXPECT_EQ(commandList->getPermanentBufferState(buffer.get()), ResourceStates::Unknown);
 
     commandList->open();
-    commandList->copyBuffer(buffer.get(), 128u, buffer.get(), 0u, 64u);
+    commandList->copyBuffer(*buffer, 128u, *buffer, 0u, 64u);
     commandList->close();
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_TRUE(commandList->hasCommandBuffer());

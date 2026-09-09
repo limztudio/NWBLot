@@ -15,20 +15,20 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearTextureFloat(Texture* textureResource, TextureSubresourceSet subresources, const Color& clearColor){
+void CommandList::clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(textureResource, subresources, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTexture(texture, subresources, NWB_TEXT("color value"), clearValue, false, false);
 }
 
 void CommandList::clearTextureRectFloat(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     const Color& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     clearColorTextureBox(
-        textureResource,
+        texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
         NWB_TEXT("color value"),
@@ -39,42 +39,42 @@ void CommandList::clearTextureRectFloat(
 }
 
 void CommandList::clearTextureBoxFloat(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     const Color& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
+    clearColorTextureBox(texture, subresources, box, NWB_TEXT("color value"), clearValue, false, false);
 }
 
-void CommandList::clearTextureUInt(Texture* textureResource, TextureSubresourceSet subresources, u32 clearColor){
-    clearTextureUInt(textureResource, subresources, UIntColor(clearColor));
+void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor){
+    clearTextureUInt(texture, subresources, UIntColor(clearColor));
 }
 
-void CommandList::clearTextureUInt(Texture* textureResource, TextureSubresourceSet subresources, const UIntColor& clearColor){
+void CommandList::clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(textureResource, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTexture(texture, subresources, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
 void CommandList::clearTextureRectUInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     u32 clearColor
 ){
-    clearTextureRectUInt(textureResource, subresources, rect, UIntColor(clearColor));
+    clearTextureRectUInt(texture, subresources, rect, UIntColor(clearColor));
 }
 
 void CommandList::clearTextureRectUInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     const UIntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     clearColorTextureBox(
-        textureResource,
+        texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
         NWB_TEXT("unsigned integer value"),
@@ -85,51 +85,51 @@ void CommandList::clearTextureRectUInt(
 }
 
 void CommandList::clearTextureBoxUInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     u32 clearColor
 ){
-    clearTextureBoxUInt(textureResource, subresources, box, UIntColor(clearColor));
+    clearTextureBoxUInt(texture, subresources, box, UIntColor(clearColor));
 }
 
 void CommandList::clearTextureBoxUInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     const UIntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
+    clearColorTextureBox(texture, subresources, box, NWB_TEXT("unsigned integer value"), clearValue, true, false);
 }
 
-void CommandList::clearTextureInt(Texture* textureResource, TextureSubresourceSet subresources, i32 clearColor){
-    clearTextureInt(textureResource, subresources, IntColor(clearColor));
+void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor){
+    clearTextureInt(texture, subresources, IntColor(clearColor));
 }
 
-void CommandList::clearTextureInt(Texture* textureResource, TextureSubresourceSet subresources, const IntColor& clearColor){
+void CommandList::clearTextureInt(Texture& texture, TextureSubresourceSet subresources, const IntColor& clearColor){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTexture(textureResource, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTexture(texture, subresources, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 void CommandList::clearTextureRectInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     i32 clearColor
 ){
-    clearTextureRectInt(textureResource, subresources, rect, IntColor(clearColor));
+    clearTextureRectInt(texture, subresources, rect, IntColor(clearColor));
 }
 
 void CommandList::clearTextureRectInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     const IntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
     clearColorTextureBox(
-        textureResource,
+        texture,
         subresources,
         Box(rect, 0, Limit<i32>::s_Max),
         NWB_TEXT("signed integer value"),
@@ -140,22 +140,22 @@ void CommandList::clearTextureRectInt(
 }
 
 void CommandList::clearTextureBoxInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     i32 clearColor
 ){
-    clearTextureBoxInt(textureResource, subresources, box, IntColor(clearColor));
+    clearTextureBoxInt(texture, subresources, box, IntColor(clearColor));
 }
 
 void CommandList::clearTextureBoxInt(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     const IntColor& clearColor
 ){
     const VkClearColorValue clearValue = VulkanTextureDetail::BuildTextureClearColorValue(clearColor);
-    clearColorTextureBox(textureResource, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
+    clearColorTextureBox(texture, subresources, box, NWB_TEXT("signed integer value"), clearValue, true, true);
 }
 
 
@@ -164,7 +164,7 @@ void CommandList::clearTextureBoxInt(
 
 
 void CommandList::clearColorTexture(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const tchar* valueName,
     const VkClearColorValue& clearValue,
@@ -175,11 +175,6 @@ void CommandList::clearColorTexture(
         return;
     static_cast<void>(valueName);
     constexpr const tchar* s_OperationName = NWB_TEXT("clear texture");
-    if(!textureResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is null"));
-        return;
-    }
-    Texture& texture = *textureResource;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -188,7 +183,7 @@ void CommandList::clearColorTexture(
         ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+    if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
@@ -231,14 +226,14 @@ void CommandList::clearColorTexture(
     if(m_renderPassActive){
         const Rect fullRect(0, Limit<i32>::s_Max, 0, Limit<i32>::s_Max);
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, fullRect, clearValue, valueName))
-            retainResource(textureResource);
+            retainResource(&texture);
         return;
     }
 
     if(blockCompressed){
         constexpr Box s_FullTextureBox(Limit<i32>::s_Max, Limit<i32>::s_Max, Limit<i32>::s_Max);
         clearColorTextureBox(
-            textureResource,
+            texture,
             resolvedSubresources,
             s_FullTextureBox,
             valueName,
@@ -254,7 +249,7 @@ void CommandList::clearColorTexture(
     );
     if(!recordAndValidateAnyCommandCapability(s_ColorClearCapabilities, s_OperationName))
         return;
-    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
     if(texture.m_creationDesc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
@@ -284,11 +279,11 @@ void CommandList::clearColorTexture(
             &range
         );
     }
-    retainResource(textureResource);
+    retainResource(&texture);
 }
 
 void CommandList::clearColorTextureBox(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     const tchar* valueName,
@@ -302,11 +297,6 @@ void CommandList::clearColorTextureBox(
         return;
     static_cast<void>(valueName);
     constexpr const tchar* s_OperationName = NWB_TEXT("clear texture box");
-    if(!textureResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is null"));
-        return;
-    }
-    Texture& texture = *textureResource;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -336,7 +326,7 @@ void CommandList::clearColorTextureBox(
         (m_renderPassActive || desc.sampleCount != 1u)
         && VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)
     ){
-        clearColorTexture(textureResource, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
+        clearColorTexture(texture, resolvedSubresources, valueName, clearValue, integerValue, signedIntegerValue);
         return;
     }
 
@@ -351,7 +341,7 @@ void CommandList::clearColorTextureBox(
         ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+    if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
@@ -389,7 +379,7 @@ void CommandList::clearColorTextureBox(
             baseResolvedBox.maxY
         );
         if(clearActiveRenderPassColorTextureRect(texture, resolvedSubresources, rect, clearValue, valueName))
-            retainResource(textureResource);
+            retainResource(&texture);
         return;
     }
 
@@ -496,7 +486,7 @@ void CommandList::clearColorTextureBox(
             return;
     }
 
-    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
 
@@ -628,7 +618,7 @@ void CommandList::clearColorTextureBox(
         retainStagingBuffer(*stagingBuffer);
     }
 
-    retainResource(textureResource);
+    retainResource(&texture);
 }
 
 

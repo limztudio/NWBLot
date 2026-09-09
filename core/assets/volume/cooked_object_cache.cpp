@@ -234,7 +234,7 @@ public:
 
 public:
     virtual bool writeCookedAsset(
-        const tchar* assetKind,
+        const NotNull<const tchar*> assetKind,
         const Name& virtualPath,
         const Core::Assets::IAsset& asset,
         const Core::Assets::IAssetCodec& codec
@@ -242,7 +242,7 @@ public:
         m_payloadBinary.clear();
         if(!codec.serialize(asset, m_payloadBinary)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize {} '{}'")
-                , assetKind
+                , assetKind.get()
                 , StringConvert(virtualPath.c_str())
             );
             return false;

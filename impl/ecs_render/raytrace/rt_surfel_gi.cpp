@@ -1823,7 +1823,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         Core::Buffer* cellHead = m_rayTracingState.m_surfelCellHeadBuffer.get();
         commandList.setBufferState(cellHead, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
-        commandList.clearBufferUInt(cellHead, NWB_SURFEL_CELL_INVALID);
+        commandList.clearBufferUInt(*cellHead, NWB_SURFEL_CELL_INVALID);
     }
 
     if(dispatchHashBuild){
@@ -2047,11 +2047,11 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             && (frameIndex - m_rayTracingState.m_surfelCountReadbackFrame) >= s_SurfelCountLogDelay
             && submissionComplete
         ){
-            const u32* counts = static_cast<const u32*>(m_graphics.getDevice().mapBuffer(readback, Core::CpuAccessMode::Read));
+            const u32* counts = static_cast<const u32*>(m_graphics.getDevice().mapBuffer(*readback, Core::CpuAccessMode::Read));
             if(counts){
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
                 const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
-                m_graphics.getDevice().unmapBuffer(readback);
+                m_graphics.getDevice().unmapBuffer(*readback);
                 NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
                     , static_cast<u64>(bumpTop - freeTop)
                     , static_cast<u64>(bumpTop)

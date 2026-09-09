@@ -119,7 +119,7 @@ struct ForgedDescriptionTask{
             return true;
 
         const CommandListParameters savedDescription = ForgeRecordingWorker(commandList);
-        commandList.clearBufferUInt(payload.destination, 0x5a17c3e9u);
+        commandList.clearBufferUInt(*payload.destination, 0x5a17c3e9u);
         const_cast<CommandListParameters&>(commandList.getDescription()) = savedDescription;
         return true;
     }
@@ -344,7 +344,7 @@ TEST_F(CommandListProvenanceTest, WorkerForgeryRejectsPreOpenAndActiveRecordingW
     EXPECT_FALSE(commandList->hasCommandBuffer());
     EXPECT_FALSE(commandList->matchesRecordingLease(recordingLease));
     constexpr u32 s_UploadWord = 0x4f25c891u;
-    EXPECT_FALSE(commandList->tryWriteBuffer(buffer.get(), &s_UploadWord, sizeof(s_UploadWord)));
+    EXPECT_FALSE(commandList->tryWriteBuffer(*buffer, &s_UploadWord, sizeof(s_UploadWord)));
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasExplicitBufferState(buffer.get()));
     EXPECT_EQ(buffer->getReferenceCount(), baselineReferences);
@@ -358,7 +358,7 @@ TEST_F(CommandListProvenanceTest, WorkerForgeryRejectsPreOpenAndActiveRecordingW
 
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
-    commandList->clearBufferUInt(buffer.get(), 0u);
+    commandList->clearBufferUInt(*buffer, 0u);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
@@ -395,7 +395,7 @@ TEST_F(CommandListProvenanceTest, QueueClassForgeryRejectsDirectRecordingIngress
         : CommandQueue::Graphics
     ;
     constexpr u32 s_UploadWord = 0x91b8e34cu;
-    EXPECT_FALSE(commandList->tryWriteBuffer(buffer.get(), &s_UploadWord, sizeof(s_UploadWord)));
+    EXPECT_FALSE(commandList->tryWriteBuffer(*buffer, &s_UploadWord, sizeof(s_UploadWord)));
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasExplicitBufferState(buffer.get()));
 
@@ -404,7 +404,7 @@ TEST_F(CommandListProvenanceTest, QueueClassForgeryRejectsDirectRecordingIngress
     EXPECT_FALSE(commandList->hasCommandBuffer());
     commandList->open();
     ASSERT_TRUE(commandList->isRecording());
-    EXPECT_TRUE(commandList->tryWriteBuffer(buffer.get(), &s_UploadWord, sizeof(s_UploadWord)));
+    EXPECT_TRUE(commandList->tryWriteBuffer(*buffer, &s_UploadWord, sizeof(s_UploadWord)));
     commandList->close();
     CommandList* const commandLists[]{ commandList.get() };
     ASSERT_TRUE(device().executeCommandLists(

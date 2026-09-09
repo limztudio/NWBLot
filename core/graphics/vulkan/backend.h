@@ -3108,7 +3108,7 @@ public:
         return ownership.m_readable && m_renderPassActive;
     }
     void clearState();
-    void beginRenderPass(Framebuffer* framebuffer, const RenderPassParameters& params);
+    void beginRenderPass(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endRenderPass();
 
     void setResourceStatesForFramebuffer(Framebuffer& framebuffer);
@@ -3140,46 +3140,46 @@ public:
     void setPermanentTextureState(Texture* texture, ResourceStates::Mask stateBits);
     void setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits);
 
-    void clearTextureFloat(Texture* texture, TextureSubresourceSet subresources, const Color& clearColor);
-    void clearTextureRectFloat(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
-    void clearTextureBoxFloat(Texture* texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor);
-    void clearDepthStencilTexture(Texture* texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureRect(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearDepthStencilTextureBox(Texture* texture, TextureSubresourceSet subresources, const Box& box, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
-    void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, u32 clearColor);
-    void clearTextureUInt(Texture* texture, TextureSubresourceSet subresources, const UIntColor& clearColor);
-    void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
-    void clearTextureRectUInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor);
-    void clearTextureBoxUInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor);
-    void clearTextureBoxUInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor);
-    void clearTextureInt(Texture* texture, TextureSubresourceSet subresources, i32 clearColor);
-    void clearTextureInt(Texture* texture, TextureSubresourceSet subresources, const IntColor& clearColor);
-    void clearTextureRectInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor);
-    void clearTextureRectInt(Texture* texture, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor);
-    void clearTextureBoxInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor);
-    void clearTextureBoxInt(Texture* texture, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor);
+    void clearTextureFloat(Texture& texture, TextureSubresourceSet subresources, const Color& clearColor);
+    void clearTextureRectFloat(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const Color& clearColor);
+    void clearTextureBoxFloat(Texture& texture, TextureSubresourceSet subresources, const Box& box, const Color& clearColor);
+    void clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    void clearDepthStencilTextureRect(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    void clearDepthStencilTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
+    void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, u32 clearColor);
+    void clearTextureUInt(Texture& texture, TextureSubresourceSet subresources, const UIntColor& clearColor);
+    void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, u32 clearColor);
+    void clearTextureRectUInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const UIntColor& clearColor);
+    void clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, u32 clearColor);
+    void clearTextureBoxUInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const UIntColor& clearColor);
+    void clearTextureInt(Texture& texture, TextureSubresourceSet subresources, i32 clearColor);
+    void clearTextureInt(Texture& texture, TextureSubresourceSet subresources, const IntColor& clearColor);
+    void clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, i32 clearColor);
+    void clearTextureRectInt(Texture& texture, TextureSubresourceSet subresources, const Rect& rect, const IntColor& clearColor);
+    void clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, i32 clearColor);
+    void clearTextureBoxInt(Texture& texture, TextureSubresourceSet subresources, const Box& box, const IntColor& clearColor);
 
-    void copyTexture(Texture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
-    void copyTexture(StagingTexture* dest, const TextureSlice& destSlice, Texture* src, const TextureSlice& srcSlice);
-    void copyTexture(Texture* dest, const TextureSlice& destSlice, StagingTexture* src, const TextureSlice& srcSlice);
+    void copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
+    void copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
+    void copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice);
     // Fallible variants are for graph recorders, which must reject a packet rather than claim an accepted lifecycle
     // when staging allocation or native preflight fails. The established void methods remain the faÃ§ade contract.
-    [[nodiscard]] bool tryWriteBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
-    void writeBuffer(Buffer* buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
-    void clearBufferUInt(Buffer* buffer, u32 clearValue);
-    void copyBuffer(Buffer* dest, u64 destOffsetBytes, Buffer* src, u64 srcOffsetBytes, u64 dataSizeBytes);
+    [[nodiscard]] bool tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
+    void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
+    void clearBufferUInt(Buffer& buffer, u32 clearValue);
+    void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
     // Experimental command-IR hook. The caller has already graph-preflighted the operands and lowered the
     // authoritative CopySource/CopyDest state transitions into this list. This emits only vkCmdCopyBuffer and
     // retains the resources; it intentionally does not mutate CommandList state tracking or synthesize barriers.
     [[nodiscard]] bool recordPreflightedCopyBufferDirectVulkan(
-        Buffer* dest,
+        Buffer& dest,
         u64 destOffsetBytes,
-        Buffer* src,
+        Buffer& src,
         u64 srcOffsetBytes,
         u64 dataSizeBytes
     );
     [[nodiscard]] bool tryWriteTexture(
-        Texture* dest,
+        Texture& dest,
         u32 arraySlice,
         u32 mipLevel,
         const void* data,
@@ -3188,7 +3188,7 @@ public:
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic
     );
     void writeTexture(
-        Texture* dest,
+        Texture& dest,
         u32 arraySlice,
         u32 mipLevel,
         const void* data,
@@ -3196,7 +3196,7 @@ public:
         usize depthPitch = 0,
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic
     );
-    void resolveTexture(Texture* dest, const TextureSubresourceSet& dstSubresources, Texture* src, const TextureSubresourceSet& srcSubresources);
+    void resolveTexture(Texture& dest, const TextureSubresourceSet& dstSubresources, Texture& src, const TextureSubresourceSet& srcSubresources);
 
     void setPushConstants(const void* data, usize byteSize);
 
@@ -3222,15 +3222,15 @@ public:
     void executeMultiIndirectClusterOperation(const RayTracingClusterOperationDesc& desc);
     void convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs);
 
-    [[nodiscard]] bool resetTimerQuery(TimerQuery* query);
+    [[nodiscard]] bool resetTimerQuery(TimerQuery& query);
     [[nodiscard]] bool canRecordTimerQueryHere()const;
     [[nodiscard]] bool canResetTimerQueryHere()const;
-    [[nodiscard]] bool beginTimerQuery(TimerQuery* query, TimerQueryRecordingToken& outToken);
-    [[nodiscard]] bool endTimerQuery(TimerQuery* query, const TimerQueryRecordingToken& token);
+    [[nodiscard]] bool beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& outToken);
+    [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
     // Lifetime closure may only consume the claim created by beginTimerQuery() on this same command buffer. It never
     // appends retention or claim storage, reports diagnostics, or invokes observers.
     [[nodiscard]] bool endTimerQueryFromExistingClaim(
-        TimerQuery* query,
+        TimerQuery& query,
         const TimerQueryRecordingToken& token
     )noexcept;
     void beginMarker(const AStringView name);
@@ -3307,7 +3307,7 @@ private:
     )const noexcept;
     [[nodiscard]] bool validateFramebufferForRendering(Framebuffer* framebuffer, const tchar* operationName);
     [[nodiscard]] bool validateRenderPassBegin(
-        Framebuffer* framebuffer,
+        Framebuffer& framebuffer,
         const RenderPassParameters& params,
         const tchar* operationName
     );
@@ -3387,7 +3387,7 @@ private:
     );
     void setViewportState(const ViewportState& viewport);
 
-    bool beginDynamicRendering(Framebuffer* framebuffer, const RenderPassParameters& params);
+    bool beginDynamicRendering(Framebuffer& framebuffer, const RenderPassParameters& params);
     void endDynamicRendering();
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
@@ -3414,8 +3414,8 @@ private:
         VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
         Buffer*& outIndirectBuffer
     );
-    void clearColorTexture(Texture* textureResource, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
-    void clearColorTextureBox(Texture* textureResource, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
+    void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, const tchar* valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     bool clearActiveRenderPassColorTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, const VkClearColorValue& clearValue, const tchar* valueName);
     bool clearActiveRenderPassDepthStencilTextureRect(Texture& texture, const TextureSubresourceSet& resolvedSubresources, const Rect& rect, bool clearDepth, f32 depth, bool clearStencil, u8 stencil);
     [[nodiscard]] bool validateStagingTextureCopyResources(
@@ -3802,8 +3802,8 @@ public:
 public:
     [[nodiscard]] HeapHandle createHeap(const HeapDesc& d);
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& d);
-    [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture* texture);
-    bool bindTextureMemory(Texture* texture, Heap* heap, u64 offset);
+    [[nodiscard]] MemoryRequirements getTextureMemoryRequirements(Texture& texture);
+    bool bindTextureMemory(Texture& texture, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     [[nodiscard]] bool isTextureReadyForGpuUse(
         Texture* texture,
@@ -3818,13 +3818,13 @@ public:
         const NativeTextureProvenance& nativeProvenance
     );
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
-    void* mapStagingTexture(StagingTexture* tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
-    void unmapStagingTexture(StagingTexture* tex);
+    void* mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
+    void unmapStagingTexture(StagingTexture& tex);
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
-    void* mapBuffer(Buffer* buffer, CpuAccessMode::Enum);
-    void unmapBuffer(Buffer* buffer);
-    [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer* buffer);
-    bool bindBufferMemory(Buffer* buffer, Heap* heap, u64 offset);
+    void* mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
+    void unmapBuffer(Buffer& buffer);
+    [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer& buffer);
+    bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
     // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
     // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
@@ -3838,19 +3838,19 @@ public:
         const NativeBufferProvenance& nativeProvenance
     );
     [[nodiscard]] ShaderHandle createShader(const ShaderDesc& d, const void* binary, usize binarySize);
-    [[nodiscard]] ShaderHandle createShaderSpecialization(Shader* baseShader, const ShaderSpecialization* constants, u32 numConstants);
+    [[nodiscard]] ShaderHandle createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants);
     [[nodiscard]] ShaderLibraryHandle createShaderLibrary(const void* binary, usize binarySize);
     [[nodiscard]] SamplerHandle createSampler(const SamplerDesc& d);
     [[nodiscard]] InputLayoutHandle createInputLayout(const VertexAttributeDesc* d, u32 attributeCount, Shader*);
     [[nodiscard]] EventQueryHandle createEventQuery();
-    [[nodiscard]] bool setEventQuery(EventQuery* query, CommandQueue::Enum queue);
-    [[nodiscard]] bool pollEventQuery(EventQuery* query);
-    [[nodiscard]] bool waitEventQuery(EventQuery* query);
+    [[nodiscard]] bool setEventQuery(EventQuery& query, CommandQueue::Enum queue);
+    [[nodiscard]] bool pollEventQuery(EventQuery& query);
+    [[nodiscard]] bool waitEventQuery(EventQuery& query);
     [[nodiscard]] TimerQueryHandle createTimerQuery();
-    bool pollTimerQuery(TimerQuery* query);
-    [[nodiscard]] bool getTimerQueryResult(TimerQuery* query, TimerQueryResult& outResult);
-    f32 getTimerQueryTime(TimerQuery* query);
-    bool resetTimerQuery(TimerQuery* query);
+    bool pollTimerQuery(TimerQuery& query);
+    [[nodiscard]] bool getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult);
+    f32 getTimerQueryTime(TimerQuery& query);
+    bool resetTimerQuery(TimerQuery& query);
     [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
     [[nodiscard]] GraphicsPipelineHandle createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo);
     [[nodiscard]] ComputePipelineHandle createComputePipeline(const ComputePipelineDesc& desc);
@@ -3860,9 +3860,9 @@ public:
     [[nodiscard]] BindingLayoutHandle createBindlessLayout(const BindlessLayoutDesc& desc);
     [[nodiscard]] RayTracingOpacityMicromapHandle createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc);
     [[nodiscard]] RayTracingAccelStructHandle createAccelStruct(const RayTracingAccelStructDesc& desc);
-    [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct* as);
+    [[nodiscard]] MemoryRequirements getAccelStructMemoryRequirements(RayTracingAccelStruct& as);
     [[nodiscard]] RayTracingClusterOperationSizeInfo getClusterOperationSizeInfo(const RayTracingClusterOperationParams& params);
-    bool bindAccelStructMemory(RayTracingAccelStruct* as, Heap* heap, u64 offset);
+    bool bindAccelStructMemory(RayTracingAccelStruct& as, Heap& heap, u64 offset);
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
@@ -4021,16 +4021,16 @@ private:
         DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
     );
     [[nodiscard]] bool setEventQueryInternal(
-        EventQuery* query,
+        EventQuery& query,
         CommandQueue::Enum queue,
         DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
     );
     [[nodiscard]] bool pollEventQueryInternal(
-        EventQuery* query,
+        EventQuery& query,
         DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
     );
     [[nodiscard]] bool waitEventQueryInternal(
-        EventQuery* query,
+        EventQuery& query,
         DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
     );
     void prepareForDestructionAfterIdleOrLoss();

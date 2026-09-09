@@ -53,7 +53,7 @@ static bool BuildMaterialCookedAsset(MaterialCookEntry& entry, Material& outAsse
 static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<MaterialCookEntry, Material, MaterialAssetCodec>(
         Material::AssetTypeName(),
-        NWB_TEXT("material"),
+        MakeNotNull(NWB_TEXT("material")),
         &ParseMaterialDocument,
         nullptr,
         &BuildMaterialCookedAsset,

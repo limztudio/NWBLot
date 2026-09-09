@@ -80,15 +80,15 @@ public:
 
 private:
     struct InitializerItem{
-        CommonDetail::BaseInitializerable* item = nullptr;
+        NotNull<CommonDetail::BaseInitializerable*> item;
         UniquePtr<CommonDetail::BaseInitializerable> ownedItem;
 
-        explicit InitializerItem(CommonDetail::BaseInitializerable* value)
-            : item(value)
+        explicit InitializerItem(CommonDetail::BaseInitializerable& value)
+            : item(MakeNotNull(&value))
         {}
         template<typename T>
         explicit InitializerItem(UniquePtr<T>&& value)
-            : item(value.get())
+            : item(MakeNotNull(value.get()))
             , ownedItem(Move(value))
         {}
     };
@@ -143,7 +143,7 @@ public:
     }
 
 public:
-    inline void enqueue(Initializerable* item){ m_cursor = m_items.emplace_after(m_cursor, item); }
+    inline void enqueue(Initializerable& item){ m_cursor = m_items.emplace_after(m_cursor, item); }
     template<typename INITIALIZE, typename FINALIZE>
     inline void enqueue(INITIALIZE&& initialize, FINALIZE&& finalize){
         auto item = MakeUnique<CommonDetail::FunctionalInitializerable>(Forward<INITIALIZE>(initialize), Forward<FINALIZE>(finalize));

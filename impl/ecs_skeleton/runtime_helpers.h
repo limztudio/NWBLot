@@ -113,7 +113,7 @@ template<typename JointMatrixVector>
             return false;
 
         SkeletonJointMatrix storedJointMatrix{};
-        StoreFloat(resolvedJointMatrix, &storedJointMatrix);
+        StoreFloat(resolvedJointMatrix, storedJointMatrix);
         outJointPalette.push_back(storedJointMatrix);
     }
 

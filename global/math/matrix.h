@@ -392,11 +392,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixInverse(SIMDVector* outDeterminant, const S
     return result;
 }
 
-NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRotQuat, SIMDVector* outTrans, const SIMDMatrix& matrix)noexcept{
-    NWB_ASSERT(outScale != nullptr);
-    NWB_ASSERT(outRotQuat != nullptr);
-    NWB_ASSERT(outTrans != nullptr);
-
+NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRotQuat, SIMDVector& outTrans, const SIMDMatrix& matrix)noexcept{
     const SIMDVector canonicalBasis[3] = {
         s_SIMDIdentityR0,
         s_SIMDIdentityR1,
@@ -404,7 +400,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     };
 
     SIMDMatrix transposed = MatrixTranspose(matrix);
-    *outTrans = transposed.v[3];
+    outTrans = transposed.v[3];
 
     SIMDVector basis[3] = {
         VectorAndInt(transposed.v[0], s_SIMDMask3),
@@ -474,8 +470,8 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector* outScale, SIMDVector* outRo
     ))
         return false;
 
-    *outScale = scale;
-    *outRotQuat = QuaternionRotationMatrix(rotationMatrix);
+    outScale = scale;
+    outRotQuat = QuaternionRotationMatrix(rotationMatrix);
     return true;
 }
 
@@ -652,7 +648,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
+    VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
@@ -665,7 +661,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
+    VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorMergeX(cosAngle, VectorZero(), sinAngle, VectorZero());
@@ -678,7 +674,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
+    VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
 
     SIMDMatrix matrix{};
     matrix.v[0] = VectorMergeX(cosAngle, VectorNegate(sinAngle), VectorZero(), VectorZero());
@@ -734,7 +730,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f3
 NWB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(&sinAngle, &cosAngle, VectorReplicate(angle));
+    VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
     const SIMDVector oneMinusCosAngle = VectorSubtract(s_SIMDOne, cosAngle);
 
 #if defined(NWB_HAS_SCALAR) || defined(NWB_HAS_NEON)
@@ -1089,7 +1085,7 @@ NWB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
 
     SIMDVector sinFov{};
     SIMDVector cosFov{};
-    VectorSinCos(&sinFov, &cosFov, VectorReplicate(s_MatrixHalf * fovAngleY));
+    VectorSinCos(sinFov, cosFov, VectorReplicate(s_MatrixHalf * fovAngleY));
     const SIMDVector zero = VectorZero();
     const SIMDVector height = VectorDivide(cosFov, sinFov);
     const SIMDVector width = VectorDivide(height, VectorReplicate(aspectRatio));

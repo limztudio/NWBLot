@@ -55,7 +55,7 @@ struct ClearBufferTask{
         )
             return false;
         commandList.endRenderPass();
-        commandList.clearBufferUInt(payload.destination.get(), payload.clearValue);
+        commandList.clearBufferUInt(*payload.destination, payload.clearValue);
         return true;
     }
 
@@ -114,7 +114,7 @@ struct ClearTextureTask{
         switch(payload.clearDesc.valueType){
         case GpuClearTextureTaskValueType::Float:
             commandList.clearTextureFloat(
-                payload.destination.get(),
+                *payload.destination,
                 payload.clearDesc.subresources,
                 payload.clearDesc.floatValue
             );
@@ -122,7 +122,7 @@ struct ClearTextureTask{
             break;
         case GpuClearTextureTaskValueType::UInt:
             commandList.clearTextureUInt(
-                payload.destination.get(),
+                *payload.destination,
                 payload.clearDesc.subresources,
                 payload.clearDesc.uintValue
             );
@@ -130,7 +130,7 @@ struct ClearTextureTask{
             break;
         case GpuClearTextureTaskValueType::Int:
             commandList.clearTextureInt(
-                payload.destination.get(),
+                *payload.destination,
                 payload.clearDesc.subresources,
                 payload.clearDesc.intValue
             );
@@ -138,7 +138,7 @@ struct ClearTextureTask{
             break;
         case GpuClearTextureTaskValueType::DepthStencil:
             commandList.clearDepthStencilTexture(
-                payload.destination.get(),
+                *payload.destination,
                 payload.clearDesc.subresources,
                 payload.clearDesc.clearDepth,
                 payload.clearDesc.depthValue,
@@ -218,7 +218,7 @@ struct ClearTextureRectUIntTask{
         if(commandList.commandRecordingFailed())
             return false;
         commandList.clearTextureRectUInt(
-            payload.destination.get(),
+            *payload.destination,
             payload.clearDesc.subresources,
             payload.clearDesc.rect,
             payload.clearDesc.uintValue

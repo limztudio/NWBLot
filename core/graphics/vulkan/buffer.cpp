@@ -425,18 +425,17 @@ bool CommandList::prepareUploadStaging(
     return true;
 }
 
-bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
+bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
     if(dataSize == 0)
         return false;
 
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("write buffer")))
         return false;
-    if(!VulkanDetail::AreAllPointersValid(bufferResource, data)){
-        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("buffer or data is null"));
+    if(!data){
+        rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("data is null"));
         return false;
     }
 
-    Buffer& buffer = *bufferResource;
     const BufferDesc& desc = buffer.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
         rejectCommandRecording(NWB_TEXT("write buffer"), NWB_TEXT("destination range is outside the buffer"));
@@ -447,7 +446,7 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
         return false;
     }
     if(!validateBufferForGpuState(
-        bufferResource,
+        &buffer,
         ResourceStates::CopyDest,
         NWB_TEXT("write buffer"),
         VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -462,7 +461,7 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
     }
 
     endActiveRenderPass();
-    setBufferState(bufferResource, ResourceStates::CopyDest, false, BufferRange(destOffsetBytes, dataSize));
+    setBufferState(&buffer, ResourceStates::CopyDest, false, BufferRange(destOffsetBytes, dataSize));
     if(m_commandRecordingFailed)
         return false;
 
@@ -473,31 +472,25 @@ bool CommandList::tryWriteBuffer(Buffer* bufferResource, const void* data, usize
 
     m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
 
-    retainResource(bufferResource);
+    retainResource(&buffer);
     retainStagingBuffer(*stagingBuffer);
     return true;
 }
 
-void CommandList::writeBuffer(Buffer* bufferResource, const void* data, usize dataSize, u64 destOffsetBytes){
-    if(!tryWriteBuffer(bufferResource, data, dataSize, destOffsetBytes))
+void CommandList::writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
+    if(!tryWriteBuffer(buffer, data, dataSize, destOffsetBytes))
         return;
 }
 
-void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
+void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear buffer")))
         return;
-    if(!VulkanDetail::AreAllPointersValid(bufferResource)){
-        rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer is null"));
-        return;
-    }
-
-    Buffer& buffer = *bufferResource;
     if((buffer.m_creationDesc.byteSize & s_BufferAlignmentMask) != 0u){
         rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
     if(!validateBufferForGpuState(
-        bufferResource,
+        &buffer,
         ResourceStates::CopyDest,
         NWB_TEXT("clear buffer"),
         VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -505,28 +498,20 @@ void CommandList::clearBufferUInt(Buffer* bufferResource, u32 clearValue){
         return;
 
     endActiveRenderPass();
-    setBufferState(bufferResource, ResourceStates::CopyDest);
+    setBufferState(&buffer, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
 
     m_context.deviceDispatch.vkCmdFillBuffer(m_currentCmdBuf->m_cmdBuf, buffer.m_buffer, 0, VK_WHOLE_SIZE, clearValue);
-    retainResource(bufferResource);
+    retainResource(&buffer);
 }
 
-void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* srcResource, u64 srcOffsetBytes, u64 dataSizeBytes){
+void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes){
     if(dataSizeBytes == 0)
         return;
 
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("copy buffer")))
         return;
-    if(!VulkanDetail::AreAllPointersValid(destResource, srcResource)){
-        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source or destination buffer is null"));
-        return;
-    }
-
-    Buffer& dest = *destResource;
-    Buffer& src = *srcResource;
-
     const BufferDesc& destDesc = dest.m_creationDesc;
     const BufferDesc& srcDesc = src.m_creationDesc;
 
@@ -545,7 +530,7 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         return;
     }
     if(
-        destResource != srcResource
+        &dest != &src
         && dest.m_buffer != VK_NULL_HANDLE
         && dest.m_buffer == src.m_buffer
     ){
@@ -569,12 +554,12 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
     ;
-    if(!validateBufferForGpuState(srcResource, sourceState, NWB_TEXT("copy buffer"), sourceUsage))
+    if(!validateBufferForGpuState(&src, sourceState, NWB_TEXT("copy buffer"), sourceUsage))
         return;
     if(
-        destResource != srcResource
+        &dest != &src
         && !validateBufferForGpuState(
-            destResource,
+            &dest,
             destinationState,
             NWB_TEXT("copy buffer"),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -583,9 +568,9 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
         return;
 
     endActiveRenderPass();
-    setBufferState(srcResource, sourceState, false, BufferRange(srcOffsetBytes, dataSizeBytes));
+    setBufferState(&src, sourceState, false, BufferRange(srcOffsetBytes, dataSizeBytes));
     if(!m_commandRecordingFailed)
-        setBufferState(destResource, destinationState, false, BufferRange(destOffsetBytes, dataSizeBytes));
+        setBufferState(&dest, destinationState, false, BufferRange(destOffsetBytes, dataSizeBytes));
     if(m_commandRecordingFailed)
         return;
 
@@ -596,14 +581,14 @@ void CommandList::copyBuffer(Buffer* destResource, u64 destOffsetBytes, Buffer* 
 
     m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1, &region);
 
-    retainResource(srcResource);
-    retainResource(destResource);
+    retainResource(&src);
+    retainResource(&dest);
 }
 
 bool CommandList::recordPreflightedCopyBufferDirectVulkan(
-    Buffer* const destResource,
+    Buffer& dest,
     const u64 destOffsetBytes,
-    Buffer* const srcResource,
+    Buffer& src,
     const u64 srcOffsetBytes,
     const u64 dataSizeBytes
 ){
@@ -614,13 +599,6 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         return false;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("direct command-IR copy buffer")))
         return false;
-    if(!VulkanDetail::AreAllPointersValid(destResource, srcResource)){
-        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source or destination buffer is null"));
-        return false;
-    }
-
-    Buffer& dest = *destResource;
-    Buffer& src = *srcResource;
     const BufferDesc& destDesc = dest.m_creationDesc;
     const BufferDesc& srcDesc = src.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
@@ -642,7 +620,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         return false;
     }
     if(
-        destResource != srcResource
+        &dest != &src
         && dest.m_buffer != VK_NULL_HANDLE
         && dest.m_buffer == src.m_buffer
     ){
@@ -664,7 +642,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     ;
     if(
         !validateBufferForGpuState(
-            srcResource,
+            &src,
             sourceState,
             NWB_TEXT("direct command-IR copy buffer"),
             sameNativeBuffer
@@ -674,9 +652,9 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     )
         return false;
     if(
-        destResource != srcResource
+        &dest != &src
         && !validateBufferForGpuState(
-            destResource,
+            &dest,
             destinationState,
             NWB_TEXT("direct command-IR copy buffer"),
             VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -695,8 +673,8 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     region.size = dataSizeBytes;
     m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, src.m_buffer, dest.m_buffer, 1u, &region);
 
-    retainResource(srcResource);
-    retainResource(destResource);
+    retainResource(&src);
+    retainResource(&dest);
     return true;
 }
 

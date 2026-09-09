@@ -488,8 +488,8 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     if(!Core::Assets::AppendVectorPayload(
         outBinary,
         mipBinaries,
-        NWB_TEXT("TextureAssetCodec::serialize"),
-        NWB_TEXT("mip levels")
+        MakeNotNull(NWB_TEXT("TextureAssetCodec::serialize")),
+        MakeNotNull(NWB_TEXT("mip levels"))
     ))
         return false;
 

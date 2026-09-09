@@ -130,7 +130,7 @@ static void ApplyCubeRotation(
     if(!transform)
         return;
 
-    StoreFloat(rotation, &transform->rotation);
+    StoreFloat(rotation, transform->rotation);
 }
 
 [[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot){

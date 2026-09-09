@@ -92,19 +92,19 @@ namespace MetadataU32ValueFailure{
     };
 };
 
-static constexpr const tchar* s_MeshMetaKind = NWB_TEXT("Mesh");
+static constexpr NotNull<const tchar*> s_MeshMetaKind = MakeNotNull(NWB_TEXT("Mesh"));
 
 static const Core::Metascript::Value* FindRequiredMetadataListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView fieldName){
     const Core::Metascript::Value* field = FindField(map, fieldName);
     if(field && field->isList())
         return field;
 
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list")
-        , metaKind
+        , metaKind.get()
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)
     );
@@ -127,14 +127,14 @@ static MetadataF32ValueFailure::Enum ValidateMetadataFiniteF32Value(const Core::
 
 static void LogMetadataFiniteF32ValueFailure(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView label,
     const MetadataF32ValueFailure::Enum failure
 ){
     switch(failure){
     case MetadataF32ValueFailure::NotNumeric:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -142,7 +142,7 @@ static void LogMetadataFiniteF32ValueFailure(
 
     case MetadataF32ValueFailure::NonFinite:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -150,7 +150,7 @@ static void LogMetadataFiniteF32ValueFailure(
 
     case MetadataF32ValueFailure::OutOfRange:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -165,14 +165,14 @@ template<usize ComponentCount>
 static bool ParseMetadataF32TupleWithLabel(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView label,
     f32 (&outValues)[ComponentCount],
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
             , ComponentCount
@@ -197,7 +197,7 @@ template<usize ComponentCount>
 static bool ParseMetadataF32TupleListElement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView fieldName,
     const usize elementIndex,
     f32 (&outValues)[ComponentCount],
@@ -211,7 +211,7 @@ template<typename ElementT, usize ComponentCount, typename ElementVectorT>
 static bool ParseMetadataFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView fieldName,
     ElementVectorT& outValues,
     Core::Alloc::ScratchArena& scratchArena
@@ -243,7 +243,7 @@ static bool ParseMetadataFloatListField(
 
     if(outValues.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
@@ -269,14 +269,14 @@ static MetadataU32ValueFailure::Enum ValidateMetadataU32Value(const Core::Metasc
 
 static void LogMetadataU32ValueFailure(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView label,
     const MetadataU32ValueFailure::Enum failure
 ){
     switch(failure){
     case MetadataU32ValueFailure::NotNumeric:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -284,7 +284,7 @@ static void LogMetadataU32ValueFailure(
 
     case MetadataU32ValueFailure::NonIntegerOrNegative:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -292,7 +292,7 @@ static void LogMetadataU32ValueFailure(
 
     case MetadataU32ValueFailure::OutOfRange:
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
@@ -306,7 +306,7 @@ static void LogMetadataU32ValueFailure(
 static bool ParseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView label,
     u32& outValue
 ){
@@ -322,7 +322,7 @@ template<typename IndexVectorT>
 static bool FillMetadataIndexRecursive(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView label,
     IndexVectorT& outIndices,
     Core::Alloc::ScratchArena& scratchArena
@@ -350,7 +350,7 @@ template<typename IndexVectorT>
 static bool ParseMetadataIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     IndexVectorT& outIndices,
     Core::Alloc::ScratchArena& scratchArena
 ){
@@ -363,7 +363,7 @@ static bool ParseMetadataIndexField(
     usize indexCount = 0u;
     if(!CountFlattenedValueLeaves(*field, indexCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -376,7 +376,7 @@ static bool ParseMetadataIndexField(
     }
     NWB_ASSERT(outIndices.size() == indexCount);
     if(outIndices.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must not be empty"), metaKind.get(), PathToString<tchar>(nwbFilePath));
         return false;
     }
     return true;

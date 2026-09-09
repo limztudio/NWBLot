@@ -66,8 +66,8 @@ bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     return Core::Assets::AppendVectorPayload(
         outBinary,
         jointBinaries,
-        NWB_TEXT("SkeletonAssetCodec::serialize"),
-        NWB_TEXT("joints")
+        MakeNotNull(NWB_TEXT("SkeletonAssetCodec::serialize")),
+        MakeNotNull(NWB_TEXT("joints"))
     );
 }
 

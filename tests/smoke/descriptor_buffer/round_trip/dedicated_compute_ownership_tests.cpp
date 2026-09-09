@@ -406,7 +406,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueLetsGraphicsCausticsF
     bootstrapStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
     bootstrapStash->commitBarriers();
     const TextureSlice slice;
-    bootstrapStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    bootstrapStash->copyTexture(*causticHistory, slice, *causticIrradiance, slice);
     bootstrapStash->close(&bootstrapStashState);
     ASSERT_TRUE(bootstrapStashState.valid());
 
@@ -435,7 +435,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueLetsGraphicsCausticsF
     activeStash->setTextureState(causticIrradiance.get(), s_AllSubresources, ResourceStates::CopySource);
     activeStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
     activeStash->commitBarriers();
-    activeStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
+    activeStash->copyTexture(*causticHistory, slice, *causticIrradiance, slice);
     activeStash->close(&activeStashState);
     ASSERT_TRUE(activeStashState.valid());
 

@@ -57,7 +57,7 @@ template<
 >
 [[nodiscard]] static bool BuildZippedMeshletRefs(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const CookEntryT& entry,
     const LocalVertexVectorT& sourceVertexRefs,
     PositionRefVectorT& outPositionRefs,
@@ -83,7 +83,7 @@ template<
         if(!FindMeshletPositionRef(outPositionRefs, positionRef, localPosition)){
             if(outPositionRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet deformed positions exceed local index limits")
-                    , metaKind
+                    , metaKind.get()
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;
@@ -96,7 +96,7 @@ template<
         if(!FindMeshletAttributeRef(outAttributeRefs, outAttributeSkins, attributeRef, source.skin, localAttribute)){
             if(outAttributeRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet attributes exceed local index limits")
-                    , metaKind
+                    , metaKind.get()
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;

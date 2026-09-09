@@ -434,7 +434,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         ASSERT_NE(readbackCommandList.get(), nullptr);
         readbackCommandList->open();
         ASSERT_TRUE(readbackCommandList->hasCommandBuffer());
-        readbackCommandList->copyTexture(readback.get(), slice, destination.get(), slice);
+        readbackCommandList->copyTexture(*readback, slice, *destination, slice);
         readbackCommandList->close();
         CommandList* const readbackLists[] = { readbackCommandList.get() };
         ASSERT_TRUE(device.executeCommandLists(
@@ -447,7 +447,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
 
         usize rowPitch = 0u;
         const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-            readback.get(),
+            *readback,
             slice,
             CpuAccessMode::Read,
             &rowPitch
@@ -462,7 +462,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
                 );
             }
         }
-        device.unmapStagingTexture(readback.get());
+        device.unmapStagingTexture(*readback);
     }
 }
 
@@ -646,16 +646,16 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphReadyFrontierUploadsUseWork
     }
 
     ASSERT_TRUE(device.waitForIdle());
-    const u32* const firstUploadedWords = static_cast<const u32*>(device.mapBuffer(firstDestination.get(), CpuAccessMode::Read));
-    const u32* const secondUploadedWords = static_cast<const u32*>(device.mapBuffer(secondDestination.get(), CpuAccessMode::Read));
+    const u32* const firstUploadedWords = static_cast<const u32*>(device.mapBuffer(*firstDestination, CpuAccessMode::Read));
+    const u32* const secondUploadedWords = static_cast<const u32*>(device.mapBuffer(*secondDestination, CpuAccessMode::Read));
     ASSERT_NE(firstUploadedWords, nullptr);
     ASSERT_NE(secondUploadedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_FirstExpectedWords); ++wordIndex){
         EXPECT_EQ(firstUploadedWords[wordIndex], s_FirstExpectedWords[wordIndex]);
         EXPECT_EQ(secondUploadedWords[wordIndex], s_SecondExpectedWords[wordIndex]);
     }
-    device.unmapBuffer(firstDestination.get());
-    device.unmapBuffer(secondDestination.get());
+    device.unmapBuffer(*firstDestination);
+    device.unmapBuffer(*secondDestination);
 }
 
 
@@ -692,7 +692,7 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMi
     const CommandListHandle upload = device.createCommandList();
     ASSERT_NE(upload.get(), nullptr);
     upload->open();
-    ASSERT_TRUE(upload->tryWriteTexture(texture.get(), 0u, 0u, uploadBytes, 4u * 4u));
+    ASSERT_TRUE(upload->tryWriteTexture(*texture, 0u, 0u, uploadBytes, 4u * 4u));
     upload->setTextureState(texture.get(), TextureSubresourceSet(0u, 1u, 0u, 1u), ResourceStates::ShaderResource);
     upload->close();
 
@@ -741,7 +741,7 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMi
     const CommandListHandle secondUpload = device.createCommandList();
     ASSERT_NE(secondUpload.get(), nullptr);
     secondUpload->open();
-    ASSERT_TRUE(secondUpload->tryWriteTexture(texture.get(), 0u, 1u, uploadBytes, 2u * 4u));
+    ASSERT_TRUE(secondUpload->tryWriteTexture(*texture, 0u, 1u, uploadBytes, 2u * 4u));
     secondUpload->setTextureState(texture.get(), TextureSubresourceSet(1u, 1u, 0u, 1u), ResourceStates::ShaderResource);
     secondUpload->close();
 

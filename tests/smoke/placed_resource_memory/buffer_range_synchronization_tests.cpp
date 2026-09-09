@@ -241,13 +241,13 @@ TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
         graph, compiled, recorded, range, nullptr, 0u, nullptr, 0u, transaction, scratchArena
     ));
     ASSERT_TRUE(device.waitForIdle());
-    const auto* const words = static_cast<const u32*>(device.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const auto* const words = static_cast<const u32*>(device.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(words, nullptr);
     for(usize index = 0u; index < LengthOf(firstWords); ++index){
         EXPECT_EQ(words[index], firstWords[index]);
         EXPECT_EQ(words[index + LengthOf(firstWords)], secondWords[index]);
     }
-    device.unmapBuffer(readback.get());
+    device.unmapBuffer(*readback);
 }
 
 
@@ -291,8 +291,8 @@ TEST_F(BufferRangeGpuTest, DisjointOwnershipReleasesMatchAcquiresAndExecuteOnAno
 
     producer->open();
     producer->beginTrackingBufferState(buffer.get(), ResourceStates::Common);
-    ASSERT_TRUE(producer->tryWriteBuffer(buffer.get(), firstWords, sizeof(firstWords), releasedRanges[0u].byteOffset));
-    ASSERT_TRUE(producer->tryWriteBuffer(buffer.get(), secondWords, sizeof(secondWords), releasedRanges[1u].byteOffset));
+    ASSERT_TRUE(producer->tryWriteBuffer(*buffer, firstWords, sizeof(firstWords), releasedRanges[0u].byteOffset));
+    ASSERT_TRUE(producer->tryWriteBuffer(*buffer, secondWords, sizeof(secondWords), releasedRanges[1u].byteOffset));
     for(const BufferRange range : releasedRanges)
         producer->setBufferState(buffer.get(), ResourceStates::CopySource, false, range);
     producer->commitBarriers();
@@ -343,8 +343,8 @@ TEST_F(BufferRangeGpuTest, DisjointOwnershipReleasesMatchAcquiresAndExecuteOnAno
     EXPECT_EQ(consumer->getBufferState(buffer.get(), BufferRange(64u, 64u)), ResourceStates::Unknown);
     EXPECT_EQ(consumer->getBufferState(buffer.get(), BufferRange(192u, 64u)), ResourceStates::Unknown);
     consumer->beginTrackingBufferState(readback.get(), ResourceStates::Common);
-    consumer->copyBuffer(readback.get(), 0u, buffer.get(), releasedRanges[0u].byteOffset, releasedRanges[0u].byteSize);
-    consumer->copyBuffer(readback.get(), 64u, buffer.get(), releasedRanges[1u].byteOffset, releasedRanges[1u].byteSize);
+    consumer->copyBuffer(*readback, 0u, *buffer, releasedRanges[0u].byteOffset, releasedRanges[0u].byteSize);
+    consumer->copyBuffer(*readback, 64u, *buffer, releasedRanges[1u].byteOffset, releasedRanges[1u].byteSize);
     consumer->close();
     ASSERT_FALSE(consumer->commandRecordingFailed());
 
@@ -362,13 +362,13 @@ TEST_F(BufferRangeGpuTest, DisjointOwnershipReleasesMatchAcquiresAndExecuteOnAno
     );
     ASSERT_TRUE(consumerToken.valid());
     ASSERT_TRUE(device.waitForIdle());
-    const auto* const words = static_cast<const u32*>(device.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const auto* const words = static_cast<const u32*>(device.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(words, nullptr);
     for(usize index = 0u; index < LengthOf(firstWords); ++index){
         EXPECT_EQ(words[index], firstWords[index]);
         EXPECT_EQ(words[index + LengthOf(firstWords)], secondWords[index]);
     }
-    device.unmapBuffer(readback.get());
+    device.unmapBuffer(*readback);
 }
 
 

@@ -37,7 +37,7 @@ TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBu
     auto commandList = device.createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
-    commandList->clearBufferUInt(buffer.get(), 0u);
+    commandList->clearBufferUInt(*buffer, 0u);
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
 
@@ -513,7 +513,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     ASSERT_TRUE(resetOnly);
 
     resetOnly->open();
-    ASSERT_TRUE(resetOnly->resetTimerQuery(query.get()));
+    ASSERT_TRUE(resetOnly->resetTimerQuery(*query));
     resetOnly->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
     resetOnly.reset();
@@ -525,12 +525,12 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     ASSERT_TRUE(endOnly);
     beginOnly->open();
     TimerQueryRecordingToken abandonedQueryRecording;
-    ASSERT_TRUE(beginOnly->beginTimerQuery(query.get(), abandonedQueryRecording));
+    ASSERT_TRUE(beginOnly->beginTimerQuery(*query, abandonedQueryRecording));
     beginOnly->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
     endOnly->open();
-    ASSERT_TRUE(endOnly->endTimerQuery(query.get(), abandonedQueryRecording));
+    ASSERT_TRUE(endOnly->endTimerQuery(*query, abandonedQueryRecording));
     endOnly->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 2u);
 
@@ -542,10 +542,10 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     auto rejected = device.createCommandList(parameters);
     ASSERT_TRUE(rejected);
     rejected->open();
-    ASSERT_TRUE(rejected->resetTimerQuery(query.get()));
+    ASSERT_TRUE(rejected->resetTimerQuery(*query));
     TimerQueryRecordingToken rejectedQueryRecording;
-    ASSERT_TRUE(rejected->beginTimerQuery(query.get(), rejectedQueryRecording));
-    ASSERT_TRUE(rejected->endTimerQuery(query.get(), rejectedQueryRecording));
+    ASSERT_TRUE(rejected->beginTimerQuery(*query, rejectedQueryRecording));
+    ASSERT_TRUE(rejected->endTimerQuery(*query, rejectedQueryRecording));
     rejected->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
@@ -576,10 +576,10 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     auto completed = device.createCommandList(parameters);
     ASSERT_TRUE(completed);
     completed->open();
-    ASSERT_TRUE(completed->resetTimerQuery(query.get()));
+    ASSERT_TRUE(completed->resetTimerQuery(*query));
     TimerQueryRecordingToken completedQueryRecording;
-    ASSERT_TRUE(completed->beginTimerQuery(query.get(), completedQueryRecording));
-    ASSERT_TRUE(completed->endTimerQuery(query.get(), completedQueryRecording));
+    ASSERT_TRUE(completed->beginTimerQuery(*query, completedQueryRecording));
+    ASSERT_TRUE(completed->endTimerQuery(*query, completedQueryRecording));
     completed->close();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);
 
@@ -598,7 +598,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
 
     ASSERT_TRUE(device.waitForIdle());
     TimerQueryResult result;
-    EXPECT_TRUE(device.getTimerQueryResult(retainedQuery.get(), result));
+    EXPECT_TRUE(device.getTimerQueryResult(*retainedQuery, result));
     for(u32 retry = 0u; retry < 5000u && retainedQuery->getReferenceCount() != referencesBeforeRecord - 1u; ++retry){
         device.runGarbageCollection();
         SleepMS(1u);

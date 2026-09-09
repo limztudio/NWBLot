@@ -113,7 +113,7 @@ void GpuTimingAccumulator::collect(
         }
 
         TimerQueryResult result;
-        if(!device.getTimerQueryResult(record.query.get(), result))
+        if(!device.getTimerQueryResult(*record.query, result))
             continue;
 
         const bool publishSample = record.epoch == epoch
@@ -199,7 +199,7 @@ void GpuTimingAccumulator::recordFrameReset(CommandList& commandList){
         if(!canReset || !record.query || record.state != QueryState::Available)
             continue;
 
-        if(!commandList.resetTimerQuery(record.query.get()))
+        if(!commandList.resetTimerQuery(*record.query))
             continue;
         record.frameResetRecorded = true;
         record.frameResetRecordingQueue = commandListDescription.physicalQueue;
@@ -287,7 +287,7 @@ bool GpuTimingAccumulator::beginQuery(
     // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
     // its begin endpoint, even if that command buffer is later discarded before submission.
     TimerQueryRecordingToken timerQueryRecording;
-    if(!commandList.beginTimerQuery(record.query.get(), timerQueryRecording))
+    if(!commandList.beginTimerQuery(*record.query, timerQueryRecording))
         return false;
 
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
@@ -334,7 +334,7 @@ GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(
         || record.state != QueryState::Recording
     )
         return QueryEndResult::Invalid;
-    if(!commandList.endTimerQuery(record.query.get(), scope.timerQueryRecording)){
+    if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
         record.publishSample = false;
         NWB_LOGGER_ERROR(NWB_TEXT("GPU timing end timestamp failed; retaining ownership until submission resolution"));
@@ -358,7 +358,7 @@ GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQueryFromExistingC
         || record.state != QueryState::Recording
     )
         return QueryEndResult::Invalid;
-    if(!commandList.endTimerQueryFromExistingClaim(record.query.get(), scope.timerQueryRecording)){
+    if(!commandList.endTimerQueryFromExistingClaim(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
         record.publishSample = false;
         return QueryEndResult::RetirementRequired;
@@ -379,7 +379,7 @@ bool GpuTimingAccumulator::recordQueryEnd(CommandList& commandList, const GpuTim
     )
         return false;
 
-    if(!commandList.endTimerQuery(record.query.get(), scope.timerQueryRecording))
+    if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording))
         return false;
 
     record.state = QueryState::EndedUnaccepted;

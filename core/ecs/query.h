@@ -40,10 +40,9 @@ struct ViewTupleAccess{
         return &Get<I>(pools)->m_dense;
     }
 
-    static EntityID entityAt(const ViewEntityVector* entities, const usize denseIndex){
-        NWB_ASSERT(entities);
-        NWB_ASSERT(denseIndex < entities->size());
-        return (*entities)[denseIndex];
+    static EntityID entityAt(const ViewEntityVector& entities, const usize denseIndex){
+        NWB_ASSERT(denseIndex < entities.size());
+        return entities[denseIndex];
     }
 
     template<usize I, typename... Ts>
@@ -136,7 +135,7 @@ struct ViewIterator{
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return ViewTupleAccess::entityAt(anchorEntities, denseIndex);
+        return ViewTupleAccess::entityAt(*anchorEntities, denseIndex);
     }
 
     ValueTuple operator*()const{
@@ -284,7 +283,7 @@ private:
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return ECSDetail::ViewTupleAccess::entityAt(m_anchorEntities, denseIndex);
+        return ECSDetail::ViewTupleAccess::entityAt(*m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>

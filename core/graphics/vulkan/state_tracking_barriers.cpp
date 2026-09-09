@@ -606,7 +606,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
 
     if(resumeFramebuffer){
         RenderPassParameters params = {};
-        if(beginDynamicRendering(resumeFramebuffer, params)){
+        if(beginDynamicRendering(*resumeFramebuffer, params)){
             m_renderPassActive = true;
             m_renderPassFramebuffer = resumeFramebuffer;
         }

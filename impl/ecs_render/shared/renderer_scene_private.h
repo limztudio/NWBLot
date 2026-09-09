@@ -253,7 +253,7 @@ inline SceneShadingGpuData ResolveSceneShadingState(Core::ECS::World& world, con
         ? LoadFloat(cameraView.transform->position)
         : LoadFloat(defaultBasis.positionDepthBias)
     ;
-    StoreFloat(VectorSetW(cameraPosition, static_cast<f32>(lightCount)), &state.cameraPositionLightCount);
+    StoreFloat(VectorSetW(cameraPosition, static_cast<f32>(lightCount)), state.cameraPositionLightCount);
     return state;
 }
 

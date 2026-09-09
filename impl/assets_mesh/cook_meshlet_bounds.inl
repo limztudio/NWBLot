@@ -98,7 +98,7 @@ static MeshletBounds BuildMeshletBounds(const CookEntryT& entry, const MeshletDe
     MeshletBounds bounds;
     StoreFloat(
         VectorSetW(calculation.center, calculation.radius * s_MeshletBoundsRadiusInflation),
-        &bounds.sphere
+        bounds.sphere
     );
     bounds.conePacked = PackMeshletCone(calculation.coneAxis, calculation.coneCutoff);
     return bounds;

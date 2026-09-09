@@ -1859,7 +1859,7 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     // White transmittance is the all-lit fallback.
     commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::CopyDest);
     commandList.commitBarriers();
-    commandList.clearTextureFloat(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
+    commandList.clearTextureFloat(*targets.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
 bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(

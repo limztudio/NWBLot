@@ -135,7 +135,7 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
     if(!allocateSBTBuffer(preflight, newBuffer, newOffset, NWB_TEXT("set ray generation shader"), NWB_TEXT("ray generation")))
         return false;
 
-    void* const mapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    void* const mapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
     if(!mapped){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to set ray generation shader: failed to map new SBT buffer"));
         return false;
@@ -145,7 +145,7 @@ bool ShaderTable::setRayGenerationShader(const AStringView exportName){
     NWB_MEMSET(recordBytes, 0, static_cast<usize>(preflight.recordByteSize));
     const u8* const handle = m_pipeline->m_shaderGroupHandles.data() + preflight.handleOffset;
     NWB_MEMCPY(recordBytes, preflight.handleSizeAligned, handle, preflight.handleSize);
-    m_device.unmapBuffer(newBuffer.get());
+    m_device.unmapBuffer(*newBuffer);
 
     m_raygenBuffer = Move(newBuffer);
     m_raygenOffset = newOffset;
@@ -516,7 +516,7 @@ u32 ShaderTable::appendShaderRecord(
     if(!allocateSBTBuffer(preflight, newBuffer, newOffset, operationName, recordName))
         return s_InvalidRayTracingShaderTableRecordIndex;
 
-    void* const newMapped = m_device.mapBuffer(newBuffer.get(), CpuAccessMode::Write);
+    void* const newMapped = m_device.mapBuffer(*newBuffer, CpuAccessMode::Write);
     if(!newMapped){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: failed to map new {} SBT buffer"), operationName, recordName);
         return s_InvalidRayTracingShaderTableRecordIndex;
@@ -531,7 +531,7 @@ u32 ShaderTable::appendShaderRecord(
         NWB_MEMCPY(newRecordBytes + recordOffset, preflight.handleSizeAligned, handle, preflight.handleSize);
         recordOffset += preflight.handleSizeAligned;
     }
-    m_device.unmapBuffer(newBuffer.get());
+    m_device.unmapBuffer(*newBuffer);
 
     groupIndices = Move(candidateGroupIndices);
     buffer = Move(newBuffer);

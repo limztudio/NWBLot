@@ -307,8 +307,8 @@ template<typename PositionVector>
     if(!AabbTests::Valid(minBounds, maxBounds))
         return false;
 
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, &outBounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, &outBounds.maxBounds);
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, outBounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, outBounds.maxBounds);
     return true;
 }
 

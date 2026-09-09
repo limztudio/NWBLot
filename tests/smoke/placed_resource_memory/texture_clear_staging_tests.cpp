@@ -72,7 +72,7 @@ struct PoisonedClearHookResult{
         return false;
 
     ++result->beforeCount;
-    commandList.clearTextureUInt(nullptr, TextureSubresourceSet{}, 0u);
+    commandList.setPushConstants(nullptr, sizeof(u32));
     return true;
 }
 
@@ -430,10 +430,10 @@ TEST_F(TextureClearStagingTest, R8ArrayClearUsesAlignedMergedLayerOffsets){
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
-    commandList->clearTextureRectUInt(texture.get(), subresources, clearRect, s_ClearValue);
+    commandList->clearTextureRectUInt(*texture, subresources, clearRect, s_ClearValue);
     for(u32 arraySlice = 0u; arraySlice < s_ArraySize; ++arraySlice){
         const TextureSlice slice = TextureSlice{}.setArraySlice(arraySlice);
-        commandList->copyTexture(readback.get(), slice, texture.get(), slice);
+        commandList->copyTexture(*readback, slice, *texture, slice);
     }
     EXPECT_FALSE(commandList->commandRecordingFailed());
     ASSERT_TRUE(submitAndWait(*commandList));
@@ -442,7 +442,7 @@ TEST_F(TextureClearStagingTest, R8ArrayClearUsesAlignedMergedLayerOffsets){
         const TextureSlice slice = TextureSlice{}.setArraySlice(arraySlice);
         usize rowPitch = 0u;
         const u8* const mappedBytes = static_cast<const u8*>(
-            device().mapStagingTexture(readback.get(), slice, CpuAccessMode::Read, &rowPitch)
+            device().mapStagingTexture(*readback, slice, CpuAccessMode::Read, &rowPitch)
         );
         ASSERT_NE(mappedBytes, nullptr);
         ASSERT_GE(rowPitch, static_cast<usize>(s_TextureWidth));
@@ -451,7 +451,7 @@ TEST_F(TextureClearStagingTest, R8ArrayClearUsesAlignedMergedLayerOffsets){
             for(u32 column = 0u; column < s_ClearWidth; ++column)
                 EXPECT_EQ(mappedRow[column], static_cast<u8>(s_ClearValue));
         }
-        device().unmapStagingTexture(readback.get());
+        device().unmapStagingTexture(*readback);
     }
 
     EXPECT_EQ(s_logger->errorCount(), errorCountBeforeRecording);
@@ -487,21 +487,21 @@ TEST_F(TextureClearStagingTest, SequentialRgb32ClearsUseTexelBlockAlignedSuballo
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
-    commandList->clearTextureRectFloat(firstTexture.get(), TextureSubresourceSet{}, clearRect, s_FirstClear);
-    commandList->clearTextureRectFloat(secondTexture.get(), TextureSubresourceSet{}, clearRect, s_SecondClear);
-    commandList->copyTexture(readback.get(), TextureSlice{}, secondTexture.get(), TextureSlice{});
+    commandList->clearTextureRectFloat(*firstTexture, TextureSubresourceSet{}, clearRect, s_FirstClear);
+    commandList->clearTextureRectFloat(*secondTexture, TextureSubresourceSet{}, clearRect, s_SecondClear);
+    commandList->copyTexture(*readback, TextureSlice{}, *secondTexture, TextureSlice{});
     EXPECT_FALSE(commandList->commandRecordingFailed());
     ASSERT_TRUE(submitAndWait(*commandList));
 
     usize rowPitch = 0u;
     const u8* const mappedBytes = static_cast<const u8*>(
-        device().mapStagingTexture(readback.get(), TextureSlice{}, CpuAccessMode::Read, &rowPitch)
+        device().mapStagingTexture(*readback, TextureSlice{}, CpuAccessMode::Read, &rowPitch)
     );
     ASSERT_NE(mappedBytes, nullptr);
     ASSERT_GE(rowPitch, static_cast<usize>(s_TextureWidth) * s_ComponentCount * sizeof(f32));
     f32 actualClear[s_ComponentCount] = {};
     NWB_MEMCPY(actualClear, sizeof(actualClear), mappedBytes, sizeof(actualClear));
-    device().unmapStagingTexture(readback.get());
+    device().unmapStagingTexture(*readback);
 
     EXPECT_FLOAT_EQ(actualClear[0], s_SecondClear.r);
     EXPECT_FLOAT_EQ(actualClear[1], s_SecondClear.g);
@@ -548,7 +548,7 @@ TEST_F(TextureClearStagingTest, TransferOnlyQueueRejectsPartialColorClear){
 
     const u32 textureReferences = texture->getReferenceCount();
     commandList->open();
-    commandList->clearTextureRectUInt(texture.get(), TextureSubresourceSet{}, Rect(2, 2), 0x5au);
+    commandList->clearTextureRectUInt(*texture, TextureSubresourceSet{}, Rect(2, 2), 0x5au);
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasExplicitTextureSubresourceState(texture.get(), 0u, 0u));
     EXPECT_EQ(texture->getReferenceCount(), textureReferences);

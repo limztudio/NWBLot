@@ -282,7 +282,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
     for(const Case& testCase : cases){
         SCOPED_TRACE(testCase.label);
         commandList->open();
-        commandList->clearBufferUInt(oracle.get(), 0x6e57424cu);
+        commandList->clearBufferUInt(*oracle, 0x6e57424cu);
         commandList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
         ASSERT_FALSE(commandList->commandRecordingFailed());
         ASSERT_TRUE(commandList->isRenderPassActive());
@@ -543,15 +543,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
     indexedIndirectArguments.setIndexCount(1u);
 
     commandList->open();
-    commandList->writeBuffer(allRolesBuffer.get(), &s_Index, sizeof(s_Index), 0u);
+    commandList->writeBuffer(*allRolesBuffer, &s_Index, sizeof(s_Index), 0u);
     commandList->writeBuffer(
-        allRolesBuffer.get(),
+        *allRolesBuffer,
         indirectArguments,
         sizeof(indirectArguments),
         16u
     );
     commandList->writeBuffer(
-        allRolesBuffer.get(),
+        *allRolesBuffer,
         &indexedIndirectArguments,
         sizeof(indexedIndirectArguments),
         64u
@@ -618,7 +618,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
     const DrawIndirectArguments retainedIndirectArguments = DrawIndirectArguments().setVertexCount(1u);
     commandList->open();
     commandList->writeBuffer(
-        permanentIndirectBuffer.get(),
+        *permanentIndirectBuffer,
         &retainedIndirectArguments,
         sizeof(retainedIndirectArguments)
     );
@@ -763,8 +763,6 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
     ASSERT_TRUE(lastAcceptedToken.valid());
 
     enum class Operation : u8{
-        NullDestination,
-        NullSource,
         EmptyDestinationRange,
         EmptySourceRange,
         SingleSampleSource,
@@ -780,8 +778,6 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
         const char* label;
     };
     const Case cases[]{
-        { Operation::NullDestination, "null destination" },
-        { Operation::NullSource, "null source" },
         { Operation::EmptyDestinationRange, "empty destination range" },
         { Operation::EmptySourceRange, "empty source range" },
         { Operation::SingleSampleSource, "single-sample source" },
@@ -806,12 +802,6 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
         TextureSubresourceSet sourceSubresources = s_AllSubresources;
         bool installDestinationPermanentConflict = false;
         switch(testCase.operation){
-        case Operation::NullDestination:
-            caseDestination = nullptr;
-            break;
-        case Operation::NullSource:
-            caseSource = nullptr;
-            break;
         case Operation::EmptyDestinationRange:
             destinationSubresources.setMipLevels(1u, 1u);
             break;
@@ -851,12 +841,12 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
         ASSERT_TRUE(commandList->isRenderPassActive());
         ASSERT_FALSE(commandList->commandRecordingFailed());
 
-        const usize sourceReferencesBeforeResolve = caseSource ? caseSource->getReferenceCount() : 0u;
-        const usize destinationReferencesBeforeResolve = caseDestination ? caseDestination->getReferenceCount() : 0u;
+        const usize sourceReferencesBeforeResolve = caseSource->getReferenceCount();
+        const usize destinationReferencesBeforeResolve = caseDestination->getReferenceCount();
         commandList->resolveTexture(
-            caseDestination,
+            *caseDestination,
             destinationSubresources,
-            caseSource,
+            *caseSource,
             sourceSubresources
         );
         EXPECT_TRUE(commandList->commandRecordingFailed());
@@ -865,10 +855,8 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
             commandList->getTextureSubresourceState(source.get(), 0u, 0u),
             ResourceStates::RenderTarget
         );
-        if(caseSource)
-            EXPECT_EQ(caseSource->getReferenceCount(), sourceReferencesBeforeResolve);
-        if(caseDestination)
-            EXPECT_EQ(caseDestination->getReferenceCount(), destinationReferencesBeforeResolve);
+        EXPECT_EQ(caseSource->getReferenceCount(), sourceReferencesBeforeResolve);
+        EXPECT_EQ(caseDestination->getReferenceCount(), destinationReferencesBeforeResolve);
 
         CommandListResourceStateHandoff invalidHandoff(DescriptorBufferRoundTripTest::arena());
         commandList->close(&invalidHandoff);
@@ -889,11 +877,11 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
     commandList->open();
     commandList->setGraphicsState(GraphicsState().setFramebuffer(framebuffer.get()));
     ASSERT_TRUE(commandList->isRenderPassActive());
-    commandList->clearTextureFloat(source.get(), s_AllSubresources, Color(1.f, 0.f, 0.f, 1.f));
+    commandList->clearTextureFloat(*source, s_AllSubresources, Color(1.f, 0.f, 0.f, 1.f));
     ASSERT_TRUE(commandList->isRenderPassActive());
     ASSERT_FALSE(commandList->commandRecordingFailed());
 
-    commandList->resolveTexture(destination.get(), s_AllSubresources, source.get(), s_AllSubresources);
+    commandList->resolveTexture(*destination, s_AllSubresources, *source, s_AllSubresources);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->isRenderPassActive());
     EXPECT_EQ(
@@ -904,7 +892,7 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
         commandList->getTextureSubresourceState(destination.get(), 0u, 0u),
         ResourceStates::ResolveDest
     );
-    commandList->copyTexture(readback.get(), TextureSlice{}, destination.get(), TextureSlice{});
+    commandList->copyTexture(*readback, TextureSlice{}, *destination, TextureSlice{});
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     const QueueSubmissionToken resolveToken = submit();
@@ -914,7 +902,7 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
 
     usize rowPitch = 0u;
     const auto* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        readback.get(),
+        *readback,
         TextureSlice{},
         CpuAccessMode::Read,
         &rowPitch
@@ -930,13 +918,13 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
             EXPECT_EQ(readbackBytes[pixelOffset + 3u], 255u);
         }
     }
-    device.unmapStagingTexture(readback.get());
+    device.unmapStagingTexture(*readback);
 
     lastAcceptedToken = resolveToken;
     commandList->open();
     commandList->setGraphicsState(GraphicsState().setFramebuffer(seededFramebuffer.get()));
     ASSERT_TRUE(commandList->isRenderPassActive());
-    commandList->clearTextureFloat(seededSource.get(), s_AllSubresources, Color(0.f, 1.f, 0.f, 1.f));
+    commandList->clearTextureFloat(*seededSource, s_AllSubresources, Color(0.f, 1.f, 0.f, 1.f));
     commandList->endRenderPass();
     commandList->setTextureState(seededSource.get(), s_AllSubresources, ResourceStates::ResolveSource);
     commandList->setTextureState(seededDestination.get(), s_AllSubresources, ResourceStates::ResolveDest);
@@ -959,9 +947,9 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
     const usize seededSourceReferencesBeforeResolve = seededSource->getReferenceCount();
     const usize seededDestinationReferencesBeforeResolve = seededDestination->getReferenceCount();
     commandList->resolveTexture(
-        seededDestination.get(),
+        *seededDestination,
         s_AllSubresources,
-        seededSource.get(),
+        *seededSource,
         s_AllSubresources
     );
     EXPECT_FALSE(commandList->commandRecordingFailed());

@@ -49,8 +49,8 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResultCarriesNativePhysicalQueue
 
     commandList->open();
     TimerQueryRecordingToken queryRecording;
-    ASSERT_TRUE(commandList->beginTimerQuery(query.get(), queryRecording));
-    ASSERT_TRUE(commandList->endTimerQuery(query.get(), queryRecording));
+    ASSERT_TRUE(commandList->beginTimerQuery(*query, queryRecording));
+    ASSERT_TRUE(commandList->endTimerQuery(*query, queryRecording));
     commandList->close();
 
     CommandList* const commandLists[] = { commandList.get() };
@@ -64,7 +64,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryResultCarriesNativePhysicalQueue
     ASSERT_TRUE(nativeDevice.waitForIdle());
 
     TimerQueryResult result;
-    ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
+    ASSERT_TRUE(nativeDevice.getTimerQueryResult(*query, result));
     EXPECT_TRUE(result.valid());
     EXPECT_EQ(result.timestampValidBits, queueInfo->timestampValidBits);
     EXPECT_EQ(result.physicalQueue, graphicsQueue);
@@ -103,7 +103,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryExistingClaimEndNeverAppendsFore
     openingCommandList->open();
     foreignCommandList->open();
     TimerQueryRecordingToken recording;
-    ASSERT_TRUE(openingCommandList->beginTimerQuery(query.get(), recording));
+    ASSERT_TRUE(openingCommandList->beginTimerQuery(*query, recording));
 
     const usize openingClaimCount = GraphicsBackend::VulkanTestDispatchAccess::currentTimerQueryRecordingClaimCount(
         *openingCommandList
@@ -116,12 +116,12 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryExistingClaimEndNeverAppendsFore
     EXPECT_EQ(GraphicsBackend::VulkanTestDispatchAccess::currentTimerQueryRecordingClaimCount(*foreignCommandList), 0u);
     EXPECT_EQ(GraphicsBackend::VulkanTestDispatchAccess::currentRetainedResourceCount(*foreignCommandList), 0u);
 
-    EXPECT_FALSE(foreignCommandList->endTimerQueryFromExistingClaim(query.get(), recording));
+    EXPECT_FALSE(foreignCommandList->endTimerQueryFromExistingClaim(*query, recording));
     EXPECT_TRUE(foreignCommandList->commandRecordingFailed());
     EXPECT_EQ(GraphicsBackend::VulkanTestDispatchAccess::currentTimerQueryRecordingClaimCount(*foreignCommandList), 0u);
     EXPECT_EQ(GraphicsBackend::VulkanTestDispatchAccess::currentRetainedResourceCount(*foreignCommandList), 0u);
 
-    ASSERT_TRUE(openingCommandList->endTimerQueryFromExistingClaim(query.get(), recording));
+    ASSERT_TRUE(openingCommandList->endTimerQueryFromExistingClaim(*query, recording));
     EXPECT_EQ(
         GraphicsBackend::VulkanTestDispatchAccess::currentTimerQueryRecordingClaimCount(*openingCommandList),
         openingClaimCount
@@ -144,7 +144,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryExistingClaimEndNeverAppendsFore
     ASSERT_TRUE(nativeDevice.waitForIdle());
 
     TimerQueryResult result;
-    ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
+    ASSERT_TRUE(nativeDevice.getTimerQueryResult(*query, result));
     EXPECT_TRUE(result.valid());
 }
 
@@ -194,9 +194,9 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
     primaryCommandList->open();
     secondaryCommandList->open();
     TimerQueryRecordingToken queryRecording;
-    ASSERT_TRUE(primaryCommandList->beginTimerQuery(query.get(), queryRecording));
-    EXPECT_FALSE(secondaryCommandList->endTimerQuery(query.get(), queryRecording));
-    ASSERT_TRUE(primaryCommandList->endTimerQuery(query.get(), queryRecording));
+    ASSERT_TRUE(primaryCommandList->beginTimerQuery(*query, queryRecording));
+    EXPECT_FALSE(secondaryCommandList->endTimerQuery(*query, queryRecording));
+    ASSERT_TRUE(primaryCommandList->endTimerQuery(*query, queryRecording));
     secondaryCommandList->close();
     primaryCommandList->close();
 
@@ -210,7 +210,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryRejectsDifferentExactPhysicalQue
     ASSERT_TRUE(nativeDevice.waitForIdle());
 
     TimerQueryResult result;
-    ASSERT_TRUE(nativeDevice.getTimerQueryResult(query.get(), result));
+    ASSERT_TRUE(nativeDevice.getTimerQueryResult(*query, result));
     EXPECT_EQ(result.timestampValidBits, primaryInfo->timestampValidBits);
     EXPECT_EQ(result.physicalQueue, primaryQueue);
 }
@@ -500,7 +500,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryUsesExternalResetForTimestampCap
     ASSERT_NE(resetCommandList.get(), nullptr);
     resetCommandList->open();
     EXPECT_FALSE(resetCommandList->canResetTimerQueryHere());
-    EXPECT_FALSE(resetCommandList->resetTimerQuery(query.get()));
+    EXPECT_FALSE(resetCommandList->resetTimerQuery(*query));
     EXPECT_TRUE(resetCommandList->commandRecordingFailed());
     resetCommandList->close();
     EXPECT_FALSE(resetCommandList->hasCommandBuffer());
@@ -509,7 +509,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryUsesExternalResetForTimestampCap
     ASSERT_NE(beginCommandList.get(), nullptr);
     beginCommandList->open();
     TimerQueryRecordingToken rejectedTransferQueryRecording;
-    EXPECT_FALSE(beginCommandList->beginTimerQuery(query.get(), rejectedTransferQueryRecording));
+    EXPECT_FALSE(beginCommandList->beginTimerQuery(*query, rejectedTransferQueryRecording));
     EXPECT_TRUE(beginCommandList->commandRecordingFailed());
     beginCommandList->close();
     EXPECT_FALSE(beginCommandList->hasCommandBuffer());
@@ -520,7 +520,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryUsesExternalResetForTimestampCap
     ASSERT_TRUE(externalResetCommandList);
     externalResetCommandList->open();
     ASSERT_TRUE(externalResetCommandList->canResetTimerQueryHere());
-    ASSERT_TRUE(externalResetCommandList->resetTimerQuery(query.get()));
+    ASSERT_TRUE(externalResetCommandList->resetTimerQuery(*query));
     externalResetCommandList->close();
     CommandList* const externalResetCommandLists[] = { externalResetCommandList.get() };
     const QueueSubmissionToken externalResetToken = device.executeCommandLists(
@@ -536,8 +536,8 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryUsesExternalResetForTimestampCap
     transferQueryCommandList->open();
     EXPECT_FALSE(transferQueryCommandList->canResetTimerQueryHere());
     TimerQueryRecordingToken transferQueryRecording;
-    ASSERT_TRUE(transferQueryCommandList->beginTimerQuery(query.get(), transferQueryRecording));
-    ASSERT_TRUE(transferQueryCommandList->endTimerQuery(query.get(), transferQueryRecording));
+    ASSERT_TRUE(transferQueryCommandList->beginTimerQuery(*query, transferQueryRecording));
+    ASSERT_TRUE(transferQueryCommandList->endTimerQuery(*query, transferQueryRecording));
     transferQueryCommandList->close();
     CommandList* const transferQueryCommandLists[] = { transferQueryCommandList.get() };
     const QueueSubmissionToken transferQueryToken = device.executeCommandLists(
@@ -549,7 +549,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryUsesExternalResetForTimestampCap
     ASSERT_TRUE(transferQueryToken.valid());
     ASSERT_TRUE(device.waitForIdle());
     TimerQueryResult transferResult;
-    ASSERT_TRUE(device.getTimerQueryResult(query.get(), transferResult));
+    ASSERT_TRUE(device.getTimerQueryResult(*query, transferResult));
     EXPECT_TRUE(transferResult.valid());
     EXPECT_EQ(transferResult.physicalQueue, transferOnlyQueue->id);
     EXPECT_EQ(transferResult.timestampValidBits, transferOnlyQueue->timestampValidBits);

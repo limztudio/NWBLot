@@ -33,7 +33,7 @@ protected:
     using UpdateBaseType = BaseUpdateIfQueued<T, NAME>;
 
 
-    explicit ClientBase(const char* allocationLog)
+    explicit ClientBase(const NotNull<const char*> allocationLog)
         : UpdateBaseType(allocationLog)
     {}
 

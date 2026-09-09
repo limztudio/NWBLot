@@ -385,11 +385,11 @@ TEST_F(StagingTextureProvenanceTest, MappingUsesImmutableMipAndArrayBoundsAndRec
             else
                 publicDesc.arraySize = 2u;
             usize pitch = s_UnchangedPitch;
-            void* const memory = device().mapStagingTexture(&staging, slice, access, &pitch);
+            void* const memory = device().mapStagingTexture(staging, slice, access, &pitch);
             publicDesc.mipLevels = 1u;
             publicDesc.arraySize = 1u;
             if(memory)
-                device().unmapStagingTexture(&staging);
+                device().unmapStagingTexture(staging);
             return memory != nullptr || pitch != s_UnchangedPitch;
         };
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
@@ -406,19 +406,19 @@ TEST_F(StagingTextureProvenanceTest, MappingUsesImmutableMipAndArrayBoundsAndRec
 
         usize edgePitch = s_UnchangedPitch;
         void* const edgeMemory = device().mapStagingTexture(
-            &staging,
+            staging,
             TextureSlice().setOrigin(7u, 7u, 0u).setSize(1u, 1u, 1u),
             access,
             &edgePitch
         );
         ASSERT_NE(edgeMemory, nullptr);
         EXPECT_NE(edgePitch, s_UnchangedPitch);
-        device().unmapStagingTexture(&staging);
+        device().unmapStagingTexture(staging);
 
         usize retryPitch = s_UnchangedPitch;
-        ASSERT_NE(device().mapStagingTexture(&staging, TextureSlice{}, access, &retryPitch), nullptr);
+        ASSERT_NE(device().mapStagingTexture(staging, TextureSlice{}, access, &retryPitch), nullptr);
         EXPECT_NE(retryPitch, s_UnchangedPitch);
-        device().unmapStagingTexture(&staging);
+        device().unmapStagingTexture(staging);
     };
 
     expectImmutableRejectionsAndRetry(*upload, CpuAccessMode::Write);
@@ -462,7 +462,7 @@ TEST_F(StagingTextureProvenanceTest, ForgedArrayCopyDirectionsRejectAtomicallyAn
             [&](CommandList& commandList){
                 TextureDesc& publicDesc = const_cast<TextureDesc&>(upload->getDescription());
                 publicDesc.arraySize = 2u;
-                commandList.copyTexture(texture.get(), imageSlice, upload.get(), forgedStagingSlice);
+                commandList.copyTexture(*texture, imageSlice, *upload, forgedStagingSlice);
                 publicDesc.arraySize = 1u;
             }
         );
@@ -478,7 +478,7 @@ TEST_F(StagingTextureProvenanceTest, ForgedArrayCopyDirectionsRejectAtomicallyAn
             [&](CommandList& commandList){
                 TextureDesc& publicDesc = const_cast<TextureDesc&>(readback->getDescription());
                 publicDesc.arraySize = 2u;
-                commandList.copyTexture(readback.get(), forgedStagingSlice, texture.get(), imageSlice);
+                commandList.copyTexture(*readback, forgedStagingSlice, *texture, imageSlice);
                 publicDesc.arraySize = 1u;
             }
         );
@@ -487,8 +487,8 @@ TEST_F(StagingTextureProvenanceTest, ForgedArrayCopyDirectionsRejectAtomicallyAn
     CommandListHandle retry = device().createCommandList();
     ASSERT_TRUE(retry);
     retry->open();
-    retry->copyTexture(texture.get(), imageSlice, upload.get(), imageSlice);
-    retry->copyTexture(readback.get(), imageSlice, texture.get(), imageSlice);
+    retry->copyTexture(*texture, imageSlice, *upload, imageSlice);
+    retry->copyTexture(*readback, imageSlice, *texture, imageSlice);
     EXPECT_FALSE(retry->commandRecordingFailed());
     retry->close();
     ASSERT_TRUE(retry->hasCommandBuffer());
@@ -563,9 +563,9 @@ TEST_F(StagingTextureProvenanceTest, ImmutableQueueAdmissionRejectsMutationAndFo
                 publicDesc.physicalQueue = leaseTarget->id;
                 publicDesc.queueType = leaseTarget->queueClass;
                 commandList.copyTexture(
-                    sharedTexture.get(),
+                    *sharedTexture,
                     TextureSlice{},
-                    sharedUpload.get(),
+                    *sharedUpload,
                     TextureSlice{}
                 );
                 publicDesc.physicalQueue = graphicsQueue;
@@ -590,7 +590,7 @@ TEST_F(StagingTextureProvenanceTest, ImmutableQueueAdmissionRejectsMutationAndFo
     transferList->open();
     TextureDesc& publicDesc = const_cast<TextureDesc&>(exclusiveUpload->getDescription());
     publicDesc.queueSharing = ResourceQueueSharing::GraphicsAsyncComputeAndTransfer;
-    transferList->copyTexture(sharedTexture.get(), TextureSlice{}, exclusiveUpload.get(), TextureSlice{});
+    transferList->copyTexture(*sharedTexture, TextureSlice{}, *exclusiveUpload, TextureSlice{});
     publicDesc.queueSharing = ResourceQueueSharing::Exclusive;
     EXPECT_TRUE(transferList->commandRecordingFailed());
     EXPECT_FALSE(transferList->hasExplicitTextureSubresourceState(sharedTexture.get(), 0u, 0u));
@@ -602,7 +602,7 @@ TEST_F(StagingTextureProvenanceTest, ImmutableQueueAdmissionRejectsMutationAndFo
     CommandListHandle retry = device().createCommandList();
     ASSERT_TRUE(retry);
     retry->open();
-    retry->copyTexture(sharedTexture.get(), TextureSlice{}, exclusiveUpload.get(), TextureSlice{});
+    retry->copyTexture(*sharedTexture, TextureSlice{}, *exclusiveUpload, TextureSlice{});
     EXPECT_FALSE(retry->commandRecordingFailed());
     retry->close();
     ASSERT_TRUE(retry->hasCommandBuffer());
@@ -695,7 +695,7 @@ TEST_F(StagingTextureProvenanceTest, ConcurrentSharingRequiresImmutableQueueClas
     const u32 stagingReferences = upload->getReferenceCount();
     const u32 textureReferences = texture->getReferenceCount();
     commandList->open();
-    commandList->copyTexture(texture.get(), TextureSlice{}, upload.get(), TextureSlice{});
+    commandList->copyTexture(*texture, TextureSlice{}, *upload, TextureSlice{});
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->hasExplicitTextureSubresourceState(texture.get(), 0u, 0u));
     EXPECT_EQ(upload->getReferenceCount(), stagingReferences);
@@ -739,7 +739,7 @@ TEST_F(StagingTextureProvenanceTest, OneFamilyNonzeroSharingCollapsesAndAllowsAn
     CommandListHandle commandList = device().createCommandList(siblingParameters);
     ASSERT_TRUE(commandList);
     commandList->open();
-    commandList->copyTexture(texture.get(), TextureSlice{}, upload.get(), TextureSlice{});
+    commandList->copyTexture(*texture, TextureSlice{}, *upload, TextureSlice{});
     EXPECT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());

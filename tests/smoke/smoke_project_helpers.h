@@ -64,7 +64,7 @@ inline constexpr f32 s_DegreesPerTurn = 360.0f;
     );
     auto* cameraTransform = world.tryGetComponent<Impl::Scene::TransformComponent>(activeCamera.camera);
     NWB_ASSERT(cameraTransform);
-    StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), &cameraTransform->rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(cameraPitch, 0.0f, 0.0f), cameraTransform->rotation);
 
     return activeCamera.camera;
 }

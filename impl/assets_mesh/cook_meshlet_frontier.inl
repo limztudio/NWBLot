@@ -50,7 +50,7 @@ static void AddMeshletTriangleNeighborsToFrontier(
 template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
 [[nodiscard]] static bool AddMeshletTriangleToBuilder(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const MeshletTriangleData& triangle,
     VertexRefVectorT& localSourceVertexRefs,
     MeshletDesc& meshlet,
@@ -62,7 +62,7 @@ template<typename VertexRefVectorT, typename PrimitiveIndexVectorT>
         if(!found){
             if(localSourceVertexRefs.size() >= s_MeshMaxMeshletVertices){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': triangle cannot fit within one meshlet")
-                    , metaKind
+                    , metaKind.get()
                     , PathToString<tchar>(nwbFilePath)
                 );
                 return false;
@@ -101,7 +101,7 @@ static void AddMeshletTriangleToScoreState(
 
 [[nodiscard]] static bool AddVisitedMeshletTriangle(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const u32 triangleIndex,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,
@@ -129,7 +129,7 @@ static void AddMeshletTriangleToScoreState(
 
 [[nodiscard]] static bool GrowMeshletFromFrontier(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     MeshletTrianglePrecompute& trianglePrecompute,
     const usize seedSearchOffset,
     Core::Assets::AssetVector<u32>& localSourceVertexRefs,

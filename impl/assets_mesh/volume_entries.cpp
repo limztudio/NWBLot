@@ -117,14 +117,14 @@ static bool BuildSkinCookedAsset(SkinCookEntry& entry, Skin& outAsset){
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<MeshCookEntry, Mesh, MeshAssetCodec>(
         Mesh::AssetTypeName(),
-        NWB_TEXT("mesh"),
+        MakeNotNull(NWB_TEXT("mesh")),
         &ParseMeshDocument,
         &ParseMeshValue,
         &BuildMeshCookedAsset
     )
         && registry.registerType<SkinCookEntry, Skin, SkinAssetCodec>(
             Skin::AssetTypeName(),
-            NWB_TEXT("skin"),
+            MakeNotNull(NWB_TEXT("skin")),
             &ParseSkinDocument,
             &ParseSkinValue,
             &BuildSkinCookedAsset

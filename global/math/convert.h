@@ -403,48 +403,48 @@ NWB_INLINE SIMDVector SIMDCALL LoadFloat3Components(const T& src)noexcept{
 }
 
 template<typename T>
-NWB_INLINE void SIMDCALL StoreFloat3Components(SIMDVector src, T* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat3Components(SIMDVector src, T& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.f[0];
-    dst->y = src.f[1];
-    dst->z = src.f[2];
+    dst.x = src.f[0];
+    dst.y = src.f[1];
+    dst.z = src.f[2];
 #elif defined(NWB_HAS_NEON)
     float32x2_t xy = vget_low_f32(src);
-    vst1_f32(&dst->x, xy);
-    vst1q_lane_f32(&dst->z, src, 2);
+    vst1_f32(&dst.x, xy);
+    vst1q_lane_f32(&dst.z, src, 2);
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_sd(reinterpret_cast<f64*>(&dst->x), _mm_castps_pd(src));
-    _mm_store_ss(&dst->z, _mm_shuffle_ps(src, src, _MM_SHUFFLE(2, 2, 2, 2)));
+    _mm_store_sd(reinterpret_cast<f64*>(&dst.x), _mm_castps_pd(src));
+    _mm_store_ss(&dst.z, _mm_shuffle_ps(src, src, _MM_SHUFFLE(2, 2, 2, 2)));
 #endif
 }
 
 #if defined(NWB_HAS_SCALAR)
 template<typename T>
-NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T* dst)noexcept{
-    dst->_11 = src._11;
-    dst->_12 = src._12;
-    dst->_13 = src._13;
-    dst->_14 = src._14;
+NWB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T& dst)noexcept{
+    dst._11 = src._11;
+    dst._12 = src._12;
+    dst._13 = src._13;
+    dst._14 = src._14;
 
-    dst->_21 = src._21;
-    dst->_22 = src._22;
-    dst->_23 = src._23;
-    dst->_24 = src._24;
+    dst._21 = src._21;
+    dst._22 = src._22;
+    dst._23 = src._23;
+    dst._24 = src._24;
 
-    dst->_31 = src._31;
-    dst->_32 = src._32;
-    dst->_33 = src._33;
-    dst->_34 = src._34;
+    dst._31 = src._31;
+    dst._32 = src._32;
+    dst._33 = src._33;
+    dst._34 = src._34;
 }
 
 template<typename T>
-NWB_INLINE void StoreFloat44Scalar(SIMDMatrix src, T* dst)noexcept{
+NWB_INLINE void StoreFloat44Scalar(SIMDMatrix src, T& dst)noexcept{
     StoreFloat34Scalar(src, dst);
 
-    dst->_41 = src._41;
-    dst->_42 = src._42;
-    dst->_43 = src._43;
-    dst->_44 = src._44;
+    dst._41 = src._41;
+    dst._42 = src._42;
+    dst._43 = src._43;
+    dst._44 = src._44;
 }
 #endif
 
@@ -532,11 +532,11 @@ NWB_INLINE SIMDMatrix SIMDCALL LoadFloat44Sse(const T& src)noexcept{
 
 #if defined(NWB_HAS_SCALAR)
 template<typename T>
-NWB_INLINE void SIMDCALL StoreInt4Scalar(SIMDVector src, T* dst)noexcept{
-    dst->x = static_cast<i32>(src.u[0]);
-    dst->y = static_cast<i32>(src.u[1]);
-    dst->z = static_cast<i32>(src.u[2]);
-    dst->w = static_cast<i32>(src.u[3]);
+NWB_INLINE void SIMDCALL StoreInt4Scalar(SIMDVector src, T& dst)noexcept{
+    dst.x = static_cast<i32>(src.u[0]);
+    dst.y = static_cast<i32>(src.u[1]);
+    dst.z = static_cast<i32>(src.u[2]);
+    dst.w = static_cast<i32>(src.u[3]);
 }
 #endif
 
@@ -857,311 +857,311 @@ NWB_INLINE void StreamFloatFence()noexcept{
 }
 
 
-NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.f[0];
-    dst->y = src.f[1];
-    dst->z = src.f[2];
-    dst->w = src.f[3];
+    dst.x = src.f[0];
+    dst.y = src.f[1];
+    dst.z = src.f[2];
+    dst.w = src.f[3];
 #elif defined (NWB_HAS_NEON)
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(dst->raw, src, 128);
+    vst1q_f32_ex(dst.raw, src, 128);
 #else
-    vst1q_f32(dst->raw, src);
+    vst1q_f32(dst.raw, src);
 #endif
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ps(dst->raw, src);
+    _mm_store_ps(dst.raw, src);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StreamFloat(SIMDVector src, Float4* dst)noexcept{
+NWB_INLINE void SIMDCALL StreamFloat(SIMDVector src, Float4& dst)noexcept{
 #if defined(NWB_HAS_SSE4)
-    _mm_stream_ps(dst->raw, src);
+    _mm_stream_ps(dst.raw, src);
 #else
     StoreFloat(src, dst);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, f32* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, f32& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    (*dst) = src.f[0];
+    dst = src.f[0];
 #elif defined (NWB_HAS_NEON)
-    vst1q_lane_f32(dst, src, 0);
+    vst1q_lane_f32(&dst, src, 0);
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ss(dst, src);
+    _mm_store_ss(&dst, src);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float2U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float2U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.f[0];
-    dst->y = src.f[1];
+    dst.x = src.f[0];
+    dst.y = src.f[1];
 #elif defined (NWB_HAS_NEON)
     float32x2_t VL = vget_low_f32(src);
-    vst1_f32(dst->raw, VL);
+    vst1_f32(dst.raw, VL);
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_sd(reinterpret_cast<f64*>(dst), _mm_castps_pd(src));
+    _mm_store_sd(reinterpret_cast<f64*>(&dst), _mm_castps_pd(src));
 #endif
 }
-NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float3U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float3U& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
 }
-NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, i32 w, Float3Int* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, i32 w, Float3Int& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
-    dst->w = w;
+    dst.w = w;
 }
-NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, u32 w, Float3UInt* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, u32 w, Float3UInt& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
-    dst->w = w;
+    dst.w = w;
 }
-NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.f[0];
-    dst->y = src.f[1];
-    dst->z = src.f[2];
-    dst->w = src.f[3];
+    dst.x = src.f[0];
+    dst.y = src.f[1];
+    dst.z = src.f[2];
+    dst.w = src.f[3];
 #elif defined (NWB_HAS_NEON)
-    vst1q_f32(dst->raw, src);
+    vst1q_f32(dst.raw, src);
 #elif defined(NWB_HAS_SSE4)
-    _mm_storeu_ps(dst->raw, src);
+    _mm_storeu_ps(dst.raw, src);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(&dst->_11, src.v[0], 128);
-    vst1q_f32_ex(&dst->_21, src.v[1], 128);
-    vst1q_f32_ex(&dst->_31, src.v[2], 128);
+    vst1q_f32_ex(&dst._11, src.v[0], 128);
+    vst1q_f32_ex(&dst._21, src.v[1], 128);
+    vst1q_f32_ex(&dst._31, src.v[2], 128);
 #else
-    vst1q_f32(&dst->_11, src.v[0]);
-    vst1q_f32(&dst->_21, src.v[1]);
-    vst1q_f32(&dst->_31, src.v[2]);
+    vst1q_f32(&dst._11, src.v[0]);
+    vst1q_f32(&dst._21, src.v[1]);
+    vst1q_f32(&dst._31, src.v[2]);
 #endif
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ps(&dst->_11, src.v[0]);
-    _mm_store_ps(&dst->_21, src.v[1]);
-    _mm_store_ps(&dst->_31, src.v[2]);
+    _mm_store_ps(&dst._11, src.v[0]);
+    _mm_store_ps(&dst._21, src.v[1]);
+    _mm_store_ps(&dst._31, src.v[2]);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float34* dst)noexcept{
+NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(NWB_HAS_SSE4)
-    _mm_stream_ps(&dst->_11, src.v[0]);
-    _mm_stream_ps(&dst->_21, src.v[1]);
-    _mm_stream_ps(&dst->_31, src.v[2]);
+    _mm_stream_ps(&dst._11, src.v[0]);
+    _mm_stream_ps(&dst._21, src.v[1]);
+    _mm_stream_ps(&dst._31, src.v[2]);
 #else
     StoreFloat(src, dst);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(&dst->_11, src.v[0], 128);
-    vst1q_f32_ex(&dst->_21, src.v[1], 128);
-    vst1q_f32_ex(&dst->_31, src.v[2], 128);
-    vst1q_f32_ex(&dst->_41, src.v[3], 128);
+    vst1q_f32_ex(&dst._11, src.v[0], 128);
+    vst1q_f32_ex(&dst._21, src.v[1], 128);
+    vst1q_f32_ex(&dst._31, src.v[2], 128);
+    vst1q_f32_ex(&dst._41, src.v[3], 128);
 #else
-    vst1q_f32(&dst->_11, src.v[0]);
-    vst1q_f32(&dst->_21, src.v[1]);
-    vst1q_f32(&dst->_31, src.v[2]);
-    vst1q_f32(&dst->_41, src.v[3]);
+    vst1q_f32(&dst._11, src.v[0]);
+    vst1q_f32(&dst._21, src.v[1]);
+    vst1q_f32(&dst._31, src.v[2]);
+    vst1q_f32(&dst._41, src.v[3]);
 #endif
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ps(&dst->_11, src.v[0]);
-    _mm_store_ps(&dst->_21, src.v[1]);
-    _mm_store_ps(&dst->_31, src.v[2]);
-    _mm_store_ps(&dst->_41, src.v[3]);
+    _mm_store_ps(&dst._11, src.v[0]);
+    _mm_store_ps(&dst._21, src.v[1]);
+    _mm_store_ps(&dst._31, src.v[2]);
+    _mm_store_ps(&dst._41, src.v[3]);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float44* dst)noexcept{
+NWB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
 #if defined(NWB_HAS_SSE4)
-    _mm_stream_ps(&dst->_11, src.v[0]);
-    _mm_stream_ps(&dst->_21, src.v[1]);
-    _mm_stream_ps(&dst->_31, src.v[2]);
-    _mm_stream_ps(&dst->_41, src.v[3]);
+    _mm_stream_ps(&dst._11, src.v[0]);
+    _mm_stream_ps(&dst._21, src.v[1]);
+    _mm_stream_ps(&dst._31, src.v[2]);
+    _mm_stream_ps(&dst._41, src.v[3]);
 #else
     StoreFloat(src, dst);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float33U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->_11 = src._11;
-    dst->_12 = src._12;
-    dst->_13 = src._13;
+    dst._11 = src._11;
+    dst._12 = src._12;
+    dst._13 = src._13;
 
-    dst->_21 = src._21;
-    dst->_22 = src._22;
-    dst->_23 = src._23;
+    dst._21 = src._21;
+    dst._22 = src._22;
+    dst._23 = src._23;
 
-    dst->_31 = src._31;
-    dst->_32 = src._32;
-    dst->_33 = src._33;
+    dst._31 = src._31;
+    dst._32 = src._32;
+    dst._33 = src._33;
 #elif defined (NWB_HAS_NEON)
     float32x4_t T1 = vextq_f32(src.v[0], src.v[1], 1);
     float32x4_t T2 = vbslq_f32(s_SIMDMask3, src.v[0], T1);
-    vst1q_f32(&dst->m[0][0], T2);
+    vst1q_f32(&dst.m[0][0], T2);
 
     T1 = vextq_f32(src.v[1], src.v[1], 1);
     T2 = vcombine_f32(vget_low_f32(T1), vget_low_f32(src.v[2]));
-    vst1q_f32(&dst->m[1][1], T2);
+    vst1q_f32(&dst.m[1][1], T2);
 
-    vst1q_lane_f32(&dst->m[2][2], src.v[2], 2);
+    vst1q_lane_f32(&dst.m[2][2], src.v[2], 2);
 #elif defined(NWB_HAS_SSE4)
     SIMDVector vTemp1 = src.v[0];
     SIMDVector vTemp2 = src.v[1];
     SIMDVector vTemp3 = src.v[2];
     SIMDVector vWork = _mm_shuffle_ps(vTemp1, vTemp2, _MM_SHUFFLE(0, 0, 2, 2));
     vTemp1 = _mm_shuffle_ps(vTemp1, vWork, _MM_SHUFFLE(2, 0, 1, 0));
-    _mm_storeu_ps(&dst->m[0][0], vTemp1);
+    _mm_storeu_ps(&dst.m[0][0], vTemp1);
     vTemp2 = _mm_shuffle_ps(vTemp2, vTemp3, _MM_SHUFFLE(1, 0, 2, 1));
-    _mm_storeu_ps(&dst->m[1][1], vTemp2);
+    _mm_storeu_ps(&dst.m[1][1], vTemp2);
     vTemp3 = _mm_shuffle_ps(vTemp3, vTemp3, _MM_SHUFFLE(2, 2, 2, 2));
-    _mm_store_ss(&dst->m[2][2], vTemp3);
+    _mm_store_ss(&dst.m[2][2], vTemp3);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-    vst1q_f32(&dst->_11, src.v[0]);
-    vst1q_f32(&dst->_21, src.v[1]);
-    vst1q_f32(&dst->_31, src.v[2]);
+    vst1q_f32(&dst._11, src.v[0]);
+    vst1q_f32(&dst._21, src.v[1]);
+    vst1q_f32(&dst._31, src.v[2]);
 #elif defined(NWB_HAS_SSE4)
-    _mm_storeu_ps(&dst->_11, src.v[0]);
-    _mm_storeu_ps(&dst->_21, src.v[1]);
-    _mm_storeu_ps(&dst->_31, src.v[2]);
+    _mm_storeu_ps(&dst._11, src.v[0]);
+    _mm_storeu_ps(&dst._21, src.v[1]);
+    _mm_storeu_ps(&dst._31, src.v[2]);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-    vst1q_f32(&dst->_11, src.v[0]);
-    vst1q_f32(&dst->_21, src.v[1]);
-    vst1q_f32(&dst->_31, src.v[2]);
-    vst1q_f32(&dst->_41, src.v[3]);
+    vst1q_f32(&dst._11, src.v[0]);
+    vst1q_f32(&dst._21, src.v[1]);
+    vst1q_f32(&dst._31, src.v[2]);
+    vst1q_f32(&dst._41, src.v[3]);
 #elif defined(NWB_HAS_SSE4)
-    _mm_storeu_ps(&dst->_11, src.v[0]);
-    _mm_storeu_ps(&dst->_21, src.v[1]);
-    _mm_storeu_ps(&dst->_31, src.v[2]);
-    _mm_storeu_ps(&dst->_41, src.v[3]);
+    _mm_storeu_ps(&dst._11, src.v[0]);
+    _mm_storeu_ps(&dst._21, src.v[1]);
+    _mm_storeu_ps(&dst._31, src.v[2]);
+    _mm_storeu_ps(&dst._41, src.v[3]);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-    vst1q_s32(dst->raw, vreinterpretq_s32_f32(src));
+    vst1q_s32(dst.raw, vreinterpretq_s32_f32(src));
 #elif defined(NWB_HAS_SSE4)
-    SIMDConvertDetail::StoreInt4Sse<true>(src, dst->raw);
+    SIMDConvertDetail::StoreInt4Sse<true>(src, dst.raw);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, i32* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, i32& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    *dst = static_cast<i32>(src.u[0]);
+    dst = static_cast<i32>(src.u[0]);
 #elif defined (NWB_HAS_NEON)
-    vst1q_lane_s32(dst, vreinterpretq_s32_f32(src), 0);
+    vst1q_lane_s32(&dst, vreinterpretq_s32_f32(src), 0);
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ss(reinterpret_cast<f32*>(dst), src);
+    _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int2U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int2U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = static_cast<i32>(src.u[0]);
-    dst->y = static_cast<i32>(src.u[1]);
+    dst.x = static_cast<i32>(src.u[0]);
+    dst.y = static_cast<i32>(src.u[1]);
 #elif defined (NWB_HAS_NEON)
-    vst1_s32(dst->raw, vget_low_s32(vreinterpretq_s32_f32(src)));
+    vst1_s32(dst.raw, vget_low_s32(vreinterpretq_s32_f32(src)));
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_sd(reinterpret_cast<f64*>(dst->raw), _mm_castps_pd(src));
+    _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int3U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int3U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = static_cast<i32>(src.u[0]);
-    dst->y = static_cast<i32>(src.u[1]);
-    dst->z = static_cast<i32>(src.u[2]);
+    dst.x = static_cast<i32>(src.u[0]);
+    dst.y = static_cast<i32>(src.u[1]);
+    dst.z = static_cast<i32>(src.u[2]);
 #elif defined (NWB_HAS_NEON)
     int32x4_t value = vreinterpretq_s32_f32(src);
-    vst1_s32(dst->raw, vget_low_s32(value));
-    vst1q_lane_s32(dst->raw + 2, value, 2);
+    vst1_s32(dst.raw, vget_low_s32(value));
+    vst1q_lane_s32(dst.raw + 2, value, 2);
 #elif defined(NWB_HAS_SSE4)
-    SIMDConvertDetail::StoreInt3Bits(src, dst->raw);
+    SIMDConvertDetail::StoreInt3Bits(src, dst.raw);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-    vst1q_s32(dst->raw, vreinterpretq_s32_f32(src));
+    vst1q_s32(dst.raw, vreinterpretq_s32_f32(src));
 #elif defined(NWB_HAS_SSE4)
-    SIMDConvertDetail::StoreInt4Sse<false>(src, dst->raw);
+    SIMDConvertDetail::StoreInt4Sse<false>(src, dst.raw);
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.u[0];
-    dst->y = src.u[1];
-    dst->z = src.u[2];
-    dst->w = src.u[3];
+    dst.x = src.u[0];
+    dst.y = src.u[1];
+    dst.z = src.u[2];
+    dst.w = src.u[3];
 #elif defined (NWB_HAS_NEON)
-    vst1q_u32(dst->raw, vreinterpretq_u32_f32(src));
+    vst1q_u32(dst.raw, vreinterpretq_u32_f32(src));
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_si128(reinterpret_cast<__m128i*>(dst->raw), _mm_castps_si128(src));
+    _mm_store_si128(reinterpret_cast<__m128i*>(dst.raw), _mm_castps_si128(src));
 #endif
 }
 
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, u32* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, u32& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    *dst = src.u[0];
+    dst = src.u[0];
 #elif defined (NWB_HAS_NEON)
-    vst1q_lane_u32(dst, vreinterpretq_u32_f32(src), 0);
+    vst1q_lane_u32(&dst, vreinterpretq_u32_f32(src), 0);
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_ss(reinterpret_cast<f32*>(dst), src);
+    _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt2U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt2U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.u[0];
-    dst->y = src.u[1];
+    dst.x = src.u[0];
+    dst.y = src.u[1];
 #elif defined (NWB_HAS_NEON)
-    vst1_u32(dst->raw, vget_low_u32(vreinterpretq_u32_f32(src)));
+    vst1_u32(dst.raw, vget_low_u32(vreinterpretq_u32_f32(src)));
 #elif defined(NWB_HAS_SSE4)
-    _mm_store_sd(reinterpret_cast<f64*>(dst->raw), _mm_castps_pd(src));
+    _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt3U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt3U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.u[0];
-    dst->y = src.u[1];
-    dst->z = src.u[2];
+    dst.x = src.u[0];
+    dst.y = src.u[1];
+    dst.z = src.u[2];
 #elif defined (NWB_HAS_NEON)
     uint32x4_t value = vreinterpretq_u32_f32(src);
-    vst1_u32(dst->raw, vget_low_u32(value));
-    vst1q_lane_u32(dst->raw + 2, value, 2);
+    vst1_u32(dst.raw, vget_low_u32(value));
+    vst1q_lane_u32(dst.raw + 2, value, 2);
 #elif defined(NWB_HAS_SSE4)
-    SIMDConvertDetail::StoreUInt3Bits(src, dst->raw);
+    SIMDConvertDetail::StoreUInt3Bits(src, dst.raw);
 #endif
 }
-NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4U* dst)noexcept{
+NWB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4U& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    dst->x = src.u[0];
-    dst->y = src.u[1];
-    dst->z = src.u[2];
-    dst->w = src.u[3];
+    dst.x = src.u[0];
+    dst.y = src.u[1];
+    dst.z = src.u[2];
+    dst.w = src.u[3];
 #elif defined (NWB_HAS_NEON)
-    vst1q_u32(dst->raw, vreinterpretq_u32_f32(src));
+    vst1q_u32(dst.raw, vreinterpretq_u32_f32(src));
 #elif defined(NWB_HAS_SSE4)
-    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst->raw), _mm_castps_si128(src));
+    _mm_storeu_si128(reinterpret_cast<__m128i*>(dst.raw), _mm_castps_si128(src));
 #endif
 }
 

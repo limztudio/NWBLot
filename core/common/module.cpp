@@ -15,7 +15,7 @@ NWB_COMMON_BEGIN
 
 
 Initializerable::Initializerable(){
-    Initializer::instance().enqueue(this);
+    Initializer::instance().enqueue(*this);
 }
 
 Initializer& Initializer::instance(){

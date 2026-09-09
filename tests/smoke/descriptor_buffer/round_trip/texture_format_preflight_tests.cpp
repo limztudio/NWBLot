@@ -79,7 +79,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
             commandList->open();
             ASSERT_FALSE(commandList->isRenderPassActive());
             commandList->clearTextureFloat(
-                unsupportedTexture.get(),
+                *unsupportedTexture,
                 s_AllSubresources,
                 Color(1.f, 0.f, 1.f, 1.f)
             );
@@ -97,7 +97,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
     const usize referencesBeforeMultisampleReject = texture->getReferenceCount();
     commandList->open();
     ASSERT_FALSE(commandList->isRenderPassActive());
-    commandList->clearTextureFloat(texture.get(), s_AllSubresources, Color(1.f, 0.f, 1.f, 1.f));
+    commandList->clearTextureFloat(*texture, s_AllSubresources, Color(1.f, 0.f, 1.f, 1.f));
     EXPECT_TRUE(commandList->commandRecordingFailed());
     EXPECT_FALSE(commandList->isRenderPassActive());
     EXPECT_EQ(texture->getReferenceCount(), referencesBeforeMultisampleReject);
@@ -109,7 +109,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
     commandList->open();
     ASSERT_FALSE(commandList->isRenderPassActive());
     commandList->clearTextureBoxFloat(
-        texture.get(),
+        *texture,
         TextureSubresourceSet(0u, 1u, 0u, 1u),
         Box(4, 4, 1),
         Color(1.f, 0.f, 1.f, 1.f)
@@ -143,14 +143,14 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
         ASSERT_TRUE(commandList->isRenderPassActive());
         if(boundedClear){
             commandList->clearTextureBoxFloat(
-                texture.get(),
+                *texture,
                 TextureSubresourceSet(0u, 1u, 0u, 1u),
                 Box(4, 4, 1),
                 Color(1.f, 0.f, 1.f, 1.f)
             );
         }
         else
-            commandList->clearTextureFloat(texture.get(), s_AllSubresources, Color(1.f, 0.f, 1.f, 1.f));
+            commandList->clearTextureFloat(*texture, s_AllSubresources, Color(1.f, 0.f, 1.f, 1.f));
         EXPECT_TRUE(commandList->commandRecordingFailed());
         EXPECT_TRUE(commandList->isRenderPassActive());
         EXPECT_EQ(texture->getReferenceCount(), referencesBeforeActiveRenderingReject);
@@ -168,7 +168,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
     ASSERT_FALSE(commandList->commandRecordingFailed());
     ASSERT_FALSE(commandList->isRenderPassActive());
     commandList->clearTextureBoxFloat(
-        texture.get(),
+        *texture,
         clearedSubresources,
         Box(0, 6, 0, static_cast<i32>(s_Height), 0, 1),
         Color(1.f, 0.f, 1.f, 1.f)
@@ -189,7 +189,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
     ASSERT_FALSE(commandList->commandRecordingFailed());
     ASSERT_FALSE(commandList->isRenderPassActive());
     commandList->clearTextureFloat(
-        texture.get(),
+        *texture,
         clearedSubresources,
         Color(1.f, 0.f, 1.f, 1.f)
     );
@@ -230,7 +230,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
         for(u32 mipLevel = 0u; mipLevel < s_MipCount; ++mipLevel){
             TextureSlice slice;
             slice.setMipLevel(mipLevel).setArraySlice(arraySlice);
-            readbackCommandList->copyTexture(readback.get(), slice, texture.get(), slice);
+            readbackCommandList->copyTexture(*readback, slice, *texture, slice);
         }
     }
     EXPECT_FALSE(readbackCommandList->commandRecordingFailed());
@@ -251,7 +251,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
             slice.setMipLevel(mipLevel).setArraySlice(arraySlice);
             usize rowPitch = 0u;
             const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-                readback.get(),
+                *readback,
                 slice,
                 CpuAccessMode::Read,
                 &rowPitch
@@ -273,7 +273,7 @@ TEST_F(DescriptorBufferRoundTripTest, BlockCompressedFullClearUsesStagingAndReje
                         EXPECT_EQ(blockBytes[byteIndex], s_ExpectedBC1Block[byteIndex]);
                 }
             }
-            device.unmapStagingTexture(readback.get());
+            device.unmapStagingTexture(*readback);
         }
     }
 }
@@ -328,7 +328,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
     mutableTextureDesc.setFormat(Format::RGBA8_UNORM);
     commandList->open();
     commandList->clearDepthStencilTextureBox(
-        texture.get(),
+        *texture,
         clearedSubresources,
         s_ClearBox,
         true,
@@ -348,7 +348,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
     mutableTextureDesc.setSampleCount(2u);
     commandList->open();
     commandList->clearDepthStencilTextureBox(
-        texture.get(),
+        *texture,
         clearedSubresources,
         Box(8, 9, 8, 9, 0, 1),
         true,
@@ -369,7 +369,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
     mutableTextureDesc.setSampleCount(2u);
     commandList->open();
     commandList->clearDepthStencilTextureBox(
-        texture.get(),
+        *texture,
         clearedSubresources,
         s_ClearBox,
         true,
@@ -405,7 +405,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
         ASSERT_TRUE(commandList->isRenderPassActive());
         if(boundedClear){
             commandList->clearDepthStencilTextureBox(
-                texture.get(),
+                *texture,
                 clearedSubresources,
                 s_ClearBox,
                 true,
@@ -416,7 +416,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
         }
         else{
             commandList->clearDepthStencilTexture(
-                texture.get(),
+                *texture,
                 clearedSubresources,
                 true,
                 0.5f,
@@ -444,7 +444,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
     if(multisampleTexture){
         commandList->open();
         commandList->clearDepthStencilTexture(
-            multisampleTexture.get(),
+            *multisampleTexture,
             s_AllSubresources,
             true,
             0.75f,
@@ -464,7 +464,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
         commandList->open();
         const usize referencesBeforeActualMultisampleReject = multisampleTexture->getReferenceCount();
         commandList->clearDepthStencilTextureBox(
-            multisampleTexture.get(),
+            *multisampleTexture,
             s_AllSubresources,
             s_ClearBox,
             true,
@@ -483,7 +483,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
     CommandListResourceStateHandoff clearFinalStates(DescriptorBufferRoundTripTest::arena());
     commandList->open();
     commandList->clearDepthStencilTexture(
-        texture.get(),
+        *texture,
         clearedSubresources,
         true,
         2.0f,
@@ -491,7 +491,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
         0u
     );
     commandList->clearDepthStencilTextureBox(
-        texture.get(),
+        *texture,
         clearedSubresources,
         s_ClearBox,
         true,
@@ -522,7 +522,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
             commandList->open();
             const usize referencesBeforeCombinedClear = combinedTexture->getReferenceCount();
             commandList->clearDepthStencilTextureBox(
-                combinedTexture.get(),
+                *combinedTexture,
                 clearedSubresources,
                 s_ClearBox,
                 true,
@@ -554,7 +554,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
         for(u32 mipLevel = 0u; mipLevel < s_MipCount; ++mipLevel){
             TextureSlice slice;
             slice.setMipLevel(mipLevel).setArraySlice(arraySlice);
-            readbackCommandList->copyTexture(readback.get(), slice, texture.get(), slice);
+            readbackCommandList->copyTexture(*readback, slice, *texture, slice);
         }
     }
     ASSERT_FALSE(readbackCommandList->commandRecordingFailed());
@@ -575,7 +575,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
             slice.setMipLevel(mipLevel).setArraySlice(arraySlice);
             usize rowPitch = 0u;
             const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-                readback.get(),
+                *readback,
                 slice,
                 CpuAccessMode::Read,
                 &rowPitch
@@ -597,7 +597,7 @@ TEST_F(DescriptorBufferRoundTripTest, DepthStencilBoxPreflightRejectsAtomicallyA
                     EXPECT_FLOAT_EQ(actualDepth, insideClear ? 0.25f : 1.0f);
                 }
             }
-            device.unmapStagingTexture(readback.get());
+            device.unmapStagingTexture(*readback);
         }
     }
 }

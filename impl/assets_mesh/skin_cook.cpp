@@ -63,14 +63,14 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skin.influences(),
-        NWB_TEXT("SkinAssetCodec::serialize"),
-        NWB_TEXT("influences")
+        MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize")),
+        MakeNotNull(NWB_TEXT("influences"))
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skin.inverseBindMatrices(),
-            NWB_TEXT("SkinAssetCodec::serialize"),
-            NWB_TEXT("inverse bind matrices")
+            MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize")),
+            MakeNotNull(NWB_TEXT("inverse bind matrices"))
         )
     ;
 }
@@ -267,7 +267,7 @@ template<usize ComponentCount>
     if(!NormalizeSkinInfluenceWeights(nwbFilePath, influenceIndex, LoadFloat(parsedWeights), normalizedWeights))
         return false;
 
-    StoreFloat(normalizedWeights, &outInfluence.weight);
+    StoreFloat(normalizedWeights, outInfluence.weight);
     return true;
 }
 

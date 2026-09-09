@@ -5,7 +5,7 @@
 template<typename CookEntryT>
 static bool BuildMeshlets(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     CookEntryT& entry,
     Core::CpuTaskScheduler& cpuScheduler
@@ -147,7 +147,7 @@ static bool BuildMeshlets(
 
     if(entry.meshlets.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet build produced no meshlets")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
         );
         return false;

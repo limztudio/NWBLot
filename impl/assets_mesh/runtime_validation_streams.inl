@@ -44,7 +44,7 @@
     const Core::Assets::AssetVector<Half4U>& tangents,
     const Core::Assets::AssetVector<Float2U>& uv0,
     const Core::Assets::AssetVector<Half4U>& colors,
-    const tchar* contextText,
+    const NotNull<const tchar*> contextText,
     const TStringView meshPathText
 ){
     if(

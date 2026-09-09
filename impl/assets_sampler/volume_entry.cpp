@@ -53,7 +53,7 @@ static bool BuildSamplerCookedAsset(SamplerCookEntry& entry, Sampler& outAsset){
 static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<SamplerCookEntry, Sampler, SamplerAssetCodec>(
         Sampler::AssetTypeName(),
-        NWB_TEXT("sampler"),
+        MakeNotNull(NWB_TEXT("sampler")),
         &ParseSamplerDocument,
         nullptr,
         &BuildSamplerCookedAsset,

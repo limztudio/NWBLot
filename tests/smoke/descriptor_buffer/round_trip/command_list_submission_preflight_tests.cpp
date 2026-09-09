@@ -108,14 +108,14 @@ TEST_F(DescriptorBufferRoundTripTest, NativeRecordingScopeRejectsStateMarkerAndQ
         afterCloseBeginQuery->open();
         afterCloseBeginQuery->close();
         TimerQueryRecordingToken afterCloseQueryRecording;
-        EXPECT_FALSE(afterCloseBeginQuery->beginTimerQuery(query.get(), afterCloseQueryRecording));
+        EXPECT_FALSE(afterCloseBeginQuery->beginTimerQuery(*query, afterCloseQueryRecording));
         EXPECT_TRUE(afterCloseBeginQuery->commandRecordingFailed());
         afterCloseBeginQuery->close();
         EXPECT_FALSE(afterCloseBeginQuery->hasCommandBuffer());
 
         afterCloseEndQuery->open();
         afterCloseEndQuery->close();
-        EXPECT_FALSE(afterCloseEndQuery->endTimerQuery(query.get(), afterCloseQueryRecording));
+        EXPECT_FALSE(afterCloseEndQuery->endTimerQuery(*query, afterCloseQueryRecording));
         EXPECT_TRUE(afterCloseEndQuery->commandRecordingFailed());
         afterCloseEndQuery->close();
         EXPECT_FALSE(afterCloseEndQuery->hasCommandBuffer());
@@ -335,8 +335,8 @@ TEST_F(DescriptorBufferRoundTripTest, HostTimerResetRejectsForeignDeviceQueryOwn
     HeadlessGraphicsScope foreignScope;
     ASSERT_TRUE(foreignScope.initialize());
     auto& foreignDevice = foreignScope.graphics().getDevice();
-    EXPECT_FALSE(foreignDevice.resetTimerQuery(query.get()));
-    EXPECT_TRUE(device.resetTimerQuery(query.get()));
+    EXPECT_FALSE(foreignDevice.resetTimerQuery(*query));
+    EXPECT_TRUE(device.resetTimerQuery(*query));
 }
 
 

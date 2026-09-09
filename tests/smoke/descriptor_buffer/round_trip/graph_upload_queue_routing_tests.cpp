@@ -62,7 +62,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
     auto graphicsProducer = device.createCommandList();
     ASSERT_NE(graphicsProducer.get(), nullptr);
     graphicsProducer->open();
-    graphicsProducer->writeBuffer(source.get(), s_CopyWords, sizeof(s_CopyWords));
+    graphicsProducer->writeBuffer(*source, s_CopyWords, sizeof(s_CopyWords));
     graphicsProducer->setBufferState(source.get(), ResourceStates::CopySource);
     graphicsProducer->close(&graphicsToTransfer);
     ASSERT_TRUE(graphicsToTransfer.valid());
@@ -84,7 +84,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
     ASSERT_NE(transferCopy.get(), nullptr);
     transferCopy->open(&graphicsToTransfer);
     EXPECT_EQ(transferCopy->getBufferState(source.get()), ResourceStates::CopySource);
-    transferCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, sizeof(s_CopyWords));
+    transferCopy->copyBuffer(*destination, 0u, *source, 0u, sizeof(s_CopyWords));
     transferCopy->close(&transferToGraphics);
     ASSERT_TRUE(transferToGraphics.valid());
 
@@ -118,11 +118,11 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedTransferQueueCopiesConcurrentBuff
     ASSERT_EQ(graphicsConsumerToken.queue, CommandQueue::Graphics);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_CopyWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_CopyWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -174,7 +174,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransfer
     auto graphicsCopy = device.createCommandList();
     ASSERT_NE(graphicsCopy.get(), nullptr);
     graphicsCopy->open();
-    graphicsCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, s_UploadByteSize);
+    graphicsCopy->copyBuffer(*destination, 0u, *source, 0u, s_UploadByteSize);
     graphicsCopy->close();
 
     CommandList* graphicsCopyLists[] = { graphicsCopy.get() };
@@ -188,12 +188,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesDedicatedTransfer
     ASSERT_EQ(graphicsCopyToken.queue, CommandQueue::Graphics);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     const usize sampledWords[] = { 0u, s_UploadWordCount / 2u, s_UploadWordCount - 1u };
     for(const usize wordIndex : sampledWords)
         EXPECT_EQ(copiedWords[wordIndex], uploadWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -271,7 +271,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesAuxiliaryGraphics
     auto primaryCopy = device.createCommandList();
     ASSERT_NE(primaryCopy.get(), nullptr);
     primaryCopy->open();
-    primaryCopy->copyBuffer(destination.get(), 0u, source.get(), 0u, s_UploadByteSize);
+    primaryCopy->copyBuffer(*destination, 0u, *source, 0u, s_UploadByteSize);
     primaryCopy->close();
 
     CommandList* primaryCopyLists[] = { primaryCopy.get() };
@@ -288,12 +288,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSetupBufferUsesAuxiliaryGraphics
     ));
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     const usize sampledWords[] = { 0u, s_UploadWordCount / 2u, s_UploadWordCount - 1u };
     for(const usize wordIndex : sampledWords)
         EXPECT_EQ(copiedWords[wordIndex], uploadWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -408,7 +408,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
         CommandListHandle readbackCommandList = device.createCommandList();
         ASSERT_NE(readbackCommandList.get(), nullptr);
         readbackCommandList->open();
-        readbackCommandList->copyTexture(readback.get(), slice, destination.get(), slice);
+        readbackCommandList->copyTexture(*readback, slice, *destination, slice);
         readbackCommandList->close();
         CommandList* const readbackLists[] = { readbackCommandList.get() };
         const QueueSubmissionToken readbackToken = device.executeCommandLists(
@@ -426,7 +426,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
 
         usize rowPitch = 0u;
         const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-            readback.get(),
+            *readback,
             slice,
             CpuAccessMode::Read,
             &rowPitch
@@ -442,7 +442,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
             for(usize component = 0u; component < 4u; ++component)
                 EXPECT_EQ(readbackBytes[readbackOffset + component], expectedMips[mipLevel][expectedOffset + component]);
         }
-        device.unmapStagingTexture(readback.get());
+        device.unmapStagingTexture(*readback);
     }
 }
 

@@ -74,9 +74,9 @@ struct CopyBufferTask{
                 return false;
             commandList.endRenderPass();
             commandList.copyBuffer(
-                copy.destination.get(),
+                *copy.destination,
                 copy.destinationOffsetBytes,
-                copy.source.get(),
+                *copy.source,
                 copy.sourceOffsetBytes,
                 copy.dataSizeBytes
             );

@@ -49,11 +49,11 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ASSERT_NE(source.get(), nullptr);
     ASSERT_NE(destination.get(), nullptr);
     ASSERT_NE(secondDestination.get(), nullptr);
-    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(source.get(), CpuAccessMode::Write));
+    u32* const sourceWords = static_cast<u32*>(device.mapBuffer(*source, CpuAccessMode::Write));
     ASSERT_NE(sourceWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         sourceWords[wordIndex] = s_SourceWords[wordIndex];
-    device.unmapBuffer(source.get());
+    device.unmapBuffer(*source);
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const GpuGraphResourceId sourceResource = graph.importBuffer(
@@ -163,8 +163,8 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     auto clearDestination = device.createCommandList();
     ASSERT_NE(clearDestination.get(), nullptr);
     clearDestination->open();
-    clearDestination->clearBufferUInt(destination.get(), s_Sentinel);
-    clearDestination->clearBufferUInt(secondDestination.get(), s_Sentinel);
+    clearDestination->clearBufferUInt(*destination, s_Sentinel);
+    clearDestination->clearBufferUInt(*secondDestination, s_Sentinel);
     clearDestination->close();
     ASSERT_TRUE(clearDestination->hasCommandBuffer());
     CommandList* const clearCommandLists[] = { clearDestination.get() };
@@ -225,11 +225,11 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ), 0u);
     ASSERT_TRUE(rejectedSubmitted);
     ASSERT_TRUE(device.waitForIdle());
-    const u32* const untouchedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const untouchedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(untouchedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(untouchedWords[wordIndex], s_Sentinel);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 
     // The normal recorder produces one capture artifact for its complete packet range. Replay must select this
     // first packet from the two-packet stream, never emit the second packet's body, and retain all ordinary packet
@@ -351,16 +351,16 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ASSERT_TRUE(replaySubmitted);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const replayedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const replayedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(replayedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(replayedWords[wordIndex], s_SourceWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 
     auto resetDirectDestination = device.createCommandList();
     ASSERT_NE(resetDirectDestination.get(), nullptr);
     resetDirectDestination->open();
-    resetDirectDestination->clearBufferUInt(destination.get(), s_Sentinel);
+    resetDirectDestination->clearBufferUInt(*destination, s_Sentinel);
     resetDirectDestination->close();
     CommandList* const resetDirectCommandLists[] = { resetDirectDestination.get() };
     bool resetDirectSubmitted = false;
@@ -422,11 +422,11 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ), 0u);
     ASSERT_TRUE(unsupportedDirectSubmitted);
     ASSERT_TRUE(device.waitForIdle());
-    const u32* const stillSentinelWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const stillSentinelWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(stillSentinelWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(stillSentinelWords[wordIndex], s_Sentinel);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 
     // Model the graph recorder's already-established packet state, then lower only the selected CopyBuffer body
     // directly to Vulkan. The direct lowerer must not create implicit state transitions of its own.
@@ -457,19 +457,19 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
     ), 0u);
     ASSERT_TRUE(directVulkanSubmitted);
     ASSERT_TRUE(device.waitForIdle());
-    const u32* const directVulkanWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const directVulkanWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(directVulkanWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(directVulkanWords[wordIndex], s_SourceWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 
     const u32* const untouchedSecondWords = static_cast<const u32*>(
-        device.mapBuffer(secondDestination.get(), CpuAccessMode::Read)
+        device.mapBuffer(*secondDestination, CpuAccessMode::Read)
     );
     ASSERT_NE(untouchedSecondWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(untouchedSecondWords[wordIndex], s_Sentinel);
-    device.unmapBuffer(secondDestination.get());
+    device.unmapBuffer(*secondDestination);
 
     GpuGraphSubmissionTransaction terminalTransaction(DescriptorBufferRoundTripTest::arena());
     terminalTransaction.reset(compiledGraph);

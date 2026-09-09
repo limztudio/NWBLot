@@ -15,17 +15,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
+void CommandList::clearDepthStencilTexture(Texture& texture, TextureSubresourceSet subresources, bool clearDepth, f32 depth, bool clearStencil, u8 stencil){
     if(!publicCommandStateAccessible())
         return;
     if(!clearDepth && !clearStencil)
         return;
     constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture");
-    if(!textureResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is null"));
-        return;
-    }
-    Texture& texture = *textureResource;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -34,7 +29,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+    if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
@@ -72,7 +67,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
             clearStencil,
             stencil
         ))
-            retainResource(textureResource);
+            retainResource(&texture);
         return;
     }
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
@@ -84,7 +79,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
     if(clearStencil)
         aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
 
-    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
     if(texture.m_creationDesc.dimension != TextureDimension::Texture3D && resolvedSubresources.numArraySlices > 1u){
@@ -97,7 +92,7 @@ void CommandList::clearDepthStencilTexture(Texture* textureResource, TextureSubr
         const VkImageSubresourceRange range = VulkanDetail::BuildImageSubresourceRange(resolvedSubresources, aspectMask);
         m_context.deviceDispatch.vkCmdClearDepthStencilImage(m_currentCmdBuf->m_cmdBuf, texture.m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1u, &range);
     }
-    retainResource(textureResource);
+    retainResource(&texture);
 }
 
 bool CommandList::clearActiveRenderPassColorTextureRect(
@@ -222,7 +217,7 @@ bool CommandList::clearActiveRenderPassDepthStencilTextureRect(
 }
 
 void CommandList::clearDepthStencilTextureRect(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Rect& rect,
     const bool clearDepth,
@@ -230,11 +225,11 @@ void CommandList::clearDepthStencilTextureRect(
     const bool clearStencil,
     const u8 stencil
 ){
-    clearDepthStencilTextureBox(textureResource, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
+    clearDepthStencilTextureBox(texture, subresources, Box(rect, 0, Limit<i32>::s_Max), clearDepth, depth, clearStencil, stencil);
 }
 
 void CommandList::clearDepthStencilTextureBox(
-    Texture* textureResource,
+    Texture& texture,
     TextureSubresourceSet subresources,
     const Box& box,
     const bool clearDepth,
@@ -249,11 +244,6 @@ void CommandList::clearDepthStencilTextureBox(
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
     constexpr const tchar* s_OperationName = NWB_TEXT("clear depth/stencil texture box");
-    if(!textureResource){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("texture is null"));
-        return;
-    }
-    Texture& texture = *textureResource;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -271,7 +261,7 @@ void CommandList::clearDepthStencilTextureBox(
     }
 
     if(VulkanTextureDetail::TextureClearBoxCoversSubresources(desc, resolvedSubresources, box)){
-        clearDepthStencilTexture(textureResource, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
+        clearDepthStencilTexture(texture, resolvedSubresources, clearDepth, depth, clearStencil, stencil);
         return;
     }
 
@@ -282,7 +272,7 @@ void CommandList::clearDepthStencilTextureBox(
         ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
         : VK_IMAGE_USAGE_TRANSFER_DST_BIT
     ;
-    if(!isTextureReadyForCommandQueue(textureResource, requiredUsage)){
+    if(!isTextureReadyForCommandQueue(&texture, requiredUsage)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture is not ready for the requested native clear on this exact command queue"));
         return;
     }
@@ -311,7 +301,7 @@ void CommandList::clearDepthStencilTextureBox(
             clearStencil,
             stencil
         ))
-            retainResource(textureResource);
+            retainResource(&texture);
         return;
     }
     if(desc.dimension == TextureDimension::Texture3D){
@@ -380,7 +370,7 @@ void CommandList::clearDepthStencilTextureBox(
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("clear depth/stencil texture box through staging")))
         return;
 
-    setTextureState(textureResource, resolvedSubresources, ResourceStates::CopyDest);
+    setTextureState(&texture, resolvedSubresources, ResourceStates::CopyDest);
     if(m_commandRecordingFailed)
         return;
 
@@ -480,7 +470,7 @@ void CommandList::clearDepthStencilTextureBox(
     if(clearStencil && !copyAspect(VK_IMAGE_ASPECT_STENCIL_BIT, stencilPattern, stencilPatternSize))
         return;
 
-    retainResource(textureResource);
+    retainResource(&texture);
 }
 
 

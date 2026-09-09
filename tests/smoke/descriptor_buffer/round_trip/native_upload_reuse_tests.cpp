@@ -284,9 +284,9 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     CommandListHandle initialClear = uploadDevice.createCommandList();
     ASSERT_TRUE(initialClear);
     initialClear->open();
-    initialClear->clearBufferUInt(destination.get(), s_InitialWord);
+    initialClear->clearBufferUInt(*destination, s_InitialWord);
     ASSERT_FALSE(initialClear->commandRecordingFailed());
-    initialClear->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    initialClear->copyBuffer(*readback, 0u, *destination, 0u, sizeof(s_RetryWords));
     ASSERT_FALSE(initialClear->commandRecordingFailed());
     initialClear->close();
     CommandList* const initialClears[]{ initialClear.get() };
@@ -299,11 +299,11 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     ASSERT_TRUE(initialToken.valid());
     ASSERT_TRUE(uploadDevice.waitForIdle());
 
-    const u32* const initialReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const u32* const initialReadback = static_cast<const u32*>(uploadDevice.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(initialReadback, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
         EXPECT_EQ(initialReadback[wordIndex], s_InitialWord);
-    uploadDevice.unmapBuffer(readback.get());
+    uploadDevice.unmapBuffer(*readback);
 
     __hidden_descriptor_buffer_round_trip_tests::NativeUploadReuseCapture rejectedNativeCapture;
     CommandListHandle rejectedUpload = uploadDevice.createCommandList();
@@ -313,7 +313,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
         ASSERT_TRUE(nativeTrace.valid());
 
         rejectedUpload->open();
-        ASSERT_TRUE(rejectedUpload->tryWriteBuffer(destination.get(), s_RejectedWords, sizeof(s_RejectedWords)));
+        ASSERT_TRUE(rejectedUpload->tryWriteBuffer(*destination, s_RejectedWords, sizeof(s_RejectedWords)));
         rejectedUpload->close();
     }
     ASSERT_EQ(rejectedNativeCapture.addressQueryCount, 1u);
@@ -354,7 +354,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
         ASSERT_TRUE(nativeTrace.valid());
 
         retryUpload->open();
-        ASSERT_TRUE(retryUpload->tryWriteBuffer(destination.get(), s_RetryWords, sizeof(s_RetryWords)));
+        ASSERT_TRUE(retryUpload->tryWriteBuffer(*destination, s_RetryWords, sizeof(s_RetryWords)));
         retryUpload->close();
     }
     EXPECT_EQ(retryNativeCapture.addressQueryCount, 0u);
@@ -365,7 +365,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     CommandListHandle rejectedReadbackCopy = uploadDevice.createCommandList();
     ASSERT_TRUE(rejectedReadbackCopy);
     rejectedReadbackCopy->open();
-    rejectedReadbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    rejectedReadbackCopy->copyBuffer(*readback, 0u, *destination, 0u, sizeof(s_RetryWords));
     ASSERT_FALSE(rejectedReadbackCopy->commandRecordingFailed());
     rejectedReadbackCopy->close();
     CommandList* const rejectedReadbackCopies[]{ rejectedReadbackCopy.get() };
@@ -378,11 +378,11 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     ASSERT_TRUE(rejectedReadbackToken.valid());
     ASSERT_TRUE(uploadDevice.waitForIdle());
 
-    const u32* const rejectedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const u32* const rejectedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(rejectedReadback, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
         EXPECT_EQ(rejectedReadback[wordIndex], s_InitialWord);
-    uploadDevice.unmapBuffer(readback.get());
+    uploadDevice.unmapBuffer(*readback);
 
     CommandList* const retryUploads[]{ retryUpload.get() };
     const QueueSubmissionToken acceptedToken = uploadDevice.executeCommandLists(
@@ -397,7 +397,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     CommandListHandle retryReadbackCopy = uploadDevice.createCommandList();
     ASSERT_TRUE(retryReadbackCopy);
     retryReadbackCopy->open();
-    retryReadbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_RetryWords));
+    retryReadbackCopy->copyBuffer(*readback, 0u, *destination, 0u, sizeof(s_RetryWords));
     ASSERT_FALSE(retryReadbackCopy->commandRecordingFailed());
     retryReadbackCopy->close();
     CommandList* const retryReadbackCopies[]{ retryReadbackCopy.get() };
@@ -410,11 +410,11 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
     ASSERT_TRUE(retryReadbackToken.valid());
     ASSERT_TRUE(uploadDevice.waitForIdle());
 
-    const u32* const retryReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const u32* const retryReadback = static_cast<const u32*>(uploadDevice.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(retryReadback, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_RetryWords); ++wordIndex)
         EXPECT_EQ(retryReadback[wordIndex], s_RetryWords[wordIndex]);
-    uploadDevice.unmapBuffer(readback.get());
+    uploadDevice.unmapBuffer(*readback);
 }
 
 
@@ -461,7 +461,7 @@ TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAft
             commandLists[commandListIndex]->open();
             if(commandListIndex == s_UploadCommandListIndex){
                 ASSERT_TRUE(commandLists[commandListIndex]->tryWriteBuffer(
-                    destination.get(),
+                    *destination,
                     s_FirstWords,
                     sizeof(s_FirstWords)
                 ));
@@ -536,7 +536,7 @@ TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAft
         reusedTraceValid = nativeTrace.valid();
         if(reusedUpload && reusedTraceValid){
             reusedUpload->open();
-            reusedRecorded = reusedUpload->tryWriteBuffer(destination.get(), s_ReusedWords, sizeof(s_ReusedWords));
+            reusedRecorded = reusedUpload->tryWriteBuffer(*destination, s_ReusedWords, sizeof(s_ReusedWords));
             reusedUpload->close();
             reusedRecordingFailed = reusedUpload->commandRecordingFailed();
         }
@@ -574,7 +574,7 @@ TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAft
     CommandListHandle readbackCopy = uploadDevice.createCommandList();
     ASSERT_TRUE(readbackCopy);
     readbackCopy->open();
-    readbackCopy->copyBuffer(readback.get(), 0u, destination.get(), 0u, sizeof(s_ReusedWords));
+    readbackCopy->copyBuffer(*readback, 0u, *destination, 0u, sizeof(s_ReusedWords));
     ASSERT_FALSE(readbackCopy->commandRecordingFailed());
     readbackCopy->close();
     CommandList* const readbackCopies[]{ readbackCopy.get() };
@@ -587,11 +587,11 @@ TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAft
     ASSERT_TRUE(readbackToken.valid());
     ASSERT_TRUE(uploadDevice.waitForIdle());
 
-    const u32* const mappedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(readback.get(), CpuAccessMode::Read));
+    const u32* const mappedReadback = static_cast<const u32*>(uploadDevice.mapBuffer(*readback, CpuAccessMode::Read));
     ASSERT_NE(mappedReadback, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_ReusedWords); ++wordIndex)
         EXPECT_EQ(mappedReadback[wordIndex], s_ReusedWords[wordIndex]);
-    uploadDevice.unmapBuffer(readback.get());
+    uploadDevice.unmapBuffer(*readback);
 }
 
 

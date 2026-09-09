@@ -60,7 +60,7 @@ bool Mesh::validatePayload()const{
         *this,
         0u,
         false,
-        NWB_TEXT("Mesh::validatePayload"),
+        MakeNotNull(NWB_TEXT("Mesh::validatePayload")),
         meshPathText
     ))
         return false;
@@ -77,7 +77,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
 
     clearGeometryPayload();
 
-    const tchar* const loadFailureContext = NWB_TEXT("Mesh::loadBinary");
+    const NotNull<const tchar*> loadFailureContext = MakeNotNull(NWB_TEXT("Mesh::loadBinary"));
     usize cursor = 0;
     MeshBinaryPayload::MeshHeaderBinary header;
     if(!Core::Assets::ReadMagicHeaderPayload(
@@ -86,7 +86,7 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
         header,
         MeshBinaryPayload::s_MeshMagic,
         loadFailureContext,
-        NWB_TEXT("mesh")
+        MakeNotNull(NWB_TEXT("mesh"))
     ))
         return false;
 

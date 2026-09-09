@@ -156,7 +156,7 @@ TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
     EXPECT_TRUE(ContainsText(callback, ".floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),"));
     EXPECT_TRUE(ContainsText(callback, "context.commandIrCapture"));
     EXPECT_TRUE(ContainsText(callback, "captureClearTexture("));
-    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);"));
+    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);"));
 
     const usize resourceUseOffset = surfelGi.find("const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse");
     const usize giSchedulingOffset = surfelGi.find("Core::GpuTaskSchedulingHint surfelGiScheduling", resourceUseOffset);

@@ -29,7 +29,7 @@ struct SourceMeshStreams{
 static bool ParseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const bool includeSkin,
     ScratchVector<MeshVertexRef>& outVertexRefs,
     Core::Alloc::ScratchArena& scratchArena
@@ -47,7 +47,7 @@ static bool ParseSourceVertexRefs(
         const Core::Metascript::Value& value = list[vertexRefIndex];
         if(!value.isList() || value.asList().size() != expectedComponentCount){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
-                , metaKind
+                , metaKind.get()
                 , PathToString<tchar>(nwbFilePath)
                 , vertexRefIndex
                 , expectedComponentCount
@@ -87,7 +87,7 @@ static bool ParseSourceVertexRefs(
     }
 
     if(outVertexRefs.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"), metaKind, PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty"), metaKind.get(), PathToString<tchar>(nwbFilePath));
         return false;
     }
     return true;
@@ -95,7 +95,7 @@ static bool ParseSourceVertexRefs(
 
 static bool ValidateSourceStreamIndex(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const AStringView streamName,
     const u32 index,
     const usize streamCount
@@ -104,7 +104,7 @@ static bool ValidateSourceStreamIndex(
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
-        , metaKind
+        , metaKind.get()
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(streamName)
     );
@@ -113,13 +113,13 @@ static bool ValidateSourceStreamIndex(
 
 static bool ValidateSourceIndexStream(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const usize vertexRefCount
 ){
     if(indices.empty() || (indices.size() % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -129,7 +129,7 @@ static bool ValidateSourceIndexStream(
             continue;
 
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -139,7 +139,7 @@ static bool ValidateSourceIndexStream(
 
 static bool ValidateSourceVertexRefs(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const bool includeSkin,
     const SourceMeshStreams& streams,
     const usize skinCount
@@ -161,7 +161,7 @@ static bool ValidateSourceVertexRefs(
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static vertex_ref cannot contain a skin index")
-                , metaKind
+                , metaKind.get()
                 , PathToString<tchar>(nwbFilePath)
             );
             return false;
@@ -202,7 +202,7 @@ static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
 static bool ParseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const bool includeSkin,
     SourceMeshStreams& streams,
     const usize skinCount,

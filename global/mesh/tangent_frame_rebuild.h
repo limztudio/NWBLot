@@ -242,8 +242,8 @@ template<typename ScratchArenaT>
                 handedness = Vector4Less(bitangentSign, VectorZero()) ? -1.0f : 1.0f;
         }
 
-        StreamFloat(VectorSetW(normal, 0.0f), &vertex.normal);
-        StreamFloat(VectorSetW(tangent, handedness), &vertex.tangent);
+        StreamFloat(VectorSetW(normal, 0.0f), vertex.normal);
+        StreamFloat(VectorSetW(tangent, handedness), vertex.tangent);
         ++result.rebuiltVertexCount;
     }
     StreamFloatFence();

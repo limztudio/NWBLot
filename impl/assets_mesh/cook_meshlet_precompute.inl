@@ -5,7 +5,7 @@
 template<typename CookEntryT>
 [[nodiscard]] static bool PrecomputeMeshletTriangleData(
     const Path& nwbFilePath,
-    const tchar* metaKind,
+    const NotNull<const tchar*> metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const CookEntryT& entry,
     MeshletTrianglePrecompute& outData
@@ -19,7 +19,7 @@ template<typename CookEntryT>
     const usize triangleCount = indices.size() / s_MeshletTriangleIndexCount;
     if(triangleCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': meshlet triangle count exceeds u32 limits")
-            , metaKind
+            , metaKind.get()
             , PathToString<tchar>(nwbFilePath)
         );
         return false;

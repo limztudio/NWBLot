@@ -51,7 +51,7 @@ static_assert(IsNothrowDestructible_V<GpuTimingMeasure>);
 
 static_assert(requires(
     CommandList& commandList,
-    TimerQuery* timerQuery,
+    TimerQuery& timerQuery,
     const TimerQueryRecordingToken& recording
 ){
     { commandList.endTimerQueryFromExistingClaim(timerQuery, recording) } noexcept ->SameAs<bool>;

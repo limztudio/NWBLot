@@ -72,8 +72,8 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     BufferHandle secondUpload = device.createBuffer(uploadDesc);
     ASSERT_TRUE(firstUpload);
     ASSERT_TRUE(secondUpload);
-    const MemoryRequirements firstUploadRequirements = device.getBufferMemoryRequirements(firstUpload.get());
-    const MemoryRequirements secondUploadRequirements = device.getBufferMemoryRequirements(secondUpload.get());
+    const MemoryRequirements firstUploadRequirements = device.getBufferMemoryRequirements(*firstUpload);
+    const MemoryRequirements secondUploadRequirements = device.getBufferMemoryRequirements(*secondUpload);
     ASSERT_GT(firstUploadRequirements.size, 0u);
     ASSERT_GT(secondUploadRequirements.size, 0u);
 
@@ -91,17 +91,17 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     };
     HeapHandle uploadHeap = device.createHeap(uploadHeapDesc);
     ASSERT_TRUE(uploadHeap);
-    if(!device.bindBufferMemory(firstUpload.get(), uploadHeap.get(), 0u))
+    if(!device.bindBufferMemory(*firstUpload, *uploadHeap, 0u))
         GTEST_SKIP() << "Upload heap memory type is incompatible with virtual buffers on this device.";
-    ASSERT_TRUE(device.bindBufferMemory(secondUpload.get(), uploadHeap.get(), secondUploadOffset));
+    ASSERT_TRUE(device.bindBufferMemory(*secondUpload, *uploadHeap, secondUploadOffset));
 
     Heap* const retainedUploadHeap = uploadHeap.get();
     EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 3u);
-    u32* const firstUploadWords = static_cast<u32*>(device.mapBuffer(firstUpload.get(), CpuAccessMode::Write));
-    u32* const secondUploadWords = static_cast<u32*>(device.mapBuffer(secondUpload.get(), CpuAccessMode::Write));
+    u32* const firstUploadWords = static_cast<u32*>(device.mapBuffer(*firstUpload, CpuAccessMode::Write));
+    u32* const secondUploadWords = static_cast<u32*>(device.mapBuffer(*secondUpload, CpuAccessMode::Write));
     ASSERT_NE(firstUploadWords, nullptr);
     ASSERT_NE(secondUploadWords, nullptr);
-    EXPECT_EQ(device.mapBuffer(firstUpload.get(), CpuAccessMode::Write), firstUploadWords);
+    EXPECT_EQ(device.mapBuffer(*firstUpload, CpuAccessMode::Write), firstUploadWords);
     const usize firstUploadAddress = reinterpret_cast<usize>(firstUploadWords);
     const usize secondUploadAddress = reinterpret_cast<usize>(secondUploadWords);
     ASSERT_GE(secondUploadAddress, firstUploadAddress);
@@ -110,14 +110,14 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
         firstUploadWords[wordIndex] = s_FirstWords[wordIndex];
         secondUploadWords[wordIndex] = s_SecondWords[wordIndex];
     }
-    device.unmapBuffer(secondUpload.get());
-    device.unmapBuffer(firstUpload.get());
+    device.unmapBuffer(*secondUpload);
+    device.unmapBuffer(*firstUpload);
 
     u32* const liveSecondUploadWords = static_cast<u32*>(
-        device.mapBuffer(secondUpload.get(), CpuAccessMode::Write)
+        device.mapBuffer(*secondUpload, CpuAccessMode::Write)
     );
     ASSERT_NE(liveSecondUploadWords, nullptr);
-    ASSERT_NE(device.mapBuffer(firstUpload.get(), CpuAccessMode::Write), nullptr);
+    ASSERT_NE(device.mapBuffer(*firstUpload, CpuAccessMode::Write), nullptr);
     firstUpload.reset();
     EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 2u);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondWords); ++wordIndex)
@@ -125,16 +125,16 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
 
     BufferHandle replacementUpload = device.createBuffer(uploadDesc);
     ASSERT_TRUE(replacementUpload);
-    ASSERT_TRUE(device.bindBufferMemory(replacementUpload.get(), uploadHeap.get(), 0u));
+    ASSERT_TRUE(device.bindBufferMemory(*replacementUpload, *uploadHeap, 0u));
     EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 3u);
     u32* const replacementUploadWords = static_cast<u32*>(
-        device.mapBuffer(replacementUpload.get(), CpuAccessMode::Write)
+        device.mapBuffer(*replacementUpload, CpuAccessMode::Write)
     );
     ASSERT_NE(replacementUploadWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_FirstWords); ++wordIndex)
         replacementUploadWords[wordIndex] = s_FirstWords[wordIndex];
-    device.unmapBuffer(replacementUpload.get());
-    device.unmapBuffer(secondUpload.get());
+    device.unmapBuffer(*replacementUpload);
+    device.unmapBuffer(*secondUpload);
     uploadHeap.reset();
     EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 2u);
 
@@ -148,8 +148,8 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     BufferHandle secondReadback = device.createBuffer(readbackDesc);
     ASSERT_TRUE(firstReadback);
     ASSERT_TRUE(secondReadback);
-    const MemoryRequirements firstReadbackRequirements = device.getBufferMemoryRequirements(firstReadback.get());
-    const MemoryRequirements secondReadbackRequirements = device.getBufferMemoryRequirements(secondReadback.get());
+    const MemoryRequirements firstReadbackRequirements = device.getBufferMemoryRequirements(*firstReadback);
+    const MemoryRequirements secondReadbackRequirements = device.getBufferMemoryRequirements(*secondReadback);
     ASSERT_GT(firstReadbackRequirements.size, 0u);
     ASSERT_GT(secondReadbackRequirements.size, 0u);
 
@@ -167,9 +167,9 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     };
     HeapHandle readbackHeap = device.createHeap(readbackHeapDesc);
     ASSERT_TRUE(readbackHeap);
-    if(!device.bindBufferMemory(firstReadback.get(), readbackHeap.get(), 0u))
+    if(!device.bindBufferMemory(*firstReadback, *readbackHeap, 0u))
         GTEST_SKIP() << "Readback heap memory type is incompatible with virtual buffers on this device.";
-    ASSERT_TRUE(device.bindBufferMemory(secondReadback.get(), readbackHeap.get(), secondReadbackOffset));
+    ASSERT_TRUE(device.bindBufferMemory(*secondReadback, *readbackHeap, secondReadbackOffset));
 
     Heap* const retainedReadbackHeap = readbackHeap.get();
     EXPECT_EQ(retainedReadbackHeap->getReferenceCount(), 3u);
@@ -188,16 +188,16 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_TRUE(copyCommandList);
     copyCommandList->open();
     copyCommandList->copyBuffer(
-        firstReadback.get(),
+        *firstReadback,
         0u,
-        replacementUpload.get(),
+        *replacementUpload,
         0u,
         sizeof(s_FirstWords)
     );
     copyCommandList->copyBuffer(
-        secondReadback.get(),
+        *secondReadback,
         0u,
-        secondUpload.get(),
+        *secondUpload,
         0u,
         sizeof(s_SecondWords)
     );
@@ -207,9 +207,9 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_TRUE(directCopyCommandList);
     directCopyCommandList->open();
     ASSERT_TRUE(directCopyCommandList->recordPreflightedCopyBufferDirectVulkan(
-        directReadback.get(),
+        *directReadback,
         0u,
-        replacementUpload.get(),
+        *replacementUpload,
         0u,
         sizeof(s_FirstWords)
     ));
@@ -243,7 +243,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
             readbackMappersReady.count_down();
             readbackMappersReady.wait();
             mappedReadbackWords[mapperIndex] = static_cast<const u32*>(
-                device.mapBuffer(readbackBuffers[mapperIndex], CpuAccessMode::Read)
+                device.mapBuffer(*readbackBuffers[mapperIndex], CpuAccessMode::Read)
             );
         });
     }
@@ -256,7 +256,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_NE(firstReadbackWords, nullptr);
     ASSERT_NE(secondReadbackWords, nullptr);
     ASSERT_NE(directReadbackWords, nullptr);
-    EXPECT_EQ(device.mapBuffer(firstReadback.get(), CpuAccessMode::Read), firstReadbackWords);
+    EXPECT_EQ(device.mapBuffer(*firstReadback, CpuAccessMode::Read), firstReadbackWords);
     const usize firstReadbackAddress = reinterpret_cast<usize>(firstReadbackWords);
     const usize secondReadbackAddress = reinterpret_cast<usize>(secondReadbackWords);
     ASSERT_GE(secondReadbackAddress, firstReadbackAddress);
@@ -266,9 +266,9 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
         EXPECT_EQ(secondReadbackWords[wordIndex], s_SecondWords[wordIndex]);
         EXPECT_EQ(directReadbackWords[wordIndex], s_FirstWords[wordIndex]);
     }
-    device.unmapBuffer(firstReadback.get());
-    device.unmapBuffer(secondReadback.get());
-    device.unmapBuffer(directReadback.get());
+    device.unmapBuffer(*firstReadback);
+    device.unmapBuffer(*secondReadback);
+    device.unmapBuffer(*directReadback);
 }
 
 TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHostSynchronized){
@@ -301,7 +301,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         slice.setArraySlice(arraySlice);
         usize rowPitch = 0u;
         u8* const mappedBytes = static_cast<u8*>(
-            device.mapStagingTexture(upload.get(), slice, CpuAccessMode::Write, &rowPitch)
+            device.mapStagingTexture(*upload, slice, CpuAccessMode::Write, &rowPitch)
         );
         ASSERT_NE(mappedBytes, nullptr);
         ASSERT_GE(rowPitch, static_cast<usize>(s_Width) * sizeof(u32));
@@ -310,7 +310,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
             for(u32 column = 0u; column < s_Width; ++column)
                 mappedRow[column] = s_SlicePixels[arraySlice];
         }
-        device.unmapStagingTexture(upload.get());
+        device.unmapStagingTexture(*upload);
     }
 
     const TextureSlice firstSlice = TextureSlice().setArraySlice(0u);
@@ -319,9 +319,9 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         ASSERT_TRUE(invalidCommandList);
         invalidCommandList->open();
         if(writeStagingDestination)
-            invalidCommandList->copyTexture(upload.get(), firstSlice, texture.get(), firstSlice);
+            invalidCommandList->copyTexture(*upload, firstSlice, *texture, firstSlice);
         else
-            invalidCommandList->copyTexture(texture.get(), firstSlice, readback.get(), firstSlice);
+            invalidCommandList->copyTexture(*texture, firstSlice, *readback, firstSlice);
         EXPECT_TRUE(invalidCommandList->commandRecordingFailed());
         invalidCommandList->close();
         EXPECT_FALSE(invalidCommandList->hasCommandBuffer());
@@ -340,7 +340,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
     for(u32 arraySlice = 0u; arraySlice < s_ArraySize; ++arraySlice){
         TextureSlice slice;
         slice.setArraySlice(arraySlice);
-        uploadCommandList->copyTexture(texture.get(), slice, upload.get(), slice);
+        uploadCommandList->copyTexture(*texture, slice, *upload, slice);
     }
     uploadCommandList->close();
     ASSERT_FALSE(uploadCommandList->commandRecordingFailed());
@@ -351,7 +351,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
     for(u32 arraySlice = 0u; arraySlice < s_ArraySize; ++arraySlice){
         TextureSlice slice;
         slice.setArraySlice(arraySlice);
-        readbackCommandList->copyTexture(readback.get(), slice, texture.get(), slice);
+        readbackCommandList->copyTexture(*readback, slice, *texture, slice);
     }
     readbackCommandList->close();
     ASSERT_FALSE(readbackCommandList->commandRecordingFailed());
@@ -371,7 +371,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
         slice.setArraySlice(arraySlice);
         usize rowPitch = 0u;
         const u8* const mappedBytes = static_cast<const u8*>(
-            device.mapStagingTexture(readback.get(), slice, CpuAccessMode::Read, &rowPitch)
+            device.mapStagingTexture(*readback, slice, CpuAccessMode::Read, &rowPitch)
         );
         ASSERT_NE(mappedBytes, nullptr);
         ASSERT_GE(rowPitch, static_cast<usize>(s_Width) * sizeof(u32));
@@ -382,7 +382,7 @@ TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHos
             for(u32 column = 0u; column < s_Width; ++column)
                 EXPECT_EQ(mappedRow[column], s_SlicePixels[arraySlice]);
         }
-        device.unmapStagingTexture(readback.get());
+        device.unmapStagingTexture(*readback);
     }
 }
 
@@ -417,15 +417,12 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
         .setCpuAccess(CpuAccessMode::Read)
     ;
     expectDiagnosticRejection([&](){ return device.createBuffer(volatileReadDesc).get() != nullptr; });
-    expectDiagnosticRejection([&](){ return device.mapBuffer(nullptr, CpuAccessMode::Write) != nullptr; });
-    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(nullptr); });
-
     BufferHandle noCpuBuffer = device.createBuffer(BufferDesc().setByteSize(256u));
     ASSERT_TRUE(noCpuBuffer);
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(noCpuBuffer.get(), CpuAccessMode::Read) != nullptr;
+        return device.mapBuffer(*noCpuBuffer, CpuAccessMode::Read) != nullptr;
     });
-    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(noCpuBuffer.get()); });
+    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(*noCpuBuffer); });
 
     const BufferDesc managedOwnerDesc = BufferDesc()
         .setByteSize(256u)
@@ -455,11 +452,11 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     EXPECT_TRUE(device.isBufferReadyForGpuUse(managedOwner.get()));
     EXPECT_EQ(managedOwner->getNativeHandle(GraphicsBackend::ObjectTypes::VK_Buffer), managedNativeBuffer);
     u32* const managedOwnerWords = static_cast<u32*>(
-        device.mapBuffer(managedOwner.get(), CpuAccessMode::Write)
+        device.mapBuffer(*managedOwner, CpuAccessMode::Write)
     );
     ASSERT_NE(managedOwnerWords, nullptr);
     managedOwnerWords[0u] = 0x1234abcdu;
-    device.unmapBuffer(managedOwner.get());
+    device.unmapBuffer(*managedOwner);
 
     const BufferDesc writeDesc = BufferDesc()
         .setByteSize(256u)
@@ -469,10 +466,10 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     BufferHandle writeBuffer = device.createBuffer(writeDesc);
     ASSERT_TRUE(writeBuffer);
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(writeBuffer.get(), CpuAccessMode::Write) != nullptr;
+        return device.mapBuffer(*writeBuffer, CpuAccessMode::Write) != nullptr;
     });
-    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(writeBuffer.get()); });
-    const MemoryRequirements writeRequirements = device.getBufferMemoryRequirements(writeBuffer.get());
+    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(*writeBuffer); });
+    const MemoryRequirements writeRequirements = device.getBufferMemoryRequirements(*writeBuffer);
     ASSERT_GT(writeRequirements.size, 0u);
     const HeapDesc wrongWriteHeapDesc{
         .capacity = writeRequirements.size,
@@ -489,27 +486,27 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ASSERT_TRUE(wrongWriteHeap);
     ASSERT_TRUE(writeHeap);
     expectDiagnosticRejection([&](){
-        return device.bindBufferMemory(writeBuffer.get(), wrongWriteHeap.get(), 0u);
+        return device.bindBufferMemory(*writeBuffer, *wrongWriteHeap, 0u);
     });
-    if(!device.bindBufferMemory(writeBuffer.get(), writeHeap.get(), 0u))
+    if(!device.bindBufferMemory(*writeBuffer, *writeHeap, 0u))
         GTEST_SKIP() << "Upload heap memory type is incompatible with virtual buffers on this device.";
 
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(writeBuffer.get(), CpuAccessMode::None) != nullptr;
+        return device.mapBuffer(*writeBuffer, CpuAccessMode::None) != nullptr;
     });
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(writeBuffer.get(), CpuAccessMode::Read) != nullptr;
+        return device.mapBuffer(*writeBuffer, CpuAccessMode::Read) != nullptr;
     });
     expectDiagnosticRejection([&](){
         return device.mapBuffer(
-            writeBuffer.get(),
+            *writeBuffer,
             static_cast<CpuAccessMode::Enum>(UINT8_MAX)
         ) != nullptr;
     });
-    u32* const writeWords = static_cast<u32*>(device.mapBuffer(writeBuffer.get(), CpuAccessMode::Write));
+    u32* const writeWords = static_cast<u32*>(device.mapBuffer(*writeBuffer, CpuAccessMode::Write));
     ASSERT_NE(writeWords, nullptr);
     writeWords[0u] = 0xabcdef01u;
-    device.unmapBuffer(writeBuffer.get());
+    device.unmapBuffer(*writeBuffer);
 
     const BufferDesc readDesc = BufferDesc()
         .setByteSize(256u)
@@ -518,7 +515,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ;
     BufferHandle readBuffer = device.createBuffer(readDesc);
     ASSERT_TRUE(readBuffer);
-    const MemoryRequirements readRequirements = device.getBufferMemoryRequirements(readBuffer.get());
+    const MemoryRequirements readRequirements = device.getBufferMemoryRequirements(*readBuffer);
     ASSERT_GT(readRequirements.size, 0u);
     const HeapDesc wrongReadHeapDesc{
         .capacity = readRequirements.size,
@@ -535,15 +532,15 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ASSERT_TRUE(wrongReadHeap);
     ASSERT_TRUE(readHeap);
     expectDiagnosticRejection([&](){
-        return device.bindBufferMemory(readBuffer.get(), wrongReadHeap.get(), 0u);
+        return device.bindBufferMemory(*readBuffer, *wrongReadHeap, 0u);
     });
-    if(!device.bindBufferMemory(readBuffer.get(), readHeap.get(), 0u))
+    if(!device.bindBufferMemory(*readBuffer, *readHeap, 0u))
         GTEST_SKIP() << "Readback heap memory type is incompatible with virtual buffers on this device.";
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(readBuffer.get(), CpuAccessMode::Write) != nullptr;
+        return device.mapBuffer(*readBuffer, CpuAccessMode::Write) != nullptr;
     });
-    ASSERT_NE(device.mapBuffer(readBuffer.get(), CpuAccessMode::Read), nullptr);
-    device.unmapBuffer(readBuffer.get());
+    ASSERT_NE(device.mapBuffer(*readBuffer, CpuAccessMode::Read), nullptr);
+    device.unmapBuffer(*readBuffer);
 
     HeadlessGraphicsScope foreignScope;
     ASSERT_TRUE(foreignScope.initialize());
@@ -553,11 +550,11 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     );
     ASSERT_TRUE(foreignBuffer);
     expectDiagnosticRejection([&](){
-        return device.mapBuffer(foreignBuffer.get(), CpuAccessMode::Write) != nullptr;
+        return device.mapBuffer(*foreignBuffer, CpuAccessMode::Write) != nullptr;
     });
-    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(foreignBuffer.get()); });
-    ASSERT_NE(foreignDevice.mapBuffer(foreignBuffer.get(), CpuAccessMode::Write), nullptr);
-    foreignDevice.unmapBuffer(foreignBuffer.get());
+    expectDiagnosticVoidRejection([&](){ device.unmapBuffer(*foreignBuffer); });
+    ASSERT_NE(foreignDevice.mapBuffer(*foreignBuffer, CpuAccessMode::Write), nullptr);
+    foreignDevice.unmapBuffer(*foreignBuffer);
 }
 
 

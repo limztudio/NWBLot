@@ -210,8 +210,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkeletonBinaryPayload::s_SkeletonMagic,
-        NWB_TEXT("Skeleton::loadBinary"),
-        NWB_TEXT("skeleton")
+        MakeNotNull(NWB_TEXT("Skeleton::loadBinary")),
+        MakeNotNull(NWB_TEXT("skeleton"))
     ))
         return false;
 
@@ -221,8 +221,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.jointCount,
         jointBinaries,
-        NWB_TEXT("Skeleton::loadBinary"),
-        NWB_TEXT("joints")
+        MakeNotNull(NWB_TEXT("Skeleton::loadBinary")),
+        MakeNotNull(NWB_TEXT("joints"))
     ))
         return false;
 
@@ -241,7 +241,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     rebuildHierarchy();
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, MakeNotNull(NWB_TEXT("Skeleton::loadBinary")))
         && validatePayload()
     ;
 }

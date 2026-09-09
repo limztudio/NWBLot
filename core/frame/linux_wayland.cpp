@@ -804,9 +804,9 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
     }
 }
 
-static bool RoundtripDisplay(wl_display* display, const tchar* operation){
+static bool RoundtripDisplay(wl_display* display, const NotNull<const tchar*> operation){
     if(wl_display_roundtrip(display) == -1){
-        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland {} failed"), operation);
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland {} failed"), operation.get());
         return false;
     }
     return true;
@@ -906,7 +906,7 @@ static void ProcessKeyRepeat(WaylandContext& context){
 
 
 bool InitWaylandFrame(Frame& frame){
-    const char* AppName = frame.windowTitleOrDefault();
+    const char* AppName = frame.windowTitleOrDefault().get();
 
     auto& frameData = frame.data<Common::LinuxFrame>();
 
@@ -939,7 +939,7 @@ bool InitWaylandFrame(Frame& frame){
     }
     wl_registry_add_listener(context->registry, &s_RegistryListener, context);
 
-    if(!RoundtripDisplay(context->display, NWB_TEXT("registry roundtrip"))){
+    if(!RoundtripDisplay(context->display, MakeNotNull(NWB_TEXT("registry roundtrip")))){
         CleanupWaylandFrame(frame);
         return false;
     }
@@ -1001,7 +1001,7 @@ bool InitWaylandFrame(Frame& frame){
     }
 
     for(u32 i = 0; i < s_InitialConfigureRoundtripLimit && !context->configured; ++i){
-        if(!RoundtripDisplay(context->display, NWB_TEXT("initial configure roundtrip"))){
+        if(!RoundtripDisplay(context->display, MakeNotNull(NWB_TEXT("initial configure roundtrip")))){
             CleanupWaylandFrame(frame);
             return false;
         }

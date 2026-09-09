@@ -146,7 +146,7 @@ namespace ECSRenderDetail{
     for(u32 attachmentIndex = 0u; attachmentIndex < NWB_MESH_GBUFFER_TARGET_COUNT; ++attachmentIndex)
         renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = Core::RenderPassLoadAction::Clear;
     renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;
-    commandList.beginRenderPass(deferredTargets.framebuffer.get(), renderPassParameters);
+    commandList.beginRenderPass(*deferredTargets.framebuffer, renderPassParameters);
 
     if(deferredResourcesReady){
         const MaterialPassDrawContext opaqueDrawContext{

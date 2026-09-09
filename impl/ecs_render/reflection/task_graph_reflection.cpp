@@ -99,7 +99,7 @@ struct UploadParametersTask{
         parameters.sampleBaseY = sampleBase.y;
         // The immutable frame value is copied into command-list staging here, after the shared scene preparation
         // outcome is known. An unavailable scene cannot enqueue work or bind its stale TLAS generation.
-        commandList.writeBuffer(payload.buffer.get(), &parameters, sizeof(parameters));
+        commandList.writeBuffer(*payload.buffer, &parameters, sizeof(parameters));
         return true;
     }
 };
@@ -251,7 +251,7 @@ struct StatisticsReadbackTask{
         )
             return false;
         commandList.endRenderPass();
-        commandList.copyBuffer(payload.destination.get(), 0u, payload.source.get(), 0u, NWB_REFLECTION_COUNTER_SIZE);
+        commandList.copyBuffer(*payload.destination, 0u, *payload.source, 0u, NWB_REFLECTION_COUNTER_SIZE);
         return !commandList.commandRecordingFailed();
     }
 

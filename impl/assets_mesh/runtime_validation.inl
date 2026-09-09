@@ -25,7 +25,7 @@
     const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices,
     const usize skinCount,
     const bool skinRequired,
-    const tchar* contextText,
+    const NotNull<const tchar*> contextText,
     const TStringView meshPathText
 ){
     if(!ValidateMeshStreams(positions, normals, tangents, uv0, colors, contextText, meshPathText))
@@ -55,7 +55,7 @@ template<typename MeshGeometryPayloadT>
     const MeshGeometryPayloadT& payload,
     const usize skinCount,
     const bool skinRequired,
-    const tchar* contextText,
+    const NotNull<const tchar*> contextText,
     const TStringView meshPathText
 ){
     return ValidateSharedMeshPayload(

@@ -834,7 +834,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             return;
         }
 
-        auto* mappedTransforms = static_cast<u8*>(m_device.mapBuffer(transformBuffer.get(), CpuAccessMode::Write));
+        auto* mappedTransforms = static_cast<u8*>(m_device.mapBuffer(*transformBuffer, CpuAccessMode::Write));
         if(!mappedTransforms){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map BLAS transform buffer"));
             return;
@@ -851,7 +851,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             ++transformIndex;
         }
 
-        m_device.unmapBuffer(transformBuffer.get());
+        m_device.unmapBuffer(*transformBuffer);
 
         transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformBuffer.get());
         if(transformBaseAddress == 0u || transformBaseAddress % 16u != 0u){
@@ -1209,7 +1209,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
     }
 
-    auto* mappedInstanceData = static_cast<u8*>(m_device.mapBuffer(instanceBuffer.get(), CpuAccessMode::Write));
+    auto* mappedInstanceData = static_cast<u8*>(m_device.mapBuffer(*instanceBuffer, CpuAccessMode::Write));
     if(!mappedInstanceData){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to map TLAS instance buffer"));
@@ -1255,7 +1255,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
             buildVkInstance(i);
     }
 
-    m_device.unmapBuffer(instanceBuffer.get());
+    m_device.unmapBuffer(*instanceBuffer);
 
     if(!buildTopLevelAccelStructFromInstanceData(
         *as,

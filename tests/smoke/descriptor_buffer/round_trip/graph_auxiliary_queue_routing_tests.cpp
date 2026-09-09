@@ -426,11 +426,11 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics]
     );
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -582,11 +582,11 @@ TEST_F(DescriptorBufferRoundTripTest, ForcedTimingQueueOverrideRoutesNativeGraph
     EXPECT_EQ(acceptedToken.queue, CommandQueue::Graphics);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const clearedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(clearedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < s_WordCount; ++wordIndex)
         EXPECT_EQ(clearedWords[wordIndex], s_ClearValue);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 
@@ -817,11 +817,11 @@ TEST_F(DescriptorBufferRoundTripTest, CrossFamilySameClassGraphicsQueuesRouteWit
     ));
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(destination.get(), CpuAccessMode::Read));
+    const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*destination, CpuAccessMode::Read));
     ASSERT_NE(copiedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SourceWords); ++wordIndex)
         EXPECT_EQ(copiedWords[wordIndex], s_SourceWords[wordIndex]);
-    device.unmapBuffer(destination.get());
+    device.unmapBuffer(*destination);
 }
 
 

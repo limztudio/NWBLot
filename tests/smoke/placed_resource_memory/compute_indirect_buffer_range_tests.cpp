@@ -119,8 +119,8 @@ TEST_F(ComputeIndirectBufferRangeTest, DispatchConsumesOnlySelectedArgumentsAndP
 
     commands->open();
     commands->beginTrackingBufferState(buffer.get(), ResourceStates::Common);
-    ASSERT_TRUE(commands->tryWriteBuffer(buffer.get(), &arguments, sizeof(arguments), s_FirstOffset));
-    ASSERT_TRUE(commands->tryWriteBuffer(buffer.get(), &arguments, sizeof(arguments), s_SecondOffset));
+    ASSERT_TRUE(commands->tryWriteBuffer(*buffer, &arguments, sizeof(arguments), s_FirstOffset));
+    ASSERT_TRUE(commands->tryWriteBuffer(*buffer, &arguments, sizeof(arguments), s_SecondOffset));
     commands->setBufferState(buffer.get(), ResourceStates::ShaderResource, false, prefixRange);
     commands->setBufferState(buffer.get(), ResourceStates::UnorderedAccess, false, suffixRange);
     commands->commitBarriers();
@@ -155,7 +155,7 @@ TEST_F(ComputeIndirectBufferRangeTest, DispatchConsumesOnlySelectedArgumentsAndP
     EXPECT_EQ(capture.barriers[0u].offset, secondRange.byteOffset);
     EXPECT_EQ(capture.barriers[0u].size, secondRange.byteSize);
 
-    ASSERT_TRUE(commands->tryWriteBuffer(buffer.get(), &arguments, sizeof(arguments), s_FirstOffset));
+    ASSERT_TRUE(commands->tryWriteBuffer(*buffer, &arguments, sizeof(arguments), s_FirstOffset));
     commands->commitBarriers();
     capture.barriers.clear();
     commands->dispatchIndirect(s_FirstOffset);

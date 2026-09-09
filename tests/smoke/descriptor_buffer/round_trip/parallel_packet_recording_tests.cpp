@@ -297,16 +297,16 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingW
     EXPECT_TRUE(secondAcceptedToken.valid());
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const firstWords = static_cast<const u32*>(device.mapBuffer(firstDestination.get(), CpuAccessMode::Read));
-    const u32* const secondWords = static_cast<const u32*>(device.mapBuffer(secondDestination.get(), CpuAccessMode::Read));
+    const u32* const firstWords = static_cast<const u32*>(device.mapBuffer(*firstDestination, CpuAccessMode::Read));
+    const u32* const secondWords = static_cast<const u32*>(device.mapBuffer(*secondDestination, CpuAccessMode::Read));
     ASSERT_NE(firstWords, nullptr);
     ASSERT_NE(secondWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_FirstWords); ++wordIndex){
         EXPECT_EQ(firstWords[wordIndex], s_FirstWords[wordIndex]);
         EXPECT_EQ(secondWords[wordIndex], s_SecondWords[wordIndex]);
     }
-    device.unmapBuffer(firstDestination.get());
-    device.unmapBuffer(secondDestination.get());
+    device.unmapBuffer(*firstDestination);
+    device.unmapBuffer(*secondDestination);
 }
 
 

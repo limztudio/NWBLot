@@ -22,11 +22,11 @@ namespace __hidden_telemetry_recorder_churn_tests{
 using namespace TelemetryTestDetail;
 namespace Perf = NWB::Core::Perf;
 
-void RecordUnsignedProperty(const char* key, const u64 value){
+void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char buffer[32u] = {};
     const AStringView formatted = FormatDecimal(value, buffer);
     buffer[formatted.size()] = '\0';
-    testing::Test::RecordProperty(key, buffer);
+    testing::Test::RecordProperty(key.get(), buffer);
 }
 
 [[nodiscard]] bool AppendMemoryFrame(
@@ -98,9 +98,9 @@ void RunRecorderChurn(const u32 ownerCount){
 
     testing::Test::RecordProperty("owner_count", ownerCount);
     testing::Test::RecordProperty("frame_count", s_FrameCount);
-    RecordUnsignedProperty("record_clear_ns", nanoseconds);
-    RecordUnsignedProperty("allocation_count", after.allocationCount - before.allocationCount);
-    RecordUnsignedProperty("deallocation_count", after.deallocationCount - before.deallocationCount);
+    RecordUnsignedProperty(MakeNotNull("record_clear_ns"), nanoseconds);
+    RecordUnsignedProperty(MakeNotNull("allocation_count"), after.allocationCount - before.allocationCount);
+    RecordUnsignedProperty(MakeNotNull("deallocation_count"), after.deallocationCount - before.deallocationCount);
 }
 
 // Each frame mirrors automatic memory-event capture followed by successful-upload clear; opt in explicitly.

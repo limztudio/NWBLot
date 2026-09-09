@@ -28,8 +28,8 @@ void BuildDefaultSceneViewBasisVectors(SIMDVector& outRight, SIMDVector& outUp, 
     SIMDVector sinAngles;
     SIMDVector cosAngles;
     VectorSinCos(
-        &sinAngles,
-        &cosAngles,
+        sinAngles,
+        cosAngles,
         VectorSet(s_DefaultSceneViewYaw, s_DefaultSceneViewPitch, 0.0f, 0.0f)
     );
 
@@ -75,10 +75,10 @@ SceneViewBasis BuildDefaultSceneViewBasis(){
     SIMDVector up;
     SIMDVector forward;
     __hidden_scene::BuildDefaultSceneViewBasisVectors(right, up, forward);
-    StoreFloat(right, &basis.right);
-    StoreFloat(up, &basis.up);
-    StoreFloat(forward, &basis.forward);
-    StoreFloat(VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene::s_DefaultSceneViewDepthOffset), &basis.positionDepthBias);
+    StoreFloat(right, basis.right);
+    StoreFloat(up, basis.up);
+    StoreFloat(forward, basis.forward);
+    StoreFloat(VectorSet(0.0f, 0.0f, 0.0f, __hidden_scene::s_DefaultSceneViewDepthOffset), basis.positionDepthBias);
     return basis;
 }
 
@@ -88,10 +88,10 @@ SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector r
     SIMDVector up;
     SIMDVector forward;
     __hidden_scene::BuildSceneViewBasisVectors(rotation, right, up, forward);
-    StoreFloat(right, &basis.right);
-    StoreFloat(up, &basis.up);
-    StoreFloat(forward, &basis.forward);
-    StoreFloat(position, &basis.positionDepthBias);
+    StoreFloat(right, basis.right);
+    StoreFloat(up, basis.up);
+    StoreFloat(forward, basis.forward);
+    StoreFloat(position, basis.positionDepthBias);
     return basis;
 }
 

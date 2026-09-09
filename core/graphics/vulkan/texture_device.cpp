@@ -173,13 +173,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
     return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-MemoryRequirements Device::getTextureMemoryRequirements(Texture* textureResource){
-    if(!textureResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture is null"));
-        return {};
-    }
-
-    Texture& texture = *textureResource;
+MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get texture memory requirements: texture belongs to another device"));
         return {};
@@ -208,16 +202,7 @@ MemoryRequirements Device::getTextureMemoryRequirements(Texture* textureResource
     return result;
 }
 
-bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset){
-    if(!textureResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture is null"));
-        return false;
-    }
-    if(!heap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap is null"));
-        return false;
-    }
-    Texture& texture = *textureResource;
+bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     if(&texture.m_context != &m_context || &texture.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture belongs to another device"));
         return false;
@@ -231,7 +216,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
         return false;
     }
 
-    Heap& memoryHeap = *heap;
+    Heap& memoryHeap = heap;
     if(&memoryHeap.m_context != &m_context || &memoryHeap.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap belongs to another device"));
         return false;
@@ -240,7 +225,7 @@ bool Device::bindTextureMemory(Texture* textureResource, Heap* heap, u64 offset)
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: heap is invalid"));
         return false;
     }
-    HeapHandle retainedHeap(heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
+    HeapHandle retainedHeap(&heap, HeapHandle::deleter_type(&memoryHeap.m_context.objectArena));
     NothrowScopedLock resourceLock(texture.m_memoryBindingMutex);
     if(texture.m_boundHeap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: texture memory was already bound"));

@@ -127,15 +127,11 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
     };
 
     enum class Operation : u8{
-        NullColorFull,
-        NullColorBox,
         EmptyColorFullRange,
         OutOfRangeColorBox,
         FloatOnIntegerFull,
         IntegerOnFloatBox,
         ColorOnDepthFull,
-        NullDepthFull,
-        NullDepthBox,
         EmptyDepthFullRange,
         StencilOnDepthOnlyFull,
         DepthOnColorFull,
@@ -151,15 +147,11 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
         ForeignDepthBox,
     };
     constexpr Operation s_Operations[] = {
-        Operation::NullColorFull,
-        Operation::NullColorBox,
         Operation::EmptyColorFullRange,
         Operation::OutOfRangeColorBox,
         Operation::FloatOnIntegerFull,
         Operation::IntegerOnFloatBox,
         Operation::ColorOnDepthFull,
-        Operation::NullDepthFull,
-        Operation::NullDepthBox,
         Operation::EmptyDepthFullRange,
         Operation::StencilOnDepthOnlyFull,
         Operation::DepthOnColorFull,
@@ -228,11 +220,6 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
         case Operation::DepthOnColorFull:
             target = colorTexture.get();
             break;
-        case Operation::NullColorFull:
-        case Operation::NullColorBox:
-        case Operation::NullDepthFull:
-        case Operation::NullDepthBox:
-            break;
         }
 
         commandList->open();
@@ -273,49 +260,29 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
         }
 
         switch(operation){
-        case Operation::NullColorFull:
-            commandList->clearTextureFloat(nullptr, s_AllSubresources, Color(0.f));
-            break;
-        case Operation::NullColorBox:
-            commandList->clearTextureBoxFloat(nullptr, s_AllSubresources, s_PartialBox, Color(0.f));
-            break;
         case Operation::EmptyColorFullRange:
-            commandList->clearTextureFloat(colorTexture.get(), s_EmptySubresources, Color(0.f));
+            commandList->clearTextureFloat(*colorTexture, s_EmptySubresources, Color(0.f));
             break;
         case Operation::OutOfRangeColorBox:
             commandList->clearTextureBoxFloat(
-                colorTexture.get(),
+                *colorTexture,
                 s_InactiveMipSubresources,
                 s_PartialBox,
                 Color(0.f)
             );
             break;
         case Operation::FloatOnIntegerFull:
-            commandList->clearTextureFloat(integerTexture.get(), s_AllSubresources, Color(0.f));
+            commandList->clearTextureFloat(*integerTexture, s_AllSubresources, Color(0.f));
             break;
         case Operation::IntegerOnFloatBox:
-            commandList->clearTextureBoxUInt(colorTexture.get(), s_AllSubresources, s_PartialBox, UIntColor(1u));
+            commandList->clearTextureBoxUInt(*colorTexture, s_AllSubresources, s_PartialBox, UIntColor(1u));
             break;
         case Operation::ColorOnDepthFull:
-            commandList->clearTextureFloat(depthTexture.get(), s_AllSubresources, Color(0.f));
-            break;
-        case Operation::NullDepthFull:
-            commandList->clearDepthStencilTexture(nullptr, s_AllSubresources, true, 0.5f, false, 0u);
-            break;
-        case Operation::NullDepthBox:
-            commandList->clearDepthStencilTextureBox(
-                nullptr,
-                s_AllSubresources,
-                s_PartialBox,
-                true,
-                0.5f,
-                false,
-                0u
-            );
+            commandList->clearTextureFloat(*depthTexture, s_AllSubresources, Color(0.f));
             break;
         case Operation::EmptyDepthFullRange:
             commandList->clearDepthStencilTexture(
-                depthTexture.get(),
+                *depthTexture,
                 s_EmptySubresources,
                 true,
                 0.5f,
@@ -325,7 +292,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             break;
         case Operation::StencilOnDepthOnlyFull:
             commandList->clearDepthStencilTexture(
-                depthTexture.get(),
+                *depthTexture,
                 s_AllSubresources,
                 false,
                 Limit<f32>::s_QuietNaN,
@@ -335,7 +302,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             break;
         case Operation::DepthOnColorFull:
             commandList->clearDepthStencilTexture(
-                colorTexture.get(),
+                *colorTexture,
                 s_AllSubresources,
                 true,
                 0.5f,
@@ -344,37 +311,37 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             );
             break;
         case Operation::ActiveUnrelatedFull:
-            commandList->clearTextureFloat(colorTexture.get(), s_AllSubresources, Color(0.f));
+            commandList->clearTextureFloat(*colorTexture, s_AllSubresources, Color(0.f));
             break;
         case Operation::ActiveUnrelatedBox:
             commandList->clearTextureBoxFloat(
-                colorTexture.get(),
+                *colorTexture,
                 s_AllSubresources,
                 s_PartialBox,
                 Color(0.f)
             );
             break;
         case Operation::ActiveSubresource:
-            commandList->clearTextureFloat(activeColorTexture.get(), s_InactiveMipSubresources, Color(0.f));
+            commandList->clearTextureFloat(*activeColorTexture, s_InactiveMipSubresources, Color(0.f));
             break;
         case Operation::ActiveReadOnly:
         case Operation::ActiveOutOfArea:
-            commandList->clearTextureFloat(activeColorTexture.get(), s_ActiveSubresources, Color(0.f));
+            commandList->clearTextureFloat(*activeColorTexture, s_ActiveSubresources, Color(0.f));
             break;
         case Operation::PartialMultisampleBox:
             commandList->clearTextureBoxFloat(
-                multisampleTexture.get(),
+                *multisampleTexture,
                 s_AllSubresources,
                 s_PartialBox,
                 Color(0.5f)
             );
             break;
         case Operation::ForeignColorFull:
-            commandList->clearTextureFloat(foreignColorTexture.get(), s_AllSubresources, Color(0.f));
+            commandList->clearTextureFloat(*foreignColorTexture, s_AllSubresources, Color(0.f));
             break;
         case Operation::ForeignColorBox:
             commandList->clearTextureBoxFloat(
-                foreignColorTexture.get(),
+                *foreignColorTexture,
                 s_AllSubresources,
                 s_PartialBox,
                 Color(0.f)
@@ -382,7 +349,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             break;
         case Operation::ForeignDepthFull:
             commandList->clearDepthStencilTexture(
-                foreignDepthTexture.get(),
+                *foreignDepthTexture,
                 s_AllSubresources,
                 true,
                 0.5f,
@@ -392,7 +359,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             break;
         case Operation::ForeignDepthBox:
             commandList->clearDepthStencilTextureBox(
-                foreignDepthTexture.get(),
+                *foreignDepthTexture,
                 s_AllSubresources,
                 s_PartialBox,
                 true,
@@ -436,30 +403,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
     commandList->open();
     const usize referencesBeforeNoOps = colorTexture->getReferenceCount();
     commandList->clearTextureBoxFloat(
-        nullptr,
-        s_AllSubresources,
-        Box(0, 0, 0, 0, 0, 0),
-        Color(0.f)
-    );
-    commandList->clearDepthStencilTexture(
-        nullptr,
-        s_AllSubresources,
-        false,
-        Limit<f32>::s_QuietNaN,
-        false,
-        0u
-    );
-    commandList->clearDepthStencilTextureBox(
-        nullptr,
-        s_AllSubresources,
-        Box(0, 0, 0, 0, 0, 0),
-        true,
-        0.5f,
-        false,
-        0u
-    );
-    commandList->clearTextureBoxFloat(
-        colorTexture.get(),
+        *colorTexture,
         s_AllSubresources,
         Box(8, 9, 8, 9, 0, 1),
         Color(0.f)
@@ -470,7 +414,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
     ;
     if(multisampleTexture){
         commandList->clearTextureBoxFloat(
-            multisampleTexture.get(),
+            *multisampleTexture,
             s_AllSubresources,
             Box(8, 9, 8, 9, 0, 1),
             Color(0.f)
@@ -491,7 +435,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
     if(multisampleTexture){
         commandList->open();
         const usize referencesBeforeFullMultisampleClear = multisampleTexture->getReferenceCount();
-        commandList->clearTextureFloat(multisampleTexture.get(), s_AllSubresources, Color(0.25f));
+        commandList->clearTextureFloat(*multisampleTexture, s_AllSubresources, Color(0.25f));
         EXPECT_FALSE(commandList->commandRecordingFailed());
         EXPECT_EQ(multisampleTexture->getReferenceCount(), referencesBeforeFullMultisampleClear + 1u);
         EXPECT_EQ(
@@ -516,7 +460,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
         if(depthStencilTexture){
             commandList->open();
             commandList->clearDepthStencilTexture(
-                depthStencilTexture.get(),
+                *depthStencilTexture,
                 s_AllSubresources,
                 false,
                 Limit<f32>::s_QuietNaN,
@@ -536,7 +480,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
         commandList->setGraphicsState(GraphicsState().setFramebuffer(depthFramebuffer.get()));
         ASSERT_TRUE(commandList->isRenderPassActive());
         commandList->clearDepthStencilTexture(
-            depthTexture.get(),
+            *depthTexture,
             s_AllSubresources,
             true,
             2.0f,
@@ -544,7 +488,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             0u
         );
         commandList->clearDepthStencilTextureBox(
-            depthTexture.get(),
+            *depthTexture,
             s_AllSubresources,
             s_PartialBox,
             true,
@@ -552,7 +496,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
             false,
             0u
         );
-        commandList->copyTexture(depthReadback.get(), TextureSlice(), depthTexture.get(), TextureSlice());
+        commandList->copyTexture(*depthReadback, TextureSlice(), *depthTexture, TextureSlice());
         ASSERT_FALSE(commandList->commandRecordingFailed());
         commandList->close();
         ASSERT_TRUE(commandList->hasCommandBuffer());
@@ -561,7 +505,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
 
         usize depthRowPitch = 0u;
         const u8* const depthReadbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-            depthReadback.get(),
+            *depthReadback,
             TextureSlice(),
             CpuAccessMode::Read,
             &depthRowPitch
@@ -580,18 +524,18 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
                 EXPECT_FLOAT_EQ(actualDepth, insideClear ? 0.0f : 1.0f);
             }
         }
-        device.unmapStagingTexture(depthReadback.get());
+        device.unmapStagingTexture(*depthReadback);
     }
 
     commandList->open();
-    commandList->clearTextureFloat(colorTexture.get(), s_AllSubresources, Color(0.f));
+    commandList->clearTextureFloat(*colorTexture, s_AllSubresources, Color(0.f));
     commandList->clearTextureBoxFloat(
-        colorTexture.get(),
+        *colorTexture,
         s_AllSubresources,
         s_PartialBox,
         Color(0.25f, 0.5f, 0.75f, 1.f)
     );
-    commandList->copyTexture(colorReadback.get(), TextureSlice(), colorTexture.get(), TextureSlice());
+    commandList->copyTexture(*colorReadback, TextureSlice(), *colorTexture, TextureSlice());
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());
@@ -600,7 +544,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
 
     usize rowPitch = 0u;
     const u8* const readbackBytes = static_cast<const u8*>(device.mapStagingTexture(
-        colorReadback.get(),
+        *colorReadback,
         TextureSlice(),
         CpuAccessMode::Read,
         &rowPitch
@@ -616,7 +560,7 @@ TEST_F(DescriptorBufferRoundTripTest, TextureClearPreflightRejectsAtomicallyAndR
                 EXPECT_EQ(pixel[channel], insideClear ? s_ExpectedClear[channel] : 0u);
         }
     }
-    device.unmapStagingTexture(colorReadback.get());
+    device.unmapStagingTexture(*colorReadback);
 }
 
 
@@ -677,7 +621,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
 
     commandList->open();
     commandList->beginTrackingBufferState(barrierBuffer.get(), ResourceStates::Common);
-    commandList->beginRenderPass(framebuffer.get(), params);
+    commandList->beginRenderPass(*framebuffer, params);
     ASSERT_FALSE(commandList->commandRecordingFailed());
     ASSERT_TRUE(commandList->isRenderPassActive());
     EXPECT_EQ(
@@ -690,13 +634,13 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
     );
 
     commandList->clearTextureBoxFloat(
-        colorTexture.get(),
+        *colorTexture,
         s_AllSubresources,
         s_FirstPartialBox,
         Color(1.0f, 0.0f, 0.0f, 1.0f)
     );
     commandList->clearDepthStencilTextureBox(
-        depthTexture.get(),
+        *depthTexture,
         s_AllSubresources,
         s_FirstPartialBox,
         true,
@@ -712,13 +656,13 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
     ASSERT_TRUE(commandList->isRenderPassActive());
 
     commandList->clearTextureBoxFloat(
-        colorTexture.get(),
+        *colorTexture,
         s_AllSubresources,
         s_SecondPartialBox,
         Color(0.0f, 1.0f, 0.0f, 1.0f)
     );
     commandList->clearDepthStencilTextureBox(
-        depthTexture.get(),
+        *depthTexture,
         s_AllSubresources,
         s_SecondPartialBox,
         true,
@@ -728,8 +672,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
     );
     ASSERT_TRUE(commandList->isRenderPassActive());
     commandList->endRenderPass();
-    commandList->copyTexture(colorReadback.get(), TextureSlice(), colorTexture.get(), TextureSlice());
-    commandList->copyTexture(depthReadback.get(), TextureSlice(), depthTexture.get(), TextureSlice());
+    commandList->copyTexture(*colorReadback, TextureSlice(), *colorTexture, TextureSlice());
+    commandList->copyTexture(*depthReadback, TextureSlice(), *depthTexture, TextureSlice());
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     CommandList* const commandLists[] = { commandList.get() };
@@ -743,14 +687,14 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
 
     usize colorRowPitch = 0u;
     const u8* const colorBytes = static_cast<const u8*>(device.mapStagingTexture(
-        colorReadback.get(),
+        *colorReadback,
         TextureSlice(),
         CpuAccessMode::Read,
         &colorRowPitch
     ));
     usize depthRowPitch = 0u;
     const u8* const depthBytes = static_cast<const u8*>(device.mapStagingTexture(
-        depthReadback.get(),
+        *depthReadback,
         TextureSlice(),
         CpuAccessMode::Read,
         &depthRowPitch
@@ -783,8 +727,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExplicitRenderPassClearSurvivesBarrierResu
             EXPECT_FLOAT_EQ(actualDepth, insideFirst ? 0.25f : insideSecond ? 0.5f : 0.75f);
         }
     }
-    device.unmapStagingTexture(depthReadback.get());
-    device.unmapStagingTexture(colorReadback.get());
+    device.unmapStagingTexture(*depthReadback);
+    device.unmapStagingTexture(*colorReadback);
 }
 
 
@@ -843,13 +787,13 @@ TEST_F(DescriptorBufferRoundTripTest, TransferCommandsEndRenderingAndAttachmentT
         ASSERT_TRUE(commandList->isRenderPassActive());
         switch(operation){
         case Operation::Write:
-            commandList->writeBuffer(destination.get(), s_Words, sizeof(s_Words));
+            commandList->writeBuffer(*destination, s_Words, sizeof(s_Words));
             break;
         case Operation::Fill:
-            commandList->clearBufferUInt(destination.get(), 0x01020304u);
+            commandList->clearBufferUInt(*destination, 0x01020304u);
             break;
         case Operation::Copy:
-            commandList->copyBuffer(destination.get(), 0u, source.get(), 0u, sizeof(s_Words));
+            commandList->copyBuffer(*destination, 0u, *source, 0u, sizeof(s_Words));
             break;
         }
         EXPECT_FALSE(commandList->isRenderPassActive());

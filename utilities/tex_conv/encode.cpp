@@ -525,7 +525,7 @@ static void ResetPayload(
                     : AverageLinearVolumeTexels(channelSums, filteredPlaneCount)
                 ;
                 UInt4 targetTexel = {};
-                StoreInt(average, &targetTexel);
+                StoreInt(average, targetTexel);
                 targetPlane(x, y) = basisu::color_rgba(
                     static_cast<int>(targetTexel.r),
                     static_cast<int>(targetTexel.g),
@@ -856,7 +856,7 @@ static void ResetPayload(
                 }
 
                 Float4 averageTexel = {};
-                StoreFloat(VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount)), &averageTexel);
+                StoreFloat(VectorScale(sum, 1.0f / static_cast<f32>(filteredPlaneCount)), averageTexel);
                 basisu::vec4F& targetColor = targetPlane(x, y);
                 targetColor[0u] = averageTexel.r;
                 targetColor[1u] = averageTexel.g;

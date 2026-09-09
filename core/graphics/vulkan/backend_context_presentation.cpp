@@ -454,7 +454,7 @@ bool BackendContext::present(){
 
     while(m_framesInFlight.size() >= m_maxFramesInFlight){
         auto query = m_framesInFlight.front();
-        if(!m_rhiDevice->waitEventQueryInternal(query.get(), Device::DeviceLossDiagnosticPolicy::Defer)){
+        if(!m_rhiDevice->waitEventQueryInternal(*query, Device::DeviceLossDiagnosticPolicy::Defer)){
             if(!m_rhiDevice->isDeviceLost())
                 m_rhiDevice->quarantineDevice();
             captureDeviceLossAfterUnlock("frame synchronization query wait", &presentationLock);
@@ -483,7 +483,7 @@ bool BackendContext::present(){
     }
 
     if(!m_rhiDevice->setEventQueryInternal(
-        query.get(),
+        *query,
         CommandQueue::Graphics,
         Device::DeviceLossDiagnosticPolicy::Defer
     )){

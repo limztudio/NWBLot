@@ -99,9 +99,9 @@ struct FramebufferCapture::ReadbackTask{
             return false;
 
         commandList.copyTexture(
-            payload.destination.get(),
+            *payload.destination,
             payload.destinationSlice,
-            payload.source.get(),
+            *payload.source,
             payload.sourceSlice
         );
         return !commandList.commandRecordingFailed();
@@ -218,7 +218,7 @@ void FramebufferCapture::update(){
 
     usize rowPitch = 0u;
     const auto* const sourceBytes = static_cast<const u8*>(device.mapStagingTexture(
-        m_readback.get(),
+        *m_readback,
         Core::TextureSlice{},
         Core::CpuAccessMode::Read,
         &rowPitch
@@ -231,7 +231,7 @@ void FramebufferCapture::update(){
 
     Core::Alloc::ScratchArena scratchArena(__hidden_framebuffer_capture::s_BitmapScratchArena);
     const bool captureWritten = writeCapture(sourceBytes, rowPitch, scratchArena);
-    device.unmapStagingTexture(m_readback.get());
+    device.unmapStagingTexture(*m_readback);
     if(!captureWritten){
         markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
         requestTerminalQuit();

@@ -259,7 +259,7 @@ private:
         );
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
-                StoreFloat(wallRotation, &transform->rotation);
+                StoreFloat(wallRotation, transform->rotation);
         }
         return entity;
     }

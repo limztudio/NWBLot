@@ -85,7 +85,7 @@ struct GraphOwnedHybridHardwareMaterialContextRestoreTask{
         for(usize streamIndex = 0u; streamIndex < s_StreamCount; ++streamIndex){
             if(payload.writeAttemptCount)
                 ++*payload.writeAttemptCount;
-            if(!commandList.tryWriteBuffer(destinations[streamIndex], sources[streamIndex], sourceByteCounts[streamIndex]))
+            if(!commandList.tryWriteBuffer(*destinations[streamIndex], sources[streamIndex], sourceByteCounts[streamIndex]))
                 return false;
         }
         for(Buffer* const destination : destinations){
@@ -368,11 +368,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
     EXPECT_EQ(statsReadbackAcceptedToken.value, shadowToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const readbackWords = static_cast<const u32*>(device.mapBuffer(statsReadback.get(), CpuAccessMode::Read));
+    const u32* const readbackWords = static_cast<const u32*>(device.mapBuffer(*statsReadback, CpuAccessMode::Read));
     ASSERT_NE(readbackWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < 4u; ++wordIndex)
         EXPECT_EQ(readbackWords[wordIndex], 0u);
-    device.unmapBuffer(statsReadback.get());
+    device.unmapBuffer(*statsReadback);
 }
 
 
@@ -566,7 +566,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
 
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         const u32* const restoredWords = static_cast<const u32*>(
-            device.mapBuffer(destinations[streamIndex].get(), CpuAccessMode::Read)
+            device.mapBuffer(*destinations[streamIndex], CpuAccessMode::Read)
         );
         ASSERT_NE(restoredWords, nullptr);
         EXPECT_EQ(
@@ -577,7 +577,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
             ),
             0
         );
-        device.unmapBuffer(destinations[streamIndex].get());
+        device.unmapBuffer(*destinations[streamIndex]);
     }
 }
 
@@ -619,7 +619,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     seedCommandList->commitBarriers();
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         ASSERT_TRUE(seedCommandList->tryWriteBuffer(
-            destinations[streamIndex].get(),
+            *destinations[streamIndex],
             s_SoftwareWords[streamIndex],
             sizeof(s_SoftwareWords[streamIndex])
         ));
@@ -778,14 +778,14 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
 
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         const u32* const retainedWords = static_cast<const u32*>(
-            device.mapBuffer(destinations[streamIndex].get(), CpuAccessMode::Read)
+            device.mapBuffer(*destinations[streamIndex], CpuAccessMode::Read)
         );
         ASSERT_NE(retainedWords, nullptr);
         EXPECT_EQ(
             NWB_MEMCMP(retainedWords, s_SoftwareWords[streamIndex], sizeof(s_SoftwareWords[streamIndex])),
             0
         );
-        device.unmapBuffer(destinations[streamIndex].get());
+        device.unmapBuffer(*destinations[streamIndex]);
     }
 }
 

@@ -500,15 +500,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
     return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
 }
 
-MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct* accelStructResource){
-    if(!accelStructResource){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: acceleration structure is null")
-        );
-        return {};
-    }
-
-    AccelStruct& accelerationStructure = *accelStructResource;
+MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure){
     if(&accelerationStructure.m_context != &m_context){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to get acceleration structure memory requirements: resource belongs to another device")
@@ -524,7 +516,7 @@ MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruc
 
     NWB_ASSERT(accelerationStructure.getDeviceGeneration()
         == accelerationStructure.m_buffer->getDeviceGeneration());
-    MemoryRequirements requirements = getBufferMemoryRequirements(accelerationStructure.m_buffer.get());
+    MemoryRequirements requirements = getBufferMemoryRequirements(*accelerationStructure.m_buffer);
     if(requirements.size == 0u || requirements.alignment == 0u)
         return {};
 
@@ -605,34 +597,24 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     return info;
 }
 
-bool Device::bindAccelStructMemory(RayTracingAccelStruct* accelStructResource, Heap* heap, u64 offset){
-    if(!accelStructResource){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: acceleration structure is null"));
-        return false;
-    }
-    if(!heap){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: heap is null"));
-        return false;
-    }
-
-    auto* as = accelStructResource;
-    ScopedLock resourceLock(as->m_memoryBindingMutex);
-    if(as->m_buffer){
-        if(!bindBufferMemory(as->m_buffer.get(), heap, offset))
+bool Device::bindAccelStructMemory(RayTracingAccelStruct& accelerationStructure, Heap& heap, u64 offset){
+    ScopedLock resourceLock(accelerationStructure.m_memoryBindingMutex);
+    if(accelerationStructure.m_buffer){
+        if(!bindBufferMemory(*accelerationStructure.m_buffer, heap, offset))
             return false;
 
         constexpr VkBufferUsageFlags s_RequiredStorageUsage =
             VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
         ;
-        if(!isBufferReadyForGpuUse(as->m_buffer.get(), s_RequiredStorageUsage)){
+        if(!isBufferReadyForGpuUse(accelerationStructure.m_buffer.get(), s_RequiredStorageUsage)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: storage buffer is not ready for device-address access"));
             return false;
         }
 
         auto addressInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureDeviceAddressInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR);
-        addressInfo.accelerationStructure = as->m_accelStruct;
-        as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
-        if(as->m_deviceAddress != 0u)
+        addressInfo.accelerationStructure = accelerationStructure.m_accelStruct;
+        accelerationStructure.m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
+        if(accelerationStructure.m_deviceAddress != 0u)
             return true;
 
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind acceleration structure memory: device address is null"));

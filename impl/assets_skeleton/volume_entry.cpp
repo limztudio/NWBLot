@@ -68,7 +68,7 @@ static bool BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Skeleton& outAsse
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
         Skeleton::AssetTypeName(),
-        NWB_TEXT("skeleton"),
+        MakeNotNull(NWB_TEXT("skeleton")),
         &ParseSkeletonDocument,
         &ParseSkeletonValue,
         &BuildSkeletonCookedAsset

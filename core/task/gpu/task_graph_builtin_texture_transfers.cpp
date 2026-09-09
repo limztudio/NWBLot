@@ -72,9 +72,9 @@ struct CopyTextureTask{
             )
                 return false;
             commandList.copyTexture(
-                copy.destination.get(),
+                *copy.destination,
                 copy.destinationSlice,
-                copy.source.get(),
+                *copy.source,
                 copy.sourceSlice
             );
             if(commandList.commandRecordingFailed())
@@ -125,9 +125,9 @@ struct ResolveTextureTask{
             if(!resolve.source || !resolve.destination)
                 return false;
             commandList.resolveTexture(
-                resolve.destination.get(),
+                *resolve.destination,
                 resolve.destinationSubresources,
-                resolve.source.get(),
+                *resolve.source,
                 resolve.sourceSubresources
             );
             if(commandList.commandRecordingFailed())

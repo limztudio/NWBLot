@@ -318,11 +318,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     EXPECT_EQ(selectorConsumerAcceptedToken.value, graphToken.value);
     ASSERT_TRUE(device.waitForIdle());
 
-    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(selectorBuffer.get(), CpuAccessMode::Read));
+    const u32* const uploadedWords = static_cast<const u32*>(device.mapBuffer(*selectorBuffer, CpuAccessMode::Read));
     ASSERT_NE(uploadedWords, nullptr);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SelectorWords); ++wordIndex)
         EXPECT_EQ(uploadedWords[wordIndex], s_SelectorWords[wordIndex]);
-    device.unmapBuffer(selectorBuffer.get());
+    device.unmapBuffer(*selectorBuffer);
 }
 
 
@@ -397,11 +397,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     ASSERT_NE(palette.get(), nullptr);
 
     const auto writeWords = [&device](Buffer* const buffer, const u32* const words){
-        u32* const mappedWords = static_cast<u32*>(device.mapBuffer(buffer, CpuAccessMode::Write));
+        u32* const mappedWords = static_cast<u32*>(device.mapBuffer(*buffer, CpuAccessMode::Write));
         ASSERT_NE(mappedWords, nullptr);
         for(usize wordIndex = 0u; wordIndex < LengthOf(s_RestPositionWords); ++wordIndex)
             mappedWords[wordIndex] = words[wordIndex];
-        device.unmapBuffer(buffer);
+        device.unmapBuffer(*buffer);
     };
     writeWords(restPosition.get(), s_RestPositionWords);
     writeWords(restNormal.get(), s_RestNormalWords);
@@ -685,11 +685,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningRestCopyMergesWithGraphC
     ASSERT_TRUE(device.waitForIdle());
 
     const auto expectCopiedWords = [&device](Buffer* const buffer, const u32* const expectedWords){
-        const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(buffer, CpuAccessMode::Read));
+        const u32* const copiedWords = static_cast<const u32*>(device.mapBuffer(*buffer, CpuAccessMode::Read));
         ASSERT_NE(copiedWords, nullptr);
         for(usize wordIndex = 0u; wordIndex < LengthOf(s_RestPositionWords); ++wordIndex)
             EXPECT_EQ(copiedWords[wordIndex], expectedWords[wordIndex]);
-        device.unmapBuffer(buffer);
+        device.unmapBuffer(*buffer);
     };
     expectCopiedWords(skinnedPosition.get(), s_RestPositionWords);
     expectCopiedWords(skinnedNormal.get(), s_RestNormalWords);

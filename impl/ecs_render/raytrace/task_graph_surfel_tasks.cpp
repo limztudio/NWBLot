@@ -55,7 +55,7 @@ bool SurfelIrradianceClearGraphTask::record(
     )
         return false;
 
-    commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);
+    commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);
     return true;
 }
 

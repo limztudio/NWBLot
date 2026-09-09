@@ -95,26 +95,22 @@ namespace __hidden_texture_transfer_staging{
 
 
 void CommandList::copyTexture(
-    StagingTexture* dest,
+    StagingTexture& dest,
     const TextureSlice& destSlice,
-    Texture* src,
+    Texture& src,
     const TextureSlice& srcSlice
 ){
     constexpr const tchar* s_OperationName = NWB_TEXT("copy texture to staging texture");
-    if(!dest || !src){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination resources must be non-null"));
-        return;
-    }
     if(!validateStagingTextureCopyResources(
-        *dest,
-        *src,
+        dest,
+        src,
         CpuAccessMode::Read,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
         s_OperationName
     ))
         return;
     if(!validateTextureForGpuState(
-        src,
+        &src,
         ResourceStates::CopySource,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT
@@ -123,9 +119,9 @@ void CommandList::copyTexture(
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
-        *dest,
+        dest,
         destSlice,
-        *src,
+        src,
         srcSlice,
         region
     )){
@@ -133,13 +129,13 @@ void CommandList::copyTexture(
         return;
     }
     const bool depthStencilCopy =
-        (src->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
+        (src.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
     ;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src->m_creationDesc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src.m_creationDesc, region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -151,48 +147,44 @@ void CommandList::copyTexture(
 
     endActiveRenderPass();
     setTextureState(
-        src,
+        &src,
         TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u),
         ResourceStates::CopySource
     );
     if(m_commandRecordingFailed)
         return;
 
-    registerHostReadbackStagingTexture(*dest);
+    registerHostReadbackStagingTexture(dest);
     m_context.deviceDispatch.vkCmdCopyImageToBuffer(
         m_currentCmdBuf->m_cmdBuf,
-        src->m_image,
+        src.m_image,
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        dest->m_buffer,
+        dest.m_buffer,
         1,
         &region
     );
 
-    retainResource(src);
-    retainResource(dest);
+    retainResource(&src);
+    retainResource(&dest);
 }
 
 void CommandList::copyTexture(
-    Texture* dest,
+    Texture& dest,
     const TextureSlice& destSlice,
-    StagingTexture* src,
+    StagingTexture& src,
     const TextureSlice& srcSlice
 ){
     constexpr const tchar* s_OperationName = NWB_TEXT("copy staging texture to texture");
-    if(!dest || !src){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination resources must be non-null"));
-        return;
-    }
     if(!validateStagingTextureCopyResources(
-        *src,
-        *dest,
+        src,
+        dest,
         CpuAccessMode::Write,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         s_OperationName
     ))
         return;
     if(!validateTextureForGpuState(
-        dest,
+        &dest,
         ResourceStates::CopyDest,
         s_OperationName,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -201,9 +193,9 @@ void CommandList::copyTexture(
 
     VkBufferImageCopy region{};
     if(!prepareStagingTextureCopy(
-        *src,
+        src,
         srcSlice,
-        *dest,
+        dest,
         destSlice,
         region
     )){
@@ -211,13 +203,13 @@ void CommandList::copyTexture(
         return;
     }
     const bool depthStencilCopy =
-        (dest->m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
+        (dest.m_aspectMask & (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)) != 0u
     ;
     if(depthStencilCopy){
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest->m_creationDesc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest.m_creationDesc, region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -229,7 +221,7 @@ void CommandList::copyTexture(
 
     endActiveRenderPass();
     setTextureState(
-        dest,
+        &dest,
         TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u),
         ResourceStates::CopyDest
     );
@@ -238,15 +230,15 @@ void CommandList::copyTexture(
 
     m_context.deviceDispatch.vkCmdCopyBufferToImage(
         m_currentCmdBuf->m_cmdBuf,
-        src->m_buffer,
-        dest->m_image,
+        src.m_buffer,
+        dest.m_image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
         &region
     );
 
-    retainResource(dest);
-    retainResource(src);
+    retainResource(&dest);
+    retainResource(&src);
 }
 
 

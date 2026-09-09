@@ -53,7 +53,7 @@ static bool BuildTextureCookedAsset(TextureCookEntry& entry, Texture& outAsset){
 static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<TextureCookEntry, Texture, TextureAssetCodec>(
         Texture::AssetTypeName(),
-        NWB_TEXT("texture"),
+        MakeNotNull(NWB_TEXT("texture")),
         &ParseTextureDocument,
         nullptr,
         &BuildTextureCookedAsset,

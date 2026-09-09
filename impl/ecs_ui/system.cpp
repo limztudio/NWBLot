@@ -768,7 +768,7 @@ bool UiSystem::prepareTaskGraphDrawUploads(ImDrawData& drawData){
     StoreFloat(__hidden_ui::BuildUiScaleTranslate(
         VectorSet(drawData.DisplayPos.x, drawData.DisplayPos.y, 0.0f, 0.0f),
         VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f)
-    ), &snapshot.pushConstants.scaleTranslate);
+    ), snapshot.pushConstants.scaleTranslate);
     snapshot.pushConstants.presentationMode = static_cast<u32>(
         m_graphics.isHDR10OutputActive()
             ? Core::SwapChainOutputMode::HDR10
@@ -2070,9 +2070,9 @@ bool UiSystem::uploadDrawBuffers(Core::CommandList& commandList, ImDrawData& dra
         const usize vertexBytes = static_cast<usize>(drawList->VtxBuffer.Size) * sizeof(ImDrawVert);
         const usize indexBytes = static_cast<usize>(drawList->IdxBuffer.Size) * sizeof(ImDrawIdx);
         if(vertexBytes > 0u)
-            commandList.writeBuffer(m_vertexBuffer.get(), drawList->VtxBuffer.Data, vertexBytes, vertexByteOffset);
+            commandList.writeBuffer(*m_vertexBuffer, drawList->VtxBuffer.Data, vertexBytes, vertexByteOffset);
         if(indexBytes > 0u)
-            commandList.writeBuffer(m_indexBuffer.get(), drawList->IdxBuffer.Data, indexBytes, indexByteOffset);
+            commandList.writeBuffer(*m_indexBuffer, drawList->IdxBuffer.Data, indexBytes, indexByteOffset);
 
         vertexByteOffset += vertexBytes;
         indexByteOffset += indexBytes;
@@ -2095,7 +2095,7 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
     const SIMDVector displaySize = VectorSet(drawData.DisplaySize.x, drawData.DisplaySize.y, 0.0f, 0.0f);
 
     UiPushConstants pushConstants;
-    StoreFloat(__hidden_ui::BuildUiScaleTranslate(displayMin, displaySize), &pushConstants.scaleTranslate);
+    StoreFloat(__hidden_ui::BuildUiScaleTranslate(displayMin, displaySize), pushConstants.scaleTranslate);
     pushConstants.presentationMode = static_cast<u32>(
         m_graphics.isHDR10OutputActive()
             ? Core::SwapChainOutputMode::HDR10

@@ -390,7 +390,7 @@ private:
         switch(view){
         case BenchmarkView::Back:
             transform->position = Float4(0.0f, s_CameraHeight, s_BackCameraDistance, 0.0f);
-            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), &transform->rotation);
+            StoreFloat(QuaternionRotationRollPitchYaw(0.0f, s_PI, 0.0f), transform->rotation);
             return;
         case BenchmarkView::Close:
             transform->position = Float4(0.0f, s_CameraHeight, -s_CloseCameraDistance, 0.0f);
@@ -500,7 +500,7 @@ private:
                     m_staticPreview,
                     animatedJoint
                 );
-                StoreFloat(animatedJoint, &pose->localJoints[jointIndex]);
+                StoreFloat(animatedJoint, pose->localJoints[jointIndex]);
             }
         }
     }

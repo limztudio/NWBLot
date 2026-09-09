@@ -39,8 +39,8 @@ inline void AssignCsgCutterTransform(
     const SIMDMatrix shapeToWorld = MatrixAffineTransformation(s_SIMDOne, VectorZero(), rotation, center);
     SIMDVector determinant;
     const SIMDMatrix worldToShape = MatrixInverse(&determinant, shapeToWorld);
-    StoreFloat(worldToShape, &cutter.worldToShape);
-    StoreFloat(shapeToWorld, &cutter.shapeToWorld);
+    StoreFloat(worldToShape, cutter.worldToShape);
+    StoreFloat(shapeToWorld, cutter.shapeToWorld);
 }
 
 template<typename ReceiverComponentT>

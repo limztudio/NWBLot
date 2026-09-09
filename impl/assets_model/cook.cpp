@@ -99,20 +99,20 @@ bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets:
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skeletonObjectBinaries,
-        NWB_TEXT("ModelAssetCodec::serialize"),
-        NWB_TEXT("skeleton objects")
+        MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
+        MakeNotNull(NWB_TEXT("skeleton objects"))
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             staticMeshObjectBinaries,
-            NWB_TEXT("ModelAssetCodec::serialize"),
-            NWB_TEXT("static mesh objects")
+            MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
+            MakeNotNull(NWB_TEXT("static mesh objects"))
         )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skinnedMeshObjectBinaries,
-            NWB_TEXT("ModelAssetCodec::serialize"),
-            NWB_TEXT("skinned mesh objects")
+            MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize")),
+            MakeNotNull(NWB_TEXT("skinned mesh objects"))
         )
     ;
 }

@@ -199,8 +199,8 @@ static void ApplyTransparentSceneTransform(
     if(!transform)
         return;
 
-    StoreFloat(RotateTransparentBasePosition(basePosition, sceneRotation), &transform->position);
-    StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), &transform->rotation);
+    StoreFloat(RotateTransparentBasePosition(basePosition, sceneRotation), transform->position);
+    StoreFloat(QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation)), transform->rotation);
 }
 
 
@@ -221,8 +221,8 @@ static void ApplyTransparentCsgSceneTransform(
     const SIMDVector receiverRotation = QuaternionNormalize(QuaternionMultiply(sceneRotation, localRotation));
 
     if(auto* transform = world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(receiverEntity)){
-        StoreFloat(receiverPosition, &transform->position);
-        StoreFloat(receiverRotation, &transform->rotation);
+        StoreFloat(receiverPosition, transform->position);
+        StoreFloat(receiverRotation, transform->rotation);
     }
 
     if(auto* cutter = world.tryGetComponent<NWB::Impl::CsgCutterComponent>(cutterEntity))

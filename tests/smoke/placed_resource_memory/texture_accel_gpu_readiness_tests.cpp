@@ -242,7 +242,7 @@ TEST_F(GpuResourceReadinessTest, TexturePredicateTracksVirtualMemoryBinding){
     ASSERT_TRUE(placed);
     EXPECT_FALSE(device.isTextureReadyForGpuUse(placed.get()));
 
-    const MemoryRequirements requirements = device.getTextureMemoryRequirements(placed.get());
+    const MemoryRequirements requirements = device.getTextureMemoryRequirements(*placed);
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
@@ -250,7 +250,7 @@ TEST_F(GpuResourceReadinessTest, TexturePredicateTracksVirtualMemoryBinding){
         .debugName = Name("tests/gpu_readiness/texture_heap"),
     });
     ASSERT_TRUE(heap);
-    if(!device.bindTextureMemory(placed.get(), heap.get(), 0u))
+    if(!device.bindTextureMemory(*placed, *heap, 0u))
         GTEST_SKIP() << "GPU readiness: DeviceLocal heap is incompatible with virtual textures.";
     EXPECT_TRUE(device.isTextureReadyForGpuUse(placed.get()));
 }
@@ -858,7 +858,7 @@ TEST_F(GpuResourceReadinessTest, AccelStructPredicateTracksVirtualMemoryBinding)
     ASSERT_TRUE(accelStruct);
     EXPECT_FALSE(device.isAccelStructReadyForGpuUse(accelStruct.get()));
 
-    const MemoryRequirements requirements = device.getAccelStructMemoryRequirements(accelStruct.get());
+    const MemoryRequirements requirements = device.getAccelStructMemoryRequirements(*accelStruct);
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
@@ -866,7 +866,7 @@ TEST_F(GpuResourceReadinessTest, AccelStructPredicateTracksVirtualMemoryBinding)
         .debugName = Name("tests/gpu_readiness/accel_struct_heap"),
     });
     ASSERT_TRUE(heap);
-    if(!device.bindAccelStructMemory(accelStruct.get(), heap.get(), 0u))
+    if(!device.bindAccelStructMemory(*accelStruct, *heap, 0u))
         GTEST_SKIP() << "GPU readiness: DeviceLocal heap is incompatible with virtual acceleration structures.";
     EXPECT_TRUE(device.isAccelStructReadyForGpuUse(accelStruct.get()));
 

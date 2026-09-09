@@ -41,7 +41,7 @@ TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
     EXPECT_TRUE(ContainsText(callback, ".floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),"));
     EXPECT_TRUE(ContainsText(callback, "context.commandIrCapture"));
     EXPECT_TRUE(ContainsText(callback, "captureClearTexture("));
-    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(destination, clearDesc.subresources, clearDesc.floatValue);"));
+    EXPECT_TRUE(ContainsText(callback, "commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);"));
 
     const usize resourceUseOffset = shadowVisibility.find("const Core::GpuTaskResourceUse allLitClearResourceUse");
     const usize shadowSchedulingOffset = shadowVisibility.find("Core::GpuTaskSchedulingHint scheduling;", resourceUseOffset);

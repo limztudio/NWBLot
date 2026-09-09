@@ -200,9 +200,9 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
             *unboundDestination,
             [&](CommandList& commandList){
                 commandList.copyTexture(
-                    unboundDestination.get(),
+                    *unboundDestination,
                     TextureSlice{},
-                    copySource.get(),
+                    *copySource,
                     TextureSlice{}
                 );
             },
@@ -222,9 +222,9 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
             *copyDestination,
             [&](CommandList& commandList){
                 commandList.copyTexture(
-                    copyDestination.get(),
+                    *copyDestination,
                     TextureSlice{},
-                    unboundSource.get(),
+                    *unboundSource,
                     TextureSlice{}
                 );
             },
@@ -243,7 +243,7 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
             *readback,
             *unboundSource,
             [&](CommandList& commandList){
-                commandList.copyTexture(readback.get(), TextureSlice{}, unboundSource.get(), TextureSlice{});
+                commandList.copyTexture(*readback, TextureSlice{}, *unboundSource, TextureSlice{});
             },
             [&](CommandList& commandList){
                 EXPECT_FALSE(commandList.hasExplicitTextureSubresourceState(unboundSource.get(), 0u, 0u));
@@ -259,7 +259,7 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
             *upload,
             *unboundDestination,
             [&](CommandList& commandList){
-                commandList.copyTexture(unboundDestination.get(), TextureSlice{}, upload.get(), TextureSlice{});
+                commandList.copyTexture(*unboundDestination, TextureSlice{}, *upload, TextureSlice{});
             },
             [&](CommandList& commandList){
                 EXPECT_FALSE(commandList.hasExplicitTextureSubresourceState(unboundDestination.get(), 0u, 0u));
@@ -278,7 +278,7 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
                 TextureDesc& mutableDesc = const_cast<TextureDesc&>(copySource->getDescription());
                 const u32 width = mutableDesc.width;
                 mutableDesc.width = width - 1u;
-                commandList.copyTexture(readback.get(), TextureSlice{}, copySource.get(), TextureSlice{});
+                commandList.copyTexture(*readback, TextureSlice{}, *copySource, TextureSlice{});
                 mutableDesc.width = width;
             },
             [&](CommandList& commandList){
@@ -298,7 +298,7 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
                 TextureDesc& mutableDesc = const_cast<TextureDesc&>(copyDestination->getDescription());
                 const u32 width = mutableDesc.width;
                 mutableDesc.width = width - 1u;
-                commandList.copyTexture(copyDestination.get(), TextureSlice{}, upload.get(), TextureSlice{});
+                commandList.copyTexture(*copyDestination, TextureSlice{}, *upload, TextureSlice{});
                 mutableDesc.width = width;
             },
             [&](CommandList& commandList){
@@ -318,7 +318,7 @@ TEST_F(TextureTransferAtomicityTest, UnboundCopyStagingAndWriteOperandsRejectAto
             *copySource,
             [&](CommandList& commandList){
                 EXPECT_FALSE(commandList.tryWriteTexture(
-                    unboundDestination.get(),
+                    *unboundDestination,
                     0u,
                     0u,
                     uploadBytes,
@@ -368,9 +368,9 @@ TEST_F(TextureTransferAtomicityTest, ResolveRejectsUnboundAndForgedMetadataBefor
             *unboundDestination,
             [&](CommandList& commandList){
                 commandList.resolveTexture(
-                    unboundDestination.get(),
+                    *unboundDestination,
                     s_AllSubresources,
-                    source.get(),
+                    *source,
                     s_AllSubresources
                 );
             },
@@ -390,9 +390,9 @@ TEST_F(TextureTransferAtomicityTest, ResolveRejectsUnboundAndForgedMetadataBefor
             *destination,
             [&](CommandList& commandList){
                 commandList.resolveTexture(
-                    destination.get(),
+                    *destination,
                     s_AllSubresources,
-                    unboundSource.get(),
+                    *unboundSource,
                     s_AllSubresources
                 );
             },
@@ -418,7 +418,7 @@ TEST_F(TextureTransferAtomicityTest, ResolveRejectsUnboundAndForgedMetadataBefor
                 mutableSourceDesc.mipLevels = Limit<MipLevel>::s_Max;
                 mutableDestinationDesc.mipLevels = Limit<MipLevel>::s_Max;
                 const TextureSubresourceSet forgedRange(0u, Limit<MipLevel>::s_Max, 0u, 1u);
-                commandList.resolveTexture(destination.get(), forgedRange, source.get(), forgedRange);
+                commandList.resolveTexture(*destination, forgedRange, *source, forgedRange);
                 mutableSourceDesc.mipLevels = sourceMipLevels;
                 mutableDestinationDesc.mipLevels = destinationMipLevels;
             },
@@ -467,15 +467,12 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
         );
     };
 
-    expectWriteRejection("null destination", destination.get(), [&](CommandList& commandList){
-        EXPECT_FALSE(commandList.tryWriteTexture(nullptr, 0u, 0u, uploadBytes, 16u * 4u, 16u * 16u * 4u));
-    });
     expectWriteRejection("null data", destination.get(), [&](CommandList& commandList){
-        EXPECT_FALSE(commandList.tryWriteTexture(destination.get(), 0u, 0u, nullptr, 16u * 4u, 16u * 16u * 4u));
+        EXPECT_FALSE(commandList.tryWriteTexture(*destination, 0u, 0u, nullptr, 16u * 4u, 16u * 16u * 4u));
     });
     expectWriteRejection("out-of-bounds mip", destination.get(), [&](CommandList& commandList){
         EXPECT_FALSE(commandList.tryWriteTexture(
-            destination.get(),
+            *destination,
             0u,
             destinationDesc.mipLevels,
             uploadBytes,
@@ -485,7 +482,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
     });
     expectWriteRejection("out-of-bounds array slice", destination.get(), [&](CommandList& commandList){
         EXPECT_FALSE(commandList.tryWriteTexture(
-            destination.get(),
+            *destination,
             destinationDesc.arraySize,
             0u,
             uploadBytes,
@@ -495,7 +492,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
     });
     expectWriteRejection("undersized row pitch", destination.get(), [&](CommandList& commandList){
         EXPECT_FALSE(commandList.tryWriteTexture(
-            destination.get(),
+            *destination,
             0u,
             0u,
             uploadBytes,
@@ -505,7 +502,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
     });
     expectWriteRejection("undersized depth pitch", destination.get(), [&](CommandList& commandList){
         EXPECT_FALSE(commandList.tryWriteTexture(
-            destination.get(),
+            *destination,
             0u,
             0u,
             uploadBytes,
@@ -519,7 +516,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
             multisampleDestination.get(),
             [&](CommandList& commandList){
                 EXPECT_FALSE(commandList.tryWriteTexture(
-                    multisampleDestination.get(),
+                    *multisampleDestination,
                     0u,
                     0u,
                     uploadBytes,
@@ -534,7 +531,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
         const Format::Enum format = mutableDesc.format;
         mutableDesc.format = static_cast<Format::Enum>(Limit<u8>::s_Max);
         const bool accepted = commandList.tryWriteTexture(
-            destination.get(),
+            *destination,
             0u,
             0u,
             uploadBytes,
@@ -552,7 +549,7 @@ TEST_F(TextureTransferAtomicityTest, WriteRejectsUnsafeInputsInEveryConfiguratio
     ASSERT_TRUE(recovery->hasCommandBuffer());
     recovery->open();
     ASSERT_TRUE(recovery->tryWriteTexture(
-        destination.get(),
+        *destination,
         0u,
         0u,
         uploadBytes,
@@ -590,8 +587,8 @@ TEST_F(TextureTransferAtomicityTest, PartialStagingCopiesUseGraphicsOrComputeCap
     CommandListHandle graphicsList = device().createCommandList();
     ASSERT_TRUE(graphicsList);
     graphicsList->open();
-    graphicsList->copyTexture(uploadDestination.get(), partialSlice, upload.get(), partialSlice);
-    graphicsList->copyTexture(readback.get(), partialSlice, readbackSource.get(), partialSlice);
+    graphicsList->copyTexture(*uploadDestination, partialSlice, *upload, partialSlice);
+    graphicsList->copyTexture(*readback, partialSlice, *readbackSource, partialSlice);
     EXPECT_FALSE(graphicsList->commandRecordingFailed());
     graphicsList->close();
     ASSERT_TRUE(graphicsList->hasCommandBuffer());
@@ -630,7 +627,7 @@ TEST_F(TextureTransferAtomicityTest, PartialStagingCopiesUseGraphicsOrComputeCap
         const u32 imageReferences = transferDestination->getReferenceCount();
 
         transferList->open();
-        transferList->copyTexture(transferDestination.get(), partialSlice, upload.get(), partialSlice);
+        transferList->copyTexture(*transferDestination, partialSlice, *upload, partialSlice);
         EXPECT_TRUE(transferList->commandRecordingFailed());
         EXPECT_FALSE(transferList->hasExplicitTextureSubresourceState(transferDestination.get(), 0u, 0u));
         EXPECT_EQ(upload->getReferenceCount(), stagingReferences);
@@ -663,8 +660,8 @@ TEST_F(TextureTransferAtomicityTest, SequentialWritesHonorFormatBlockOffsetAlign
     CommandListHandle commandList = device().createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
-    ASSERT_TRUE(commandList->tryWriteTexture(rgbaDestination.get(), 0u, 0u, rgbaBytes, 4u, 4u));
-    ASSERT_TRUE(commandList->tryWriteTexture(rgbDestination.get(), 0u, 0u, rgbBytes, 12u, 12u));
+    ASSERT_TRUE(commandList->tryWriteTexture(*rgbaDestination, 0u, 0u, rgbaBytes, 4u, 4u));
+    ASSERT_TRUE(commandList->tryWriteTexture(*rgbDestination, 0u, 0u, rgbBytes, 12u, 12u));
     EXPECT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     ASSERT_TRUE(commandList->hasCommandBuffer());

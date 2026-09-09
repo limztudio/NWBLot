@@ -92,12 +92,12 @@ void StoreObjectWorldTransform(
     SIMDVector scale;
     SIMDVector rotation;
     SIMDVector translation;
-    if(!MatrixDecompose(&scale, &rotation, &translation, MatrixMultiply(ownerMatrix, LoadFloat(localTransform))))
+    if(!MatrixDecompose(scale, rotation, translation, MatrixMultiply(ownerMatrix, LoadFloat(localTransform))))
         return;
 
-    StoreFloat(VectorSetW(translation, 0.0f), &transform.position);
-    StoreFloat(rotation, &transform.rotation);
-    StoreFloat(VectorSetW(scale, 0.0f), &transform.scale);
+    StoreFloat(VectorSetW(translation, 0.0f), transform.position);
+    StoreFloat(rotation, transform.rotation);
+    StoreFloat(VectorSetW(scale, 0.0f), transform.scale);
 }
 
 void TagObject(
@@ -618,12 +618,12 @@ void ModelSystem::updateStaticMeshAttachments(){
             SIMDVector scale;
             SIMDVector rotation;
             SIMDVector translation;
-            if(!MatrixDecompose(&scale, &rotation, &translation, worldTransform))
+            if(!MatrixDecompose(scale, rotation, translation, worldTransform))
                 return;
 
-            StoreFloat(VectorSetW(translation, 0.0f), &transform.position);
-            StoreFloat(rotation, &transform.rotation);
-            StoreFloat(VectorSetW(scale, 0.0f), &transform.scale);
+            StoreFloat(VectorSetW(translation, 0.0f), transform.position);
+            StoreFloat(rotation, transform.rotation);
+            StoreFloat(VectorSetW(scale, 0.0f), transform.scale);
         }
     );
 }

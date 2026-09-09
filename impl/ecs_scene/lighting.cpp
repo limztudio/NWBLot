@@ -100,7 +100,7 @@ Core::ECS::EntityID CreateDirectionalLightEntity(
     auto& transform = lightEntity.addComponent<TransformComponent>();
     StoreFloat(
         QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
-        &transform.rotation
+        transform.rotation
     );
 
     auto& light = lightEntity.addComponent<LightComponent>();
@@ -146,7 +146,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     transform.position = position;
     StoreFloat(
         QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, rollRadians),
-        &transform.rotation
+        transform.rotation
     );
 
     auto& light = lightEntity.addComponent<LightComponent>();
@@ -161,8 +161,8 @@ Core::ECS::EntityID CreateSpotLightEntity(
 
 SceneLight BuildDefaultSceneLight(const SIMDVector forward){
     SceneLight light;
-    StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), &light.direction);
-    StoreFloat(s_SIMDOne, &light.colorIntensity);
+    StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), light.direction);
+    StoreFloat(s_SIMDOne, light.colorIntensity);
     light.type = LightType::Directional;
     return light;
 }
@@ -184,7 +184,7 @@ bool TryBuildSceneLight(
     if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
         return false;
 
-    StoreFloat(colorIntensity, &outLight.colorIntensity);
+    StoreFloat(colorIntensity, outLight.colorIntensity);
     outLight.type = type;
     outLight.enableCaustics = enableCaustics;
     outLight.angularRadius = angularRadius;
@@ -197,7 +197,7 @@ bool TryBuildSceneLight(
 
         StoreFloat(
             __hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
-            &outLight.direction
+            outLight.direction
         );
         return true;
     }
@@ -207,7 +207,7 @@ bool TryBuildSceneLight(
         if(!IsFinite(range) || range <= 0.0f)
             return false;
 
-        StoreFloat(VectorSetW(position, 1.0f), &outLight.position);
+        StoreFloat(VectorSetW(position, 1.0f), outLight.position);
         outLight.range = range;
         return true;
     }
@@ -222,13 +222,13 @@ bool TryBuildSceneLight(
         if(!__hidden_lighting::IsValidLightCone(innerConeCos, outerConeCos))
             return false;
 
-        StoreFloat(VectorSetW(position, innerConeCos), &outLight.position);
+        StoreFloat(VectorSetW(position, innerConeCos), outLight.position);
         StoreFloat(
             VectorSetW(
                 __hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
                 outerConeCos
             ),
-            &outLight.direction
+            outLight.direction
         );
         outLight.range = range;
         return true;

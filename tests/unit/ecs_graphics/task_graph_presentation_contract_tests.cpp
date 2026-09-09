@@ -654,7 +654,7 @@ TEST(EcsGraphics, PresentPassDiscardsOnlyItsFullOverwriteLoad){
         "renderPassParameters.colorAttachmentActions[0u].storeAction = Core::RenderPassStoreAction::Store;"
     ));
     const usize beginRenderPass = present.find(
-        "commandList.beginRenderPass(&presentationFramebuffer, renderPassParameters);"
+        "commandList.beginRenderPass(presentationFramebuffer, renderPassParameters);"
     );
     const usize setGraphicsState = present.find("commandList.setGraphicsState(graphicsState);");
     const usize draw = present.find("commandList.draw(drawArgs);");

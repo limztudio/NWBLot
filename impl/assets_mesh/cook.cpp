@@ -204,7 +204,7 @@ bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     MeshAssetBinaryPayload::FillMeshBaseHeader(header, mesh);
     AppendPOD(outBinary, header);
 
-    const tchar* const serializeFailureContext = NWB_TEXT("MeshAssetCodec::serialize");
+    const NotNull<const tchar*> serializeFailureContext = MakeNotNull(NWB_TEXT("MeshAssetCodec::serialize"));
     if(!MeshAssetBinaryPayload::AppendMeshAttributeStreams(outBinary, mesh, serializeFailureContext))
         return false;
     return MeshAssetBinaryPayload::AppendMeshletStreams(outBinary, mesh, serializeFailureContext);

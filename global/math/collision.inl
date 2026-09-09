@@ -990,12 +990,12 @@ inline void SIMDCALL BoundingSphere::transform(BoundingSphere& outSphere, const 
     const SIMDVector sphereValue = LoadFloat(centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVector sphereRadius = VectorSplatW(sphereValue);
-    if(MatrixDecompose(&scale, &rotation, &translation, matrix)){
+    if(MatrixDecompose(scale, rotation, translation, matrix)){
         const SIMDVector absScale = VectorAbs(scale);
         const SIMDVector maxScale = CollisionDetail::Vector3MaxComponent(absScale);
         StoreFloat(
             CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale)),
-            &outSphere.centerRadius
+            outSphere.centerRadius
         );
         return;
     }
@@ -1003,7 +1003,7 @@ inline void SIMDCALL BoundingSphere::transform(BoundingSphere& outSphere, const 
     const SIMDVector maxScaleVector = VectorMax(Vector3Length(matrix.v[0]), VectorMax(Vector3Length(matrix.v[1]), Vector3Length(matrix.v[2])));
     StoreFloat(
         CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScaleVector)),
-        &outSphere.centerRadius
+        outSphere.centerRadius
     );
 }
 
@@ -1017,7 +1017,7 @@ inline void SIMDCALL BoundingSphere::transform(
     const SIMDVector transformedCenter = VectorAdd(Vector3Rotate(VectorScale(CollisionDetail::SphereCenter(sphereValue), scale), rotation), translation);
     StoreFloat(
         CollisionDetail::SphereCenterRadius(transformedCenter, VectorScale(VectorSplatW(sphereValue), Abs(scale))),
-        &outSphere.centerRadius
+        outSphere.centerRadius
     );
 }
 
@@ -1235,15 +1235,15 @@ inline void BoundingSphere::createMerged(
     if(Vector4Greater(distance, VectorReplicate(CollisionDetail::s_RayEpsilon)))
         newCenter = VectorMultiplyAdd(delta, VectorDivide(VectorSubtract(newRadius, radius0), distance), center0);
 
-    StoreFloat(CollisionDetail::SphereCenterRadius(newCenter, newRadius), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(newCenter, newRadius), outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
-    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
-    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(LoadFloat(box.center), Vector3Length(LoadFloat(box.extents))), outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromPoints(
@@ -1265,7 +1265,7 @@ inline void BoundingSphere::createFromPoints(
         radiusSq = VectorMax(radiusSq, Vector3LengthSq(delta));
     }
 
-    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorSqrt(radiusSq)), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::SphereCenterRadius(centerVector, VectorSqrt(radiusSq)), outSphere.centerRadius);
 }
 
 inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
@@ -1281,7 +1281,7 @@ inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const B
         frustum.farPlane,
         corners
     );
-    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners, BoundingFrustum::s_CornerCount), &outSphere.centerRadius);
+    StoreFloat(CollisionDetail::CreateSphereFromVectorPoints(corners, BoundingFrustum::s_CornerCount), outSphere.centerRadius);
 }
 
 
@@ -1298,8 +1298,8 @@ inline void SIMDCALL BoundingBox::transform(BoundingBox& outBox, const SIMDMatri
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-    StoreFloat(centerVector, &outBox.center);
-    StoreFloat(extentsVector, &outBox.extents);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
 }
 
 inline void SIMDCALL BoundingBox::transform(
@@ -1320,8 +1320,8 @@ inline void SIMDCALL BoundingBox::transform(
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-    StoreFloat(centerVector, &outBox.center);
-    StoreFloat(extentsVector, &outBox.extents);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
 }
 
 inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
@@ -1329,7 +1329,7 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
     SIMDVector cornerVectors[s_CornerCount];
     CollisionDetail::AabbCorners(LoadFloat(center), LoadFloat(extents), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
-        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), &corners[i]);
+        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingBox::contains(const SIMDVector point)const noexcept{
@@ -1501,24 +1501,24 @@ inline void BoundingBox::createMerged(BoundingBox& outBox, const BoundingBox& bo
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(VectorMin(min0, min1), VectorMax(max0, max1), centerVector, extentsVector);
-    StoreFloat(centerVector, &outBox.center);
-    StoreFloat(extentsVector, &outBox.extents);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
 }
 
 inline void BoundingBox::createFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept{
     const SIMDVector sphereValue = LoadFloat(sphere.centerRadius);
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVector extentsVector = CollisionDetail::SphereRadius(sphereValue);
-    StoreFloat(VectorSetW(centerVector, 0.0f), &outBox.center);
-    StoreFloat(VectorSetW(extentsVector, 0.0f), &outBox.extents);
+    StoreFloat(VectorSetW(centerVector, 0.0f), outBox.center);
+    StoreFloat(VectorSetW(extentsVector, 0.0f), outBox.extents);
 }
 
 inline void SIMDCALL BoundingBox::createFromPoints(BoundingBox& outBox, const SIMDVector point0, const SIMDVector point1)noexcept{
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(VectorMin(point0, point1), VectorMax(point0, point1), centerVector, extentsVector);
-    StoreFloat(centerVector, &outBox.center);
-    StoreFloat(extentsVector, &outBox.extents);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
 }
 
 inline void BoundingBox::createFromPoints(
@@ -1536,8 +1536,8 @@ inline void BoundingBox::createFromPoints(
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-    StoreFloat(centerVector, &outBox.center);
-    StoreFloat(extentsVector, &outBox.extents);
+    StoreFloat(centerVector, outBox.center);
+    StoreFloat(extentsVector, outBox.extents);
 }
 
 
@@ -1548,7 +1548,7 @@ inline void SIMDCALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox,
     SIMDVector scale{};
     SIMDVector rotation{};
     SIMDVector translation{};
-    if(!MatrixDecompose(&scale, &rotation, &translation, matrix)){
+    if(!MatrixDecompose(scale, rotation, translation, matrix)){
         SIMDVector corners[s_CornerCount];
         CollisionDetail::ObbCorners(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), corners);
         SIMDVector minBounds = Vector3Transform(corners[0], matrix);
@@ -1559,8 +1559,8 @@ inline void SIMDCALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox,
         SIMDVector centerVector{};
         SIMDVector extentsVector{};
         CollisionDetail::CenterExtentsFromMinMax(minBounds, maxBounds, centerVector, extentsVector);
-        StoreFloat(centerVector, &outBox.center);
-        StoreFloat(extentsVector, &outBox.extents);
+        StoreFloat(centerVector, outBox.center);
+        StoreFloat(extentsVector, outBox.extents);
         outBox.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
         return;
     }
@@ -1568,9 +1568,9 @@ inline void SIMDCALL BoundingOrientedBox::transform(BoundingOrientedBox& outBox,
     const SIMDVector centerVector = Vector3Transform(LoadFloat(center), matrix);
     const SIMDVector extentsVector = VectorMultiply(LoadFloat(extents), VectorAbs(scale));
     const SIMDVector orientationVector = QuaternionNormalize(QuaternionMultiply(LoadFloat(orientation), rotation));
-    StoreFloat(VectorSetW(centerVector, 0.0f), &outBox.center);
-    StoreFloat(VectorSetW(extentsVector, 0.0f), &outBox.extents);
-    StoreFloat(orientationVector, &outBox.orientation);
+    StoreFloat(VectorSetW(centerVector, 0.0f), outBox.center);
+    StoreFloat(VectorSetW(extentsVector, 0.0f), outBox.extents);
+    StoreFloat(orientationVector, outBox.orientation);
 }
 
 inline void SIMDCALL BoundingOrientedBox::transform(
@@ -1582,9 +1582,9 @@ inline void SIMDCALL BoundingOrientedBox::transform(
     const SIMDVector centerVector = VectorAdd(Vector3Rotate(VectorScale(LoadFloat(center), scale), rotation), translation);
     const SIMDVector extentsVector = VectorScale(LoadFloat(extents), Abs(scale));
     const SIMDVector orientationVector = QuaternionNormalize(QuaternionMultiply(LoadFloat(orientation), rotation));
-    StoreFloat(VectorSetW(centerVector, 0.0f), &outBox.center);
-    StoreFloat(VectorSetW(extentsVector, 0.0f), &outBox.extents);
-    StoreFloat(orientationVector, &outBox.orientation);
+    StoreFloat(VectorSetW(centerVector, 0.0f), outBox.center);
+    StoreFloat(VectorSetW(extentsVector, 0.0f), outBox.extents);
+    StoreFloat(orientationVector, outBox.orientation);
 }
 
 inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
@@ -1592,7 +1592,7 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     SIMDVector cornerVectors[s_CornerCount];
     CollisionDetail::ObbCorners(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
-        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), &corners[i]);
+        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingOrientedBox::contains(const SIMDVector point)const noexcept{
@@ -1781,7 +1781,7 @@ inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, con
     SIMDVector scale{};
     SIMDVector rotation{};
     SIMDVector translation{};
-    if(!MatrixDecompose(&scale, &rotation, &translation, matrix)){
+    if(!MatrixDecompose(scale, rotation, translation, matrix)){
         scale = s_SIMDOne;
         rotation = s_SIMDIdentityR3;
         translation = Vector3Transform(VectorZero(), matrix);
@@ -1792,8 +1792,8 @@ inline void SIMDCALL BoundingFrustum::transform(BoundingFrustum& outFrustum, con
     const SIMDVector scaledPlanes = VectorMultiply(VectorSet(nearPlane, farPlane, 0.0f, 0.0f), maxScale);
     const SIMDVector originVector = Vector3Transform(LoadFloat(origin), matrix);
     const SIMDVector orientationVector = QuaternionNormalize(QuaternionMultiply(LoadFloat(orientation), rotation));
-    StoreFloat(VectorSetW(originVector, 0.0f), &outFrustum.origin);
-    StoreFloat(orientationVector, &outFrustum.orientation);
+    StoreFloat(VectorSetW(originVector, 0.0f), outFrustum.origin);
+    StoreFloat(orientationVector, outFrustum.orientation);
     outFrustum.rightSlope = rightSlope;
     outFrustum.leftSlope = leftSlope;
     outFrustum.topSlope = topSlope;
@@ -1814,8 +1814,8 @@ inline void SIMDCALL BoundingFrustum::transform(
         VectorSet(nearPlane, farPlane, 0.0f, 0.0f),
         VectorAbs(VectorReplicate(scale))
     );
-    StoreFloat(VectorSetW(originVector, 0.0f), &outFrustum.origin);
-    StoreFloat(orientationVector, &outFrustum.orientation);
+    StoreFloat(VectorSetW(originVector, 0.0f), outFrustum.origin);
+    StoreFloat(orientationVector, outFrustum.orientation);
     outFrustum.rightSlope = rightSlope;
     outFrustum.leftSlope = leftSlope;
     outFrustum.topSlope = topSlope;
@@ -1839,7 +1839,7 @@ inline void BoundingFrustum::getCorners(Float3U* corners)const noexcept{
         cornerVectors
     );
     for(u32 i = 0u; i < s_CornerCount; ++i)
-        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), &corners[i]);
+        StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
 
 [[nodiscard]] inline ContainmentType::Enum SIMDCALL BoundingFrustum::contains(const SIMDVector point)const noexcept{

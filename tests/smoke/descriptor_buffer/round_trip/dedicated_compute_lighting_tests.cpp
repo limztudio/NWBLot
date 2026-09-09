@@ -465,9 +465,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     seedStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
     seedStash->commitBarriers();
     const TextureSlice slice;
-    seedStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
-    seedStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
-    seedStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    seedStash->copyTexture(*shadowHistory, slice, *shadowVisibility, slice);
+    seedStash->copyTexture(*causticHistory, slice, *causticIrradiance, slice);
+    seedStash->copyTexture(*surfelHistory, slice, *surfelIrradiance, slice);
     seedStash->close(&seedStashState);
     ASSERT_TRUE(seedStashState.valid());
     ASSERT_TRUE(seedShadowReturnState.buildTextureSubset(seedStashState, shadowVisibility.get(), fanInScratchArena));
@@ -587,9 +587,9 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueUsesAcceptedLaggedLig
     nextStash->setTextureState(causticHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
     nextStash->setTextureState(surfelHistory.get(), s_AllSubresources, ResourceStates::CopyDest);
     nextStash->commitBarriers();
-    nextStash->copyTexture(shadowHistory.get(), slice, shadowVisibility.get(), slice);
-    nextStash->copyTexture(causticHistory.get(), slice, causticIrradiance.get(), slice);
-    nextStash->copyTexture(surfelHistory.get(), slice, surfelIrradiance.get(), slice);
+    nextStash->copyTexture(*shadowHistory, slice, *shadowVisibility, slice);
+    nextStash->copyTexture(*causticHistory, slice, *causticIrradiance, slice);
+    nextStash->copyTexture(*surfelHistory, slice, *surfelIrradiance, slice);
     nextStash->close(&nextStashState);
     ASSERT_TRUE(nextStashState.valid());
 

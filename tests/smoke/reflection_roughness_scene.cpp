@@ -138,7 +138,7 @@ bool ReflectionRoughnessScene::applyMutation(){
             return false;
         for(u32 joint = 1u; joint < pose.localJoints.size(); ++joint){
             const f32 angle = (joint & 1u) != 0u ? 0.32f : -0.32f;
-            StoreFloat(MatrixMultiply(LoadFloat(m_bindJoints[joint]), MatrixRotationRollPitchYaw(0.15f, angle, 0.12f)), &pose.localJoints[joint]);
+            StoreFloat(MatrixMultiply(LoadFloat(m_bindJoints[joint]), MatrixRotationRollPitchYaw(0.15f, angle, 0.12f)), pose.localJoints[joint]);
         }
         break;
     }
@@ -156,7 +156,7 @@ Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef
     if(!entity.valid())
         return entity;
     auto& transform = m_world.entity(entity).getComponent<Impl::Scene::TransformComponent>();
-    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), &transform.rotation);
+    StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
     const Half4U packedF0 = MakeHalf4U(f0, f0, f0, 0.f);
     const Half packedRoughness = ConvertFloatToHalf(roughness);
     if(!Impl::SetMaterialMutableParameter(

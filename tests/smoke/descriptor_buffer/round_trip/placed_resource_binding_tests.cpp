@@ -78,8 +78,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     ASSERT_TRUE(localTexture);
     EXPECT_EQ(localBuffer->getDeviceGeneration(), device.getDeviceGeneration());
     EXPECT_EQ(localTexture->getDeviceGeneration(), device.getDeviceGeneration());
-    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(localBuffer.get());
-    const MemoryRequirements textureRequirements = device.getTextureMemoryRequirements(localTexture.get());
+    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(*localBuffer);
+    const MemoryRequirements textureRequirements = device.getTextureMemoryRequirements(*localTexture);
     ASSERT_GT(bufferRequirements.size, 0u);
     ASSERT_GT(textureRequirements.size, 0u);
 
@@ -91,26 +91,12 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);
 
-    expectDiagnosticRejection([&](){
-        return device.getBufferMemoryRequirements(nullptr).size != 0u;
-    });
-    expectDiagnosticRejection([&](){
-        return device.getTextureMemoryRequirements(nullptr).size != 0u;
-    });
-    expectDiagnosticRejection([&](){
-        return device.getAccelStructMemoryRequirements(nullptr).size != 0u;
-    });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(nullptr, heap.get(), 0u); });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(nullptr, heap.get(), 0u); });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(localBuffer.get(), nullptr, 0u); });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(localTexture.get(), nullptr, 0u); });
-
     BufferHandle ordinaryBuffer = device.createBuffer(BufferDesc().setByteSize(4096u));
     ASSERT_TRUE(ordinaryBuffer);
     expectDiagnosticRejection([&](){
-        return device.getBufferMemoryRequirements(ordinaryBuffer.get()).size != 0u;
+        return device.getBufferMemoryRequirements(*ordinaryBuffer).size != 0u;
     });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(ordinaryBuffer.get(), heap.get(), 0u); });
+    expectDiagnosticRejection([&](){ return device.bindBufferMemory(*ordinaryBuffer, *heap, 0u); });
 
     TextureHandle ordinaryTexture = device.createTexture(
         TextureDesc()
@@ -121,9 +107,9 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     );
     ASSERT_TRUE(ordinaryTexture);
     expectDiagnosticRejection([&](){
-        return device.getTextureMemoryRequirements(ordinaryTexture.get()).size != 0u;
+        return device.getTextureMemoryRequirements(*ordinaryTexture).size != 0u;
     });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(ordinaryTexture.get(), heap.get(), 0u); });
+    expectDiagnosticRejection([&](){ return device.bindTextureMemory(*ordinaryTexture, *heap, 0u); });
 
     const TextureDesc nativeTextureDesc = ordinaryTexture->getDescription();
     TextureDesc virtualNativeTextureDesc = nativeTextureDesc;
@@ -137,9 +123,9 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     );
     ASSERT_TRUE(nativeTexture);
     expectDiagnosticRejection([&](){
-        return device.getTextureMemoryRequirements(nativeTexture.get()).size != 0u;
+        return device.getTextureMemoryRequirements(*nativeTexture).size != 0u;
     });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(nativeTexture.get(), heap.get(), 0u); });
+    expectDiagnosticRejection([&](){ return device.bindTextureMemory(*nativeTexture, *heap, 0u); });
 
     HeadlessGraphicsScope foreignScope;
     ASSERT_TRUE(foreignScope.initialize());
@@ -151,15 +137,15 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     ASSERT_TRUE(foreignTexture);
     ASSERT_TRUE(foreignHeap);
     expectDiagnosticRejection([&](){
-        return device.getBufferMemoryRequirements(foreignBuffer.get()).size != 0u;
+        return device.getBufferMemoryRequirements(*foreignBuffer).size != 0u;
     });
     expectDiagnosticRejection([&](){
-        return device.getTextureMemoryRequirements(foreignTexture.get()).size != 0u;
+        return device.getTextureMemoryRequirements(*foreignTexture).size != 0u;
     });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(foreignBuffer.get(), heap.get(), 0u); });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(foreignTexture.get(), heap.get(), 0u); });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(localBuffer.get(), foreignHeap.get(), 0u); });
-    expectDiagnosticRejection([&](){ return device.bindTextureMemory(localTexture.get(), foreignHeap.get(), 0u); });
+    expectDiagnosticRejection([&](){ return device.bindBufferMemory(*foreignBuffer, *heap, 0u); });
+    expectDiagnosticRejection([&](){ return device.bindTextureMemory(*foreignTexture, *heap, 0u); });
+    expectDiagnosticRejection([&](){ return device.bindBufferMemory(*localBuffer, *foreignHeap, 0u); });
+    expectDiagnosticRejection([&](){ return device.bindTextureMemory(*localTexture, *foreignHeap, 0u); });
 
     const HeapDesc localBufferHeapDesc{
         .capacity = bufferRequirements.size,
@@ -175,16 +161,16 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     HeapHandle localTextureHeap = device.createHeap(localTextureHeapDesc);
     ASSERT_TRUE(localBufferHeap);
     ASSERT_TRUE(localTextureHeap);
-    const bool localBufferBound = device.bindBufferMemory(localBuffer.get(), localBufferHeap.get(), 0u);
-    const bool localTextureBound = device.bindTextureMemory(localTexture.get(), localTextureHeap.get(), 0u);
+    const bool localBufferBound = device.bindBufferMemory(*localBuffer, *localBufferHeap, 0u);
+    const bool localTextureBound = device.bindTextureMemory(*localTexture, *localTextureHeap, 0u);
     if(!localBufferBound || !localTextureBound){
         GTEST_SKIP() << "DeviceLocal heap selection is incompatible with a local virtual resource on this device.";
     }
 
     const MemoryRequirements foreignBufferRequirements =
-        foreignDevice.getBufferMemoryRequirements(foreignBuffer.get());
+        foreignDevice.getBufferMemoryRequirements(*foreignBuffer);
     const MemoryRequirements foreignTextureRequirements =
-        foreignDevice.getTextureMemoryRequirements(foreignTexture.get());
+        foreignDevice.getTextureMemoryRequirements(*foreignTexture);
     ASSERT_GT(foreignBufferRequirements.size, 0u);
     ASSERT_GT(foreignTextureRequirements.size, 0u);
     const HeapDesc foreignBufferHeapDesc{
@@ -202,9 +188,9 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     ASSERT_TRUE(foreignBufferHeap);
     ASSERT_TRUE(foreignTextureHeap);
     const bool foreignBufferBound =
-        foreignDevice.bindBufferMemory(foreignBuffer.get(), foreignBufferHeap.get(), 0u);
+        foreignDevice.bindBufferMemory(*foreignBuffer, *foreignBufferHeap, 0u);
     const bool foreignTextureBound =
-        foreignDevice.bindTextureMemory(foreignTexture.get(), foreignTextureHeap.get(), 0u);
+        foreignDevice.bindTextureMemory(*foreignTexture, *foreignTextureHeap, 0u);
     if(!foreignBufferBound || !foreignTextureBound){
         GTEST_SKIP() << "DeviceLocal heap selection is incompatible with a foreign virtual resource on this device.";
     }
@@ -232,7 +218,7 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
     BufferHandle secondBuffer = device.createBuffer(virtualBufferDesc);
     ASSERT_TRUE(firstBuffer);
     ASSERT_TRUE(secondBuffer);
-    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(firstBuffer.get());
+    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(*firstBuffer);
     ASSERT_GT(bufferRequirements.size, 0u);
     ASSERT_GT(bufferRequirements.alignment, 0u);
 
@@ -247,18 +233,18 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);
 
-    if(!device.bindBufferMemory(firstBuffer.get(), heap.get(), 0u))
+    if(!device.bindBufferMemory(*firstBuffer, *heap, 0u))
         GTEST_SKIP() << "Heap memory type is incompatible with the virtual buffers on this device.";
     expectDiagnosticRejection([&](){
-        return device.bindBufferMemory(firstBuffer.get(), heap.get(), bufferRequirements.alignment);
+        return device.bindBufferMemory(*firstBuffer, *heap, bufferRequirements.alignment);
     });
-    expectDiagnosticRejection([&](){ return device.bindBufferMemory(secondBuffer.get(), heap.get(), 0u); });
-    ASSERT_TRUE(device.bindBufferMemory(secondBuffer.get(), heap.get(), secondBufferOffset));
+    expectDiagnosticRejection([&](){ return device.bindBufferMemory(*secondBuffer, *heap, 0u); });
+    ASSERT_TRUE(device.bindBufferMemory(*secondBuffer, *heap, secondBufferOffset));
 
     firstBuffer.reset();
     BufferHandle reusedBuffer = device.createBuffer(virtualBufferDesc);
     ASSERT_TRUE(reusedBuffer);
-    ASSERT_TRUE(device.bindBufferMemory(reusedBuffer.get(), heap.get(), 0u));
+    ASSERT_TRUE(device.bindBufferMemory(*reusedBuffer, *heap, 0u));
 
 #if defined(NWB_FINAL)
     BufferHandle concurrentBuffer = device.createBuffer(virtualBufferDesc);
@@ -272,7 +258,7 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
         binders[binderIndex] = Thread([&, binderIndex](){
             bindersReady.count_down();
             bindersReady.wait();
-            bindingResults[binderIndex] = device.bindBufferMemory(concurrentBuffer.get(), concurrentHeap.get(), 0u);
+            bindingResults[binderIndex] = device.bindBufferMemory(*concurrentBuffer, *concurrentHeap, 0u);
         });
     }
     for(Thread& binder : binders)
@@ -322,8 +308,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedTextureAndCrossClassBindingsReserveR
     ASSERT_TRUE(mixedBuffer);
     ASSERT_TRUE(firstTexture);
     ASSERT_TRUE(secondTexture);
-    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(mixedBuffer.get());
-    const MemoryRequirements textureRequirements = device.getTextureMemoryRequirements(firstTexture.get());
+    const MemoryRequirements bufferRequirements = device.getBufferMemoryRequirements(*mixedBuffer);
+    const MemoryRequirements textureRequirements = device.getTextureMemoryRequirements(*firstTexture);
     ASSERT_GT(bufferRequirements.size, 0u);
     ASSERT_GT(bufferRequirements.alignment, 0u);
     ASSERT_GT(textureRequirements.size, 0u);
@@ -344,20 +330,20 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedTextureAndCrossClassBindingsReserveR
     };
     HeapHandle mixedHeap = device.createHeap(mixedHeapDesc);
     ASSERT_TRUE(mixedHeap);
-    if(!device.bindBufferMemory(mixedBuffer.get(), mixedHeap.get(), 0u))
+    if(!device.bindBufferMemory(*mixedBuffer, *mixedHeap, 0u))
         GTEST_SKIP() << "Heap memory type is incompatible with the virtual buffer on this device.";
-    if(!device.bindTextureMemory(firstTexture.get(), mixedHeap.get(), textureOffset))
+    if(!device.bindTextureMemory(*firstTexture, *mixedHeap, textureOffset))
         GTEST_SKIP() << "No common buffer/optimal-image heap memory type is available on this device.";
 
     expectDiagnosticRejection([&](){
-        return device.bindTextureMemory(firstTexture.get(), mixedHeap.get(), textureOffset);
+        return device.bindTextureMemory(*firstTexture, *mixedHeap, textureOffset);
     });
     expectDiagnosticRejection([&](){
-        return device.bindTextureMemory(secondTexture.get(), mixedHeap.get(), textureOffset);
+        return device.bindTextureMemory(*secondTexture, *mixedHeap, textureOffset);
     });
 
     firstTexture.reset();
-    ASSERT_TRUE(device.bindTextureMemory(secondTexture.get(), mixedHeap.get(), textureOffset));
+    ASSERT_TRUE(device.bindTextureMemory(*secondTexture, *mixedHeap, textureOffset));
     Heap* const retainedMixedHeap = mixedHeap.get();
     EXPECT_EQ(retainedMixedHeap->getReferenceCount(), 3u);
     mixedHeap.reset();
@@ -392,9 +378,9 @@ TEST_F(DescriptorBufferRoundTripTest, VirtualAccelStructRequirementsCoverBacking
     ASSERT_TRUE(accelStruct->getBackingBuffer());
     EXPECT_EQ(accelStruct->getDeviceGeneration(), accelStruct->getBackingBuffer()->getDeviceGeneration());
 
-    const MemoryRequirements accelRequirements = device.getAccelStructMemoryRequirements(accelStruct.get());
+    const MemoryRequirements accelRequirements = device.getAccelStructMemoryRequirements(*accelStruct);
     const MemoryRequirements bufferRequirements =
-        device.getBufferMemoryRequirements(accelStruct->getBackingBuffer());
+        device.getBufferMemoryRequirements(*accelStruct->getBackingBuffer());
     ASSERT_GT(accelRequirements.size, 0u);
     ASSERT_GT(accelRequirements.alignment, 0u);
     EXPECT_EQ(accelRequirements.size, bufferRequirements.size);
@@ -410,7 +396,7 @@ TEST_F(DescriptorBufferRoundTripTest, VirtualAccelStructRequirementsCoverBacking
     };
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);
-    if(!device.bindAccelStructMemory(accelStruct.get(), heap.get(), 0u))
+    if(!device.bindAccelStructMemory(*accelStruct, *heap, 0u))
         GTEST_SKIP() << "Heap memory type is incompatible with acceleration-structure storage on this device.";
 
     Heap* const retainedHeap = heap.get();

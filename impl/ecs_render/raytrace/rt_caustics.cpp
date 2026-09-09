@@ -698,8 +698,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         combinedMax = VectorMax(combinedMax, worldMax);
 
         NwbCausticEmissionTargetGpu target;
-        StoreFloat(VectorSetW(worldMin, 0.0f), &target.aabbMin);
-        StoreFloat(VectorSetW(worldMax, 0.0f), &target.aabbMax);
+        StoreFloat(VectorSetW(worldMin, 0.0f), target.aabbMin);
+        StoreFloat(VectorSetW(worldMax, 0.0f), target.aabbMax);
         targets.push_back(target);
     }
 
@@ -723,8 +723,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         targetByteCount
     );
 
-    StoreFloat(combinedMin, &m_rayTracingState.m_causticTargetBoundsMin);
-    StoreFloat(combinedMax, &m_rayTracingState.m_causticTargetBoundsMax);
+    StoreFloat(combinedMin, m_rayTracingState.m_causticTargetBoundsMin);
+    StoreFloat(combinedMax, m_rayTracingState.m_causticTargetBoundsMax);
     m_rayTracingState.m_causticRefractiveInstanceCount = targetCount;
 
     return true;
@@ -907,7 +907,7 @@ void RendererRayTracingSystem::clearNonTemporalCausticAccumulator(Core::CommandL
         m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
-        commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+        commandList.clearTextureUInt(*targets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
     }
 }
 
@@ -1145,7 +1145,7 @@ void RendererRayTracingSystem::prepareCausticAccumulatorForSplat(Core::CommandLi
         m_rayTracingState.m_causticAccumulatorInitialized = true;
         commandList.setTextureState(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
-        commandList.clearTextureUInt(targets.causticAccumulator.get(), ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
+        commandList.clearTextureUInt(*targets.causticAccumulator, ECSRenderDetail::s_CausticAccumulatorSubresources, 0u);
         return;
     }
 

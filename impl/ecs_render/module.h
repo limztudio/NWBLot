@@ -7,6 +7,8 @@
 
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/deferred/presentation_settings.h>
 
 #include <core/alloc/general.h>
 #include <core/ecs/system.h>
@@ -80,6 +82,8 @@ public:
     void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
+    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;
     [[nodiscard]] bool setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy);
     [[nodiscard]] Core::GpuTaskGraphRuntimeStatistics deferredTaskGraphRuntimeStatistics()const noexcept;

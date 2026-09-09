@@ -57,6 +57,7 @@ struct AvboitFrameTargets{
     Core::TextureHandle refractionNormalIor;
     Core::TextureHandle refractionTintCoverage;
     Core::TextureHandle refractionInstance;
+    Core::TextureHandle refractionSpecularRoughness;
     Core::TextureHandle refractionResolve;
     Core::TextureHandle foregroundAccumColor;
     Core::TextureHandle foregroundAccumExtinction;
@@ -103,7 +104,7 @@ struct AvboitFrameTargets{
 #endif
     }
 };
-static_assert(sizeof(AvboitFrameTargets) == 232u + 7u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
+static_assert(sizeof(AvboitFrameTargets) == 232u + 8u * sizeof(Core::TextureHandle) + sizeof(Core::FramebufferHandle), "AvboitFrameTargets should keep its compact CPU-only layout");
 
 struct MaterialPassDrawContext{
     Core::CommandList& commandList;
@@ -245,6 +246,7 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle gbufferBaseColor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferNormal = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferWorldPosition = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle gbufferSpecularRoughness = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle gbufferDepth = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle shadowVisibility = Core::GpuDescriptorHandle::invalid();
     // Writable view of the sampled shadow visibility array.
@@ -266,6 +268,7 @@ struct DeferredBindlessFrameResources{
     Core::GpuDescriptorHandle refractionNormalIor = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle refractionTintCoverage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle refractionInstance = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle refractionSpecularRoughness = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle refractionResolve = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle refractionResolveStorage = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle avboitForegroundColor = Core::GpuDescriptorHandle::invalid();
@@ -330,6 +333,7 @@ struct DeferredBindlessFrameResources{
             && gbufferBaseColor.valid()
             && gbufferNormal.valid()
             && gbufferWorldPosition.valid()
+            && gbufferSpecularRoughness.valid()
             && gbufferDepth.valid()
             && shadowVisibility.valid()
             && shadowVisibilityStorage.valid()
@@ -436,6 +440,7 @@ struct DeferredFrameTargets{
     Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
     Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
+    Core::Format::Enum specularRoughnessFormat = Core::Format::UNKNOWN;
     Core::Format::Enum opaqueColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum compositeColorFormat = Core::Format::UNKNOWN;
     Core::Format::Enum depthFormat = Core::Format::UNKNOWN;
@@ -465,6 +470,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle albedo;
     Core::TextureHandle normal;
     Core::TextureHandle worldPosition;
+    Core::TextureHandle specularRoughness;
     Core::TextureHandle csgCapBackNormal;
     Core::TextureHandle csgIntervalDepth;
     Core::TextureHandle csgIntervalId;
@@ -556,6 +562,7 @@ struct DeferredFrameTargets{
             && albedoFormat != Core::Format::UNKNOWN
             && normalFormat != Core::Format::UNKNOWN
             && worldPositionFormat != Core::Format::UNKNOWN
+            && specularRoughnessFormat != Core::Format::UNKNOWN
             && opaqueColorFormat != Core::Format::UNKNOWN
             && compositeColorFormat != Core::Format::UNKNOWN
             && depthFormat != Core::Format::UNKNOWN
@@ -563,6 +570,7 @@ struct DeferredFrameTargets{
             && albedo != nullptr
             && normal != nullptr
             && worldPosition != nullptr
+            && specularRoughness != nullptr
             && opaqueColor != nullptr
             && compositeColor != nullptr
             && depth != nullptr

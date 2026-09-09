@@ -24,6 +24,7 @@ struct NwbMeshGBufferOutput{
     [[vk::location(NWB_MESH_GBUFFER_BASE_COLOR_LOCATION)]] float4 baseColor : SV_Target0;
     [[vk::location(NWB_MESH_GBUFFER_NORMAL_LOCATION)]] float4 normal : SV_Target1;
     [[vk::location(NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION)]] float4 worldPosition : SV_Target2;
+    [[vk::location(NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION)]] float4 specularRoughness : SV_Target3;
 #if NWB_CSG_ENABLED
     float depth : SV_Depth;
 #endif
@@ -32,12 +33,14 @@ struct NwbMeshGBufferOutput{
 static half4 outGBufferBaseColor;
 static half4 outGBufferNormal;
 static half4 outGBufferWorldPosition;
+static half4 outGBufferSpecularRoughness;
 
 NwbMeshGBufferOutput nwbBuildMeshGBufferOutput(){
     NwbMeshGBufferOutput output;
     output.baseColor = outGBufferBaseColor;
     output.normal = outGBufferNormal;
     output.worldPosition = outGBufferWorldPosition;
+    output.specularRoughness = outGBufferSpecularRoughness;
 #if NWB_CSG_ENABLED
     output.depth = inPixelDepth;
 #endif
@@ -134,15 +137,17 @@ float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
     return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
 }
 
-// Full G-buffer write: the three RGBA16F targets carry, in their otherwise-unused alpha channels, the
+// Full G-buffer write: the first three RGBA16F targets carry, in their otherwise-unused alpha channels, the
 // shading-model id (base-color.a, delivered as data by the renderer) + two user BXDF parameters (normal.a,
 // world.a). The deferred lighting framework unpacks these into the surface the material BXDF reads, so a
 // material chooses what those two scalars mean (e.g. roughness / metallic) while its shading model is fixed
-// by its `bxdf` declaration.
-void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1){
+// by its `bxdf` declaration. The fourth target carries separately sanitized explicit F0 RGB and roughness.
+void nwbWriteMeshGBufferParams(
+    half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
     outGBufferWorldPosition = half4(half3(worldPosition), param1);
+    outGBufferSpecularRoughness = specularRoughness;
 }
 
 

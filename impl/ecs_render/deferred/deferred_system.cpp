@@ -47,6 +47,13 @@ void RendererDeferredSystem::invalidateResources(){
     m_deferredState.invalidateResources();
 }
 
+bool RendererDeferredSystem::setPresentationSettings(const PresentationSettings& settings){
+    if(!ValidatePresentationSettings(settings))
+        return false;
+    m_deferredState.m_presentationSettings = settings;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

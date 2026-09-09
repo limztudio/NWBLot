@@ -27,6 +27,7 @@ struct NwbRayTraceSurfaceHit{
     bool hit;
     bool frontFace;
     uint instance;
+    uint shadingModelId;
     float distance;
     float3 position;
     float3 geometricNormal;
@@ -67,6 +68,7 @@ NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
     hit.distance = query.CommittedRayT();
     hit.position = origin + direction * hit.distance;
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance];
+    hit.shadingModelId = material.shadingModelId;
     const uint triangleBase = query.CommittedPrimitiveIndex() * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint3 triangle = NwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));

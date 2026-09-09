@@ -208,7 +208,7 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 struct NwbRtInstanceMaterialGpu{
     u32 shadowTransmittanceModelId = Limit<u32>::s_Max;
     u32 flags = 0u;
-    u32 reservedMeshSlot = 0u;
+    u32 shadingModelId = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
     // Global-heap geometry slots; nodeSlot is software-only.
@@ -218,6 +218,7 @@ struct NwbRtInstanceMaterialGpu{
     u32 nodeSlot = Limit<u32>::s_Max;
 };
 static_assert(sizeof(NwbRtInstanceMaterialGpu) == 36u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
+static_assert(offsetof(NwbRtInstanceMaterialGpu, shadingModelId) == sizeof(u32) * 2u);
 
 // Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 namespace RtInstanceMaterialFlag{

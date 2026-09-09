@@ -6,6 +6,8 @@
 
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/reflection/composite_inputs.h>
+#include <impl/ecs_render/deferred/presentation_settings.h>
 
 #include <core/alloc/global.h>
 #include <core/ecs/global.h>
@@ -102,6 +104,7 @@ public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
 
 public:
     // Resolves immutable per-frame data before graph declaration. The shared renderer publishes changed payloads
@@ -148,11 +151,13 @@ public:
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
         DeferredFrameTargets& targets,
-        Core::GpuTimingSubmissionTicket& timingTicket
+        Core::GpuTimingSubmissionTicket& timingTicket,
+        const ReflectionCompositeInputs& reflectionInputs
     );
     [[nodiscard]] bool renderDeferredComposite(
         Core::CommandList& commandList,
-        DeferredFrameTargets& targets
+        DeferredFrameTargets& targets,
+        const ReflectionCompositeInputs& reflectionInputs
     );
     [[nodiscard]] bool renderDeferredPresent(
         Core::CommandList& commandList,

@@ -64,7 +64,7 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
     if(abs(projectedDepth - opaqueDepth) > 0.0002 || length(opaqueWorld - hit.position) > max(0.01, cameraDistance * 0.002))
         return false;
     radiance = includeTransparency ? nwbRefractionBackgroundForEntry(pixel, entry)
-        : NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(int3(pixel, 0)).rgb;
+        : nwbRefractionOpaqueBackground(pixel);
     return true;
 }
 
@@ -171,7 +171,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbRefractionOutput[pixel] = float4(0.0);
         return;
     }
-    g_NwbRefractionOutput[pixel] = nwbRefractionResolveHardware(pixel, entry);
+    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u
+        ? nwbRefractionResolveHardware(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
 }
 
 

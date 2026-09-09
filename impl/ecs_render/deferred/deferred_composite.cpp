@@ -38,14 +38,20 @@ namespace __hidden_deferred_composite{
 struct CompositePushConstants{
     u32 resourceSlots = 0u;
     u32 refractionResources = 0u;
+    u32 opaqueReflectionSlot = 0xffffffffu;
+    u32 glassReflectionSlot = 0xffffffffu;
+    u32 reflectionDebugView = 0u;
 };
-static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 2u);
+static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u);
 
 struct PresentPushConstants{
     u32 resourceSlots = 0u;
     u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
+    u32 toneMap = NWB_DEFERRED_TONE_MAP_REINHARD;
+    f32 exposure = 1.f;
+    f32 shoulder = 0.65f;
 };
-static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 2u);
+static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 5u);
 
 
 struct DeferredCompositeGraphTask{
@@ -53,6 +59,7 @@ struct DeferredCompositeGraphTask{
         RendererDeferredSystem* deferredSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        ReflectionCompositeInputs reflectionInputs;
     };
 
     [[nodiscard]] static bool record(
@@ -67,7 +74,8 @@ struct DeferredCompositeGraphTask{
             [&](RendererDeferredSystem& deferredSystem, DeferredFrameTargets& targets, Core::CommandList& taskCommandList){
                 return deferredSystem.renderDeferredComposite(
                     taskCommandList,
-                    targets
+                    targets,
+                    payload.reflectionInputs
                 );
             }
         );
@@ -211,7 +219,8 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
     Core::GpuTaskGraph& graph,
     const Core::GpuTaskDesc& desc,
     DeferredFrameTargets& targets,
-    Core::GpuTimingSubmissionTicket& timingTicket
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const ReflectionCompositeInputs& reflectionInputs
 ){
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
@@ -219,6 +228,7 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
             .deferredSystem = this,
             .targets = &targets,
             .timingTicket = &timingTicket,
+            .reflectionInputs = reflectionInputs,
         }
     );
 }
@@ -226,7 +236,8 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
 
 bool RendererDeferredSystem::renderDeferredComposite(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets
+    DeferredFrameTargets& targets,
+    const ReflectionCompositeInputs& reflectionInputs
 ){
     NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
@@ -241,7 +252,10 @@ bool RendererDeferredSystem::renderDeferredComposite(
     m_graphics.getDevice().getDescriptorHeap().bindCompute(commandList, *m_deferredState.m_compositeComputePipeline);
     const __hidden_deferred_composite::CompositePushConstants pushConstants{
         targets.bindless.slotsBufferDescriptor.slot(),
-        targets.avboit.refractionFramebuffer ? 1u : 0u
+        targets.avboit.refractionFramebuffer ? 1u : 0u,
+        reflectionInputs.opaqueRadianceSlot,
+        reflectionInputs.glassRadianceSlot,
+        static_cast<u32>(reflectionInputs.debugView)
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     const u32 groupCountX = (targets.width + NWB_DEFERRED_COMPOSITE_GROUP_SIZE - 1u) / NWB_DEFERRED_COMPOSITE_GROUP_SIZE;
@@ -297,10 +311,13 @@ bool RendererDeferredSystem::renderDeferredPresent(
     commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(commandList, *m_deferredState.m_presentPipeline);
     const __hidden_deferred_composite::PresentPushConstants pushConstants{
-        targets.bindless.slotsBufferDescriptor.slot(),
-        m_graphics.isHDR10OutputActive()
+        .resourceSlots = targets.bindless.slotsBufferDescriptor.slot(),
+        .presentationMode = m_graphics.isHDR10OutputActive()
             ? NWB_DEFERRED_PRESENTATION_HDR10
-            : NWB_DEFERRED_PRESENTATION_SDR
+            : NWB_DEFERRED_PRESENTATION_SDR,
+        .toneMap = m_deferredState.m_presentationSettings.toneMap,
+        .exposure = m_deferredState.m_presentationSettings.exposure,
+        .shoulder = m_deferredState.m_presentationSettings.shoulder,
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

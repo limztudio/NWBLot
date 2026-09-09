@@ -176,10 +176,15 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     const Core::GpuGraphResourceId normalIor = ImportTexture(graph, targets.avboit.refractionNormalIor);
     const Core::GpuGraphResourceId tintCoverage = ImportTexture(graph, targets.avboit.refractionTintCoverage);
     const Core::GpuGraphResourceId instance = ImportTexture(graph, targets.avboit.refractionInstance);
-    if(!depth.valid() || !normalIor.valid() || !tintCoverage.valid() || !instance.valid())
+    const Core::GpuGraphResourceId specularRoughness = ImportTexture(graph, targets.avboit.refractionSpecularRoughness);
+    if(!depth.valid() || !normalIor.valid() || !tintCoverage.valid() || !instance.valid() || !specularRoughness.valid())
         return {};
 
-    const auto appendClear = [&](const Name identity, const Core::GpuGraphResourceId destination, const bool isDepth){
+    const auto appendClear = [&](
+        const Name identity,
+        const Core::GpuGraphResourceId destination,
+        const bool isDepth,
+        const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
         Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Clear", dependency);
         desc.setQueue(GraphicsUploadQueueRequest());
         Core::GpuClearTextureTaskDesc clear;
@@ -188,18 +193,21 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         clear.valueType = isDepth ? Core::GpuClearTextureTaskValueType::DepthStencil : Core::GpuClearTextureTaskValueType::Float;
         clear.clearDepth = isDepth;
         clear.depthValue = 1.f;
-        clear.floatValue = Core::Color(0.f, 0.f, 0.f, 0.f);
+        clear.floatValue = color;
         dependency = graph.addClearTextureTask(desc, clear);
         return dependency.valid();
     };
     if(!appendClear(Name("render.refraction.clear.depth"), depth, true)
         || !appendClear(Name("render.refraction.clear.normal_ior"), normalIor, false)
         || !appendClear(Name("render.refraction.clear.tint_coverage"), tintCoverage, false)
-        || !appendClear(Name("render.refraction.clear.instance"), instance, false))
+        || !appendClear(Name("render.refraction.clear.instance"), instance, false)
+        || !appendClear(Name("render.refraction.clear.specular_roughness"), specularRoughness, false, Core::Color(0.f, 0.f, 0.f, 1.f)))
         return {};
 
     const auto finalize = [&](){
-        const Core::GpuTaskResourceUse uses[] = {ReadUse(depth), ReadUse(normalIor), ReadUse(tintCoverage), ReadUse(instance)};
+        const Core::GpuTaskResourceUse uses[] = {
+            ReadUse(depth), ReadUse(normalIor), ReadUse(tintCoverage), ReadUse(instance), ReadUse(specularRoughness)
+        };
         Core::GpuTaskDesc desc = TaskDesc(Name("render.refraction.capture_finalize"), "Refraction Capture Finalize", dependency);
         desc.setResourceUses(uses, LengthOf(uses));
         return graph.addTask<FinalizeTask>(desc, FinalizeTask::Payload{});
@@ -208,12 +216,6 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         return finalize();
     if(!targets.avboit.refractionFramebuffer)
         return {};
-    // The fourth shader output has its write mask disabled, but Vulkan still requires the attached scratch
-    // image in attachment state. The ordinary AVBOIT clear initializes it after capture completes.
-    const Core::GpuGraphResourceId unusedExtinctionAttachment = ImportTexture(graph, targets.avboit.foregroundAccumExtinction);
-    if(!unusedExtinctionAttachment.valid())
-        return {};
-
     Core::Alloc::ScratchArena scratch(RendererArenaScope::s_TaskGraphArena);
     MaterialPassDrawItemPartitions drawItems{scratch};
     InstanceGpuDataVector instances{scratch};
@@ -337,10 +339,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
             uses.push_back(ReadWriteUse(normalIor, Core::ResourceStates::RenderTarget));
             uses.push_back(ReadWriteUse(tintCoverage, Core::ResourceStates::RenderTarget));
             uses.push_back(ReadWriteUse(instance, Core::ResourceStates::RenderTarget));
-            // This attachment has no enabled color writes or blending and its old contents are irrelevant.
-            // A write-only use permits the first capture to discard Undefined contents; ReadWrite would demand
-            // an initial state source before AVBOIT's following clear has initialized the scratch image.
-            uses.push_back(WriteUse(unusedExtinctionAttachment, Core::ResourceStates::RenderTarget));
+            uses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
         }
         const auto identityText = StringFormat(scratch, "render.refraction.capture.draw_{}", drawTaskIndex++);
         Core::GpuTaskDesc desc = TaskDesc(ToName(identityText), generate ? "Refraction Capture Generate" : "Refraction Capture Raster", dependency);

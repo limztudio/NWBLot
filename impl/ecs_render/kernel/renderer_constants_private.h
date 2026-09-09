@@ -31,6 +31,7 @@ inline constexpr Core::Color s_ClearColor = Core::Color(0.07f, 0.09f, 0.13f, 1.f
 // G-buffer sentinels. Keep target creation and per-frame clears in lockstep so background tests see the same data.
 inline constexpr Core::Color s_GBufferNormalClearColor = Core::Color(0.5f, 0.5f, 1.f, 1.f);
 inline constexpr Core::Color s_GBufferWorldPositionClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
+inline constexpr Core::Color s_GBufferSpecularRoughnessClearColor = Core::Color(0.f, 0.f, 0.f, 1.f);
 inline constexpr Core::Color s_SurfelIrradianceClearColor = Core::Color(0.f, 0.f, 0.f, 0.f);
 // Runtime quality defaults shared by state initialization and shader push-constant construction.
 inline constexpr f32 s_DefaultSwShadowEdgeThreshold = 0.1f;

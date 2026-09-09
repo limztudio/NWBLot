@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include <impl/global.h>
+#include <impl/assets/graphics/deferred/presentation_constants.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace PresentationToneMap{
+    enum Enum : u32{
+        LinearClamp = NWB_DEFERRED_TONE_MAP_LINEAR_CLAMP,
+        Reinhard = NWB_DEFERRED_TONE_MAP_REINHARD,
+    };
+};
+
+// Scene lighting, transparency, refraction, and reflections always exchange linear radiance. Exposure applies at
+// presentation for both output formats. Tone map and shoulder select the SDR display transform; HDR10 retains its
+// calibrated reference-white/mastering-peak shoulder and PQ encoding instead of applying a second SDR curve.
+struct PresentationSettings{
+    PresentationToneMap::Enum toneMap = PresentationToneMap::Reinhard;
+    f32 exposure = 1.f;
+    f32 shoulder = 0.65f;
+};
+
+[[nodiscard]] bool ValidatePresentationSettings(const PresentationSettings& settings);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

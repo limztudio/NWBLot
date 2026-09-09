@@ -91,6 +91,7 @@ RendererFramePipeline::RendererFramePipeline(
         m_opticalVolumes
     )
     , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
+    , m_reflectionSystem(arena, graphics, m_shaderSystem)
     , m_avboitSystem(
         arena,
         graphics,
@@ -135,6 +136,17 @@ RendererFramePipeline::~RendererFramePipeline(){
     m_deferredTaskTimingFeedback.deactivate();
 }
 
+
+bool RendererFramePipeline::setReflectionSettings(const ReflectionSettings& settings){
+    if(!ValidateReflectionSettings(settings))
+        return false;
+    m_reflectionSettings = settings;
+    return true;
+}
+
+bool RendererFramePipeline::setPresentationSettings(const PresentationSettings& settings){
+    return m_deferredSystem.setPresentationSettings(settings);
+}
 
 bool RendererFramePipeline::setTaskGraphTimingFeedbackPolicy(const Core::GpuTaskTimingFeedbackPolicy& policy){
     return m_deferredTaskTimingFeedback.setPolicy(policy);

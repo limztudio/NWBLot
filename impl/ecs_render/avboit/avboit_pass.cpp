@@ -149,8 +149,6 @@ Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
     ;
     renderState.rasterState.enableDepthClip().setCullBack();
     // The nearest surviving fragment replaces all optical fields together; no attachment blends.
-    renderState.blendState.targets[NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION]
-        .setColorWriteMask(Core::ColorMask::None);
     return renderState;
 }
 

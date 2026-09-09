@@ -384,7 +384,14 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     // Resource recreation preserves the user's traversal preference.
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_refractionHardwareTracingEnabled="));
     EXPECT_EQ(CountText(compactStateSystem, ".clear();"), 16u);
-    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 25u);
+    // Shadow and caustic aliases now share one descriptor owned by the ray scene; invalidation retires it once.
+    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 24u);
+    EXPECT_EQ(CountText(compactStateHeader, "Core::GpuDescriptorHandlem_rayTraceMaterialContextSlotsHeapHandle="), 1u);
+    EXPECT_EQ(CountText(compactStateSystem, "m_rayTraceMaterialContextSlotsHeapHandle=Core::GpuDescriptorHandle::invalid();"), 1u);
+    EXPECT_FALSE(ContainsText(compactStateHeader, "m_shadowMaterialContextSlotsHeapHandle"));
+    EXPECT_FALSE(ContainsText(compactStateHeader, "m_causticMaterialContextSlotsHeapHandle"));
+    EXPECT_EQ(CountText(rayTracingShadowSource, "heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);"), 1u);
+    EXPECT_FALSE(ContainsText(rayTracingCausticsSource, "heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_tlasBackingFresh=false;m_tlasBackingStateHandoffPending=false;"));
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_swShadowEdgeThreshold="));
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_causticTemporalDecay="));

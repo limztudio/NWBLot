@@ -1,103 +1,141 @@
-Stage one established explicit F0/roughness surface parameters, validated reflection settings, and shared ray-hit reconstruction. The debug build and asset cook passed, followed by the ECS graphics unit suite and both GPU-debug refraction and caustic/refraction capture smoke tests. Visible reflection work begins in the next stage.
+The stage-two smooth reflection baseline is implemented. It traces one hardware
+reflection ray for each queued eligible opaque or primary-glass sample and
+composites the result with AVBOIT. The seven-capture smoke has passed on the
+Qualcomm Adreno X2-90 with real hardware ray queries and `--gpudbg`: every capture
+completed normally with clean runtime and GPU validation logs. This establishes
+the cases described below. The 286-test ECS graphics suite, reflection/refraction
+analysis suites, GPU-debug refraction comparison, 33-capture exact-duplicate
+gallery, and caustic/refraction capture also passed. The refraction fixture
+explicitly disables reflection to isolate its transmission comparisons.
 
-This is the stage-one reflection smoke and measurement plan. The reflection
-fixture, runner, and statistics described below are planned work, not completed
-validation. The production `ReflectionSettings` contract defines
-the route and quality controls for the fixture.
+The public `ReflectionSettings` contract is declared in
+`impl/ecs_render/reflection/settings.h` and applied through
+`RendererSystem::setReflectionSettings`. Material surface hooks explicitly supply
+RGB specular F0 and perceptual roughness. These values have their own G-buffer and
+primary-glass capture targets; project-defined BXDF `param0/param1` retain their
+existing meanings. Fixtures use the typed `smoke_surface` mutable fields
+`runtime.specular_f0` and `runtime.perceptual_roughness`.
 
-The fixture will be a dedicated `nwb_reflection_smoke` target with its own
-`reflection_project.cpp`, registered by `tests/smoke/CMakeLists.txt` and the smoke
-launcher. It will reuse `framebuffer_capture.cpp` and
-`NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1` for actual 960x720 framebuffer readbacks.
-The existing `nwb_transparent_multi_smoke_assets` cook already combines
-`impl/assets` with `tests/smoke/assets` into `Testing/smoke_runtime/<config>/res`.
-Launching from that runtime directory keeps executable and cooked assets matched.
+At this stage `Hardware` traces the bounded ray queue, `ScreenSpace` supplies the
+analytic environment without screen hits, `Hybrid` uses the available hardware
+path, and `Disabled` produces identity reflection outputs. Hierarchical SSR and
+hybrid continuation are subsequent stages. The smoke selects its mode explicitly
+and sets both analytic environment colors to black, preventing environment color
+from passing as a reflected marker. Its ray budget is 1,382,400, enough for both
+960x720 layers; default budget quality is not established by this test.
 
-Reflection fixture materials belong under `tests/smoke/assets/smoke/reflection`,
-with their `.bind`, `.surface`, and `.bxdf` assets under
-`tests/smoke/assets/shaders`. Reuse existing mesh assets, not material assumptions.
-The current `NwbMeshSurface::param0/param1` and `NwbBxdfSurface::param0/param1`
-fields are project-defined; they cannot be assumed to mean roughness/metallic for
-arbitrary authored BXDFs. Fixture materials must explicitly supply the reflection
-contract once it is defined. Engine reflection passes consume that contract;
-project-specific material policy stays in the test asset tree.
+The dedicated `nwb_reflection_smoke` target uses `reflection_project.cpp` and
+`framebuffer_capture.cpp`. It reads back the actual 960x720 framebuffer after
+16 graphics presentation frames, then exits through normal application shutdown.
+Run from `Testing/smoke_runtime/<configuration>` so `cwd/res` selects the matching
+packed smoke assets. The shared `nwb_transparent_multi_smoke_assets` cook includes
+both `impl/assets` and `tests/smoke/assets`; rebuilding the target recooks changed
+shader/material assets.
 
-The visual matrix will compare reflections off, screen-space only, ray tracing
-only, and hybrid screen-space/ray-traced reflection at identical resolution,
-camera, geometry, material values, and simulation frame. Explicit hardware
-acceptance requires real ray-query support and a successful hardware dispatch;
-portable smoke coverage reports unsupported required routes as skips without
-changing device capability reporting. Test-local controls forward to the typed
-renderer settings rather than introducing production environment probes.
+The cases are:
 
-The initial cases and their checks are:
+- `offscreen`: the camera is at `(0, 1.4, -6)`, facing `+Z` with a 60-degree
+  vertical FOV. A smooth opaque mirror lies at `z=0`. Red and green sphere markers
+  sit behind the camera at `z=-8`, so their mirror images have virtual depth
+  `z=+8`, 14 units from the camera. The two reflected colors must appear in their
+  geometrically predicted regions. Disabled and screen/environment captures must
+  contain neither colored marker.
+- `moved`: both offscreen markers shift right by 0.9 world units. Their images
+  must move right by approximately 40.085 pixels at the fixed projection, with
+  negligible vertical movement. This is a static before/after geometry test,
+  not a temporal-history test.
+- `opaque_glass`: adjacent opaque and clear glass spheres reflect red/green
+  panels behind the camera. A grayscale striped backdrop remains visible through
+  the glass, and a blue foreground AVBOIT strip crosses both objects. Glass uses
+  IOR 3.8 and its corresponding dielectric F0 of approximately 0.34028. This is
+  deliberately a high-index optical stress fixture, not ordinary window glass;
+  coverage is zero and absorption is disabled.
 
-- An opaque planar mirror with an asymmetric colored marker visible to the
-  camera. The reflected marker must appear in its geometrically predicted region
-  and disappear when reflection is disabled. Moving the source must move its
-  reflection; mere brightening or flat tinting cannot pass.
-- A colored marker outside the camera frustum but visible to the reflection ray.
-  The offscreen marker must be absent from the direct framebuffer region, absent
-  from screen-space-only hits, and present in the hardware and hybrid reflection.
-  This case proves that the hardware continuation supplies information unavailable
-  to screen-space tracing.
-- Opaque and primary-glass reflectors in the same scene. Reflection must appear
-  on both eligible surfaces, while glass transmission, foreground AVBOIT layers,
-  and pixels outside the reflective silhouettes remain correct. The existing
-  strict refraction/duplicate and caustic smoke tests remain regression gates.
-- A roughness sweep with a finite bright marker over a dark background. Capture
-  several authored roughness values and measure lobe extent, local contrast, and
-  energy using tolerances appropriate to the implemented sampling model. Do not
-  impose byte equality between stochastic routes or claim that blur alone proves
-  physically correct rough reflection.
-- Deterministic camera and object motion, including a disocclusion and a camera
-  cut. Capture fixed early/middle/settled frames. Reflections must track current
-  geometry and stale history must be rejected when history is implemented.
-- Overlapping glass and opaque occluders, plus a foreground transparent strip.
-  Validate the nearest supported reflective surface, occlusion, and foreground
-  preservation. Mark unsupported multilayer transport explicitly in the gallery.
+`reflection_smoke.py` captures disabled, screen/environment, and hardware
+`offscreen`; disabled and hardware `moved`; and disabled and hardware
+`opaque_glass`. It requires the matching accepted-route diagnostic, normal
+shutdown, nonempty actual framebuffer data, and strict runtime/validation logs.
+Unsupported required hardware is a skip unless `--require-hardware` was selected.
+The application must self-exit within each capture timeout. The outer runner
+allows an additional 90 seconds for bounded child startup and process/logserver
+cleanup, rather than interrupting that cleanup at the capture deadline.
 
-The capture runner will reuse `window_capture_smoke.py` application capture,
-strict runtime/validation log rejection, normal shutdown checks, fixed simulation
-delta, and sanitized fixture environment. Dedicated Python analysis tests will
-exercise the marker-location, no-effect, retained-foreground, and history-rejection
-oracles. Raw BMPs remain the evidence; lossless PNG copies and a self-contained
-HTML comparison can reuse the existing gallery packaging. Artifact metadata must
-record route, hardware support, quality/ray budgets, roughness, frame count,
-simulation delta, device/build identity, and enabled validation mode.
+The image assertions require each mirror marker to cover at least 25% of its
+analytically projected disk area: 659 pixels at 960x720. At least 95% of each
+marker must lie in its predicted region, and its centroid and movement must match
+the fixed projection. Each opaque/glass receiver must acquire colored reflection
+in at least 2% of its test region. The blue foreground mask must retain at least
+97% of its original pixels and add no more than 3%; exterior changes are limited
+to 0.5% of the sampled exterior regions. Twelve independent synthetic analysis
+tests reject flat tint, missing or stationary markers, sparse correctly located
+patches, missing glass reflection, expanded/lost foreground, exterior corruption,
+malformed frames, and inherited fixture controls.
 
-Performance measurement is a separate bounded run using the same fixture and
-quality settings. `GpuPassTimingProbe` already reads published GPU timestamp
-windows, deduplicates their publish indices, and writes per-pass intervals to
-`NWB_GPU_TIMING_FILE` after `CaptureOptions::GpuTimingOnly()` is enabled. Its
-current cadence is a 0.25-second initial warm-up and 0.5-second reporting interval;
-the benchmark runner must add a meaningful shader/history warm-up and collect
-enough positive intervals. Feed real frame delta to FPS/timing cadence while
-advancing scene motion with the separately fixed simulation delta. Otherwise a
-fixed 1/60 simulation delta would produce a fabricated 60 FPS report.
+The completed stage-two hardware captures contained 2,643-2,687 pixels per mirror
+marker, with no marker pixels outside the predicted regions. The measured
+horizontal movements were approximately 40.2 pixels for red and 40.1 for green,
+against the 40.085-pixel prediction. Disabled and screen/environment controls had
+zero colored marker pixels. The paired spheres gained 3,880 opaque and 3,881 glass
+reflection pixels. All 12,811 foreground pixels were retained, with zero added
+foreground pixels and zero changed exterior pixels. These are fixture-specific
+observations from the completed capture; they are not general image-quality or
+performance guarantees.
 
-`tests/ab/gpu_timing_parse.py` already supports interval parsing, measurement
-byte offsets, per-scope medians, required sample counts, and `.namesym` decoding
-for opt/fin builds. The bounded process, warm-up, measurement, and logger lifecycle
-in `tests/ab/hybrid_shadow_boundary/run.py` provides the corresponding runner
-pattern. Require every expected reflection scope to appear; the existing smoke
-probe has a 64-scope cap and must not silently omit a new pass. Use `render.frame`
-for the end-to-end GPU critical path instead of summing overlapping envelopes.
+Build and run on the Windows ARM64 debug preset:
 
-Proposed reflection timings separate screen tracing, hardware continuation,
-temporal reconstruction, spatial filtering, and composition. Existing
-`render.opaque_regular`, `render.shadow_visibility`, and applicable caustic scopes
-serve as unaffected controls. Compare repeated, interleaved screen-only,
-hardware-only, and hybrid runs with identical quality settings. Report median
-frame/pass time, variation, and device-local memory use. Broad improvements in
-all control scopes indicate system variance, not a reflection optimization.
+```powershell
+cmake --build --preset windows-clang-arm64-dbg --target nwb_reflection_smoke
+ctest --test-dir __cmake/build/windows-clang-arm64 -C dbg --output-on-failure -R '^nwb_reflection_capture_analysis_unit$'
+python tests/smoke/reflection_smoke.py --executable __exec/windows/arm64/full/dbg/reflection_smoke.exe --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg --output-directory __cmake/build/windows-clang-arm64/Testing/smoke/dbg/reflection_gpudbg --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe --require-hardware --application-arg=--gpudbg
+```
 
-There is no existing reflection-specific GPU counter stream. The staged runtime
-implementation should expose completed asynchronous statistics for eligible
-opaque/glass pixels, screen-trace attempts and accepted hits, hardware rays,
-budget exhaustion, fallback pixels, and history acceptance/rejection. These
-counters must retain the originating frame and route identity, avoid synchronous
-readback stalls, and be disabled when diagnostics are not requested. Timings alone
-cannot prove that hybrid tracing saved rays or that an offscreen hit came from
-hardware. Hardware-only and hybrid measurements therefore require both timing
-and route/counter evidence before claiming a speed or quality improvement.
+The portable CTest entry is `nwb_reflection_capture_smoke`. The launcher scene is
+`reflection`, with `--reflection-case offscreen|moved|opaque_glass` and
+`--reflection-mode disabled|screen|hardware|hybrid`. All controls remain test-local
+and forward to the typed renderer API.
+
+Artifacts include the original BMPs, PNG conversions with identical RGB pixels,
+`reflection_manifest.json`, and a self-contained offline `reflection.html`.
+Images and an unvalidated report are saved before the final image assertions so
+failed visual comparisons remain inspectable. A passing report records the
+resulting metrics. The report uses actual rendered pixels; it contains no
+illustrated or generated replacement images.
+
+Remaining work and limits are explicit:
+
+- Only smooth single-bounce reflection is validated. Roughness currently gates
+  trace eligibility; rough lobe sampling and reconstruction remain future work.
+- Hardware hits use the authored BXDF with linear radiance and bounded lighting
+  inputs. Additional reflection, shadow, GI, and transparent-volume transport at
+  a secondary hit are not traced. A second transparent glass surface can therefore
+  hide content that full optical transport would reveal.
+- Primary glass reflection is composited behind foreground AVBOIT. The paired
+  fixture checks this order and visible reflection on glass; it is not a numerical
+  proof of full reflection/refraction energy conservation or multilayer optics.
+- Hierarchical SSR needs on-camera marker panels whose direct and mirror images
+  occupy separate predicted regions. Hardware/SSR/hybrid comparison, frustum-edge
+  fallback, and motion/disocclusion/history tests follow that implementation.
+- The existing strict refraction, exact-duplicate, and caustic tests passed as
+  separate regression gates. Combined reflection/duplicate and more complex
+  reflected secondary transport cases remain part of the subsequent matrix.
+- No reflection performance improvement has been measured. The GPU counter buffer
+  counts candidates, actual hardware rays/hits, eligible opaque/glass samples, and
+  fallback samples; completion-associated CPU publication and benchmark assertions
+  remain future work.
+
+For subsequent performance runs, enable `NWB_REFLECTION_SMOKE_TIMING=1` and use
+`NWB_GPU_TIMING_FILE`. The fixture forwards real frame delta to `FpsProbe` and
+`GpuPassTimingProbe`, while fixed simulation delta remains separate. The current
+reflection scopes are `render.reflection_classify`, `render.reflection_build_args`,
+and `render.reflection_hardware`; more scopes will accompany SSR and filtering.
+The probe has a 64-scope cap, so the benchmark must require all expected scopes
+rather than silently accepting missing timings. Decode opt/fin scope hashes with
+the matching `.namesym` file using `tests/ab/gpu_timing_parse.py`.
+
+Collect repeated, interleaved route runs after shader/history warm-up. Compare the
+`render.frame` critical path and affected reflection scopes alongside unaffected
+controls such as `render.opaque_regular`, `render.shadow_visibility`, and applicable
+caustic scopes; do not sum overlapping packet envelopes. CPU-visible counters
+must retain their originating frame/route and come only from completed accepted
+submissions. Ray savings require actual ray-count evidence, and timing changes
+that also appear in unaffected controls indicate system variance.

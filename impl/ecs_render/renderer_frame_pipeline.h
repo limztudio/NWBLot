@@ -19,6 +19,7 @@
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_render/reflection/reflection_system.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -146,6 +147,8 @@ public:
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
+    [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
+    [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
             return;
@@ -208,6 +211,7 @@ private:
         Core::GpuGraphResourceId albedo,
         Core::GpuGraphResourceId normal,
         Core::GpuGraphResourceId worldPosition,
+        Core::GpuGraphResourceId specularRoughness,
         Core::GpuGraphResourceId depth,
         Core::GpuGraphResourceId opaqueColor,
         Core::GpuGraphResourceId sceneShading,
@@ -581,6 +585,11 @@ private:
     bool m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
+    ReflectionSettings m_reflectionSettings;
+    bool m_preparedReflectionSceneAvailable = false;
+    bool m_reflectionHardwareLogged = false;
+    bool m_reflectionFallbackLogged = false;
+    u32 m_reflectionFrameIndex = 0u;
     bool m_refractionEnabled = true;
     bool m_refractionHardwareLogged = false;
     bool m_refractionScreenLogged = false;
@@ -609,6 +618,7 @@ private:
     RendererCsgSystem m_csgSystem;
     RendererMaterialSystem m_materialSystem;
     RendererDeferredSystem m_deferredSystem;
+    RendererReflectionSystem m_reflectionSystem;
     RendererAvboitSystem m_avboitSystem;
     RendererRayTracingSystem m_raytracingSystem;
 

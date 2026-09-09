@@ -18,8 +18,8 @@
 // Per-instance shadow-occluder material, indexed by the shadow instance id (hardware InstanceID() == software
 // scene-BVH leaf index). shadowTransmittanceModelId dispatches the per-hit transmittance hook; flags bit0 =
 // isTransparent (1 -> evaluate the hook, multiply the running transmittance and keep tracing; 0 -> opaque, zero
-// the transmittance and stop); reservedMeshSlot preserves its ABI position while the trace reaches
-// geometry through the heap slots below;
+// the transmittance and stop); shadingModelId selects the authored BXDF when a camera effect evaluates radiance.
+// Surface and BXDF dispatch IDs are separate domains; neither may substitute for the other.
 // materialConstantByteOffset locates the occluder's constant block in g_NwbMaterialTypedWords and
 // meshInstanceIndex indexes g_NwbMeshInstances (the mutable storage offset) -- together they reconstruct the
 // material-constants context the surface hook reads. GI evaluates the same hook for baseColor at the traced hit,
@@ -28,7 +28,7 @@
 struct NwbRtInstanceMaterial{
     uint shadowTransmittanceModelId;
     uint flags;
-    uint reservedMeshSlot;
+    uint shadingModelId;
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
     // Per-buffer descriptor-heap slots for this occluder's mesh geometry. The host registers each backing buffer and

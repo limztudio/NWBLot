@@ -1,0 +1,66 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_SURFACE_LIGHTING_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_SURFACE_LIGHTING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "surface_hit.slangi"
+#include "../deferred/bxdf_surface.slangi"
+
+// A traced surface has no associated opaque G-buffer texel. Its light loop must never read the primary camera's
+// screen-space visibility or caustics, even when the hit projects inside the viewport. Include this harness before
+// scene/lighting.slangi; the caller supplies the scene-shading and light-list heap-slot macros.
+#ifdef NWB_GRAPHICS_SCENE_LIGHTING_SLANGI
+#error "Include raytrace/surface_lighting.slangi before scene/lighting.slangi"
+#endif
+#ifndef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+#define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
+#endif
+#include "../scene/lighting.slangi"
+
+bool nwbBxdfRequiresLinearOutput(){
+    return true;
+}
+
+#include "deferred/generated/bxdf_dispatch.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// observerDirection points from the hit back along the incident ray. Material BXDFs consume this explicit view
+// vector and return linear radiance. This bounded approximation uses the authored direct-light loop and hemispheric
+// indirect fallback; it does not trace secondary shadow, GI, or recursive specular rays.
+float3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection){
+    if(!hit.hit)
+        return float3(0.0);
+
+    NwbBxdfSurface surface;
+    surface.baseColor = hit.surface.baseColor;
+    surface.normal = nwbSafeNormalize(hit.surface.normal, hit.geometricNormal);
+    surface.viewVector = nwbSafeNormalize(observerDirection, hit.geometricNormal);
+    if(dot(surface.normal, surface.viewVector) < 0.0)
+        surface.normal = -surface.normal;
+    surface.worldPosition = hit.position;
+    surface.shadingModel = hit.shadingModelId;
+    surface.param0 = hit.surface.param0;
+    surface.param1 = hit.surface.param1;
+    surface.isBackground = false;
+    surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.worldPosition, surface.normal);
+    return max(float3(nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(-1, -1))), float3(0.0));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -855,8 +855,8 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
     // the graph's frozen resource identity and the immutable selector snapshot it retains.
     if(
         !m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        || !m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.valid()
-        || m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
+        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
     )
         return false;
 
@@ -888,28 +888,6 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
     return true;
 }
 
-bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsHeapHandle(){
-    if(!ensureRayTraceMaterialContextSlotsBuffer())
-        return false;
-
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(
-        !heap.isInitialized()
-        || !RayTracingDetail::EnsureHeapBuffer(
-            heap,
-            *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(),
-            Core::GpuDescriptorClass::UniformBuffer,
-            false,
-            m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle
-        )
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register ray-trace material-context selector in the descriptor heap"));
-        return false;
-    }
-    return true;
-}
-
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -919,7 +897,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
         heap.free(m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
         heap.free(m_rayTracingState.m_shadowMaterialTypedHeapHandle);
         heap.free(m_rayTracingState.m_shadowInstanceHeapHandle);
-        heap.free(m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle);
+        heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);
         heap.free(m_rayTracingState.m_swShadowEdgeStatsHeapHandle);
         heap.free(m_rayTracingState.m_swShadowEdgeCounterHeapHandle);
         heap.free(m_rayTracingState.m_swShadowEdgeListHeapHandle);
@@ -930,7 +908,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     m_rayTracingState.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
@@ -1912,7 +1890,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         !heap.isInitialized()
         || !targets.bindless.valid()
         || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowVisibilityStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
@@ -1962,7 +1940,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         SwShadowHeapPushConstants push;
         push.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
         push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        push.materialContextSlotsHeapSlot = m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.slot();
+        push.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
         push.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
         push.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
         push.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();

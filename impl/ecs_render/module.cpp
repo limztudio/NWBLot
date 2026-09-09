@@ -84,6 +84,14 @@ void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noex
     m_pipeline->setRefractionHardwareTracingEnabled(enabled);
 }
 
+bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings){
+    return m_pipeline->setReflectionSettings(settings);
+}
+
+bool RendererSystem::setPresentationSettings(const PresentationSettings& settings){
+    return m_pipeline->setPresentationSettings(settings);
+}
+
 void RendererSystem::setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
     m_pipeline->setFrameLaggedAsyncLightingEnabled(enabled);
 }

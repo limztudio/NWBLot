@@ -14,7 +14,7 @@
 // (base color, normal, world position, the shading-model id + two BXDF params from the alpha channels), the
 // scene light list + per-light resolve, and the shadow-visibility accessor. The lighting pass itself owns
 // the loop: it loads the surface, dispatches on surface.shadingModel to a (user-authored) BXDF that walks the
-// lights and applies per-light visibility. SDR tonemaps there; HDR10 preserves linear highlights for presentation.
+// lights and applies per-light visibility. All transport remains linear; the final presentation pass owns display mapping.
 
 
 #include "binding_slots.h"
@@ -51,9 +51,15 @@ bool nwbDeferredPresentationIsHdr10(){
     return g_NwbDeferredLightingPushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10;
 }
 
-// BXDFs own their tone-map policy, but both deferred and AVBOIT harnesses expose this narrow presentation query.
+// This legacy presentation query describes the output surface, not the radiance required by transport passes.
 bool nwbBxdfPresentationIsHdr10(){
     return nwbDeferredPresentationIsHdr10();
+}
+
+// Authored BXDFs return linear radiance in deferred, AVBOIT, and ray-hit harnesses. Display mapping runs once after
+// their contributions are composed, so reflected screen samples and freshly shaded hits share the same color space.
+bool nwbBxdfRequiresLinearOutput(){
+    return true;
 }
 
 #define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE NwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)

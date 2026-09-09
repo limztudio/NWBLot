@@ -60,10 +60,17 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
 
 // Authored reflection inputs remain independent of legacy BXDF parameters and optical absorption/coverage.
 // Reject nonfinite inputs to the neutral defaults before clamping, so later filtering never spreads NaNs.
-void nwbSetMeshSurfaceReflection(inout NwbMeshSurface surface, half3 specularF0, half perceptualRoughness){
-    surface.specularF0 = all(isfinite(float3(specularF0))) ? saturate(specularF0) : NWB_SURFACE_SPECULAR_F0_NONE;
-    surface.perceptualRoughness = isfinite(float(perceptualRoughness))
+half4 nwbPackMeshSurfaceReflection(half3 specularF0, half perceptualRoughness){
+    const half3 validSpecularF0 = all(isfinite(float3(specularF0))) ? saturate(specularF0) : NWB_SURFACE_SPECULAR_F0_NONE;
+    const half validRoughness = isfinite(float(perceptualRoughness))
         ? saturate(perceptualRoughness) : NWB_SURFACE_ROUGHNESS_MAX;
+    return half4(validSpecularF0, validRoughness);
+}
+
+void nwbSetMeshSurfaceReflection(inout NwbMeshSurface surface, half3 specularF0, half perceptualRoughness){
+    const half4 reflection = nwbPackMeshSurfaceReflection(specularF0, perceptualRoughness);
+    surface.specularF0 = reflection.rgb;
+    surface.perceptualRoughness = reflection.a;
 }
 
 // Glass density seeds matching render coverage and shadow absorption.

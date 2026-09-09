@@ -107,9 +107,8 @@ struct RtSceneBvhState{
     // Global StorageBuffer heap views selected by the common trace-context slot cbuffer for SW shadow, GI, and caustics.
     Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    // Shared context-slot payload with independently owned heap views.
-    Core::GpuDescriptorHandle m_causticMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    // One context-slot descriptor shared by all ray-tracing effects.
+    Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
     // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
     Float44U m_prevWorldToClip = {};
 

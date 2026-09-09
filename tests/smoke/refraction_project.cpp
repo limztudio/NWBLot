@@ -42,6 +42,10 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("RefractionSmokeProject"));
         auto& renderer = AddSmokeRenderSystems(*world, context);
+        // These comparisons isolate transmission. Reflection has its own combined optical capture matrix.
+        NWB::Impl::ReflectionSettings reflection;
+        reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
+        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
         f32 enabled = 1.0f;
         static_cast<void>(ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", enabled));
         renderer.setRefractionEnabled(enabled != 0.0f);

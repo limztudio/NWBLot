@@ -34,6 +34,11 @@ bool nwbBxdfPresentationIsHdr10(){
     return nwbAvboitPresentationIsHdr10();
 }
 
+// Transport passes request linear radiance independently of the display presentation mode.
+bool nwbBxdfRequiresLinearOutput(){
+    return true;
+}
+
 #include "../mesh/gbuffer_io.slangi"
 
 #include "material_context_authoring.slangi"
@@ -117,7 +122,8 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         capture.accumExtinction.w = -1.0;
 #endif
         capture.foregroundColor = float4(float(nwbMeshInstanceIndex()) + 1.0, 0.0, 0.0, 0.0);
-        capture.foregroundExtinction = float4(0.0);
+        // The capture framebuffer binds persistent F0/roughness at the shared PS's fourth output location.
+        capture.foregroundExtinction = nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness);
         return capture;
     }
 
@@ -142,12 +148,8 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
     // Negative pixel bypasses opaque-G-buffer shadow sampling.
     const half3 resolvedColor = nwbDeferredDispatchBxdf(bxdfSurface.shadingModel, bxdfSurface, int2(-1, -1));
-    // Opacity belongs in weightedAlpha and never exceeds one. RGB is radiance: retain HDR highlights through the
-    // RGBA16F accumulation/composite targets, but preserve the prior SDR clamp for non-HDR presentation.
-    const half3 shadedColor = nwbAvboitPresentationIsHdr10()
-        ? max(resolvedColor, half3(0.0h))
-        : clamp(resolvedColor, half3(0.0h), half3(1.0h))
-    ;
+    // Opacity belongs in weightedAlpha. RGB stays nonnegative linear radiance until the final display transform.
+    const half3 shadedColor = max(resolvedColor, half3(0.0h));
 
     NwbAvboitAccumulatePixelOutput output;
     output.accumColor = half4(shadedColor * weightedAlpha, weightedAlpha);

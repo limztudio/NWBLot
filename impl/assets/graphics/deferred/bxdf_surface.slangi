@@ -15,11 +15,12 @@
 // dispatch (nwbDeferredDispatchBxdf), so the BXDF parameter type lives here -- shared by both consumers --
 // rather than in either consumer's own header. The two params are whatever the material packed into the
 // normal/world alpha channels (e.g. roughness / metallic); shadingModel selects which BXDF dispatches.
+// BXDFs use viewVector for their observer and return linear radiance when nwbBxdfRequiresLinearOutput() is true.
 struct NwbBxdfSurface{
     half3  baseColor;
     float3 normal;          // world space, normalized
     float3 worldPosition;
-    float3 viewVector;      // normalized, surface -> camera
+    float3 viewVector;      // normalized, surface -> observer; ray effects supply the reflected viewing direction
     uint   shadingModel;
     half   param0;
     half   param1;

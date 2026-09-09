@@ -350,7 +350,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             tracePush.frameIndex = frameIndex;
             tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
             tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-            tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_shadowMaterialContextSlotsHeapHandle.slot();
+            tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
             tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
             tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
             tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();

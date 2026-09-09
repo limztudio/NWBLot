@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
+#include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 
 #include <core/alloc/scratch.h>
@@ -326,6 +327,8 @@ struct RayTracingRefractionGraphResources{
     Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
     u32 materialContextSlotsHeapSlot = 0u;
     u32 viewHeapSlot = 0u;
+    u32 opaqueReflectionSlot = 0xffffffffu;
+    bool refractionEnabled = true;
     bool usesHardwareTrace = false;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -372,6 +375,8 @@ public:
 
     [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
     [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const;
+    [[nodiscard]] bool prepareSceneQueryResources();
+    [[nodiscard]] RayTracingSceneGraphResources snapshotSceneGraphResources()const;
     [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const;
     [[nodiscard]] RayTracingShadowVisibilityGraphPlanSnapshot snapshotShadowVisibilityGraphPlan(
         bool hardwareShadowSupported
@@ -1423,7 +1428,6 @@ private:
     [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
-    [[nodiscard]] bool ensureCausticMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;

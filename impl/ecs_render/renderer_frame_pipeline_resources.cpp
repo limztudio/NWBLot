@@ -97,6 +97,9 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
     }
 
+    if(!m_reflectionSystem.prepareResources(width, height, m_graphics.queryFeatureSupport(Core::Feature::RayQuery)))
+        return false;
+
     if(!m_avboitSystem.createAvboitPipelines())
         return false;
 
@@ -219,6 +222,7 @@ void RendererFramePipeline::invalidateResources(){
     resetInvalidatedResourceStateHandoffs();
     resetLaggedLightingHistoryTracking();
     m_frameRenderRecoveryFailed = false;
+    m_reflectionSystem.invalidateResources();
     m_raytracingSystem.invalidateResources();
     resetFrameTargets();
     // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material
@@ -472,6 +476,12 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
     m_shadowPreparationOutcome.resourcesValid = true;
+    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its
+    // neutral material context only after that preflight has selected the current generation.
+    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware
+        || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
+    m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
+    ++m_reflectionFrameIndex;
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))

@@ -270,7 +270,7 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 10u);
+    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 11u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
@@ -280,10 +280,10 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        ;\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, " = importAvboitTexture("), 11u);
+    EXPECT_EQ(CountText(deferredLighting, " = importAvboitTexture("), 12u);
     for(const AStringView resource : {
         AStringView("refractionDepth"), AStringView("refractionNormalIor"), AStringView("refractionTintCoverage"),
-        AStringView("refractionInstance"), AStringView("refractionResolve"),
+        AStringView("refractionInstance"), AStringView("refractionSpecularRoughness"), AStringView("refractionResolve"),
         AStringView("avboitForegroundColor"), AStringView("avboitForegroundExtinction"),
     }){
         AString declaration(resource.data(), resource.size());

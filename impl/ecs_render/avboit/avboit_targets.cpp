@@ -240,6 +240,9 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.refractionInstance = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::R32_FLOAT,
         "engine/avboit/refraction_instance", transparentBlack, true);
+    avboitTargets.refractionSpecularRoughness = __hidden_avboit_targets::CreateRenderTarget(
+        m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
+        "engine/avboit/refraction_specular_roughness", Core::Color(0.f, 0.f, 0.f, 1.f), true);
     Core::TextureDesc refractionDepthDesc = createdTargets.depth->getCreationDescription();
     refractionDepthDesc.setName("engine/avboit/refraction_depth")
         .setInitialState(Core::ResourceStates::Common)
@@ -255,16 +258,17 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
     avboitTargets.refractionResolve = m_graphics.createTexture(refractionResolveDesc);
     if(!avboitTargets.foregroundAccumColor || !avboitTargets.foregroundAccumExtinction
         || !avboitTargets.refractionNormalIor || !avboitTargets.refractionTintCoverage
-        || !avboitTargets.refractionInstance || !avboitTargets.refractionDepth || !avboitTargets.refractionResolve)
+        || !avboitTargets.refractionInstance || !avboitTargets.refractionSpecularRoughness
+        || !avboitTargets.refractionDepth || !avboitTargets.refractionResolve)
         return false;
     Core::FramebufferDesc refractionFramebufferDesc;
     refractionFramebufferDesc
         .addColorAttachment(avboitTargets.refractionNormalIor.get(), ECSRenderDetail::s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionTintCoverage.get(), ECSRenderDetail::s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionInstance.get(), ECSRenderDetail::s_FramebufferSubresources)
-        // The shared PS declares four outputs. Bind the existing foreground target for a complete interface;
-        // capture masks its writes and AVBOIT clears it before accumulation.
-        .addColorAttachment(avboitTargets.foregroundAccumExtinction.get(), ECSRenderDetail::s_FramebufferSubresources)
+        // The shared PS's fourth output carries reflection inputs during capture. Keep them separate from the
+        // foreground extinction that ordinary AVBOIT clears and accumulates after this pass.
+        .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), ECSRenderDetail::s_FramebufferSubresources)
         .setDepthAttachment(avboitTargets.refractionDepth.get(), ECSRenderDetail::s_FramebufferSubresources);
     avboitTargets.refractionFramebuffer = device.createFramebuffer(refractionFramebufferDesc);
     if(!avboitTargets.refractionFramebuffer)

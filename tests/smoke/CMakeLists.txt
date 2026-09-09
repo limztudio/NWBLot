@@ -183,6 +183,34 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
+        nwb_declare_executable(nwb_reflection_smoke)
+        target_sources(nwb_reflection_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+        )
+        target_compile_definitions(nwb_reflection_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_reflection_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_reflection_smoke nwb_transparent_multi_smoke_assets)
+
+        if(TARGET nwb_logserver)
+            set(_nwb_reflection_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+        else()
+            set(_nwb_reflection_logserver_args)
+        endif()
+        add_test(
+            NAME nwb_reflection_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_smoke.py"
+                "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection"
+                ${_nwb_reflection_logserver_args}
+        )
+        set_tests_properties(nwb_reflection_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 600
+        )
+
         nwb_declare_executable(nwb_refraction_smoke)
         target_sources(nwb_refraction_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/refraction_project.cpp"

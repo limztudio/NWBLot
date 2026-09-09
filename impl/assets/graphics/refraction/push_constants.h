@@ -17,7 +17,9 @@
     FIELD(height, 0u) \
     FIELD(deferredResourcesHeapSlot, 0u) \
     FIELD(materialContextSlotsHeapSlot, 0u) \
-    FIELD(viewHeapSlot, 0u)
+    FIELD(viewHeapSlot, 0u) \
+    FIELD(opaqueReflectionSlot, 0xffffffffu) \
+    FIELD(refractionEnabled, 1u)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

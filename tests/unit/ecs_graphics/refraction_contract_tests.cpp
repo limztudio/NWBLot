@@ -80,9 +80,7 @@ TEST(EcsGraphics, RefractionCaptureWritesOneNearestSurfaceWithoutBlendingOptical
     EXPECT_EQ(capture.depthStencilState.depthFunc, NWB::Core::ComparisonFunc::LessOrEqual);
     for(u32 index = 0u; index < NWB_AVBOIT_ACCUM_TARGET_COUNT; ++index){
         EXPECT_FALSE(capture.blendState.targets[index].blendEnable);
-        const auto expectedMask = index == NWB_AVBOIT_ACCUM_FOREGROUND_EXTINCTION_LOCATION
-            ? NWB::Core::ColorMask::None : NWB::Core::ColorMask::All;
-        EXPECT_EQ(capture.blendState.targets[index].colorWriteMask, expectedMask);
+        EXPECT_EQ(capture.blendState.targets[index].colorWriteMask, NWB::Core::ColorMask::All);
     }
 }
 
@@ -142,7 +140,7 @@ TEST(EcsGraphics, StandaloneAvboitModeNeverSamplesMissingRefractionDescriptors){
     }
 }
 
-TEST(EcsGraphics, CompositeRefractionPolicyUsesTwoWordPushAbiAndGatesAuxiliaryReads){
+TEST(EcsGraphics, CompositeOpticalPolicyMatchesFiveWordPushAbiAndGatesAuxiliaryReads){
     TestArena testArena;
     const TestPath root = RepoRoot(testArena);
     AString cppSource;
@@ -151,13 +149,17 @@ TEST(EcsGraphics, CompositeRefractionPolicyUsesTwoWordPushAbiAndGatesAuxiliaryRe
     ASSERT_TRUE(ReadTextFile(root / "impl" / "assets" / "graphics" / "deferred" / "composite_cs.slang", shaderSource));
     const AStringView cpp(cppSource.data(), cppSource.size());
     const AStringView shader(shaderSource.data(), shaderSource.size());
-    EXPECT_TRUE(ContainsText(cpp, "static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 2u)"));
+    EXPECT_TRUE(ContainsText(cpp, "static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u)"));
     EXPECT_TRUE(ContainsText(shader, "uint resourceSlots;\n    uint refractionResources;"));
     const usize guard = shader.find("if(g_NwbDeferredCompositePushConstants.refractionResources != 0u)");
     const usize auxiliaryRead = shader.find("g_NwbDeferredBindlessResources.refractionSlots1");
     ASSERT_NE(guard, AStringView::npos);
     ASSERT_NE(auxiliaryRead, AStringView::npos);
     EXPECT_LT(guard, auxiliaryRead);
+    EXPECT_TRUE(ContainsText(shader, "uint opaqueReflectionSlot;\n    uint glassReflectionSlot;\n    uint reflectionDebugView;"));
+    EXPECT_TRUE(ContainsText(shader, "opaqueReflectionSlot != 0xffffffffu"));
+    EXPECT_TRUE(ContainsText(shader, "glassReflectionSlot != 0xffffffffu"));
+    EXPECT_TRUE(ContainsText(shader, "frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)"));
 }
 
 

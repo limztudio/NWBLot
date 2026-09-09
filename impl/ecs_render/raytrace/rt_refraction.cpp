@@ -29,7 +29,7 @@ struct RefractionPushConstants{
     NWB_REFRACTION_PUSH_CONSTANTS_FIELDS(NWB_REFRACTION_CPU_FIELD)
 #undef NWB_REFRACTION_CPU_FIELD
 };
-static_assert(sizeof(RefractionPushConstants) == 5u * sizeof(u32));
+static_assert(sizeof(RefractionPushConstants) == 7u * sizeof(u32));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,7 +104,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         && heap.hasAccelStructLayout()
         && m_rayTracingState.m_tlas && m_rayTracingState.m_tlasHeapHandle.valid()
         && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer;
-    if(hardwareReady && ensureCausticMaterialContextSlotsHeapHandle() && ensurePipeline(true))
+    if(hardwareReady && ensureRayTraceMaterialContextSlotsHeapHandle() && ensurePipeline(true))
         m_rayTracingState.m_refractionUseHardwareTrace = true;
     return true;
 }
@@ -128,7 +128,7 @@ RayTracingRefractionGraphResources RendererRayTracingSystem::snapshotRefractionG
         resources.sceneTlas = m_rayTracingState.m_tlas;
         resources.tlasHeapHandle = m_rayTracingState.m_tlasHeapHandle;
         resources.materialContextSlotsBuffer = m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer;
-        resources.materialContextSlotsHeapSlot = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.slot();
+        resources.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
     }
     return resources;
 }
@@ -149,6 +149,8 @@ bool RendererRayTracingSystem::recordRefractionResolve(
     push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
     push.materialContextSlotsHeapSlot = resources.materialContextSlotsHeapSlot;
     push.viewHeapSlot = resources.viewHeapSlot;
+    push.opaqueReflectionSlot = resources.opaqueReflectionSlot;
+    push.refractionEnabled = resources.refractionEnabled ? 1u : 0u;
     Core::ComputeState state;
     state.setPipeline(resources.pipeline.get());
     commandList.setComputeState(state);

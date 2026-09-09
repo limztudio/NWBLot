@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/deferred/presentation_settings.h>
 
 #include <core/graphics/rhi/pipeline.h>
 #include <core/graphics/rhi/pipeline_state.h>
@@ -40,6 +41,7 @@ public:
 
 
 private:
+    PresentationSettings m_presentationSettings;
     Core::BindingLayoutHandle m_lightingBindingLayout;
     Core::BufferHandle m_sceneShadingBuffer;
     Core::BufferHandle m_lightBuffer;

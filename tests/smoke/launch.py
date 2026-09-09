@@ -40,6 +40,12 @@ SMOKE_REQUIRED_DEFINES = {
 
 
 SMOKE_SCENES = {
+    "reflection": SmokeScene(
+        runtime="smoke_runtime",
+        backends={
+            "native": SmokeExecutable("nwb_reflection_smoke", "reflection_smoke"),
+        },
+    ),
     "refraction": SmokeScene(
         runtime="smoke_runtime",
         backends={
@@ -145,6 +151,10 @@ def build_smoke_environment(args) -> Dict[str, str]:
             env["NWB_REFRACTION_SMOKE_ENABLED"] = "0"
     elif getattr(args, "refraction_geometry", False):
         raise SystemExit("--refraction-geometry requires --refraction-case")
+    if getattr(args, "reflection_case", None):
+        env["NWB_REFLECTION_SMOKE_CASE"] = args.reflection_case
+    if getattr(args, "reflection_mode", None):
+        env["NWB_REFLECTION_SMOKE_MODE"] = args.reflection_mode
     if args.spin_angle is not None:
         env["NWB_TRANSPARENT_MULTI_SPIN_ANGLE"] = args.spin_angle
     if args.spin_speed is not None:
@@ -217,6 +227,10 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--backend", default="native", help="Backend variant for the scene; currently native.")
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
+    parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass"),
+        help="Select the reflection fixture; defaults to offscreen mirror markers.")
+    parser.add_argument("--reflection-mode", choices=("disabled", "screen", "hardware", "hybrid"),
+        help="Select the typed reflection trace mode; the fixture defaults to hardware.")
     parser.add_argument("--refraction-case", choices=(
         "single", "separate", "stacked", "intersecting", "nested", "coincident",
         "coincident_tinted", "torus", "same_mesh", "prism",

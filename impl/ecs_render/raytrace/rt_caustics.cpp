@@ -760,55 +760,14 @@ bool RendererRayTracingSystem::retainPreparedCausticEmissionTargetUpload(
 }
 
 void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
-    if(
-        !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-        && !m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
-    )
+    if(!m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
         return;
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(heap.isInitialized()){
+    if(heap.isInitialized())
         heap.free(m_rayTracingState.m_causticEmissionTargetHeapHandle);
-        heap.free(m_rayTracingState.m_causticMaterialContextSlotsHeapHandle);
-    }
     m_rayTracingState.m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_causticMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-}
-
-bool RendererRayTracingSystem::ensureCausticMaterialContextSlotsHeapHandle(){
-    auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon selectors require the initialized global descriptor heap"));
-        return false;
-    }
-    if(!m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon selectors require the ray-trace material-context payload"));
-        return false;
-    }
-
-    Core::GpuDescriptorHandle& handle = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle;
-    if(handle.valid()){
-        if(RayTracingDetail::IsHeapHandle(handle, Core::GpuDescriptorClass::UniformBuffer))
-            return true;
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic material-context selector has an unexpected descriptor class"));
-        return false;
-    }
-
-    Core::GpuDescriptorHandle acquired;
-    if(!RayTracingDetail::RegisterHeapBuffer(
-        heap,
-        *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(),
-        Core::GpuDescriptorClass::UniformBuffer,
-        false,
-        acquired
-    )){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register caustic material-context selector in the descriptor heap"));
-        return false;
-    }
-    handle = acquired;
-    return true;
 }
 
 bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){
@@ -1285,8 +1244,8 @@ bool RendererRayTracingSystem::hasCausticWork(const ECSRenderDetail::MeshViewBuf
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
         && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
         && meshView.bindingValid()
     ;
 }
@@ -1323,7 +1282,7 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
         return false;
     }
 
-    const bool producerReady = ensureCausticMaterialContextSlotsHeapHandle() && ensureSwCausticPipeline();
+    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && ensureSwCausticPipeline();
     const bool resolveReady =
         ensureCausticGeometryDownsamplePipeline()
         && ensureCausticResolvePipeline()
@@ -1738,7 +1697,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     const f32 temporalDecay = causticTemporalDecay();
     if(
         !m_rayTracingState.m_swCausticPipeline
-        || !m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
+        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || !causticResolveResourcesReady(targets, temporalDecay)
     )
         return false;
@@ -1785,7 +1744,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
         pushConstants.viewSlot = meshView.heapHandle.slot();
         pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.slot();
+        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
         pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
         pushConstants.temporalPhaseCount = temporalPhaseCount;
 
@@ -2201,8 +2160,8 @@ bool RendererRayTracingSystem::hasHwCausticWork(const ECSRenderDetail::MeshViewB
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
         && m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
         && m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
-        && m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
+        && m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
         && meshView.bindingValid()
     ;
 }
@@ -2239,7 +2198,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
         return false;
     }
 
-    const bool producerReady = ensureCausticMaterialContextSlotsHeapHandle() && ensureCausticRtPipeline();
+    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && ensureCausticRtPipeline();
     const bool resolveReady =
         ensureCausticGeometryDownsamplePipeline()
         && ensureCausticResolvePipeline()
@@ -2303,7 +2262,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
     if(
         !m_rayTracingState.m_hwCausticPipeline
         || !m_rayTracingState.m_hwCausticShaderTable
-        || !m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.valid()
+        || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || !causticResolveResourcesReady(targets, temporalDecay)
     )
         return false;
@@ -2352,7 +2311,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
         pushConstants.viewSlot = meshView.heapHandle.slot();
         pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_causticMaterialContextSlotsHeapHandle.slot();
+        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
         pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
         pushConstants.temporalPhaseCount = temporalPhaseCount;
 

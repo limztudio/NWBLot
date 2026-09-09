@@ -217,6 +217,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         registerTexture(bindless.gbufferBaseColor, Core::GpuDescriptorClass::SampledImage, targets.albedo.get(), targets.albedoFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage, targets.normal.get(), targets.normalFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage, targets.worldPosition.get(), targets.worldPositionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.gbufferSpecularRoughness, Core::GpuDescriptorClass::SampledImage, targets.specularRoughness.get(), targets.specularRoughnessFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.gbufferDepth, Core::GpuDescriptorClass::SampledImage, targets.depth.get(), targets.depthFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.shadowVisibility, Core::GpuDescriptorClass::SampledImage2DArray, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.shadowVisibilityStorage, targets.shadowVisibility.get(), targets.shadowVisibilityFormat, Core::TextureDimension::Texture2DArray)
@@ -239,6 +240,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerTexture(bindless.refractionNormalIor, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionNormalIor.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.refractionTintCoverage, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionTintCoverage.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.refractionInstance, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionInstance.get(), Core::Format::R32_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
+        && registerTexture(bindless.refractionSpecularRoughness, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionSpecularRoughness.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.refractionResolve, Core::GpuDescriptorClass::SampledImage, targets.avboit.refractionResolve.get(), Core::Format::RGBA16_FLOAT, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitForegroundColor, Core::GpuDescriptorClass::SampledImage, targets.avboit.foregroundAccumColor.get(), targets.avboit.accumColorFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitForegroundExtinction, Core::GpuDescriptorClass::SampledImage, targets.avboit.foregroundAccumExtinction.get(), targets.avboit.accumExtinctionFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -389,6 +391,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
         heap.free(targets.bindless.gbufferBaseColor);
         heap.free(targets.bindless.gbufferNormal);
         heap.free(targets.bindless.gbufferWorldPosition);
+        heap.free(targets.bindless.gbufferSpecularRoughness);
         heap.free(targets.bindless.gbufferDepth);
         heap.free(targets.bindless.shadowVisibility);
         heap.free(targets.bindless.shadowVisibilityStorage);
@@ -409,6 +412,7 @@ void RendererDeferredSystem::resetDeferredBindlessFrameResources(DeferredFrameTa
         heap.free(targets.bindless.refractionNormalIor);
         heap.free(targets.bindless.refractionTintCoverage);
         heap.free(targets.bindless.refractionInstance);
+        heap.free(targets.bindless.refractionSpecularRoughness);
         heap.free(targets.bindless.refractionResolve);
         heap.free(targets.bindless.avboitForegroundColor);
         heap.free(targets.bindless.avboitForegroundExtinction);
@@ -644,6 +648,7 @@ void RendererDeferredSystem::resetDeferredFrameTargets(DeferredFrameTargets& tar
     targets.albedo.reset();
     targets.normal.reset();
     targets.worldPosition.reset();
+    targets.specularRoughness.reset();
     targets.csgCapBackNormal.reset();
     targets.csgIntervalDepth.reset();
     targets.csgIntervalId.reset();
@@ -724,6 +729,7 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     createdTargets.albedoFormat = albedoFormat;
     createdTargets.normalFormat = normalFormat;
     createdTargets.worldPositionFormat = worldPositionFormat;
+    createdTargets.specularRoughnessFormat = worldPositionFormat;
     createdTargets.opaqueColorFormat = opaqueColorFormat;
     createdTargets.compositeColorFormat = opaqueColorFormat;
     createdTargets.depthFormat = depthFormat;
@@ -793,6 +799,22 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
         return false;
     }
 
+    Core::TextureDesc specularRoughnessDesc;
+    specularRoughnessDesc
+        .setWidth(createdTargets.width)
+        .setHeight(createdTargets.height)
+        .setFormat(createdTargets.specularRoughnessFormat)
+        .setInRenderTarget(true)
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName("engine/deferred/gbuffer_specular_roughness")
+        .setClearValue(ECSRenderDetail::s_GBufferSpecularRoughnessClearColor)
+    ;
+    createdTargets.specularRoughness = m_graphics.createTexture(specularRoughnessDesc);
+    if(!createdTargets.specularRoughness){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred specular/roughness target"));
+        return false;
+    }
+
     Core::TextureDesc opaqueColorDesc;
     opaqueColorDesc
         .setWidth(createdTargets.width)
@@ -855,6 +877,10 @@ bool RendererDeferredSystem::createDeferredFrameTargets(
     ;
     gbufferAttachments[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION]
         .setTexture(createdTargets.worldPosition.get())
+        .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
+    ;
+    gbufferAttachments[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION]
+        .setTexture(createdTargets.specularRoughness.get())
         .setSubresources(ECSRenderDetail::s_FramebufferSubresources)
     ;
     Core::FramebufferDesc framebufferDesc;

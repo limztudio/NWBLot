@@ -1,0 +1,140 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_REFLECTION_COMMON_SLANGI
+#define NWB_GRAPHICS_REFLECTION_COMMON_SLANGI
+
+#include "frame_constants.h"
+#include "../deferred/bindless_resources.slangi"
+#include "../common/math.slangi"
+
+struct NwbReflectionParameters{
+#define NWB_REFLECTION_UINT_FIELD(name, value) uint name;
+    NWB_REFLECTION_FRAME_UINT_FIELDS(NWB_REFLECTION_UINT_FIELD)
+#undef NWB_REFLECTION_UINT_FIELD
+#define NWB_REFLECTION_FLOAT_FIELD(name, value) float name;
+    NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_FLOAT_FIELD)
+#undef NWB_REFLECTION_FLOAT_FIELD
+};
+
+struct NwbReflectionPushConstants{
+    uint frameParametersSlot;
+};
+[[vk::push_constant]] ConstantBuffer<NwbReflectionPushConstants> g_NwbReflectionPush;
+
+// Mesh owns the complete view ABI. This read-only prefix excludes its frustum planes.
+struct NwbReflectionView{
+    row_major float4x4 worldToClip;
+    row_major float4x4 clipToWorld;
+    float4 cameraPosition;
+};
+#pragma warning(push)
+#pragma warning(disable: 39001)
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbReflectionParameters, Std140DataLayout> g_NwbHeapReflectionParameters[];
+[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
+ConstantBuffer<NwbReflectionView, Std140DataLayout> g_NwbHeapReflectionViews[];
+#pragma warning(pop)
+
+#define g_NwbReflectionParameters g_NwbHeapReflectionParameters[g_NwbReflectionPush.frameParametersSlot]
+#define g_NwbReflectionResources g_NwbHeapDeferredBindlessResources[g_NwbReflectionParameters.deferredResourcesSlot]
+#define g_NwbReflectionView g_NwbHeapReflectionViews[g_NwbReflectionParameters.viewSlot]
+#define g_NwbReflectionQueue g_NwbHeapStorageBuffers[g_NwbReflectionParameters.queueSlot]
+#define g_NwbReflectionCounters g_NwbHeapStorageBuffers[g_NwbReflectionParameters.counterSlot]
+
+struct NwbReflectionSurface{
+    float3 position;
+    float3 normal;
+    float3 direction;
+    float3 weight;
+    float roughness;
+    float bias;
+};
+
+float3 nwbReflectionEnvironment(const float3 direction){
+    const float3 top = float3(g_NwbReflectionParameters.environmentTopR, g_NwbReflectionParameters.environmentTopG, g_NwbReflectionParameters.environmentTopB);
+    const float3 bottom = float3(g_NwbReflectionParameters.environmentBottomR, g_NwbReflectionParameters.environmentBottomG, g_NwbReflectionParameters.environmentBottomB);
+    return lerp(bottom, top, saturate(direction.y * 0.5 + 0.5));
+}
+
+void nwbReflectionStore(const uint2 pixel, const bool glass, const float3 radiance, const float source){
+    const float4 output = float4(max(radiance, float3(0.0)), source);
+    // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring
+    // storage-image nonuniform indexing beyond the existing device contract.
+    if(glass)
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = output;
+    else
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.opaqueOutputSlot)[pixel] = output;
+}
+
+bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflectionSurface surface){
+    surface = (NwbReflectionSurface)0;
+    const int3 texel = int3(pixel, 0);
+    const uint specularSlot = glass ? g_NwbReflectionParameters.glassSpecularSlot : g_NwbReflectionParameters.opaqueSpecularSlot;
+    const float4 specularRoughness = NwbHeapSampledImage2DNonUniform(specularSlot).Load(texel);
+    const uint normalSlot = glass ? g_NwbReflectionResources.refractionSlots0.y : g_NwbReflectionResources.gbufferSlots.y;
+    float4 packedNormal = float4(0.0);
+    float3 f0 = saturate(specularRoughness.rgb);
+    if(glass){
+        packedNormal = NwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+        if(!isfinite(packedNormal.w) || packedNormal.w <= 1.0001)
+            return false;
+        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two
+        // entry terms remain complementary even when an authored opaque-reflection parameter is absent.
+        const float ior = clamp(packedNormal.w, 1.0, 4.0);
+        const float ratio = (ior - 1.0) / (ior + 1.0);
+        f0 = float3(ratio * ratio);
+    }
+    if(!isfinite(specularRoughness.a) || !all(isfinite(f0)) || !any(f0 > 0.0))
+        return false;
+    const uint depthSlot = glass ? g_NwbReflectionResources.refractionSlots0.x : g_NwbReflectionResources.gbufferSlots.w;
+    const float depth = NwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
+    if(!isfinite(depth) || depth < 0.0 || depth >= 1.0)
+        return false;
+    const float2 uv = (float2(pixel) + 0.5) / float2(g_NwbReflectionParameters.width, g_NwbReflectionParameters.height);
+    if(glass){
+        const float4 world = mul(g_NwbReflectionView.clipToWorld, float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0));
+        if(!all(isfinite(world)) || world.w == 0.0)
+            return false;
+        surface.position = world.xyz / world.w;
+    }
+    else
+        surface.position = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
+    if(!all(isfinite(surface.position)))
+        return false;
+    const float3 cameraRay = surface.position - g_NwbReflectionView.cameraPosition.xyz;
+    const float3 incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
+    if(!glass)
+        packedNormal = NwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+    surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
+    if(dot(surface.normal, incident) > 0.0)
+        surface.normal = -surface.normal;
+    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds
+    // four representable D32 depth steps, retaining the inverse arithmetic margin in the final bias below.
+    float originUncertainty = dot(abs(surface.position) * 0.0009765625, abs(surface.normal));
+    if(glass){
+        const float nextDepth = min(asfloat(asuint(depth) + 4u), 1.0);
+        const float4 nextWorld = mul(g_NwbReflectionView.clipToWorld, float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, nextDepth, 1.0));
+        if(!all(isfinite(nextWorld)) || nextWorld.w == 0.0)
+            return false;
+        const float3 nextPosition = nextWorld.xyz / nextWorld.w;
+        if(!all(isfinite(nextPosition)))
+            return false;
+        originUncertainty = length(nextPosition - surface.position);
+    }
+    surface.direction = reflect(incident, surface.normal);
+    surface.roughness = saturate(specularRoughness.a);
+    const float cosine = saturate(-dot(incident, surface.normal));
+    surface.weight = f0 + (1.0 - f0) * pow(1.0 - cosine, 5.0);
+    surface.bias = max(0.001, originUncertainty + length(cameraRay) * 1e-5);
+    // Clear glass has zero AVBOIT coverage; coverage never scales its Fresnel reflection.
+    return isfinite(surface.bias) && all(isfinite(surface.direction))
+        && all(isfinite(surface.position + surface.normal * surface.bias));
+}
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

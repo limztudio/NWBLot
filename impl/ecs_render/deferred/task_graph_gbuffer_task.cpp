@@ -141,6 +141,8 @@ namespace ECSRenderDetail{
         ECSRenderDetail::s_GBufferNormalClearColor;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_WORLD_POSITION_LOCATION] =
         ECSRenderDetail::s_GBufferWorldPositionClearColor;
+    renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_SPECULAR_ROUGHNESS_LOCATION] =
+        ECSRenderDetail::s_GBufferSpecularRoughnessClearColor;
     for(u32 attachmentIndex = 0u; attachmentIndex < NWB_MESH_GBUFFER_TARGET_COUNT; ++attachmentIndex)
         renderPassParameters.colorAttachmentActions[attachmentIndex].loadAction = Core::RenderPassLoadAction::Clear;
     renderPassParameters.depthAttachmentActions.loadAction = Core::RenderPassLoadAction::Clear;

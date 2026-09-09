@@ -72,9 +72,16 @@ bool nwbRefractionProject(const float3 world, out uint2 pixel, out float depth){
     return true;
 }
 
-float3 nwbRefractionBackground(const uint2 pixel){
+float3 nwbRefractionOpaqueBackground(const uint2 pixel){
     const int3 texel = int3(pixel, 0);
     const float3 opaque = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(texel).rgb;
+    return g_NwbRefractionPush.opaqueReflectionSlot != 0xffffffffu
+        ? opaque + NwbHeapSampledImage2D(g_NwbRefractionPush.opaqueReflectionSlot).Load(texel).rgb : opaque;
+}
+
+float3 nwbRefractionBackground(const uint2 pixel){
+    const int3 texel = int3(pixel, 0);
+    const float3 opaque = nwbRefractionOpaqueBackground(pixel);
     const float3 behind = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb;
     const float behindExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r;
     const float frontExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r;
@@ -139,7 +146,7 @@ float3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEnt
     // transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is
     // reusable there; the hardware path can still evaluate transparent geometry actually intersected by its ray.
     return samplePrimary == entry.primaryRasterInstance ? nwbRefractionBackground(pixel)
-        : NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(int3(pixel, 0)).rgb;
+        : nwbRefractionOpaqueBackground(pixel);
 }
 
 float3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){

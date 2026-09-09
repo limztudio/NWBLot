@@ -85,8 +85,7 @@ void RendererRayTracingState::invalidateResources(){
     m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_rayTraceMaterialContextSlotsBuffer.reset();
-    m_causticMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_shadowMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;

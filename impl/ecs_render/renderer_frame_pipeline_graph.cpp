@@ -10,6 +10,8 @@
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
+#include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
+#include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -569,6 +571,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         Name("render.deferred_lighting.world_position"),
         "G-Buffer World Position"
     );
+    const Core::GpuGraphResourceId specularRoughness = importFirstWriteTexture(
+        deferredTargets.specularRoughness,
+        Name("render.deferred_lighting.specular_roughness"),
+        "G-Buffer Specular Roughness"
+    );
     const Core::GpuGraphResourceId depth = importFirstWriteTexture(
         deferredTargets.depth,
         Name("render.deferred_lighting.depth"),
@@ -839,6 +846,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
     const Core::GpuGraphResourceId refractionInstance = importAvboitTexture(
         deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
+    const Core::GpuGraphResourceId refractionSpecularRoughness = importAvboitTexture(
+        deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
     const Core::GpuGraphResourceId refractionResolve = importAvboitTexture(
         deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
     const Core::GpuGraphResourceId avboitForegroundColor = importAvboitTexture(
@@ -885,6 +894,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         !albedo.valid()
         || !normal.valid()
         || !worldPosition.valid()
+        || !specularRoughness.valid()
+        || !refractionSpecularRoughness.valid()
         || !depth.valid()
         || !csgCapBackNormal.valid()
         || !csgIntervalDepth.valid()
@@ -1009,6 +1020,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         albedo,
         normal,
         worldPosition,
+        specularRoughness,
         depth,
         opaqueColor,
         sceneShading,
@@ -2790,9 +2802,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyPayload.csgResources = csgResources;
     avboitOccupancyComputeEmulationPayload.csgResources = csgResources;
 
-    const bool refractionActive = m_refractionEnabled && hasTransparentRenderers
-        && m_raytracingSystem.prepareRefractionResources();
-    const RayTracingRefractionGraphResources refractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    const bool opticalCaptureRequested = hasTransparentRenderers
+        && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    const bool refractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
+    RayTracingRefractionGraphResources refractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    refractionResources.refractionEnabled = m_refractionEnabled;
+    if(!m_refractionEnabled){
+        refractionResources.pipeline = refractionResources.screenFallbackPipeline;
+        refractionResources.usesHardwareTrace = false;
+        refractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    }
     const Core::GpuTaskId refractionCaptureTask = DeclareAvboitRefractionCapture(
         m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
         csgFrameState, csgResources, frameBindings, meshViewState, avboitIntervalCompletionTask,
@@ -5939,13 +5958,74 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
+    const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
+    const ReflectionFrameSnapshot reflectionResources = m_reflectionSystem.snapshotFrameResources(
+        deferredTargets, meshViewBufferSnapshot,
+        m_preparedReflectionSceneAvailable ? sceneResources : RayTracingSceneGraphResources{},
+        m_reflectionSettings, m_reflectionFrameIndex
+    );
+    if(!reflectionResources.valid())
+        return;
+    RayTracingSceneGraphReads sceneReads;
+    if(reflectionResources.parameters.hardwareEnabled != 0u || refractionResources.usesHardwareTrace){
+        sceneReads = ImportRayTracingSceneGraphReads(
+            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
+        );
+        if(!sceneReads.valid())
+            return;
+    }
+    const Core::GpuTaskResourceUse reflectionSurfaceReads[] = {
+        ReadUse(specularRoughness), ReadUse(refractionSpecularRoughness), ReadUse(normal), ReadUse(depth), ReadUse(worldPosition),
+        ReadUse(refractionDepth), ReadUse(refractionNormalIor),
+        ReadUse(meshView, Core::ResourceStates::ConstantBuffer),
+        ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
+    };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> reflectionHardwareReads{traceGeometryScratchArena};
+    reflectionHardwareReads.reserve(7u);
+    if(sceneReads.valid()){
+        for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+            reflectionHardwareReads.push_back(read);
+        reflectionHardwareReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        reflectionHardwareReads.push_back(ReadUse(lights));
+    }
+    Core::GpuTaskResourceSetUse reflectionSets[2] = {};
+    usize reflectionSetCount = 0u;
+    for(const Core::GpuGraphResourceSetId set : {hardwareTraceGeometrySet, traceMaterialSampledTextureSet}){
+        if(set.valid()){
+            reflectionSets[reflectionSetCount++] = Core::GpuTaskResourceSetUse{
+                .resourceSet = set, .range = {}, .requiredState = Core::ResourceStates::ShaderResource,
+                .access = Core::GpuTaskResourceAccess::Read,
+            };
+        }
+    }
+    const ReflectionGraphInputs reflectionInputs{
+        .surfaceReads = reflectionSurfaceReads, .surfaceReadCount = LengthOf(reflectionSurfaceReads),
+        .hardwareReads = reflectionHardwareReads.data(), .hardwareReadCount = reflectionHardwareReads.size(),
+        .hardwareSetReads = reflectionSets, .hardwareSetReadCount = reflectionSetCount,
+        .hardwarePreparationReady = &m_shadowPreparationOutcome.ready,
+        .hardwareDispatchLogged = &m_reflectionHardwareLogged,
+        .fallbackDispatchLogged = &m_reflectionFallbackLogged,
+    };
+    const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(
+        m_deferredLightingTaskGraph, m_graphics, traceGeometryScratchArena,
+        reflectionResources, reflectionInputs, m_deferredLightingTask
+    );
+    if(!reflectionGraph.valid())
+        return;
+    const ReflectionCompositeInputs reflectionCompositeInputs{
+        .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot,
+        .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot,
+        .debugView = m_reflectionSettings.debugView,
+    };
+    refractionResources.opaqueReflectionSlot = reflectionCompositeInputs.opaqueRadianceSlot;
+
     Core::GpuTaskId refractionResolveTask;
     if(refractionActive && refractionResources.valid()){
         Core::Alloc::ScratchArena refractionScratch(RendererArenaScope::s_TaskGraphArena);
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{refractionScratch};
         const Core::GpuGraphResourceId refractionInputs[] = {
             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
-            opaqueColor, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
+            opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,
             avboitForegroundColor, avboitForegroundExtinction
         };
         for(const auto input : refractionInputs)
@@ -5958,38 +6038,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         Core::GpuTaskResourceSetUse refractionSets[3] = {};
         usize refractionSetCount = 0;
         if(refractionResources.usesHardwareTrace){
-            const auto importRefractionBuffer = [&](const Core::BufferHandle& buffer){
-                if(!buffer)
-                    return Core::GpuGraphResourceId{};
-                {
-                    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-                    const auto existing = declarations.findImportedBuffer(buffer);
-                    if(existing.valid())
-                        return existing;
-                }
-                return importBuffer(buffer, buffer->getCreationDescription().debugName, "Refraction Trace Buffer");
-            };
-            const auto tlas = m_deferredLightingTaskGraph.importAccelStruct(refractionResources.sceneTlas,
-                AccelStructResourceDesc(Name("render.deferred_effects.tlas"), "Scene TLAS")
-                    .setInitialState(m_raytracingSystem.sceneTlasBackingInitialState()));
-            const auto contextSlots = importRefractionBuffer(refractionResources.materialContextSlotsBuffer);
-            if(!tlas.valid() || !contextSlots.valid())
-                return;
-            refractionUses.push_back(ReadUse(tlas, Core::ResourceStates::AccelStructRead));
-            refractionUses.push_back(ReadUse(contextSlots, Core::ResourceStates::ConstantBuffer));
-            const Core::BufferHandle traceBuffers[] = {
-                rayTracingGraphResources.shadowInstanceMaterialBuffer,
-                rayTracingGraphResources.shadowMaterialTypedBuffer,
-                rayTracingGraphResources.shadowInstanceBuffer
-            };
-            for(const auto& buffer : traceBuffers){
-                if(!buffer)
-                    return;
-                const auto resource = importRefractionBuffer(buffer);
-                if(!resource.valid())
-                    return;
-                refractionUses.push_back(ReadUse(resource));
-            }
+            for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
+                refractionUses.push_back(read);
             const Core::GpuGraphResourceSetId sets[] = {
                 hardwareTraceGeometrySet, traceMaterialSampledTextureSet
             };
@@ -6002,7 +6052,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             }
         }
         const Core::GpuTaskId refractionDependencies[] = {
-            m_deferredLightingTask, avboitFinalTask, m_deferredSurfelGiTask
+            reflectionGraph.completion, avboitFinalTask, m_deferredSurfelGiTask
         };
         Core::GpuTaskDesc refractionDesc;
         refractionDesc.setIdentity(Name("render.avboit.refraction_resolve"))
@@ -6055,6 +6105,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     const Core::GpuTaskResourceUse compositeResourceUses[] = {
         ReadUse(opaqueColor),
+        ReadUse(reflectionGraph.opaqueRadiance),
+        ReadUse(reflectionGraph.glassRadiance),
         ReadUse(avboitAccumColor),
         ReadUse(avboitAccumExtinction),
         ReadUse(avboitForegroundColor),
@@ -6075,6 +6127,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredLightingTask,
         avboitFinalTask,
         refractionResolveTask,
+        reflectionGraph.completion,
     };
     Core::GpuTaskDesc compositeDesc;
     compositeDesc
@@ -6089,7 +6142,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredLightingTaskGraph,
         compositeDesc,
         deferredTargets,
-        compositeTimingTicket
+        compositeTimingTicket,
+        reflectionCompositeInputs
     );
     if(!m_deferredCompositeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));

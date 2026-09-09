@@ -56,6 +56,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuGraphResourceId albedo,
     const Core::GpuGraphResourceId normal,
     const Core::GpuGraphResourceId worldPosition,
+    const Core::GpuGraphResourceId specularRoughness,
     const Core::GpuGraphResourceId depth,
     const Core::GpuGraphResourceId opaqueColor,
     const Core::GpuGraphResourceId sceneShading,
@@ -124,6 +125,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || !albedo.valid()
         || !normal.valid()
         || !worldPosition.valid()
+        || !specularRoughness.valid()
         || !depth.valid()
         || !opaqueColor.valid()
         || !sceneShading.valid()
@@ -1079,7 +1081,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
 
     gbufferResourceUses.reserve(
-        (hasOpaqueDrawItems ? 7u : 5u)
+        (hasOpaqueDrawItems ? 8u : 6u)
         + (hasCsgFrameGpuWork ? 5u : 0u)
         + (hasOpaqueCsgFrameWork ? 5u : 0u)
     );
@@ -1199,6 +1201,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferResourceUses.push_back(WriteUse(albedo, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(normal, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(worldPosition, Core::ResourceStates::RenderTarget));
+    gbufferResourceUses.push_back(WriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
     gbufferResourceUses.push_back(WriteUse(depth, Core::ResourceStates::DepthWrite));
     const Core::GpuTaskResourceSetUse gbufferMaterialGeometrySetUse{
         .resourceSet = gbufferMaterialGeometrySet,
@@ -1468,7 +1471,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             WriteUse(opaqueSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess)
         );
 
-        opaqueSharedComputeEmulationRasterResourceUses.reserve(8u);
+        opaqueSharedComputeEmulationRasterResourceUses.reserve(9u);
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );
@@ -1489,6 +1492,9 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadWriteUse(worldPosition, Core::ResourceStates::RenderTarget)
+        );
+        opaqueSharedComputeEmulationRasterResourceUses.push_back(
+            ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadWriteUse(depth, Core::ResourceStates::DepthWrite)
@@ -1801,6 +1807,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         csgIntervalSampleResourceUses.push_back(ReadWriteUse(albedo, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(ReadWriteUse(normal, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(ReadWriteUse(worldPosition, Core::ResourceStates::RenderTarget));
+        csgIntervalSampleResourceUses.push_back(ReadWriteUse(specularRoughness, Core::ResourceStates::RenderTarget));
         csgIntervalSampleResourceUses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));
         const Core::GpuTaskResourceSetUse csgIntervalSampleMaterialGeometrySetUse{
             .resourceSet = csgIntervalSampleMaterialGeometrySet,
@@ -2009,10 +2016,11 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena normalizeScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ normalizeScratchArena };
-    normalizeResourceUses.reserve(8u + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
+    normalizeResourceUses.reserve(9u + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
     normalizeResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
+    normalizeResourceUses.push_back(ReadUse(specularRoughness, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(depth, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));

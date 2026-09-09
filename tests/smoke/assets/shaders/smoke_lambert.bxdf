@@ -59,7 +59,7 @@ half3 nwbSmokeLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
         cross(normalVector, tangentVector),
         cross(normalVector, nwbFrameFallbackTangent(normalVector))
     );
-    const float3 viewVector = nwbSafeNormalize(g_NwbSceneCameraPosition.xyz - surface.worldPosition, float3(0.0, 0.0, 1.0));
+    const float3 viewVector = nwbSafeNormalize(surface.viewVector, float3(0.0, 0.0, 1.0));
     const half ndotv = half(max(dot(normalVector, viewVector), 0.0));
 
     half3 litColor = surface.baseColor * surface.indirectIrradiance;
@@ -79,7 +79,7 @@ half3 nwbSmokeLambertShadeSurface(NwbBxdfSurface surface, int2 pixel){
     }
 
     litColor += nwbBxdfCausticIrradiance(pixel) * surface.baseColor;
-    return nwbBxdfPresentationIsHdr10()
+    return nwbBxdfRequiresLinearOutput()
         ? max(litColor, half3(0.0h))
         : nwbSmokeLambertTonemap(litColor)
     ;

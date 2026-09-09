@@ -13,6 +13,9 @@
 struct NwbDeferredCompositePushConstants{
     uint resourceSlots;
     uint refractionResources;
+    uint opaqueReflectionSlot;
+    uint glassReflectionSlot;
+    uint reflectionDebugView;
 };
 
 [[vk::push_constant]]
@@ -44,7 +47,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader
     // stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
     const int3 texel = int3(pixel, 0);
-    const half3 opaqueColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb);
+    const float4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != 0xffffffffu
+        ? NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel) : float4(0.0);
+    const float4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != 0xffffffffu
+        ? NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel) : float4(0.0);
+    const half3 opaqueColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb + opaqueReflection.rgb);
+    float reflectionSource = opaqueReflection.a;
     const half4 transparentColorAccum = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
     const half transparentExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.z).Load(texel).r);
     const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
@@ -55,9 +63,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float frontTransmittance = exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
         const float4 transmitted = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel);
         compositeColor = half3(transmitted.a > 0.0
-            ? frontColor + frontTransmittance * transmitted.rgb
+            ? frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)
             : frontColor + float3(transparentColorAccum.rgb) + float3(opaqueColor) * frontTransmittance * float(totalTransmittance));
     }
+    if(glassReflection.a > 0.0)
+        reflectionSource = glassReflection.a;
+    if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 1u){
+        compositeColor = reflectionSource >= 3.0 ? half3(0.15h, 0.3h, 1.0h)
+            : reflectionSource >= 2.0 ? half3(0.15h, 1.0h, 0.2h)
+            : reflectionSource > 0.0 ? half3(1.0h, 0.25h, 0.1h) : half3(0.0h);
+    }
+    else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 2u)
+        compositeColor = half3(reflectionSource >= 2.0 ? 1.0h : 0.0h);
     g_NwbDeferredCompositeOutput[pixel] = float4(float3(compositeColor), 1.0);
 }
 

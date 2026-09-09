@@ -350,6 +350,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
+    AString sceneGraphSource;
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
@@ -368,6 +369,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         },
         taskGraphSource
     ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl/ecs_render/raytrace/task_graph_scene_resources.cpp", sceneGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
@@ -377,6 +379,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", rendererStateSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView sceneGraph(sceneGraphSource.data(), sceneGraphSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
@@ -465,11 +468,20 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         "const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();"
     ));
     EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\").setInitialState(sceneTlasInitialState)"));
-    // Refraction shares the same generation-aware scene TLAS as shadows, GI, and caustics.
-    EXPECT_EQ(CountText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")"), 5u);
+    // Refraction and reflection use the neutral importer, forwarding the same generation-aware initial state as
+    // the direct shadow, GI, and caustic imports. Count both owners without losing coverage of the moved import.
+    static constexpr AStringView s_SceneTlasImport = "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")";
+    EXPECT_EQ(CountText(taskGraph, s_SceneTlasImport) + CountText(sceneGraph, s_SceneTlasImport), 5u);
     EXPECT_EQ(CountText(taskGraph, "sceneTlasBackingInitialState()"), 5u);
+    EXPECT_TRUE(ContainsText(
+        taskGraph,
+        "ImportRayTracingSceneGraphReads(\n"
+        "            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()"
+    ));
+    EXPECT_EQ(CountText(sceneGraph, ".setInitialState(tlasInitialState)"), 1u);
     EXPECT_EQ(
-        CountText(taskGraph, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())"),
+        CountText(taskGraph, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())")
+            + CountText(sceneGraph, ".setInitialState(tlasInitialState)"),
         4u
     );
 

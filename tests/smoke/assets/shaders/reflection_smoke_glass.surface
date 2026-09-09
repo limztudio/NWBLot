@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// This stress fixture uses IOR 3.8 and its matching dielectric F0 supplied by the project.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    NwbMeshSurface result = nwbMakeGlassSurface(
+        half3(0.0h), inNormal, half(3.8h), NWB_SURFACE_ABSORPTION_NONE, half(0.0h)
+    );
+    nwbSetMeshSurfaceReflection(result, runtime.specular_f0, runtime.perceptual_roughness);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

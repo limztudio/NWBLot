@@ -237,6 +237,7 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ASSERT_TRUE(ReadTextFile(repoRoot / "tests" / "smoke" / "launch.py", smokeLauncherSource));
 
     static constexpr StringView s_SmokeProjectSourceNames[] = {
+        "reflection_project.cpp",
         "transparent_multi_project.cpp",
         "csg_visible_project.cpp",
         "skinned_caustic_project.cpp",
@@ -342,7 +343,8 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ));
     EXPECT_GE(CountText(smokeCmake, "\"--skip-blocking-log-message\" \"VUID-\""), 4u);
 
-    EXPECT_EQ(CountText(smokeLauncher, "\"native\": SmokeExecutable("), 15u);
+    EXPECT_EQ(CountText(smokeLauncher, "\"native\": SmokeExecutable("), 16u);
+    EXPECT_TRUE(ContainsText(smokeLauncher, "\"native\": SmokeExecutable(\"nwb_reflection_smoke\", \"reflection_smoke\")"));
     EXPECT_TRUE(ContainsText(smokeLauncher, "\"native\": SmokeExecutable(\"nwb_refraction_smoke\", \"refraction_smoke\")"));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"hw\": SmokeExecutable("));
     EXPECT_FALSE(ContainsText(smokeLauncher, "\"sw\": SmokeExecutable("));

@@ -38,6 +38,8 @@ private:
     static constexpr int s_TimingFilePrecision = 4;
     static constexpr usize s_MaxScopes = 64u;
 
+
+private:
     struct ScopeAccum{
         f64 sumSeconds = 0.0;
         f64 minSeconds = 0.0;
@@ -45,6 +47,17 @@ private:
         u32 frames = 0u;
         u64 samples = 0u;
     };
+
+
+private:
+    static void OpenTimingFile(OutputFileStream& timingFile){
+        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
+        SmokeEnvironmentString timingPath(arena);
+        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
+            return;
+
+        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
+    }
 
 
 public:
@@ -78,15 +91,6 @@ public:
 
 
 private:
-    static void OpenTimingFile(OutputFileStream& timingFile){
-        Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-        SmokeEnvironmentString timingPath(arena);
-        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
-            return;
-
-        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
-    }
-
     void accumulate(const Core::Perf::TimingView& gpuTiming){
         const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
         for(usize i = 0u; i < scopeCount; ++i){

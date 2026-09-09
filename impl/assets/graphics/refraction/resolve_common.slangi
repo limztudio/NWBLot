@@ -1,11 +1,20 @@
 // limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #ifndef NWB_GRAPHICS_REFRACTION_RESOLVE_COMMON_SLANGI
 #define NWB_GRAPHICS_REFRACTION_RESOLVE_COMMON_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #include "push_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../avboit/constants.h"
 #include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct NwbRefractionPushConstants{
 #define NWB_REFRACTION_SHADER_FIELD(name, defaultValue) uint name;
@@ -29,6 +38,10 @@ ConstantBuffer<NwbRefractionView, Std140DataLayout> g_NwbHeapRefractionViews[];
 #define g_NwbRefractionResources g_NwbHeapDeferredBindlessResources[g_NwbRefractionPush.deferredResourcesHeapSlot]
 #define g_NwbRefractionView g_NwbHeapRefractionViews[g_NwbRefractionPush.viewHeapSlot]
 #define g_NwbRefractionOutput NwbHeapStorageImage2DFloat4(g_NwbRefractionResources.refractionSlots0.w)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static const float NWB_REFRACTION_MAX_DISTANCE = 10000.0;
 static const float NWB_REFRACTION_MIN_DISTANCE = 0.001;
@@ -184,4 +197,12 @@ float4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry en
     return float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

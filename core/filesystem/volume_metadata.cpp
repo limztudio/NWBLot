@@ -219,49 +219,14 @@ bool VolumeFileSystem::flushMetadataLocked(){
     header.fileCount = static_cast<u64>(m_files.size());
     header.nextFreeOffset = m_nextFreeOffset;
 
-    struct MetadataIndexRecord{
-        Name path;
-        FileRecord file;
-    };
+    using FilesystemVolumeDetail::VolumeIndexEntryDisk;
 
-    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
-    Vector<MetadataIndexRecord, Core::Alloc::ScratchArena> sortedRecords{ scratchArena };
-    sortedRecords.reserve(m_files.size());
-    for(const auto& [path, record] : m_files)
-        sortedRecords.push_back(MetadataIndexRecord{ path, record });
-    Sort(
-        sortedRecords.begin(),
-        sortedRecords.end(),
-        [](const MetadataIndexRecord& lhs, const MetadataIndexRecord& rhs){
-            return ::LessNameHash(lhs.path.hash(), rhs.path.hash());
-        }
-    );
-
-    Vector<u8, Core::Alloc::ScratchArena> indexBytes{scratchArena};
-    u64 expectedIndexBytes = 0;
-    if(!FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount, expectedIndexBytes)){
+    if(!FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount, header.indexBytes)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, "flushMetadata", "file count overflows index size");
         return false;
     }
-    if(expectedIndexBytes > static_cast<u64>(Limit<usize>::s_Max)){
+    if(header.indexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, "flushMetadata", "metadata index exceeds runtime addressable range");
-        return false;
-    }
-    indexBytes.reserve(static_cast<usize>(expectedIndexBytes));
-
-    for(const MetadataIndexRecord& recordInfo : sortedRecords){
-        const FileRecord& record = recordInfo.file;
-        FilesystemVolumeDetail::VolumeIndexEntryDisk entry{};
-        entry.hash = recordInfo.path.hash();
-        entry.offset = record.offset;
-        entry.size = record.size;
-
-        AppendPOD(indexBytes, entry);
-    }
-
-    header.indexBytes = static_cast<u64>(indexBytes.size());
-    if(header.indexBytes != expectedIndexBytes){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "flushMetadata", "serialized index size mismatch");
         return false;
     }
 
@@ -279,10 +244,19 @@ bool VolumeFileSystem::flushMetadataLocked(){
         return false;
     }
 
+    Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_SaveMetadataScratch);
+    Vector<VolumeIndexEntryDisk, Core::Alloc::ScratchArena> sortedRecords{scratchArena};
+    sortedRecords.reserve(m_files.size());
+    for(const auto& [path, record] : m_files)
+        sortedRecords.push_back(VolumeIndexEntryDisk{ path.hash(), record.offset, record.size });
+    Sort(sortedRecords.begin(), sortedRecords.end(), [](const VolumeIndexEntryDisk& lhs, const VolumeIndexEntryDisk& rhs){
+        return ::LessNameHash(lhs.hash, rhs.hash);
+    });
+
     Vector<u8, Core::Alloc::ScratchArena> metadataBuffer{scratchArena};
     metadataBuffer.reserve(static_cast<usize>(m_metadataBytes));
     AppendPOD(metadataBuffer, header);
-    ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, indexBytes.data(), indexBytes.size());
+    ::BinaryDetail::AppendBytesNoReserveUnchecked(metadataBuffer, sortedRecords.data(), static_cast<usize>(header.indexBytes));
     metadataBuffer.resize(static_cast<usize>(m_metadataBytes), 0u);
 
     if(writeBytesLocked(0, metadataBuffer.data(), metadataBuffer.size()))

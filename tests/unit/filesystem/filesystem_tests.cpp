@@ -5,10 +5,12 @@
 #include <core/filesystem/factory.h>
 #include <core/filesystem/volume_file_system.h>
 #include <core/filesystem/volume_staging.h>
+#include <core/filesystem/volume_storage_detail.h>
 #include <tests/common/test_context.h>
 #include <tests/common/capturing_logger.h>
 
 #include <global/filesystem.h>
+#include <global/binary.h>
 
 #include <gtest/gtest.h>
 
@@ -143,6 +145,38 @@ protected:
 
 
 protected:
+    void benchmarkMetadataFlush(const usize fileCount, const usize iterations){
+        m_desc.metadataSize = fileCount == 1u ? 512u : 512u * 1024u;
+        m_desc.segmentSize = m_desc.metadataSize * 2u;
+        auto filesystem = CreateFilesystem(m_arena, m_desc);
+        ASSERT_TRUE(filesystem);
+        filesystem->reserveFileCapacity(fileCount);
+        for(usize index = 0u; index < fileCount; ++index){
+            char number[TextDetail::s_DecimalTextBufferBytes] = {};
+            const Name path(FormatDecimal(index, number));
+            ASSERT_TRUE(filesystem->writeFileDeferred(path, nullptr, 0u));
+        }
+        ASSERT_TRUE(filesystem->flush());
+        const Timer begin = TimerNow();
+        for(usize iteration = 0u; iteration < iterations; ++iteration)
+            ASSERT_TRUE(filesystem->flush());
+        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
+        char durationText[TextDetail::s_DecimalTextBufferBytes] = {};
+        const AStringView formattedDuration = FormatDecimal(nanoseconds, durationText);
+        durationText[formattedDuration.size()] = '\0';
+        RecordProperty("flush_ns", durationText);
+        RecordProperty("file_count", static_cast<int>(fileCount));
+        RecordProperty("iterations", static_cast<int>(iterations));
+        ASSERT_TRUE(filesystem->unmount());
+        m_desc.createIfMissing = false;
+        m_desc.usage = VolumeUsage::RuntimeReadOnly;
+        ASSERT_TRUE(filesystem->mount(m_desc));
+        EXPECT_EQ(filesystem->fileCount(), fileCount);
+        ASSERT_TRUE(filesystem->unmount());
+    }
+
+
+protected:
     NWB::Core::Alloc::GlobalArena m_arena;
     Path m_directory;
     VolumeMountDesc m_desc;
@@ -246,6 +280,87 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
     EXPECT_FALSE(filesystem->readFile(s_TestFile, loaded));
     EXPECT_TRUE(loaded.empty());
     ASSERT_TRUE(filesystem->unmount());
+}
+
+TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemovedRecords){
+    using FilesystemVolumeDetail::VolumeHeaderDisk;
+    using FilesystemVolumeDetail::VolumeIndexEntryDisk;
+    auto filesystem = CreateFilesystem(m_arena, m_desc);
+    ASSERT_TRUE(filesystem);
+    Array<NameHash, 3u> hashes{};
+    for(NameHash& hash : hashes)
+        hash.qwords[0u] = 7u;
+    hashes[0u].qwords[s_NameHashLaneCount - 1u] = 30u;
+    hashes[1u].qwords[s_NameHashLaneCount - 1u] = 10u;
+    hashes[2u].qwords[s_NameHashLaneCount - 1u] = 20u;
+    const Array<u8, 3u> payload{ 4u, 5u, 6u };
+    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[0u]), payload));
+    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[2u]), payload));
+    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[1u]), nullptr, 0u));
+    ASSERT_TRUE(filesystem->flush());
+
+    NWB::Core::Alloc::ScratchArena scratchArena(s_TestArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> expected(scratchArena);
+    Vector<u8, NWB::Core::Alloc::ScratchArena> actual(scratchArena);
+    expected.reserve(static_cast<usize>(m_desc.segmentSize));
+    actual.reserve(static_cast<usize>(m_desc.segmentSize));
+    const Array<VolumeIndexEntryDisk, 3u> records{
+        VolumeIndexEntryDisk{ hashes[1u], 518u, 0u },
+        VolumeIndexEntryDisk{ hashes[2u], 515u, 3u },
+        VolumeIndexEntryDisk{ hashes[0u], 512u, 3u }
+    };
+    const Path segmentPath = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
+    const auto verifyImage = [&](const usize firstRecord){
+        VolumeHeaderDisk header{};
+        NWB_MEMCPY(header.magic, sizeof(header.magic), FilesystemVolumeDetail::s_VolumeMagic, sizeof(header.magic));
+        header.segmentSize = m_desc.segmentSize;
+        header.metadataBytes = m_desc.metadataSize;
+        header.fileCount = records.size() - firstRecord;
+        header.indexBytes = header.fileCount * sizeof(VolumeIndexEntryDisk);
+        header.nextFreeOffset = 518u;
+        expected.clear();
+        AppendPOD(expected, header);
+        for(usize index = firstRecord; index < records.size(); ++index)
+            AppendPOD(expected, records[index]);
+        expected.resize(static_cast<usize>(m_desc.metadataSize), 0u);
+        expected.insert(expected.end(), payload.begin(), payload.end());
+        expected.insert(expected.end(), payload.begin(), payload.end());
+        ErrorCode error;
+        ASSERT_TRUE(ReadBinaryFile(segmentPath, actual, error));
+        ASSERT_EQ(actual.size(), expected.size());
+        EXPECT_EQ(NWB_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
+    };
+    verifyImage(0u);
+    ASSERT_TRUE(filesystem->unmount());
+    m_desc.createIfMissing = false;
+    m_desc.usage = VolumeUsage::RuntimeReadOnly;
+    ASSERT_TRUE(filesystem->mount(m_desc));
+    for(usize index = 0u; index < hashes.size(); ++index){
+        VolumeBytes loaded(m_arena);
+        ASSERT_TRUE(filesystem->readFile(Name(hashes[index]), loaded));
+        if(index == 1u)
+            EXPECT_TRUE(loaded.empty());
+        else{
+            ASSERT_EQ(loaded.size(), payload.size());
+            EXPECT_EQ(NWB_MEMCMP(loaded.data(), payload.data(), payload.size()), 0);
+        }
+    }
+    ASSERT_TRUE(filesystem->unmount());
+    m_desc.usage = VolumeUsage::CookWrite;
+    ASSERT_TRUE(filesystem->mount(m_desc));
+    for(usize index = 0u; index < records.size(); ++index){
+        ASSERT_TRUE(filesystem->removeFile(Name(records[index].hash)));
+        verifyImage(index + 1u);
+    }
+    ASSERT_TRUE(filesystem->unmount());
+}
+
+TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmarkSingleFile){
+    benchmarkMetadataFlush(1u, 1024u);
+}
+
+TEST_F(FilesystemVolumeTest, DISABLED_MetadataFlushBenchmark4096Files){
+    benchmarkMetadataFlush(4096u, 128u);
 }
 
 TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){

@@ -22,6 +22,9 @@ NWB_IMPL_BEGIN
 namespace RayTracingShadowVisibilityTaskDetail{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal
 // fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never
 // survives acceptance or a retry.
@@ -782,6 +785,9 @@ struct ShadowVisibilityGraphTask{
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
     }
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

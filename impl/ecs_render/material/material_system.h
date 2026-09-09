@@ -83,6 +83,7 @@ class RendererMaterialState;
 class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererCsgSystem;
+class RendererOpticalVolumeSelection;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,7 +100,8 @@ public:
         RendererMaterialState& materialState,
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
-        RendererCsgSystem& csgSystem
+        RendererCsgSystem& csgSystem,
+        const RendererOpticalVolumeSelection& opticalVolumes
     );
 
 public:
@@ -329,6 +331,7 @@ private:
     RendererShaderSystem& m_shaderSystem;
     RendererMeshSystem& m_meshSystem;
     RendererCsgSystem& m_csgSystem;
+    const RendererOpticalVolumeSelection& m_opticalVolumes;
 };
 
 

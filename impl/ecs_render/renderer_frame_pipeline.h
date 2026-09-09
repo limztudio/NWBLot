@@ -18,6 +18,7 @@
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
+#include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -546,6 +547,7 @@ private:
 private:
     RendererMeshState m_meshState;
     RendererMaterialState m_materialState;
+    RendererOpticalVolumeSelection m_opticalVolumes;
     RendererCsgState m_csgState;
     RendererDeferredState m_deferredState;
     RendererAvboitState m_avboitState;

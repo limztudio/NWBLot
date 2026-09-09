@@ -49,6 +49,7 @@ class RendererShaderSystem;
 class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererRayTracingState;
+class RendererOpticalVolumeSelection;
 struct MaterialSurfaceInfo;
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
@@ -346,7 +347,8 @@ public:
         RendererShaderSystem& shaderSystem,
         RendererMeshSystem& meshSystem,
         RendererMaterialSystem& materialSystem,
-        RendererRayTracingState& rayTracingState
+        RendererRayTracingState& rayTracingState,
+        const RendererOpticalVolumeSelection& opticalVolumes
     );
     ~RendererRayTracingSystem();
 
@@ -1498,6 +1500,7 @@ private:
     RendererMeshSystem& m_meshSystem;
     RendererMaterialSystem& m_materialSystem;
     RendererRayTracingState& m_rayTracingState;
+    const RendererOpticalVolumeSelection& m_opticalVolumes;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;

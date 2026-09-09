@@ -26,9 +26,26 @@ class Material;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace OpticalVolumeCoincidence{
+    enum Enum : u8{
+        Independent,
+        IdenticalMaterial,
+        SharedGroup,
+    };
+};
+
 struct RendererComponent{
     Core::Assets::AssetRef<Material> material;
     bool visible = true;
+    // Merging is opt-in: both modes assert that the material's geometry and surface hooks are independent of
+    // dense instance ID. Mesh, material asset and exact transform must match. IdenticalMaterial also compares
+    // every effective mutable byte; SharedGroup requires a nonempty common group and asserts that differing
+    // mutable inputs preserve the same boundary. Runtime meshes and CSG receivers always remain independent.
+    OpticalVolumeCoincidence::Enum opticalVolumeCoincidence = OpticalVolumeCoincidence::Independent;
+    Name opticalVolumeGroup = NAME_NONE;
+    // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every
+    // optical and shading property to raster, RT and caustics, including when screen refraction is disabled.
+    i32 opticalVolumePriority = 0;
 };
 
 struct MaterialInstanceParameter{

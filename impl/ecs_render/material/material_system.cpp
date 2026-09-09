@@ -25,7 +25,8 @@ RendererMaterialSystem::RendererMaterialSystem(
     RendererMaterialState& materialState,
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem,
-    RendererCsgSystem& csgSystem
+    RendererCsgSystem& csgSystem,
+    const RendererOpticalVolumeSelection& opticalVolumes
 )
     : m_arena(arena)
     , m_world(world)
@@ -36,6 +37,7 @@ RendererMaterialSystem::RendererMaterialSystem(
     , m_shaderSystem(shaderSystem)
     , m_meshSystem(meshSystem)
     , m_csgSystem(csgSystem)
+    , m_opticalVolumes(opticalVolumes)
 {}
 
 

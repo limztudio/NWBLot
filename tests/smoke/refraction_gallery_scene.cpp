@@ -31,6 +31,7 @@ constexpr SmokeMaterialRef s_Preview{"project/smoke/refraction/materials/gallery
 constexpr SmokeMaterialRef s_Opaque{"project/smoke/refraction/materials/opaque"};
 constexpr SmokeMaterialRef s_Transparent{"project/smoke/refraction/materials/transparent"};
 constexpr AStringView s_Interface = "project/shaders/smoke_surface";
+constexpr Name s_DuplicateOpticalGroup("project/smoke/refraction/gallery_duplicate_volume");
 
 
 class GalleryBuilder final{
@@ -51,7 +52,10 @@ public:
         const f32 coverage = 0.0f,
         const f32 yaw = 0.0f,
         const f32 roll = 0.0f,
-        const f32 pitch = 0.0f){
+        const f32 pitch = 0.0f,
+        const Name opticalGroup = NAME_NONE,
+        const i32 opticalPriority = 0,
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, 0.48f) : Float4(0.90f, 0.98f, 1.0f, coverage);
         const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, 0.48f) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
@@ -62,10 +66,27 @@ public:
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
         StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), &transform->rotation);
+        if(!m_preview){
+            auto& renderer = m_world.entity(entity).getComponent<Impl::RendererComponent>();
+            renderer.opticalVolumeGroup = opticalGroup;
+            renderer.opticalVolumePriority = opticalPriority;
+            renderer.opticalVolumeCoincidence = opticalCoincidence;
+        }
     }
 
-    void sphere(const f32 x, const f32 z, const f32 radius, const bool second = false, const f32 coverage = 0.0f){
-        object(s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage);
+    void sphere(
+        const f32 x,
+        const f32 z,
+        const f32 radius,
+        const bool second = false,
+        const f32 coverage = 0.0f,
+        const Name opticalGroup = NAME_NONE,
+        const i32 opticalPriority = 0,
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
+        object(
+            s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage,
+            0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence
+        );
     }
 
     void panel(
@@ -157,10 +178,50 @@ bool CreateRefractionGalleryScene(
         scene.sphere(0.0f, 0.0f, 1.2f);
         scene.sphere(0.2f, 0.15f, 0.62f, true);
     }
-    else if(caseName == "coincident" || caseName == "coincident_tinted"){
-        const f32 coverage = caseName == "coincident_tinted" ? 0.3f : 0.0f;
-        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage);
-        scene.sphere(0.0f, 0.0f, 1.1f, true, coverage);
+    else if(
+        caseName == "duplicate_single_cool" || caseName == "duplicate_single_warm"
+        || caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted"
+    ){
+        const bool warm = caseName == "duplicate_single_warm" || caseName == "duplicate_single_warm_tinted";
+        const bool tinted = caseName == "duplicate_single_cool_tinted" || caseName == "duplicate_single_warm_tinted";
+        const f32 coverage = tinted ? 0.3f : 0.0f;
+        scene.sphere(0.0f, 0.0f, 1.1f, warm, coverage);
+    }
+    else if(
+        caseName == "coincident" || caseName == "coincident_tinted"
+        || caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed"
+        || caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap"
+    ){
+        const bool tinted = caseName == "coincident_tinted" || caseName == "coincident_tinted_reversed"
+            || caseName == "coincident_tinted_priority_swap";
+        const bool reversed = caseName == "coincident_reversed" || caseName == "coincident_tinted_reversed";
+        const bool warmWins = caseName == "coincident_priority_swap" || caseName == "coincident_tinted_priority_swap";
+        const f32 coverage = tinted ? 0.3f : 0.0f;
+        const i32 coolPriority = warmWins ? 0 : 10;
+        const i32 warmPriority = warmWins ? 10 : 0;
+        const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;
+        scene.sphere(
+            0.0f, 0.0f, 1.1f, reversed, coverage, opticalGroup,
+            reversed ? warmPriority : coolPriority, Impl::OpticalVolumeCoincidence::SharedGroup
+        );
+        scene.sphere(
+            0.0f, 0.0f, 1.1f, !reversed, coverage, opticalGroup,
+            reversed ? coolPriority : warmPriority, Impl::OpticalVolumeCoincidence::SharedGroup
+        );
+    }
+    else if(caseName == "coincident_identical" || caseName == "coincident_tinted_identical"){
+        const f32 coverage = caseName == "coincident_tinted_identical" ? 0.3f : 0.0f;
+        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, NAME_NONE, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, NAME_NONE, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+    }
+    else if(caseName == "near_coincident"){
+        const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;
+        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f, opticalGroup, 10, Impl::OpticalVolumeCoincidence::SharedGroup);
+        scene.sphere(0.04f, 0.0f, 1.1f, true, 0.3f, opticalGroup, 0, Impl::OpticalVolumeCoincidence::SharedGroup);
+    }
+    else if(caseName == "coincident_preserved"){
+        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f);
+        scene.sphere(0.0f, 0.0f, 1.1f, false, 0.3f);
     }
     else if(caseName == "torus")
         scene.object(

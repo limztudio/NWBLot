@@ -28,6 +28,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         NAME nwb_refraction_gallery_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_gallery_smoke_tests.py"
     )
+    add_test(
+        NAME nwb_refraction_duplicate_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_duplicate_smoke_tests.py"
+    )
 endif()
 
 if(TARGET nwb_tex_conv)

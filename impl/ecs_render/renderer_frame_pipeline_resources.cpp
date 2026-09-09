@@ -115,6 +115,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
 }
 
 void RendererFramePipeline::invalidateResources(){
+    m_opticalVolumes.reset();
     m_deferredTaskTimingFeedback.reset();
     m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();
     m_preparedCsgFrameState = CsgFrameState{};
@@ -406,6 +407,10 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
+    if(m_preparedHasTransparentRenderers)
+        m_opticalVolumes.prepare(m_world, m_materialSystem, scratchArena);
+    else
+        m_opticalVolumes.reset();
     m_preparedCsgFrameState = HasCsgFrameCandidates(m_world)
         ? m_csgSystem.buildFrameState(scratchArena, m_materialSystem)
         : CsgFrameState{}

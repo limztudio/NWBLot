@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/material/sampled_texture_collection.h>
+#include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
 #include <global/algorithm.h>
@@ -1088,7 +1089,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         sampledTextureCollector.emplace(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
 
     for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible)
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
@@ -1652,7 +1653,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         sampledTextureCollector.emplace(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
 
     for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible)
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;

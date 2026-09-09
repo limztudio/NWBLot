@@ -28,7 +28,8 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     RendererShaderSystem& shaderSystem,
     RendererMeshSystem& meshSystem,
     RendererMaterialSystem& materialSystem,
-    RendererRayTracingState& rayTracingState
+    RendererRayTracingState& rayTracingState,
+    const RendererOpticalVolumeSelection& opticalVolumes
 )
     : m_arena(arena)
     , m_world(world)
@@ -37,6 +38,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_meshSystem(meshSystem)
     , m_materialSystem(materialSystem)
     , m_rayTracingState(rayTracingState)
+    , m_opticalVolumes(opticalVolumes)
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)

@@ -37,7 +37,8 @@ renderer settings and exist only in the smoke project.
 
 The complex-case gallery is an additional visual inspection fixture. It covers
 `single`, `separate`, `stacked`, `intersecting`, `nested`, `coincident`,
-`coincident_tinted`, `torus`, `same_mesh`, and `prism`. Select a case interactively
+`coincident_tinted`, `torus`, `same_mesh`, and `prism`, plus twelve exact-duplicate
+references and controls. Select a case interactively
 with `--refraction-case <case>` on the smoke launcher. Add `--refraction-geometry`
 to show the same arrangement with colored translucent materials, normal-based
 shading, a neutral backdrop, and refraction disabled. This makes overlapping and
@@ -47,7 +48,7 @@ nested geometry easier to inspect.
 python tests/smoke/launch.py refraction --config dbg --refraction-case torus
 ```
 
-Generate all forty actual framebuffer captures and a portable offline gallery:
+Generate all eighty-eight actual framebuffer captures and a portable offline gallery:
 
 ```powershell
 python tests/smoke/refraction_gallery_smoke.py `
@@ -77,13 +78,60 @@ those differences because its materials and backdrop intentionally differ.
 The gallery checks clean logs, successful route dispatch, orderly shutdown,
 nontrivial frames, and visible differences when the disabled baseline is selected.
 It does not assert physical correctness for complex media. The current renderer
-retains one primary refractor per pixel, has bounded internal reflection and
-transparent continuation, and can fall back per pixel when a second refractive
-interface, nested object, overlap, or unsupported exit sequence is encountered.
+retains one primary refractor per pixel and has bounded internal reflection and
+transparent continuation. Once the first volume has a valid exit, additional
+glass uses a background approximation from that exit, preserving the primary
+exit direction, measured thickness, absorption, and Fresnel without tracing extra
+rays. It does not trace the remaining chain of volumes. Invalid first exits,
+intersections, and nested media still use a conservative fallback from the entry.
 Each case includes its relevant limitation. `--require-hardware` confirms that a
 hardware resolve was dispatched; it does not imply every pixel stayed on that
 path. The original single-sphere smoke remains the stricter regression test for
 stripe displacement and foreground transparency preservation.
+
+The default `RendererComponent::opticalVolumeCoincidence` policy is `Independent`,
+which preserves authored surfaces. `IdenticalMaterial` opts into grouping exact
+static duplicates with the same mesh, material, effective surface inputs, and
+transform. `SharedGroup` additionally requires a nonempty `opticalVolumeGroup` and
+permits differing mutable surface inputs. Both merge modes assert that geometry and surface hooks are independent of dense
+instance identity; `SharedGroup` also asserts that the
+differing inputs preserve the same boundary. The material asset, mesh, and exact
+transform must still match. Higher `opticalVolumePriority` wins, with the lowest
+full entity identity breaking equal-priority ties. Runtime/deformed meshes and CSG
+are excluded.
+Grouping also prevents duplicate tint when camera refraction is disabled; the
+nonrefractive geometry preview continues to show every authored entity.
+
+The strict duplicate regression uses radius-1.1 cool and warm single references,
+with both zero coverage and coverage 0.3. It compares opted-in identical duplicates,
+explicitly grouped conflicting tints, reversed creation order, and swapped
+priorities with the selected single reference. A translated near-overlap and
+independent coincident surfaces must retain visible separate contributions. The
+existing radius-1.15 `single` gallery case is not used as their reference.
+
+```powershell
+python tests/smoke/refraction_duplicate_smoke.py `
+  --executable __exec/windows/arm64/full/dbg/refraction_smoke.exe `
+  --working-directory __cmake/build/windows-clang-arm64/Testing/smoke_runtime/dbg `
+  --logserver-executable __exec/windows/arm64/full/dbg/logserver.exe `
+  --output-directory __artifacts/refraction-duplicates `
+  --require-hardware --application-arg=--gpudbg
+```
+
+The default run captures thirty-three framesets: fourteen cases on each of the
+automatic and screen-space routes, plus five refraction-disabled controls.
+`--variants automatic` or `--variants screen` limits the optical route. Every
+capture uses sixteen graphics presentation frames, completed GPU readback, clean
+logs, and normal shutdown. Duplicate
+matches permit at most two levels of channel rounding and a mean absolute RGB
+error of 0.02/255 across the full frame. Distinct controls must change at least
+sixty-four pixels by more than two channel levels; separate cool/warm reference
+checks prevent a priority test from passing with indistinguishable materials.
+`duplicate_comparisons.json` records successful comparisons, while `gallery.html`
+and raw BMP/PNG captures are written before image comparison so a failed oracle
+can be inspected. The corresponding CTest is
+`nwb_refraction_duplicate_capture_smoke`; CPU-only oracle tests are registered as
+`nwb_refraction_duplicate_analysis_unit`.
 
 The caustic-sphere fixture also explicitly enables camera refraction while keeping
 its original glass material, light, receiver, and photon caustics. Launch it with:

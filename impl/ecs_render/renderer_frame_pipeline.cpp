@@ -56,6 +56,7 @@ RendererFramePipeline::RendererFramePipeline(
     , m_frameGraphRendererLabel(arena)
     , m_meshState(arena)
     , m_materialState(arena)
+    , m_opticalVolumes(arena)
     , m_rayTracingState(arena)
     , m_shadowComputePersistentState(arena)
     , m_shadowVisibilityReturnState(arena)
@@ -86,7 +87,8 @@ RendererFramePipeline::RendererFramePipeline(
         m_materialState,
         m_shaderSystem,
         m_meshSystem,
-        m_csgSystem
+        m_csgSystem,
+        m_opticalVolumes
     )
     , m_deferredSystem(arena, world, graphics, m_deferredState, m_shaderSystem)
     , m_avboitSystem(
@@ -104,7 +106,8 @@ RendererFramePipeline::RendererFramePipeline(
         m_shaderSystem,
         m_meshSystem,
         m_materialSystem,
-        m_rayTracingState
+        m_rayTracingState,
+        m_opticalVolumes
     )
     , m_deferredTaskTimingFeedback(
         arena,

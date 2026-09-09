@@ -44,6 +44,7 @@ RendererSystem::RendererSystem(
     readAccess<NWB::Impl::Scene::CameraComponent>();
     readAccess<RendererComponent>();
     readAccess<MaterialInstanceComponent>();
+    readAccess<CsgReceiverComponent>();
     readAccess<StaticCsgMeshComponent>();
     readAccess<SkinnedCsgMeshComponent>();
     readAccess<CsgCutterComponent>();

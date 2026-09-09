@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/optics/coincident_volumes.h>
 
 #include <core/task/gpu/compiled_graph.h>
 
@@ -647,7 +648,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
     SIMDVector combinedMax = VectorReplicate(-s_RayTracingFiniteInfinity);
 
     for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible)
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;

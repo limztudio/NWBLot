@@ -11,6 +11,8 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/optics/coincident_volumes.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/optics/coincident_volumes.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_resources.cpp"

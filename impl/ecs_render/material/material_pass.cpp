@@ -8,6 +8,7 @@
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/optics/coincident_volumes.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -673,7 +674,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     };
 
     for(auto&& [entity, renderer] : rendererView){
-        if(!renderer.visible)
+        // Every pass consumes the same frozen selection before assigning its dense instance indices.
+        if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
         if(!ecsMeshSystem){

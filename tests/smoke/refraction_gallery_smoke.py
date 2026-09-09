@@ -23,21 +23,45 @@ CASES = {
     "separate": ("Separate objects", "Distinct glass objects with separate visible silhouettes.",
         "Each pixel can retain its own nearest refractor. Spatially separate objects can therefore use different primary interfaces."),
     "stacked": ("Depth stack", "Multiple glass objects placed one behind another along the view.",
-        "The first refractor is retained. Further refractive interfaces along the transmitted ray trigger the bounded screen-space fallback; a full chain of volumes is not traced."),
+        "After a valid first exit, further glass uses an approximation from that exit while preserving the completed primary direction, measured thickness, absorption and Fresnel. No extra rays trace the remaining volume chain."),
     "intersecting": ("Intersecting volumes", "Glass objects whose solid volumes overlap.",
         "Overlapping volumes do not have a tracked medium stack. When another instance interrupts the selected volume's exit path, the hardware resolver falls back per pixel."),
     "nested": ("Nested volumes", "One glass object contained inside another.",
         "Nested media are outside the first implementation's complete optical model. Encountering the inner instance can trigger the screen-space fallback."),
-    "coincident": ("Coincident surfaces", "Separate glass instances occupying the same surface positions.",
-        "Equal-depth interfaces are ambiguous. The retained primary can depend on draw or intersection ordering; use the geometry preview to inspect the arrangement."),
+    "coincident": ("Coincident surfaces", "Exact coincident glass with different tints and an explicit shared optical-volume group.",
+        "The cool instance has priority 10 and the warm instance priority 0. The renderer should select one cool optical volume; the geometry preview still shows both authored surfaces."),
     "coincident_tinted": ("Coincident tinted glass", "Coincident glass instances with different authored optical tints.",
-        "The renderer retains one primary optical interface. Coincident tint selection and remaining AVBOIT layers are approximations, so this is an ambiguity probe rather than a reference solution."),
+        "Both instances have coverage 0.3 and share an authored optical-volume group. Cool priority 10 wins over warm priority 0, avoiding duplicate optical attenuation."),
     "torus": ("Concave torus", "A closed ring with a visible hole and a concave inner surface.",
-        "Entry and exit queries handle the selected local volume segment. A bent ray can hit the same ring again; additional glass encounters take the bounded fallback."),
+        "A valid entry/exit pair handles one local ring segment. If the bent ray meets the ring again, the remaining background is approximated from the completed exit without discarding its optical result or adding rays. Invalid exit sequences still use the conservative entry fallback."),
     "same_mesh": ("Disconnected components", "Multiple disconnected glass components inside one mesh instance.",
-        "The primary identity is an instance, not a connected-volume label. This case exposes the limits of instance-based exclusion and continuation across disconnected surfaces."),
+        "Primary identity is an instance, not a connected-volume label, so exclusion can affect its other components. After a valid first exit, later components use the exit-based background approximation; a full optical chain through disconnected components is not traced."),
     "prism": ("Faceted prism", "A glass prism with planar faces and sharp changes in surface normal.",
         "The selected entry and exit faces bend the ray using their normals. Internal reflection is capped, so sharp-angle regions can lose unresolved reflected energy. This angle-stress scene does not verify that the total-internal-reflection branch executed."),
+    "duplicate_single_cool": ("Cool reference", "One cool glass sphere of radius 1.1, matching the duplicate fixtures exactly.",
+        "Zero coverage; its actual render is the reference for cool-priority and identical-material clear duplicate cases."),
+    "duplicate_single_warm": ("Warm reference", "One warm glass sphere of radius 1.1, matching the duplicate fixtures exactly.",
+        "Zero coverage; its actual render is the reference when explicit optical priority selects the warm instance."),
+    "duplicate_single_cool_tinted": ("Cool tinted reference", "One cool glass sphere of radius 1.1 with coverage 0.3.",
+        "Reference for the cool-priority and identical-material duplicate cases with nonzero coverage."),
+    "duplicate_single_warm_tinted": ("Warm tinted reference", "One warm glass sphere of radius 1.1 with coverage 0.3.",
+        "Reference when explicit optical priority selects the warm instance with nonzero coverage."),
+    "coincident_reversed": ("Reversed creation order", "The warm instance is created before the cool instance at exactly the same transform.",
+        "The cool instance still has priority 10. Reversing creation order should preserve its single-volume result."),
+    "coincident_tinted_reversed": ("Reversed tinted order", "The coverage-0.3 pair is created warm first, cool second.",
+        "Explicit cool priority should preserve the cool single reference despite the reversed insertion order."),
+    "coincident_priority_swap": ("Swapped priority", "The same clear duplicate pair now gives the warm instance priority 10.",
+        "The result should match the warm single reference; optical priority changes the selected material."),
+    "coincident_tinted_priority_swap": ("Swapped tinted priority", "The coverage-0.3 duplicate pair now gives the warm instance priority 10.",
+        "The result should match the warm tinted single reference without adding the lower-priority surface."),
+    "coincident_identical": ("Identical-material duplicate", "Two identical clear spheres explicitly opt into IdenticalMaterial coincidence handling.",
+        "The author guarantees instance-independent geometry. Exact static geometry, transform, material and effective inputs should collapse to the cool single reference."),
+    "coincident_tinted_identical": ("Identical tinted duplicate", "Two identical coverage-0.3 spheres explicitly opt into IdenticalMaterial coincidence handling.",
+        "The opted-in duplicate should not add an extra optical or AVBOIT layer, including when camera refraction is disabled."),
+    "near_coincident": ("Near overlap retained", "The warm member of an authored group is translated 0.04 units from the cool sphere.",
+        "The transforms are different, so the renderer must retain both volumes. The existing bounded overlap fallback still applies."),
+    "coincident_preserved": ("Independent duplicate layers", "Two identical tinted spheres retain the default Independent coincidence policy.",
+        "Independent surfaces remain separate. Their layered result remains subject to the renderer's bounded interface model."),
 }
 
 VARIANTS = ("geometry", "automatic", "screen", "disabled")
@@ -47,8 +71,11 @@ VARIANT_LABELS = {
 }
 COMMON_LIMIT = (
     "Current implementation: one primary refractor per pixel, bounded hardware continuation, "
-    "and a screen-space fallback for unsupported interface sequences. A hardware dispatch can "
-    "still fall back on individual pixels. These are real renderer outputs; the gallery measures "
+    "and opted-in exact static duplicate grouping. Additional glass after a valid first exit uses "
+    "an exit-based background approximation that preserves the primary direction, thickness, absorption "
+    "and Fresnel without extra rays. Invalid first exits, intersections and nested media retain the "
+    "conservative entry fallback. A hardware dispatch can still fall back on individual pixels. "
+    "These are real renderer outputs; the gallery measures "
     "visible changes and exposes limitations without certifying complex optical accuracy."
 )
 

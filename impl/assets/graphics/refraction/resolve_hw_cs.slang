@@ -188,22 +188,14 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     float3 origin = exitHit.position + outgoingDirection * entry.bias;
     float3 accumulated = float3(0.0);
     float transmittance = 1.0;
-    // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query;
-    // further glass interfaces deliberately take the bounded screen fallback instead of spawning another path.
+    // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query.
+    // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
     for(uint layer = 0u; layer < 3u; ++layer){
         const NwbRefractionHit background = nwbRefractionTrace(origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
-        if(!background.hit){
-            if(layer > 0u)
-                return nwbRefractionResolveScreen(pixel, entry);
-            float3 screenRadiance;
-            NwbRefractionEntry screenEntry = entry;
-            screenEntry.position = exitHit.position;
-            const float3 missRadiance = nwbRefractionScreenBackground(screenEntry, outgoingDirection, screenRadiance)
-                ? screenRadiance : nwbRefractionBackground(pixel);
-            return float4((accumulated + transmittance * missRadiance) * attenuation, 1.0);
-        }
+        if(!background.hit)
+            break;
         if(float(background.surface.refractionIor) > 1.001)
-            return nwbRefractionResolveScreen(pixel, entry);
+            break;
         const float coverage = saturate(float(background.surface.renderCoverage));
         if(coverage >= 0.999){
             float3 radiance;
@@ -215,7 +207,16 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         transmittance *= 1.0 - coverage;
         origin = background.position + outgoingDirection * entry.bias;
     }
-    return nwbRefractionResolveScreen(pixel, entry);
+    // Keep the completed primary volume's exit direction, measured thickness, and Fresnel transmission. The bounded
+    // screen lookup retains its depth and primary-instance checks; secondary glass contributes only its cached AVBOIT
+    // appearance, without additional bending or optical absorption. Replace the entire background estimate here so
+    // partially traced transparent layers are not also counted through the cached AVBOIT accumulation.
+    NwbRefractionEntry exitEntry = entry;
+    exitEntry.position = exitHit.position;
+    float3 backgroundRadiance;
+    if(!nwbRefractionScreenBackground(exitEntry, outgoingDirection, backgroundRadiance))
+        backgroundRadiance = nwbRefractionBackground(pixel);
+    return float4(backgroundRadiance * attenuation, 1.0);
 }
 
 
@@ -237,5 +238,4 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 

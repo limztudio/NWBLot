@@ -5,9 +5,17 @@
 #ifndef NWB_GRAPHICS_REFLECTION_COMMON_SLANGI
 #define NWB_GRAPHICS_REFLECTION_COMMON_SLANGI
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "frame_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 struct NwbReflectionParameters{
 #define NWB_REFLECTION_UINT_FIELD(name, value) uint name;
@@ -132,6 +140,10 @@ bool nwbReflectionLoadSurface(const uint2 pixel, const bool glass, out NwbReflec
     return isfinite(surface.bias) && all(isfinite(surface.direction))
         && all(isfinite(surface.position + surface.normal * surface.bias));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 #endif
 

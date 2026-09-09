@@ -108,14 +108,30 @@ Core::ECS::EntityID CreateSceneCameraEntity(Core::ECS::World& world, const Float
 
 SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallbackAspectRatio){
     const Core::ECS::EntityID activeCamera = __hidden_camera::ResolveActiveCamera(world);
-    SceneCameraView fallbackCamera;
-    SceneCameraView requestedCamera;
+    if(activeCamera.valid()){
+        auto* transform = world.tryGetComponent<TransformComponent>(activeCamera);
+        auto* camera = world.tryGetComponent<CameraComponent>(activeCamera);
+        if(transform && camera){
+            SceneCameraView requestedCamera;
+            if(__hidden_camera::TryBuildSceneCameraView(
+                activeCamera,
+                *transform,
+                *camera,
+                fallbackAspectRatio,
+                LoadFloat(transform->position),
+                LoadFloat(transform->rotation),
+                LoadFloat(transform->scale),
+                requestedCamera
+            ))
+                return requestedCamera;
+        }
+    }
 
     const auto cameraView = world.view<TransformComponent, CameraComponent>();
     for(auto it = cameraView.begin(); it != cameraView.end(); ++it){
         auto&& [entity, transform, camera] = *it;
         SceneCameraView resolvedCamera;
-        if(!__hidden_camera::TryBuildSceneCameraView(
+        if(__hidden_camera::TryBuildSceneCameraView(
             entity,
             transform,
             camera,
@@ -125,20 +141,10 @@ SceneCameraView ResolveSceneCameraView(Core::ECS::World& world, const f32 fallba
             LoadFloat(transform.scale),
             resolvedCamera
         ))
-            continue;
-
-        if(!fallbackCamera.valid())
-            fallbackCamera = resolvedCamera;
-        if(activeCamera.valid() && entity == activeCamera){
-            requestedCamera = resolvedCamera;
-            break;
-        }
+            return resolvedCamera;
     }
 
-    return requestedCamera.valid()
-        ? requestedCamera
-        : fallbackCamera
-    ;
+    return {};
 }
 
 

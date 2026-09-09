@@ -64,6 +64,8 @@ void RendererReflectionSystem::invalidateResources(){
     m_classifyShader = nullptr;
     m_buildArgsShader = nullptr;
     m_hardwareShader = nullptr;
+    m_plainHardwareShader = nullptr;
+    m_plainHardwarePipeline = nullptr;
     m_depthShader = nullptr;
     m_bindingLayout = nullptr;
     m_depthBindingLayout = nullptr;
@@ -85,7 +87,7 @@ bool RendererReflectionSystem::prepareResources(
     const u32 capacity = static_cast<u32>(boundedCapacity);
     if(
         m_resources.valid() && m_resources.parameters.width == width && m_resources.parameters.height == height
-        && (!prepareHardware || m_resources.hardwarePipeline)
+        && (!prepareHardware || (m_resources.hardwarePipeline && m_plainHardwarePipeline))
     )
         return prepareQueue(capacity) && m_statistics.prepareResources() && m_postprocess.prepareResources(width, height, settings);
     auto& device = m_graphics.getDevice();
@@ -298,6 +300,9 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     )
         return {};
     ReflectionFrameSnapshot snapshot = m_resources;
+    const bool opticalTransport = !scene.opticalScene.boundsComplete || scene.opticalScene.transparentCount != 0u;
+    if(scene.valid() && !opticalTransport)
+        snapshot.hardwarePipeline = m_plainHardwarePipeline;
     const ReflectionRadianceBinding base{
         m_resources.opaqueRadiance, m_resources.parameters.opaqueRadianceSlot, m_resources.parameters.opaqueOutputSlot,
     };
@@ -316,6 +321,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.maxHardwareRays = Min(settings.maxHardwareRaysPerFrame, parameters.queueCapacity);
     parameters.sampleIndex = snapshot.postprocess.history.sampleIndex;
     parameters.samplingSeed = settings.samplingSeed;
+    parameters.maxOpticalQueries = settings.maxOpticalQueries;
     parameters.opaqueOutputSlot = snapshot.postprocess.current.storageSlot;
     parameters.opaqueRadianceSlot = snapshot.postprocess.spatialEnabled
         ? snapshot.postprocess.spatial.sampledSlot : snapshot.postprocess.current.sampledSlot;
@@ -351,6 +357,8 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         metadata.width = parameters.width;
         metadata.height = parameters.height;
         metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
+        metadata.maxOpticalQueries = settings.maxOpticalQueries;
+        metadata.opticalTransportEnabled = parameters.hardwareEnabled != 0u && opticalTransport;
         metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
         metadata.queueCapacity = parameters.queueCapacity;
         metadata.traceMode = settings.traceMode;
@@ -456,13 +464,12 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
         const Name shaderName,
         const Name debugName,
         const bool hardware,
-        const Core::BindingLayoutHandle& bindingLayout){
+        const Core::BindingLayoutHandle& bindingLayout,
+        const AStringView variant = Core::ShaderArchive::s_DefaultVariant){
         if(pipeline)
             return true;
         if(!m_shaders.loadShader(
-            shader, shaderName,
-            hardware ? AStringView("NWB_BINDLESS_TLAS=1") : Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute, debugName
+            shader, shaderName, variant, Core::ShaderType::Compute, debugName
         ))
             return false;
         Core::ComputePipelineDesc desc;
@@ -494,10 +501,15 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
         return false;
     if(
         prepareHardware && m_graphics.queryFeatureSupport(Core::Feature::RayQuery) && heap.hasAccelStructLayout()
-        && !preparePipeline(
+        && (!preparePipeline(
             m_resources.hardwarePipeline, m_hardwareShader,
-            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionHardware"), true, m_bindingLayout
-        )
+            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout,
+            AStringView("NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=1")
+        ) || !preparePipeline(
+            m_plainHardwarePipeline, m_plainHardwareShader,
+            Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
+            AStringView("NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=0")
+        ))
     )
         return false;
     return true;

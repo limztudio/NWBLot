@@ -1,0 +1,148 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_OPTICAL_MEDIA_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_OPTICAL_MEDIA_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "optical_transport_constants.h"
+#include "optical_scene_constants.h"
+#include "../optics/dielectric.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbOpticalTraceConfig{
+    uint instanceMaterialHeapSlot;
+    uint opticalSceneHeapSlot;
+    uint opticalInstanceCount;
+    uint maxQueries;
+    float minDistance; // Initial receiver uncertainty only; later boundaries use their reconstructed FP32 position.
+    float maxDistance;
+};
+
+struct NwbOpticalTraceResult{
+    float3 radiance;
+    float distance;
+    uint queryCount;
+    uint bootstrapEventCount;
+    uint tirCount;
+    uint termination;
+    bool transparentPath;
+    bool surfaceHit;
+};
+
+struct NwbOpticalMedium{
+    uint instance;
+    uint entityId;
+    uint mode;
+    int priority;
+    uint winding;
+    float ior;
+    float3 absorption;
+};
+
+struct NwbOpticalMedia{
+    NwbOpticalMedium entries[NWB_OPTICAL_MAX_MEDIA];
+    uint count;
+};
+
+NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
+    NwbOpticalMedium result = (NwbOpticalMedium)0;
+    result.ior = 1.0;
+    if(media.count == 0u)
+        return result;
+    result = media.entries[media.count - 1u];
+    if(result.mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+        [unroll]
+        for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+            if(index < media.count){
+                const NwbOpticalMedium candidate = media.entries[index];
+                if(candidate.priority > result.priority || (candidate.priority == result.priority && candidate.entityId < result.entityId))
+                    result = candidate;
+            }
+        }
+    }
+    return result;
+}
+
+// A nested boundary is an authored stack discipline. Priority boundaries form an authored set: highest priority
+// wins, with the lowest full EntityID resolving equal priorities. Overlapping outward-oriented shells of one
+// instance form a union through bounded positive winding; only zero/positive changes affect medium membership.
+// Mixed active policies and unmatched exits are ambiguous; traversal never guesses from hardware tie order.
+bool nwbOpticalApplyBoundary(
+    inout NwbOpticalMedia media,
+    const NwbOpticalMedium medium,
+    const bool entering,
+    inout NwbOpticalTraceResult result){
+    uint existing = NWB_OPTICAL_MAX_MEDIA;
+    [unroll]
+    for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+        if(index < media.count && media.entries[index].instance == medium.instance)
+            existing = index;
+    }
+    result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+    if(entering){
+        if(existing != NWB_OPTICAL_MAX_MEDIA){
+            if(media.entries[existing].winding == NWB_OPTICAL_MAX_WINDING){
+                result.termination = NWB_OPTICAL_TERMINATION_MEDIUM_LIMIT;
+                return false;
+            }
+            ++media.entries[existing].winding;
+            return true;
+        }
+        if(media.count != 0u && media.entries[0].mode != medium.mode)
+            return false;
+        if(media.count == NWB_OPTICAL_MAX_MEDIA){
+            result.termination = NWB_OPTICAL_TERMINATION_MEDIUM_LIMIT;
+            return false;
+        }
+        media.entries[media.count] = medium;
+        media.entries[media.count].winding = 1u;
+        ++media.count;
+        return true;
+    }
+    if(existing == NWB_OPTICAL_MAX_MEDIA)
+        return false;
+    if(media.entries[existing].winding > 1u){
+        --media.entries[existing].winding;
+        return true;
+    }
+    if(medium.mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && existing + 1u != media.count)
+        return false;
+    [unroll]
+    for(uint index = 0u; index + 1u < NWB_OPTICAL_MAX_MEDIA; ++index){
+        if(index >= existing && index + 1u < media.count)
+            media.entries[index] = media.entries[index + 1u];
+    }
+    --media.count;
+    return true;
+}
+
+float nwbOpticalPositionUncertainty(const float3 position){
+    return max(1e-6, 4.0 * 1.1920928955078125e-7 * max(1.0, max(abs(position.x), max(abs(position.y), abs(position.z)))));
+}
+
+bool nwbOpticalConsumeQuery(const NwbOpticalTraceConfig config, inout NwbOpticalTraceResult result){
+    if(result.queryCount >= min(config.maxQueries, NWB_OPTICAL_MAX_QUERIES)){
+        result.termination = NWB_OPTICAL_TERMINATION_QUERY_LIMIT;
+        return false;
+    }
+    ++result.queryCount;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

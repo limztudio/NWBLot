@@ -34,6 +34,14 @@ namespace OpticalVolumeCoincidence{
     };
 };
 
+namespace OpticalBoundaryMode{
+    enum Enum : u8{
+        Unspecified,
+        ClosedNested,
+        ClosedPriority,
+    };
+};
+
 struct RendererComponent{
     Core::Assets::AssetRef<Material> material;
     bool visible = true;
@@ -46,6 +54,15 @@ struct RendererComponent{
     // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every
     // optical and shading property to raster, RT and caustics, including when screen refraction is disabled.
     i32 opticalVolumePriority = 0;
+    // Closed modes assert watertight outward-oriented geometry and homogeneous IOR/unit-distance absorption:
+    // these optical inputs are invariant across UV, normals, world position, and ray/observer direction.
+    // Outward closed shells in one instance form a union. Nested asserts disjoint or properly nested instance
+    // unions. Priority replaces the effective medium in overlaps;
+    // simultaneously active volumes must use the same mode. These contracts are independent of caustic eligibility.
+    OpticalBoundaryMode::Enum opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
+    // Higher priority selects the medium; equal priority uses the lowest full EntityID. This is separate from
+    // opticalVolumePriority, which chooses a representative of explicitly coincident geometry before gathering.
+    i32 opticalMediumPriority = 0;
 };
 
 struct MaterialInstanceParameter{

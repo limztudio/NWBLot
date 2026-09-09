@@ -27,7 +27,8 @@ namespace __hidden_reflection_history{
     return
         a.traceMode == b.traceMode && a.temporalEnabled == b.temporalEnabled
         && a.temporalMaxSamples == b.temporalMaxSamples && a.samplingSeed == b.samplingSeed
-        && a.maxHardwareRaysPerFrame == b.maxHardwareRaysPerFrame && a.maxRayDistance == b.maxRayDistance
+        && a.maxHardwareRaysPerFrame == b.maxHardwareRaysPerFrame && a.maxOpticalQueries == b.maxOpticalQueries
+        && a.maxRayDistance == b.maxRayDistance
         && a.distanceFadeStart == b.distanceFadeStart && a.roughnessCutoff == b.roughnessCutoff
         && a.screenMaxSteps == b.screenMaxSteps && a.screenThickness == b.screenThickness
         && a.screenConfidenceThreshold == b.screenConfidenceThreshold && a.screenEdgeFade == b.screenEdgeFade

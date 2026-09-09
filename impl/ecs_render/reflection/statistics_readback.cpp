@@ -77,6 +77,7 @@ void ReflectionStatisticsState::accept(
     slot->inFlight = true;
     slot->metadata.acceptedToken = token;
     slot->metadata.hardwareReady = hardwareReady;
+    slot->metadata.opticalTransportEnabled = slot->metadata.opticalTransportEnabled && hardwareReady;
     if(history){
         slot->metadata.historyEpoch = history->epoch;
         slot->metadata.historyStartGraphicsFrame = history->historyStartGraphicsFrame;
@@ -136,6 +137,14 @@ void ReflectionStatisticsState::complete(
         m_latest.fallbackPixels = counters[NWB_REFLECTION_COUNTER_FALLBACK_PIXELS / sizeof(u32)];
         m_latest.screenAttempts = counters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
         m_latest.screenHits = counters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
+        m_latest.hardwareQueries = counters[NWB_REFLECTION_COUNTER_HARDWARE_QUERIES / sizeof(u32)];
+        m_latest.bootstrapEvents = counters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
+        m_latest.transparentPaths = counters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
+        m_latest.unsupportedPaths = counters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];
+        m_latest.limitedPaths = counters[NWB_REFLECTION_COUNTER_LIMITED_PATHS / sizeof(u32)];
+        m_latest.ambiguousPaths = counters[NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS / sizeof(u32)];
+        m_latest.tirEvents = counters[NWB_REFLECTION_COUNTER_TIR_EVENTS / sizeof(u32)];
+        m_latest.mediumOverflowPaths = counters[NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS / sizeof(u32)];
     }
     *slot = {};
 }

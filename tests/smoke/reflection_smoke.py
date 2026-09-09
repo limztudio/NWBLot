@@ -448,7 +448,7 @@ def parse_args(argv):
     parser.add_argument("--working-directory", required=True, type=Path)
     parser.add_argument("--output-directory", required=True, type=Path)
     parser.add_argument("--logserver-executable", type=Path)
-    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget", "rough", "temporal"), default="all",
+    parser.add_argument("--suite", choices=("all", "baseline", "screen", "budget", "rough", "temporal", "optical"), default="all",
         help="Capture the original 22 comparisons, a subset, or the separate roughness/history suites.")
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--timeout", type=float, default=60.0)
@@ -466,6 +466,9 @@ def main(argv):
     args.output_directory.mkdir(parents=True, exist_ok=True)
     if args.suite in ("rough", "temporal"):
         from reflection_roughness_smoke import run_suite
+        return run_suite(args)
+    if args.suite == "optical":
+        from reflection_optical_smoke import run_suite
         return run_suite(args)
     completed = []
     statistics = {}

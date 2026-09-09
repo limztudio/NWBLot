@@ -416,6 +416,10 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
     );
 }
 
+bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const{
+    return m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity) != nullptr;
+}
+
 void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
     MarkLiveSkinnedRuntimeMeshes(
         m_world, requests,

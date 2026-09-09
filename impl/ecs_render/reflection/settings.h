@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/assets/graphics/raytrace/optical_transport_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,12 +49,14 @@ struct ReflectionSettings{
     f32 distanceFadeStart = 80.f;
     f32 roughnessCutoff = 0.8f;
     u32 maxHardwareRaysPerFrame = 262144u;
+    // Total scene queries per admitted path, including optional initial-medium discovery.
+    u32 maxOpticalQueries = NWB_OPTICAL_DEFAULT_QUERIES;
     u32 screenMaxSteps = 96u;
     // World-space surface uncertainty, acceptance confidence and normalized viewport-edge fade width.
     f32 screenThickness = 0.03f;
     f32 screenConfidenceThreshold = 0.8f;
     f32 screenEdgeFade = 0.05f;
-    // Linear HDR radiance for the analytic sky fallback. A missing trace is never a black validity hole.
+    // Linear HDR radiance for ordinary exterior misses. Unresolved optical paths retain only accumulated radiance.
     Float3U environmentTop = Float3U(0.15f, 0.2f, 0.3f);
     Float3U environmentBottom = Float3U(0.04f, 0.04f, 0.04f);
 };

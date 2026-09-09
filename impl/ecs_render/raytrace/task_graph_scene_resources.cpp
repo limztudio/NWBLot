@@ -7,6 +7,7 @@
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -30,6 +31,7 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
         resources.instanceMaterialBuffer,
         resources.materialTypedBuffer,
         resources.instanceBuffer,
+        resources.opticalScene.buffer,
     };
     Core::GpuGraphResourceId importedBuffers[LengthOf(buffers)] = {};
     {
@@ -60,6 +62,37 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
             .setInitialState(tlasInitialState)
     );
     if(!tlas.valid())
+        return {};
+
+    // Every declared consumer frame uploads its immutable metadata on the same primary queue. This deliberately
+    // makes no preflight/accepted-cache claim: a rejected graph cannot cause a later frame to skip initialization,
+    // and normal graph write/read hazards serialize replacements after all earlier consumers of this buffer.
+    const auto& opticalBytes = resources.opticalScene.upload->bytes;
+    const Core::GpuUploadBlobId opticalBlob = graph.copyUploadData(opticalBytes.data(), opticalBytes.size(), alignof(u32));
+    if(!opticalBlob.valid())
+        return {};
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Tiny;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    Core::GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("render.raytrace.optical_scene_upload"))
+        .setMarkerLabel("Ray Optical Scene Upload")
+        .setQueue(RendererTaskGraphDetail::GraphicsUploadQueueRequest())
+        .setScheduling(scheduling)
+    ;
+    const Core::GpuTaskId opticalUpload = graph.addUploadBufferTask(
+        uploadDesc,
+        Core::GpuUploadBufferTaskDesc{
+            .source = opticalBlob,
+            .destination = importedBuffers[LengthOf(buffers) - 1u],
+            .finalState = Core::ResourceStates::Common,
+        }
+    );
+    if(!opticalUpload.valid())
         return {};
 
     RayTracingSceneGraphReads result;

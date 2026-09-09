@@ -1,0 +1,26 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[material_constant]
+struct NwbReflectionOpticalSurface{
+    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
+    half4 base_color;
+};
+
+[material_mutable]
+struct NwbReflectionOpticalRuntime{
+    [default("half4(1.0h, 1.0h, 1.0h, 0.0h)")]
+    half4 color_tint;
+    [default("half3(1.0h, 1.0h, 1.0h)")]
+    half3 unit_transmission;
+    [default("half(1.5h)")]
+    half ior;
+};
+
+NwbReflectionOpticalSurface surface;
+NwbReflectionOpticalRuntime runtime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

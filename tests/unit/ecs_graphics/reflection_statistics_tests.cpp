@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/reflection/statistics_readback.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
 
 #include <core/alloc/general.h>
 #include <core/task/gpu/task_graph.h>
@@ -35,6 +36,7 @@ struct StatisticsContext{
     value.requestedHardwareBudget = 128u;
     value.effectiveHardwareBudget = 64u;
     value.queueCapacity = 64u;
+    value.maxOpticalQueries = 8u;
     value.traceMode = ReflectionTraceMode::Hybrid;
     value.hardwareRequested = true;
     value.hardwareAvailable = true;
@@ -106,7 +108,7 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
     EXPECT_EQ(accepted.value, 21u);
 }
 
-TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllEightCountersOnlyAtCompletion){
+TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllSixteenCountersOnlyAtCompletion){
     StatisticsContext context;
     ReflectionStatistics metadata = Metadata();
     const auto key = context.control->reserve(metadata);
@@ -116,7 +118,8 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllEightCounter
     context.control->discard(key);
     ReflectionStatistics statistics;
     EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
-    const u32 counters[] = {100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u};
+    const u32 counters[] = {100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u};
+    static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
     context.control->complete(key, Token(), counters);
     ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
     EXPECT_EQ(statistics.sequence, key.sequence);
@@ -141,6 +144,15 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllEightCounter
     EXPECT_EQ(statistics.fallbackPixels, 50u);
     EXPECT_EQ(statistics.screenAttempts, 90u);
     EXPECT_EQ(statistics.screenHits, 20u);
+    EXPECT_EQ(statistics.maxOpticalQueries, 8u);
+    EXPECT_EQ(statistics.hardwareQueries, 98u);
+    EXPECT_EQ(statistics.bootstrapEvents, 42u);
+    EXPECT_EQ(statistics.transparentPaths, 12u);
+    EXPECT_EQ(statistics.unsupportedPaths, 2u);
+    EXPECT_EQ(statistics.limitedPaths, 1u);
+    EXPECT_EQ(statistics.ambiguousPaths, 3u);
+    EXPECT_EQ(statistics.tirEvents, 4u);
+    EXPECT_EQ(statistics.mediumOverflowPaths, 5u);
 }
 
 TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
@@ -149,7 +161,7 @@ TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     const auto newer = context.control->reserve(Metadata(11u));
     context.control->accept(older, Token(20u), true);
     context.control->accept(newer, Token(21u), false);
-    const u32 counters[8] = {};
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(newer, Token(21u), counters);
     context.control->complete(older, Token(20u), counters);
     ReflectionStatistics statistics;
@@ -164,7 +176,7 @@ TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     StatisticsContext context;
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
-    const u32 counters[8] = {};
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     Core::QueueSubmissionToken wrong = Token();
     wrong.physicalQueueIndex = 1u;
     context.control->complete(key, wrong, counters);
@@ -182,7 +194,7 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     StatisticsContext context;
     const auto previous = context.control->reserve(Metadata());
     context.control->accept(previous, Token(), true);
-    const u32 counters[8] = {};
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(8u);
     ReflectionStatistics statistics;
@@ -262,7 +274,7 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
     ReflectionStatisticsReservationKey key;
     Core::QueueSubmissionToken token;
     ASSERT_TRUE(context.control->pending(index, key, token));
-    const u32 counters[8] = {};
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(key, token, counters);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
 }

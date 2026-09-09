@@ -16,6 +16,7 @@
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "reflection_optical_scene.h"
 #include "reflection_roughness_scene.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
@@ -68,7 +69,9 @@ public:
         SmokeEnvironmentString caseText(m_context.objectArena);
         const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
         const AStringView caseName = hasCase ? AStringView(caseText.data(), caseText.size()) : AStringView("offscreen");
-        m_extendedCase = caseName.starts_with("rough") || caseName.starts_with("temporal_");
+        m_opticalCase = caseName.starts_with("optical_");
+        m_extendedCase = m_opticalCase || caseName.starts_with("rough") || caseName.starts_with("temporal_");
+        m_opticalTir = caseName == "optical_tir";
         m_furnace = caseName == "rough_furnace";
         m_glassRoughnessCase = caseName == "rough_glass";
         if(!configureRenderer())
@@ -87,7 +90,11 @@ public:
         );
         NWB_FATAL_ASSERT_MSG(cameraId.valid() && light.valid(), NWB_TEXT("ReflectionSmokeProject: camera/light creation failed"));
 
-        if(m_extendedCase && !m_glassRoughnessCase){
+        if(m_opticalCase){
+            if(!CreateReflectionOpticalScene(m_context, *m_world, caseName))
+                return false;
+        }
+        else if(m_extendedCase && !m_glassRoughnessCase){
             m_roughnessScene = MakeUnique<ReflectionRoughnessScene>(m_context, *m_world, cameraId, light, m_authoredRoughness);
             if(!m_roughnessScene->create(caseName, m_freshFinalState))
                 return false;
@@ -208,9 +215,9 @@ private:
         settings.environmentBottom = Float3U(0.0f, 0.0f, 0.0f);
         settings.maxHardwareRaysPerFrame = 2u * 960u * 720u;
         settings.diagnosticsEnabled = true;
-        settings.temporalEnabled = m_extendedCase;
+        settings.temporalEnabled = m_extendedCase && !m_opticalCase;
         settings.spatialFilterEnabled = false;
-        m_targetSamples = m_extendedCase ? 64u : 16u;
+        m_targetSamples = m_extendedCase && !m_opticalCase ? 64u : 16u;
         if(
             !readFlag("NWB_REFLECTION_SMOKE_DIAGNOSTICS", settings.diagnosticsEnabled)
             || !readFlag("NWB_REFLECTION_SMOKE_TEMPORAL", settings.temporalEnabled)
@@ -219,6 +226,7 @@ private:
             || !readU32("NWB_REFLECTION_SMOKE_HISTORY_SAMPLES", m_targetSamples, 1u, 256u)
             || !readU32("NWB_REFLECTION_SMOKE_POST_RESET_SAMPLES", m_postResetSamples, 1u, 256u)
             || !readU32("NWB_REFLECTION_SMOKE_SEED", m_requestedSeed, 0u, Limit<u32>::s_Max)
+            || !readU32("NWB_REFLECTION_SMOKE_OPTICAL_QUERIES", settings.maxOpticalQueries, 1u, 16u)
         )
             return false;
         settings.temporalMaxSamples = m_targetSamples;
@@ -237,7 +245,7 @@ private:
             if(!m_renderer.setPresentationSettings(presentation))
                 return false;
         }
-        if(m_furnace){
+        if(m_furnace || m_opticalTir){
             settings.environmentTop = Float3U(1.f, 1.f, 1.f);
             settings.environmentBottom = Float3U(1.f, 1.f, 1.f);
             settings.roughnessCutoff = 1.f;
@@ -287,6 +295,8 @@ private:
         );
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: reflection mode {}"), StringConvert(route));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: hardware ray budget {}"), settings.maxHardwareRaysPerFrame);
+        if(m_opticalCase)
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: optical query limit {}"), settings.maxOpticalQueries);
         return true;
     }
 
@@ -319,6 +329,16 @@ private:
             , statistics.historyEligible ? 1u : 0u, statistics.historyReused ? 1u : 0u, statistics.historyReset ? 1u : 0u
             , static_cast<u32>(statistics.historyResetReason)
         );
+        {
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} hardware_queries={}")
+                NWB_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
+                NWB_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
+                , statistics.sequence, statistics.generation, statistics.maxOpticalQueries, statistics.hardwareQueries
+                , statistics.bootstrapEvents, statistics.transparentPaths, statistics.unsupportedPaths, statistics.limitedPaths
+                , statistics.ambiguousPaths, statistics.tirEvents, statistics.mediumOverflowPaths
+                , statistics.opticalTransportEnabled ? 1u : 0u
+            );
+        }
         if(
             m_extendedCase && m_framebufferCapture && m_framebufferCapture->captureReady()
             && statistics.graphicsFrameIndex >= m_framebufferCapture->capturedGraphicsFrameIndex()
@@ -452,6 +472,7 @@ private:
         const auto glass = createMesh(s_SphereMesh, s_GlassMaterial, Float4(1.0f, 1.0f, 1.0f, 0.0f),
             Float4(1.3f, 1.5f, 0.0f, 0.0f), Float4(0.95f, 0.95f, 0.95f, 0.0f), s_GlassF0);
         NWB_FATAL_ASSERT_MSG(opaque.valid() && glass.valid(), NWB_TEXT("ReflectionSmokeProject: opaque/glass spheres failed"));
+        m_world->entity(glass).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
         createPanel(s_OpaqueMaterial, Float4(1.0f, 0.01f, 0.01f, 1.0f),
             Float4(-4.0f, 1.4f, -8.0f, 0.0f), Float4(4.0f, 1.0f, 4.0f, 0.0f));
         createPanel(s_OpaqueMaterial, Float4(0.01f, 1.0f, 0.01f, 1.0f),
@@ -479,6 +500,8 @@ private:
     u32 m_requestedSeed = 0u;
     f32 m_authoredRoughness = 0.f;
     bool m_extendedCase = false;
+    bool m_opticalCase = false;
+    bool m_opticalTir = false;
     bool m_furnace = false;
     bool m_glassRoughnessCase = false;
     bool m_freshFinalState = false;

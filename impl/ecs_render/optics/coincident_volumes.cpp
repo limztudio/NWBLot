@@ -59,6 +59,8 @@ struct CandidateHasher{
         })
             HashCombineFloat(hash, value);
         if(candidate->group == NAME_NONE){
+            HashCombine(hash, candidate->boundaryMode);
+            HashCombine(hash, candidate->mediumPriority);
             HashCombine(hash, candidate->mutableTypedByteCount);
             HashCombine(hash, ComputeFnv64Bytes(candidate->mutableTypedBytes, candidate->mutableTypedByteCount));
         }
@@ -77,9 +79,10 @@ struct CandidateEqual{
         )
             return false;
         // A shared group is the author's assertion that surface overrides preserve the common static boundary.
-        // Without that assertion, every byte of the effective material input must agree, even on hash collisions.
+        // Without that assertion, medium semantics and every effective material byte must agree, even on hash collisions.
         return lhs->group != NAME_NONE || (
-            lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
+            lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
+            && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
             && (lhs->mutableTypedByteCount == 0u
                 || NWB_MEMCMP(lhs->mutableTypedBytes, rhs->mutableTypedBytes, lhs->mutableTypedByteCount) == 0)
         );
@@ -133,7 +136,9 @@ void RendererOpticalVolumeSelection::prepare(
         if(!mergingEnabled(renderer))
             continue;
         MaterialSurfaceInfo* material = nullptr;
-        if(!materials.findMaterialSurfaceInfo(renderer.material, material) || !material->transparent || !material->refractive)
+        const bool closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested
+            || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
+        if(!materials.findMaterialSurfaceInfo(renderer.material, material) || !material->transparent || (!material->refractive && !closed))
             continue;
 
         RenderableMeshDesc mesh;
@@ -159,6 +164,8 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.group = renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup
             ? renderer.opticalVolumeGroup : NAME_NONE;
         candidate.priority = renderer.opticalVolumePriority;
+        candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
+        candidate.mediumPriority = renderer.opticalMediumPriority;
         candidate.mutableTypedBytes = mutableBytes->data();
         candidate.mutableTypedByteCount = mutableBytes->size();
         if(const auto* transform = world.tryGetComponent<Scene::TransformComponent>(entity)){

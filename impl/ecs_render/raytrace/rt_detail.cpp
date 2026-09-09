@@ -34,7 +34,7 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
-bool ResolveRenderableMeshResources(
+RenderableMeshResolution::Enum ResolveRenderableMeshResources(
     MeshSystem& meshSystem,
     RendererMeshSystem& rendererMeshSystem,
     const Core::ECS::EntityID entity,
@@ -42,10 +42,13 @@ bool ResolveRenderableMeshResources(
     ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
 ){
     outMesh = {};
-    if(!meshSystem.resolveRenderableMesh(entity, outResolvedMesh))
-        return false;
+    const RenderableMeshResolution::Enum resolution = meshSystem.resolveRenderableMeshStatus(entity, outResolvedMesh);
+    if(resolution != RenderableMeshResolution::Ready)
+        return resolution;
 
-    return rendererMeshSystem.findRenderableRayTracingResourceSnapshot(outResolvedMesh, outMesh);
+    return rendererMeshSystem.findRenderableRayTracingResourceSnapshot(outResolvedMesh, outMesh)
+        ? RenderableMeshResolution::Ready : RenderableMeshResolution::Unavailable
+    ;
 }
 
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){

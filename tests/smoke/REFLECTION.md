@@ -404,3 +404,148 @@ raw writer establishes nonnegative radiance, finite inputs are checked, and the
 validated 256-sample maximum bounds the integer rounding implementation. The
 sample index continues beyond the bounded history count. The spatial result is
 stored separately and cannot bias future temporal samples.
+
+Stage six adds a separate `--suite optical` with 30 bounded captures. The
+camera and a smooth opaque mirror face forward; all transport-test glass and
+the unlit striped chart are behind the camera. Camera refraction therefore
+cannot substitute for reflected transport through these objects. Normal and
+oblique closed slabs, tinted absorption, two and three nested media, overlapping
+priority media, alpha 0/0.5/1 panes before and after glass, exact duplicate
+representatives, reversed duplicate creation, mirrored nonuniform transforms,
+disconnected components in one or two instances, an authored triangle torus,
+one instance with overlapping shells whose winding reaches two, its matching
+single-volume union, equal-priority ties resolved by full entity ID, and one or
+two origin-containing volumes each have an independent reference.
+The failure fixtures use an unspecified optical boundary, mixed active medium
+contracts, independent unsuppressed coincident instances, five active media, a one-query slab limit and a TIR prism exhausted
+after three queries. All 30 captures passed GPU-debug validation, completed
+counter checks and the independent image analysis on this host.
+
+`reflection_optical_reference.py` uses float64 plane, convex-box and authored
+triangle intersections, exact unpolarized dielectric Fresnel and Snell's law.
+Unit-distance transmission is half-quantized exactly as authored and integrated
+over world-space segment lengths. Camera-radiance transport includes
+`(eta_i / eta_t)^2` at each interface. This cancels for a complete air-to-glass-to-air
+slab but remains for rays that begin inside glass. The reference therefore permits
+linear radiance above one before the fixed Reinhard/sRGB presentation. Mirror
+F0, material transmission, IOR and chart colors are also half-quantized. A
+one-pixel neighborhood of predicted discontinuities is omitted; stable pixels
+must match both stripe position and channel energy. Screenshots are never blurred,
+shifted or normalized to make them match. Duplicate and disconnected-instance
+comparisons additionally require the same reflected image.
+
+The faceted torus uses a four-pixel reference grid within its existing narrow
+projected region. Its 236 retained sample centers include 148 chart samples
+whose rays pass through glass and 34 whose rays leave and re-enter it. The
+oracle requires at least 60 transmitted and 16 re-entry chart samples, so extra
+unobstructed background cannot satisfy the test. Linear RGB MAE is 0.002457 for
+the torus; the largest per-case MAE in this run is 0.008575 for the inside-origin
+fixture. The duplicate, mirrored-transform, disconnected-instance and priority
+tie comparisons are byte-identical within the mirror region. The overlapping
+shell union differs from its single-volume reference by only 0.0000167 byte
+MAE there. These measurements apply to stable samples in the declared mirror
+region, not every ray from the primary glass visible around its boundary.
+Ambiguous seams, repeated TIR and exhausted paths elsewhere retain the defined
+conservative termination behavior.
+
+Closed homogeneous volumes explicitly use `OpticalBoundaryMode::ClosedNested`
+or `ClosedPriority`. Priority media select the highest `opticalMediumPriority`
+and then the smallest full entity ID. This is independent of
+`opticalVolumePriority`, which selects a duplicate representative.
+`IdenticalMaterial` and `SharedGroup` coincidence opt-ins retain their existing
+geometry promises. The geometry of a closed optical volume and its homogeneous
+IOR/absorption are author contracts; an arbitrary open mesh is not silently
+declared a valid dielectric volume. IOR-one transparent panes use flat coverage
+composition. Secondary non-TIR Fresnel reflected branches remain omitted; the
+walker follows deterministic transmission and continues true total internal
+reflection. Unsupported, ambiguous and exhausted residual paths contribute no
+straight environment leak.
+
+The typed `maxOpticalQueries` default and maximum are 16. The optical suite uses
+16 for regular cases, one for the deliberately exhausted slab, and three for
+the inside-prism test: one membership bootstrap, one boundary query and one
+coincidence validation query allow a real TIR event before further work is
+denied. Transparent crossings require both nearest-hit and coincidence queries;
+opaque-only scenes select the smaller plain shader variant and need one query
+per admitted path. Completed `ReflectionSmokeOptics` lines report the frozen
+variant and query cap alongside actual query, bootstrap, transparent-path,
+unsupported, limited, ambiguous, TIR and medium-overflow counters. They match
+the existing completed sequence/generation/token metadata. Actual queries must
+remain within `hardwareRays * maxOpticalQueries`; primary path counts are not
+relabeled as scene-query counts. These counters establish bounded work, not GPU
+speed. No complete secondary path tracer or reflected caustic-cache lookup is
+claimed.
+
+The captured opaque-only reference issued 217,668 hardware paths and exactly
+217,668 scene queries using the plain kernel. The single clear slab used the
+same 217,668 admitted paths and 1,088,340 queries; three nested volumes used
+2,829,684. This is five and thirteen actual queries per path respectively,
+including interface coincidence validation. The three-query TIR-limit fixture
+reported real TIR events before exhausting its paths, and independent coincident
+instances reported ambiguity. These are completed work counters rather than
+timing measurements. Actual images, logs, final source hashes and metrics are
+under `Testing/smoke/dbg/reflection_optical_gpudbg` in the build directory.
+
+Run `python tests/integration/reflection_optical_smoke_tests.py` for the physical
+identities and negative image/counter cases, and
+`python tests/smoke/generate_reflection_optical_meshes.py --check` to verify the
+closed disconnected-box and TIR-prism assets without rewriting them. The optical
+capture command uses the same executable, working-directory and logserver
+arguments as the earlier suites, with `--suite optical`. Its CTest name is
+`nwb_reflection_optical_capture_smoke`. Interactive launch supports
+`--reflection-case optical_nested3` and `--reflection-optical-queries 16`.
+Actual BMPs, lossless PNGs, completed logs, an offline HTML gallery and the
+reference metrics are retained in the requested output directory.
+
+`caustic_optical_smoke.py` separately captures the existing caustic sphere scene
+at presentation frame 360 with all effects enabled, reflection disabled,
+caustics disabled and camera refraction disabled. The test-only
+`NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON=1` setup selects a fixed bright
+reflection environment and disables reflection history/spatial filtering;
+the ordinary caustic fixture keeps its defaults. Its known closed sphere uses
+`ClosedNested`; ground F0 stays zero. The reflection toggle must produce a
+visible sphere contribution while retaining the nonreflective ground control.
+The caustic toggle must remove a positive ground contribution, and camera
+refraction must alter the transmitted sphere image. This is a combined visual
+integration check, not a claim that secondary hit shading can reuse the
+primary-camera caustic cache. The script accepts the caustic executable and the
+same working-directory/output/logserver/`--require-hardware` arguments as the
+other capture runners. Its CTest name is `nwb_caustic_optical_capture_smoke`.
+
+The final four combined framebuffer captures pass the end-to-end harness:
+reflection changes 203,862 sphere pixels, camera refraction changes 10,156,
+and disabling caustics changes 36,229 ground pixels outside the sphere
+silhouette. Neither reflection nor camera-refraction toggling changes a ground
+pixel beyond the comparison threshold. The primary-glass reflection still
+requires AVBOIT optical composition when camera refraction is disabled: that
+variant reports the fixture's disabled camera-refraction state and uses the
+screen-space composition route, while hardware camera refraction is rejected.
+
+A geometry-based exterior oracle additionally selects 7,032 regular-grid samples
+whose reflected rays escape both the authored sphere mesh and the ground. It
+predicts their environment contribution from the disabled image, IOR 1.5,
+Schlick Fresnel and the fixed Reinhard/sRGB transform. All samples pass, with
+zero missing reflections, a minimum predicted-gain fraction of 0.97196 and RGB
+byte MAE 0.22628. This catches local dark patches that whole-image contribution
+counts can miss. The oracle rejects the saved defective image at seven samples.
+The final images, predictor metadata and lossless gallery are retained under
+`Testing/smoke/dbg/caustic_stage6_final_gpudbg`; the optical/combined CPU analysis
+suite passes 44 tests.
+
+Containment records remain immutable after candidate collection; bootstrap sorts
+scalar indices and constructs the ordered active media once. A GPU diagnostic
+identified the original destructive struct insertion losing a reversed entry/exit
+pair. The repair preserves geometry checks and physical transport limits instead
+of weakening the ambiguity policy. The 30-case optical suite passes again with
+the repaired shader under `Testing/smoke/dbg/reflection_stage6_final_optical_gpudbg`.
+
+The neutral mesh resolver distinguishes no geometry attachment from an attached
+mesh whose descriptor/resources are unavailable. A model parent may carry renderer
+settings without a mesh; its spawned children supply geometry. Such parents do
+not invalidate optical completeness, while missing attached geometry still does.
+Valid opaque deformation disables temporal trust without suppressing the plain
+reflection kernel. Five behavior tests cover absent/static/runtime bindings and
+existing static fallback; all 342 ECS tests pass. All 12 temporal captures pass
+under `Testing/smoke/dbg/reflection_stage6_mesh_temporal_gpudbg`, including the
+posed red model's reflected footprint changing from 729 to 4,604 pixels with the
+4,422-pixel green control retained.

@@ -1,0 +1,81 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_OPTICS_DIELECTRIC_SLANGI
+#define NWB_GRAPHICS_OPTICS_DIELECTRIC_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbDielectricInterface{
+    float3 direction;
+    float reflectedFraction;
+    float radianceTransmission;
+    bool totalInternalReflection;
+};
+
+// Exact unpolarized dielectric Fresnel and Snell transport. direction and opposingNormal are unit vectors, with
+// the normal facing the incident medium. The eta ratio is explicit: camera-radiance transmission contains
+// (etaIncident / etaTransmitted)^2, which cancels across a lossless air/glass/air pair. Photon flux uses a different
+// measure. Reference: https://pbr-book.org/4ed/Reflection_Models/Dielectric_BSDF .
+NwbDielectricInterface nwbDielectricTransmit(
+    const float3 direction,
+    const float3 opposingNormal,
+    const float etaIncident,
+    const float etaTransmitted){
+    NwbDielectricInterface result = (NwbDielectricInterface)0;
+    if(etaIncident == etaTransmitted){
+        result.direction = direction;
+        result.radianceTransmission = 1.0;
+        return result;
+    }
+    const float cosineIncident = saturate(-dot(direction, opposingNormal));
+    const float eta = etaIncident / etaTransmitted;
+    const float sineTransmittedSquared = eta * eta * max(0.0, 1.0 - cosineIncident * cosineIncident);
+    if(sineTransmittedSquared >= 1.0){
+        result.direction = reflect(direction, opposingNormal);
+        result.reflectedFraction = 1.0;
+        result.totalInternalReflection = true;
+        return result;
+    }
+    const float cosineTransmitted = sqrt(max(0.0, 1.0 - sineTransmittedSquared));
+    const float perpendicular = (etaIncident * cosineIncident - etaTransmitted * cosineTransmitted)
+        / (etaIncident * cosineIncident + etaTransmitted * cosineTransmitted);
+    const float parallel = (etaTransmitted * cosineIncident - etaIncident * cosineTransmitted)
+        / (etaTransmitted * cosineIncident + etaIncident * cosineTransmitted);
+    result.reflectedFraction = saturate(0.5 * (perpendicular * perpendicular + parallel * parallel));
+    result.direction = nwbSafeNormalize(
+        eta * direction + (eta * cosineIncident - cosineTransmitted) * opposingNormal,
+        direction
+    );
+    result.radianceTransmission = (1.0 - result.reflectedFraction) * eta * eta;
+    return result;
+}
+
+// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material
+// contract. Homogeneous closed volumes retain this coefficient from their entry boundary.
+float3 nwbDielectricAbsorptionCoefficient(const float3 unitSurvival){
+    return -log(clamp(unitSurvival, float3(1e-4), float3(1.0)));
+}
+
+float3 nwbDielectricBeerTransmission(const float3 absorption, const float distance){
+    return exp(-absorption * max(distance, 0.0));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

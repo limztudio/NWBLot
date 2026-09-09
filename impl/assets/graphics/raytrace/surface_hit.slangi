@@ -27,6 +27,8 @@ struct NwbRayTraceSurfaceHit{
     bool hit;
     bool frontFace;
     uint instance;
+    uint primitive;
+    uint flags;
     uint shadingModelId;
     float distance;
     float3 position;
@@ -42,13 +44,139 @@ float3 nwbRayTraceTransformSurfaceNormal(const float3x4 worldToObject, const flo
     ), float3(0.0, 0.0, 1.0));
 }
 
+// A triangle's cross product carries area and instance scale, unlike an authored unit shading normal. Normalize
+// relative to its own magnitude so valid small triangles and large instances never acquire a fixed fallback axis.
+// Degenerate or nonfinite geometry returns zero, which the optical membership/progress checks reject.
+float3 nwbRayTraceScaleGeometryVector(const float3 value){
+    if(!all(isfinite(value)))
+        return float3(0.0);
+    const float scale = max(abs(value.x), max(abs(value.y), abs(value.z)));
+    if(scale == 0.0)
+        return float3(0.0);
+    return value / scale;
+}
+
+float3 nwbRayTraceNormalizeGeometryVector(const float3 value){
+    const float3 scaled = nwbRayTraceScaleGeometryVector(value);
+    const float lengthSquared = dot(scaled, scaled);
+    if(lengthSquared == 0.0)
+        return float3(0.0);
+    return scaled * rsqrt(lengthSquared);
+}
+
+float3 nwbRayTraceTriangleGeometricNormal(
+    const NwbRtInstanceMaterial material,
+    const uint primitive,
+    const float3x4 worldToObject){
+    const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const uint3 triangle = NwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    // For a closed object with an outward local normal n, its interior satisfies n.(x - p) < 0. Under x' = A*x + b,
+    // the same interior satisfies (inverse(A)^T*n).(x' - p') < 0, even when determinant(A) is negative. Thus inverse
+    // transpose preserves the physical outward direction; multiplying by determinant sign would invert mirrored
+    // volumes. Query FrontFace remains available for legacy callers, but optical membership uses this normal.
+    const float3 edge0 = nwbRayTraceScaleGeometryVector(v1 - v0);
+    const float3 edge1 = nwbRayTraceScaleGeometryVector(v2 - v0);
+    const float3 normal = nwbRayTraceScaleGeometryVector(cross(edge0, edge1));
+    const float3 worldNormal = float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), normal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), normal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), normal)
+    );
+    return nwbRayTraceNormalizeGeometryVector(worldNormal);
+}
+
+// Only a real triangulation seam can merge two candidate events. Indexed adjacency distinguishes a shared edge
+// from independent overlapping shells, while opposite edge orientation excludes duplicate/overlapping triangles.
+// Coplanarity is tested in object space (preserved by every nonsingular affine instance transform), using a
+// forward-error bound for the scalar triple product rather than smoothing an arbitrary crease angle.
+bool nwbRayTraceCoplanarSeam(
+    const uint instanceMaterialHeapSlot,
+    const uint instance,
+    const uint firstPrimitive,
+    const uint secondPrimitive){
+    if(firstPrimitive == secondPrimitive)
+        return true;
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[instance];
+    const uint3 first = NwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint3 second = NwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    uint opposite = 3u;
+    [unroll]
+    for(uint firstEdge = 0u; firstEdge < 3u; ++firstEdge){
+        [unroll]
+        for(uint secondEdge = 0u; secondEdge < 3u; ++secondEdge){
+            if(first[firstEdge] == second[(secondEdge + 1u) % 3u] && first[(firstEdge + 1u) % 3u] == second[secondEdge])
+                opposite = (secondEdge + 2u) % 3u;
+        }
+    }
+    if(opposite == 3u)
+        return false;
+    if(any(second[opposite] == first))
+        return false;
+    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(first.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(first.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(first.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v3 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(second[opposite] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 a = nwbRayTraceScaleGeometryVector(v1 - v0);
+    const float3 b = nwbRayTraceScaleGeometryVector(v2 - v0);
+    const float3 c = nwbRayTraceScaleGeometryVector(v3 - v0);
+    const float3 normal = cross(a, b);
+    const float determinant = dot(normal, c);
+    const float magnitude = dot(abs(a), abs(b.yzx * c.zxy) + abs(b.zxy * c.yzx));
+    const float error = 24.0 * 1.1920928955078125e-7 * magnitude;
+    return isfinite(determinant) && isfinite(error) && dot(normal, normal) > 0.0 && abs(determinant) <= error;
+}
+
+NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
+    const uint instanceMaterialHeapSlot,
+    const float3 origin,
+    const float3 direction,
+    const float distance,
+    const uint instance,
+    const uint primitive,
+    const float2 bary,
+    const float3x4 worldToObject,
+    const bool frontFace){
+    NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
+    hit.hit = true;
+    hit.frontFace = frontFace;
+    hit.instance = instance;
+    hit.primitive = primitive;
+    hit.distance = distance;
+    hit.position = origin + direction * hit.distance;
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance];
+    hit.flags = material.flags;
+    hit.shadingModelId = material.shadingModelId;
+    const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    hit.geometricNormal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
+
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.worldPosition = hit.position;
+    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(
+        worldToObject,
+        float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z
+    );
+    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+    surfaceHit.rayDirection = direction;
+    hit.surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
+    return hit;
+}
+
 NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
     const uint instanceMaterialHeapSlot,
     const float3 origin,
     const float3 direction,
     const float minDistance,
     const float maxDistance){
-    NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -60,40 +188,13 @@ NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     while(query.Proceed()){}
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
-        return hit;
+        return (NwbRayTraceSurfaceHit)0;
 
-    hit.hit = true;
-    hit.frontFace = query.CommittedTriangleFrontFace();
-    hit.instance = query.CommittedInstanceID();
-    hit.distance = query.CommittedRayT();
-    hit.position = origin + direction * hit.distance;
-    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance];
-    hit.shadingModelId = material.shadingModelId;
-    const uint triangleBase = query.CommittedPrimitiveIndex() * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const uint3 triangle = NwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    hit.geometricNormal = nwbRayTraceTransformSurfaceNormal(query.CommittedWorldToObject3x4(), cross(v1 - v0, v2 - v0));
-    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const float2 bary = query.CommittedTriangleBarycentrics();
-    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
-
-    NwbShadowHit surfaceHit;
-    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-    surfaceHit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
-    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
-    surfaceHit.worldPosition = hit.position;
-    surfaceHit.worldNormal = nwbRayTraceTransformSurfaceNormal(
-        query.CommittedWorldToObject3x4(),
-        float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z
+    return nwbRayTraceReconstructSurfaceHit(
+        instanceMaterialHeapSlot, origin, direction, query.CommittedRayT(), query.CommittedInstanceID(),
+        query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), query.CommittedWorldToObject3x4(),
+        query.CommittedTriangleFrontFace()
     );
-    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
-    surfaceHit.rayDirection = direction;
-    hit.surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit);
-    return hit;
 }
 
 

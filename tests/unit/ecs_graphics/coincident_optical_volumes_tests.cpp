@@ -82,6 +82,40 @@ TEST(CoincidentOpticalVolumes, AutomaticSelectionKeepsDifferentByteValuesAndLeng
         EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
 }
 
+TEST(CoincidentOpticalVolumes, IdenticalMaterialGroupingKeepsDistinctMediumSemantics){
+    SelectionContext context;
+    CoincidentOpticalVolumeCandidate candidates[] = {
+        MakeCandidate(10u), MakeCandidate(20u), MakeCandidate(30u), MakeCandidate(40u)
+    };
+    candidates[1].boundaryMode = 1u;
+    candidates[2].boundaryMode = 2u;
+    candidates[3].boundaryMode = 2u;
+    candidates[3].mediumPriority = 50;
+    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    for(const auto& candidate : candidates)
+        EXPECT_FALSE(context.selection.isSuppressed(candidate.entity));
+
+    candidates[3].mediumPriority = 0;
+    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[2].entity));
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[3].entity));
+}
+
+TEST(CoincidentOpticalVolumes, AuthoredGroupRepresentativeSuppliesItsCompleteMediumPolicy){
+    SelectionContext context;
+    CoincidentOpticalVolumeCandidate candidates[] = {MakeCandidate(10u), MakeCandidate(20u)};
+    for(auto& candidate : candidates)
+        candidate.group = Name("tests/coincident_optical_volumes/policy_override");
+    candidates[0].boundaryMode = 1u;
+    candidates[0].mediumPriority = 100;
+    candidates[1].boundaryMode = 2u;
+    candidates[1].mediumPriority = -10;
+    candidates[1].priority = 20;
+    context.selection.select(candidates, LengthOf(candidates), context.scratch);
+    EXPECT_TRUE(context.selection.isSuppressed(candidates[0].entity));
+    EXPECT_FALSE(context.selection.isSuppressed(candidates[1].entity));
+}
+
 TEST(CoincidentOpticalVolumes, ExplicitGroupUsesPriorityAcrossDifferentSurfaceBytes){
     SelectionContext context;
     const u8 firstBytes[] = { 7u, 8u, 9u, 10u };

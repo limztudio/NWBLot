@@ -32,6 +32,19 @@ TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
     EXPECT_TRUE(ValidateReflectionSettings(settings));
 }
 
+TEST(ReflectionSettings, BoundsAllSceneQueriesPerAdmittedPath){
+    ReflectionSettings settings;
+    EXPECT_EQ(settings.maxOpticalQueries, 16u);
+    settings.maxOpticalQueries = 0u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+    settings.maxOpticalQueries = 1u;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+    settings.maxOpticalQueries = 16u;
+    EXPECT_TRUE(ValidateReflectionSettings(settings));
+    settings.maxOpticalQueries = 17u;
+    EXPECT_FALSE(ValidateReflectionSettings(settings));
+}
+
 TEST(ReflectionSettings, BoundsTemporalReferenceCountAndSpatialRadius){
     ReflectionSettings settings;
     settings.temporalMaxSamples = 0u;

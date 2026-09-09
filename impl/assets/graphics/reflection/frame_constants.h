@@ -5,6 +5,8 @@
 #ifndef NWB_GRAPHICS_REFLECTION_FRAME_CONSTANTS_H
 #define NWB_GRAPHICS_REFLECTION_FRAME_CONSTANTS_H
 
+#include "../raytrace/optical_transport_constants.h"
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -26,7 +28,15 @@
 #define NWB_REFLECTION_COUNTER_FALLBACK_PIXELS 20u
 #define NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS 24u
 #define NWB_REFLECTION_COUNTER_SCREEN_HITS 28u
-#define NWB_REFLECTION_COUNTER_SIZE 32u
+#define NWB_REFLECTION_COUNTER_HARDWARE_QUERIES 32u
+#define NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS 36u
+#define NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS 40u
+#define NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS 44u
+#define NWB_REFLECTION_COUNTER_LIMITED_PATHS 48u
+#define NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS 52u
+#define NWB_REFLECTION_COUNTER_TIR_EVENTS 56u
+#define NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS 60u
+#define NWB_REFLECTION_COUNTER_SIZE 64u
 
 // Eleven std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
 #define NWB_REFLECTION_FRAME_UINT_FIELDS(FIELD) \
@@ -57,7 +67,7 @@
     FIELD(samplingSeed, 0u) \
     FIELD(sampleBaseX, 0u) \
     FIELD(sampleBaseY, 0u) \
-    FIELD(_samplingPad2, 0u)
+    FIELD(maxOpticalQueries, NWB_OPTICAL_DEFAULT_QUERIES)
 
 #define NWB_REFLECTION_FRAME_FLOAT_FIELDS(FIELD) \
     FIELD(maxRayDistance, 100.f) \

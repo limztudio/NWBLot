@@ -884,6 +884,15 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
         return false;
     }
 
+    // Hardware effects retain hardware InstanceID order even when the hybrid material table uses software node
+    // descriptors. Pure software selects its own order. Neither a late hybrid fallback nor recording allocates views.
+    const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported
+        ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+    if(opticalScene.valid()){
+        slots.opticalScene = opticalScene.descriptor.slot();
+        slots.opticalInstanceCount = opticalScene.upload->instanceCount;
+    }
+
     outSlots = slots;
     return true;
 }

@@ -1,0 +1,95 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_OPTICAL_SCENE_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_OPTICAL_SCENE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "optical_media.slangi"
+#include "surface_hit.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbOpticalInstance{
+    uint entityId;
+    int priority;
+    uint mode;
+    uint flags;
+};
+
+bool nwbOpticalReadInstance(
+    const NwbOpticalTraceConfig config,
+    const uint instance,
+    out NwbOpticalInstance optical,
+    inout NwbOpticalTraceResult result){
+    optical = (NwbOpticalInstance)0;
+    if(instance >= config.opticalInstanceCount){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    const uint offset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES;
+    const uint4 record = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load4(offset);
+    optical.entityId = record.x;
+    optical.priority = asint(record.y);
+    optical.mode = record.z;
+    optical.flags = record.w;
+    if(
+        (optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) != 0u
+        && (optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID) == 0u
+    ){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    return true;
+}
+
+bool nwbOpticalSetMediumProperties(
+    const NwbMeshSurface surface,
+    inout NwbOpticalMedium medium,
+    inout NwbOpticalTraceResult result){
+    medium.ior = float(surface.refractionIor);
+    if(!isfinite(medium.ior) || medium.ior < 1.0 || !all(isfinite(float3(surface.shadowAbsorptionTint)))){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    medium.absorption = nwbDielectricAbsorptionCoefficient(float3(surface.shadowAbsorptionTint));
+    return true;
+}
+
+// Closed volume authors promise homogeneous IOR and absorption independent of UV, normal, position and ray
+// direction. Only those optical fields are consumed here, so valid neutral hook inputs avoid retaining a 3x4
+// transform and all triangle attributes per bootstrap event. Appearance fields remain geometry-dependent and
+// are always evaluated at the real surface when shaded. Unspecified surfaces never use this contract.
+bool nwbOpticalLoadHomogeneousMedium(
+    const NwbOpticalTraceConfig config,
+    const float3 origin,
+    const float3 direction,
+    inout NwbOpticalMedium medium,
+    inout NwbOpticalTraceResult result){
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
+    NwbShadowHit input = (NwbShadowHit)0;
+    input.meshInstanceIndex = material.meshInstanceIndex;
+    input.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    input.materialConstantByteOffset = material.materialConstantByteOffset;
+    input.worldPosition = origin;
+    input.worldNormal = float3(0.0, 1.0, 0.0);
+    input.rayDirection = direction;
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, input);
+    return nwbOpticalSetMediumProperties(surface, medium, result);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

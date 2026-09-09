@@ -475,7 +475,7 @@ namespace RayTracingDetail{
 
 
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
-[[nodiscard]] bool ResolveRenderableMeshResources(
+[[nodiscard]] RenderableMeshResolution::Enum ResolveRenderableMeshResources(
     MeshSystem& meshSystem,
     RendererMeshSystem& rendererMeshSystem,
     const Core::ECS::EntityID entity,

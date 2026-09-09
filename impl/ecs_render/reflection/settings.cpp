@@ -17,6 +17,8 @@ NWB_IMPL_BEGIN
 bool ValidateReflectionSettings(const ReflectionSettings& settings){
     if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > 256u || settings.spatialRadius > 3u)
         return false;
+    if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > NWB_OPTICAL_MAX_QUERIES)
+        return false;
     if(settings.traceMode > ReflectionTraceMode::Hybrid || settings.debugView > ReflectionDebugView::Confidence)
         return false;
     if(

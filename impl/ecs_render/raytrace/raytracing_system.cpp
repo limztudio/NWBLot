@@ -39,6 +39,8 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_materialSystem(materialSystem)
     , m_rayTracingState(rayTracingState)
     , m_opticalVolumes(opticalVolumes)
+    , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
+    , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)
@@ -61,6 +63,8 @@ RendererRayTracingSystem::~RendererRayTracingSystem() = default;
 void RendererRayTracingSystem::invalidateResources(){
     discardPreflightShadowVisibilityResources();
     invalidatePreparedShadowTraceGeometryBuffers();
+    m_hardwareOpticalScene.invalidate();
+    m_softwareOpticalScene.invalidate();
     releaseSceneTlasHeapHandle();
     releaseCausticEmissionTargetHeapHandle();
     releaseRayTraceMaterialContextHeapHandles();
@@ -1621,6 +1625,8 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_rayTracingState.m_tlasBackingStateHandoffPending = false;
     m_shadowVisibilityPreparedTargets = nullptr;
     m_preparedSceneContentStamp = {};
+    m_hardwareOpticalScene.resetPrepared();
+    m_softwareOpticalScene.resetPrepared();
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
@@ -1652,6 +1658,8 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     // invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
     m_shadowVisibilityPreparedTargets = nullptr;
     m_preparedSceneContentStamp = {};
+    m_hardwareOpticalScene.resetPrepared();
+    m_softwareOpticalScene.resetPrepared();
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;

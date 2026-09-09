@@ -60,8 +60,11 @@ bool RendererRayTracingSystem::prepareSceneQueryResources(){
 RayTracingSceneGraphResources RendererRayTracingSystem::snapshotSceneGraphResources()const{
     const auto& state = m_rayTracingState;
     RayTracingSceneGraphResources resources;
-    if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted)
+    if(m_shadowVisibilityResourcesPreflighted && m_shadowVisibilityTraceResourcesPreflighted){
         resources.contentStamp = m_preparedSceneContentStamp;
+        resources.opticalScene = m_shadowVisibilityHardwareSupported
+            ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
+    }
     if(
         !m_shadowVisibilityHardwareSupported
         || !m_shadowVisibilityTraceResourcesPreflighted

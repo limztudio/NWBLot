@@ -55,7 +55,7 @@ ConstantBuffer<NwbReflectionView, Std140DataLayout> g_NwbHeapReflectionViews[];
 // Candidate allocation is a scheduling input and remains unconditional. These other counters are diagnostics
 // only; disabling their writes must never change trace eligibility, queue contents, or the rendered result.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
-    if(g_NwbReflectionParameters.diagnosticsEnabled != 0u){
+    if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){
         uint previousCount;
         g_NwbReflectionCounters.InterlockedAdd(byteOffset, value, previousCount);
     }

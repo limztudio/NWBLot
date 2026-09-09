@@ -224,6 +224,7 @@ public:
     virtual void invalidateResources()override;
 
     virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh)override;
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
 private:

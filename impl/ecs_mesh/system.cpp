@@ -24,6 +24,7 @@ MeshSystem::MeshSystem(Core::Alloc::GlobalArena& arena, Core::ECS::World& world)
     , m_runtimeMeshProviders(arena)
 {
     readAccess<MeshComponent>();
+    readAccess<SkinnedMeshBindingComponent>();
 }
 
 void MeshSystem::update(Core::ECS::World& world, f32 delta){
@@ -57,6 +58,12 @@ bool MeshSystem::resolveRenderableMesh(
     const Core::ECS::EntityID entity,
     RenderableMeshDesc& outMesh
 )const{
+    return resolveRenderableMeshStatus(entity, outMesh) == RenderableMeshResolution::Ready;
+}
+
+RenderableMeshResolution::Enum MeshSystem::resolveRenderableMeshStatus(
+    const Core::ECS::EntityID entity,
+    RenderableMeshDesc& outMesh)const{
     outMesh = RenderableMeshDesc{};
 
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
@@ -67,16 +74,24 @@ bool MeshSystem::resolveRenderableMesh(
         if(provider->resolveRuntimeMesh(entity, runtimeMesh) && runtimeMesh.valid()){
             outMesh.runtimeMesh = runtimeMesh;
             outMesh.runtime = true;
-            return true;
+            return RenderableMeshResolution::Ready;
         }
     }
 
     Core::Assets::AssetRef<Mesh> mesh;
-    if(!resolveMesh(entity, mesh))
-        return false;
+    if(!resolveMesh(entity, mesh)){
+        if(findMesh(entity) || m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
+            return RenderableMeshResolution::Unavailable;
+        // Only unresolved entities need attachment discovery; ready runtime/static paths keep their existing lookups.
+        for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
+            if(provider && provider->hasRuntimeMeshBinding(entity))
+                return RenderableMeshResolution::Unavailable;
+        }
+        return RenderableMeshResolution::Absent;
+    }
 
     outMesh.mesh = mesh;
-    return outMesh.valid();
+    return RenderableMeshResolution::Ready;
 }
 
 void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{

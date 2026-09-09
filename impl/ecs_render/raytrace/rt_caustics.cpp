@@ -653,14 +653,14 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
+        const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_meshSystem,
             entity,
             resolvedMesh,
             mesh
         );
-        if(!meshReady || !mesh.csgLocalBounds.valid())
+        if(meshResolution != RenderableMeshResolution::Ready || !mesh.csgLocalBounds.valid())
             continue;
 
         MaterialSurfaceInfo* materialInfo = nullptr;

@@ -9,6 +9,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_sampling_sequence_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lighting_content_stamp_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/coincident_optical_volumes_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/optical_scene_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ecs_graphics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/refraction_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_alias_plan_tests.cpp"

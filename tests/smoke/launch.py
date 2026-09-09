@@ -160,7 +160,7 @@ def build_smoke_environment(args) -> Dict[str, str]:
     if getattr(args, "reflection_ray_budget", None) is not None:
         env["NWB_REFLECTION_SMOKE_RAY_BUDGET"] = str(args.reflection_ray_budget)
     for option, name in (("roughness", "ROUGHNESS"), ("history_samples", "HISTORY_SAMPLES"),
-        ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED")):
+        ("post_reset_samples", "POST_RESET_SAMPLES"), ("seed", "SEED"), ("optical_queries", "OPTICAL_QUERIES")):
         value = getattr(args, "reflection_" + option, None)
         if value is not None:
             env["NWB_REFLECTION_SMOKE_" + name] = str(value)
@@ -251,7 +251,12 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--spin-angle", help="Pin NWB_TRANSPARENT_MULTI_SPIN_ANGLE, in radians.")
     parser.add_argument("--spin-speed", help="Set NWB_TRANSPARENT_MULTI_SPIN_SPEED.")
     parser.add_argument("--reflection-case", choices=("offscreen", "moved", "opaque_glass", "onscreen", "onscreen_moved", "boundary", "floor",
-        "rough", "rough_furnace", "rough_glass", "rough_deform", "temporal_camera", "temporal_transform", "temporal_material", "temporal_light", "temporal_deform"),
+        "rough", "rough_furnace", "rough_glass", "rough_deform", "temporal_camera", "temporal_transform", "temporal_material", "temporal_light", "temporal_deform",
+        "optical_reference", "optical_clear", "optical_tinted", "optical_tilted", "optical_nested2", "optical_nested3",
+        "optical_priority_a", "optical_priority_b", "optical_alpha_before", "optical_alpha_after", "optical_duplicate_identical",
+        "optical_duplicate_group", "optical_duplicate_reverse", "optical_mirrored", "optical_disconnected", "optical_same_mesh",
+        "optical_torus", "optical_inside", "optical_inside_nested", "optical_unspecified", "optical_mixed", "optical_overflow", "optical_tir",
+        "optical_union_single", "optical_union_same_mesh", "optical_coincident_independent", "optical_priority_tie_a", "optical_priority_tie_b"),
         help="Select the reflection fixture; defaults to offscreen mirror markers.")
     parser.add_argument("--reflection-mode", choices=("disabled", "screen", "hardware", "hybrid"),
         help="Select the typed reflection trace mode; the fixture defaults to hardware.")
@@ -265,6 +270,8 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reflection-post-reset-samples", type=int, choices=range(1, 257), metavar="1..256",
         help="Capture at the first reset frame or after this many accepted post-reset samples.")
     parser.add_argument("--reflection-seed", type=reflection_ray_budget, help="Deterministic u32 sampling seed.")
+    parser.add_argument("--reflection-optical-queries", type=int, choices=range(1, 17), metavar="1..16",
+        help="Typed maximum scene queries per reflected optical path, including bootstrap and continuations.")
     for option in ("temporal", "spatial", "diagnostics", "final-state"):
         parser.add_argument("--reflection-" + option, choices=("on", "off"),
             help="Set the test fixture's typed " + option + " control.")

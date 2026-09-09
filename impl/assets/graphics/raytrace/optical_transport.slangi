@@ -1,0 +1,227 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_OPTICAL_TRANSPORT_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_OPTICAL_TRANSPORT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "optical_bootstrap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor
+// environment assets, reflection outputs, screen-space caches, or feature statistics buffers.
+float3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
+float3 nwbOpticalEnvironmentRadiance(const float3 direction);
+
+// Resolve numerical ties around the true nearest transparent boundary before changing membership. A second
+// bounded candidate query is necessary because a committed nearest hit alone cannot reveal coincident independent
+// volumes. The authored coincidence selector has already removed explicitly shared boundaries from the scene.
+bool nwbOpticalCheckBoundary(
+    const NwbOpticalTraceConfig config,
+    const float3 origin,
+    const float3 direction,
+    const NwbRayTraceSurfaceHit hit,
+    inout NwbOpticalTraceResult result){
+    if(!nwbOpticalConsumeQuery(config, result))
+        return false;
+    const float tolerance = 4.0 * max(nwbOpticalPositionUncertainty(origin), nwbOpticalPositionUncertainty(hit.position));
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = max(0.0, hit.distance - tolerance);
+    ray.TMax = hit.distance + tolerance;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    bool found = false;
+    [loop]
+    for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+        if(!query.Proceed()){
+            if(!found)
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return found;
+        }
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != hit.instance){
+            query.Abort();
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return false;
+        }
+        if(query.CandidatePrimitiveIndex() == hit.primitive){
+            // The already reconstructed primitive is the common case; only another triangle needs seam geometry.
+            found = true;
+            continue;
+        }
+        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(
+            material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
+        );
+        const float facing = dot(direction, normal);
+        if(
+            !isfinite(facing) || abs(facing) <= 1e-6 || facing * dot(direction, hit.geometricNormal) <= 0.0
+            || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())
+        ){
+            query.Abort();
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return false;
+        }
+        found = true;
+    }
+    query.Abort();
+    result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Follow one dominant transmitted path, preserving accumulated radiance on every termination. Ordinary Fresnel
+// reflection at secondary interfaces is an explicitly omitted branch, not an environment approximation. TIR
+// reflects the same path without changing membership. No binary path tree or recursive query can escape the
+// shared query budget, and a miss/cap inside a medium never introduces exterior environment light.
+NwbOpticalTraceResult nwbOpticalTrace(
+    const NwbOpticalTraceConfig config,
+    const float3 initialOrigin,
+    const float3 initialDirection){
+    NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
+    result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+    if(
+        !all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0
+        || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0
+        || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu
+    )
+        return result;
+    float3 direction = normalize(initialDirection);
+    float3 origin = initialOrigin;
+    NwbOpticalMedia media;
+    if(!nwbOpticalBootstrap(config, origin, direction, media, result))
+        return result;
+
+    float3 throughput = float3(1.0);
+    float minDistance = config.minDistance;
+    float continuationUncertainty = 0.0;
+    [loop]
+    for(uint step = 0u; step < NWB_OPTICAL_MAX_QUERIES; ++step){
+        const float remaining = config.maxDistance - result.distance;
+        if(remaining <= minDistance){
+            result.termination = NWB_OPTICAL_TERMINATION_RANGE;
+            return result;
+        }
+        if(!nwbOpticalConsumeQuery(config, result))
+            return result;
+        const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(
+            config.instanceMaterialHeapSlot, origin, direction, minDistance, remaining
+        );
+        if(!hit.hit){
+            if(media.count != 0u){
+                result.termination = NWB_OPTICAL_TERMINATION_RANGE;
+                return result;
+            }
+            result.radiance += throughput * nwbOpticalEnvironmentRadiance(direction);
+            result.termination = NWB_OPTICAL_TERMINATION_MISS_OUTSIDE;
+            return result;
+        }
+        result.surfaceHit = true;
+        if(
+            !isfinite(hit.distance) || !all(isfinite(hit.position)) || !all(isfinite(hit.geometricNormal))
+            || dot(hit.geometricNormal, hit.geometricNormal) == 0.0
+            || hit.distance <= continuationUncertainty
+        ){
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return result;
+        }
+        result.distance += hit.distance;
+        const NwbOpticalMedium incidentMedium = nwbOpticalDominantMedium(media);
+        throughput *= nwbDielectricBeerTransmission(incidentMedium.absorption, hit.distance);
+        NwbOpticalInstance optical;
+        if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
+            return result;
+        if((optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u){
+            result.radiance += throughput * nwbOpticalSurfaceRadiance(hit, -direction);
+            result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
+            return result;
+        }
+        result.transparentPath = true;
+        NwbOpticalMedium boundaryMedium = (NwbOpticalMedium)0;
+        boundaryMedium.instance = hit.instance;
+        boundaryMedium.entityId = optical.entityId;
+        boundaryMedium.mode = optical.mode;
+        boundaryMedium.priority = optical.priority;
+        if(!nwbOpticalSetMediumProperties(hit.surface, boundaryMedium, result))
+            return result;
+        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED && boundaryMedium.ior != 1.0){
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            return result;
+        }
+        if(!nwbOpticalCheckBoundary(config, origin, direction, hit, result))
+            return result;
+
+        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
+            const float coverage = float(hit.surface.renderCoverage);
+            if(!isfinite(coverage)){
+                result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return result;
+            }
+            const float alpha = saturate(coverage);
+            if(alpha > 0.0)
+                result.radiance += throughput * alpha * nwbOpticalSurfaceRadiance(hit, -direction);
+            throughput *= 1.0 - alpha;
+            if(alpha == 1.0){
+                result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
+                return result;
+            }
+        }
+        else{
+            if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+                result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return result;
+            }
+            const float facing = dot(direction, hit.geometricNormal);
+            if(abs(facing) <= 1e-6){
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return result;
+            }
+            const bool entering = facing < 0.0;
+            NwbOpticalMedia transmittedMedia = media;
+            if(!nwbOpticalApplyBoundary(transmittedMedia, boundaryMedium, entering, result))
+                return result;
+            const NwbOpticalMedium transmittedMedium = nwbOpticalDominantMedium(transmittedMedia);
+            const NwbDielectricInterface boundary = nwbDielectricTransmit(
+                direction, entering ? hit.geometricNormal : -hit.geometricNormal,
+                incidentMedium.ior, transmittedMedium.ior
+            );
+            direction = boundary.direction;
+            if(boundary.totalInternalReflection)
+                ++result.tirCount;
+            else{
+                throughput *= boundary.radianceTransmission;
+                media = transmittedMedia;
+            }
+        }
+        // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer
+        // bias. Offset to the next geometric half-space and require progress on the next query. Near-coincident
+        // crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
+        continuationUncertainty = nwbOpticalPositionUncertainty(hit.position);
+        const float3 offsetNormal = dot(direction, hit.geometricNormal) >= 0.0 ? hit.geometricNormal : -hit.geometricNormal;
+        origin = hit.position + offsetNormal * continuationUncertainty;
+        minDistance = 0.0;
+    }
+    result.termination = NWB_OPTICAL_TERMINATION_QUERY_LIMIT;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

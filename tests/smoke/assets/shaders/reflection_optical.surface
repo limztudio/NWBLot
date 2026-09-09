@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbReflectionOpticalRuntime runtime = nwbMaterialBindLoadRuntime(instance);
+    NwbMeshSurface result = nwbMakeGlassSurface(
+        runtime.color_tint.rgb, inNormal, runtime.ior, runtime.unit_transmission, runtime.color_tint.a
+    );
+    // Homogeneous optical absorption is independent of AVBOIT render coverage, including clear density-zero glass.
+    result.shadowAbsorptionTint = runtime.unit_transmission;
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

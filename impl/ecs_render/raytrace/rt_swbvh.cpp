@@ -6,6 +6,7 @@
 #include <impl/ecs_render/material/sampled_texture_collection.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_csg/components.h>
 
 #include <global/algorithm.h>
 #include <global/hash_utils.h>
@@ -1087,6 +1088,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
     bool contentComplete = true;
+    RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
     Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
     if(!commandList)
@@ -1098,15 +1100,22 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
+        const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_meshSystem,
             entity,
             resolvedMesh,
             mesh
         );
-        if(!meshReady || !mesh.blas || !mesh.triangleIndexBuffer || !mesh.attributeBuffer || !mesh.positionBuffer){
+        // An entity without a mesh attachment contributes no geometry to the scene.
+        if(meshResolution == RenderableMeshResolution::Absent)
+            continue;
+        if(
+            meshResolution != RenderableMeshResolution::Ready || !mesh.blas
+            || !mesh.triangleIndexBuffer || !mesh.attributeBuffer || !mesh.positionBuffer
+        ){
             contentComplete = false;
+            opticalScene.markIncomplete();
             continue;
         }
         // Runtime mesh updates disable static TLAS reuse.
@@ -1196,6 +1205,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         }
         if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
             contentComplete = false;
+        // An opaque surface hook can be unavailable without hiding an optical boundary. Unknown classification
+        // or an unevaluable transparent surface cannot support the outside-volume shortcut.
+        if(!materialInfo || (materialInfo->transparent && materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max))
+            opticalScene.markIncomplete();
         instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
@@ -1203,6 +1216,26 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         // Opaque candidates terminate RayQuery; software handles transparent transmittance.
         if(!(materialInfo && materialInfo->transparent))
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
+
+        const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
+        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK
+            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
+        Float3U opticalLocalMin{};
+        Float3U opticalLocalMax{};
+        StoreFloat(LoadFloatInt(mesh.csgLocalBounds.minBounds), opticalLocalMin);
+        StoreFloat(LoadFloatInt(mesh.csgLocalBounds.maxBounds), opticalLocalMax);
+        Float34U opticalWorld{};
+        StoreFloat(LoadFloat(instanceDesc.transform), opticalWorld);
+        Float3U opticalMin{};
+        Float3U opticalMax{};
+        const bool opticalBoundsValid =
+            transparent && !resolvedMesh.runtime && !mesh.runtimeMesh && mesh.csgLocalBounds.valid()
+            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
+            && ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax, opticalMin, opticalMax)
+        ;
+        opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 
         instances.push_back(instanceDesc);
         instanceBlases.push_back(mesh.blas);
@@ -1464,8 +1497,12 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
     // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or
     // an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
-    if(!commandList)
+    if(!commandList){
+        if(!m_hardwareOpticalScene.prepare(opticalScene))
+            return false;
+        Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
         m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
+    }
     return true;
 }
 
@@ -1665,6 +1702,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
     m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
     bool contentComplete = true;
+    RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
     Optional<ShadowMaterialSampledTextureCollector> sampledTextureCollector;
     if(!commandList)
@@ -1676,13 +1714,16 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
-        const bool meshReady = RayTracingDetail::ResolveRenderableMeshResources(
+        const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystem,
             m_meshSystem,
             entity,
             resolvedMesh,
             mesh
         );
+        if(meshResolution == RenderableMeshResolution::Absent)
+            continue;
+        const bool meshReady = meshResolution == RenderableMeshResolution::Ready;
         // Preflight allocates storage before the first GPU topology build.  It may therefore gather a pending mesh
         // using the selected storage, while the recording path still requires the topology to have completed.
         const bool topologyReady = meshReady && (
@@ -1704,6 +1745,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             || !mesh.csgLocalBounds.valid()
         ){
             contentComplete = false;
+            opticalScene.markIncomplete();
             continue;
         }
         // Runtime mesh updates disable static scene-BVH reuse.
@@ -1794,6 +1836,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         SIMDVector worldMax{};
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax)){
             contentComplete = false;
+            opticalScene.markIncomplete();
             continue;
         }
         RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
@@ -1831,6 +1874,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         }
         if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
             contentComplete = false;
+        if(!materialInfo || (materialInfo->transparent && materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max))
+            opticalScene.markIncomplete();
         instanceMaterial.indexSlot = m_rayTracingState.m_swShadowMeshIndexHandles[meshSlot].slot();
         instanceMaterial.attributeSlot = m_rayTracingState.m_swShadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_swShadowMeshPositionHandles[meshSlot].slot();
@@ -1841,10 +1886,32 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), 0.5f);
         bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
+        Float3U opticalLocalMin{};
+        Float3U opticalLocalMax{};
+        StoreFloat(localMin, opticalLocalMin);
+        StoreFloat(localMax, opticalLocalMax);
+        Float34U opticalWorld{};
+        StoreFloat(objectToWorld, opticalWorld);
+        Float3U opticalMin{};
+        Float3U opticalMax{};
+        const bool opticalBoundsValid =
+            bvhPrimitive.transparentOccluder && !resolvedMesh.runtime && !mesh.runtimeMesh
+            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
+            && ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax, opticalMin, opticalMax)
+        ;
+        opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
+
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+    }
+
+    if(!commandList && m_shadowVisibilityHardwareSupported && !m_hardwareOpticalScene.matchesInstanceOrder(opticalScene)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid optical/material instance order differs from the hardware scene"));
+        return false;
     }
 
     if(m_rayTracingState.m_swShadowMeshCount > m_rayTracingState.m_swShadowMeshHeapHighWater){
@@ -2134,8 +2201,13 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         else
             clearPreparedSceneSwBvhTraversal();
     }
-    if(!commandList)
-        m_preparedSceneContentStamp = { sceneStaticHash, swMaterialContextHash, staticScene && contentComplete };
+    if(!commandList){
+        if(!m_softwareOpticalScene.prepare(opticalScene))
+            return false;
+        u64 opticalMaterialContentHash = swMaterialContextHash;
+        Fnv64AppendValue(opticalMaterialContentHash, opticalScene.contentHash());
+        m_preparedSceneContentStamp = { sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete };
+    }
     return true;
 }
 

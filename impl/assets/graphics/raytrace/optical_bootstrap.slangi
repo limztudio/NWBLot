@@ -1,0 +1,279 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_OPTICAL_BOOTSTRAP_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_OPTICAL_BOOTSTRAP_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "optical_scene.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbOpticalBootstrapEvent{
+    float distance;
+    uint instance;
+    uint primitive;
+    uint entering;
+};
+
+// The transparent union is conservative, including unspecified transparent materials. Outside it, air is
+// proven without a ray. Inside it, replay one complete exterior-to-origin crossing list; neither opaque scene
+// occluders nor arbitrary traversal order can establish containment. Candidate collection never commits hits.
+bool nwbOpticalBootstrap(
+    const NwbOpticalTraceConfig config,
+    const float3 origin,
+    const float3 direction,
+    out NwbOpticalMedia media,
+    inout NwbOpticalTraceResult result){
+    media = (NwbOpticalMedia)0;
+    const uint headerFlags = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
+    if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    const uint transparentCount = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
+    if(transparentCount == 0u)
+        return true;
+    const float3 boundsMin = asfloat(NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
+    const float3 boundsMax = asfloat(NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
+    if(!all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax)){
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+    }
+    if(any(origin < boundsMin) || any(origin > boundsMax))
+        return true;
+    const float3 bootstrapDirection = normalize(float3(0.754877666, 0.569840291, 0.324717957));
+    const float tolerance = 4.0 * max(nwbOpticalPositionUncertainty(boundsMin), nwbOpticalPositionUncertainty(boundsMax));
+    const float bootstrapDistance = length(boundsMax - boundsMin) + tolerance * 2.0;
+    RayDesc ray;
+    ray.Origin = origin - bootstrapDirection * bootstrapDistance;
+    ray.Direction = bootstrapDirection;
+    ray.TMin = 0.0;
+    ray.TMax = bootstrapDistance;
+    if(
+        !isfinite(bootstrapDistance) || bootstrapDistance <= 0.0 || !all(isfinite(ray.Origin))
+        || !(any(ray.Origin < boundsMin) || any(ray.Origin > boundsMax))
+    ){
+        result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+        return false;
+    }
+    if(!nwbOpticalConsumeQuery(config, result))
+        return false;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
+    uint eventCount = 0u;
+    bool complete = false;
+    [loop]
+    for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
+        if(!query.Proceed()){
+            complete = true;
+            break;
+        }
+        ++result.bootstrapEventCount;
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE){
+            query.Abort();
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            return false;
+        }
+        const uint instance = query.CandidateInstanceID();
+        NwbOpticalInstance optical;
+        if(!nwbOpticalReadInstance(config, instance, optical, result)){
+            query.Abort();
+            return false;
+        }
+        if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
+            const NwbRayTraceSurfaceHit hit = nwbRayTraceReconstructSurfaceHit(
+                config.instanceMaterialHeapSlot, ray.Origin, ray.Direction, query.CandidateTriangleRayT(), instance,
+                query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(), query.CandidateWorldToObject3x4(),
+                query.CandidateTriangleFrontFace()
+            );
+            // A flat alpha surface cannot contain a medium. An unspecified refractor may be open or displaced;
+            // without an authored volume contract it cannot prove that the initial origin is in air.
+            if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0)){
+                query.Abort();
+                result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+                return false;
+            }
+            continue;
+        }
+        if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
+            query.Abort();
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            return false;
+        }
+        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(
+            material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
+        );
+        const float facing = dot(bootstrapDirection, normal);
+        const float distance = query.CandidateTriangleRayT();
+        if(!isfinite(facing) || abs(facing) <= 1e-6 || bootstrapDistance - distance <= tolerance){
+            query.Abort();
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return false;
+        }
+        NwbOpticalBootstrapEvent event;
+        event.distance = distance;
+        event.instance = instance;
+        event.primitive = query.CandidatePrimitiveIndex();
+        event.entering = facing < 0.0 ? 1u : 0u;
+        events[eventCount] = event;
+        ++eventCount;
+    }
+    if(!complete){
+        // Once all candidate slots are consumed, stopping is conservative even if this happened to be the final
+        // candidate. A further Proceed call could expose an unbudgeted event, so unresolved containment is rejected.
+        query.Abort();
+        result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
+        return false;
+    }
+
+    // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while
+    // shifting that same array; every crossing keeps its original distance, primitive and orientation together.
+    uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = {
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
+        16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
+    };
+    [loop]
+    for(uint index = 1u; index < eventCount; ++index){
+        uint insertion = index;
+        [loop]
+        while(insertion != 0u){
+            if(events[eventOrder[insertion - 1u]].distance <= events[index].distance)
+                break;
+            eventOrder[insertion] = eventOrder[insertion - 1u];
+            --insertion;
+        }
+        eventOrder[insertion] = index;
+    }
+    uint duplicateEvents = 0u;
+    [loop]
+    for(uint index = 1u; index < eventCount; ++index){
+        const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
+        const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
+        if(event.distance - previous.distance <= tolerance){
+            // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge
+            // still has multiple refraction normals, and an unshared triangle belongs to another shell.
+            if(
+                event.instance != previous.instance || event.entering != previous.entering
+                || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)
+            ){
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+            duplicateEvents |= 1u << index;
+        }
+    }
+
+    // Accumulate signed winding per instance before allocating the four origin-active media. The probe may pass
+    // through many volumes that are already exited at the origin; those must not consume the active-medium cap.
+    // Exterior-to-origin crossings use entries minus exits. Each final positive interval's start orders nested
+    // enclosing media; overlapping shells of one instance retain their union until the winding becomes zero.
+    uint activeEventIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
+    uint activeEntryIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
+    uint activeWindings[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
+    uint activeMode = NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
+    [loop]
+    for(uint index = 0u; index < eventCount; ++index){
+        const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
+        if((duplicateEvents & (1u << index)) != 0u)
+            continue;
+        bool firstOccurrence = true;
+        [loop]
+        for(uint previous = 0u; previous < index; ++previous){
+            if(events[eventOrder[previous]].instance == event.instance)
+                firstOccurrence = false;
+        }
+        if(!firstOccurrence)
+            continue;
+        int winding = 0;
+        uint activeEntry = index;
+        [loop]
+        for(uint crossing = index; crossing < eventCount; ++crossing){
+            const NwbOpticalBootstrapEvent candidate = events[eventOrder[crossing]];
+            if(candidate.instance != event.instance || (duplicateEvents & (1u << crossing)) != 0u)
+                continue;
+            if(candidate.entering == 1u){
+                if(winding == 0)
+                    activeEntry = crossing;
+                ++winding;
+            }
+            else
+                --winding;
+            if(winding < 0){
+                result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+                return false;
+            }
+        }
+        if(winding == 0)
+            continue;
+        if(media.count == NWB_OPTICAL_MAX_MEDIA || uint(winding) > NWB_OPTICAL_MAX_WINDING){
+            result.termination = NWB_OPTICAL_TERMINATION_MEDIUM_LIMIT;
+            return false;
+        }
+        NwbOpticalInstance optical;
+        if(!nwbOpticalReadInstance(config, event.instance, optical, result))
+            return false;
+        if(media.count != 0u && activeMode != optical.mode){
+            result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
+            return false;
+        }
+        activeMode = optical.mode;
+        uint insertion = media.count;
+        [unroll]
+        for(uint shift = 0u; shift < NWB_OPTICAL_MAX_MEDIA; ++shift){
+            if(insertion == 0u)
+                break;
+            if(activeEntryIndices[insertion - 1u] < activeEntry)
+                break;
+            activeEventIndices[insertion] = activeEventIndices[insertion - 1u];
+            activeEntryIndices[insertion] = activeEntryIndices[insertion - 1u];
+            activeWindings[insertion] = activeWindings[insertion - 1u];
+            --insertion;
+        }
+        activeEventIndices[insertion] = eventOrder[index];
+        activeEntryIndices[insertion] = activeEntry;
+        activeWindings[insertion] = uint(winding);
+        ++media.count;
+    }
+    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved
+    // through its own backing array, and at most four homogeneous material evaluations remain necessary.
+    [unroll]
+    for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
+        if(index < media.count){
+            NwbOpticalInstance optical;
+            const uint instance = events[activeEventIndices[index]].instance;
+            if(!nwbOpticalReadInstance(config, instance, optical, result))
+                return false;
+            NwbOpticalMedium medium = (NwbOpticalMedium)0;
+            medium.instance = instance;
+            medium.entityId = optical.entityId;
+            medium.mode = optical.mode;
+            medium.priority = optical.priority;
+            medium.winding = activeWindings[index];
+            medium.ior = 1.0;
+            if(!nwbOpticalLoadHomogeneousMedium(config, origin, direction, medium, result))
+                return false;
+            media.entries[index] = medium;
+        }
+    }
+    result.transparentPath = media.count != 0u;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

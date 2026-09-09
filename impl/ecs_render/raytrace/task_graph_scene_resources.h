@@ -20,8 +20,8 @@ NWB_IMPL_BEGIN
 
 
 struct RayTracingSceneGraphReads{
-    // TLAS, material selector CB, instance-material table, typed material words, mesh-instance material storage.
-    Core::GpuTaskResourceUse uses[5] = {};
+    // TLAS, selector CB, material/typed/mesh-instance tables, and the optical policy/bounds sidecar.
+    Core::GpuTaskResourceUse uses[6] = {};
 
     [[nodiscard]] bool valid()const noexcept{
         for(const auto& use : uses){

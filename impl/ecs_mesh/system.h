@@ -52,6 +52,8 @@ public:
     [[nodiscard]] const MeshComponent* findMesh(Core::ECS::EntityID entity)const;
     [[nodiscard]] bool resolveMesh(Core::ECS::EntityID entity, Core::Assets::AssetRef<Mesh>& outMesh)const;
     [[nodiscard]] bool resolveRenderableMesh(Core::ECS::EntityID entity, RenderableMeshDesc& outMesh)const;
+    // Distinguish a non-rendering owner from an attached mesh whose resources are temporarily unavailable.
+    [[nodiscard]] RenderableMeshResolution::Enum resolveRenderableMeshStatus(Core::ECS::EntityID entity, RenderableMeshDesc& outMesh)const;
     void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const;
 
 public:

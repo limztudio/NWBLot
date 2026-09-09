@@ -1,0 +1,12 @@
+material asset;
+asset.interface = "project/shaders/reflection_optical.bind";
+asset.surface = "project/shaders/reflection_optical.surface";
+asset.bxdf = "project/shaders/refraction_smoke.bxdf";
+asset.transparent = 1;
+asset.two_sided = 1;
+asset.refractive = 1;
+asset.shader_variant = "default";
+asset.parameters = {
+    "surface": { "base_color": "half4(1.0h, 1.0h, 1.0h, 1.0h)" },
+};
+

@@ -190,11 +190,12 @@ TEST(EcsGraphics, ReflectionFrameSelectorsMatchElevenStd140LanesAndSeparateCount
     EXPECT_EQ(offsetof(Parameters, samplingSeed), 96u);
     EXPECT_EQ(offsetof(Parameters, sampleBaseX), 100u);
     EXPECT_EQ(offsetof(Parameters, sampleBaseY), 104u);
+    EXPECT_EQ(offsetof(Parameters, maxOpticalQueries), 108u);
     EXPECT_EQ(offsetof(Parameters, maxRayDistance), 112u);
     EXPECT_EQ(offsetof(Parameters, environmentTopR), 128u);
     EXPECT_EQ(offsetof(Parameters, environmentBottomR), 144u);
     EXPECT_EQ(offsetof(Parameters, screenThickness), 160u);
-    EXPECT_EQ(NWB_REFLECTION_COUNTER_SCREEN_HITS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
+    EXPECT_EQ(NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS + sizeof(u32), NWB_REFLECTION_COUNTER_SIZE);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Disabled), NWB_REFLECTION_MODE_DISABLED);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::ScreenSpace), NWB_REFLECTION_MODE_SCREEN);
     EXPECT_EQ(static_cast<u32>(NWB::Impl::ReflectionTraceMode::Hardware), NWB_REFLECTION_MODE_HARDWARE);

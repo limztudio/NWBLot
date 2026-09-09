@@ -6,6 +6,7 @@
 #include <impl/ecs_mesh/skinning/resource_names.h>
 #include <impl/ecs_mesh/skinning/runtime_instance.h>
 #include <impl/ecs_mesh/system.h>
+#include <impl/ecs_render/components.h>
 #include <impl/ecs_render/mesh/runtime_mesh_pruning.h>
 
 #include <core/ecs/entity.h>
@@ -91,6 +92,12 @@ public:
         if(payload->versionOverride)
             outMesh.version = *payload->versionOverride;
         return true;
+    }
+
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const Core::ECS::EntityID entity)const override{
+        const auto* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity);
+        const auto* payload = m_world.tryGetComponent<RuntimePayload>(entity);
+        return binding && payload && payload->providerId == m_providerId;
     }
 
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override{
@@ -223,6 +230,79 @@ struct PruneContext{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(RenderableMeshResolution, RendererOnlyOwnerIsAbsentAndClearsPreviousDescription){
+    PruneContext context;
+    const auto ready = context.addBinding();
+    RenderableMeshDesc description;
+    ASSERT_EQ(context.meshSystem.resolveRenderableMeshStatus(ready, description), RenderableMeshResolution::Ready);
+    ASSERT_TRUE(description.valid());
+    auto owner = context.world.createEntity();
+    owner.addComponent<RendererComponent>();
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(owner.id(), description), RenderableMeshResolution::Absent);
+    EXPECT_FALSE(description.valid());
+    EXPECT_FALSE(description.runtime);
+    EXPECT_FALSE(context.meshSystem.resolveRenderableMesh(owner.id(), description));
+}
+
+TEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable){
+    PruneContext context;
+    auto entity = context.world.createEntity();
+    auto& mesh = entity.addComponent<MeshComponent>();
+    RenderableMeshDesc description;
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Unavailable);
+    EXPECT_FALSE(description.valid());
+    mesh.mesh = Core::Assets::AssetRef<Mesh>("tests/runtime_mesh_pruning/static_attachment");
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Ready);
+    EXPECT_TRUE(description.valid());
+    EXPECT_FALSE(description.runtime);
+    EXPECT_EQ(description.mesh.name(), mesh.mesh.name());
+}
+
+TEST(RenderableMeshResolution, OwnedRuntimeBindingRemainsUnavailableUntilReady){
+    PruneContext context;
+    const auto entity = context.addBinding(1u);
+    auto& instance = context.world.entity(entity).getComponent<RuntimePayload>().instance;
+    instance.dirtyFlags = RuntimeMeshDirtyFlag::SkinningInputDirty;
+    RenderableMeshDesc description;
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity, description), RenderableMeshResolution::Unavailable);
+    EXPECT_FALSE(description.valid());
+    instance.dirtyFlags = RuntimeMeshDirtyFlag::None;
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity, description), RenderableMeshResolution::Ready);
+    EXPECT_TRUE(description.runtime);
+    EXPECT_EQ(description.runtimeMesh.entity, entity);
+    context.world.entity(entity).getComponent<SkinnedMeshBindingComponent>().runtimeMesh.reset();
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity, description), RenderableMeshResolution::Unavailable);
+    EXPECT_FALSE(description.valid());
+}
+
+TEST(RenderableMeshResolution, UnavailableRuntimePreservesExistingReadyStaticFallback){
+    PruneContext context;
+    const auto entity = context.addBinding();
+    auto& instance = context.world.entity(entity).getComponent<RuntimePayload>().instance;
+    instance.dirtyFlags = RuntimeMeshDirtyFlag::SkinningInputDirty;
+    auto& mesh = context.world.entity(entity).addComponent<MeshComponent>();
+    mesh.mesh = Core::Assets::AssetRef<Mesh>("tests/runtime_mesh_pruning/static_fallback");
+    RenderableMeshDesc description;
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity, description), RenderableMeshResolution::Ready);
+    EXPECT_TRUE(description.valid());
+    EXPECT_FALSE(description.runtime);
+    EXPECT_EQ(description.mesh.name(), mesh.mesh.name());
+    mesh.mesh = {};
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity, description), RenderableMeshResolution::Unavailable);
+    EXPECT_FALSE(description.valid());
+}
+
+TEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable){
+    PruneContext context;
+    context.meshSystem.unregisterRuntimeMeshProvider(context.firstProvider);
+    context.meshSystem.unregisterRuntimeMeshProvider(context.secondProvider);
+    auto entity = context.world.createEntity();
+    entity.addComponent<SkinnedMeshBindingComponent>();
+    RenderableMeshDesc description;
+    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Unavailable);
+    EXPECT_FALSE(description.valid());
+}
 
 TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCurrentInstances){
     PruneContext context;

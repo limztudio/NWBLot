@@ -44,10 +44,12 @@ struct ReflectionStatistics{
     u32 requestedHardwareBudget = 0u;
     u32 effectiveHardwareBudget = 0u;
     u32 queueCapacity = 0u;
+    u32 maxOpticalQueries = 0u;
     ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Disabled;
     bool hardwareRequested = false;
     bool hardwareAvailable = false;
     bool hardwareReady = false;
+    bool opticalTransportEnabled = false;
     u64 historyEpoch = 0u;
     u64 historyStartGraphicsFrame = 0u;
     u32 historySampleCount = 0u;
@@ -67,6 +69,15 @@ struct ReflectionStatistics{
     u32 screenAttempts = 0u;
     // Only screen hits meeting the configured confidence threshold are accepted.
     u32 screenHits = 0u;
+    // Admitted paths and actual scene queries remain separate; bootstrap and continuations consume query limits.
+    u32 hardwareQueries = 0u;
+    u32 bootstrapEvents = 0u;
+    u32 transparentPaths = 0u;
+    u32 unsupportedPaths = 0u;
+    u32 limitedPaths = 0u;
+    u32 ambiguousPaths = 0u;
+    u32 tirEvents = 0u;
+    u32 mediumOverflowPaths = 0u;
 };
 
 

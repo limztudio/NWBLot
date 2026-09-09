@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/reflection/history.h>
+#include <impl/assets/graphics/reflection/frame_constants.h>
 #include <impl/ecs_render/reflection/statistics_readback.h>
 
 #include <core/alloc/general.h>
@@ -136,6 +137,11 @@ TEST(ReflectionHistory, SeedAndBudgetChangesRestartTheSamplingSequence){
     const auto budget = state.plan(Stamp(), settings, 3u);
     EXPECT_EQ(budget.resetReason, ReflectionHistoryResetReason::SettingsChanged);
     EXPECT_EQ(budget.sampleIndex, 0u);
+    Accept(state, budget);
+    --settings.maxOpticalQueries;
+    const auto queries = state.plan(Stamp(), settings, 4u);
+    EXPECT_EQ(queries.resetReason, ReflectionHistoryResetReason::SettingsChanged);
+    EXPECT_EQ(queries.sampleIndex, 0u);
 }
 
 TEST(ReflectionHistory, SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory){
@@ -273,7 +279,7 @@ TEST(ReflectionHistory, CompletedStatisticsRetainEpochStartAndResolvedSamplingMe
     metadata.samplingSeed = 77u;
     const auto key = statistics.reserve(metadata);
     statistics.accept(key, Token(), true, &outcome);
-    const u32 counters[8] = {};
+    const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     statistics.complete(key, Token(), counters);
     ReflectionStatistics completed;
     ASSERT_TRUE(statistics.tryGetLatestStatistics(completed));

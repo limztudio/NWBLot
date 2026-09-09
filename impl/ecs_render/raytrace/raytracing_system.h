@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
+#include <impl/ecs_render/raytrace/optical_scene_resources.h>
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 
 #include <core/alloc/scratch.h>
@@ -1505,6 +1506,8 @@ private:
     RendererMaterialSystem& m_materialSystem;
     RendererRayTracingState& m_rayTracingState;
     const RendererOpticalVolumeSelection& m_opticalVolumes;
+    RayTracingOpticalSceneResources m_hardwareOpticalScene;
+    RayTracingOpticalSceneResources m_softwareOpticalScene;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;

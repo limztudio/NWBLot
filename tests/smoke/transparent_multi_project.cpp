@@ -325,6 +325,28 @@ private:
             || hardwareSetting != 0.0f;
         rendererSystem.setRefractionEnabled(refractionEnabled);
         rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
+        NWB::Impl::ReflectionSettings reflectionSettings;
+        NWB::Tests::Smoke::SmokeEnvironmentString reflectionModeText(context.objectArena);
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_MODE", reflectionModeText)){
+            const AStringView mode(reflectionModeText.data(), reflectionModeText.size());
+            if(mode == "disabled")
+                reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
+            else if(mode == "hardware")
+                reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
+            else if(mode == "screen")
+                reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::ScreenSpace;
+            else
+                NWB_FATAL_ASSERT_MSG(mode == "hybrid", NWB_TEXT("CausticSphereSmokeProject: invalid reflection mode"));
+        }
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON")){
+            reflectionSettings.environmentTop = Float3U(0.6f, 0.7f, 1.f);
+            reflectionSettings.environmentBottom = reflectionSettings.environmentTop;
+            reflectionSettings.maxHardwareRaysPerFrame = 2u * 1280u * 900u;
+            reflectionSettings.temporalEnabled = false;
+            reflectionSettings.spatialFilterEnabled = false;
+        }
+        NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
             , refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
         );
@@ -437,8 +459,12 @@ public:
             s_DefaultDirectionalLightIntensity
         );
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity))
-            light->enableCaustics = true;
+        f32 causticSetting = 1.f;
+        const bool causticsEnabled = !ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED", causticSetting) || causticSetting != 0.f;
+        m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}")
+            , causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        );
 #endif
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -456,6 +482,8 @@ public:
         );
         m_centerShape = centerShapeEntity;
         const bool shapesValid = centerShapeEntity.valid();
+        if(shapesValid)
+            m_world->entity(centerShapeEntity).getComponent<NWB::Impl::RendererComponent>().opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
 #else
         const auto shapeEntity = CreateTransparentStaticMeshEntity(
             *m_world,

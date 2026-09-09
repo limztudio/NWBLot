@@ -5991,7 +5991,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> reflectionHardwareReads{traceGeometryScratchArena};
-    reflectionHardwareReads.reserve(7u);
+    reflectionHardwareReads.reserve(LengthOf(sceneReads.uses) + 2u);
     if(sceneReads.valid()){
         for(const Core::GpuTaskResourceUse& read : sceneReads.uses)
             reflectionHardwareReads.push_back(read);

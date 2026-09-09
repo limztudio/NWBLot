@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <impl/global.h>
+#include "optical_scene_resources.h"
 
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/raytracing.h>
@@ -41,13 +41,14 @@ struct RayTracingSceneGraphResources{
     Core::BufferHandle instanceMaterialBuffer;
     Core::BufferHandle materialTypedBuffer;
     Core::BufferHandle instanceBuffer;
+    RayTracingOpticalSceneSnapshot opticalScene;
     u32 materialContextSlotsHeapSlot = 0u;
     bool hardwareAvailable = false;
 
     [[nodiscard]] bool valid()const noexcept{
         return
             hardwareAvailable && sceneTlas && tlasHeapHandle.valid() && materialContextSlotsBuffer
-            && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer
+            && instanceMaterialBuffer && materialTypedBuffer && instanceBuffer && opticalScene.valid()
         ;
     }
 };

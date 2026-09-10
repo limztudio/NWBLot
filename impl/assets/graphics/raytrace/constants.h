@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The hardware ray-tracing instance mask is an eight-bit ABI field. This full mask selects every TLAS instance for
-// traces that do not perform per-instance filtering.
+// The hardware ray-tracing instance mask is eight bits; this full mask selects every TLAS instance.
 #define NWB_RAY_TRACING_ALL_INSTANCE_MASK 0xFFu
 
 

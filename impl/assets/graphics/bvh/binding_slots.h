@@ -9,16 +9,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bitonic sort over (Morton key, primitive index) pairs. Padding slots hold sentinel keys.
+// Bitonic sort over (key, index) pairs.
 #define NWB_BVH_SORT_GROUP_SIZE 256
 
-// NwbBvhBitonicSortPushConstants.mode values (CPU/shader ABI, must match).
+// mode values (CPU/shader ABI).
 #define NWB_BVH_SORT_MODE_LOCAL_TILE 0u
 #define NWB_BVH_SORT_MODE_GLOBAL 1u
 #define NWB_BVH_SORT_MODE_GLOBAL_TAIL 2u
 #define NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT 8u
 
-// LBVH build passes (Morton -> sort -> Karras topology -> bottom-up fit) using global heap buffers.
+// LBVH build passes over global heap buffers.
 #define NWB_BVH_BUILD_GROUP_SIZE 256
 #define NWB_BVH_BUILD_MODE_FULL 0u
 #define NWB_BVH_BUILD_MODE_REFIT 1u

@@ -14,9 +14,8 @@
 #define NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL (1u << 2u)
 #define NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL (1u << 3u)
 
-// The per-draw dispatch word (dispatch.w) carries cull/dispatch flags in its low 16 bits and the owning
-// material's shading-model id in its high 16 bits. The G-buffer pixel shader reads the id back out and writes
-// it into the base-color alpha, where the deferred lighting pass uses it to dispatch the material's BXDF.
+// dispatch.w carries cull/dispatch flags in its low 16 bits and the material shading-model id in its high 16.
+// The pixel shader writes the id into base-color alpha for the deferred lighting BXDF dispatch.
 #define NWB_MESH_DISPATCH_FLAG_MASK 0x0000FFFFu
 #define NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT 16u
 #define NWB_MESH_DISPATCH_SHADING_MODEL_MASK 0x0000FFFFu
@@ -27,15 +26,14 @@
 #define NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX 1u
 #define NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET 2u
 #define NWB_MESH_PUSH_DISPATCH_FLAGS 3u
-// The per-draw frame-resource heap slots occupy the fourth 16-byte lane of the material push constant. Keeping
-// them together lets both the mesh/compute stage and its independently compiled pixel stage reach the same
-// instance, typed-material, and camera buffers without recreating local resource bindings.
+// Per-draw frame-resource heap slots share the fourth 16-byte lane of the material push constant, so the
+// mesh/compute stage and its pixel stage reach the same instance, typed-material, and camera buffers.
 #define NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET 12u
 #define NWB_MESH_FRAME_HEAP_SLOT_INSTANCE 0u
 #define NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED 1u
 #define NWB_MESH_FRAME_HEAP_SLOT_VIEW 2u
-// The compute-emulation path uses the otherwise unused fourth frame-slot lane to select its writable generated
-// vertex buffer from the global StorageBuffer heap. Raster/mesh-shader draws leave this slot zero.
+// The compute-emulation path uses the otherwise unused fourth frame-slot lane to select its writable
+// generated vertex buffer. Raster/mesh-shader draws leave this slot zero.
 #define NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX 3u
 #define NWB_MESH_FRAME_HEAP_SLOT_COUNT 4u
 #define NWB_MESH_PUSH_CONSTANT_BYTE_SIZE 64u
@@ -49,13 +47,11 @@
 #define NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET 4u
 #define NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET 7u
 #define NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET 8u
-// Raster mesh geometry lives in the global descriptor heap. The per-draw instance record carries the
-// heap slot for each mesh-stream ABI position (including the intentional binding-6 gap), so the shared
-// mesh shader can fetch its streams without growing the already-full AVBOIT draw push constant.
+// Raster mesh geometry lives in the global descriptor heap. The per-draw instance record carries the heap
+// slot per mesh-stream ABI position, so the shared mesh shader fetches streams without growing the AVBOIT push constant.
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET 12u
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT 12u
-// Binding 6 is reserved for CSG's UniformBuffer context selector; typed words use the frame heap lane. Do not
-// renumber the mesh-stream ABI positions.
+// Binding 6 is reserved for the CSG UniformBuffer context selector; typed words use the frame heap lane.
 #define NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT 6u
 #define NWB_MESH_INSTANCE_FLOAT_COUNT (NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET + NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT)
 

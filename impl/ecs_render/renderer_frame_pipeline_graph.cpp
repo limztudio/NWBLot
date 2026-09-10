@@ -2501,9 +2501,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitIntervalResourceUses.push_back(ReadBufferUse(csgCutters, transparentCsgCutterRange));
         avboitIntervalResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
         avboitIntervalResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
-        // The sparse peel and event payloads are never loaded by this producer. Interval ID preserves its preceding
-        // zero clear for unwritten layers, while event count is atomically incremented from its clear, so those two
-        // validity resources remain ReadWrite. The payloads are write-only and may start from native Unknown.
+        // Sparse payloads are write-only from Unknown; ID/count stay ReadWrite from their clears.
         avboitIntervalResourceUses.push_back(
             WriteTextureUse(csgCapBackNormal, csgPeelSubresources, Core::ResourceStates::UnorderedAccess)
         );
@@ -3124,8 +3122,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             }
         }
         else{
-            // The graph phase is still authoritative for an empty visible set. Retaining the empty snapshot prevents
-            // native recording from re-gathering mutable renderer state as a compatibility fallback.
+            // Graph phase stays authoritative for empty sets; retain snapshot to skip native re-gather.
             avboitOccupancyPayload.occupancySnapshot.capture(
                 occupancyDrawItems,
                 occupancyCsgFrameData,
@@ -3137,7 +3134,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-    // Preserve the native order: phase-local material/CSG uploads first, then the serial AVBOIT target values, then occupancy. Each value now records as a typed built-in clear, so the graph owns all nine CopyDest operations instead of a custom native thunk hiding them behind one broad resource-use declaration.
+    // Keep native order: uploads, serial target clears, then occupancy; graph owns all CopyDest ops.
     Core::GpuTaskId avboitClearTask = occupancyUploadTask;
     if(clearAvboitTargets){
         Core::GpuTaskSchedulingHint avboitClearScheduling;
@@ -3145,8 +3142,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitClearScheduling.forceSubmissionBoundary = false;
         avboitClearScheduling.allowPacketMerge = true;
         avboitClearScheduling.mergeWithPrevious = true;
-        // The direct serial target-clear chain and its Occupancy successor own one AVBOIT Pre timing packet even
-        // when split Depth Warp consumes it from another queue.
+        // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
         avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](
             const Name identity,

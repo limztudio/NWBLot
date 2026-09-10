@@ -193,7 +193,7 @@ void GpuCommandIrCapture::reset()noexcept{
     if(m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
         TerminateInvariant();
 
-    // The validated header size only shrinks the byte vector, retaining its storage without allocation.
+    // Shrinking resize keeps capacity without allocating.
     m_records.clear();
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_graphGeneration = 0u;
@@ -227,7 +227,7 @@ void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
 
     static_assert(IsNothrowDestructible_V<GpuCommandIrBuiltinTaskRecord>);
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    // Both validated boundaries only shrink their vectors, so these resizes cannot allocate or construct elements.
+    // Both resizes only shrink, so they cannot allocate.
     m_records.resize(recordCount);
     m_commandBytes.resize(byteOffset);
     m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
@@ -357,8 +357,7 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_records, nextRecordCount))
         return false;
 
-    // Reserve the inspection record first: once both reservations succeed the POD appends cannot allocate, so a
-    // failure leaves both sequences unchanged.
+    // Reserve first so failure leaves both sequences unchanged.
     ContainerDetail::ReserveGrowingCapacity(m_records, nextRecordCount);
 
     if(!appendCommandBytes(record))
@@ -418,8 +417,7 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
         encoded.depthClearValue = record.depthClearValue;
         encoded.stencilClearValue = record.stencilClearValue;
         encoded.clearTextureValueType = static_cast<u8>(record.clearTextureValueType);
-        // Color clears retain legacy inspection fields, but native color-clear lowering ignores aspect flags. The
-        // stream is canonical and only encodes depth/stencil selection for a depth/stencil clear command.
+        // Color clears ignore aspect flags; depth/stencil selection is encoded only for depth/stencil clears.
         if(record.clearTextureValueType == GpuClearTextureTaskValueType::DepthStencil){
             if(record.clearDepth)
                 encoded.clearFlags = static_cast<GpuCommandIrClearTextureFlag::Mask>(

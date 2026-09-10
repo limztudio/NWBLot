@@ -55,11 +55,8 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
 }
 
 [[nodiscard]] f32 SaturateFloat(const f32 value){
-    if(value < 0.0f)
-        return 0.0f;
-    if(value > 1.0f)
-        return 1.0f;
-    return value;
+    // SIMD clamp keeps the scalar weight on vector lanes (min/max, no branches).
+    return VectorGetX(VectorSaturate(VectorReplicate(value)));
 }
 
 [[nodiscard]] f32 ShapeEpsilon(const CsgDeformBuildOptions& options){
@@ -133,35 +130,33 @@ namespace CsgDeformShapeKind{
     return CsgDeformShapeKind::Invalid;
 }
 
-// Scalar SDFs take shape-space xyz directly. One lane extraction per vertex in
-// ShapeDistances feeds all cutter kinds without per-vertex SIMD stores.
-[[nodiscard]] f32 PlaneSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
-    return shapeX * parameter0.x + shapeY * parameter0.y + shapeZ * parameter0.z + parameter0.w;
+// SIMD SDFs take shape-space position directly. Dot/abs/length stay on SIMD
+// lanes; only the final distance crosses back to scalar for the epsilon snap.
+[[nodiscard]] f32 PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
+    return VectorGetX(Vector3Dot(shapePosition, parameter0)) + VectorGetW(parameter0);
 }
 
-[[nodiscard]] f32 BoxSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
-    const f32 qx = Abs(shapeX) - parameter0.x;
-    const f32 qy = Abs(shapeY) - parameter0.y;
-    const f32 qz = Abs(shapeZ) - parameter0.z;
-    const f32 outsideX = qx > 0.0f ? qx : 0.0f;
-    const f32 outsideY = qy > 0.0f ? qy : 0.0f;
-    const f32 outsideZ = qz > 0.0f ? qz : 0.0f;
-    const f32 outside = Sqrt(outsideX * outsideX + outsideY * outsideY + outsideZ * outsideZ);
-    const f32 inside = Min(qx, Min(qy, qz)) < 0.0f ? Min(qx, Min(qy, qz)) : 0.0f;
+[[nodiscard]] f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
+    // 3-lane helpers ignore w, so the affine w=1 lane needs no masking.
+    const SIMDVector halfExtents = VectorSetW(parameter0, 0.0f);
+    const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), halfExtents);
+    const SIMDVector outsideVec = VectorMax(q, VectorZero());
+    const f32 outside = VectorGetX(Vector3Length(outsideVec));
+    const f32 insideComp = VectorGetX(Vector3MinComponent(q));
+    const f32 inside = insideComp < 0.0f ? insideComp : 0.0f;
     return outside + inside;
 }
 
-[[nodiscard]] f32 SphereSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
-    return Sqrt(shapeX * shapeX + shapeY * shapeY + shapeZ * shapeZ) - parameter0.x;
+[[nodiscard]] f32 SphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
+    return VectorGetX(Vector3Length(shapePosition)) - VectorGetX(parameter0);
 }
 
-[[nodiscard]] f32 CapsuleSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
-    const f32 halfHeight = parameter0.y;
+[[nodiscard]] f32 CapsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
+    const f32 halfHeight = VectorGetY(parameter0);
+    const f32 shapeY = VectorGetY(shapePosition);
     const f32 clampedY = shapeY < -halfHeight ? -halfHeight : (shapeY > halfHeight ? halfHeight : shapeY);
-    const f32 dx = shapeX;
-    const f32 dy = shapeY - clampedY;
-    const f32 dz = shapeZ;
-    return Sqrt(dx * dx + dy * dy + dz * dz) - parameter0.x;
+    const SIMDVector delta = VectorSubtract(shapePosition, VectorSet(0.0f, clampedY, 0.0f, 0.0f));
+    return VectorGetX(Vector3Length(delta)) - VectorGetX(parameter0);
 }
 
 [[nodiscard]] bool ShapeDistances(
@@ -185,17 +180,17 @@ namespace CsgDeformShapeKind{
     outDistances.clear();
     outDistances.resize(vertexCount, 0.0f);
 
-    // Cutter dispatch happens once per cut. Each specialized loop extracts lanes
-    // once per vertex and snaps the epsilon band inline, so ClipShell needs no
-    // second pass and preview/commit observe identical distances.
+    // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on
+    // SIMD lanes; only the snapped distance crosses back to scalar, so
+    // preview/commit observe identical distances with no second pass.
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
-    const Float4 parameter0 = shape.parameter0;
+    const SIMDVector parameter0 = LoadFloat(shape.parameter0);
     switch(shapeKind){
     case CsgDeformShapeKind::Plane:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
-            f32 distance = PlaneSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            f32 distance = PlaneSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
@@ -209,8 +204,8 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Box:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
-            f32 distance = BoxSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            f32 distance = BoxSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
@@ -224,8 +219,8 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Sphere:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
-            f32 distance = SphereSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            f32 distance = SphereSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
@@ -239,8 +234,8 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Capsule:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
-            f32 distance = CapsuleSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            f32 distance = CapsuleSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
@@ -277,63 +272,54 @@ struct EdgeSplitKeyHash{
 using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchArena>;
 
 [[nodiscard]] CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
+    // SIMD blend keeps positions/normals/tangents/uvs/colors on vector lanes.
+    // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise.
     const f32 blend = SaturateFloat(firstWeight);
     const f32 other = 1.0f - blend;
+    const SIMDVector blendVec = VectorReplicate(blend);
+    const SIMDVector otherVec = VectorReplicate(other);
     CsgDeformVertex mixed;
-    mixed.position = Float3U(
-        first.position.x * blend + second.position.x * other,
-        first.position.y * blend + second.position.y * other,
-        first.position.z * blend + second.position.z * other
-    );
-    mixed.normal = Float4(
-        first.normal.x * blend + second.normal.x * other,
-        first.normal.y * blend + second.normal.y * other,
-        first.normal.z * blend + second.normal.z * other,
-        first.normal.w * blend + second.normal.w * other
-    );
-    mixed.tangent = Float4(
-        first.tangent.x * blend + second.tangent.x * other,
-        first.tangent.y * blend + second.tangent.y * other,
-        first.tangent.z * blend + second.tangent.z * other,
-        first.tangent.w * blend + second.tangent.w * other
-    );
-    mixed.uv0 = Float2U(
-        first.uv0.x * blend + second.uv0.x * other,
-        first.uv0.y * blend + second.uv0.y * other
-    );
-    mixed.color = Float4(
-        first.color.x * blend + second.color.x * other,
-        first.color.y * blend + second.color.y * other,
-        first.color.z * blend + second.color.z * other,
-        first.color.w * blend + second.color.w * other
-    );
+    const SIMDVector mixedPosition = VectorAdd(VectorMultiply(LoadFloat(first.position), blendVec), VectorMultiply(LoadFloat(second.position), otherVec));
+    StoreFloat(mixedPosition, mixed.position);
+    const SIMDVector mixedNormal = VectorAdd(VectorMultiply(LoadFloat(first.normal), blendVec), VectorMultiply(LoadFloat(second.normal), otherVec));
+    StoreFloat(mixedNormal, mixed.normal);
+    const SIMDVector mixedTangent = VectorAdd(VectorMultiply(LoadFloat(first.tangent), blendVec), VectorMultiply(LoadFloat(second.tangent), otherVec));
+    StoreFloat(mixedTangent, mixed.tangent);
+    const SIMDVector mixedUv = VectorAdd(VectorMultiply(LoadFloat(first.uv0), blendVec), VectorMultiply(LoadFloat(second.uv0), otherVec));
+    StoreFloat(mixedUv, mixed.uv0);
+    const SIMDVector mixedColor = VectorAdd(VectorMultiply(LoadFloat(first.color), blendVec), VectorMultiply(LoadFloat(second.color), otherVec));
+    StoreFloat(mixedColor, mixed.color);
     return mixed;
 }
 
 [[nodiscard]] bool NormalizeDeformVertex(CsgDeformVertex& vertex){
-    const f32 nx = vertex.normal.x;
-    const f32 ny = vertex.normal.y;
-    const f32 nz = vertex.normal.z;
-    const f32 normalLength = Sqrt(nx * nx + ny * ny + nz * nz);
-    if(normalLength > 0.000001f){
-        vertex.normal.x = nx / normalLength;
-        vertex.normal.y = ny / normalLength;
-        vertex.normal.z = nz / normalLength;
+    // SIMD normalize keeps xyz length/normalize on vector lanes. The degenerate
+    // fallback and w/handedness stay scalar so both preview and commit pick the
+    // identical deterministic branch.
+    constexpr f32 s_NormalizeEpsilonSq = 0.000001f * 0.000001f;
+    const SIMDVector normalVec = LoadFloat(vertex.normal);
+    const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
+    if(normalLengthSq > s_NormalizeEpsilonSq){
+        const SIMDVector normalized = Vector3Normalize(normalVec);
+        const f32 fallbackW = VectorGetW(normalVec);
+        vertex.normal.x = VectorGetX(normalized);
+        vertex.normal.y = VectorGetY(normalized);
+        vertex.normal.z = VectorGetZ(normalized);
+        vertex.normal.w = fallbackW;
     }
     else{
         vertex.normal.x = 0.0f;
         vertex.normal.y = 1.0f;
         vertex.normal.z = 0.0f;
     }
-    const f32 tx = vertex.tangent.x;
-    const f32 ty = vertex.tangent.y;
-    const f32 tz = vertex.tangent.z;
-    const f32 tangentLength = Sqrt(tx * tx + ty * ty + tz * tz);
-    if(tangentLength > 0.000001f){
-        const f32 handedness = vertex.tangent.w < 0.0f ? -1.0f : 1.0f;
-        vertex.tangent.x = tx / tangentLength;
-        vertex.tangent.y = ty / tangentLength;
-        vertex.tangent.z = tz / tangentLength;
+    const SIMDVector tangentVec = LoadFloat(vertex.tangent);
+    const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
+    if(tangentLengthSq > s_NormalizeEpsilonSq){
+        const SIMDVector normalized = Vector3Normalize(tangentVec);
+        const f32 handedness = VectorGetW(tangentVec) < 0.0f ? -1.0f : 1.0f;
+        vertex.tangent.x = VectorGetX(normalized);
+        vertex.tangent.y = VectorGetY(normalized);
+        vertex.tangent.z = VectorGetZ(normalized);
         vertex.tangent.w = handedness;
     }
     else{
@@ -605,27 +591,21 @@ struct CutLoopEdge{
     outNormal = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     if(loop.size() < 3u)
         return false;
-    f32 areaX = 0.0f;
-    f32 areaY = 0.0f;
-    f32 areaZ = 0.0f;
-    const Float3U& origin = vertices[loop[0u]].position;
+    // SIMD fan-area accumulation keeps edge subtract/cross/add on vector lanes.
+    const SIMDVector originVec = LoadFloat(vertices[loop[0u]].position);
+    SIMDVector areaVec = VectorZero();
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
-        const Float3U& first = vertices[loop[vertexIndex]].position;
-        const Float3U& second = vertices[loop[vertexIndex + 1u]].position;
-        const f32 edgeAx = first.x - origin.x;
-        const f32 edgeAy = first.y - origin.y;
-        const f32 edgeAz = first.z - origin.z;
-        const f32 edgeBx = second.x - origin.x;
-        const f32 edgeBy = second.y - origin.y;
-        const f32 edgeBz = second.z - origin.z;
-        areaX += edgeAy * edgeBz - edgeAz * edgeBy;
-        areaY += edgeAz * edgeBx - edgeAx * edgeBz;
-        areaZ += edgeAx * edgeBy - edgeAy * edgeBx;
+        const SIMDVector firstVec = LoadFloat(vertices[loop[vertexIndex]].position);
+        const SIMDVector secondVec = LoadFloat(vertices[loop[vertexIndex + 1u]].position);
+        const SIMDVector edgeA = VectorSubtract(firstVec, originVec);
+        const SIMDVector edgeB = VectorSubtract(secondVec, originVec);
+        areaVec = VectorAdd(areaVec, Vector3Cross(edgeA, edgeB));
     }
-    const f32 areaLength = Sqrt(areaX * areaX + areaY * areaY + areaZ * areaZ);
-    if(!(areaLength > 0.0000001f))
+    const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
+    if(!(areaLengthSq > 0.0000001f * 0.0000001f))
         return false;
-    outNormal = Float4(areaX / areaLength, areaY / areaLength, areaZ / areaLength, 0.0f);
+    const SIMDVector normalized = Vector3Normalize(areaVec);
+    outNormal = Float4(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), 0.0f);
     return true;
 }
 
@@ -642,30 +622,28 @@ struct CutLoopEdge{
         return false;
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return false;
-    f32 centerPosition[3u] = { 0.0f, 0.0f, 0.0f };
-    f32 centerUv[2u] = { 0.0f, 0.0f };
-    f32 centerColor[4u] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    // SIMD center accumulation keeps position/uv/color sums on vector lanes.
+    SIMDVector centerPositionVec = VectorZero();
+    SIMDVector centerUvVec = VectorZero();
+    SIMDVector centerColorVec = VectorZero();
     for(const u32 vertexIndex : loop){
         if(vertexIndex >= inOutVertices.size())
             return false;
         const CsgDeformVertex& vertex = inOutVertices[vertexIndex];
-        centerPosition[0u] += vertex.position.x;
-        centerPosition[1u] += vertex.position.y;
-        centerPosition[2u] += vertex.position.z;
-        centerUv[0u] += vertex.uv0.x;
-        centerUv[1u] += vertex.uv0.y;
-        centerColor[0u] += vertex.color.x;
-        centerColor[1u] += vertex.color.y;
-        centerColor[2u] += vertex.color.z;
-        centerColor[3u] += vertex.color.w;
+        centerPositionVec = VectorAdd(centerPositionVec, LoadFloat(vertex.position));
+        centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
+        centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
     }
-    const f32 loopSize = static_cast<f32>(loop.size());
+    const SIMDVector loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
+    const SIMDVector centerPositionAvg = VectorDivide(centerPositionVec, loopSizeVec);
+    const SIMDVector centerUvAvg = VectorDivide(centerUvVec, loopSizeVec);
+    const SIMDVector centerColorAvg = VectorDivide(centerColorVec, loopSizeVec);
     CsgDeformVertex center;
-    center.position = Float3U(centerPosition[0u] / loopSize, centerPosition[1u] / loopSize, centerPosition[2u] / loopSize);
+    StoreFloat(centerPositionAvg, center.position);
     center.normal = loopNormal;
     center.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
-    center.uv0 = Float2U(centerUv[0u] / loopSize, centerUv[1u] / loopSize);
-    center.color = Float4(centerColor[0u] / loopSize, centerColor[1u] / loopSize, centerColor[2u] / loopSize, centerColor[3u] / loopSize);
+    StoreFloat(centerUvAvg, center.uv0);
+    StoreFloat(centerColorAvg, center.color);
     if(!NormalizeDeformVertex(center))
         return false;
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());

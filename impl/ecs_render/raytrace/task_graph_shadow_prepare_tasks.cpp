@@ -50,8 +50,7 @@ bool ShadowPrepareGraphTask::record(
     ))
         return false;
     payload.outcome->ready = false;
-    // The compiled ConstantBuffer use established this packet's selector state before this thunk records. The
-    // retained descriptor-visible state is also ConstantBuffer, so normal graph frames need no native bridge.
+    // Selector state is ConstantBuffer; normal graph frames need no native bridge.
     const bool shadowResourcesPrepared = payload.targets->bindless.valid()
         && payload.raytracingSystem->recordPreflightShadowVisibilityResources(
             commandList,
@@ -67,14 +66,11 @@ bool ShadowPrepareGraphTask::record(
             payload.deferHybridSoftwareTail
         )
     ;
-    // The immutable material-context selector upload precedes this task and the compiler establishes its
-    // ConstantBuffer state before native preparation records.
+    // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
     if(!shadowResourcesPrepared)
         return false;
 
-    // These declarations, and the adjacent hybrid-tail ShaderResource reads when present, export every selected
-    // BLAS/SW-BVH input's exact graph-visible boundary state before the following Prefix packet is seeded.
-    // Route-local build work remains inside this callback.
+    // These declarations export BLAS/SW-BVH boundary states before the Prefix packet seeds.
     return true;
 }
 
@@ -98,7 +94,7 @@ void ShadowPrepareGraphTask::discarded(Payload& payload){
     if(!payload.raytracingSystem || !payload.outcome)
         return;
 
-    // Failed preparation keeps resource storage but invalidates the selected frame plan and every semantic cache.
+    // Failed preparation keeps storage but invalidates the frame plan and caches.
     payload.outcome->ready = false;
     payload.outcome->resourcesValid = false;
     if(payload.targets)
@@ -159,8 +155,7 @@ bool ShadowPrepareHybridSoftwareTailGraphTask::record(
     )
         return false;
 
-    // The tail may record SW-BVH timing scopes, so it shares the accepting packet's timing ticket even though
-    // its callback begins after the hardware preparation callback closed its own recording scope.
+    // The tail shares the accepting packet's timing ticket for SW-BVH scopes.
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
 
     return payload.raytracingSystem->recordPreflightHybridSoftwareTail(

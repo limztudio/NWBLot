@@ -127,15 +127,14 @@ private:
 
     struct UiTextureResource{
         Core::TextureHandle texture;
-        // Every dynamically-created ImGui texture (including the font atlas) has one persistent sampled-image
-        // heap entry. The heap retains the texture through its deferred-free quarantine, so this handle must be
-        // retired before the owning resource leaves m_textures.
+        // One persistent sampled-image heap entry per dynamic ImGui texture. The heap retains the texture through
+        // deferred-free quarantine, so retire this handle before the resource leaves m_textures.
         Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
-        // Newly-created retained textures have a native Unknown origin. Only an accepted full upload can publish
-        // their descriptor ShaderResource state for a later first read.
+        // New retained textures start at native Unknown; only an accepted full upload publishes ShaderResource
+        // state for the first read.
         bool initialUploadAccepted = false;
-        // A texture can be imported once per graph generation and then shared by its upload and UI draw resource
-        // declarations.  The generation check rejects an ID retained across a graph rebuild.
+        // One import per graph generation, shared by upload and draw declarations. The generation check rejects
+        // IDs retained across a rebuild.
         Core::GpuGraphResourceId taskGraphResource;
         u64 taskGraphGeneration = 0u;
         u32 width = 0;
@@ -154,9 +153,8 @@ private:
     };
     static_assert(sizeof(UiPushConstants) == sizeof(f32) * 4u + sizeof(u32) * 4u, "Ui push constants must match the ImGui shader block");
 
-    // A graph declaration must never leave late native recording to re-read ImGui's transient command arrays.
-    // Each visible draw captures its exact heap-selected texture and already-resolved source offsets; the retained
-    // texture handle keeps the declared sampled resource alive independently of the next ImGui frame.
+    // Graph declarations must not re-read ImGui's transient command arrays during late recording. Each draw
+    // captures its heap-selected texture and resolved offsets; the retained handle keeps the resource alive.
     struct TaskGraphDrawCommand{
         Core::TextureHandle texture;
         bool textureInitialUploadAccepted = false;

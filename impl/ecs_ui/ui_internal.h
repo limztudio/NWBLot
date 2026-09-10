@@ -40,11 +40,9 @@ inline constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 [[nodiscard]] inline Core::GpuTaskSchedulingHint UploadScheduling(const usize byteCount){
     const bool preferDedicatedTransport = byteCount >= s_TransferPreferredUploadMinimumBytes;
     Core::GpuTaskSchedulingHint scheduling;
-    // Tiny UI deltas stay on Graphics. A large font or texture refresh may use Transfer first and a dedicated
-    // Compute queue second. Imported UI resources are created for all graph upload classes, so large immutable
-    // updates may offload across explicitly opted-in same-class physical queues while the overlay remains on
-    // primary Graphics. Built-in graph uploads capture immutable blobs onto a fresh native command list, so
-    // independent packets may record together once their shared scene-output dependency is ready.
+    // Tiny UI deltas stay on Graphics. Large refreshes may use Transfer first, Compute second; built-in uploads
+    // capture immutable blobs onto a fresh command list, so independent packets record together once dependencies
+    // are ready.
     scheduling.cost = preferDedicatedTransport ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = preferDedicatedTransport;
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;

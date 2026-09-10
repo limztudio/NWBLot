@@ -16,8 +16,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stable canonical ownership for one VkQueue. Scheduler queues retain their own semantic mutex and take it before
-// hostMutex whenever both are required; presentation uses hostMutex directly because it has no scheduler state.
+// Canonical ownership for one VkQueue. Scheduler queues take their semantic mutex before hostMutex;
+// presentation uses hostMutex directly (no scheduler state).
 struct NativeQueueState final : NoCopy{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;

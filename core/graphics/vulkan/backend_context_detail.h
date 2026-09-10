@@ -39,8 +39,8 @@ using ScratchStringStream = AStringStream<Alloc::ScratchArena>;
 using ScratchStringSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, Alloc::ScratchArena>;
 
 static constexpr u64 s_BytesPerMiB = 1024ull * 1024ull;
-// HDR10 metadata mirrors the Rec.2020/ST.2084 presentation transform. Keep the mastering display values named so
-// a presentation-policy adjustment cannot silently leave Vulkan's advertised metadata behind.
+// HDR10 metadata mirrors the Rec.2020/ST.2084 transform. Keep values named so a policy change cannot leave
+// the advertised Vulkan metadata behind.
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryRed = { 0.708f, 0.292f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryGreen = { 0.170f, 0.797f };
 static constexpr VkXYColorEXT s_Hdr10DisplayPrimaryBlue = { 0.131f, 0.046f };
@@ -50,9 +50,8 @@ static constexpr f32 s_Hdr10MinimumLuminance = 0.005f;
 static constexpr f32 s_Hdr10MaximumFrameAverageLightLevel = 400.0f;
 static constexpr u32 s_Hdr10MetadataSwapChainCount = 1u;
 
-// Vulkan guarantees transfer support for Graphics and Compute families, but a Graphics family does not imply
-// Compute support. Keep the physical registry faithful to the family flags so cross-family Graphics queues cannot
-// receive Compute work merely because the primary Graphics family can execute it.
+// Transfer is guaranteed for Graphics/Compute families, but Graphics does not imply Compute. Keep the registry
+// faithful to family flags so a cross-family Graphics queue never receives Compute work by inheritance.
 [[nodiscard]] inline constexpr GpuQueueCapability::Mask QueueCapabilitiesForQueueFlags(
     const VkQueueFlags queueFlags
 )noexcept{

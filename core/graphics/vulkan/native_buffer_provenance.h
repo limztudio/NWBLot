@@ -17,9 +17,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Immutable facts supplied by the owner of an imported VkBuffer. The owner must report the values used to create
-// the buffer; a concurrent queue-family list is borrowed for this call and copied by Buffer. initialStateKnown
-// describes whether BufferDesc::initialState already reflects the buffer's current state.
+// Immutable facts from the owner of an imported VkBuffer; values must match creation. A concurrent queue-family
+// list is borrowed for the call and copied by Buffer.
 using NativeBufferProvenance = NativeResourceProvenance<VkBufferUsageFlags, VkBufferCreateFlags>;
 
 

@@ -113,29 +113,21 @@ struct MaterialPassDrawContext{
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
-    // Prepared graph tasks declare the receiver-event images before the material thunk records. Compatibility
-    // callers leave this false and retain their direct heap-image state setup.
+    // Graph tasks declare receiver-event images first; compat callers keep direct setup.
     bool csgReceiverSurfaceImageStatesGraphOwned = false;
-    // The opaque graph splits interval combine from its following material/cap sample task. That task lowers the
-    // required UAV handoff before this thunk records; direct and AVBOIT compatibility callers retain their bridge.
+    // Sample task lowers the UAV handoff first; compat callers keep their bridge.
     bool csgIntervalSampleImageStatesGraphOwned = false;
-    // The shared graph declares receiver/cutter SRVs and clip/interval-sample CBVs before prepared CSG thunks
-    // record. Direct and unprepared callers retain the native heap-buffer setup by leaving this false.
+    // Graph declares CSG SRVs/CBVs first; unprepared callers keep native setup.
     bool csgClipBufferStatesGraphOwned = false;
-    // Prepared graph tasks also declare the shared mesh-view CBV and material instance/typed SRVs. A frozen stream
-    // can independently retain every selected mesh-source SRV, while direct/unprepared draws keep local setup.
+    // Graph declares mesh-view/material SRVs; frozen streams may retain mesh-source SRVs.
     bool materialFrameStatesGraphOwned = false;
-    // The graph may also retain and declare every source buffer selected by this frozen draw stream. Generated
-    // emulation vertices remain local by default; an alias-free opaque split opts into the trailing graph handoff.
+    // Graph may retain source buffers; emulation vertices stay local by default.
     bool materialGeometryStatesGraphOwned = false;
-    // A split compute-emulation producer/raster pair receives this mesh's generated-vertex output in its required
-    // entry state from the graph (UAV for the producer and VertexBuffer for the raster consumer). Compatibility
-    // callers leave this false and retain the per-item native UAV-to-VertexBuffer handoff.
+    // Split pairs receive generated-vertex entry states from the graph; compat keeps native handoff.
     bool emulationOutputEntryStateGraphOwned = false;
-    // Prepared CSG draws consume the root-captured descriptor/buffer tuple. Regular paths leave this null because
-    // no CSG heap binding is part of their draw contract.
+    // Prepared CSG draws consume the root tuple; regular paths leave it null.
     const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    // Every material recording path consumes one immutable Mesh-published frame binding generation.
+    // Every material path consumes one immutable Mesh-published binding generation.
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
 };
 

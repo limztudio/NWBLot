@@ -437,17 +437,16 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     // Pre opens it; Combine closes it.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
-    // The split Occupancy handoff starts this interval in its compute producer and closes it in the raster consumer.
+    // Producer opens it; raster consumer closes it.
     Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;
-    // The split Extinction handoff starts this interval in its compute producer and closes it in the raster consumer.
+    // Producer opens it; raster consumer closes it.
     Optional<Core::GpuTimingMeasure> avboitExtinctionComputeEmulationTiming;
-    // The split Accumulation handoff starts this interval in its compute producer and closes it in the raster consumer.
+    // Producer opens it; raster consumer closes it.
     Optional<Core::GpuTimingMeasure> avboitAccumulationComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket deferredLightingTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket deferredCompositeTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket deferredPresentTimingTicket(m_graphics.gpuTiming());
-    // Publish the frame endpoint only after the terminal Graphics Present packet accepts. This also covers the
-    // serialized Graphics-only route when no dedicated compute family exists.
+    // Publish the endpoint only after Present accepts.
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_graphics.gpuTiming());
     Optional<Core::GpuTimingMeasure> asyncFinalTiming;
     const f32 meshViewAspectRatio = ECSRenderDetail::ResolveFramebufferAspectRatio(

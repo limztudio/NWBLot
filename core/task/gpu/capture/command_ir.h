@@ -59,10 +59,8 @@ namespace GpuCommandIrWireOpcode{
     };
 };
 
-// The stream is a same-host tooling format for now. The magic/version make a future reader reject incompatible
-// layouts before interpreting its POD records; remote or persistent cross-platform transport will add endian policy.
-// Its serialized identity intentionally remains graph+plan scoped so tooling may replay a captured plan. Recording
-// attempts guard only a live GpuCommandIrCapture object's mutation while native packets are being recorded.
+// Same-host tooling format for now; magic/version reject incompatible layouts before decoding. Identity stays
+// graph+plan scoped so tooling may replay a captured plan.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
 inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 3u;
 inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
@@ -74,8 +72,8 @@ struct GpuCommandIrStreamHeaderPrefix{
     u16 reserved = 0u;
 };
 
-// Version 3 separates declared graph handles from compiler-generated packet handles. Versions 1 and 2 used a
-// 32-byte header that cannot name the immutable packet plan, so this reader rejects them before decoding records.
+// v3 separates declared graph handles from compiler-generated packet handles. v1/v2 used a 32-byte header that
+// cannot name the packet plan, so the reader rejects them before decoding.
 struct GpuCommandIrStreamHeader{
     u32 magic = s_GpuCommandIrStreamMagic;
     u16 version = s_GpuCommandIrStreamVersion;
@@ -88,13 +86,12 @@ struct GpuCommandIrStreamHeader{
 
 struct GpuCommandIrHeader{
     GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::CopyBuffer;
-    // Total bytes occupied by this record, including this header. Every v1 opcode has one fixed-size payload.
+    // Total record bytes including this header. Every v1 opcode has one fixed-size payload.
     u16 byteSize = 0u;
 };
 
-// Every v3 built-in record targets the graph generation and immutable compiled-plan generation supplied by
-// GpuCommandIrStreamHeader. Queue generation remains command-local because it names a physical-device queue
-// lifetime rather than graph metadata.
+// Every v3 built-in record targets the stream header's graph and plan generations. Queue generation stays
+// command-local: it names a physical-device queue lifetime, not graph metadata.
 struct GpuCommandIrRecordContext{
     u32 taskIndex = Limit<u32>::s_Max;
     u32 packetIndex = Limit<u32>::s_Max;

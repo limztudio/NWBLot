@@ -357,9 +357,8 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_records, nextRecordCount))
         return false;
 
-    // Reserve the inspection record before the stream helper reserves and writes its bytes. Once both reservations
-    // return, the POD appends cannot allocate, so an allocation exception leaves both logical sequences unchanged
-    // and unwinds to the application boundary.
+    // Reserve the inspection record first: once both reservations succeed the POD appends cannot allocate, so a
+    // failure leaves both sequences unchanged.
     ContainerDetail::ReserveGrowingCapacity(m_records, nextRecordCount);
 
     if(!appendCommandBytes(record))

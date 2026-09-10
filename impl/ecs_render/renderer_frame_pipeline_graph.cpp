@@ -3427,7 +3427,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             avboitPreResourceUses.push_back(ReadBufferUse(csgReceiverRanges, occupancyReceiverRange));
             avboitPreResourceUses.push_back(ReadBufferUse(csgCutters, occupancyCutterRange));
             avboitPreResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            // The preceding full-resolution interval producer owns this state. Occupancy only samples it.
+            // Interval producer owns this state; occupancy only samples it.
             avboitPreResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
         }
     }
@@ -4358,11 +4358,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionResourceUses.push_back(ReadBufferUse(csgReceiverRanges, extinctionReceiverRange));
             extinctionResourceUses.push_back(ReadBufferUse(csgCutters, extinctionCutterRange));
             extinctionResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            // The full-resolution interval producer owns this sample state throughout all low-raster AVBOIT phases.
+            // Interval producer owns this sample state through all low-raster phases.
             extinctionResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
             if(extinctionCsgIntervalSampleImageStatesGraphOwned){
-                // The prepared transparent interval producer wrote these aliases. Extinction loads them through
-                // StorageImage descriptors, so the graph lowers its same-UAV handoff before this thunk records.
+                // Interval producer wrote these aliases; graph lowers the same-UAV handoff.
                 extinctionResourceUses.push_back(ReadTextureUse(
                     csgRemovedIntervalDepth,
                     csgRemovedIntervalSubresources,
@@ -4522,8 +4521,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         extinctionComputeEmulationScheduling.forceSubmissionBoundary = false;
         extinctionComputeEmulationScheduling.allowPacketMerge = true;
         extinctionComputeEmulationScheduling.mergeWithPrevious = true;
-        // The next raster consumes this producer's graph-owned UAV output and shares its Extinction timing ticket.
-        // Keep the immediate pair intact even if FrontierSafe sees Integration on a later Compute packet.
+        // Next raster consumes the producer UAV output and shares its timing ticket.
         extinctionComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc extinctionComputeEmulationDesc;
         extinctionComputeEmulationDesc

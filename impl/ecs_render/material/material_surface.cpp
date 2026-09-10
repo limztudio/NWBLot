@@ -407,9 +407,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     createdInfo.shadingModelId = material.shadingModelId();
     createdInfo.shadowTransmittanceModelId = material.shadowTransmittanceModelId();
-    // The material cook reserves UINT_MAX for explicit opaque stage shaders, which provide no project-owned
-    // surface hook. CSG caps must evaluate that hook through the typed material context, so those materials are
-    // deliberately kept out of CSG clipping instead of receiving an inferred/fallback cap color.
+    // UINT_MAX marks explicit opaque shaders without a surface hook; keep them out of CSG clipping.
     createdInfo.csgCapSurfaceDispatchAvailable = createdInfo.shadowTransmittanceModelId != Limit<u32>::s_Max;
     createdInfo.transparent = material.transparent();
     createdInfo.twoSided = material.twoSided();

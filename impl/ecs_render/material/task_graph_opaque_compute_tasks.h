@@ -61,9 +61,7 @@ struct OpaqueRegularComputeEmulationGraphTask{
 };
 
 
-// The small shared-output sequence keeps the compatibility order without hiding its alternating output states
-// inside one callback. Each graph instance records either one compute generation or one raster draw; raster phases
-// close dynamic rendering before the next generation phase can bind a compute pipeline.
+// Shared-output sequence keeps compat order; each instance records one phase.
 struct OpaqueRegularSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,

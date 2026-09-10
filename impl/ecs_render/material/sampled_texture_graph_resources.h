@@ -28,8 +28,7 @@ enum Enum : u8{
 };
 };
 
-// Appends resources in texture order and retains a successfully imported prefix on failure.
-// The graph and input handles remain owned by the caller; declaration views never escape this operation.
+// Append in texture order; retain the imported prefix on failure; views never escape.
 [[nodiscard]] SampledTextureImportResult::Enum ImportMaterialSampledTextureResources(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle* textures,

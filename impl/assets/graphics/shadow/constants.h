@@ -9,11 +9,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// NwbRtInstanceMaterial::flags bits shared by the CPU-built instance table and all ray-tracing shader consumers.
+// flags bits shared by CPU and ray-tracing shaders.
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
 
-// Shared light-ray construction policy. Hardware RayQuery and software BVH traversal include the same helper.
+// Shared by hardware RayQuery and software BVH traversal.
 #define NWB_SHADOW_RAY_MIN_DISTANCE 0.001
 #define NWB_SHADOW_DIRECTIONAL_RAY_MAX_DISTANCE 1.0e7
 #define NWB_SHADOW_LIGHT_DIRECTION_EPSILON 1.0e-5

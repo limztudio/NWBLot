@@ -26,10 +26,7 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cook-private NAME PREFIXES for the generated per-material AVBOIT accumulate/occupancy/extinction pixel shaders
-// (kept here, not in the graphics avboit/names.h, so the material cook does not depend on the graphics-asset header).
-// The cook builds "<prefix><material virtual path>" + stores the resolved Name on the cooked material; the renderer
-// binds via that stored Name (materialInfo.avboit{Accumulate,Occupancy,Extinction}PixelShader), never re-deriving here.
+// Cook-private AVBOIT PS prefixes; the renderer binds the stored Name.
 static constexpr AStringView s_AvboitAccumulatePixelShaderGeneratedPrefix("generated/avboit_accumulate_ps/");
 static constexpr AStringView s_AvboitOccupancyPixelShaderGeneratedPrefix("generated/avboit_occupancy_ps/");
 static constexpr AStringView s_AvboitExtinctionPixelShaderGeneratedPrefix("generated/avboit_extinction_ps/");
@@ -126,8 +123,7 @@ bool EmitMaterialPixelShadersImpl(
             return false;
         }
 
-        // The generated pixel shader: engine PS authoring + this material's typed .bind (by interface virtual
-        // path) + its resolved surface hook (by absolute path). Mesh stage is the shared engine mesh shader.
+        // Engine authoring + .bind + surface hook; mesh stage is shared.
         CookString generatedSource(arena);
         generatedSource += "// Generated per-material G-buffer pixel shader: engine pixel-shader authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";
@@ -188,14 +184,7 @@ bool EmitMaterialPixelShadersImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared body for the three per-material AVBOIT pass-PS generators (accumulate / occupancy / extinction). All three
-// generate ONE PS per TRANSPARENT `surface`-authored material that includes the engine pass-authoring header + the
-// material's typed .bind + its resolved surface hook, so all three read this material's SAME shader-decided
-// surface.renderCoverage. They differ only in the generated-directory leaf, the included authoring header, the log label,
-// the generated-name prefix, and which entry name field records the identity -- threaded through here. Unlike the
-// G-buffer PS these are NOT material stage shaders; their generated names are stored on the cooked material for the
-// transparent draw. Opaque materials are skipped. ParseMaterialMeta rejects
-// transparent/refractive explicit-stage materials because they have no project-owned AVBOIT/shadow optical hook.
+// Shared body for the three AVBOIT pass-PS generators; opaque materials are skipped.
 static bool EmitMaterialAvboitPassPixelShadersImpl(
     CookArena& arena,
     const Path& cacheDirectory,
@@ -236,9 +225,7 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
             return false;
         }
 
-        // The generated pass pixel shader: engine AVBOIT pass authoring + this material's typed .bind (by interface
-        // virtual path) + its resolved surface hook (by absolute path) -- the same .bind + .surface pair the
-        // G-buffer PS uses, so the transparent pass reads the material's own shader-decided surface.renderCoverage.
+        // Same .bind + .surface pair as the G-buffer PS.
         CookString generatedSource(arena);
         generatedSource += "// Generated per-material AVBOIT pass pixel shader: engine AVBOIT pass authoring + this material's\n";
         generatedSource += "// typed .bind + its surface hook. The material declares only its 'surface' fragment; the cook\n";

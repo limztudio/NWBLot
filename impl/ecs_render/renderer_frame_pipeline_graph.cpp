@@ -288,8 +288,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
     resetDeferredTaskGraphRuntime();
-    // This renderer-owned declaration/build attempt starts after stale graph artifacts are discarded and ends
-    // immediately before core compilation, whose total duration remains separate.
+    // Declaration runs between artifact discard and core compilation.
     const Timer declarationBegin = TimerNow();
 
     const auto& device = m_graphics.getDevice();
@@ -338,10 +337,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )
         return;
 
-    // Preflight has already frozen the exact visible HW/SW mesh tables. Keep retained handles here rather than the
-    // raw descriptor-table pointers, import every physical buffer once, and fan the same IDs out to all packets.
-    // A fresh/replaced buffer starts from its creation state; a buffer normalized by an accepted earlier Prefix is
-    // explicitly imported as SRV so the first packet never claims a stale state.
+    // Preflight froze the mesh tables; import each buffer once and fan out IDs.
     Core::Alloc::ScratchArena traceGeometryScratchArena(RendererArenaScope::s_TaskGraphArena);
     if(!m_raytracingSystem.freezePreparedShadowTraceGeometryBuffers(traceGeometryScratchArena)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow-trace geometry buffers"));
@@ -370,15 +366,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
-    // These outputs begin with a graph-owned write. Fresh managed subresources lower from Undefined; accepted retained
-    // state is restored to descriptor state at packet close and reused by StateTracker on later packets.
+    // Outputs begin with a graph-owned write; fresh resources start Undefined.
     const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);
         desc.setInitialState(Core::ResourceStates::Unknown);
         return m_deferredLightingTaskGraph.importTexture(texture, desc);
     };
-    // A clear owns the old AVBOIT contents and may begin from Undefined. A no-clear frame instead imports the
-    // retained Common state restored by the preceding accepted command lists.
+    // Clears may start Undefined; no-clear frames import retained Common.
     const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return clearAvboitTargets
             ? importFirstWriteTexture(texture, identity, label)

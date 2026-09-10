@@ -36,13 +36,6 @@ namespace ReflectionDebugView{
 };
 
 struct ReflectionSettings{
-    ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Hybrid;
-    ReflectionDebugView::Enum debugView = ReflectionDebugView::None;
-    bool diagnosticsEnabled = false;
-    // Stable smooth Hybrid tiles may bypass proven screen misses. Default remains off until measured.
-    bool screenFeedbackEnabled = false;
-    bool temporalEnabled = true;
-    bool spatialFilterEnabled = true;
     u32 temporalMaxSamples = 16u;
     u32 samplingSeed = 0u;
     u32 spatialRadius = 2u;
@@ -61,6 +54,13 @@ struct ReflectionSettings{
     // Linear HDR radiance for ordinary exterior misses. Unresolved optical paths retain only accumulated radiance.
     Float3U environmentTop = Float3U(0.15f, 0.2f, 0.3f);
     Float3U environmentBottom = Float3U(0.04f, 0.04f, 0.04f);
+    ReflectionTraceMode::Enum traceMode = ReflectionTraceMode::Hybrid;
+    ReflectionDebugView::Enum debugView = ReflectionDebugView::None;
+    bool diagnosticsEnabled = false;
+    // Stable smooth Hybrid tiles may bypass proven screen misses. Default remains off until measured.
+    bool screenFeedbackEnabled = false;
+    bool temporalEnabled = true;
+    bool spatialFilterEnabled = true;
 };
 
 // Settings are an external control boundary. Reject invalid values before they reach shaders or history state.

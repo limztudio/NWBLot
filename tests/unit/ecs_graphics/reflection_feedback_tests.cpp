@@ -28,7 +28,12 @@ using namespace NWB::Impl;
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value){
-    return Core::QueueSubmissionToken{Core::CommandQueue::Graphics, value, 0u, 1u};
+    return Core::QueueSubmissionToken{
+        .value = value,
+        .queue = Core::CommandQueue::Graphics,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 1u,
+    };
 }
 
 void Accept(ReflectionFeedbackState& state, const ReflectionFeedbackPlan& plan, const bool hardwareReady = true){

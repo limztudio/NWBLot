@@ -90,18 +90,20 @@ public:
     [[nodiscard]] bool accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
 
 private:
-    mutable Futex m_mutex;
+    // Field order is alignment-descending: the 8-byte stamp/generation lanes lead, the 4-byte token/indices share
+    // one lane, and the 2-byte device generation packs with the 1-byte flags plus the 4-byte mutex (208 -> 200).
     ReflectionSceneContentStamp m_stamp;
     ReflectionSettings m_settings;
-    Core::QueueSubmissionToken m_acceptedToken;
     u64 m_generation = 1u;
     u64 m_nextSequence = 1u;
     u64 m_acceptedSequence = 0u;
     u64 m_reservedSequence = 0u;
     u64 m_epoch = 0u;
     u64 m_startGraphicsFrame = 0u;
+    Core::QueueSubmissionToken m_acceptedToken;
     u32 m_nextProbeIndex = 0u;
     u32 m_acceptedBank = 0u;
+    mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
     bool m_enabled = false;
     bool m_eligible = false;

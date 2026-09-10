@@ -54,8 +54,8 @@ using RayTracingOpticalSceneUploadHandle = RefCountPtr<RayTracingOpticalSceneUpl
 
 struct RayTracingOpticalSceneSnapshot{
     Core::BufferHandle buffer;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
     RayTracingOpticalSceneUploadHandle upload;
+    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
     u32 transparentCount = 0u;
     bool boundsComplete = false;
 

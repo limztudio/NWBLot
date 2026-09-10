@@ -35,11 +35,13 @@ namespace ReflectionHistoryResetReason{
 };
 
 // A completed accepted reflection copy, independently of whether later presentation work succeeded.
+// Field order is size-descending: the lone 4-byte frame index joins the width/height/budget lane so the 8-byte
+// graphics frame index no longer strands 4 bytes of padding (256 -> 248 bytes).
 struct ReflectionStatistics{
     u64 sequence = 0u;
     u64 generation = 0u;
-    u32 frameIndex = 0u;
     u64 graphicsFrameIndex = 0u;
+    u32 frameIndex = 0u;
     u32 width = 0u;
     u32 height = 0u;
     u32 requestedHardwareBudget = 0u;

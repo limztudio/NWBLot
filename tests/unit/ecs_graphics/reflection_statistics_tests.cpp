@@ -44,7 +44,12 @@ struct StatisticsContext{
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 20u){
-    return Core::QueueSubmissionToken{Core::CommandQueue::Graphics, value, 0u, 7u};
+    return Core::QueueSubmissionToken{
+        .value = value,
+        .queue = Core::CommandQueue::Graphics,
+        .physicalQueueIndex = 0u,
+        .deviceGeneration = 7u,
+    };
 }
 
 struct LeaseTask{

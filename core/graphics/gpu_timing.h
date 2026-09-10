@@ -31,13 +31,13 @@ class GpuTaskScheduler;
 
 struct GpuTimingScope{
     Name scopeName = NAME_NONE;
-    u32 index = Limit<u32>::s_Max;
-    // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
-    u32 epoch = 0u;
     u64 reservation = 0u;
     TimerQueryRecordingToken timerQueryRecording;
     GpuTimingSubmissionTicket* submissionTicket = nullptr;
     usize submissionPublicationIndex = Limit<usize>::s_Max;
+    u32 index = Limit<u32>::s_Max;
+    // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
+    u32 epoch = 0u;
 
     [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
@@ -107,20 +107,20 @@ inline constexpr bool operator!=(
 inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
 
 struct GpuTimingSample{
-    Name scopeName = NAME_NONE;
     u64 sourceFrameIndex = 0u;
     f64 durationSeconds = 0.0;
+    Name scopeName = NAME_NONE;
     // Exact accepted native queue for every attributed query outcome. This remains valid when the backend exposes
     // duration timestamps but cannot expose an absolute cross-submission comparable range.
-    GpuPhysicalQueueId physicalQueue;
     GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
+    GpuComparableTimestampRange comparableRange;
+    GpuPhysicalQueueId physicalQueue;
     // False retires a previously attributed query whose value became unavailable for publication, such as after a
     // capture epoch change. durationSeconds is meaningful only when this is true.
     bool published = false;
     // Valid only for a published result whose backend queue exposes absolute comparable timestamps. Unpublished
     // retirement notifications retain physicalQueue but deliberately keep this range invalid even when raw query
     // data existed.
-    GpuComparableTimestampRange comparableRange;
 };
 
 // The listener context belongs to its caller. Callbacks run without the registration or query-state locks; a
@@ -195,7 +195,6 @@ namespace GpuTimingScopeSkipReason{
 
 
 struct GpuTimingRecorderStatistics{
-    u16 deviceGeneration = 0u;
     u64 preparedScopeCount = 0u;
     u64 requestedQueryCount = 0u;
     u64 materializedQueryCount = 0u;
@@ -210,6 +209,7 @@ struct GpuTimingRecorderStatistics{
     u64 beginFailureCount = 0u;
     u64 sampleListenerFailureCount = 0u;
     u64 skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
+    u16 deviceGeneration = 0u;
     bool queryCollectionEnabled = false;
     bool timingSinkEnabled = false;
     bool feedbackCollectionEnabled = false;
@@ -252,17 +252,17 @@ private:
 
     struct QueryRecord{
         TimerQueryHandle query;
-        GpuPhysicalQueueId physicalQueue;
         QueueSubmissionToken acceptedSubmission;
         QueueSubmissionToken frameResetSubmission;
-        GpuPhysicalQueueId frameResetRecordingQueue;
         u64 frameIndex = 0u;
         GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
-        u32 epoch = 0u;
         u64 reservation = 0u;
         u64 publicationGeneration = 0u;
         u64 performanceCaptureEpoch = 0u;
         u64 retirementSubscriptionIdentityLimit = 0u;
+        GpuPhysicalQueueId physicalQueue;
+        GpuPhysicalQueueId frameResetRecordingQueue;
+        u32 epoch = 0u;
         CommandQueue::Enum queueClass = CommandQueue::kCount;
         QueryState state = QueryState::Available;
         // A recovery endpoint completes an accepted begin after a later frame packet was rejected. The query must
@@ -357,8 +357,6 @@ private:
 
 private:
     QueryVector m_queries;
-    Name m_scopeName = NAME_NONE;
-    Perf::TimingScopeId m_timingScope;
     u64 m_nextReservation = 0u;
     u64 m_publicationGeneration = 1u;
     usize m_pendingAcceptedQueryCount = 0u;
@@ -369,6 +367,8 @@ private:
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
     u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
+    Name m_scopeName = NAME_NONE;
+    Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
     bool m_captureEnabled = false;
 };

@@ -90,11 +90,11 @@ private:
     [[nodiscard]] Slot* matchingSlot(const ReflectionStatisticsReservationKey& key)noexcept;
 
 private:
-    mutable Futex m_mutex;
     Slot m_slots[s_SlotCount];
     ReflectionStatistics m_latest;
     u64 m_generation = 1u;
     u64 m_nextSequence = 1u;
+    mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
 };
 

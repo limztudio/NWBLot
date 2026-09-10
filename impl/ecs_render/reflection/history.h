@@ -71,7 +71,8 @@ public:
     void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
 
 private:
-    mutable Futex m_mutex;
+    // Field order is alignment-descending: the 8-byte stamp/generation lanes lead and the 4-byte mutex plus the
+    // 2-byte device generation pack with the 1-byte flags (200 -> 192 bytes).
     ReflectionSceneContentStamp m_stamp;
     ReflectionSettings m_settings;
     u64 m_generation = 1u;
@@ -83,6 +84,7 @@ private:
     u32 m_nextSampleIndex = 0u;
     u32 m_sampleCount = 0u;
     u32 m_acceptedBank = 0u;
+    mutable Futex m_mutex;
     u16 m_deviceGeneration = 0u;
     bool m_eligible = false;
     bool m_hardwareReady = false;

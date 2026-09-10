@@ -586,8 +586,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     );
 
 
-// The CSG working set (peel targets, receiver-event/span images, removed-interval outputs) is declared by
-    // the graph; the wider CSG target lifecycle stays in native compatibility producers.
+    // The CSG working set (peel targets, receiver-event/span images, removed-interval outputs) is declared by the graph; the wider CSG target lifecycle stays in native compatibility producers.
     const Core::GpuGraphResourceId csgCapBackNormal = importTexture(
         deferredTargets.csgCapBackNormal,
         Name("render.deferred.csg_cap_back_normal"),
@@ -779,9 +778,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
 
 
-// The optional history copy is declared in this graph after Present, but records only after its accepted
-    // producer snapshots exist. Active lighting samples the history resources above, so reuse those exact graph
-    // identities for copy destinations and import only the current producer images that are otherwise absent.
+    // The optional history copy is declared in this graph after Present, but records only after its accepted producer snapshots exist. Active lighting samples the history resources above, so reuse those exact graph identities for copy destinations and import only the current producer images that are otherwise absent.
     Core::GpuGraphResourceId historyCopyShadowVisibility;
     Core::GpuGraphResourceId historyCopyCausticIrradiance;
     Core::GpuGraphResourceId historyCopySurfelIrradiance;
@@ -822,9 +819,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-// AVBOIT shares the deferred graph's G-buffer and current bindless imports. Its private targets remain
-    // distinct resources, while the compiler owns every producer/consumer state seed through Lighting and
-    // Composite on both the live and active-lagged routes.
+    // AVBOIT shares the deferred graph's G-buffer and current bindless imports. Its private targets remain distinct resources, while the compiler owns every producer/consumer state seed through Lighting and Composite on both the live and active-lagged routes.
     const Core::GpuGraphResourceId avboitLowRaster = importAvboitTexture(
         deferredTargets.avboit.lowRasterTarget,
         Name("render.avboit.low_raster"),
@@ -1124,7 +1119,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-// Effects start from the accepted graphics-prefix packet and remain compiler-owned through the deferred suffix.
+    // Effects start from the accepted graphics-prefix packet and remain compiler-owned through the deferred suffix.
     // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
     if(!declareDeferredShadowVisibilityTask(
         deferredTargets,
@@ -1222,9 +1217,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
 
 
-// Hardware Caustics belongs to this graph so the live irradiance producer/consumer transition is compiler-owned.
-    // It is declared before Lighting: declaration order establishes the live current-irradiance RAW edge, while the
-    // lagged route uses distinct current/history targets and intentionally has no Hardware-to-Lighting dependency.
+    // Hardware Caustics belongs to this graph so the live irradiance producer/consumer transition is compiler-owned.
+    // It is declared before Lighting: declaration order establishes the live current-irradiance RAW edge, while the lagged route uses distinct current/history targets and intentionally has no Hardware-to-Lighting dependency.
     if(declaresHardwareCaustics){
         const Core::GpuGraphResourceId causticAccumulator = importTexture(
             deferredTargets.causticAccumulator,
@@ -2063,9 +2057,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitCsgIntervalCombinePayload.csgResources = csgResources;
 
 
-// Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material
-    // and CSG buffers are intentionally overwritten by the later occupancy/extinction/accumulation compatibility
-    // paths, so this snapshot applies only to the receiver-surface interval work immediately before occupancy.
+    // Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material and CSG buffers are intentionally overwritten by the later occupancy/extinction/accumulation compatibility paths, so this snapshot applies only to the receiver-surface interval work immediately before occupancy.
     Core::GpuTaskId transparentCsgUploadTask = m_graphicsPrefixTask;
     Core::Alloc::ScratchArena transparentCsgMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;
@@ -2407,10 +2399,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-// Prepared transparent CSG uses the same persistent interval values and peel targets as opaque CSG. Place its
-    // frozen rect clear immediately after immutable stream uploads so the graph owns CopyDest -> UAV ordering,
-    // then declare the CSG StorageImage working set on the producer task. An unprepared compatibility path
-    // continues to call the legacy all-target helper.
+    // Prepared transparent CSG uses the same persistent interval values and peel targets as opaque CSG. Place its frozen rect clear immediately after immutable stream uploads so the graph owns CopyDest -> UAV ordering,
+    // then declare the CSG StorageImage working set on the producer task. An unprepared compatibility path continues to call the legacy all-target helper.
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         Core::GpuTaskSchedulingHint transparentCsgIntervalClearScheduling;
         transparentCsgIntervalClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -3171,9 +3161,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-// Preserve the native order: phase-local material/CSG uploads first, then the serial AVBOIT target values, then
-    // occupancy. Each value now records as a typed built-in clear, so the graph owns all nine CopyDest operations
-    // instead of a custom native thunk hiding them behind one broad resource-use declaration.
+    // Preserve the native order: phase-local material/CSG uploads first, then the serial AVBOIT target values, then occupancy. Each value now records as a typed built-in clear, so the graph owns all nine CopyDest operations instead of a custom native thunk hiding them behind one broad resource-use declaration.
     Core::GpuTaskId avboitClearTask = occupancyUploadTask;
     if(clearAvboitTargets){
         Core::GpuTaskSchedulingHint avboitClearScheduling;
@@ -4492,8 +4480,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
 
 
-// Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the
-    // immediate Extinction dependency; replacing this anchor would hide a broken upload-to-producer handoff.
+    // Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the immediate Extinction dependency; replacing this anchor would hide a broken upload-to-producer handoff.
     const Core::GpuTaskId extinctionStreamTask = extinctionUploadTask;
     if(extinctionStreamsUploaded)
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
@@ -5344,7 +5331,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
 
 
-// accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
+    // accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
     accumulationResourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
     accumulationResourceUses.push_back(ReadUse(avboitTransmittance));
     accumulationResourceUses.push_back(ReadUse(avboitDepthWarp));
@@ -5817,7 +5804,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
 
 
-// Live Lighting joins Shadow/Software, Surfel GI, AVBOIT, and Hardware Caustics through internal graph edges.
+    // Live Lighting joins Shadow/Software, Surfel GI, AVBOIT, and Hardware Caustics through internal graph edges.
     // Active lagged Lighting instead reads history and stays independent from the current-frame producers.
     const Core::GpuTaskId hardwareLightingDependencies[] = {
         m_deferredShadowVisibilityTask,

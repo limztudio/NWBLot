@@ -2378,8 +2378,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // BackendContext turns this into a submission-local binary signal only when a swap-chain image is active.
-    // Empty hooks retain the compatibility present() path for non-windowed/direct render callers.
+    // Empty hooks keep the compatibility present() path.
     const Core::QueueSubmissionPreSubmitHook framePresentationSignal = m_graphics.claimFramePresentationSignal();
     const Core::GpuTaskGraphTaskSubmissionHook terminalPresentationSubmissionHooks[] = {
         Core::GpuTaskGraphTaskSubmissionHook{
@@ -2608,9 +2607,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     }
 
     if(m_deferredSurfelGiCounterReadbackTask.valid()){
-        // The readback has no normal-frame consumer, so record it only after Present. Its Counter source imports the
-        // compiler-retained Surfel-GI packet state through the declared dependency; recording needs no manual state
-        // seed or synthetic queue wait, while the resulting tail state is retained for the next frame.
+        // No normal-frame consumer; record only after Present.
         const bool readbackTailAvailable =
             finalPresentationSubmissionToken.valid()
             && m_deferredLightingTaskGraphValid
@@ -2634,8 +2631,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             const Core::BufferHandle readbackCounterBuffers[] = {
                 rayTracingSurfelResources.counterBuffer,
             };
-            // Keep the filtered final-state candidate private until the Transfer task accepts, so a rejected
-            // readback cannot replace the last accepted Surfel-GI counter state.
+            // Keep the candidate private until Transfer accepts.
             struct SurfelCounterReadbackContext{
                 Core::Alloc::ScratchArena& scratchArena;
                 RendererFramePipeline* renderer = nullptr;
@@ -2727,23 +2723,19 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 return;
             }
             else{
-                // The accepted callback publishes only after retained state commits, keeping CPU polling tied to
-                // the selected physical transport rather than the preceding Surfel-GI packet.
+                // Publish only after retained state commits.
                 NWB_ASSERT(m_raytracingSystem.surfelCountReadbackSubmissionMatches(readbackSubmissionToken));
             }
         }
     }
 
     if(requestsLaggedLightingHistoryCapture && !captureLaggedLightingHistory){
-        // The optional tail could not be built, but Present already completed through the durable deferred graph.
-        // Match the former standalone-copy fallback by forcing the next frame through bootstrap.
+        // Present already completed; force next frame through bootstrap.
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred lagged lighting-history tail was unavailable; reverting to current-frame lighting"));
         invalidateLaggedLightingHistorySubmission();
     }
     else if(captureLaggedLightingHistory){
-        // The deferred graph's terminal history-copy task depends on Present internally. Its retained producer
-        // snapshots are graph-owned state seeds, so the late runtime helper needs no renderer packet-state binding.
-        // The task remains outside normal execution because its publication is conditional on accepted presentation.
+        // The history copy depends on Present; publication needs accepted presentation.
         if(
             !finalPresentationSubmissionToken.valid()
             || !m_deferredLightingTaskGraphValid

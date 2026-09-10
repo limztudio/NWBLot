@@ -64,7 +64,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
     MaterialPassDrawItems drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.plan.materialize(drawItems, csgFrameData);
-    // The output set imported by the graph is immutable. Reject a corrupted retained plan before recording.
+    // The imported output set is immutable; reject a corrupted plan.
     if(!payload.plan.matches(scratchArena))
         return false;
 
@@ -99,8 +99,7 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
         csgViewportState,
-        // Receiver-event images are raster-only outputs.  The subsequent G-buffer task owns their UAV state;
-        // this compute producer uses the CSG clip bindings but must not claim or transition those images.
+        // Receiver-event images are raster-owned; do not claim them here.
         true,
         false,
         true,
@@ -153,7 +152,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
     MaterialPassDrawItems drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.plan.materialize(drawItems, csgFrameData);
-    // The graph imported these exact output handles and descriptor slots. Reject a corrupted retained plan.
+    // Reject a corrupted retained plan.
     if(!payload.plan.matches())
         return false;
 
@@ -188,8 +187,7 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         graphics.getDevice(),
         commandList
     );
-    // The scope crosses the following raster callback, so close its marker in this producer before command-list
-    // finalization. The terminal sample callback owns finishTiming/discard.
+    // Close the marker here; the sample callback owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(payload.opaqueCsgTiming))
         return false;
     const MaterialPassDrawContext drawContext{

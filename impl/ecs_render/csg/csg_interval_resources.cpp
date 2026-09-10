@@ -43,8 +43,7 @@ namespace CsgIntervalDetail{
 
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
-    // All CSG images and selector payloads are global-heap resources.  The standalone dispatch only needs this
-    // existing push range to select its CSG context UniformBuffer and mesh view.
+    // Push range selects the CSG context and mesh view; the rest is heap-owned.
     bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);

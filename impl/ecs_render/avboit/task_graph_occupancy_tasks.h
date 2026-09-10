@@ -81,9 +81,7 @@ struct AvboitPreGraphTask{
 };
 
 
-// Occupancy's alias-free compute-emulation stream is independently frozen after the phase's final target clear.
-// The regular and CSG-only variants are mutually exclusive: their existing Occupancy callback remains the shared
-// raster endpoint, while mixed or shared-output streams retain the established local bridge.
+// Occupancy emulation streams freeze after target clear; regular and CSG stay exclusive.
 struct AvboitOccupancyComputeEmulationGraphTask{
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
@@ -160,8 +158,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
 };
 
 
-// Occupancy follows the interval producer in the same AVBOIT packet, but has an independent immutable stream:
-// each transparent raster phase overwrites the shared material and CSG buffers with phase-local instance indices.
+// Occupancy follows the interval producer with its own immutable stream.
 struct AvboitOccupancyGraphTask{
     struct Payload{
         RendererAvboitSystem* avboitSystem = nullptr;
@@ -220,9 +217,7 @@ struct AvboitDepthWarpGraphTask{
 };
 
 
-// Extinction's alias-free compute-emulation stream is independently frozen after the prior AVBOIT phase uploads.
-// The regular and CSG-only variants are mutually exclusive: the existing Extinction callback remains the shared
-// raster endpoint, while mixed or shared-output streams retain the established local bridge.
+// Extinction emulation streams freeze after prior uploads; regular and CSG stay exclusive.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

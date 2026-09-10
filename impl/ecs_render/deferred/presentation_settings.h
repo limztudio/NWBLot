@@ -25,9 +25,7 @@ namespace PresentationToneMap{
     };
 };
 
-// Scene lighting, transparency, refraction, and reflections always exchange linear radiance. Exposure applies at
-// presentation for both output formats. Tone map and shoulder select the SDR display transform; HDR10 retains its
-// calibrated reference-white/mastering-peak shoulder and PQ encoding instead of applying a second SDR curve.
+// Stages exchange linear radiance; exposure applies at presentation.
 struct PresentationSettings{
     PresentationToneMap::Enum toneMap = PresentationToneMap::Reinhard;
     f32 exposure = 1.f;

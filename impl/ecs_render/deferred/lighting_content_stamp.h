@@ -22,7 +22,7 @@ namespace ECSRenderDetail{
     struct SceneLightGpuData;
 };
 
-// Consumes the exact immutable upload payload, including direct value edits and light ordering/selection.
+// Hashes the immutable upload payload, including edits and light order.
 [[nodiscard]] u64 ComputeSceneLightingContentHash(
     const ECSRenderDetail::SceneShadingGpuData& shading,
     const ECSRenderDetail::SceneLightGpuData* lights,

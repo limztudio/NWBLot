@@ -96,15 +96,7 @@ static void ClearCsgIntervalTargets(
     const CsgIntervalSubresources& subresources,
     const Core::Rect& csgClearRect
 ){
-    // The CSG interval targets are per-pixel append buffers. Every consumer bounds its reads by a
-    // per-pixel counter (receiver-event / span / removed-interval counts) or by the cutter-interval
-    // id, and the span/removed-interval counts and flags are rewritten for every work-region pixel by
-    // their producing compute pass. Only state that accumulates across a frame needs resetting:
-    //  - receiver event count is atomically incremented from zero by the surface pass (its overflow is
-    //    derived later from count > layer budget, so no separate event-flags target is needed),
-    //  - interval id is written sparsely by the peel pass (unwritten layers must read back as empty).
-    // The bulk depth/normal/data layers and the span/removed counters are written before they are
-    // read, so clearing them is wasted bandwidth (this clear dominated the CSG frame cost).
+    // CSG interval targets are per-pixel append buffers; only accumulating state needs reset.
     commandList.clearTextureRectUInt(*targets.csgIntervalId, subresources.peel, csgClearRect, 0u);
     commandList.clearTextureRectUInt(*targets.csgReceiverEventCount, subresources.receiverEventCounter, csgClearRect, 0u);
 }

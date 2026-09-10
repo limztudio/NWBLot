@@ -7,10 +7,12 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 CsgDeformViability CheckCsgDeformCutsViability(
     Core::Alloc::ScratchArena& scratchArena,
@@ -95,8 +97,7 @@ bool CommitCsgDeformCuts(
     outStats = CsgDeformStats{};
     outVertices.clear();
     outTriangles.clear();
-    // Commit reuses the preview entry point so both always observe the same
-    // rebuild, viability classifier, and stats for identical inputs.
+    // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
     CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
     CsgDeformStats previewStats{};
@@ -128,6 +129,7 @@ bool CommitCsgDeformCuts(
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_IMPL_END
 

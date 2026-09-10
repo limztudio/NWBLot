@@ -58,13 +58,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
     if(g_NwbDeferredCompositePushConstants.refractionResources != 0u){
-        const float3 frontColor = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb;
-        const float frontExtinction = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r;
-        const float frontTransmittance = exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
-        const float4 transmitted = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel);
-        compositeColor = half3(transmitted.a > 0.0
-            ? frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)
-            : frontColor + float3(transparentColorAccum.rgb) + float3(opaqueColor) * frontTransmittance * float(totalTransmittance));
+        // Front-layer color and its (0, 1) bounded extinction/transmittance factor are LDR color math, matching the half composite path.
+        const half3 frontColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb);
+        const half frontExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r);
+        const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
+        const half4 transmitted = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel));
+        const half3 transmittedColor = transmitted.a > half(0.0h)
+            ? frontColor + frontTransmittance * (transmitted.rgb + half3(glassReflection.rgb))
+            : frontColor + transparentColorAccum.rgb + opaqueColor * frontTransmittance * totalTransmittance;
+        compositeColor = transmittedColor;
     }
     if(glassReflection.a > 0.0)
         reflectionSource = glassReflection.a;

@@ -35,9 +35,11 @@ float2 nwbReflectionSample2D(const uint2 pixel, const uint2 sampleBase, const ui
 }
 
 float3 nwbReflectionSchlick(const float3 f0, const float viewHalfCosine){
-    const float complement = 1.0 - saturate(viewHalfCosine);
-    const float square = complement * complement;
-    return f0 + (1.0 - f0) * square * square * complement;
+    // The Schlick factor is a (0, 1) bounded color multiplier, so half arithmetic is sufficient here.
+    const half complement = half(1.0 - saturate(viewHalfCosine));
+    const half square = complement * complement;
+    const half3 fresnel = (half3(1.0h) - half3(f0)) * square * square * complement;
+    return f0 + float3(fresnel);
 }
 
 

@@ -98,7 +98,7 @@ bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
 
 
 // 5x5 B-spline a-trous kernel.
-static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
+static const half s_NwbShadowResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
 
 #define NWB_SHADOW_RESOLVE_NORMAL_POWER 8.0
 
@@ -112,9 +112,10 @@ static const float s_NwbShadowResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 /
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE (2 * NWB_SHADOW_RESOLVE_GUIDED_RADIUS + 1)
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT (NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)
 
-float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
+half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
+    // The normal-agreement weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
     const float3 tn = nwbOctDecodeNormal(float2(tapOct));
-    return pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER);
+    return half(pow(max(dot(centerNormal, tn), 0.0), NWB_SHADOW_RESOLVE_NORMAL_POWER));
 }
 
 // Use temporal variance only after enough history samples.
@@ -127,8 +128,9 @@ float nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tap
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM (4.0 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (0.05 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 
-float nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
-    return exp(-abs(tapVis - centerVis) / sigmaLum);
+half nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
+    // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
+    return half(exp(-abs(tapVis - centerVis) / sigmaLum));
 }
 
 float nwbShadowResolveLuma(const float v){
@@ -138,8 +140,9 @@ float nwbShadowResolveLuma(const float3 c){
     return nwbLuminance(c);
 }
 
-float nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){
-    return exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / sigmaLum);
+half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){
+    // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
+    return half(exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / sigmaLum));
 }
 
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
@@ -170,8 +173,9 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
             return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(varTemporal) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
         }
     }
-    float mean = 0.0;
-    float mean2 = 0.0;
+    // Spatial visibility moments stay in (0, 1), so half accumulation is sufficient here.
+    half mean = half(0.0h);
+    half mean2 = half(0.0h);
     int cnt = 0;
     [unroll] for(int dy = -1; dy <= 1; ++dy){
         [unroll] for(int dx = -1; dx <= 1; ++dx){
@@ -180,9 +184,9 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
                 continue;
             const half4 sColor = half4(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(t, (int)slot, 0)));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-            const float v = nwbShadowResolveLuma(float3(sColor.rgb));
+            const half v = half(nwbShadowResolveLuma(float3(sColor.rgb)));
 #else
-            const float v = float(sColor.r);
+            const half v = sColor.r;
 #endif
             mean += v;
             mean2 += v * v;
@@ -407,10 +411,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                                 continue;
                             const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)s_NwbShadowResolveTileVis[idx];
                             const float dDist = float(s_NwbShadowResolveTileDist[idx]) - centerGeomDistance;
-                            const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                            const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, s_NwbShadowResolveTileNormal[idx]);
-                            const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
-                            const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
+                            // Every filter weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+                            const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
+                            const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, s_NwbShadowResolveTileNormal[idx]);
+                            const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
+                            const half weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                             sum += weight * tapVis;
                             weightSum += weight;
                         }
@@ -446,10 +451,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                 const float dDist = float(tapGeom.z) - centerGeomDistance;
-                const float distWeight = exp(-dDist * dDist * invTwoSigmaDistSq);
-                const float normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
-                const float valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
-                const float weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
+                // Every filter weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+                const half distWeight = half(exp(-dDist * dDist * invTwoSigmaDistSq));
+                const half normalWeight = nwbShadowResolveNormalWeightVec(centerNormalWavelet, tapGeom.xy);
+                const half valueWeight = nwbShadowResolveValueWeightVec(centerVis, tapVis, sigmaLum);
+                const half weight = s_NwbShadowResolveKernel[kx + 2] * s_NwbShadowResolveKernel[ky + 2] * distWeight * normalWeight * valueWeight;
                 sum += weight * tapVis;
                 weightSum += weight;
             }

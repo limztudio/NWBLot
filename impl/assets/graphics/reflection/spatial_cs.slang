@@ -143,16 +143,17 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 || neighborSpecular.a <= 0.0 || !any(neighborSpecular.rgb > 0.0)
             )
                 continue;
-            const float roughnessDifference = abs(neighborSpecular.a - roughness);
-            const float3 f0Difference = abs(neighborSpecular.rgb - specular.rgb);
-            const float maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
-            if(roughnessDifference > 0.1 || maxF0Difference > 0.05)
+            const half roughnessDifference = half(abs(neighborSpecular.a - roughness));
+            const half3 f0Difference = half3(abs(neighborSpecular.rgb - specular.rgb));
+            const half maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
+            if(roughnessDifference > half(0.1h) || maxF0Difference > half(0.05h))
                 continue;
             const float3 neighborNormal = nwbSafeNormalize(
                 g_NwbReflectionSpatialNormal[neighborIndex].xyz * 2.0 - 1.0, normal
             );
-            const float normalAgreement = dot(normal, neighborNormal);
-            if(normalAgreement < 0.95)
+            // The normal-agreement gate is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+            const half normalAgreement = half(dot(normal, neighborNormal));
+            if(normalAgreement < half(0.95h))
                 continue;
             const float3 neighborPosition = g_NwbReflectionSpatialPositionDepth[neighborIndex].xyz;
             if(!all(isfinite(neighborPosition)))
@@ -174,14 +175,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const float4 neighbor = g_NwbReflectionSpatialRadiance[neighborIndex];
             if(neighbor.a <= 0.0 || !all(isfinite(neighbor.rgb)))
                 continue;
-            const float normalizedPlaneDistance = planeDistance / planeTolerance;
-            const float weight = exp(
+            // The combined bilateral weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
+            const half normalizedPlaneDistance = half(planeDistance / planeTolerance);
+            const half weight = half(exp(
                 spatialExponent
                 -0.5 * normalizedPlaneDistance * normalizedPlaneDistance
-                -80.0 * (1.0 - saturate(normalAgreement))
-                -200.0 * maxF0Difference * maxF0Difference
-                -50.0 * roughnessDifference * roughnessDifference
-            );
+                -half(80.0h) * (half(1.0h) - saturate(normalAgreement))
+                -half(200.0h) * maxF0Difference * maxF0Difference
+                -half(50.0h) * roughnessDifference * roughnessDifference
+            ));
             // True zero samples participate normally. Rejecting black samples or clamping bright samples biases
             // energy, and filtered output must never be used as the next temporal-history bank.
             sum += neighbor.rgb * weight;

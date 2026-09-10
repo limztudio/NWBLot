@@ -77,7 +77,7 @@ float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
 
 // 5x5 B-spline a-trous kernel.
 // Geometry-only edge stop: luminance is sparse-splat noise and must not gate filtering.
-static const float s_NwbCausticResolveKernel[5] = { 1.0 / 16.0, 4.0 / 16.0, 6.0 / 16.0, 4.0 / 16.0, 1.0 / 16.0 };
+static const half s_NwbCausticResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
 
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
@@ -115,22 +115,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int2 baseTexel = int2(floor(src));
         const float2 lerpFrac = src - float2(baseTexel);
 
-        float3 sum = float3(0.0, 0.0, 0.0);
-        float weightSum = 0.0;
+        // Bilinear and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
+        half3 sum = half3(0.0h, 0.0h, 0.0h);
+        half weightSum = half(0.0h);
         [unroll] for(int j = 0; j < 2; ++j){
             [unroll] for(int i = 0; i < 2; ++i){
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
-                const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
+                const half bilinearWeight = (i == 0 ? half(1.0 - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? half(1.0 - lerpFrac.y) : half(lerpFrac.y));
                 const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
-                const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
+                const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
                 const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
-                sum += weight * float3(tapColor);
+                sum += weight * tapColor;
                 weightSum += weight;
             }
         }
-        g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+        g_NwbCausticResolveOutput[pixel] = (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -225,20 +226,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float sigmaWorld = pixelSpacing * (float)step * 2.0;
         const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
-        float3 sum = float3(0.0, 0.0, 0.0);
-        float weightSum = 0.0;
+        // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
+        half3 sum = half3(0.0h, 0.0h, 0.0h);
+        half weightSum = half(0.0h);
         [unroll] for(int ky = -2; ky <= 2; ++ky){
             [unroll] for(int kx = -2; kx <= 2; ++kx){
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                 if(s_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
                 const float3 d = float3(s_NwbCausticResolveTileWorld[idx]) - centerWorld;
-                const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
-                sum += weight * float3(s_NwbCausticResolveTileColor[idx]);
+                const half weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
+                sum += weight * s_NwbCausticResolveTileColor[idx];
                 weightSum += weight;
             }
         }
-        g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+        g_NwbCausticResolveOutput[pixel] = (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
 
@@ -256,8 +258,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const float sigmaWorld = pixelSpacing * (float)step * 2.0;
     const float invTwoSigmaWorldSq = 1.0 / (2.0 * sigmaWorld * sigmaWorld);
 
-    float3 sum = float3(0.0, 0.0, 0.0);
-    float weightSum = 0.0;
+    // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
+    half3 sum = half3(0.0h, 0.0h, 0.0h);
+    half weightSum = half(0.0h);
     [unroll] for(int ky = -2; ky <= 2; ++ky){
         [unroll] for(int kx = -2; kx <= 2; ++kx){
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
@@ -266,14 +269,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             if(!nwbCausticResolveValidAtHalf(tap))
                 continue;
             const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
-            const float weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * exp(-dot(d, d) * invTwoSigmaWorldSq);
+            const half weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
             const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
-            sum += weight * float3(tapColor);
+            sum += weight * tapColor;
             weightSum += weight;
         }
     }
 
-    g_NwbCausticResolveOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 1.0);
+    g_NwbCausticResolveOutput[pixel] = (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
 }
 
 

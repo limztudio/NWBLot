@@ -139,9 +139,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             n = mom.z;
         }
 
-        // Clamp history to the current neighbourhood.
-        const float lumaCur = nwbLuminance(cur);
-        const float lumaHistRaw = nwbLuminance(hist);
+        // Clamp history to the current neighbourhood. Visibility luma stays in (0, 1), so half math is sufficient here.
+        const half lumaCur = half(nwbLuminance(cur));
+        const half lumaHistRaw = half(nwbLuminance(hist));
         const float temporalDelta = lumaCur - lumaHistRaw;
         const float temporalDeltaAbs = abs(temporalDelta);
         float3 mu = float3(0.0, 0.0, 0.0);
@@ -160,13 +160,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const int2 t = int2(clamp(unclampedTap.x, 0, hw - 1), clamp(unclampedTap.y, 0, hh - 1));
                 if(nwbShadowMergeGeomCurr(t).w <= half(0.5h))
                     continue;
-                const half3 visibilitySample = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb);
-                const float3 s = float3(visibilitySample);
-                mu += s;
-                mu2 += s * s;
-                const float sl = nwbLuminance(s);
-                lumaM1 += sl;
-                lumaM2 += sl * sl;
+                // Tap visibility and its luma stay in (0, 1), so half math is sufficient here.
+                const half3 s = half3(NwbHeapSampledImage2DArray(g_NwbShadowMergePush.softTraceSlot).Load(int4(t, slot, 0)).rgb);
+                mu += float3(s);
+                mu2 += float3(s * s);
+                const half sl = half(nwbLuminance(float3(s)));
+                lumaM1 += float(sl);
+                lumaM2 += float(sl * sl);
                 const float tapDelta = sl - lumaHistRaw;
                 if(
                     supportTapInBounds
@@ -192,8 +192,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             sigmaLuma = sqrt(max(lumaM2 * invCount - lumaMean * lumaMean, 0.0));
         }
 
-        // Reduce history at temporal edges after removing local noise.
-        const float lumaHist = nwbLuminance(histClamped);
+        // Reduce history at temporal edges after removing local noise. Visibility luma stays in (0, 1), so half math is sufficient here.
+        const half lumaHist = half(nwbLuminance(histClamped));
         const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
         const float edgeSignal = temporalChangeCoherent
             ? max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma)

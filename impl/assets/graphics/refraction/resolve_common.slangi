@@ -92,16 +92,18 @@ float3 nwbRefractionBackground(const uint2 pixel){
     return behind / max(frontTransmittance, 1e-4) + opaque * backTransmittance;
 }
 
-float nwbRefractionFresnelTransmission(const float ior, const float cosine){
-    const float ratio = (ior - 1.0) / (ior + 1.0);
-    const float r0 = ratio * ratio;
-    return 1.0 - (r0 + (1.0 - r0) * pow(1.0 - saturate(cosine), 5.0));
+half nwbRefractionFresnelTransmission(const float ior, const float cosine){
+    // Schlick reflectance is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+    const half ratio = half((ior - 1.0) / (ior + 1.0));
+    const half r0 = ratio * ratio;
+    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(1.0 - saturate(cosine), 5.0)));
 }
 
-float3 nwbRefractionAttenuation(const float3 tint, const float thickness, const float ior, const float entryCosine, const float exitCosine){
-    return exp(log(clamp(tint, float3(1e-4), float3(1.0))) * max(thickness, 0.0))
-        * nwbRefractionFresnelTransmission(ior, entryCosine)
-        * nwbRefractionFresnelTransmission(ior, exitCosine);
+half3 nwbRefractionAttenuation(const float3 tint, const float thickness, const float ior, const float entryCosine, const float exitCosine){
+    // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
+    return half3(exp(log(clamp(tint, float3(1e-4), float3(1.0))) * max(thickness, 0.0))
+        * float3(nwbRefractionFresnelTransmission(ior, entryCosine))
+        * float3(nwbRefractionFresnelTransmission(ior, exitCosine)));
 }
 
 struct NwbRefractionEntry{

@@ -7,11 +7,8 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Hardware surfel-GI trace slots, shared by Slang and the C++ pipeline-layout builder.
-// Slot 0 is the bindless slot cbuffer; slot 1 is an ABI gap. Slot 11 selects the
-// InstanceID/material-surface context. Surfel tail (12/13/20/21) matches surfel_binding_slots.h.
+// Slot 0 is the bindless slot cbuffer; slot 1 is an ABI gap. Slot 11 selects the InstanceID/material-surface context. Surfel tail (12/13/20/21) matches surfel_binding_slots.h.
 
 
 #define NWB_GI_HW_SET 0

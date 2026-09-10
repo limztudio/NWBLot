@@ -17,10 +17,7 @@ NWB_COMMON_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Filename of the vendored NVIDIA Nsight Aftermath runtime shared library. Single source of truth shared by
-// the device-side GPU crash dump capture (core/graphics) and the server-side GPU crash dump decode
-// (logger/server), so the name is not duplicated across modules. tchar so it matches the platform's native
-// path string type, and loaded through Common::SharedLibrary.
+// Vendored Aftermath runtime name; single source shared by capture and decode.
 #if defined(NWB_PLATFORM_WINDOWS)
 inline constexpr const tchar* s_AftermathRuntimeName = NWB_TEXT("GFSDK_Aftermath_Lib.x64.dll");
 #else

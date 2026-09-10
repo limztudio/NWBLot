@@ -46,20 +46,19 @@ using NameDetail::IsNameHashTokenChar;
 [[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
 
 void InstallRuntimeRegistry();
-// Detaches record/resolve callbacks so no Name use reaches the registry afterwards. Runs before the registry's
-// function-local static is destroyed, so static-teardown Name use cannot dereference it.
+// Detaches callbacks before registry teardown so static use cannot dereference it.
 void UninstallRuntimeRegistry();
 void ClearRuntimeSymbols();
 
 [[nodiscard]] bool LoadLine(AStringView line);
 [[nodiscard]] bool WriteDefaultFile();
 
-// Symbol count, used as a cheap "grew since last upload" gate for the cross-process upload.
+// Symbol count; cheap grew-since-upload gate for cross-process upload.
 [[nodiscard]] usize EntryCount();
-// Serializes the registry to `.namesym` text (same bytes WriteDefaultFile writes) for the wire push to a log server.
+// Serializes the registry to `.namesym` text for the wire push to a log server.
 void Serialize(AString<Alloc::GlobalArena>& outText);
 
-// Ingests a whole `.namesym` document; file and wire transports differ only in where the bytes come from.
+// Ingests a `.namesym` document; file and wire differ only in byte source.
 [[nodiscard]] inline bool LoadFromMemory(const AStringView text){
     bool loadedAny = false;
     usize lineBegin = 0u;

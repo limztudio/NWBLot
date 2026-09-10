@@ -105,7 +105,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
         return false;
 
     u64 fileOffset = 0u;
-    // The file-offset field is optional in /proc maps lines; a parse failure leaves the pre-initialized default of 0.
+    // File-offset is optional in /proc maps; failures keep the default of 0.
     const bool parsedFileOffset = ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin), fileOffset);
     if(!parsedFileOffset)
         fileOffset = 0u;

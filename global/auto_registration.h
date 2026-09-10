@@ -13,8 +13,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Static extension registration may run while a consumer takes a stable snapshot. Keep synchronization and duplicate
-// handling here so each extension point owns only its value semantics.
+// Registration may race snapshots; keep sync and duplicate handling here.
 template<typename ValueT, typename ArenaT>
 class AutoRegistrationQueue final : NoCopy{
 public:

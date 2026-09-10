@@ -69,8 +69,7 @@ public:
             m_reservedBytes.fetch_sub(bytes, MemoryOrder::relaxed);
     }
 
-    // Direct arenas derive reservation from usage during capture. Pools track their reservation separately.
-    // Allocation hot paths update only this arena's usage, peak and operation counters.
+    // Direct arenas derive reservation from usage; hot paths update local counters only.
     void recordAllocation(const u64 bytes){
         if(bytes == 0u)
             return;

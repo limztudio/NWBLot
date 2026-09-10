@@ -20,8 +20,7 @@ namespace HalfConvertDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// IEEE-754 binary32/binary16 conversion layout. Keep these explicit so the scalar fallback documents the
-// bit-level contract shared with the F16C implementation below.
+// IEEE-754 binary32/binary16 layout; scalar fallback documents the shared bit contract.
 inline constexpr u32 s_F32SignBitMask = 0x80000000u;
 inline constexpr u32 s_F32AbsoluteBitMask = 0x7fffffffu;
 inline constexpr u32 s_F32InfinityBits = 0x7f800000u;
@@ -586,8 +585,7 @@ NWB_INLINE SIMDVector SIMDCALL LoadHalf(const Half4U& value)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SIMDVector and SIMDMatrix are calculation values. Persistent CPU/GPU data must use the typed Float#/Int#/UInt#
-// storage layouts and cross into SIMD only through these conversion boundaries.
+// SIMD types are calculation values; persistent data uses typed layouts via these boundaries.
 NWB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);

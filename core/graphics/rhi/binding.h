@@ -104,8 +104,8 @@ struct BindingLayoutDesc{
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
-// BindlessLayoutType describes the descriptor classes exposed through the renderer's global heap. Authored Slang
-// bindings and host layouts must use the same explicit Vulkan descriptor-set and binding indices.
+// BindlessLayoutType describes descriptor classes in the global heap. Slang bindings and host layouts must agree
+// on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
     enum Enum : u8{
         Immutable = 0,      // Must use registerSpaces to define a fixed descriptor type
@@ -119,14 +119,13 @@ namespace BindlessLayoutType{
     };
 };
 
-// Bindless layouts describe a global descriptor-heap array in the shader. The `registerSpaces` vector specifies
-// which bindings the heap exposes, with the resource type derived from each entry. They are never per-pass tables.
+// Bindless layouts describe a global heap array in the shader; `registerSpaces` selects its bindings.
+// They are never per-pass tables.
 struct BindlessLayoutDesc{
     FixedVector<BindingLayoutItem, s_MaxBindlessRegisterSpaces> registerSpaces;
     u32 maxCapacity = 0;
 
-    // This resource-bearing layout occupies an explicit SPIR-V descriptor set in a multi-layout pipeline. Pipeline-
-    // local BindingLayout objects carry push constants only and do not consume descriptor sets.
+    // This resource-bearing layout takes an explicit SPIR-V descriptor set; push-only BindingLayouts take none.
     u32 descriptorSetIndex = Limit<u32>::s_Max;
 
     ShaderType::Mask visibility = ShaderType::None;

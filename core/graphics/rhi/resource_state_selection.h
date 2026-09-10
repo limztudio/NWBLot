@@ -23,9 +23,8 @@ namespace GraphicsBackend{
     class VulkanTestDispatchAccess;
 };
 
-// Operation-owned membership for whole-resource state filtering. Entries retain the first input ordinal for each
-// exact kind/pointer identity; resources remain caller-owned. Finish adding before any other scratch allocations,
-// and destroy the selection before reusing that scratch for another operation such as state fan-in.
+// Operation-owned membership for whole-resource state filtering. Entries keep the first input ordinal per
+// kind/pointer identity; resources stay caller-owned. Finish adding before other scratch allocations.
 class CommandListResourceSelection final : NoCopy{
     friend class GraphicsBackend::VulkanTestDispatchAccess;
 

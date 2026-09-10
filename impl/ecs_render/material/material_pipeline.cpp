@@ -375,9 +375,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         pipelineDesc.setRenderState(renderState);
         // Set 0 is the shared push-only range; all CSG and AVBOIT resources are selected through the global heap.
         pipelineDesc.addBindingLayout(materialPassBindingLayout);
-        // The mesh stage resolves every immutable geometry stream through the global StorageBuffer heap. Keep both
-        // fixed heap layouts in every mesh pipeline. The sampler layout is part of that frozen heap surface even though geometry uses
-        // only the resource table today.
+        // Keep both fixed heap layouts in every mesh pipeline; samplers are frozen surface.
         pipelineDesc
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())

@@ -34,8 +34,7 @@ namespace RendererGpuTimingScope{
 inline constexpr Core::GpuTimingScopeDefinition s_MeshDispatch("render.mesh_dispatch");
 inline constexpr Core::GpuTimingScopeDefinition s_Raster("render.raster");
 inline constexpr Core::GpuTimingScopeDefinition s_Frame("render.frame");
-// Dedicated-queue packet envelopes. render.frame remains the end-to-end critical path while these isolate graph and
-// remaining packet submissions without assuming a particular physical route.
+// Dedicated-queue envelopes; render.frame stays the end-to-end critical path.
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncPrefix("render.async_prefix");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadow("render.async_shadow");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncSurfelGi("render.async_surfel_gi");
@@ -43,8 +42,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
-// Keep the aggregate shadow envelope for frame-level ranking, and publish its expensive compute phases separately so
-// a performance investigation can distinguish ray traversal from temporal filtering and reconstruction.
+// Keep the aggregate shadow envelope; publish expensive phases separately.
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTrace("render.shadow_opaque_trace");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("render.shadow_geometry_downsample");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTemporal("render.shadow_opaque_temporal");

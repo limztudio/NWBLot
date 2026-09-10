@@ -59,8 +59,7 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(
 )noexcept;
 
 
-// Stores owner-serialized submission resolution and asynchronous sample completion in a drainable ledger. Recording
-// may grow storage, but accepted/discarded/sample callbacks only mutate existing entries and are allocation-free.
+// Drainable ledger for submission resolution and sample completion; callbacks stay allocation-free.
 class RendererTaskTimingFeedbackState final : NoCopy{
 private:
     struct PendingSample{
@@ -118,8 +117,7 @@ private:
 };
 
 
-// Keeps renderer-selected task timing separate from the graph compiler. The renderer owns query-attribution lifetime,
-// while the compiler consumes only an immutable history snapshot during the following frame's compile.
+// Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
 class RendererTaskTimingFeedback final : NoCopy{
 private:
     static void onGpuTimingSampleCallback(void* context, const Core::GpuTimingSample& sample)noexcept;

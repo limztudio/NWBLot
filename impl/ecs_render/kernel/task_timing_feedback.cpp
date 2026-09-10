@@ -134,8 +134,7 @@ void RendererTaskTimingFeedbackState::completeSample(
     if(pending.sampleResolved)
         return;
 
-    // Every matching notification is terminal, including unpublished and malformed results. Acceptance still owns
-    // route assignment independently, while only a complete positive duration is eligible for history.
+    // Every matching notification is terminal; only complete positive durations enter history.
     pending.sampleResolved = true;
     if(
         !feedbackActive
@@ -305,7 +304,7 @@ void RendererTaskTimingFeedback::deactivate()noexcept{
         m_subscription = {};
     }
 
-    // Unsubscription removes only this bridge's collection demand and waits for any callback retaining this context.
+    // Unsubscription removes this bridge's demand and waits for retaining callbacks.
     m_graphics.gpuTiming().unsubscribeSampleListener(subscription);
     reset();
 }

@@ -330,7 +330,7 @@ ReflectionGraphResult DeclareReflectionTasks(
     const bool feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
     const bool buildArguments = resources.parameters.hardwareEnabled != 0u && resources.parameters.maxHardwareRays > 0u;
     const DispatchStage::Enum feedbackPublicationStage = buildArguments ? DispatchStage::BuildArgs : DispatchStage::Classify;
-    // A stale or quarantined feedback lease disables this optional optimization; reflection rendering remains available.
+    // A stale feedback lease disables this optimization; rendering remains available.
     Core::GpuGraphResourceId feedbackCurrent;
     Core::GpuGraphResourceId feedbackPrevious;
     if(feedbackWrites){

@@ -59,7 +59,7 @@ struct RendererAvboitTaskGraphStageState{
     [[nodiscard]] RendererTaskGraphTransparencyStage transparencyStage()const noexcept;
 };
 
-// The host sees only this immutable result after graph compilation. AVBOIT keeps the concrete task topology,
+// Host sees only this immutable result; AVBOIT keeps its task topology.
 // queue checks, and packet-order invariants inside its own domain implementation.
 struct RendererAvboitTaskGraphValidation{
     RendererTaskGraphTransparencyStage m_stage;
@@ -69,8 +69,7 @@ struct RendererAvboitTaskGraphValidation{
     [[nodiscard]] const RendererTaskGraphTransparencyStage& stage()const noexcept{ return m_stage; }
 };
 
-// AVBOIT contributes semantic timing bindings to its host's whole-graph execution. This keeps the domain free to
-// change its internal packet topology without taking ownership of graph recording or submission.
+// AVBOIT contributes timing bindings; domain stays free of recording ownership.
 inline constexpr usize s_AvboitTaskGraphTimingTicketCapacity = 7u;
 
 struct RendererAvboitTaskGraphTimingTickets{

@@ -161,8 +161,7 @@ public:
         // Graph may generate alias-free vertices; shared/direct paths keep local work.
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
-        // A distinct frozen CSG-only producer may own the same handoff. It remains separate from the regular flag
-        // so mixed CSG streams keep their compatibility interleaving.
+        // A frozen CSG-only producer may own this handoff; keep it separate.
         bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void renderAvboitExtinctionPass(

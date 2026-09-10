@@ -53,8 +53,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Runs after transparent CSG intervals and before the first AVBOIT material-stream upload. Even a disabled
-// capture clears its selection so previously visible refractors cannot affect the current frame.
+// Runs after CSG intervals, before first AVBOIT upload; disabled capture still clears selection.
 [[nodiscard]] Core::GpuTaskId DeclareAvboitRefractionCapture(
     Core::GpuTaskGraph& graph,
     Core::Alloc::GlobalArena& arena,

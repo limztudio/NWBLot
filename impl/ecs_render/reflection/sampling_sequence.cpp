@@ -18,8 +18,7 @@ ReflectionSampleBase ComputeReflectionSampleBase(const u32 sampleIndex)noexcept{
     ReflectionSampleBase base;
     u32 remaining = sampleIndex;
     u32 direction = 0x80000000u;
-    // The first coordinate reverses index bits; the second uses the degree-one Sobol generator.
-    // https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
+    // x reverses index bits; y uses the Sobol generator (see pbr-book).
     for(u32 bit = 0u; bit < 32u; ++bit){
         const u32 selected = remaining & 1u;
         base.x = (base.x << 1u) | selected;

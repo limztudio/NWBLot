@@ -23,7 +23,7 @@ namespace __hidden_reflection_history{
 
 
 [[nodiscard]] bool SameEstimatorSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
-    // Presentation diagnostics and the spatial filter do not affect the unfiltered temporal estimator.
+    // Diagnostics/filter leave the temporal estimator unchanged.
     return
         a.traceMode == b.traceMode && a.temporalEnabled == b.temporalEnabled
         && a.temporalMaxSamples == b.temporalMaxSamples && a.samplingSeed == b.samplingSeed
@@ -118,7 +118,7 @@ ReflectionHistoryPlan ReflectionHistoryState::plan(
     result.reused = result.eligible && m_eligible && !result.reset && m_sampleCount > 0u;
     result.previousSampleCount = result.reused ? m_sampleCount : 0u;
     result.previousBank = m_acceptedBank;
-    // A rejected transition must preserve the last accepted history even if the next frame disables accumulation.
+    // Rejected transitions keep last accepted history.
     result.currentBank = (result.eligible || m_eligible) && m_acceptedSequence != 0u ? 1u - m_acceptedBank : 0u;
     if(result.reset && (!settings.temporalEnabled || settings.traceMode == ReflectionTraceMode::Disabled))
         result.resetReason = ReflectionHistoryResetReason::Disabled;

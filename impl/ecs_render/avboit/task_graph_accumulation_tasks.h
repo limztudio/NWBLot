@@ -79,9 +79,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
 };
 
 
-// Two or three regular AVBOIT Accumulation draws sharing one generated-vertex buffer cannot batch their generators
-// ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C)] stream as explicit
-// primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer boundary.
+// Shared-buffer accumulation draws cannot batch generators; keep D/R streams explicit.
 struct AvboitAccumulationSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -154,10 +152,7 @@ struct AvboitAccumulationGraphTask{
 };
 
 
-// Accumulation produces attachments that Deferred Composite samples on Compute and leaves the read-only deferred
-// depth attachment in DepthRead. Keep all ShaderResource handoffs in a Graphics task immediately after
-// rasterization, so no following packet has to name a framebuffer attachment source state. The task intentionally
-// records no native work; packet-prologue barriers are the entire contract.
+// Keep ShaderResource handoffs in a Graphics task right after rasterization; barriers are the contract.
 struct AvboitAccumulationFinalizeGraphTask{
     struct Payload{};
 

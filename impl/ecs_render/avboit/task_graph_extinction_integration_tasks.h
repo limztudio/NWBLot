@@ -81,10 +81,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
 };
 
 
-// Two through five regular Extinction draws targeting one persistent generated-vertex buffer must retain their
-// native D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)] order.
-// Each phase is graph-visible so the compiler lowers the alternating UAV/VertexBuffer states before the common
-// typed Integration tail consumes the packed outputs.
+// Shared-buffer extinction draws keep native D/R order; phases stay graph-visible.
 struct AvboitExtinctionSharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,
@@ -179,9 +176,7 @@ struct AvboitIntegrationGraphTask{
 };
 
 
-// Accumulation's alias-free compute-emulation stream is independently frozen after Integration and its immutable
-// upload chain. The regular and CSG-only variants are mutually exclusive: the existing Accumulation callback
-// remains the shared raster endpoint and its following finalizer retains the terminal attachment handoff.
+// Accumulation emulation streams freeze after Integration; regular and CSG stay exclusive.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

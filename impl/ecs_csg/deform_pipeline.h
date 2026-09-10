@@ -37,12 +37,6 @@ public:
 
 
 public:
-// Preview and commit share one rebuild path so viability always agrees:
-// - Sequential cuts apply in order, one rebuild per active cut.
-// - Rebuild splits triangles at the zero crossing, never welds source verts.
-// - Walls are the kept split triangles with interpolated attributes.
-// - Caps fill cut boundary loops with a deterministic fan.
-// - One epsilon, one edge-cache rule, one cap orientation rule for both preview and commit.
     [[nodiscard]] static bool RebuildSequentialCuts(
         Core::Alloc::ScratchArena& scratchArena,
         NotNull<const CsgDeformVertex*> inputVertices,

@@ -21,7 +21,6 @@ NWB_IMPL_BEGIN
 //
 // Preview and commit observe one epsilon, one edge-cache rule, and one cap
 // orientation rule through these constants, so viability always agrees.
-// Default cutter/build values. Named so preview and commit observe one default.
 inline constexpr f32 s_DefaultDistanceEpsilon = 0.00001f;
 inline constexpr Float4 s_DefaultShapeParameter = Float4(0.0f, 1.0f, 0.0f, 0.0f);
 

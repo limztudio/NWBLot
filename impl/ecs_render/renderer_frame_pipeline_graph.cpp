@@ -4179,9 +4179,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
-            // A phase may graph-own one alias-free stream or a narrowly retained regular shared stream.
-            // Mixed regular/CSG work and every other shared-output shape retain local interleaving because a single
-            // producer/raster handoff cannot preserve their per-draw overwrite order.
+            // Mixed work keeps local interleaving; one handoff cannot preserve per-draw order.
             extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
                 && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
                 && extinctionMaterialSampledTexturesCollected
@@ -4220,8 +4218,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             NWB_ASSERT(!(extinctionCsgComputeEmulationPlanCaptured && extinctionSharedComputeEmulationPlanCaptured));
         }
         else{
-            // Preserve graph ownership even when a transparent frame has no ready extinction draws: native recording
-            // consumes this explicit empty phase rather than regathering mutable renderer state.
+            // Keep graph ownership for empty phases; skip native re-gather of mutable state.
             avboitExtinctionPayload.extinctionSnapshot.capture(
                 extinctionDrawItems,
                 extinctionCsgFrameData,
@@ -4348,8 +4345,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         + (extinctionStreamsUploaded ? 7u : 0u)
         + (extinctionCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
     );
-    // Queue placement cannot change native descriptor access. Keep the complete raster resource contract on every
-    // route so compiler-selected crossings retain the same hazards and state lowering.
+    // Keep the full raster contract on every route so crossings retain hazards and lowering.
     extinctionResourceUses.push_back(ReadUse(albedo));
     extinctionResourceUses.push_back(ReadUse(refractionInstance));
     extinctionResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));

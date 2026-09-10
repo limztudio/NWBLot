@@ -2895,7 +2895,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
                 if(!submitFrameRecoveryPacket())
                     failFrameRenderRecovery();
-                // The accepted copy cannot be replayed, and losing any return cache leaves no safe producer layout.
+                // The accepted copy cannot be replayed.
                 failFrameRenderRecovery();
                 return;
             }
@@ -2910,8 +2910,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 invalidateLaggedLightingHistorySubmission();
             }
             else{
-                // The task's accepted hook publishes this exact token.  Keep the assertion close to the handoff
-                // so a future lifecycle change cannot accidentally reintroduce a renderer-side publication path.
+                // The accepted hook publishes this token; keep the assertion here.
                 NWB_ASSERT(
                     m_laggedLightingHistorySubmissionToken.queue == historyCopySubmissionToken.queue
                     && m_laggedLightingHistorySubmissionToken.value == historyCopySubmissionToken.value

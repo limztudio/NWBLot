@@ -29,8 +29,7 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
-// RAII detach of Name callbacks on every exit path, before static teardown. WriteDefaultFile reads the registry
-// directly, so it still works after uninstall.
+// RAII detach of Name callbacks on exit; WriteDefaultFile still works after uninstall.
 class ScopedNameSymbolRegistry final{
 public:
     ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }

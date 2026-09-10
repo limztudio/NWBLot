@@ -46,9 +46,9 @@ public:
 
 
 public:
-    // A volume identifies one logical namespace; custom backends may ignore segment/metadata sizing hints.
+    // A volume is one logical namespace; custom backends may ignore sizing hints.
     virtual bool mount(const VolumeMountDesc& desc) = 0;
-    // Writable implementations must persist pending writes before releasing their mount.
+    // Writable backends must persist pending writes before unmount.
     virtual bool unmount() = 0;
     [[nodiscard]] virtual bool mounted()const = 0;
     [[nodiscard]] virtual bool writable()const = 0;

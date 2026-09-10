@@ -128,7 +128,7 @@ void SystemScheduler::execute(World& world, f32 delta){
     if(m_dirty)
         rebuild();
 
-    // Preparation can change entity/component storage, so it stays on the caller before any update starts.
+    // Preparation can change storage; it stays on the caller before updates start.
     for(ISystem* system : m_allSystems)
         system->prepare(world);
 

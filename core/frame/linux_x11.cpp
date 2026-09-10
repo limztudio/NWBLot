@@ -57,7 +57,7 @@ static constexpr f64 s_ScrollUnit = 1.0;
 static constexpr usize s_TextInputBufferSize = 64u;
 static constexpr u32 s_TextInputControlCodePointLimit = 32u;
 static constexpr u32 s_TextInputDeleteCodePoint = 127u;
-// Idle throttle applied while the window is hidden or unfocused, mirroring the Wayland inactive-poll timeout.
+// Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
 static constexpr i32 s_InactivePollSleepMs = 10;
 
 static bool s_DetectableAutoRepeat = false;

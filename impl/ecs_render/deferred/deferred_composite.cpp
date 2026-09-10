@@ -286,7 +286,7 @@ bool RendererDeferredSystem::renderDeferredPresent(
     )
         return false;
 
-    // The graph owns both the sampled composite transition and this exact acquired texture's render-target state.
+    // Graph owns the composite transition and the acquired texture's render-target state.
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, m_graphics.getDevice(), commandList);
 

@@ -235,12 +235,10 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.refractionResolveStorage, targets.avboit.refractionResolve.get(), Core::Format::RGBA16_FLOAT, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.avboitTransmittance, Core::GpuDescriptorClass::SampledImage3D, targets.avboit.transmittanceTexture.get(), targets.avboit.transmittanceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture3D)
         && registerSampler(bindless.avboitLinearSampler, &avboitLinearSampler)
-        // Scene-shading cbuffer (uniform-buffer table) + light-list storage buffer (structured-buffer table): the two
-        // shared singletons the deferred lighting pass now reads from the heap via its two spare avboit slot lanes.
+        // Scene-shading and light-list singletons read from the heap via spare slot lanes.
         && registerConstantBuffer(bindless.sceneShading, m_deferredState.m_sceneShadingBuffer.get())
         && registerStructuredBuffer(bindless.lightList, m_deferredState.m_lightBuffer.get())
-        // CSG interval/peel resources use one persistent StorageImage descriptor each. Their target-generation slots
-        // are consumed by the CSG compute, material surface, and cap-fill shaders through the shared slot cbuffer.
+        // CSG resources use one StorageImage descriptor each, consumed via the slot cbuffer.
         && registerStorageTexture(bindless.csgCapBackNormal, targets.csgCapBackNormal.get(), targets.csgCapNormalFormat, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.csgIntervalDepth, targets.csgIntervalDepth.get(), targets.csgIntervalDepthFormat, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.csgIntervalId, targets.csgIntervalId.get(), targets.csgIntervalIdFormat, Core::TextureDimension::Texture2DArray)
@@ -252,8 +250,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.csgRemovedIntervalCapNormal, targets.csgRemovedIntervalCapNormal.get(), targets.csgRemovedIntervalCapNormalFormat, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.csgRemovedIntervalData, targets.csgRemovedIntervalData.get(), targets.csgRemovedIntervalDataFormat, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.csgRemovedIntervalCount, targets.csgRemovedIntervalCount.get(), targets.csgRemovedIntervalCountFormat, Core::TextureDimension::Texture2DArray)
-        // The caustic resolve carries all sampled inputs through target-generation slots. The R32_UINT accumulator uses
-        // the heap's dedicated typed uint Texture2DArray table; the remaining resources are floating-point Texture2Ds.
+        // Caustic resolve carries inputs via generation slots; accumulator uses the uint table.
         && registerTexture(bindless.causticAccumulator, Core::GpuDescriptorClass::SampledImage2DArrayUint, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, ECSRenderDetail::s_CausticAccumulatorSubresources, Core::TextureDimension::Texture2DArray)
         && registerStorageTexture(bindless.causticAccumulatorStorage, targets.causticAccumulator.get(), targets.causticAccumulatorFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.causticHistory, Core::GpuDescriptorClass::SampledImage, targets.causticHistory.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
@@ -262,8 +259,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.causticResolveHalfStorage, targets.causticResolveHalf.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.causticResolveGeometry, Core::GpuDescriptorClass::SampledImage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.causticResolveGeometryStorage, targets.causticResolveGeometry.get(), targets.causticHistoryFormat, Core::TextureDimension::Texture2D)
-        // Every soft-shadow producer/resolve work image has both its sampled read view and, where a compute pass
-        // writes it, a StorageImage view. The heap owns each target generation until recorded dispatches retire.
+        // Soft-shadow images carry sampled views plus StorageImage views where written.
         && registerStorageTexture(bindless.shadowCoarseTransmittanceStorage, targets.shadowCoarseTransmittance.get(), targets.shadowCoarseTransmittanceFormat, Core::TextureDimension::Texture2DArray)
         && registerTexture(bindless.shadowSoftGeometry, Core::GpuDescriptorClass::SampledImage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.shadowSoftGeometryStorage, targets.shadowSoftGeometry.get(), targets.shadowSoftGeometryFormat, Core::TextureDimension::Texture2D)

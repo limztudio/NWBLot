@@ -571,16 +571,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             return false;
         }
     }
-    // A fully frozen hybrid packet has a separate software-tail callback, so the graph can now lower its exact
-    // BLAS AccelStructBuildInput -> SW-BVH ShaderResource handoff at that boundary. Keep the direct/retry fallback
-    // native unless both frozen plans and every required shared trace-geometry import are available.
+    // Frozen hybrid packet lowers the BLAS -> SW-BVH handoff at its tail boundary.
     const bool hybridSoftwareTailInputStatesCandidate =
         hybridSoftwareTailGraphOwned
         && meshBlasBuildsGraphOwned
         && meshSwBvhBuildsGraphOwned
     ;
-    // A prepared hardware route with no software tail has no later consumer, so its frozen geometry can enter
-    // graph-owned directly as before. The hybrid candidate below extends that only to its verified tail boundary.
+    // Tail-less hardware geometry enters graph-owned; hybrid only to its tail boundary.
     bool meshBlasGeometryBuildInputStatesGraphOwned =
         meshBlasBuildsGraphOwned
         && (
@@ -589,9 +586,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         )
     ;
     bool meshSwBvhInputStatesGraphOwned = hybridSoftwareTailInputStatesCandidate;
-    // The pure-software route has no accepted hardware fallback. It can therefore move each frozen operation's
-    // private sentinel setup into graph built-ins, while the hybrid route deliberately retains its conditional
-    // native transaction until its fallback boundary is separately modeled.
+    // Pure-software moves sentinel setup into built-ins; hybrid keeps conditional native path.
     const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate =
         meshSwBvhBuildsGraphOwned
         && !m_raytracingSystem.shadowVisibilityHardwareSupported()

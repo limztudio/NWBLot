@@ -96,8 +96,7 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void backBufferResizing()override;
 
-    // The renderer asks this optional contributor to turn the finished ImGui draw list and its upload payloads into
-    // terminal graph work. Direct IRenderPass rendering remains available for worlds without a graph-owning renderer.
+    // Optional contributor turning the finished ImGui draw list into terminal graph work.
     virtual bool prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame)override;
     [[nodiscard]] virtual bool hasTaskGraphPresentationWork()const override;
     [[nodiscard]] virtual Core::GpuTaskId declareTaskGraphPresentation(
@@ -127,14 +126,11 @@ private:
 
     struct UiTextureResource{
         Core::TextureHandle texture;
-        // One persistent sampled-image heap entry per dynamic ImGui texture. The heap retains the texture through
-        // deferred-free quarantine, so retire this handle before the resource leaves m_textures.
+        // One sampled-image heap entry per dynamic texture; retire before resource leaves.
         Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
-        // New retained textures start at native Unknown; only an accepted full upload publishes ShaderResource
-        // state for the first read.
+        // New textures start at Unknown; only an accepted upload publishes ShaderResource.
         bool initialUploadAccepted = false;
-        // One import per graph generation, shared by upload and draw declarations. The generation check rejects
-        // IDs retained across a rebuild.
+        // One import per graph generation; generation check rejects IDs across rebuilds.
         Core::GpuGraphResourceId taskGraphResource;
         u64 taskGraphGeneration = 0u;
         u32 width = 0;
@@ -153,8 +149,7 @@ private:
     };
     static_assert(sizeof(UiPushConstants) == sizeof(f32) * 4u + sizeof(u32) * 4u, "Ui push constants must match the ImGui shader block");
 
-    // Graph declarations must not re-read ImGui's transient command arrays during late recording. Each draw
-    // captures its heap-selected texture and resolved offsets; the retained handle keeps the resource alive.
+    // Declarations must not re-read transient ImGui arrays; draws capture texture and offsets.
     struct TaskGraphDrawCommand{
         Core::TextureHandle texture;
         bool textureInitialUploadAccepted = false;

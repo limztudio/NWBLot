@@ -9,29 +9,23 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Binding slots for the HARDWARE surfel-GI trace (surfel_trace_hw_cs / gi_hw_trace.slangi). Dual-consumed by the Slang
-// shader AND the C++ pipeline-layout builder so both agree. Slot 0 carries the target-generation
-// DeferredBindlessResourceSlots cbuffer; its avboitSlots.z/.w select the shared scene-shading + light-list heap entries,
-// leaving slot 1 as an ABI gap. Slot 11 is the trace-owned material-context slot cbuffer, selecting the shared
-// InstanceID material and surface-evaluator buffers from the global heap. The surfel tail (constants 12 / pool 13 /
-// snapshot 20/21 -- surfel_binding_slots.h) is shared verbatim.
+// Hardware surfel-GI trace slots, shared by Slang and the C++ pipeline-layout builder.
+// Slot 0 is the bindless slot cbuffer; slot 1 is an ABI gap. Slot 11 selects the
+// InstanceID/material-surface context. Surfel tail (12/13/20/21) matches surfel_binding_slots.h.
 
 
 #define NWB_GI_HW_SET 0
 
-// Bindings 0 and 1 preserve the scene/light ABI positions: binding 0 is the bindless slot cbuffer, while 1 remains
-// intentionally unbound. Do not renumber the subsequent ABI slots.
+// Bindings 0-1 keep the scene/light ABI positions; 1 stays unbound. Do not renumber.
 #define NWB_GI_HW_BINDING_SCENE_SHADING 0
 #define NWB_GI_HW_BINDING_LIGHT_LIST 1
 #define NWB_GI_HW_BINDING_BINDLESS_RESOURCES NWB_GI_HW_BINDING_SCENE_SHADING
 #define NWB_GI_HW_BINDING_TLAS 2               // RaytracingAccelerationStructure (the scene TLAS)
-// Slots 3-10 are intentional ABI gaps. HW GI reads positions, indices, and attributes from the global descriptor heap
-// through the material record's {position,index,attribute}Slot; b11 selects its InstanceID/material-surface context.
-// Do not repurpose or renumber these holes.
+// Slots 3-10 are ABI gaps. Positions/indices/attributes come from the global heap
+// via the material record; b11 selects the material-surface context. Do not reuse.
 #define NWB_GI_HW_BINDING_MATERIAL_CONTEXT_SLOTS 11 // ConstantBuffer<NwbRayTraceMaterialContextSlots>
 
-// The shared shade (gi_trace_common.slangi) casts a dominant-light occlusion ray; keep it on the HW path too so the HW
-// and SW shades are identical (the occlusion ray re-enters the HW RayQuery via the seam).
+// Keep the dominant-light occlusion ray on the HW path so HW and SW shading match.
 #ifndef NWB_GI_HIT_SHADOW_RAYS
 #define NWB_GI_HIT_SHADOW_RAYS 1
 #endif

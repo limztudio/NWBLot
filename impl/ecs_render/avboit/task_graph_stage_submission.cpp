@@ -51,13 +51,13 @@ bool RendererAvboitSystem::appendTaskGraphTimingTickets(
     if(validation.stage().hasTransparentTasks){
         appendTimingTicket(m_taskGraphStage.m_depthWarpTask, timingTickets.m_depthWarp);
         if(m_taskGraphStage.m_extinctionComputeEmulationTask.valid()){
-            // Both callbacks resolve to one packet and deliberately share the one Extinction timing ticket.
+            // Shares the one Extinction ticket.
             appendTimingTicket(m_taskGraphStage.m_extinctionComputeEmulationTask, timingTickets.m_extinction);
         }
         appendTimingTicket(m_taskGraphStage.m_extinctionTask, timingTickets.m_extinction);
         appendTimingTicket(m_taskGraphStage.m_integrationTask, timingTickets.m_integration);
         if(m_taskGraphStage.m_accumulationComputeEmulationTask.valid()){
-            // Both callbacks resolve to one packet and deliberately share the one Accumulation timing ticket.
+            // Shares the one Accumulation ticket.
             appendTimingTicket(m_taskGraphStage.m_accumulationComputeEmulationTask, timingTickets.m_accumulation);
         }
         appendTimingTicket(m_taskGraphStage.m_accumulationTask, timingTickets.m_accumulation);

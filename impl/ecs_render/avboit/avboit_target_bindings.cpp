@@ -139,8 +139,7 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
         return false;
     }
 
-    // AVBOIT borrows this target generation's shared slot-payload descriptor. The five owned StorageBuffer handles
-    // plus the writable transmittance StorageImage handle populate that payload before deferred rendering uploads it.
+    // Borrow the shared slot payload; populate it before deferred uploads it.
     avboitTargets.deferredSlotsBufferDescriptor = createdTargets.bindless.slotsBufferDescriptor;
     createdTargets.bindless.slots.avboitCoverage = avboitTargets.coverageBufferDescriptor.slot();
     createdTargets.bindless.slots.avboitDepthWarp = avboitTargets.depthWarpBufferDescriptor.slot();

@@ -54,8 +54,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_clearTask
         )
     );
-    // Prepared transparent CSG clears the two persistent interval values through the same first/last primitive
-    // bracket. Keep both with AVBOIT Pre so its stable timing binding and packet-local handoff remain authoritative.
+    // Keep CSG clears with AVBOIT Pre for its timing and handoff.
     const bool avboitPrePacketContainsTransparentCsgClear =
         (!taskGraphStage.m_transparentCsgIntervalClearFirstTask.valid()
             && !taskGraphStage.m_transparentCsgIntervalClearTask.valid())
@@ -80,8 +79,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         taskGraphStage.m_occupancyTask
     )
     ;
-    // The transparent Span/Combine callbacks consume the frozen CSG stream before phase-local occupancy uploads
-    // replace it. They share AVBOIT Pre's timing and external state source, so a split is rejected before recording.
+    // Span/Combine share Pre's timing; reject a split before recording.
     const bool avboitPrePacketContainsCsgReceiverSpan =
         !taskGraphStage.m_csgReceiverSpanTask.valid()
         || compiledGraph.tasksSharePacket(
@@ -143,8 +141,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_accumulationStreamTask
         )
     ;
-    // The graph-only finalizer lowers the final attachment transition, so it is part of accumulation's accepted
-    // Graphics packet and timing endpoint. A split here would let Composite bypass that handoff.
+    // The finalizer is part of accumulation's packet; a split would bypass it.
     const bool avboitAccumulationPacketContainsFinalizer = !hasTransparentRenderers
         || compiledGraph.tasksSharePacket(
             taskGraphStage.m_accumulationTask,
@@ -199,8 +196,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
     const bool integrationRunsOnCompute = avboitIntegrationQueue
         && avboitIntegrationQueue->queueClass == Core::CommandQueue::Compute
     ;
-    // The compiler may independently retain or collapse both Compute-preferred stages. Preserve the one natural
-    // semantic order, and require each collapsed stage to merge with both adjacent Graphics semantics.
+    // Keep natural stage order; collapsed stages merge with adjacent Graphics.
     const bool avboitNaturalStagePlacementValid = !hasTransparentRenderers || (
         avboitDepthWarpQueue
         && avboitExtinctionQueue
@@ -230,9 +226,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_accumulationFinalizeTask
         )
     );
-    // Occupancy's measurement spans the generator and raster consumer. Require the exact Pre-packet order so
-    // graph declarations, rather than a callback-local transition, own the output UAV-to-VertexBuffer handoff on
-    // both the split and unsplit AVBOIT routes.
+    // Require Pre-packet order so the graph owns the output handoff.
     const bool avboitOccupancyComputeEmulationMerged = [&](){
         if(!taskGraphStage.m_occupancyComputeEmulationTask.valid())
             return true;
@@ -278,9 +272,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_occupancyComputeEmulationTask
         );
     }();
-    // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
-    // must be contiguous in AVBOIT Pre's one Graphics packet, or a later local bridge could overwrite the retained
-    // output between the compiler-owned UAV and VertexBuffer phases.
+    // Shared outputs need contiguous D/R callbacks in Pre's packet.
     const bool avboitOccupancySharedComputeEmulationMerged = [&](){
         const usize phaseCount = taskGraphStage.m_occupancySharedComputeEmulationTaskCount;
         if(phaseCount == 0u){
@@ -366,8 +358,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         avboitOccupancyComputeEmulationMerged
         && avboitOccupancySharedComputeEmulationMerged
     ;
-    // Extinction's measurement spans the generator and raster consumer. Require their exact packet order so the
-    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff on both routes.
+    // Require exact packet order so the graph owns the output handoff.
     const bool avboitExtinctionComputeEmulationMerged = [&](){
         if(!taskGraphStage.m_extinctionComputeEmulationTask.valid())
             return true;

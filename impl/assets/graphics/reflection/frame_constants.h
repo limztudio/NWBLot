@@ -5,6 +5,10 @@
 #ifndef NWB_GRAPHICS_REFLECTION_FRAME_CONSTANTS_H
 #define NWB_GRAPHICS_REFLECTION_FRAME_CONSTANTS_H
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "../raytrace/optical_transport_constants.h"
 #include "feedback_constants.h"
 

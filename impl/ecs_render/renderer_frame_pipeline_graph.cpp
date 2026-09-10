@@ -4438,7 +4438,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
 
 
-    // Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the immediate Extinction dependency; replacing this anchor would hide a broken upload-to-producer handoff.
+    // Keep the final upload as stream anchor; replacing it hides a broken producer handoff.
     const Core::GpuTaskId extinctionStreamTask = extinctionUploadTask;
     if(extinctionStreamsUploaded)
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;

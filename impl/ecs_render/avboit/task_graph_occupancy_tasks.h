@@ -122,10 +122,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
 };
 
 
-// Two through five regular AVBOIT Occupancy draws sharing one generated-vertex buffer cannot batch their
-// generators ahead of rasterization. Keep the original D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) ->
-// R(D) -> D(E) -> R(E)] stream as explicit primary-Graphics callbacks so the compiler owns every alternating UAV/VertexBuffer
-// boundary before the existing Depth-Warp successor.
+// Shared-buffer occupancy draws cannot batch generators; keep D/R streams as explicit callbacks.
 struct AvboitOccupancySharedComputeEmulationGraphTask{
     enum class Phase : u8{
         Generate,

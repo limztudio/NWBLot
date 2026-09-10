@@ -140,9 +140,7 @@ public:
     [[nodiscard]] bool prepareResources(Core::Framebuffer* framebuffer);
     void render(Core::Framebuffer* framebuffer);
     [[nodiscard]] bool appendFrameGraph(Core::Telemetry::FrameGraphBuilder& builder);
-    // This explicitly trades one frame of shadow/caustic/surfel latency for overlap: Graphics lights the current G-buffer from
-    // an accepted prior shadow/caustic/surfel snapshot while AsyncCompute produces the next one. It is off by default
-    // and self-bootstraps through the normal current-frame path after every toggle or target recreation.
+    // Trades one frame of effect latency for overlap; off by default, self-bootstraps on toggle.
     void setRefractionEnabled(const bool enabled)noexcept{ m_refractionEnabled = enabled; }
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);

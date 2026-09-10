@@ -1310,8 +1310,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
 
-        // Geometry downsample writes its fresh cache after photons. The following wavelet callback reads that cache,
-        // so the compiler owns their exact UAV-to-SRV handoff while ping-pong transitions remain local.
+        // Geometry downsample feeds the wavelet cache; compiler owns the UAV-to-SRV handoff.
         hardwareGeometryResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -1328,8 +1327,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             Core::ResourceStates::UnorderedAccess
         ));
 
-        // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong
-        // target. It does not sample the ping-pong input for this stage; wavelets own that alternating sequence.
+        // Prepare writes the parity-selected ping-pong target; wavelets own the alternating sequence.
         constexpr bool s_HardwareCausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
         hardwareResolvePrepareResourceUses.push_back(ReadTextureUse(
             causticAccumulator,
@@ -1481,7 +1479,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             ));
         }
 
-        // Upsample receives its exact final graph handoff. The following timing-close callback carries no resource use.
+        // Upsample takes the final graph handoff; timing-close carries no resource use.
         hardwareResolveUpsampleResourceUses.push_back(ReadTextureUse(
             worldPosition,
             ECSRenderDetail::s_FramebufferSubresources,
@@ -1560,9 +1558,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 Core::ResourceStates::ConstantBuffer
             ));
         }
-        // Hardware caustic closest-hit shaders directly heap-load the selected mesh attribute streams.  These are
-        // centrally imported retained handles, so declaring them here gives the compiler the Prefix -> Caustics
-        // SRV handoff instead of relying on the recorder's manual staging loop.
+        // Declare retained attribute handles here for the Prefix -> Caustics SRV handoff.
         for(const Core::GpuGraphResourceId resource : hardwareTraceAttributeResources){
             if(!resource.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
@@ -1609,15 +1605,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             : 0u
         ;
 
-        // The lagged-history completion must protect the first writer too: clear starts the existing Hardware
-        // Caustics Graphics packet and the ray-tracing producer merges into it below. A fresh temporal accumulator
-        // inserts its typed zero clear between that no-producer result and the producer callback.
+        // Lagged-history completion must protect the first writer; fresh accumulator clears between them.
         Core::GpuTaskSchedulingHint irradianceClearScheduling;
         irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         irradianceClearScheduling.allowPacketMerge = true;
-        // Start Hardware Caustics on the selected same-class GraphicsRuntime lane when available, including an alternate
-        // Graphics family only when its declared resources support the crossing. Every later direct successor
-        // retains that lane through the graph's normal physical-queue dependency plan.
+        // Prefer the same-class GraphicsRuntime lane; later successors retain it.
         EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
         EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
 

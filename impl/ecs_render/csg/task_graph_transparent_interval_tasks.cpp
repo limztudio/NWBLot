@@ -91,8 +91,7 @@ bool AvboitCsgReceiverSpanGraphTask::record(
         );
     }
     else{
-        // Pre and Span use the same frozen readiness snapshot. A defensive mismatch must not leave a timestamp
-        // reservation open or let Combine consume an unbuilt span image.
+        // Drop the reservation on mismatch; never feed Combine a stale image.
         DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
@@ -163,8 +162,7 @@ bool AvboitCsgIntervalCombineGraphTask::record(
         payload.transparentCsgIntervalsTiming->reset();
     }
     else{
-        // Pre and Combine use the same frozen readiness snapshot. A defensive mismatch must not leave a
-        // timestamp reservation open or publish a stale removed-interval image.
+        // Drop the reservation on mismatch; never publish a stale image.
         DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();

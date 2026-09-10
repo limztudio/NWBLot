@@ -46,9 +46,7 @@ static void SetCsgReceiverSpanStorageStates(
     const bool receiverSpanOutputImageStatesGraphOwned,
     const bool receiverSpanInputImageStatesGraphOwned
 ){
-    // These load-only inputs use StorageImage heap descriptors, whose Vulkan image layout is GENERAL. The opaque
-    // graph's separate span callback declares the receiver-surface-write -> span-read same-UAV fence; aggregate
-    // native and AVBOIT callers retain it here.
+    // Load-only StorageImage inputs; aggregate callers keep the fence here.
     if(!receiverSpanInputImageStatesGraphOwned){
         commandList.setTextureState(targets.csgReceiverEventData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
@@ -65,8 +63,7 @@ static void SetCsgIntervalCombineStorageStates(
     const bool removedIntervalOutputImageStatesGraphOwned,
     const bool intervalCombineInputImageStatesGraphOwned
 ){
-    // The combine pass loads these prior-stage values through StorageImage aliases. The opaque graph's separate
-    // combine callback declares those exact same-UAV fences; aggregate native and AVBOIT callers retain them here.
+    // Combine loads prior values via StorageImage aliases; keep fences here.
     if(!intervalCombineInputImageStatesGraphOwned){
         commandList.setTextureState(targets.csgCapBackNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
         commandList.setTextureState(targets.csgIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
@@ -83,7 +80,7 @@ static void SetCsgIntervalCombineStorageStates(
 }
 
 static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    // Sampling is implemented as Load through StorageImage aliases, not sampled-image descriptors; keep GENERAL.
+    // Sampled via Load through StorageImage aliases.
     commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);

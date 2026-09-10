@@ -9,15 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Dispatch dimensions shared by the CPU scheduler and shader entry points.
+// Shared by the CPU scheduler and shader entry points.
 #define NWB_DEFERRED_LIGHTING_GROUP_SIZE 8
 #define NWB_DEFERRED_COMPOSITE_GROUP_SIZE 8
 
-// Push-constant value shared by deferred lighting and final presentation. HDR10 targets A2B10G10R10_UNORM with VK_COLOR_SPACE_HDR10_ST2084_EXT; SDR keeps the sRGB path.
+// Shared by deferred lighting and final presentation.
 #define NWB_DEFERRED_PRESENTATION_SDR 0u
 #define NWB_DEFERRED_PRESENTATION_HDR10 1u
 
-// Fullscreen Graphics semantic locations shared by the present blit and CSG cap-fill path.
+// Shared by the present blit and CSG cap-fill path.
 #define NWB_DEFERRED_FULLSCREEN_UV_LOCATION 0
 #define NWB_DEFERRED_COLOR_TARGET_LOCATION 0
 

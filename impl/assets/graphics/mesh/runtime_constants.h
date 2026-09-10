@@ -14,8 +14,7 @@
 #define NWB_MESH_DISPATCH_FLAG_MESHLET_CONE_CULL (1u << 2u)
 #define NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL (1u << 3u)
 
-// dispatch.w carries cull/dispatch flags in its low 16 bits and the material shading-model id in its high 16.
-// The pixel shader writes the id into base-color alpha for the deferred lighting BXDF dispatch.
+// dispatch.w packs flags (low 16) and the shading-model id (high 16).
 #define NWB_MESH_DISPATCH_FLAG_MASK 0x0000FFFFu
 #define NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT 16u
 #define NWB_MESH_DISPATCH_SHADING_MODEL_MASK 0x0000FFFFu
@@ -26,14 +25,12 @@
 #define NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX 1u
 #define NWB_MESH_PUSH_DISPATCH_MATERIAL_CONSTANT_BYTE_OFFSET 2u
 #define NWB_MESH_PUSH_DISPATCH_FLAGS 3u
-// Per-draw frame-resource heap slots share the fourth 16-byte lane of the material push constant, so the
-// mesh/compute stage and its pixel stage reach the same instance, typed-material, and camera buffers.
+// Frame heap slots share one push-constant lane across both stages.
 #define NWB_MESH_PUSH_FRAME_HEAP_SLOT_WORD_OFFSET 12u
 #define NWB_MESH_FRAME_HEAP_SLOT_INSTANCE 0u
 #define NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED 1u
 #define NWB_MESH_FRAME_HEAP_SLOT_VIEW 2u
-// The compute-emulation path uses the otherwise unused fourth frame-slot lane to select its writable
-// generated vertex buffer. Raster/mesh-shader draws leave this slot zero.
+// Compute emulation selects its vertex buffer here; raster draws leave it zero.
 #define NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX 3u
 #define NWB_MESH_FRAME_HEAP_SLOT_COUNT 4u
 #define NWB_MESH_PUSH_CONSTANT_BYTE_SIZE 64u
@@ -47,11 +44,10 @@
 #define NWB_MESH_INSTANCE_TRANSLATION_FLOAT_OFFSET 4u
 #define NWB_MESH_INSTANCE_MATERIAL_MUTABLE_BYTE_OFFSET_FLOAT_OFFSET 7u
 #define NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET 8u
-// Raster mesh geometry lives in the global descriptor heap. The per-draw instance record carries the heap
-// slot per mesh-stream ABI position, so the shared mesh shader fetches streams without growing the AVBOIT push constant.
+// Geometry lives in the global heap; instance records carry per-stream slots.
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET 12u
 #define NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT 12u
-// Binding 6 is reserved for the CSG UniformBuffer context selector; typed words use the frame heap lane.
+// Binding 6 is the CSG context selector.
 #define NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT 6u
 #define NWB_MESH_INSTANCE_FLOAT_COUNT (NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET + NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT)
 
@@ -69,9 +65,7 @@
 
 #define NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX 0
 #define NWB_MESH_EMULATION_VERTEX_ATTRIBUTE_COUNT 6
-// Compute-emulation writes the same half-precision normal/tangent/color payload the mesh path hands to
-// the rasterizer.  Keep the byte offsets here (rather than mirrored C++ literals) because this mixed f32/f16
-// buffer is a shared CPU/GPU ABI.
+// Byte offsets live here because the f32/f16 buffer is a shared CPU/GPU ABI.
 #define NWB_MESH_EMULATION_VERTEX_BYTE_SIZE 64u
 #define NWB_MESH_EMULATION_VERTEX_POSITION_LOCATION 0
 #define NWB_MESH_EMULATION_VERTEX_NORMAL_LOCATION 1

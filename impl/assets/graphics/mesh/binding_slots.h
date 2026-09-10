@@ -15,8 +15,7 @@
 #define NWB_MESH_BINDING_UV0 3
 #define NWB_MESH_BINDING_COLOR 4
 #define NWB_MESH_BINDING_MESHLET_DESC 5
-// Stable source-slot identities for typed material words and per-instance mutable storage,
-// both resolved through the frame descriptor heap.
+// Resolved through the frame descriptor heap.
 #ifndef NWB_MESH_BINDING_MATERIAL_TYPED
 #define NWB_MESH_BINDING_MATERIAL_TYPED 6
 #endif

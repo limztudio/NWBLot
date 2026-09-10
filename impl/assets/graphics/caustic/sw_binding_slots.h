@@ -7,15 +7,15 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Software caustic photon producer (no-HWRT fallback). 1D dispatch, one thread per photon.
+// SW photon producer (no-HWRT fallback); one thread per photon.
 
 // 64 photons per group.
 #define NWB_CAUSTIC_SW_GROUP_SIZE 64
 
-// Reuses SW shadow scene geometry; material records select buffers via heap slots.
+// Reuses SW shadow geometry.
 #include "../shadow/sw_binding_slots.h"
 
-// Overflow drops the far child rather than corrupting traversal state.
+// Overflow drops the far child.
 #define NWB_CAUSTIC_SW_SCENE_STACK_SIZE 16
 #define NWB_CAUSTIC_SW_MESH_STACK_SIZE 64
 

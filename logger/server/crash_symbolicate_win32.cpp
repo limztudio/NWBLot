@@ -330,11 +330,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     return value;
 }
 
-// The crashing process captures its own call stack at fault time (where all modules are loaded and unwinding
-// is reliable) and ships the frame addresses in callstack.txt. Resolving those addresses against the dump's
-// module map is far more dependable than unwinding the minidump server-side, so prefer them for the visible
-// callstack. Returns false when no client frames were shipped (e.g. the exception path), so the caller can
-// fall back to a server-side StackWalk64.
+// Prefer client-captured frames; fall back to server StackWalk64 when none were shipped.
 [[nodiscard]] static bool AppendClientCallstack(LogArena& arena, const HANDLE symbolProcess, const Path& packageDirectory, CrashReportText& outReport){
     AString<LogArena> callstackText{arena};
     if(!ReadTextFile(packageDirectory / CrashNames::s_CallstackFileName, callstackText) || callstackText.empty())

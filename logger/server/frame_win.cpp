@@ -85,13 +85,7 @@ inline constexpr Name s_MessageArenaName("logger/server/frame/messages");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The message store (arena + deque) is arena-backed heap memory, so its lifetime MUST end while the
-// standalone allocator runtime (oneTBB scalable_malloc, behind GlobalArena) is still alive. It therefore
-// lives inside the Frame instance, NOT at namespace scope: a namespace-scope arena/deque would be torn
-// down by the CRT atexit chain AFTER the runtime has already shut down, freeing memory into a dead
-// allocator (observed as an access violation / abort on close). MessageStore is owned by the Frame and
-// reached through the s_Store pointer; all access is guarded by s_ListMutex plus a live-store check, so
-// a stray Frame::print from a not-yet-stopped worker thread after teardown is a safe no-op.
+// Keep the store inside Frame so it tears down before the allocator runtime; late prints are safe no-ops.
 struct MessageStore{
     MessageStore()
         : arena(s_MessageArenaName)
@@ -106,8 +100,7 @@ static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
 
-// Raw pointer -> trivially destructible, so it is safe as a namespace-scope static. Points at the live
-// Frame store while a Frame exists; null before construction and after ~Frame. Guarded by s_ListMutex.
+// Points at the live Frame store; null outside Frame lifetime. Guarded by s_ListMutex.
 static MessageStore* s_Store = nullptr;
 
 static Futex s_ListMutex;

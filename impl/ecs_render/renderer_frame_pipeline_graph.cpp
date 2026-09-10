@@ -1680,7 +1680,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorBootstrapClearScheduling.allowPacketMerge = true;
             accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
-            // The bootstrap clear directly follows irradiance clear and must remain in the accepted producer packet.
+            // Bootstrap clear follows irradiance clear in the accepted producer packet.
             accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
             EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
@@ -1764,7 +1764,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         hardwareCausticsScheduling.forceSubmissionBoundary = false;
         hardwareCausticsScheduling.allowPacketMerge = true;
         hardwareCausticsScheduling.mergeWithPrevious = true;
-        // Photon, geometry, and resolve stages are explicit immediate successors in one Hardware Caustics timing chain.
+        // Keep photon/geometry/resolve stages in one Hardware Caustics timing chain.
         hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc hardwarePhotonDesc;
         hardwarePhotonDesc
@@ -2037,7 +2037,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitCsgIntervalCombinePayload.csgResources = csgResources;
 
 
-    // Freeze the transparent CSG interval producer before AVBOIT native recording.  Its shared instance/material and CSG buffers are intentionally overwritten by the later occupancy/extinction/accumulation compatibility paths, so this snapshot applies only to the receiver-surface interval work immediately before occupancy.
+    // Freeze the transparent CSG interval producer before AVBOIT recording; snapshot covers receiver work only.
     Core::GpuTaskId transparentCsgUploadTask = m_graphicsPrefixTask;
     Core::Alloc::ScratchArena transparentCsgMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId transparentCsgMaterialGeometrySet;

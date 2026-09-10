@@ -16,7 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software shadows use push-selected global heap resources; local SRV slots are ABI gaps.
+// Local SRV slots are ABI gaps.
 #define NWB_SW_SHADOW_SET 0
 
 #define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
@@ -25,7 +25,7 @@
 #define NWB_SW_SHADOW_BINDING_SCENE_SHADING 3
 #define NWB_SW_SHADOW_BINDING_LIGHT_LIST 4
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
-// Shared material context selects scene and mesh records from the heap.
+// Selects scene/mesh records from the heap.
 #define NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS 8
 // Slots 5, 7, and 9-14 are intentional ABI gaps; do not renumber.
 #define NWB_SW_SHADOW_BINDING_COARSE 15
@@ -40,9 +40,9 @@
 #define NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT 3u
 // Half-resolution opaque trace input for the soft resolve.
 #define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
-// Parallel half-resolution transparent trace input for RGB resolve/fold.
+// Transparent trace input for RGB resolve.
 #define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
-// Target-generation frame selector cbuffer.
+// Frame selector.
 #define NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES 22
 
 #define NWB_SW_SHADOW_GROUP_SIZE 8
@@ -51,7 +51,7 @@
 #define NWB_SW_SHADOW_COARSE_SHIFT 2u
 #define NWB_SW_SHADOW_COARSE_FACTOR (1u << NWB_SW_SHADOW_COARSE_SHIFT)
 
-// Separate shared C++/shader soft-opaque scale.
+// Shared soft-opaque scale.
 #define NWB_SW_SHADOW_SOFT_SHIFT 1u
 #define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
 
@@ -65,10 +65,10 @@
 #define NWB_SW_SHADOW_EDGE_COUNTER_TRACE 1
 #define NWB_SW_SHADOW_EDGE_COUNTER_SIZE 2
 
-// Compacted edge record: packed pixel and light-loop index.
+// Packed pixel and light-loop index.
 #define NWB_SW_SHADOW_EDGE_RECORD_WORDS 2
 
-// Compile-time occluder class for traversal passes.
+// Occluder class for traversal passes.
 #define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
 #define NWB_SW_SHADOW_OCCLUDER_ALL 2

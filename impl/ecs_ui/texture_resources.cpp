@@ -259,9 +259,8 @@ bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
             .setFormat(Core::Format::RGBA8_UNORM)
             .setInitialState(Core::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
-            // Graph-owned ImGui texture updates may prefer Transfer/Compute and can explicitly offload within that
-            // class. Keep all normal producer/consumer families concurrent from creation; a one-family device still
-            // retains the backend's ordinary exclusive allocation mode.
+            // ImGui texture updates may prefer Transfer/Compute. Keep all producer/consumer families concurrent from
+            // creation; a one-family device still keeps the ordinary exclusive mode.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setName(__hidden_ui::UiTextureName(static_cast<usize>(textureData.UniqueID)))
         ;

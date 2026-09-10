@@ -21,8 +21,7 @@ NWB_IMPL_SCENE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Default camera projection policy. The zero aspect-ratio sentinel deliberately asks the renderer to derive the
-// aspect from its active framebuffer; callers that cannot do that use s_FallbackAspectRatio instead.
+// Default camera policy; zero aspect asks the renderer to derive it from the framebuffer.
 namespace CameraDefaults{
 inline constexpr f32 s_VerticalFovRadians = 60.0f * (s_PI / 180.0f);
 inline constexpr f32 s_NearPlane = 0.001f;
@@ -113,7 +112,7 @@ namespace LightType{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Default physical-light policy shared by authoring components and the renderer's resolved light representation.
+// Default light policy shared by authoring and renderer representations.
 namespace LightDefaults{
 inline constexpr f32 s_WhiteColorComponent = 1.0f;
 inline constexpr f32 s_Intensity = 1.0f;
@@ -141,10 +140,7 @@ struct alignas(Float4) LightComponent{
     // Spot cone cosines; outer (wider) must stay <= inner (narrower).
     f32 innerConeCos = LightDefaults::s_InnerConeCos;
     f32 outerConeCos = LightDefaults::s_OuterConeCos;
-    // Soft-shadow source size (physical, Unreal-style). Directional: angular radius of the light disk in
-    // radians (the sun half-angle; default ~0.27deg). Point/Spot: emissive sphere radius in world units.
-    // Larger = softer penumbra. The RT sampler jitters the shadow ray over this source, so contact hardening
-    // and distance-based softening emerge for free (no separate penumbra parameter).
+    // Soft-shadow source size: directional angular radius; point/spot emissive radius.
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
     f32 sourceRadius = LightDefaults::s_PunctualSourceRadius;
     // Byte-sized members kept last so the five f32 above pack contiguously with no internal padding.

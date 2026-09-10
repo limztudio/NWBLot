@@ -54,7 +54,7 @@ NWB_IMPL_SCENE_BEGIN
 struct alignas(Float4) SceneLight{
     // xyz = world position (point/spot); w = spot inner cone cosine.
     Float4 position = Float4(0.0f, 0.0f, 0.0f, 1.0f);
-    // Directional: normalized direction toward the light. Spot: normalized emission axis. w = spot outer cone cosine.
+    // Directional: direction toward light. Spot: emission axis. w = outer cone cosine.
     Float4 direction = Float4(0.0f, 0.0f, -1.0f, 1.0f);
     // xyz = color, w = intensity.
     Float4 colorIntensity = Float4(
@@ -77,7 +77,7 @@ static_assert(IsTriviallyCopyable_V<SceneLight>, "SceneLight must stay cheap to 
 static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep storage vectors aligned");
 
 
-// Fallback used when a world declares no lights: a single neutral directional light aimed along the view.
+// Fallback when a world declares no lights: one neutral directional light.
 [[nodiscard]] SceneLight BuildDefaultSceneLight(SIMDVector forward);
 [[nodiscard]] bool TryBuildSceneLight(
     SIMDVector position,

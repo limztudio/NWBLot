@@ -18,7 +18,7 @@ NWB_IMPL_SCENE_BEGIN
 
 
 struct alignas(Float4) SceneViewBasis{
-    // Persistent view-basis storage. Calculation helpers use SIMDVector values before writing this boundary.
+    // Persistent view-basis storage; helpers convert at this boundary.
     Float4 right = Float4(1.0f, 0.0f, 0.0f, 0.0f);
     Float4 up = Float4(0.0f, 1.0f, 0.0f, 0.0f);
     Float4 forward = Float4(0.0f, 0.0f, 1.0f, 0.0f);

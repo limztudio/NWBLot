@@ -20,7 +20,7 @@ NWB_IMPL_SCENE_BEGIN
 
 
 struct alignas(Float4) CameraProjection{
-    // Persistent projection payload. Keep SIMD values in calculation helpers and convert only at this boundary.
+    // Persistent projection payload; helpers convert at this boundary.
     Float4 projectionParams = Float4(0.0f, 0.0f, 0.0f, 0.0f);
     f32 aspectRatio = 0.0f;
     f32 tanHalfVerticalFov = 0.0f;

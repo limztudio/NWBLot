@@ -22,7 +22,7 @@ namespace __hidden_lighting{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Length-squared epsilon used to decide whether a quaternion/normalization input is degenerate (near-zero).
+// Length-squared epsilon for degenerate normalization inputs.
 inline constexpr f32 s_NormalizeLengthSquaredEpsilon = 0.0001f;
 // Cosine clamping bounds for valid light cone angles.
 inline constexpr f32 s_ConeCosineMin = -1.0f;

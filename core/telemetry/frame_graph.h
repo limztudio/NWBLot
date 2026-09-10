@@ -265,10 +265,7 @@ struct FrameGraphRuntimeStatistics{
     bool present = false;
 };
 
-// Exact CPU telemetry for one physical queue in one immutable graph plan and recording attempt. A side-table row is
-// independently exact; the generic payload codec accepts a validated partial set, and an absent queue row is unknown rather
-// than zero. Live frame-graph producers must emit every queue in the compiled topology for a complete report. Durations are
-// seconds.
+// Exact CPU telemetry per physical queue; absent rows are unknown, not zero.
 struct FrameGraphPhysicalQueueCompileRuntimeStatistics{
     u64 taskCount = 0u;
     u64 packetCount = 0u;

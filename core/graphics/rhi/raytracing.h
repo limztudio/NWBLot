@@ -515,7 +515,7 @@ struct RayTracingClusterOperationDesc{
     u64 inIndirectArgsOffsetInBytes = 0;                   // Offset (in bytes) to where the descriptor array starts inIndirectArgsBuffer
 
     // In/Out Resources
-    // Required by ExplicitDestinations; independently optional as a result array for ImplicitDestinations; null for GetSizes.
+    // Required by ExplicitDestinations; optional result array for ImplicitDestinations.
     Buffer* inOutAddressesBuffer = nullptr;
     u64 inOutAddressesOffsetInBytes = 0;                   // Used only when inOutAddressesBuffer is provided
 

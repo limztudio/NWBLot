@@ -64,7 +64,7 @@ struct alignas(Float4) SceneLight{
         LightDefaults::s_Intensity
     );
     f32 range = 0.0f;
-    // Soft-shadow source size (see LightComponent): directional angular radius (radians) / punctual source radius (world units).
+    // Soft-shadow source size: angular radius (radians) / punctual radius (world units).
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
     f32 sourceRadius = LightDefaults::s_PunctualSourceRadius;
     // Byte-sized members kept last so the f32 fields pack contiguously with no internal padding.

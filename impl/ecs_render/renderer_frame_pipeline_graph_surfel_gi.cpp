@@ -471,9 +471,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             Core::GpuTaskSchedulingHint chainedInitializationScheduling = initializationScheduling;
             chainedInitializationScheduling.cost = Core::GpuTaskCostHint::Tiny;
             chainedInitializationScheduling.mergeWithPrevious = true;
-            // The subsequent snapshot can route to a dedicated Transfer queue and therefore creates a consumer
-            // frontier for the first two clears. Every tail is an explicit immediate successor, so retain the
-            // complete initialization chain in its single accepted packet rather than splitting before that wait.
+            // Snapshot may route to Transfer; retain the full init chain in one accepted packet.
             chainedInitializationScheduling.allowMergeAcrossConsumerFrontier = true;
             Core::GpuTaskId initializationDependency = m_deferredSurfelGiPreparationTask;
             const auto addInitializationClear = [&](
@@ -595,16 +593,11 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     }
 
 
-// Zero coverage is the deferred-lighting no-op. Keep the typed CopyDest clear at the front of the same Compute
-    // packet as GI: it does not merge with the preceding effects packet, while GI explicitly merges with it below.
-    // This preserves the established semantic GI boundary on every Compute/Graphics fallback route.
+// Zero coverage is the no-op; keep its clear at the front of the GI packet.
     Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
     surfelIrradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     surfelIrradianceClearScheduling.allowPacketMerge = true;
-    // This starts the independent Surfel GI effect packet after its optional Transfer snapshot, so it may choose
-    // an explicitly opted-in same-class auxiliary lane, including an alternate Compute family when every
-    // declared resource can legally cross it. The GI chain below retains that exact queue through its direct
-    // dependencies.
+    // Start the GI packet after its snapshot; the chain retains that queue.
     EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(surfelIrradianceClearScheduling);
     const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse = WriteTextureUse(
@@ -638,8 +631,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     surfelGiScheduling.forceSubmissionBoundary = false;
     surfelGiScheduling.allowPacketMerge = true;
     surfelGiScheduling.mergeWithPrevious = true;
-    // Every GI preparation stage directly succeeds the output clear or its predecessor and shares one accepted
-    // Compute timing packet; later cross-queue consumers wait for the completed packet.
+    // GI stages share one accepted timing packet; cross-queue consumers wait for it.
     surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;
     EnableSameFamilyComputeEffectRouting(surfelGiScheduling);
     EnableCrossFamilyComputeEffectRouting(surfelGiScheduling);
@@ -931,8 +923,7 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(
         },
     };
     Core::GpuTaskSchedulingHint scheduling;
-    // This infrequent diagnostic follows the terminal presentation endpoint. Treat it as a small copy so a
-    // dedicated Transfer transport can absorb it without delaying Present, while Compute/Graphics remain valid.
+    // Infrequent diagnostic after presentation; small copy so Transfer absorbs it.
     scheduling.cost = Core::GpuTaskCostHint::Small;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;

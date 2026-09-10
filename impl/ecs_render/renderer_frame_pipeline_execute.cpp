@@ -1355,9 +1355,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || (m_deferredPresentationOverlayRequired && !deferredPresentationOverlayQueue)
         || !terminalPresentationQueue
         || !deferredFrameRecoveryQueue
-        // The acquired swap-chain semaphore is attached to the primary physical Graphics transport. The task
-        // graph may use an explicitly opted-in auxiliary Graphics queue for ordinary work, but it must not route
-        // a backbuffer writer or its final presentation signal without an acquired-image/share contract for it.
+        // Backbuffer writers need an acquired-image contract on the primary queue.
         || !primaryGraphicsQueue.valid()
         || presentationEndpoint->queue != primaryGraphicsQueue
         || deferredPresentQueue->id != primaryGraphicsQueue
@@ -1388,8 +1386,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         shadowVisibilityTimingTicket.discard();
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
-        // Immutable scene-light preparation happens during graph declaration so it can be copied into graph-owned
-        // blobs. No packet has been accepted on this early path; restore its CPU-only classification exactly.
+        // No packet accepted yet; restore the CPU-only classification.
         m_raytracingSystem.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
@@ -1460,8 +1457,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.discardSoftShadowTemporalHistory();
     };
 
-    // Record preparation and prefix through the graph's ready-frontier path. These renderer payloads intentionally
-    // retain the serial default, while graph-owned upload packets later in the frame may opt into worker recording.
+    // Prep/prefix stay serial; later upload packets may use workers.
     const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
     ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
@@ -1483,10 +1479,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || m_raytracingSystem.preparedMeshSwBvhBuildsReady()
         || m_raytracingSystem.shadowVisibilitySoftwareResourcesPreflighted()
     ;
-    // A normalized trace-geometry stream may be imported as ShaderResource on the next frame even when its native
-    // BufferDesc starts at Common. Keep that accepted graph state with the preparation handoff; otherwise the
-    // following Prefix packet has a compiler state seed with no native producer entry to import. Include retained
-    // invisible streams too: preflight deliberately keeps their accepted normalization until the mesh is removed.
+    // Keep accepted trace-geometry state with the handoff, including invisible streams.
     for(const Core::BufferHandle& acceptedBuffer : acceptedTraceGeometry){
         appendShadowPrepareStateBuffer(acceptedBuffer);
         shadowPrepareStateCandidateRequired = true;

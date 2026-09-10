@@ -155,9 +155,7 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-// Material geometry is dynamically enumerable from the frozen draw snapshot. Keep collection/import compatibility in
-// the established helper above, then give the graph one immutable named collection so a consuming task can declare
-// the whole bindless geometry set without retaining its own per-buffer use list.
+// Material geometry enumerates from the frozen snapshot; give the graph one immutable collection.
 [[nodiscard]] inline bool GatherPreparedMaterialGeometryResourceSet(
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,

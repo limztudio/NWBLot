@@ -34,8 +34,7 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::All)
-            // Every material graphics pass uses this push-only layout without consuming a descriptor set. Transparent
-            // passes consume the full combined mesh/AVBOIT payload; opaque and AVBOIT compute paths use smaller payloads.
+            // Every material pass uses this push-only layout; transparent consumes the full payload.
             .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
         ;
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
@@ -53,8 +52,7 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!m_materialState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        // The per-mesh generated-vertex UAV is a global StorageBuffer heap entry selected through the fourth mesh
-        // frame-slot push-constant lane.  This local layout deliberately retains only the push range.
+        // Generated-vertex UAV is a global heap entry via the fourth push lane; keep push range only.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         auto& device = m_graphics.getDevice();
@@ -303,8 +301,7 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
     InstanceGpuDataVector& instanceData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
 ){
-    // Slot 6 carries CSG's heap-selected UniformBuffer context for every raster instance, avoiding a second
-    // pipeline-local resource descriptor in the mesh and compute geometry stages.
+    // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
     u32 csgContextHeapSlot = 0u;
     if(!csgResources.findClipContextHeapSlot(csgContextHeapSlot))
         csgContextHeapSlot = 0u;

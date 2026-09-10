@@ -59,9 +59,7 @@ static Alloc::GlobalArena& DumpArena(){
 }
 
 
-// Process-global Aftermath state: the dynamically loaded runtime, its resolved entry points, and the single
-// crash dump collected on device-lost. The dump callback (a driver thread) writes 'dumpBytes' under
-// 'dumpMutex'; the device-lost thread reads it after polling the dump status to Finished.
+// Process-global Aftermath state: runtime, entry points, and the device-lost dump.
 struct State{
     SharedLibrary library;
     PFN_GFSDK_Aftermath_EnableGpuCrashDumps enable = nullptr;
@@ -87,8 +85,7 @@ static State& GetState(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// GPU crash dump callback (free-threaded). The dump pointer is only valid for the duration of the call, so
-// copy it into the process-global buffer for the device-lost thread to ship into the crash package.
+// Crash dump callback is free-threaded; copy the dump for the device-lost thread.
 static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const uint32_t gpuCrashDumpSize, void* pUserData){
     static_cast<void>(pUserData);
     if(!pGpuCrashDump || gpuCrashDumpSize == 0u)
@@ -205,9 +202,7 @@ GpuCrashDumpView WaitForCrashDump(){
     if(!state.active)
         return view;
 
-    // Poll until the dump callback has run (Finished) or collection failed; ignore status-query failures and
-    // keep polling until the timeout so older drivers (which may only report 'Unknown') still get a chance to
-    // deliver the dump via the callback.
+    // Poll until Finished/failed; keep polling so older drivers still deliver.
     u32 waited = 0u;
     for(;;){
         GFSDK_Aftermath_CrashDump_Status status = GFSDK_Aftermath_CrashDump_Status_Unknown;

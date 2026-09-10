@@ -162,7 +162,7 @@ bool GpuDescriptorHeap::write(const GpuDescriptorHandle handle, const Descriptor
         return false;
     }
 
-    // Handle class owns binding and array index; the compatible authored type preserves storage-buffer aliases.
+    // Handle owns binding and index; authored type preserves storage-buffer aliases.
     DescriptorWriteItem writeItem = item;
     writeItem.slot = getRegisterSlot(descriptorClass);
     writeItem.arrayElement = handle.slot();

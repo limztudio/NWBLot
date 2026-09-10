@@ -33,7 +33,7 @@ namespace __hidden_runtime_cache_resources{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Each reconstructed runtime-BLAS stream needs a small allocator/control overhead in addition to its typed payload.
+// Each runtime-BLAS stream needs allocator overhead beyond its typed payload.
 static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
 
 
@@ -358,8 +358,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         return false;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Both the software fallback and the hybrid transparent-shadow tail read skinned positions and reconstructed
-    // triangle indices as raw byte buffers. Keep those views available even when hardware ray tracing is present.
+    // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
 
     bool uploaded = true;
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
@@ -505,9 +504,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         NWB_TEXT("attribute skin")
     ) && uploaded;
 
-    // Both shadow backends trace triangles, so the reconstructed index buffer is built whenever the upload
-    // otherwise succeeded; the hardware path consumes it as an accel-struct input and the software fallback
-    // reads it as a raw byte buffer.
+    // Both shadow backends trace triangles; always build the reconstructed index buffer.
     if(uploaded){
         const usize indexCount = instance.meshletPrimitiveIndices.size();
         Core::Alloc::ScratchArena scratchArena(
@@ -552,12 +549,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
         ) && uploaded;
     }
 
-    // Flat per-triangle-corner shadow/caustic trace attribute buffer, indexed as primitive*3+corner in lockstep
-    // with the reconstructed triangle index buffer above. SEEDED from the BIND-POSE streams (uv0 is pose-invariant;
-    // normal is the rest normal); for an actively-skinned mesh the normal half is then OVERWRITTEN per frame from the
-    // deformed normals by the graph-owned repack compute pass (repack_normals_cs.slang), so RT traces bend
-    // on the live pose while preserving raster hard/soft edge semantics. Both shadow backends read it as a
-    // ByteAddressBuffer, so it carries a raw view; canHaveUavs lets the repack pass write it as a raw UAV in place.
+    // Per-corner trace attributes seeded from bind-pose; repack overwrites normals per frame.
     if(uploaded){
         const usize attributeCount = instance.meshletPrimitiveIndices.size();
         Core::Alloc::ScratchArena scratchArena(

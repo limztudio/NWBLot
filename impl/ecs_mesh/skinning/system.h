@@ -231,9 +231,7 @@ private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();
-    // Declares all frame-local skinning work as one graph-owned primary-Graphics packet: immutable palette/selector
-    // uploads and rest-stream copies feed deformation, bounds/repack, and final-state stages whose accepted task
-    // commits dirty-state changes.
+    // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] bool submitFrameSkinningGraph();
     [[nodiscard]] bool prepareRuntimeMeshResources(
         MeshSkinningRuntimeInstance& instance,

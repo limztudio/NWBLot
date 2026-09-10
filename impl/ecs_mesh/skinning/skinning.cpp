@@ -51,8 +51,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
         return false;
     if(!ensureBoundsPipeline())
         return false;
-    // The RT attribute buffer exists only when ray tracing is supported; build the repack pipeline only then so the
-    // runtime resource registration has its layout, and so no-RT runs do not pay for an unused pipeline.
+    // RT attribute buffer exists only with ray tracing; build repack pipeline only then.
     if(instance.attributeBuffer && !ensureRepackPipeline())
         return false;
 
@@ -67,8 +66,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     ))
         return false;
 
-    // Releasing a pose rebuilds the per-dispatch descriptors before the subsequent render pass can observe the
-    // previous skinning generation. Force one rest->skinned copy so the output streams no longer retain that pose.
+    // Releasing a pose rebuilds descriptors; force one rest->skinned copy.
     if(!hasActiveSkin && hadSkinningResources && resourcesRebuilt){
         instance.dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(
             instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty
@@ -126,8 +124,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
     if(!heap.isInitialized())
         return false;
 
-    // The graph establishes the selector and static inputs before this callback, and its deformation task declares
-    // every generated skinned stream as an UnorderedAccess write. The callback only records the compute dispatch.
+    // Graph establishes inputs and declares UAV outputs; callback records dispatch only.
     Core::ComputeState computeState;
     computeState.setPipeline(skinningPipeline);
     commandList.setComputeState(computeState);
@@ -188,8 +185,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
     if(!heap.isInitialized())
         return false;
 
-    // Bounds consumes graph-declared descriptor-visible skinned positions and static meshlet inputs, then writes
-    // graph-declared meshlet-bounds UAV output.
+    // Bounds consumes declared skinned positions and writes declared bounds output.
     Core::ComputeState computeState;
     computeState.setPipeline(boundsPipeline);
     commandList.setComputeState(computeState);
@@ -213,8 +209,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
         if(!skinnedNormal || !meshletAttributeRefDeltas || !attributeBuffer || !repackPipeline)
             return false;
 
-        // The graph lowers the deformation/copy handoff before normal repack, then publishes packed attributes as
-        // this task's UnorderedAccess output.
+        // Graph lowers the handoff before repack; publishes packed attributes as output.
         computeState.setPipeline(repackPipeline);
         commandList.setComputeState(computeState);
         heap.bindCompute(commandList, *repackPipeline);

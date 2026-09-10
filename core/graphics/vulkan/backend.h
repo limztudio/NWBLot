@@ -962,7 +962,6 @@ private:
 private:
     VkCommandBuffer m_cmdBuf = VK_NULL_HANDLE;
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
-    bool m_ownsCmdPool = false;
     Futex* m_sharedCommandPoolMutex = nullptr;
 
     CommandBufferResourceReferences m_resourceReferences;
@@ -985,6 +984,7 @@ private:
     const VulkanContext& m_context;
     Queue& m_queue;
     TrackedCommandBufferArenaState::Enum m_arenaState = TrackedCommandBufferArenaState::Untracked;
+    bool m_ownsCmdPool = false;
 };
 typedef Handle<TrackedCommandBuffer> TrackedCommandBufferPtr;
 
@@ -1135,9 +1135,9 @@ private:
     Device& m_device;
 
     NativeQueueState& m_nativeQueue;
-    CommandQueue::Enum m_queueID;
     GpuPhysicalQueueId m_physicalQueue;
     u32 m_queueFamilyIndex;
+    CommandQueue::Enum m_queueID;
 
     // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
     // Acquire before m_mutex when both are required.
@@ -1294,14 +1294,14 @@ private:
     VkDeviceMemory m_memory = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
     VkDeviceSize m_memoryOffset = 0;
-    u32 m_memoryTypeIndex = UINT32_MAX;
     void* m_mappedMemory = nullptr;
-    bool m_requiresInvalidate = false;
     Vector<BindingReservation, Alloc::GlobalArena> m_bindingReservations;
     Futex m_bindingMutex;
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
+    u32 m_memoryTypeIndex = UINT32_MAX;
+    bool m_requiresInvalidate = false;
 };
 
 
@@ -1422,11 +1422,11 @@ private:
     Device& m_device;
     u64 m_defaultChunkSize;
     u64 m_memoryLimit;
-    bool m_isScratchBuffer;
     Futex m_mutex;
     u64 m_retiredChunkBytes = 0;
 
     GraphicsDeque<QueueChunkLedger> m_queueChunkLedgers;
+    bool m_isScratchBuffer;
 };
 
 
@@ -1504,7 +1504,6 @@ private:
 private:
     BufferDesc m_desc;
     const BufferDesc m_creationDesc;
-    const bool m_creationInitialStateKnown;
 
     VkBuffer m_buffer = VK_NULL_HANDLE;
     VulkanAllocationHandle m_allocation = nullptr;
@@ -1522,12 +1521,13 @@ private:
     VolatileBufferState m_volatileState;
     Futex m_bufferViewsMutex;
 
+    const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
+    const bool m_creationInitialStateKnown;
+
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
     bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
-
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
 };
 
 
@@ -1659,7 +1659,6 @@ private:
 private:
     TextureDesc m_desc;
     const TextureDesc m_creationDesc;
-    const bool m_creationInitialStateKnown;
     VulkanDetail::TextureFormatBlockLayout m_formatLayout;
     VkImageAspectFlags m_aspectMask = 0;
 
@@ -1677,10 +1676,10 @@ private:
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
 
-    bool m_managed = true; // if true, owns the VkImage or VMA allocation
-
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
+    const bool m_creationInitialStateKnown;
+    bool m_managed = true; // if true, owns the VkImage or VMA allocation
 };
 
 
@@ -1710,7 +1709,6 @@ private:
     VkImageAspectFlags m_aspectMask = 0;
     u64 m_arrayByteSize = 0;
     u64 m_totalByteSize = 0;
-    u32 m_bufferOffsetAlignment = 0;
     ResourceQueueSharing::Mask m_creationQueueSharing = ResourceQueueSharing::Exclusive;
     VkSharingMode m_creationSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     VulkanDetail::StagingTextureMipLayoutVector m_mipLayouts;
@@ -1720,11 +1718,12 @@ private:
     VulkanAllocationHandle m_allocation = nullptr;
     Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
-    bool m_requiresInvalidate = false;
-    CpuAccessMode::Enum m_cpuAccess{};
 
     const VulkanContext& m_context;
     VulkanAllocator& m_allocator;
+    u32 m_bufferOffsetAlignment = 0;
+    CpuAccessMode::Enum m_cpuAccess{};
+    bool m_requiresInvalidate = false;
 };
 
 
@@ -2378,7 +2377,6 @@ private:
     FixedTable<BufferHandle> m_resourceDescriptorBuffers;
     FixedTable<TextureHandle> m_resourceDescriptorTextures;
     FixedTable<SamplerHandle> m_samplerDescriptorResources;
-    u32 m_accelStructBufferBindingOffset = 0u;
     // Binding byte offsets within a set block.
     u32 m_classBufferOffset[GpuDescriptorClass::kCount] = {};
 
@@ -2396,6 +2394,7 @@ private:
     u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
+    u32 m_accelStructBufferBindingOffset = 0u;
     bool m_initialized = false;
 };
 
@@ -2535,7 +2534,6 @@ public:
 
 private:
     RayTracingPipelineDesc m_desc;
-    const bool m_allowClusterAccelerationStructuresAtCreation;
     VkPipeline m_pipeline = VK_NULL_HANDLE;
     // vkGetRayTracingShaderGroupHandlesKHR returns tightly packed handles; SBT records add alignment later.
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
@@ -2543,6 +2541,7 @@ private:
 
     const VulkanContext& m_context;
     Device& m_device;
+    const bool m_allowClusterAccelerationStructuresAtCreation;
 };
 
 
@@ -2788,12 +2787,12 @@ private:
     BufferHandle m_dataBuffer;
     VkMicromapEXT m_micromap = VK_NULL_HANDLE;
     u64 m_deviceAddress = 0;
-    u32 m_maxOpacity2StateSubdivisionLevel = 0u;
-    u32 m_maxOpacity4StateSubdivisionLevel = 0u;
-    bool m_compacted = false;
 
     const VulkanContext& m_context;
     Atomic<bool> m_acceptedConstructed{ false };
+    u32 m_maxOpacity2StateSubdivisionLevel = 0u;
+    u32 m_maxOpacity4StateSubdivisionLevel = 0u;
+    bool m_compacted = false;
 };
 
 
@@ -3489,18 +3488,18 @@ private:
     TrackedCommandBufferPtr m_currentCmdBuf;
     StateTracker m_stateTracker;
     VulkanDetail::HostReadbackBarrierTracker m_hostReadbackBarrierTracker;
-    bool m_enableAutomaticBarriers = true;
-    bool m_isRecording = false;
-    bool m_commandRecordingFailed = false;
     u64 m_recordingLeaseSerial = 0u;
     Atomic<u64> m_graphRecordingOwnershipSerial{ 0u };
     mutable Atomic<u8> m_graphPublicationState{ s_GraphPublicationUnowned };
     u64 m_nativeRecordingID = 0u;
     u64 m_nextMarkerSerial = 0u;
-    bool m_renderPassActive = false;
-    bool m_descriptorBuffersBound = false;
     GraphicsVector<MarkerStackEntry> m_markerStack;
     Framebuffer* m_renderPassFramebuffer = nullptr;
+    bool m_enableAutomaticBarriers = true;
+    bool m_isRecording = false;
+    bool m_commandRecordingFailed = false;
+    bool m_renderPassActive = false;
+    bool m_descriptorBuffersBound = false;
 #if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
     GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;
@@ -3539,9 +3538,9 @@ public:
 private:
     Futex m_mutex;
     VkFence m_fence = VK_NULL_HANDLE;
-    bool m_started = false;
 
     const VulkanContext& m_context;
+    bool m_started = false;
 };
 
 
@@ -3577,14 +3576,11 @@ private:
     Futex m_mutex;
     VkQueryPool m_queryPool = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_timestampQueue;
-    u32 m_timestampValidBits = 0u;
     GpuPhysicalQueueId m_cycleBaselineQueue;
     GpuPhysicalQueueId m_cycleQueue;
     RecordingOwner m_resetRecordingOwner;
     RecordingOwner m_beginRecordingOwner;
     RecordingOwner m_endRecordingOwner;
-    u32 m_cycleBaselineValidBits = 0u;
-    u32 m_cycleValidBits = 0u;
     u64 m_incarnation = 0u;
     u64 m_nextRecordingGeneration = 0u;
     u64 m_nextResetAuthorizationGeneration = 0u;
@@ -3597,6 +3593,9 @@ private:
     QueueSubmissionToken m_cycleBaselineCompletion;
     QueueSubmissionToken m_completedCycleSubmission;
     QueueSubmissionToken m_resetAuthorizationSubmission;
+    u32 m_timestampValidBits = 0u;
+    u32 m_cycleBaselineValidBits = 0u;
+    u32 m_cycleValidBits = 0u;
     bool m_cycleBaselineActive = false;
     bool m_beginAccepted = false;
     bool m_cycleInvalidated = false;

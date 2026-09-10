@@ -24,7 +24,6 @@ TrackedCommandBuffer::TrackedCommandBuffer(
 )
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_cmdPool(commandPool)
-    , m_ownsCmdPool(ownsCommandPool)
     , m_sharedCommandPoolMutex(sharedCommandPoolMutex)
     , m_resourceReferences(context.objectArena)
     , m_referencedStagingBuffers(context.objectArena)
@@ -35,6 +34,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
     , m_timerQueryRecordingClaims(context.objectArena)
     , m_context(context)
     , m_queue(queue)
+    , m_ownsCmdPool(ownsCommandPool)
 {
     if(m_ownsCmdPool){
         auto poolInfo = VulkanDetail::MakeVkStruct<VkCommandPoolCreateInfo>(VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO);

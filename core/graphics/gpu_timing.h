@@ -359,7 +359,6 @@ private:
     QueryVector m_queries;
     Name m_scopeName = NAME_NONE;
     Perf::TimingScopeId m_timingScope;
-    u32 m_requestedQueryCount = 0u;
     u64 m_nextReservation = 0u;
     u64 m_publicationGeneration = 1u;
     usize m_pendingAcceptedQueryCount = 0u;
@@ -370,6 +369,7 @@ private:
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
     u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
+    u32 m_requestedQueryCount = 0u;
     bool m_captureEnabled = false;
 };
 
@@ -589,8 +589,8 @@ private:
     Atomic<u64> m_sampleSubscriptionIdentityLimit{ 0u };
     u64 m_performanceCaptureEpoch = 1u;
     u64 m_currentFrameIndex = 0u;
-    u32 m_epoch = 1u;
     GpuTimingRecorderStatistics m_statistics;
+    u32 m_epoch = 1u;
     bool m_pendingAttributionRetirements = false;
     bool m_accumulatorsActive = false;
     bool m_performanceCollectionActive = false;

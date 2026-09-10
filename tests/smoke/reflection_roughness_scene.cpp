@@ -56,9 +56,9 @@ ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& contex
     const Core::ECS::EntityID camera, const Core::ECS::EntityID light, const f32 roughness)
     : m_context(context)
     , m_world(world)
+    , m_bindJoints(context.objectArena)
     , m_camera(camera)
     , m_light(light)
-    , m_bindJoints(context.objectArena)
     , m_roughness(roughness){}
 
 bool ReflectionRoughnessScene::create(const AStringView caseName, const bool finalState){

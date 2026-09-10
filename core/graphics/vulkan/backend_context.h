@@ -344,9 +344,9 @@ private:
     QueueSubmissionToken m_framePresentationSubmission;
     u64 m_nextFramePresentationClaimIdentity = 0u;
     u64 m_framePresentationClaimIdentity = 0u;
-    bool m_framePresentationClaimIdentityExhausted = false;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
     FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
+    bool m_framePresentationClaimIdentityExhausted = false;
     bool m_frameAcquired = false;
     bool m_frameAbandonmentComplete = false;
 

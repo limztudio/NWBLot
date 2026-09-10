@@ -256,11 +256,11 @@ private:
     EntityManager m_entityManager;
     Vector<u32, Alloc::GlobalArena> m_entityComponentHeads;
     Vector<EntityComponentNode, Alloc::GlobalArena> m_entityComponentNodes;
-    u32 m_freeEntityComponentNode;
     Vector<ComponentPoolPtr, Alloc::GlobalArena> m_pools;
     Vector<SystemEntry, Alloc::GlobalArena> m_systems;
     SystemScheduler m_scheduler;
     MessageBus m_messageBus;
+    u32 m_freeEntityComponentNode;
 };
 
 

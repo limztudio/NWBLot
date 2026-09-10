@@ -18,8 +18,8 @@ UploadManager::UploadManager(Device& pParent, u64 defaultChunkSize, u64 memoryLi
     : m_device(pParent)
     , m_defaultChunkSize(defaultChunkSize)
     , m_memoryLimit(memoryLimit)
-    , m_isScratchBuffer(isScratchBuffer)
     , m_queueChunkLedgers(m_device.m_context.objectArena)
+    , m_isScratchBuffer(isScratchBuffer)
 {}
 UploadManager::~UploadManager(){
     clear();

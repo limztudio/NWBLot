@@ -292,6 +292,8 @@ private:
     Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;
     usize m_vertexBufferCapacity = 0;
     usize m_indexBufferCapacity = 0;
+    u64 m_taskGraphPresentationGraphGeneration = 0u;
+    u64 m_frameGeneration = 0u;
     f32 m_deltaSeconds = 0.0f;
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
@@ -307,8 +309,6 @@ private:
     // Keep it separate from the immutable overlay claim above.
     bool m_taskGraphLegacyPresentationClaimed = false;
     bool m_taskGraphDrawUploadsPrepared = false;
-    u64 m_taskGraphPresentationGraphGeneration = 0u;
-    u64 m_frameGeneration = 0u;
     bool m_wantsKeyboardCapture = false;
     bool m_wantsMouseCapture = false;
     bool m_wantsTextInput = false;

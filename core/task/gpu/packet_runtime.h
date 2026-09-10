@@ -1072,12 +1072,9 @@ private:
     const u64 m_transactionIdentity = 0u;
     u64 m_resetGeneration = 0u;
     GpuGraphSubmissionBinding m_activeSubmissionBinding;
-    bool m_submissionBindingResolved = false;
-    u16 m_deviceGeneration = 0u;
     u64 m_acceptedSubmissionCount = 0u;
     u64 m_acceptanceRevision = 0u;
     GpuTaskGraphSubmissionStatistics m_submissionStatistics;
-    bool m_valid = false;
     // Ready-frontier workers cannot inherit the caller's thread-local operation chain. A composite writer therefore
     // closes public operation admission across threads before it invokes or waits for arbitrary record callbacks.
     mutable AtomicFlag m_compositeOperationActive;
@@ -1092,6 +1089,9 @@ private:
     // Keep that indivisible publication tail serialized while native queue work remains free to overlap.
     mutable Futex m_resolutionMutex;
     mutable Futex m_mutex;
+    bool m_submissionBindingResolved = false;
+    bool m_valid = false;
+    u16 m_deviceGeneration = 0u;
 };
 
 

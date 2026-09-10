@@ -110,9 +110,6 @@ private:
     ACompactString m_volumeName;
 
     mutable Futex m_mutex;
-    VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
-    bool m_mounted = false;
-    bool m_writable = false;
 
     u64 m_segmentSize = 0;
     u64 m_metadataBytes = 0;
@@ -122,6 +119,10 @@ private:
     Alloc::GlobalArena& m_arena;
     SegmentPathVector m_segmentPaths;
     FileMap m_files;
+
+    VolumeUsage::Enum m_usage = VolumeUsage::RuntimeReadOnly;
+    bool m_mounted = false;
+    bool m_writable = false;
 };
 
 

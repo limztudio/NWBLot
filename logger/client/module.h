@@ -112,8 +112,8 @@ private:
     Vector<u8, LogArena> m_pendingPayload;
     AString<LogArena> m_messageUrl;
     AString<LogArena> m_telemetryUrl;
-    bool m_hasPendingPayload;
     ClientPayloadKind::Enum m_pendingPayloadKind;
+    bool m_hasPendingPayload;
 
 private:
     Atomic<usize> m_msgCount;

@@ -47,11 +47,11 @@ private:
 private:
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
+    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
     Core::ECS::EntityID m_camera;
     Core::ECS::EntityID m_light;
     Core::ECS::EntityID m_red;
     Core::ECS::EntityID m_skeleton;
-    Vector<Impl::SkeletonJointMatrix, Core::Alloc::GlobalArena> m_bindJoints;
     f32 m_roughness;
     ReflectionRoughnessCase::Enum m_case = ReflectionRoughnessCase::Static;
     bool m_finalState = false;

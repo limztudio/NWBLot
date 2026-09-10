@@ -24,11 +24,11 @@ World::World(Alloc::GlobalArena& arena, CpuTaskScheduler& taskScheduler)
     , m_entityManager(m_arena)
     , m_entityComponentHeads(m_arena)
     , m_entityComponentNodes(m_arena)
-    , m_freeEntityComponentNode(s_InvalidEntityComponentNode)
     , m_pools(m_arena)
     , m_systems(m_arena)
     , m_scheduler(m_arena)
     , m_messageBus(m_arena)
+    , m_freeEntityComponentNode(s_InvalidEntityComponentNode)
 {}
 World::~World()noexcept(false){
     ScopeExit drainOnFailure([this]()noexcept{ m_tasks.drain(); });

@@ -185,11 +185,11 @@ private:
     const tchar* m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
-    u32 m_intervalFrames = 0u;
     ScopeAccum m_scopes[s_MaxScopes] = {};
     // Per-scope last-folded publish-frame watermark. NOT reset between intervals (resetInterval only clears
     // m_scopes), so a GPU window folded in one interval is never re-folded into the next at the boundary.
     u64 m_scopeLastFoldedPublish[s_MaxScopes] = {};
+    u32 m_intervalFrames = 0u;
 };
 
 

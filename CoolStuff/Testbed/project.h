@@ -57,10 +57,10 @@ private:
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;
     NWB::Core::ECS::EntityID m_characterEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
-    Array<bool, s_KeyStateCount> m_keyPressed = {};
     bool m_inputRegistered = false;
     bool m_mouseLookActive = false;
     bool m_mousePositionValid = false;
+    Array<bool, s_KeyStateCount> m_keyPressed = {};
 };
 
 

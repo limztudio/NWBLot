@@ -94,12 +94,12 @@ private:
 private:
     MStringView m_source;
     usize m_current = 0;
+    MStringView m_errorMessage;
     u32 m_line = 1;
     u32 m_column = 1;
-    bool m_hasPendingError = false;
     u32 m_errorLine = 1;
     u32 m_errorColumn = 1;
-    MStringView m_errorMessage;
+    bool m_hasPendingError = false;
 };
 
 

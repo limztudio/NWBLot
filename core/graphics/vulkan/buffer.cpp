@@ -106,7 +106,6 @@ Buffer::Buffer(
     : RefCounter<GraphicsResource>(context.cpuScheduler)
     , m_desc(creationDesc)
     , m_creationDesc(creationDesc)
-    , m_creationInitialStateKnown(initialStateKnown)
     , m_bufferQueueFamilyIndices(__hidden_buffer::CopyBufferQueueFamilyIndices(context, bufferInfo))
     , m_bufferInfo(__hidden_buffer::RetainBufferCreateInfo(bufferInfo, m_bufferQueueFamilyIndices))
     , m_retainedStateKnown(creationDesc.keepInitialState && initialStateKnown)
@@ -114,6 +113,7 @@ Buffer::Buffer(
     , m_bufferViews(context.objectArena)
     , m_context(context)
     , m_allocator(allocator)
+    , m_creationInitialStateKnown(initialStateKnown)
 {}
 Buffer::~Buffer(){
     const VkBuffer registeredNativeBuffer = m_buffer;

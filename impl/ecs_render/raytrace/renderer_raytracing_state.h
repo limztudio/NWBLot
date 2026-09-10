@@ -67,10 +67,6 @@ struct RtSceneBvhState{
     usize m_sceneInstanceCapacity = 0u;
 
     Core::RayTracingAccelStructHandle m_tlas;
-    // A new backing generation begins in Common until native direct recording or an accepted Shadow Preparation
-    // handoff records its final state. This remains true across discarded frozen plans.
-    bool m_tlasBackingFresh = false;
-    bool m_tlasBackingStateHandoffPending = false;
     Core::BindingLayoutHandle m_bvhSortBindingLayout;
     Core::ShaderHandle m_bvhSortShader;
     Core::ComputePipelineHandle m_bvhSortPipeline;
@@ -116,6 +112,10 @@ struct RtSceneBvhState{
     bool m_sceneSwBvhStaticSceneHashValid = false;
     bool m_hwShadowMaterialContextHashValid = false;
     bool m_swShadowMaterialContextHashValid = false;
+    // A new backing generation begins in Common until native direct recording or an accepted Shadow Preparation
+    // handoff records its final state. This remains true across discarded frozen plans.
+    bool m_tlasBackingFresh = false;
+    bool m_tlasBackingStateHandoffPending = false;
     // HW traces opaque shadows; SW adds transparent transmittance when needed.
     bool m_sceneHasTransparentOccluder = false;
     bool m_hybridTransparentShadowReady = false;
@@ -394,6 +394,7 @@ struct RtSurfelGiState{
     // Surfel owns its shared material-context heap view.
     Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
 
+    Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     u32 m_surfelCountReadbackFrame = 0u;
     u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
     u32 m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
@@ -410,7 +411,6 @@ struct RtSurfelGiState{
     bool m_surfelAgeFreePipelineFailed = false;
     bool m_surfelSpawnPipelineFailed = false;
     bool m_surfelEnabled = false;
-    Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     // First trace uses all surfels; later traces use the update divisor.
     bool m_surfelSeeded = false;
     // Retries graph-owned resource clears after a rejected packet.

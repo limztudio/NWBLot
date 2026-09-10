@@ -25,8 +25,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-operation membership for compute-emulation output ownership. Buffers and descriptor slots are separate
-// identity domains; the plans choose which domains participate in their existing alias contract.
+// Per-operation emulation-output membership; buffers and slots are separate domains.
 template<typename Identity>
 class MaterialPassEmulationOutputIndex final : NoCopy{
 private:
@@ -55,7 +54,7 @@ public:
         return true;
     }
 
-    // Seeds and mutable receiver snapshots permit repeated identities without changing their owning row arrays.
+    // Seeds and snapshots permit repeated identities without changing owners.
     void include(const Identity identity){
         if(m_index){
             m_index->insert(identity);

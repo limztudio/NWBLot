@@ -33,7 +33,7 @@ class RendererMaterialSystem;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Device-lifetime material asset caches retain the descriptor owner for every patched global heap slot.
+// Material asset caches retain descriptor owners for patched heap slots.
 struct RendererMaterialResourceState{
     HashMap<Name, UniquePtr<TextureGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> textureAssetCache;
     HashMap<Name, UniquePtr<SamplerGpuResource>, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> samplerAssetCache;

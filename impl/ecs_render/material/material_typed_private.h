@@ -80,8 +80,7 @@ struct MaterialTypedByteContentKeyHasher{
     }
 };
 
-// Content-addressed dedup map for mutable typed byte ranges within one upload buffer: identical mutable blocks
-// (the common case -- many instances sharing a material's default mutable storage) share one appended range.
+// Dedup map for mutable typed ranges; identical blocks share one range.
 // Used by the material draw pass and the shadow occluder packing alike.
 using MaterialTypedByteContentRangeMap = HashMap<
     MaterialTypedByteContentKey,

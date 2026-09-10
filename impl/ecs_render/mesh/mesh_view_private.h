@@ -70,14 +70,14 @@ inline SIMDMatrix BuildWorldToClipMatrix(
         VectorAndInt(VectorSplatW(positionDepthBias), s_SIMDMaskZ)
     );
 
-    // World-to-view: basis vectors as rows, view-space translation in the fourth column (M*v form).
+    // World-to-view: basis rows, translation in fourth column.
     SIMDMatrix worldToView{};
     worldToView.v[0] = VectorSelect(right, VectorSplatX(translation), s_SIMDMaskW);
     worldToView.v[1] = VectorSelect(up, VectorSplatY(translation), s_SIMDMaskW);
     worldToView.v[2] = VectorSelect(forward, VectorSplatZ(translation), s_SIMDMaskW);
     worldToView.v[3] = s_SIMDIdentityR3;
 
-    // View-to-clip: projection lanes are x/y scale, z scale, and z bias; clip.w carries view-space z.
+    // View-to-clip: x/y scale, z scale/bias; clip.w carries view-space z.
     SIMDMatrix viewToClip{};
     viewToClip.v[0] = VectorAndInt(projection, s_SIMDMaskX);
     viewToClip.v[1] = VectorAndInt(projection, s_SIMDMaskY);

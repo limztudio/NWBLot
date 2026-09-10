@@ -67,8 +67,7 @@ struct MeshViewSetupGraphTask{
 };
 
 
-// The CPU mirror is updated only after the built-in upload packet accepts. This keeps a rejected recording from
-// suppressing the retry's immutable blob declaration.
+// Update the CPU mirror after packet accepts so rejected recordings still retry.
 struct MeshViewUploadCommitGraphTask{
     struct Payload{
         RendererMeshSystem* meshSystem = nullptr;

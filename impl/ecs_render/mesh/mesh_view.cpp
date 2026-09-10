@@ -29,9 +29,7 @@ bool RendererMeshSystem::createMeshViewBuffer(){
         .setByteSize(sizeof(ECSRenderDetail::MeshViewGpuData))
         .setIsConstantBuffer(true)
         .setDebugName(ECSRenderDetail::s_MeshViewBufferName)
-        // Either caustic producer can consume the just-uploaded view on AsyncCompute after the Graphics prefix.
-        // Keep this input concurrent so that dependency is a timeline wait, not an ownership transfer that serializes
-        // the two lanes.
+        // Either caustic producer can consume the view; keep concurrent to avoid serializing lanes.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

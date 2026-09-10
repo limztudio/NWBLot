@@ -714,9 +714,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             ++graphicsPrefixUniquePacketCount;
         }
     }
-    // GpuTimingMeasure is deliberately submission-local. Skip this optional long-lived scope when the compiler
-    // exposes a frontier between its endpoints. Immutable built-in uploads may add untimed packets between these
-    // semantic anchors; their enclosing Graphics submission remains graph-owned and deterministic.
+    // Measures are submission-local; skip the scope across a frontier.
     asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
         && deferredCompiledPlan.tasksSharePacket(
             m_graphicsPrefixMeshViewSetupTask,
@@ -759,9 +757,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             )
         )
     ;
-    // The normal monolithic callback relies on the preceding typed all-lit clear. Keep that clear in its semantic
-    // packet so task-range recording/submission still encloses the CopyDest -> UAV handoff. Prepared split-soft
-    // frames deliberately retain their native fallback clear and therefore must not declare this primitive.
+    // Keep the all-lit clear in its packet; split-soft frames keep native clear.
     const bool shadowVisibilityAllLitClearMerged = m_deferredShadowVisibilityOpaqueTask.valid()
         ? !m_deferredShadowVisibilityAllLitClearTask.valid()
         : m_deferredShadowVisibilityAllLitClearTask.valid()
@@ -770,9 +766,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 m_deferredShadowVisibilityAllLitClearTask
             )
     ;
-    // The adaptive clear/copy primitives deliberately keep the original Shadow Visibility acceptance endpoint.
-    // A split would leave part of the chain outside its semantic record/submit range and would make the frozen
-    // diagnostic state observable before the traversal packet accepts.
+    // Keep the original acceptance endpoint; a split would leak state early.
     const bool shadowVisibilityAdaptivePrimitivesMerged =
         (!m_deferredShadowVisibilityAdaptiveStatsClearTask.valid()
             || deferredCompiledPlan.tasksSharePacket(
@@ -828,8 +822,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             deferredCompiledPlan.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
         graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
     }
-    // The optional alias-free regular-emulation producer shares G-buffer's primary Graphics packet. Its required
-    // UAV-to-VertexBuffer boundary is packet-local and G-buffer's timing/range remains the semantic endpoint.
+    // The producer shares G-buffer's packet; its boundary stays packet-local.
     const bool graphicsPrefixOpaqueComputeEmulationMerged =
         !m_graphicsPrefixOpaqueComputeEmulationTask.valid()
         || (
@@ -842,9 +835,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
-    // A shared persistent generated-vertex output cannot be reduced to an endpoint coalescing check: every
-    // alternating callback must remain in exact packet order, or a later local dispatch/raster bridge could
-    // silently return. Keep the G-buffer prelude before the contiguous D(A) -> R(A) -> ... run.
+    // Shared outputs need exact packet order; keep the G-buffer prelude first.
     const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = [&](){
         const usize phaseCount = m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){

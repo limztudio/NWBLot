@@ -33,10 +33,6 @@ static_assert(IsTriviallyCopyable_V<CsgDeformPipelineResult>, "CsgDeformPipeline
 
 class CsgDeformPipeline final : NoCopy{
 public:
-    CsgDeformPipeline() = delete;
-
-
-public:
     [[nodiscard]] static bool RebuildSequentialCuts(
         Core::Alloc::ScratchArena& scratchArena,
         NotNull<const CsgDeformVertex*> inputVertices,
@@ -50,6 +46,10 @@ public:
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles,
         CsgDeformPipelineResult& outResult
     );
+
+
+public:
+    CsgDeformPipeline() = delete;
 };
 
 

@@ -54,7 +54,7 @@ static void DispatchAvboitCompute(
 
     Core::ComputeState computeState;
     computeState.setPipeline(pipeline);
-    // The pipeline's low set is push-only; its work resources are selected by heap slots.
+    // Low set is push-only; work resources use heap slots.
     commandList.setComputeState(computeState);
     heap.bindCompute(commandList, *pipeline);
 
@@ -148,7 +148,7 @@ Core::RenderState BuildRendererAvboitRefractionCaptureRenderState(){
         .setDepthFunc(Core::ComparisonFunc::LessOrEqual)
     ;
     renderState.rasterState.enableDepthClip().setCullBack();
-    // The nearest surviving fragment replaces all optical fields together; no attachment blends.
+    // Nearest fragment wins; no attachment blends.
     return renderState;
 }
 
@@ -264,17 +264,13 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     )
         return;
 
-    // Graph-owned peel states are valid only when the paired graph-owned clear omitted the legacy broad CopyDest
-    // setup. Keep an externally mismatched compatibility call on the safe native bridge instead of claiming that
-    // a ClearDestination peel image is already a StorageImage.
+    // Keep mismatched compatibility calls on the native bridge.
     NWB_ASSERT(!intervalPeelTargetStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!receiverSpanOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!removedIntervalOutputImageStatesGraphOwned || intervalTargetsGraphOwned);
     NWB_ASSERT(!deferIntervalCombine || (intervalTargetsGraphOwned && deferredIntervalTiming));
 
-    // The prepared graph's Span/Combine callbacks complete this interval in the same ordered Graphics packet.
-    // Direct callers retain the local RAII scope, and malformed split requests safely fall back to the aggregate
-    // route.
+    // Span/Combine share one packet; malformed splits fall back to aggregate.
     const bool splitIntervalCombine = deferIntervalCombine && deferredIntervalTiming;
     const bool splitReceiverSpanBuild = splitIntervalCombine;
     Optional<Core::GpuTimingMeasure> localIntervalTiming;
@@ -292,8 +288,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         m_graphics.getDevice(),
         commandList
     );
-    // The normal prepared path records the two exact rect clears as preceding graph primitives. Retain the direct helper
-    // for compatibility callers, including its historical all-target state preparation before readiness checks.
+    // Keep the direct helper for compatibility callers.
     if(!intervalTargetsGraphOwned){
         ClearDeferredCsgIntervalTargets(
             m_graphics,
@@ -303,9 +298,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         );
     }
 
-    // The graph copied the material and CSG bytes after preflight froze every selected handle.  Do not rebuild or
-    // rewrite them here: a rejected packet will re-declare the retained blobs, while this native step only consumes
-    // the graph-owned data.
+    // The native step only consumes graph-owned data; never rebuild it.
     const bool drawBuffersReady = frameBindings.frameReady(instanceCount, materialTypedByteCount);
     const bool csgResourcesReady = csgResources.frameReady(csgFrameData);
     const bool receiverSurfaceDrawResourcesReady =
@@ -313,8 +306,7 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
     ;
     if(!drawBuffersReady || !csgResourcesReady || !receiverSurfaceDrawResourcesReady){
         if(splitIntervalCombine){
-            // No Combine callback will emit the endpoint when its producer skipped. Preserve the legacy short
-            // interval instead of retaining an unfinished timestamp reservation across the packet.
+            // Preserve the short interval; drop the unfinished reservation.
             if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
                 return;
             intervalTiming->value().finishTiming(commandList);

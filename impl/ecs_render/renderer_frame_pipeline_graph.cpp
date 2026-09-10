@@ -3803,8 +3803,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
         m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTaskCount =
             occupancySharedComputeEmulationPhaseCount;
-        // The terminal raster is the existing Occupancy semantic endpoint: Depth Warp, timing, state cache, and
-        // accepted-token publication remain tied to this packet-local task.
+        // Terminal raster stays the Occupancy endpoint for warp, timing, cache, and tokens.
         m_avboitSystem.taskGraphStage().m_occupancyTask = occupancySharedComputeEmulationDependency;
     }
     else{
@@ -3837,9 +3836,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitComputeScheduling.allowPacketMerge = true;
     avboitComputeScheduling.mergeWithPrevious = true;
     avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Depth Warp and Integration independently prefer Compute, while the compiler may collapse either task onto
-    // its direct Graphics predecessor. Preserve direct affinity after a Graphics collapse and keep auxiliary
-    // Compute transports available when the compiler retains the preferred queue class.
+    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
     EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
     EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
@@ -3885,8 +3882,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
     if(hasTransparentRenderers){
-    // Extinction is a distinct shared-buffer write point. Snapshot and publish it only after Depth Warp so neither
-    // phase can overwrite the other phase's instance/typed/CSG stream.
+    // Snapshot Extinction after Depth Warp so phases never overwrite each other.
     AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena };
     AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena };
     avboitExtinctionPayload.frameBindings = frameBindings;

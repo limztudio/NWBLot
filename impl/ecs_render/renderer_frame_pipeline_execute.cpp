@@ -1070,9 +1070,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             )
         )
     ;
-    // Persistent first-use initialization has four typed clear tasks followed by a resource-free lifecycle task.
-    // The range/state anchor stays on the first clear, so require the lifecycle tail to share its packet before
-    // accepting the normal graph path; otherwise an accepted clear could be omitted from that semantic prefix.
+    // The lifecycle tail must share the first clear's packet.
     const bool surfelGiInitializationLifecycleMergedIntoPreparationPacket =
         !m_deferredSurfelGiInitializationLifecycleTask.valid()
         || (
@@ -1083,12 +1081,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             )
         )
     ;
-    // Both caustic routes retain a black output on a no-producer frame. Keep the typed clear with the selected
-    // semantic producer task so effects timing, acceptance, and the lagged-history wait still protect the first
-    // write without mirroring its compiler packet.
-    // Photon, geometry, resolve prepare, five wavelets, upsample, and timing close are distinct callbacks so the
-    // compiler can lower their immutable and ping-pong UAV-to-SRV handoffs. They remain one semantic
-    // submission: clear acceptance, timing, and all dependent effects keep the established packet endpoint.
+    // Keep the clear with the producer; caustic callbacks stay one submission.
     const bool causticPhotonMergedIntoCausticsPacket =
         m_deferredCausticPhotonTask.valid()
         && deferredCompiledPlan.tasksSharePacket(
@@ -1159,8 +1152,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             causticsTask
         )
     ;
-    // Non-temporal accumulation resets every frame through a typed graph clear before its selected producer. The
-    // producer commits the matching CPU reset only after that shared packet accepts.
+    // CPU reset commits only after the shared packet accepts.
     const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorNonTemporalClearTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -1168,9 +1160,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             causticsTask
         )
     ;
-    // A fresh temporal accumulator is zeroed by a typed graph clear before its selected producer. Like the
-    // irradiance clear, it must remain in that producer packet so the accepted callback is the sole publisher of
-    // the initialized mirror and no hidden submission can write the accumulator.
+    // Keep the bootstrap clear in the producer packet; no hidden writers.
     const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorBootstrapClearTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -1178,9 +1168,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             causticsTask
         )
     ;
-    // A warm temporal accumulator decays in the same selected caustics packet.  If it split, the photon timing
-    // scope could span an unsubmitted packet and the compiler-owned UAV dependency would no longer protect the
-    // following atomic producer.
+    // Keep decay in the packet; a split would break the UAV dependency.
     const bool causticAccumulatorDecayMergedIntoCausticsPacket =
         !m_deferredCausticAccumulatorDecayTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -1188,8 +1176,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             causticsTask
         )
     ;
-    // Snapshot Copy and the timed Surfel GI endpoint must remain separate, while Preparation may alias/share
-    // Snapshot. This preserves their distinct acceptance and timing boundaries without exposing packet identities.
+    // Keep Snapshot Copy and the GI endpoint separate with distinct boundaries.
     const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =
         !m_deferredSurfelGiSnapshotCopyTask.valid()
         || !deferredCompiledPlan.tasksSharePacket(

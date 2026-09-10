@@ -17,7 +17,7 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Called once per mount, including graphics resources and pipeline caches. A null factory selects the volume backend.
+// Called once per mount; a null factory selects the volume backend.
 using FilesystemFactory = Function<UniquePtr<IFilesystem>(Alloc::GlobalArena& arena, const VolumeMountDesc& desc)>;
 
 UniquePtr<IFilesystem> CreateFilesystem(Alloc::GlobalArena& arena, const VolumeMountDesc& desc, const FilesystemFactory& factory = {});

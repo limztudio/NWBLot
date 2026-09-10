@@ -66,14 +66,14 @@ inline constexpr u32 s_VulkanMemoryTypeBitCount = sizeof(u32) * 8u;
 // Fixed-size, pre-reserved arena for GPU crash reports. Captured on device-lost, so it must
 // not touch the growable heap (which may be unsafe at crash time); the block is reserved up front.
 inline constexpr usize s_GpuCrashReportArenaSize = 64u * 1024u; // 64 KB
-inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // AGGREGATE cap on markers/fault entries formatted into the fixed crash arena (across all queues + fault sections)
-inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker string truncation so one deeply-nested label cannot blow the report budget
-inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // reserved report.details capacity; bounds peak arena use well under s_GpuCrashReportArenaSize (no realloc transients)
-inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u; // VK_EXT_device_fault vendor blob cap; large dumps are skipped rather than touching growable heap on device-lost.
+inline constexpr u32 s_MaxGpuCrashCaptureEntries = 64u; // aggregate cap across all queues and fault sections
+inline constexpr usize s_MaxGpuCrashMarkerChars = 256u; // per-marker truncation so one deep label cannot blow the budget
+inline constexpr usize s_MaxGpuCrashReportChars = 32u * 1024u; // report.details capacity; keeps peak use under the arena (no reallocs)
+inline constexpr usize s_MaxDeviceFaultVendorBinaryBytes = 512u * 1024u; // vendor blob cap; large dumps are skipped on device-lost.
 // Slots in each exact physical queue's disjoint AMD breadcrumb ring.
 inline constexpr u32 s_MaxAmdBreadcrumbSlots = 256u;
-inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID for AMD; gates Radeon GPU Detective dump naming.
-inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID for NVIDIA; gates NVIDIA-only Aftermath GPU crash dump setup
+inline constexpr u32 s_AmdVendorId = 0x1002; // PCI vendor ID; gates Radeon GPU Detective naming.
+inline constexpr u32 s_NvidiaVendorId = 0x10DE; // PCI vendor ID; gates NVIDIA-only Aftermath setup
 
 // Queue and swap chain defaults.
 // Local sentinel used until a compatible queue family is selected.

@@ -17,6 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Seam-safe, attribute-aware cap handling for deformable CSG rebuilds.
 
+
 // Owns cut boundary loop collection, deterministic ordering, and fan fills with one cap orientation rule, so preview and commit caps always agree.
 struct CsgDeformCutLoopEdge{
     u32 first = 0u;
@@ -31,10 +32,6 @@ static_assert(IsTriviallyCopyable_V<CsgDeformCutLoopEdge>, "CsgDeformCutLoopEdge
 
 
 class CsgDeformCapBuilder final : NoCopy{
-public:
-    CsgDeformCapBuilder() = delete;
-
-
 public:
     static void CollectBoundaryEdges(
         Core::Alloc::ScratchArena& scratchArena,
@@ -65,6 +62,10 @@ public:
         Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
         u32& outCapTriangles
     );
+
+
+public:
+    CsgDeformCapBuilder() = delete;
 };
 
 

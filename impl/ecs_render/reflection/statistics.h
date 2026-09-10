@@ -60,8 +60,7 @@ struct ReflectionStatistics{
     bool historyReused = false;
     bool historyReset = false;
     ReflectionHistoryResetReason::Enum historyResetReason = ReflectionHistoryResetReason::None;
-    // Enabled is the accepted complete writer's actual eligibility; reused is the CPU previous-valid flag.
-    // GPU budget/header checks may still reject bypass, which is reported by the executed-work counters below.
+    // Enabled is writer eligibility; reused is the CPU previous-valid flag.
     u64 feedbackSequence = 0u;
     u64 feedbackEpoch = 0u;
     u64 feedbackStartGraphicsFrame = 0u;
@@ -80,9 +79,9 @@ struct ReflectionStatistics{
     u32 glassPixels = 0u;
     u32 fallbackPixels = 0u;
     u32 screenAttempts = 0u;
-    // Only screen hits meeting the configured confidence threshold are accepted.
+    // Only screen hits meeting the confidence threshold are accepted.
     u32 screenHits = 0u;
-    // Admitted paths and actual scene queries remain separate; bootstrap and continuations consume query limits.
+    // Admitted paths and scene queries stay separate; bootstrap consumes query limits.
     u32 hardwareQueries = 0u;
     u32 bootstrapEvents = 0u;
     u32 transparentPaths = 0u;

@@ -107,7 +107,7 @@ using ReflectionStatisticsControlHandle = RefCountPtr<
     u16 deviceGeneration
 );
 
-// Destruction releases only an unaccepted reservation, including addTask failures before callbacks are installed.
+// Destruction releases only an unaccepted reservation.
 class ReflectionStatisticsReservation final : NoCopy{
 public:
     ReflectionStatisticsReservation(ReflectionStatisticsControlHandle control, const ReflectionStatistics& metadata);

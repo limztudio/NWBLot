@@ -360,8 +360,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         return dependency.valid();
     };
 
-    // Native mesh draws batch by CSG mode. Each emulated draw retains an explicit generator/raster pair so
-    // shared generated-vertex buffers can never be overwritten before their owning draw consumes them.
+    // Emulated draws keep a generator/raster pair so outputs outlive their draw.
     const MaterialPassDrawItems* const orderedSets[] = {&drawItems.regular, &drawItems.csg};
     for(usize setIndex = 0u; setIndex < LengthOf(orderedSets); ++setIndex){
         const MaterialPassDrawItems& items = *orderedSets[setIndex];

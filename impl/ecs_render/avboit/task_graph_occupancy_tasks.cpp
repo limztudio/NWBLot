@@ -129,9 +129,7 @@ namespace RendererTaskGraphDetail{
         payload.csgPlan.materialize(drawItems, csgFrameData);
     else
         payload.plan.materialize(drawItems);
-    // The following raster task is graph-owned and cannot safely fall back to its local bridge. Reject a late
-    // material/pipeline loss so the packet is discarded and the next frame re-preflights instead of accepting
-    // Occupancy with stale generated vertices.
+    // Reject late losses so the packet is discarded and the next frame re-preflights.
     if(
         !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
         || (csgComputeEmulation && (
@@ -153,8 +151,7 @@ namespace RendererTaskGraphDetail{
         graphics.getDevice(),
         commandList
     );
-    // Occupancy's raster half records after this producer in the same selected Graphics packet. Close the
-    // marker before this command list completes; its consumer owns finishTiming/discard.
+    // Close the marker now; the raster consumer owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(payload.occupancyTiming))
         return false;
     Core::ViewportState viewportState;
@@ -219,8 +216,7 @@ namespace RendererTaskGraphDetail{
         return false;
 
     if(payload.phase == Phase::Generate){
-        // A preceding raster phase leaves dynamic rendering active. End it before the timing marker and
-        // compute-state bind, matching the retained local D/R interleaving order.
+        // End the prior raster phase before the marker and compute bind.
         commandList.endRenderPass();
         if(payload.beginTiming){
             if(payload.occupancyTiming->has_value())
@@ -231,8 +227,7 @@ namespace RendererTaskGraphDetail{
                 graphics.getDevice(),
                 commandList
             );
-            // The range spans serial callbacks, but this opening command list still needs its marker closed
-            // before recording advances to the raster consumer.
+            // Close the marker before advancing to the raster consumer.
             if(!Core::FinishSplitGpuTimingMarker(payload.occupancyTiming))
                 return false;
         }
@@ -274,7 +269,7 @@ namespace RendererTaskGraphDetail{
             payload.occupancyTiming->value().finishTiming(commandList);
             payload.occupancyTiming->reset();
         }
-        // The next generator must never bind a compute pipeline while dynamic rendering remains active.
+        // Never bind compute while dynamic rendering is active.
         commandList.endRenderPass();
     }
     return true;
@@ -323,7 +318,7 @@ namespace RendererTaskGraphDetail{
             &payload.frameBindings,
             preparedOccupancyInstanceCount,
             preparedOccupancyMaterialTypedByteCount,
-            // The task's declared depth/coverage uses have already lowered and committed their graph barrier.
+            // Declared uses already lowered their barrier.
             true,
             payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
             payload.occupancyCsgClipBufferStatesGraphOwned,
@@ -334,8 +329,7 @@ namespace RendererTaskGraphDetail{
             payload.occupancyCsgComputeEmulationOutputStatesGraphOwned
         );
     }
-    // The declared sampled G-buffer uses remain authoritative here. Occupancy's low-resolution framebuffer
-    // does not attach any deferred target, so the graph-established states remain valid for either continuation.
+    // Graph-established states remain valid for either continuation.
     return true;
 }
 

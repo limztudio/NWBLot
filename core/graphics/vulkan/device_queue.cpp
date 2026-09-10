@@ -181,8 +181,7 @@ void Device::configureLegacyQueueContext(){
         : s_InvalidQueueFamilyIndex
     ;
     m_context.auxiliaryTransferQueueFamilyIndex = resolveAuxiliaryFamily(transferQueue, CommandQueue::Transfer);
-    // Cross-family async Compute remains an explicit resource-sharing capability even though submission routes use
-    // queue classes or exact physical queue IDs directly.
+    // Cross-family async Compute stays an explicit sharing capability.
     m_context.asyncComputeLaneEnabled = graphicsQueue
         && computeQueue
         && computeQueue->m_queueFamilyIndex != graphicsQueue->m_queueFamilyIndex

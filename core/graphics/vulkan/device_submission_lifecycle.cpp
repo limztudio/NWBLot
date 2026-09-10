@@ -70,8 +70,7 @@ void Device::endSubmissionOperation()noexcept{
 }
 
 bool Device::beginLifecycleDrain()noexcept{
-    // A public submission hook executes while its submit operation remains leased. Re-entering teardown from that
-    // callback must fail before closing the gate, otherwise this thread would wait forever for its own lease.
+    // Submission hooks run while leased; re-entrant teardown must fail before closing the gate.
     if(submissionOperationActiveOnCurrentThread())
         return false;
 

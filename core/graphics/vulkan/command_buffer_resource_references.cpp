@@ -181,8 +181,7 @@ void CommandBufferResourceReferences::promoteMembershipIndex(){
     for(const RetainedBufferStateCommit& commit : m_bufferStateCommits)
         membership[commit.buffer] |= s_BufferStateCommit;
 
-    // Build the complete membership off to the side. Allocation failure leaves the ordered lists authoritative;
-    // after publication every lookup uses this index, including non-owning and pending-publication membership.
+    // Build membership off to the side; on failure the ordered lists stay authoritative.
     static_assert(IsNothrowMoveConstructible_V<MembershipIndex>);
     m_membership.emplace(Move(membership));
 }

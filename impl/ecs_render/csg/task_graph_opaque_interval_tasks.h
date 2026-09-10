@@ -81,9 +81,7 @@ struct CsgReceiverSpanBuildGraphTask{
 };
 
 
-// Interval combine consumes the five StorageImage aliases produced by peel/span build, then writes the four
-// removed-interval aliases consumed by the following material/cap draws. Keep both boundaries in the established
-// Graphics submission when safe, but let the graph lower their exact same-UAV fences.
+// Interval combine maps peel/span aliases to removed-interval aliases; graph lowers fences.
 struct CsgIntervalCombineGraphTask{
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;
@@ -111,9 +109,7 @@ struct CsgIntervalCombineGraphTask{
 };
 
 
-// Interval combine writes StorageImage-backed removed-interval outputs, while the following opaque material and cap
-// draws load those same aliases. This task receives the graph-lowered output fence rather than replaying it from a
-// renderer thunk.
+// Interval sample takes the graph-lowered output fence instead of replaying it.
 struct CsgIntervalSampleGraphTask{
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;
@@ -132,8 +128,7 @@ struct CsgIntervalSampleGraphTask{
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
-        // When the preceding interval-sample producer owns generated-vertex UAV output, this callback keeps the
-        // frozen CSG compute draws raster-only so the compiler supplies the one UAV-to-VertexBuffer boundary.
+        // Keep CSG compute draws raster-only so the compiler supplies the UAV boundary.
         bool csgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* opaqueCsgComputeEmulationTiming = nullptr;
 

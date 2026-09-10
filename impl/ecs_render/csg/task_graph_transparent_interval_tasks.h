@@ -65,7 +65,7 @@ struct AvboitCsgReceiverSpanGraphTask{
 };
 
 
-// Interval combine consumes the five graph-visible span/peel inputs and writes the four removed-interval outputs.
+// Interval combine maps visible span/peel inputs to removed-interval outputs.
 struct AvboitCsgIntervalCombineGraphTask{
     struct Payload{
         RendererMaterialSystem* materialSystem = nullptr;

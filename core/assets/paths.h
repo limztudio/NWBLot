@@ -421,8 +421,8 @@ template<typename MetadataValue>
     );
 }
 
-// Shared cooker-side metadata field readers keep string, name, and typed-reference missing/type/nonempty validation
-// consistent before a cooker consumes them.
+// Shared cooker-side metadata readers: consistent missing/type/nonempty validation for string, name,
+// and typed-reference fields before a cooker consumes them.
 template<typename MetadataValue>
 [[nodiscard]] inline bool ReadMetadataStringField(
     const Path& nwbFilePath,

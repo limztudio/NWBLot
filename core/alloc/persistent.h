@@ -54,7 +54,7 @@ private:
 
 
 private:
-    // Individual fixed-pool operations are serialized. The caller owns arena and allocated-object lifetime synchronization.
+    // Pool operations are serialized; the caller owns arena and object-lifetime synchronization.
     MallocMutex m_mutex;
     void* m_bucket = nullptr;
     usize m_maxSize = 0u;

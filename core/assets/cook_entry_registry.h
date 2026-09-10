@@ -126,12 +126,9 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves a cook entry's `virtualPath` member to a Name regardless of how the entry stores it. Most asset entries
-// store `virtualPath` as a Name -- this overload is a zero-cost identity pass-through, so their dedup/output is
-// unchanged. An entry that instead keeps the readable source TEXT (e.g. the material entry, which needs the text for
-// generated-shader file paths / `#include`s / identities -- Name::c_str() is only a hash off debug) stores a string
-// `virtualPath`; this overload hashes it to the Name on demand. Either way the framework keys dedup + cooked output
-// by the same Name. Logging keeps using entry.virtualPath.c_str() directly (Name and string both provide it).
+// Resolves a cook entry's `virtualPath` to a Name either way it is stored: Name entries pass through
+// unchanged, while string entries (e.g. material, which needs readable text for generated-shader paths and
+// `#include`s) are hashed on demand. Dedup and cooked output always key by the same Name.
 [[nodiscard]] inline const Name& ToCookEntryName(const Name& virtualPath){
     return virtualPath;
 }

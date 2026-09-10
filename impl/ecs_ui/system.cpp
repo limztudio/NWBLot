@@ -352,9 +352,9 @@ struct UiSystem::StandaloneTextureUploadCompletionTask{
 };
 
 
-// An arbitrary ImDrawCmd callback owns opaque user state and therefore cannot enter the immutable overlay packet.
-// The standalone graph recorder is synchronous, so this compatibility task may invoke it against the still-live
-// ImGui arrays while the graph retains and orders every ordinary UI resource around that opaque operation.
+// An ImDrawCmd callback owns opaque user state, so it cannot enter the immutable overlay packet. The synchronous
+// standalone recorder may invoke it against the live ImGui arrays while the graph orders ordinary UI resources
+// around it.
 struct UiSystem::StandaloneLegacyPresentationTask{
     struct Payload{
         UiSystem* ui = nullptr;
@@ -1326,9 +1326,8 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
         return false;
     }
 
-    // RendererSystem may already have declared this optional tail before a later graph packet rejected. The accepted
-    // path resets m_frameFinished before UiSystem::render() reaches here, so a still-live claim is necessarily an
-    // abandoned declaration and can be rebuilt as this independent graph.
+    // The accepted path resets m_frameFinished before render() reaches here, so a still-live claim is an abandoned
+    // declaration and can be rebuilt as this independent graph.
     m_taskGraphPresentationClaimed = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     struct StandalonePresentationContext{
@@ -1997,12 +1996,11 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
 
     const bool hasVisibleDraw = drawData->TotalVtxCount > 0 && drawData->TotalIdxCount > 0;
     if(hasVisibleDraw){
-        // A completed immutable snapshot proves the live command stream contains no arbitrary callback. Reset-state
-        // callbacks are intentionally omitted from that snapshot and remain safe to rebuild on another frame.
+        // A completed snapshot proves the stream has no arbitrary callback. Reset-state callbacks stay out of the
+        // snapshot and remain safe to rebuild on another frame.
         const bool retrySafe = m_taskGraphDrawUploadsPrepared;
-        // Custom callbacks remain opaque, but the standalone graph records them synchronously against the live
-        // ImGui arrays. That preserves callback ABI while moving command-list ownership, texture uploads, and the
-        // submit transaction into the graph. A rejected opaque callback cannot be invoked a second time safely.
+        // Opaque callbacks stay out of the graph but record synchronously against the live arrays. A rejected
+        // opaque callback cannot run a second time safely.
         if(submitStandaloneLegacyTaskGraphPresentation(frame))
             return;
         if(!m_frameFinished)

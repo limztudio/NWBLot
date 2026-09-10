@@ -1919,8 +1919,7 @@ bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
         graphicsQueue
     );
     if(!submitted || !submissionToken.valid()){
-        // Compilation/recording failure can occur before the completion task is available to discard this batch.
-        // Keeping every request pending lets a later acquired frame rebuild the same graph inputs.
+        // Early compile failure may precede the discard task; keep requests pending for rebuild.
         m_textureUploadBatch.complete(false);
         NWB_LOGGER_ERROR(NWB_TEXT("UiSystem: failed to submit graph-owned ImGui texture uploads"));
         return false;
@@ -1960,8 +1959,7 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
         return;
     }
 
-    // A renderer-owned declaration is not necessarily an accepted submission. If it was abandoned, or this world
-    // has no RendererSystem at all, rebuild the immutable overlay as one standalone graph.
+    // Renderer declarations may be abandoned; rebuild overlays as one standalone graph.
     if(m_taskGraphPresentationPrepared && m_taskGraphPresentationHasWork){
         if(submitStandaloneTaskGraphPresentation(frame))
             return;
@@ -1974,11 +1972,9 @@ void UiSystem::render(Core::Framebuffer* framebuffer){
 
     const bool hasVisibleDraw = drawData->TotalVtxCount > 0 && drawData->TotalIdxCount > 0;
     if(hasVisibleDraw){
-        // A completed snapshot proves the stream has no arbitrary callback. Reset-state callbacks stay out of the
-        // snapshot and remain safe to rebuild on another frame.
+        // Completed snapshots prove no arbitrary callbacks; reset callbacks stay out.
         const bool retrySafe = m_taskGraphDrawUploadsPrepared;
-        // Opaque callbacks stay out of the graph but record synchronously against the live arrays. A rejected
-        // opaque callback cannot run a second time safely.
+        // Opaque callbacks record synchronously; rejected ones cannot safely re-run.
         if(submitStandaloneLegacyTaskGraphPresentation(frame))
             return;
         if(!m_frameFinished)
@@ -2152,8 +2148,7 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
             ;
 
             commandList.setGraphicsState(graphicsState);
-            // The heap bind must follow setGraphicsState(), which installs the UI pipeline layout and selects the
-            // global resource/sampler descriptor-buffer blocks.
+            // Heap bind follows setGraphicsState(), which installs layout and descriptor blocks.
             heap.bindGraphics(commandList, *m_pipeline);
             commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

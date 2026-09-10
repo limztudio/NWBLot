@@ -100,8 +100,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        // A sampled image and sampler cannot share one descriptor-buffer segment. Texture/sampler descriptors reside
-        // in the global heap's pure resource/sampler sets; this leaf carries per-draw slots in push constants.
+        // Texture/sampler descriptors live in the global heap; this leaf carries per-draw slots in push constants.
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(UiPushConstants)));
 
@@ -253,8 +252,7 @@ bool UiSystem::ensureBuffers(const usize vertexCount, const usize indexCount){
             .setIsVertexBuffer(true)
             .setDebugName(__hidden_ui::s_UiVertexBufferName)
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
-            // Immutable graph uploads may route through Transfer/Compute or an explicitly opted-in same-class
-            // physical transport before the primary-Graphics overlay consumes this buffer.
+            // Graph uploads may use Transfer/Compute before the Graphics overlay consumes this buffer.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         ;
 

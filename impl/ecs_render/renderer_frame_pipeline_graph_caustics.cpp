@@ -65,8 +65,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     m_deferredCausticResolveUpsampleTask = {};
     m_deferredCausticProducerDispatched = false;
 
-    // This remains the direct successor of Shadow Visibility in the deferred graph. A distinct Compute family is
-    // optional; on other devices the compiler routes the same packet through Graphics.
+    // Direct successor of Shadow Visibility; Compute family is optional.
     if(
         hardwareCaustics
         || !m_deferredShadowVisibilityTask.valid()
@@ -156,7 +155,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         ECSRenderDetail::s_FramebufferSubresources,
         Core::ResourceStates::ShaderResource
     ));
-    // Software caustics samples the bindless depth image, so its declared layout must match the shader read.
+    // Declared layout must match the shader read.
     photonResourceUses.push_back(ReadTextureUse(
         depth,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -170,8 +169,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     ));
     photonResourceUses.push_back(ReadUse(sceneGeometryDomain));
 
-    // Geometry downsample begins only after the selected photon producer. It writes the fresh cache before wavelet
-    // resolve reads it; dynamic ping-pong transitions remain inside the latter callback.
+    // Downsample runs after the producer; ping-pong stays in resolve.
     geometryResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,
@@ -188,9 +186,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         Core::ResourceStates::UnorderedAccess
     ));
 
-    // Prepare consumes both immutable graph-produced inputs, then writes the parity-selected first ping-pong target.
-    // It does not sample the ping-pong input for this stage; the five fixed wavelet passes own that alternating
-    // read/write sequence, including their exact UAV-to-SRV handoffs before the native upsample tail begins.
+    // Prepare writes the first ping-pong target; wavelets own the sequence.
     constexpr bool s_CausticResolvePrepareWritesHalf = (NWB_CAUSTIC_RESOLVE_PASS_COUNT % 2u) == 0u;
     resolvePrepareResourceUses.push_back(ReadTextureUse(
         causticAccumulator,
@@ -342,8 +338,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         ));
     }
 
-    // Upsample receives the exact fifth-wavelet UAV-to-SRV handoff, so normal graph recording does not repeat that
-    // native state bridge. The following timing-close callback intentionally carries no resource use.
+    // Upsample takes the fifth-wavelet handoff; timing-close carries no use.
     resolveUpsampleResourceUses.push_back(ReadTextureUse(
         worldPosition,
         ECSRenderDetail::s_FramebufferSubresources,

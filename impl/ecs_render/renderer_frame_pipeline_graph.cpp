@@ -3438,8 +3438,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
     }
     if(occupancyCsgIntervalSampleImageStatesGraphOwned){
-        // The prepared interval producer wrote these aliases in the preceding AVBOIT task. The occupancy material
-        // shaders load them through StorageImage descriptors, so the graph lowers the required UAV handoff here.
+        // Interval producer wrote these aliases; lower the required UAV handoff for occupancy shaders.
         avboitPreResourceUses.push_back(ReadTextureUse(
             csgRemovedIntervalDepth,
             csgRemovedIntervalSubresources,
@@ -3499,8 +3498,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         .requiredState = Core::ResourceStates::UnorderedAccess,
         .access = Core::GpuTaskResourceAccess::Write,
     };
-    // Keep the final immutable upload as the stream anchor. The optional generator only becomes Occupancy's
-    // immediate dependency; replacing this anchor would hide a broken upload/clear-to-producer handoff.
+    // Keep the final upload as stream anchor; replacing it would hide a broken producer handoff.
     const Core::GpuTaskId occupancyStreamTask = occupancyUploadTask;
     if(avboitOccupancyPayload.occupancyStreamsUploaded)
         m_avboitSystem.taskGraphStage().m_occupancyStreamTask = occupancyStreamTask;
@@ -3511,8 +3509,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyScheduling.forceSubmissionBoundary = false;
     avboitOccupancyScheduling.allowPacketMerge = true;
     avboitOccupancyScheduling.mergeWithPrevious = true;
-    // Occupancy directly closes the serial AVBOIT Pre packet after its uploads and clears; preserve that timing
-    // and acceptance contract when later split stages form a cross-queue consumer frontier.
+    // Occupancy closes the serial AVBOIT Pre packet; keep timing across consumer frontiers.
     avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     if(occupancyComputeEmulationOutputStatesGraphOwned){
         avboitOccupancyComputeEmulationPayload.graphics = &m_graphics;

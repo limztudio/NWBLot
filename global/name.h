@@ -328,11 +328,7 @@ inline void RecordNameSymbolText(
         state.callback(hash, AStringView(text.data(), text.size()), state.userData);
     }
     else{
-        // Wide -> narrow by per-code-unit byte truncation, NOT UTF-8: ComputeNameHash hashes each wchar as
-        // static_cast<u8>(Canonicalize(ch)), so the recorded text must use those same truncated bytes to round-trip
-        // back to the Name's hash. Emitting real UTF-8 here would make the symbol text hash to a DIFFERENT NameHash.
-        // Names are effectively ASCII identifiers/paths in this engine; a non-ASCII wide Name records as truncated
-        // bytes (consistent with its hash, just not human-readable) -- acceptable given no non-ASCII Names exist.
+        // Wide->narrow by byte truncation, not UTF-8, so recorded text round-trips to the hash.
         char narrowText[s_SymbolTextBufferLength] = {};
         usize copiedCount = 0u;
         for(const CharT ch : text){
@@ -584,9 +580,7 @@ public:
 #endif
     }
 
-    // Non-resolving text for VMA allocation labels and crash breadcrumbs: the readable name in dbg/buildmode,
-    // otherwise raw hash hex. This avoids the allocation and callback work that c_str() may perform to resolve a
-    // symbol. Arena telemetry keeps binary owner identities and resolves their text when exporting a capture.
+    // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] const char* logText()const{
 #if defined(NWB_DEBUG) || defined(NWB_BUILDMODE)
         return m_debugName;

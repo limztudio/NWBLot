@@ -26,9 +26,9 @@ struct CpuWorkerPlacement{
 
     u32 logicalProcessorIndex = s_InvalidProcessor;
     u32 processorGroup = 0u;
-    // Platform ordinal capacity: a larger value identifies a faster tier. Values are not comparable across machines.
+    // Platform ordinal capacity; larger is faster, not comparable across machines.
     u32 performanceClass = 0u;
-    // Any means homogeneous or unavailable capacity information; Efficiency includes every tier below the fastest.
+    // Any means homogeneous or unknown; Efficiency includes every tier below fastest.
     CpuAffinity::Enum affinity = CpuAffinity::Any;
 
 

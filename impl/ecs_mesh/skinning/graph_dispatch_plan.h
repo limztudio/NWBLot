@@ -22,8 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mirrors NwbSkinnedMeshBindlessResources exactly: four std140 uint4 lanes. Every handle below is a persistent
-// StorageBuffer-heap registration. The selector payload itself is a UniformBuffer heap entry.
+// Mirrors bindless resources: four uint4 lanes; handles are StorageBuffer registrations.
 struct MeshSkinningBindlessResourceSlots{
     u32 restPosition = 0u;
     u32 skinnedPosition = 0u;
@@ -50,9 +49,7 @@ struct MeshSkinningBindlessResourceSlots{
 static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
 
 
-// The graph tasks retain only immutable per-mesh dispatch inputs. They resolve imported buffers and pipelines
-// from graph-owned IDs while recording, then publish the dirty-state and selector-residency commit only after
-// the containing primary-Graphics packet is accepted.
+// Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
 struct MeshSkinningGraphDispatchPlan{
     RuntimeMeshHandle handle;
     Core::BufferHandle bindlessResourceSlotsBuffer;

@@ -337,8 +337,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
         return failRebuild();
 
-    // Each rebuild allocates fresh heap slots. Free the replaced generation before dropping its BufferHandles so the
-    // heap's deferred retirement keeps in-flight dispatches valid instead of overwriting their descriptors.
+    // Rebuilds allocate fresh slots; free replaced generation before dropping handles.tors.
     releaseRuntimeResourceBindlessHeapHandles(resources);
     resources = Move(rebuilt);
     outResources = &resources;

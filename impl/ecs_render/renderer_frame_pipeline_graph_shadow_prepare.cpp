@@ -622,12 +622,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned, meshSwBvhInputStatesGraphOwned);
     hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u + 3u);
     pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
-    // Shadow Preparation owns each preflight input's post-transition packet boundary. This deliberately supersedes
-    // preceding immutable uploads as graph producers, so later Compute readers wait on this first Graphics packet
-    // rather than forcing FrontierSafe packetization to split an upload away from its accepting consumer.
+    // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
-    // Retain Shadow Preparation as the graph producer for this selector. This WAW handoff retires the immutable
-    // upload before later Compute reads without a record-time native state transition.
+    // Retain Shadow Preparation as producer; WAW handoff retires the immutable upload.
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
     if(causticEmissionTargets.valid())
         resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
@@ -645,9 +642,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
 
     if(hybridSoftwareTailGraphOwned){
-        // The tail may conditionally restore these immutable HW bytes after the optional SW traversal fails. Its
-        // final shader-visible state is declared here; the graph-owned recorder performs the internal CopyDest
-        // writes only on that fallback arm.
+        // Tail may restore HW bytes on SW failure; final state declared here.
         hybridSoftwareTailResourceUses.push_back(
             WriteUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource)
         );
@@ -668,8 +663,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
             const Name blasIdentity = DeriveName(build.meshName, AStringView(":blas"));
-            // Only this backing generation's first graph build knows native Common. Retained BLAS storage must
-            // import the accepted Shadow Preparation binding; Unknown deliberately rejects a missing handoff.
+            // First build knows native Common; retained storage imports the accepted binding.
             const Core::ResourceStates::Mask blasInitialState = build.backingFresh
                 ? Core::ResourceStates::Common
                 : Core::ResourceStates::Unknown
@@ -680,9 +674,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             );
             resourcesImported = resourcesImported && blas.valid();
             if(blas.valid()){
-                // The typed graph resource lowers its state and ownership through its retained backing allocation.
-                // A prepared no-tail route and a fully verified hybrid tail own the matching geometry boundary;
-                // direct and incomplete compatibility routes retain their native bridge.
+                // Typed resource lowers state via backing allocation; compat routes keep native bridge.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
             }

@@ -17,8 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This is cooked-asset ABI shared by the CSG cooker and the runtime registry.  It intentionally lives with the
-// authored CSG asset schema, rather than either implementation, so neither side owns the other.
+// Cooked-asset ABI shared by the CSG cooker and the runtime registry.
 using CsgShapeTypeId = u32;
 
 inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
@@ -27,14 +26,12 @@ inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CSG evaluator modules cook independently from runtime registration. Keep the GPU dispatch ID a deterministic
-// projection of the Name hash, not an insertion ordinal. Cooker and runtime both reject 32-bit collisions,
-// so this is a stable ABI.
+// Keep the dispatch ID a deterministic Name-hash projection, not an insertion ordinal.
 [[nodiscard]] inline CsgShapeTypeId CsgShapeTypeIdFromName(const Name& shapeName){
     if(!shapeName)
         return s_InvalidCsgShapeTypeId;
 
-    // NameHash lanes are part of the Name ABI; HashValue returns usize and would make the cooked ID host-dependent.
+    // HashValue returns usize and would make the cooked ID host-dependent.
     const NameHash& shapeHash = shapeName.hash();
     u64 foldedHash = shapeHash.qwords[0u];
     for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane){

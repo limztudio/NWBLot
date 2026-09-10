@@ -100,7 +100,7 @@ bool UiSystem::ensureRenderResources(Core::Framebuffer* framebuffer){
         static_assert(sizeof(UiPushConstants) <= Core::s_MaxPushConstantSize, "Ui push constants must fit the portable push constant budget");
 
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
-        // Texture/sampler descriptors live in the global heap; this leaf carries per-draw slots in push constants.
+        // Descriptors live in the global heap; this leaf carries per-draw slots.
         bindingLayoutDesc.setVisibility(Core::ShaderType::AllGraphics);
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(UiPushConstants)));
 

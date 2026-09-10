@@ -1138,8 +1138,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
             })
             .setScheduling(scheduling)
             .setDependencies(dependencies.data(), dependencies.size())
-            // Return any Transfer-owned font/texture update to the Graphics consumer queue even when this frame has
-            // no visible draw command.  The no-op record body intentionally exists to lower this final handoff.
+            // Return Transfer-owned updates to Graphics even with no visible draws.
             .setResourceUses(resourceUses.data(), resourceUses.size())
         ;
         const Core::GpuTaskId task = graph.addTask<TaskGraphUploadCompletionTask>(
@@ -1226,8 +1225,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     resourceUses.push_back(__hidden_ui::ReadBufferUse(vertexBuffer, Core::ResourceStates::VertexBuffer));
     resourceUses.push_back(__hidden_ui::ReadBufferUse(indexBuffer, Core::ResourceStates::IndexBuffer));
 
-    // A requested texture may not appear in this frame's draw commands. Still declare it on the terminal Graphics
-    // task so a Transfer upload publishes ShaderResource state and ownership for the next frame's UI consumer.
+    // Requested textures may skip this frame's draws; still declare them for next-frame ownership.
     for(const Core::GpuGraphResourceId texture : uploadedTextures)
         __hidden_ui::AppendTextureReadUse(resourceUses, texture);
 
@@ -1318,8 +1316,7 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
         return false;
     }
 
-    // The accepted path resets m_frameFinished before render() reaches here, so a still-live claim is an abandoned
-    // declaration and can be rebuilt as this independent graph.
+    // Accepted path resets m_frameFinished; a live claim here is abandoned and rebuildable.
     m_taskGraphPresentationClaimed = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     struct StandalonePresentationContext{

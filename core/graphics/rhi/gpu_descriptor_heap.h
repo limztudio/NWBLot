@@ -17,13 +17,12 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Global descriptor-heap contract.
 //
-// A resource registered in the heap is addressed everywhere - C++ and shader - by a single opaque 32-bit
-// GpuDescriptorHandle. The handle bit-layout and class taxonomy are shared by C++ and shaders; the Vulkan renderer
-// resolves every handle through its required descriptor-buffer-backed global heap.
+// A heap resource is addressed everywhere (C++ and shader) by one opaque 32-bit GpuDescriptorHandle.
+// Bit-layout and class taxonomy are shared; the Vulkan renderer resolves handles through its global heap.
 
 
-// The resource classes a shader must select between. Each class maps to exactly one global-heap register space /
-// descriptor type, so the class tag alone disambiguates which shader-side array to index.
+// Resource classes a shader selects between. Each class maps to exactly one heap register space,
+// so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
     enum Enum : u8{
         SampledImage = 0,   // Texture_SRV           -> SAMPLED_IMAGE
@@ -84,9 +83,8 @@ inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescrip
 static_assert(sizeof(GpuDescriptorHandle) == 4, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
-// Project/bootstrap-owned values that connect the renderer's generic descriptor heap to the shared shader ABI.
-// Core carries and validates this typed payload without depending on the implementation-owned macro contract that
-// supplies it. The Vulkan backend performs its stricter descriptor-layout range and ordering checks at initialize().
+// Values connecting the generic descriptor heap to the shared shader ABI. Core validates this payload without
+// depending on the implementation-owned macro contract; stricter layout checks run at initialize().
 struct GpuDescriptorHeapAbi{
     static constexpr u32 s_Unspecified = s_MaxU32;
 
@@ -125,9 +123,8 @@ struct GpuDescriptorHeapAbi{
 };
 
 
-// Capacities are hard ceilings: the heap is not auto-grown mid-frame. Effective caps are clamped to the device's
-// descriptor-layout limits at initialize() time and logged (no silent truncation). Zero means "use the renderer
-// default".
+// Capacities are hard ceilings (no mid-frame growth). Effective caps clamp to device limits at initialize()
+// and are logged; zero means "use the renderer default".
 struct GpuDescriptorHeapDesc{
     u32 resourceCapacity = 0;   // slots shared by all non-sampler classes (one global namespace)
     u32 samplerCapacity = 0;    // samplers live in their own global namespace

@@ -729,8 +729,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
 
 
-    // The frozen trace list can carry BLAS position/index resources that need AccelStructBuildInput in this task.
-    // Keep those exact members separate, but declare the remaining SRV subset as one immutable graph collection.
+    // Frozen trace list may carry build inputs; keep them separate from the SRV subset.
     Core::GpuGraphResourceSetId shadowPrepareTraceGeometrySet;
     if(!shadowPrepareTraceGeometryResources.empty()){
         shadowPrepareTraceGeometrySet = m_deferredLightingTaskGraph.importResourceSet(
@@ -772,8 +771,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     const bool softwareBvhBuildStateStatesGraphOwned = softwareBvhBuildStateSet.valid();
     if(!softwareBvhBuildStateStatesGraphOwned){
         for(usize resourceIndex = 0u; resourceIndex < softwareBvhBuildStateResourceCount; ++resourceIndex){
-            // Parent links and global build scratch retain their native UAV close state. They are state-only graph
-            // resources: later traversal keeps its narrower node/geometry declarations.
+            // Parent links and scratch keep native UAV state; they are state-only resources.
             resourceUses.push_back(ReadWriteUse(
                 softwareBvhBuildStateResources[resourceIndex],
                 Core::ResourceStates::UnorderedAccess
@@ -791,8 +789,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
     Core::GpuGraphResourceId sceneTlas;
     if(rayTracingShadowResources.sceneTlas){
-        // Every import observes the current backing generation. Fresh direct and frozen paths know native Common;
-        // retained storage remains Unknown until the accepted packet-state binding supplies its final native state.
+        // Imports observe the backing generation; retained storage stays Unknown until accepted.
         const Core::ResourceStates::Mask sceneTlasInitialState = m_raytracingSystem.sceneTlasBackingInitialState();
         sceneTlas = m_deferredLightingTaskGraph.importAccelStruct(
             rayTracingShadowResources.sceneTlas,

@@ -175,8 +175,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         outPrepared.push_back(PreparedShadowTraceGeometryBuffer{
             .buffer = buffer,
             .identity = identity,
-            // Fresh/preflight-created buffers retain their creation state (normally Common).  Only a buffer that an
-            // accepted preparation/prefix tail explicitly normalized may enter the next graph as ShaderResource.
+            // Fresh buffers keep creation state; only normalized ones enter as ShaderResource.
             .initialState = normalizedByAcceptedPacket
                 ? Core::ResourceStates::ShaderResource
                 : buffer->getCreationDescription().initialState,
@@ -205,9 +204,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         }
         return true;
     };
-    // Shadow Prepare rebuilds runtime and dirty meshes even when they have no scene instance this frame.  Keep those
-    // build inputs in the frozen graph set too: otherwise an off-screen build can leave a buffer in BLAS-input/UAV
-    // state, then a later frame would import that same physical buffer as Common when it becomes visible.
+    // Keep off-screen rebuild inputs frozen so later frames never import stale states.
     const auto appendPendingBlasBuildInputs = [&]{
         for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
             if(!mesh.runtimeMesh && !mesh.blasBuildPending)
@@ -326,8 +323,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
         outPrepared.clear();
         return false;
     }
-    // Acceptance only publishes handles whose frozen state was not already normalized. Reserve the full retained
-    // union so this noexcept tail remains allocation-free even when invisible accepted meshes occupy existing slots.
+    // Acceptance publishes non-normalized handles; reserve the full union to stay allocation-free.
     acceptedBuffers.reserve(acceptedCapacity);
     return true;
 }

@@ -73,7 +73,7 @@ public:
 
 
 public:
-    // Collect identities without reading graph state or deciding fallback. Size outputs from distinct requested buffers.
+    // Collect identities without reading graph state; size outputs from distinct buffers.
     void prepareStorage(bool blasInputStatesGraphOwned, bool softwareInputStatesGraphOwned);
     void gatherBuildInputs(
         const Core::GpuTaskGraph& graph,
@@ -107,7 +107,7 @@ private:
     InlineRequest m_inlineRequests[s_InlineCount] = {};
     usize m_inlineRequestCount = 0u;
     Optional<RequestIndex> m_requests;
-    // Request storage is complete before this index retains pointers into it; it never grows after prepareStorage.
+    // Request storage is complete before the index retains pointers; it never grows after.
     Optional<ResourceIndex> m_resources;
     usize m_blasRequestCount = 0u;
     usize m_softwareRequestCount = 0u;
@@ -116,7 +116,7 @@ private:
     bool m_preparedSoftwarePolicy = false;
     bool m_storagePrepared = false;
     bool m_inputsGathered = false;
-    // Prepared build names remain frozen and outlive this operation, so membership borrows their full identities.
+    // Prepared build names stay frozen and outlive this operation; membership borrows them.
     mutable const NameHash* m_inlineNames[s_InlineCount];
     mutable usize m_inlineNameCount = 0u;
     mutable Optional<NameIndex> m_names;

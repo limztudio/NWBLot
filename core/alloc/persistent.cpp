@@ -544,7 +544,7 @@ void* PersistentArena::allocateLocked(const usize align, const usize size, void*
 void PersistentArena::deallocateBlockLocked(void* const blockPointer)noexcept{
     auto* const block = static_cast<__hidden_persistent::Block*>(blockPointer);
     block->requestedBytes = 0u;
-    // Keep exact blocks ready for reuse; allocateLocked coalesces the physical chain only when a request needs it.
+    // Keep exact blocks for reuse; coalesce only when a request needs it.
     block->isFree = true;
     __hidden_persistent::InsertFreeBlock(m_freeHead, *block);
 }

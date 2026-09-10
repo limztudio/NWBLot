@@ -53,7 +53,7 @@ private:
     NotNull<DestroyFunction> m_destroy;
 };
 
-// The original allocation arena must outlive the extension, including ownership transfers between maps.
+// The allocation arena must outlive the extension, including transfers between maps.
 using ParsedMetadataExtension = UniquePtr<void, ParsedMetadataExtensionDeleter>;
 
 

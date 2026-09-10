@@ -23,8 +23,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional arena context must use FollowsUsage reservation and accounts direct heap ownership with the
-// same usable-size query as the backing total. Pool backing allocations omit this context.
+// Arena context uses FollowsUsage reservation; pool backing allocations omit it.
 extern void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker = nullptr);
 extern void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker = nullptr);
 extern void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr);

@@ -66,7 +66,7 @@ using ScratchNameHashSet = HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>
     return false;
 }
 
-// Tiny documents keep bounded lookups inline; larger documents share one exact-text index for every reference.
+// Tiny documents keep inline lookups; larger ones share one exact-text index.
 class DeclarationLookup final : NoCopy{
 private:
     using Declaration = Metascript::Document::Declaration;

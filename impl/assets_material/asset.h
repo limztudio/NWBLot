@@ -347,9 +347,8 @@ struct MaterialTypedLayoutField{
     UInt4U defaultValue = {};
 };
 
-// A cooked material keeps resource identity separate from its numeric/default typed payload. `constantByteOffset`
-// points at the four-byte slot word the renderer patches after it has resolved the device-lifetime descriptor handle.
-// Exactly one typed asset reference is valid, selected by resourceKind.
+// A cooked material separates resource identity from its numeric/default payload. `constantByteOffset` is the slot
+// word the renderer patches after resolving the descriptor handle. Exactly one typed reference is valid.
 struct MaterialResourceReference{
     Name blockName = NAME_NONE;
     Name fieldName = NAME_NONE;
@@ -434,23 +433,18 @@ public:
     [[nodiscard]] const ResourceReferenceVector& resourceReferences()const{ return m_resourceReferences; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
-    // The cook-generated per-material AVBOIT accumulate pixel shader bound for this material's transparent draw
-    // (the transparent-pass twin of the G-buffer pixel shader). Valid for a transparent material authored with a
-    // `surface`; invalid for an opaque material. A missing shader on a transparent material is a cook/runtime
-    // contract failure. Unlike the stage shaders this is not a graphics stage -- a material has a single pixel
-    // stage (the G-buffer PS); this is a second, transparent-only pixel shader the renderer selects by pass.
+    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw (the transparent-pass twin
+    // of the G-buffer PS). Valid only for surface-authored transparent materials; missing means a cook/runtime
+    // contract failure. Not a graphics stage: the material has one pixel stage, and this is the transparent-only
+    // shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
-    // The occupancy/extinction twins of avboitAccumulatePixelShader, bound for this material's transparent draw so
-    // all three AVBOIT passes read the material's SAME shader-decided surface.renderCoverage. They are valid for a
-    // surface-authored transparent material and invalid for an opaque material. A missing shader on a transparent
-    // material is a cook/runtime contract failure.
+    // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface
+    // renderCoverage. Same validity contract as above.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }
     [[nodiscard]] bool twoSided()const{ return m_twoSided; }
-    // The dedicated refractive-caster classification flag (SEPARATE from `transparent`). The material decides only
-    // this boolean; the refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side, returned by the `.surface`
-    // hook via NwbMeshSurface. Authored metadata must provide the value explicitly.
+    // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
     [[nodiscard]] bool refractive()const{ return m_refractive; }
 
 

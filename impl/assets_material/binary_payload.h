@@ -27,11 +27,9 @@ namespace MaterialBinaryPayload{
 
 inline constexpr u32 s_MaterialMagic = 0x4D544C38u; // MTL8 (per-material asset paths)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
-// Material render-property flags packed into the serialized materialFlags word (decoded in Material::loadBinary),
-// mirroring the authored `transparent`/`two_sided`/`refractive` booleans. `Refractive` is the dedicated
-// refractive-caster classification (SEPARATE from `Transparent`). The refraction VALUES (refractionIor /
-// shadowAbsorptionTint) are shader-side (NwbMeshSurface), not in this payload. `All` is the mask of supported bits;
-// loadBinary rejects any bit outside it.
+// Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the
+// caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported
+// bits; loadBinary rejects anything outside it.
 namespace MaterialFlag{
     enum Mask : u32{
         None = 0u,
@@ -83,9 +81,8 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
-// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization immediately initializes
-// the matching typed asset reference. The renderer resolves that reference to a device-lifetime global-heap handle
-// and writes its slot into constantByteOffset; no device-specific descriptor value is serialized here.
+// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization initializes the typed
+// asset reference, and the renderer writes the resolved heap slot into constantByteOffset.
 struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};

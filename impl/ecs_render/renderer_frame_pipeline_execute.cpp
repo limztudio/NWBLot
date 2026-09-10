@@ -194,8 +194,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
         return;
     }
-    // Renderer scheduling queries the physical transport exposed to the graph, not the legacy unresolved lane.
-    // A Compute entry exists only when Vulkan created an enabled, distinct async-compute queue for this device.
+    // Scheduling queries the graph-visible transport, not the legacy lane.
     const Core::GpuPhysicalQueueId primaryGraphicsQueue =
         device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics);
     const u32 graphicsFamilyIndex = device.getQueueFamilyIndex(Core::CommandQueue::Graphics);
@@ -240,9 +239,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_laggedLightingHistoryGeneration
     );
 
-    // The next graph declaration clears the normal history-tail output token before its replacement can accept.
-    // Keep only an incomplete accepted tail as the writer drain. A completed tail cannot race live producers, while a
-    // later accepted tail is a proven successor of an older drain and protects a rejected declaration/submission retry.
+    // Keep only an incomplete accepted tail as the writer drain.
     if(laggedLightingHistorySubmissionPending){
         m_laggedLightingHistoryWriterDrainToken = laggedLightingHistorySubmissionToken;
         m_laggedLightingHistoryWriterDrainGeneration = m_laggedLightingHistoryGeneration;
@@ -258,7 +255,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
 
     if(laggedAsyncLightingRequested){
         if(m_laggedLightingHistoryGeneration != laggedLightingHistoryTargetGeneration){
-            // Target generations prevent history from using recycled slots after resize.
+            // Generations block recycled slots after resize.
             invalidateLaggedLightingHistorySubmission();
             m_laggedLightingHistoryGeneration = laggedLightingHistoryTargetGeneration;
         }
@@ -266,8 +263,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     else{
         resetLaggedLightingHistoryReadTracking();
     }
-    // Declaring the next history-copy tail intentionally resets the member token before that new packet accepts.
-    // Snapshot the prior accepted tail for every current-frame external dependency before graph declaration.
+    // Snapshot the prior tail before declaration resets the token.
     const Core::QueueSubmissionToken priorLaggedLightingHistoryReadReadyToken =
         m_laggedLightingHistorySubmissionToken
     ;
@@ -284,12 +280,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         && laggedLightingHistoryResourcesReady
         && priorLaggedLightingHistoryReadReadyToken.valid()
     ;
-    // History capture is graph-owned and remains available whenever the opt-in path has a distinct compute
-    // transport. Its tail is optional: a failed tail build must leave the current frame's deferred path intact.
+    // The history tail is optional; its failure must not break the frame.
     const bool requestsLaggedLightingHistoryCapture = laggedAsyncLightingRequested;
     m_shadowPreparationOutcome.ready = false;
-    // Compile every independent graph before native recording. The graphics prefix records all five ordered tasks
-    // natively from mesh-view setup through post-G-buffer normalization.
+    // Compile graphs first; the prefix records its five tasks natively.
     const ECSRenderDetail::RendererFrameGraphFeatures frameGraphFeatures{
         .frameLaggedAsyncLightingEnabled = m_frameLaggedAsyncLightingEnabled,
         .laggedLightingHistoryReady = laggedLightingHistoryResourcesReady,
@@ -301,7 +295,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.discardSoftShadowTemporalHistory();
     m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();
 
-    // Preserve CPU mirrors so rejected recordings can be retried exactly.
+    // Preserve mirrors so rejected recordings retry exactly.
     const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_raytracingSystem.captureFrameCpuState();
     const bool avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
     const bool deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
@@ -312,7 +306,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_raytracingSystem.snapshotSurfelPersistentResources()
     ;
     const auto restorePrefixCpuState = [&](){
-        // Rejected G-buffer recording invalidates CPU upload mirrors.
+        // Rejected recording invalidates upload mirrors.
         m_meshSystem.invalidateMeshViewBufferUploadMirror();
         m_deferredSystem.invalidateSceneLightingUploadMirrors();
     };

@@ -112,13 +112,13 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     const f32 ny = parameter0.y;
     const f32 nz = parameter0.z;
     f32 position[4u] = {};
-    StoreF32(position, shapePosition);
+    SIMDConvertDetail::StoreF32(position, shapePosition);
     return position[0u] * nx + position[1u] * ny + position[2u] * nz + parameter0.w;
 }
 
 [[nodiscard]] f32 BoxSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
     f32 position[4u] = {};
-    StoreF32(position, shapePosition);
+    SIMDConvertDetail::StoreF32(position, shapePosition);
     const f32 qx = Abs(position[0u]) - parameter0.x;
     const f32 qy = Abs(position[1u]) - parameter0.y;
     const f32 qz = Abs(position[2u]) - parameter0.z;
@@ -132,13 +132,13 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
 
 [[nodiscard]] f32 SphereSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
     f32 position[4u] = {};
-    StoreF32(position, shapePosition);
+    SIMDConvertDetail::StoreF32(position, shapePosition);
     return Sqrt(position[0u] * position[0u] + position[1u] * position[1u] + position[2u] * position[2u]) - parameter0.x;
 }
 
 [[nodiscard]] f32 CapsuleSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
     f32 position[4u] = {};
-    StoreF32(position, shapePosition);
+    SIMDConvertDetail::StoreF32(position, shapePosition);
     const f32 halfHeight = parameter0.y;
     const f32 clampedY = position[1u] < -halfHeight ? -halfHeight : (position[1u] > halfHeight ? halfHeight : position[1u]);
     const f32 dx = position[0u];
@@ -303,8 +303,7 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
         return false;
     // firstWeight lands on second when secondDistance is zero.
     const f32 firstWeight = SaturateFloat(Abs(secondDistance / denominator));
-    const f32 keepWeight = 1.0f - firstWeight;
-    CsgDeformVertex mixed = MixVertices(vertices[first], vertices[second], keepWeight);
+    CsgDeformVertex mixed = MixVertices(vertices[first], vertices[second], firstWeight);
     if(!NormalizeDeformVertex(mixed))
         return false;
     const u32 created = static_cast<u32>(vertices.size());
@@ -482,30 +481,51 @@ struct CutLoopEdge{
     outLoop.clear();
     if(edges.empty())
         return true;
-    HashMap<u32, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchArena> nextMap(0, EdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
-    nextMap.reserve(edges.size() * 2u + 1u);
-    for(const CutLoopEdge& edge : edges){
-        if(nextMap.find(edge.first) != nextMap.end())
-            return false;
-        nextMap.emplace(edge.first, edge.second);
-    }
-    u32 start = edges.front().first;
-    for(const CutLoopEdge& edge : edges){
+    // Boundary edges keep source-triangle winding, so consecutive edges meet
+    // head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
+    Vector<CutLoopEdge, ScratchArena> remaining(scratchArena);
+    remaining = edges;
+    u32 start = remaining.front().first;
+    u32 cursor = start;
+    for(const CutLoopEdge& edge : remaining){
         if(edge.first < start)
             start = edge.first;
+        if(edge.second < start)
+            start = edge.second;
     }
-    outLoop.reserve(edges.size() + 1u);
-    u32 cursor = start;
-    for(usize step = 0u; step <= edges.size(); ++step){
-        outLoop.push_back(cursor);
-        const auto found = nextMap.find(cursor);
-        if(found == nextMap.end())
+    cursor = start;
+    outLoop.reserve(edges.size());
+    outLoop.push_back(cursor);
+    {
+        const auto seed = std::find_if(
+            remaining.begin(),
+            remaining.end(),
+            [cursor](const CutLoopEdge& edge){ return edge.first == cursor || edge.second == cursor; }
+        );
+        if(seed == remaining.end())
             return false;
-        cursor = found.value();
-        if(cursor == start)
+        cursor = seed->first == cursor ? seed->second : seed->first;
+        outLoop.push_back(cursor);
+        remaining.erase(seed);
+    }
+    while(!remaining.empty()){
+        bool advanced = false;
+        for(auto it = remaining.begin(); it != remaining.end(); ++it){
+            if(it->first == cursor || it->second == cursor){
+                const u32 next = it->first == cursor ? it->second : it->first;
+                remaining.erase(it);
+                cursor = next;
+                if(cursor == start)
+                    break;
+                outLoop.push_back(cursor);
+                advanced = true;
+                break;
+            }
+        }
+        if(cursor == start || !advanced)
             break;
     }
-    if(cursor != start || outLoop.size() != edges.size())
+    if(cursor != start || !remaining.empty())
         return false;
     for(usize vertexIndex = 1u; vertexIndex < outLoop.size(); ++vertexIndex){
         for(usize other = 0u; other < vertexIndex; ++other){
@@ -803,9 +823,6 @@ CsgDeformViability CheckCsgDeformCutsViability(
     const usize cutCount,
     const CsgDeformBuildOptions& options
 ){
-    CsgDeformViability viability;
-    viability.viable = false;
-    viability.reason = CsgDeformViabilityReason::Ok;
     CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
     __hidden_csg_deform_edit::DeformRebuildResult result;
@@ -878,10 +895,12 @@ bool CommitCsgDeformCuts(
     outStats = CsgDeformStats{};
     outVertices.clear();
     outTriangles.clear();
+    // Commit reuses the preview entry point so both always observe the same
+    // rebuild, viability classifier, and stats for identical inputs.
     CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    __hidden_csg_deform_edit::DeformRebuildResult result;
-    if(!__hidden_csg_deform_edit::RebuildSequentialCuts(
+    CsgDeformStats previewStats{};
+    if(!PreviewCsgDeformCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,
@@ -892,13 +911,9 @@ bool CommitCsgDeformCuts(
         options,
         previewVertices,
         previewTriangles,
-        result
+        previewStats
     )){
-        outStats = result.stats;
-        return false;
-    }
-    if(!result.viability.viable){
-        outStats = result.stats;
+        outStats = previewStats;
         return false;
     }
     outVertices.reserve(previewVertices.size());
@@ -907,7 +922,7 @@ bool CommitCsgDeformCuts(
         outVertices.push_back(vertex);
     for(const CsgDeformTriangle& triangle : previewTriangles)
         outTriangles.push_back(triangle);
-    outStats = result.stats;
+    outStats = previewStats;
     return true;
 }
 

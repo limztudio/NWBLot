@@ -654,8 +654,8 @@ TEST(Csg, CsgShapeRegistryProjectShape){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
 
     auto makeVertex = [](const f32 x, const f32 y, const f32 z){
         NWB::Impl::CsgDeformVertex vertex;
@@ -714,8 +714,8 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     EXPECT_TRUE(viability.viable);
     EXPECT_EQ(viability.reason, NWB::Impl::CsgDeformViabilityReason::Ok);
 
-    NWB::Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
-    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::ScratchArena> previewTriangles(scratchArena);
     NWB::Impl::CsgDeformStats previewStats;
     EXPECT_TRUE(NWB::Impl::PreviewCsgDeformCuts(
         scratchArena,
@@ -735,8 +735,8 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     EXPECT_EQ(previewStats.appliedCutCount, 2u);
     EXPECT_GT(previewStats.capTriangleCount, 0u);
 
-    NWB::Impl::CsgDeformVertexVector<Core::Alloc::GlobalArena> commitVertices(commitArena);
-    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
     NWB::Impl::CsgDeformStats commitStats;
     EXPECT_TRUE(NWB::Impl::CommitCsgDeformCuts(
         scratchArena,
@@ -783,8 +783,8 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
 }
 
 TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
-    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
 
     NWB::Impl::CsgDeformVertex vertex;
     vertex.position = Float3U(-5.0f, 0.0f, 0.0f);
@@ -816,8 +816,8 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     );
     EXPECT_FALSE(viability.viable);
 
-    NWB::Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
-    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::ScratchArena> previewTriangles(scratchArena);
     NWB::Impl::CsgDeformStats previewStats;
     EXPECT_FALSE(NWB::Impl::PreviewCsgDeformCuts(
         scratchArena,
@@ -833,8 +833,8 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
         previewStats
     ));
 
-    NWB::Impl::CsgDeformVertexVector<Core::Alloc::GlobalArena> commitVertices(commitArena);
-    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
     NWB::Impl::CsgDeformStats commitStats;
     EXPECT_FALSE(NWB::Impl::CommitCsgDeformCuts(
         scratchArena,

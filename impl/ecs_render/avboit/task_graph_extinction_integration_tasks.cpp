@@ -70,9 +70,7 @@ namespace RendererTaskGraphDetail{
         payload.csgPlan.materialize(drawItems, csgFrameData);
     else
         payload.plan.materialize(drawItems);
-    // The following raster task is deliberately graph-owned and cannot safely fall back to its local bridge.
-    // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
-    // of accepting an all-or-nothing Extinction phase with stale generated vertices.
+    // Reject late losses so the packet is discarded and the next frame re-preflights.
     if(
         !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
         || (csgComputeEmulation && (
@@ -94,8 +92,7 @@ namespace RendererTaskGraphDetail{
         graphics.getDevice(),
         commandList
     );
-    // Extinction's raster half records after this producer in the same selected Graphics packet. Close the
-    // marker before this command list completes; its consumer owns finishTiming/discard.
+    // Close the marker now; the raster consumer owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(payload.extinctionTiming))
         return false;
     Core::ViewportState viewportState;
@@ -160,8 +157,7 @@ namespace RendererTaskGraphDetail{
         return false;
 
     if(payload.phase == Phase::Generate){
-        // Raster A leaves dynamic rendering active.  End it before the next compute generator, retaining the
-        // original per-item material order and allowing the terminal typed Integration successor to record.
+        // End the prior raster phase before the next compute generator.
         commandList.endRenderPass();
         if(payload.beginTiming){
             if(payload.extinctionTiming->has_value())
@@ -213,7 +209,7 @@ namespace RendererTaskGraphDetail{
             payload.extinctionTiming->value().finishTiming(commandList);
             payload.extinctionTiming->reset();
         }
-        // Integration binds a compute pipeline in the next graph callback.
+        // Next callback binds compute; end rendering first.
         commandList.endRenderPass();
     }
     return true;

@@ -1383,8 +1383,7 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
         return false;
     }
 
-    // A failed standalone attempt leaves the live ImGui list available to the synchronous graph or a later retry.
-    // The task graph itself discards incomplete immutable upload work; clearing this claim only releases graph IDs.
+    // Failed standalone attempts leave the live list for retry; clearing releases graph IDs.
     m_taskGraphPresentationClaimed = false;
     m_taskGraphPresentationGraphGeneration = 0u;
     return false;
@@ -1476,8 +1475,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         .requiredState = Core::ResourceStates::RenderTarget,
         .access = Core::GpuTaskResourceAccess::Write,
     });
-    // The opaque task writes its live ImGui bytes before binding the same buffers for rasterization.  The callback
-    // retains that intra-task CopyDest-to-Vertex/Index transition; the graph owns packet ordering and final use.
+    // Opaque task writes live bytes before rasterization; graph owns ordering and final use.
     resourceUses.push_back(Core::GpuTaskResourceUse{
         .resource = vertexBuffer,
         .range = {},
@@ -1490,8 +1488,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         .requiredState = Core::ResourceStates::IndexBuffer,
         .access = Core::GpuTaskResourceAccess::ReadWrite,
     });
-    // A custom ImDrawCmd callback can bind arbitrary user resources.  Keep that operation explicit and serial
-    // without pretending its private state can be converted into an immutable resource declaration.
+    // Custom callbacks may bind arbitrary resources; keep that path explicit and serial.
     resourceUses.push_back(Core::GpuTaskResourceUse{
         .resource = opaqueCallbackDomain,
         .range = {},
@@ -1633,8 +1630,7 @@ bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredP
         return false;
     }
 
-    // The rejected graph leaves every texture request pending. The caller decides whether the immutable snapshot
-    // proved callback-free replay or whether an opaque callback makes the failure terminal for this device session.
+    // Rejected graphs leave texture requests pending; caller decides retry versus terminal.
     m_taskGraphLegacyPresentationClaimed = false;
     m_textureUploadBatch.complete(false);
     return false;
@@ -1690,8 +1686,7 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
         })
         .setScheduling(scheduling)
         .setDependencies(uploadTasks.data(), uploadTasks.size())
-        // The next retained UI frame must observe the compiler-owned ShaderResource handoff even if an upload
-        // preferred a separate transport.
+        // Next retained frame observes the compiler-owned ShaderResource handoff.
         .setResourceUses(resourceUses.data(), resourceUses.size())
     ;
     const Core::GpuTaskId completionTask = graph.addTask<StandaloneTextureUploadCompletionTask>(
@@ -1819,8 +1814,7 @@ bool UiSystem::recordTaskGraphPresentation(
     if(!m_frameFinished)
         return false;
 
-    // Vertex/index bytes and the command stream reached immutable graph-owned storage before declaration. This
-    // terminal task only consumes the declared VertexBuffer/IndexBuffer and sampled-texture states.
+    // Bytes reached immutable storage before declaration; terminal consumes declared states.
     if(!recordTaskGraphDrawSnapshot(commandList, frame, backbuffer, context))
         return false;
     commandList.endRenderPass();

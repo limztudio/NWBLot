@@ -78,8 +78,7 @@ struct CandidateEqual{
             || lhs->scale.x != rhs->scale.x || lhs->scale.y != rhs->scale.y || lhs->scale.z != rhs->scale.z
         )
             return false;
-        // A shared group is the author's assertion that surface overrides preserve the common static boundary.
-        // Without that assertion, medium semantics and every effective material byte must agree, even on hash collisions.
+        // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
         return lhs->group != NAME_NONE || (
             lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
             && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount

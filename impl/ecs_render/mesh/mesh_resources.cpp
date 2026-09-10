@@ -379,8 +379,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Both the software fallback and the hybrid transparent-shadow tail read positions and reconstructed triangle
-    // indices as raw byte buffers. Keep those views available even when hardware ray tracing is present.
+    // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
@@ -481,9 +480,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     if(!uploaded)
         return false;
 
-    // Both shadow backends trace triangles, so the reconstructed index buffer is always created. The
-    // hardware path consumes it as an accel-struct build input; the software fallback reads it as a raw
-    // byte buffer. blasBuildPending / swBvhBuildPending route the mesh to whichever backend is active.
+    // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
         const usize indexCount = static_cast<usize>(createdMesh.meshletPrimitiveIndexCount);
         Core::Alloc::ScratchArena scratchArena(

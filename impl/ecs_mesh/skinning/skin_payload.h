@@ -36,8 +36,7 @@ static_assert(
     "MeshSkinning influence GPU layout must stay SIMD-aligned"
 );
 
-// Resource preparation and graph upload declaration resolve the current pose independently. Static influences
-// stay in the persistent skin buffer; the graph copies only jointMatrices before releasing this scratch storage.
+// Preparation and graph declaration resolve the pose independently; graph copies joints only.
 struct RuntimeSkinPayloadScratch final{
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> poseJoints;
     Vector<SkeletonJointMatrix, Core::Alloc::ScratchArena> jointMatrices;
@@ -64,7 +63,7 @@ namespace MeshSkinningPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Encode and validate mesh-owned data only when creating its GPU buffer, including after an edit revision changes.
+// Encode mesh-owned data only when creating its GPU buffer.
 template<typename SkinInfluenceVector>
 [[nodiscard]] bool BuildSkinInfluences(const MeshSkinningRuntimeInstance& instance, SkinInfluenceVector& outSkinInfluences){
     outSkinInfluences.clear();

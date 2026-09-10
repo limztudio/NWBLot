@@ -68,15 +68,14 @@ static void ResolveSkeletonComponents(
 }
 
 static constexpr bool s_RuntimeSkinningMeshletFrustumCullingEnabled = true;
-static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Runtime deformations can make meshlet cones unsafe; benchmarks override through a test provider only.
+static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Deformations make cones unsafe.
 
 [[nodiscard]] static Core::GpuQueueRequest JointPaletteUploadQueueRequest(){
     Core::GpuQueueRequest request;
     request.requiredCapabilities = Core::GpuQueueCapability::Transfer;
     request.preferredQueue = Core::GpuQueuePreference::Graphics;
     request.allowFallback = false;
-    // The graph-owned compute continuation merges with these uploads on primary Graphics. Keep the full skinning
-    // chain on that transport until an explicitly profiled async-compute variant is introduced.
+    // Compute continuation merges with uploads on Graphics; keep the chain there.
     request.compilerMayOverridePreference = false;
     return request;
 }

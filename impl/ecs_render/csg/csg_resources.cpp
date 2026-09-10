@@ -474,8 +474,7 @@ template<typename CutterTransformLoader, typename CutterHandler>
 ){
     Core::GpuDescriptorHandle acquired;
     if(!AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer, acquired)){
-        // The backing buffer was replaced for capacity growth, so the existing descriptor must not survive as a
-        // seemingly valid handle to retired storage. Leave the context explicitly unregistered for a later retry.
+        // The buffer was replaced; drop the stale handle for a later retry.
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
         if(inOutHandle.valid() && heap.isInitialized())
             heap.free(inOutHandle);
@@ -483,8 +482,7 @@ template<typename CutterTransformLoader, typename CutterHandler>
         return false;
     }
 
-    // Never rewrite a descriptor a previous command list can still reach. A capacity replacement gets a fresh slot;
-    // free() retires the old descriptor only after the heap's in-flight quarantine has elapsed.
+    // Replacements take a fresh slot; the old one retires after quarantine.
     if(inOutHandle.valid())
         device.getDescriptorHeap().free(inOutHandle);
     inOutHandle = acquired;
@@ -559,7 +557,7 @@ bool RendererCsgSystem::createCsgClipResources(){
     if(!m_csgState.m_clipBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
-        // This layout contains only the shared 64-byte mesh push ABI used by the cap-fill fullscreen path.
+        // Push-only layout for the cap-fill path.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         m_csgState.m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -681,7 +679,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     if(!createCsgClipResources())
         return false;
 
-    // Keep the setup contract explicit: draw paths consume these handles only through an immutable graph snapshot.
+    // Draw paths consume these handles only via a graph snapshot.
     NWB_ASSERT(m_csgState.m_receiverRangeBufferCapacity >= receiverRangeCount);
     NWB_ASSERT(m_csgState.m_cutterBufferCapacity >= cutterCount);
     NWB_ASSERT(m_csgState.m_receiverRangeBufferHeapHandle.valid());
@@ -723,8 +721,7 @@ bool RendererCsgSystem::prepareCsgClipContextSlotData(
     )
         return false;
 
-    // Buffer selection, descriptor registration, and target selection have all completed before graph declaration.
-    // Capture every indirection now so a later native record never observes handles from a different generation.
+    // Freeze indirections now; later records must not see another generation.
     outContextSlots.receiverRanges = csgResources.receiverRangeHeapHandle.slot();
     outContextSlots.cutters = csgResources.cutterHeapHandle.slot();
     outContextSlots.materialTyped = frameBindings.materialTypedHeapHandle.slot();

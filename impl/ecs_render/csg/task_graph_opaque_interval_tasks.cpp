@@ -259,9 +259,7 @@ bool CsgIntervalSampleGraphTask::record(
         && (opaqueDrawItems.csgReceiverSurface.empty()
             || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
     ;
-    // The producer validates the same frozen full CSG stream before opening this cross-callback measure. Keep
-    // the fallback defensive: if a later readiness check disagrees, retire the reservation instead of leaving
-    // a stale generated-vertex raster or an unsubmitted timing scope alive.
+    // Retire the reservation on later disagreement; never leave it stale.
     if(
         payload.csgComputeEmulationOutputStatesGraphOwned
         && payload.opaqueCsgComputeEmulationTiming->has_value()

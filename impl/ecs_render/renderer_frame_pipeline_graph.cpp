@@ -2214,9 +2214,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             transparentCsgUploadScheduling.forceSubmissionBoundary = false;
             transparentCsgUploadScheduling.allowPacketMerge = true;
             transparentCsgUploadScheduling.mergeWithPrevious = true;
-            // Hardware Caustics and AVBOIT have independent timing and acceptance submissions even when both route
-            // to Graphics. Start this frozen AVBOIT upload chain in its own packet, then merge every following
-            // upload/clear/interval callback into that new semantic packet.
+            // Caustics and AVBOIT submit independently; start this upload chain in its own packet.
             Core::GpuTaskSchedulingHint transparentCsgFirstUploadScheduling = transparentCsgUploadScheduling;
             transparentCsgFirstUploadScheduling.mergeWithPrevious = false;
 
@@ -2379,8 +2377,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-    // Prepared transparent CSG uses the same persistent interval values and peel targets as opaque CSG. Place its frozen rect clear immediately after immutable stream uploads so the graph owns CopyDest -> UAV ordering,
-    // then declare the CSG StorageImage working set on the producer task. An unprepared compatibility path continues to call the legacy all-target helper.
+    // Clear frozen rect after uploads so the graph owns CopyDest -> UAV ordering.
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         Core::GpuTaskSchedulingHint transparentCsgIntervalClearScheduling;
         transparentCsgIntervalClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -2474,8 +2471,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         );
     }
 
-    // The interval producer consumes the first frozen transparent CSG stream. Its graph-visible states must be
-    // declared here, before its native work records, rather than on the later occupancy task.
+    // Declare interval-producer states here, before native recording, not on the occupancy task.
     const Core::BufferRange transparentCsgInstanceRange(
         0u,
         avboitPrePayload.transparentCsgSnapshot.instanceCount * sizeof(InstanceGpuData)

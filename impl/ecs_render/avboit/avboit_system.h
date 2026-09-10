@@ -92,8 +92,7 @@ public:
     void invalidateResources();
 
 public:
-    // The graph host owns the shared graph artifact; AVBOIT owns every graph-local identifier required by its
-    // transparency stage. Cross-domain users consume the typed stage boundary instead of those local identifiers.
+    // Host owns the graph artifact; AVBOIT owns its stage identifiers; users see the stage boundary.
     void resetTaskGraphStage()noexcept;
     [[nodiscard]] RendererAvboitTaskGraphStageState& taskGraphStage()noexcept{ return m_taskGraphStage; }
     [[nodiscard]] RendererAvboitTaskGraphValidation validateTaskGraphStage(
@@ -132,18 +131,14 @@ public:
         bool preparedTransparentCsgIntervalPeelTargetStatesGraphOwned = false,
         bool preparedTransparentCsgReceiverSpanOutputImageStatesGraphOwned = false,
         bool preparedTransparentCsgRemovedIntervalOutputImageStatesGraphOwned = false,
-        // Prepared graph interval work declares the CSG receiver/cutter SRVs and clip/sample CBVs. Direct and
-        // unprepared paths retain their native heap-buffer setup.
+        // Graph interval work declares CSG SRVs/CBVs; unprepared paths keep native setup.
         bool preparedTransparentCsgClipBufferStatesGraphOwned = false,
-        // The graph can also retain the source-buffer SRVs selected by this frozen stream. Direct and unprepared
-        // work retains the material draw thunk's native geometry setup.
+        // Graph may retain source-buffer SRVs; unprepared work keeps native geometry setup.
         bool preparedTransparentCsgMaterialFrameStatesGraphOwned = false,
         bool preparedTransparentCsgMaterialGeometryStatesGraphOwned = false,
-        // The prepared AVBOIT graph can split receiver-span and the final interval-combine dispatch into ordered
-        // callbacks. Direct and aggregate compatibility paths leave this false and retain the native in-thunk tail.
+        // Graph may split span/combine dispatches; compat paths keep the native tail.
         bool deferPreparedTransparentCsgIntervalCombine = false,
-        // A split callback preserves the existing aggregate interval timing range across its ordered packet cells.
-        // Direct and aggregate compatibility callers leave this null and keep the local timing scope.
+        // Split callbacks preserve the aggregate timing range; compat keeps local scope.
         Optional<Core::GpuTimingMeasure>* deferredPreparedTransparentCsgIntervalTiming = nullptr
     );
     void renderAvboitOccupancyPass(
@@ -155,18 +150,15 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot* preparedOccupancyFrameBindings = nullptr,
         usize preparedOccupancyInstanceCount = 0u,
         usize preparedOccupancyMaterialTypedByteCount = 0u,
-        // The normal task-graph path declares depth as ShaderResource and coverage as UnorderedAccess before this
-        // material pass. Direct compatibility callers retain the explicit bridge.
+        // Graph declares depth/coverage states first; compat callers keep the bridge.
         bool occupancyStatesGraphOwned = false,
-        // The prepared transparent interval producer declares the removed-interval outputs before graph-owned
-        // occupancy CSG sampling. Other AVBOIT and compatibility consumers retain the native UAV handoff.
+        // Interval producer declares removed-interval outputs first; others keep the UAV handoff.
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false,
-        // A prepared occupancy CSG stream also has graph-declared clip buffers at the material callback entry.
+        // Prepared occupancy CSG streams also carry graph-declared clip buffers.
         bool occupancyCsgClipBufferStatesGraphOwned = false,
         bool occupancyMaterialFrameStatesGraphOwned = false,
         bool occupancyMaterialGeometryStatesGraphOwned = false,
-        // The graph can generate alias-free regular emulation vertices in the preceding producer.
-        // Shared-output and direct paths leave this false and retain local dispatch/raster work.
+        // Graph may generate alias-free vertices; shared/direct paths keep local work.
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
         // A distinct frozen CSG-only producer may own the same handoff. It remains separate from the regular flag

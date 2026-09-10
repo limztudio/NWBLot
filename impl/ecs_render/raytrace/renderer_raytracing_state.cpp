@@ -23,9 +23,7 @@ void RendererRayTracingState::invalidateResources(){
     m_refractionScreenPipelineFailed = false;
     m_refractionHwPipelineFailed = false;
     m_refractionUseHardwareTrace = false;
-    // The scene TLAS is GPU state and must be released on device/resource teardown; per-mesh BLAS
-    // handles live on MeshResources and are released with the mesh cache. Ray tracing capability
-    // persists across resource invalidation.
+    // Scene TLAS is GPU state released on teardown; per-mesh BLAS lives on the mesh cache.
     m_tlas.reset();
     m_tlasBackingFresh = false;
     m_tlasBackingStateHandoffPending = false;
@@ -123,9 +121,7 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowMeshPositionHandles.clear();
     m_swShadowMeshIndexHandles.clear();
     m_swShadowMeshAttributeHandles.clear();
-    // The stable handle caches pin their buffers (BufferHandle refs) and own heap slots; drop both so a device-loss
-    // / resource-invalidation teardown cannot leave dangling handles or hold buffers past teardown. The heap itself
-    // is torn down by the device, so only the refs (not heap.free) need clearing here.
+    // Drop pinned handle caches so teardown leaves no dangling handles.
     m_hwMeshHeapHandleCache.clear();
     m_swMeshHeapHandleCache.clear();
     m_swShadowTransparentSoftShader.reset();
@@ -190,16 +186,14 @@ void RendererRayTracingState::invalidateResources(){
     m_causticAccumulatorDecayShader.reset();
     m_causticAccumulatorDecayPipeline.reset();
     m_causticAccumulatorDecayPipelineFailed = false;
-    // The accumulator target is released on invalidation (deferred targets are recreated), so re-seed the EMA; the next
-    // enabled frame clears instead of decaying.
+    // Accumulator target is recreated on invalidation; re-seed the EMA.
     m_causticAccumulatorInitialized = false;
     m_causticTemporalReuseFrameCount = 0u;
-    // Reset the SW temporal-reuse phase so the interleaved sequence restarts deterministically after a device reset.
+    // Reset the SW temporal phase so the sequence restarts deterministically.
     m_swCausticFrameIndex = 0u;
-    // Reset the HW temporal-reuse phase likewise (byte-parallel HW scheme).
+    // Reset the HW temporal phase likewise.
     m_hwCausticFrameIndex = 0u;
-    // Surfel GI. The persistent pool/cell-head/counter/params buffers live on this state (not DeferredFrameTargets), so
-    // a resize does not reset convergence -- but a full invalidate (device reset) does release + re-seed them.
+    // Surfel buffers live on this state; resize keeps convergence, invalidate re-seeds.
     m_surfelSpawnBindingLayout.reset();
     m_surfelAgeFreeBindingLayout.reset();
     m_surfelHashBuildBindingLayout.reset();

@@ -24,9 +24,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
     if(!createMeshGeometryHeapHandles(mesh))
         return false;
 
-    // Devices without mesh shaders use the compute-emulation path for every material pass.  Establish its output
-    // buffer and descriptor with the mesh resource so a material pass never has to allocate them while preparing
-    // or drawing a frame.
+    // Non-mesh-shader devices use emulation; establish its output with the mesh resource.
     if(
         !m_graphics.queryFeatureSupport(Core::Feature::Meshlets)
         && !createComputeEmulationHeapHandle(mesh)
@@ -159,7 +157,7 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
     ECSRenderDetail::MeshFrameBindingSnapshot retired = Move(m_meshState.m_frameBindings);
     m_meshState.m_frameBindings = Move(replacement);
 
-    // Keep the retired buffers alive until every descriptor enters the heap's deferred-reuse quarantine.
+    // Keep retired buffers alive until descriptors enter deferred-reuse quarantine.
     if(retired.instanceHeapHandle.valid())
         heap.free(retired.instanceHeapHandle);
     if(retired.materialTypedHeapHandle.valid())
@@ -204,8 +202,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         return false;
     }
 
-    // A failed earlier attempt leaves no live handles behind (the failure path below resets every acquired slot),
-    // so a non-empty partial set signals a broken lifetime transition rather than something we can safely merge.
+    // A non-empty partial set signals a broken lifetime transition, never a safe merge.
     for([[maybe_unused]] const Core::GpuDescriptorHandle handle : mesh.geometryHeapHandles)
         NWB_ASSERT(!handle.valid());
 

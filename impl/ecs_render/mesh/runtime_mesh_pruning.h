@@ -27,7 +27,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Releases geometry before its owning cache entry is erased, in the cache's existing iteration order.
+// Release geometry before its cache entry is erased, in iteration order.
 template<typename ReleaseMesh>
 void PruneRuntimeMeshResources(
     HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>& meshes,

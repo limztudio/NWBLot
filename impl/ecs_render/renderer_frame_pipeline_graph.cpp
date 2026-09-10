@@ -4784,8 +4784,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-// Accumulation is another independent write point for the shared material/CSG buffers. Freeze and publish its
-    // bytes after integration, rather than letting native recording re-gather mutable scene state after extinction.
+// Accumulation is another independent write point; freeze bytes after integration.
     AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena };
     AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena };
     avboitAccumulationPayload.frameBindings = frameBindings;
@@ -5101,10 +5100,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     accumulationUploadScratch
                 )
             ;
-            // The all-compute two-through-five-draw case can preserve one shared generated output only
-            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
-            // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate accumulation callback
-            // is never partially replayed around its phases.
+            // All-compute draws share one output only as an explicit D/R sequence; keep mesh/CSG out.
             accumulationSharedComputeEmulationPlanCaptured = !accumulationRegularComputeEmulationPlanCaptured
                 && accumulationDrawItems.regular.meshDrawItems.empty()
                 && accumulationDrawItems.csg.empty()
@@ -5139,7 +5135,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             }
         }
         else{
-            // An empty captured phase is still authoritative: recording must not re-gather mutable renderer state.
+            // An empty captured phase stays authoritative; recording must not re-gather state.
             avboitAccumulationPayload.accumulationSnapshot.capture(
                 accumulationDrawItems,
                 accumulationCsgFrameData,
@@ -5373,8 +5369,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitAccumulationScheduling.mergeWithPrevious = true;
     avboitAccumulationScheduling.allowMergeAcrossConsumerFrontier = true;
 
-    // Keep the final immutable upload as the semantic stream anchor. The optional producer becomes only the
-    // immediate Accumulation dependency; replacing this anchor would hide a broken upload-to-producer handoff.
+    // Keep the final upload as stream anchor; replacing it hides a broken handoff.
     const Core::GpuTaskId accumulationStreamTask = accumulationUploadTask;
     if(accumulationStreamsUploaded)
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
@@ -5462,9 +5457,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         accumulationComputeEmulationScheduling.forceSubmissionBoundary = false;
         accumulationComputeEmulationScheduling.allowPacketMerge = true;
         accumulationComputeEmulationScheduling.mergeWithPrevious = true;
-        // The next raster consumes this producer's graph-owned UAV output and shares its Accumulation timing
-        // ticket. Keep the immediate pair intact even if Composite observes the finalizer from a later Compute
-        // packet.
+        // Next raster consumes the producer UAV output and shares its timing ticket.
         accumulationComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc accumulationComputeEmulationDesc;
         accumulationComputeEmulationDesc

@@ -7,18 +7,18 @@
 
 #include "deform_types.h"
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 // Deterministic CPU-side rebuild orchestration for deformable CSG editing.
-//
-// Applies sequential cuts in order (one wall rebuild plus cap fill per active
-// cut) through the shared validator, cutter-field, wall, and cap classes,
-// so preview and commit viability always agree.
+
+
+// Applies sequential cuts in order (one wall rebuild plus cap fill per active cut) through the shared validator, cutter-field, wall, and cap classes, so preview and commit viability always agree.
 struct CsgDeformPipelineResult{
     CsgDeformViability viability;
     CsgDeformStats stats;
@@ -52,7 +52,9 @@ public:
     );
 };
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_IMPL_END
 

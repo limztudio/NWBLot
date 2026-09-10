@@ -601,7 +601,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
         return;
     }
 
-    // Validate every pending buffer release before publishing any barrier or retention. This keeps a late descriptor drift or incompatible tracked state from partially mutating the command-list transaction.
+    // Validate all pending releases first so a late failure never partially mutates the transaction.
     for(auto it = m_bufferOwnershipReleaseDestinations.begin(); it != m_bufferOwnershipReleaseDestinations.end(); ++it){
         Buffer* const buffer = it->first;
         if(!buffer || buffer->m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT || m_stateTracker.isPermanentBuffer(*buffer)){

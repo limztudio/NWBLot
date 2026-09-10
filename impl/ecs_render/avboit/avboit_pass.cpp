@@ -372,13 +372,11 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         );
     }
     else{
-        // The task marker surrounding this callback must close before the following Combine graph task begins its
-        // own marker. The timestamp endpoint remains open until that callback records.
+        // Close the marker before Combine begins; the endpoint stays open.
         if(!Core::FinishSplitGpuTimingMarker(intervalTiming))
             return;
     }
-    // A deferred span callback receives graph-lowered prologue barriers before it records. The receiver-surface
-    // raster pass must therefore be closed even when the native span dispatch moved out of this callback.
+    // Close the raster pass even when the span dispatch moved out.
     commandList.endRenderPass();
 }
 
@@ -465,8 +463,7 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     NWB_ASSERT(m_avboitState.m_depthWarpPipeline);
     NWB_ASSERT(m_avboitState.m_integratePipeline);
 
-    // Occupancy discovers opaque depth and writes coverage solely through global heap descriptors. The normal graph
-    // path declares those exact states at its packet boundary; direct compatibility callers retain this bridge.
+    // Occupancy uses heap descriptors; compatibility callers keep this bridge.
     if(!occupancyStatesGraphOwned){
         commandList.setTextureState(
             targets.depth.get(),
@@ -538,8 +535,7 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
-    // The graph records the warp/control reads and packed-extinction writes as packet-boundary state; this thunk
-    // contains only the native raster pass.
+    // Packet states are graph-owned; this thunk holds only the raster pass.
 
     if(
         preparedExtinctionDrawItems
@@ -603,8 +599,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
-    // The graph records the integrated volume and work-buffer reads as packet-boundary state; this thunk owns only
-    // the native raster pass and its explicit final cross-graph transition below.
+    // This thunk owns only the raster pass and its final transition.
 
     if(
         preparedAccumulationDrawItems
@@ -646,9 +641,7 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     }
     commandList.endRenderPass();
 
-    // Deferred composite is a Compute pass. The normal graph lowers the two accumulation attachment and read-only
-    // depth transitions in its following Graphics finalizer, so later packets never name framebuffer attachment
-    // source states. Direct callers retain the established bridge.
+    // Deferred composite is Compute; direct callers keep the bridge.
     if(!accumulationFinalStatesGraphOwned){
         commandList.setTextureState(
             avboitTargets.accumColor.get(),
@@ -684,8 +677,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
-    // The graph records the coverage read and warp/control writes as packet-boundary state; this thunk contains only
-    // the native dispatch itself.
+    // This thunk holds only the native dispatch.
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
@@ -716,8 +708,7 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
     if(timingRecorded)
         *timingRecorded = timing.valid();
 
-    // The graph records packed-extinction reads and the Texture3D UAV write as packet-boundary state; this thunk
-    // contains only the native dispatch itself.
+    // This thunk holds only the native dispatch.
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 

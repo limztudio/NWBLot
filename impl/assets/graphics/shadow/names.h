@@ -41,23 +41,19 @@ inline constexpr Name s_SwTransparentClassifyShaderName("engine/graphics/shadow/
 inline constexpr Name s_SwTransparentBuildArgsShaderName("engine/graphics/shadow/sw_shadow_transparent_buildargs_cs");
 inline constexpr Name s_SwTransparentIndirectShaderName("engine/graphics/shadow/sw_shadow_transparent_indirect_cs");
 inline constexpr Name s_SwTransparentUniformShaderName("engine/graphics/shadow/sw_shadow_transparent_uniform_cs");
-// Soft COLORED TRANSPARENT shadow: the half-res cone-jittered TRANSPARENT
-// trace -- the colored (Beer-Lambert/Fresnel) analog of the soft opaque trace, kept a PARALLEL signal (independent noise,
-// separately denoised) and fold-multiplied onto the soft opaque visibility only at the final full-res upsample.
+// Soft COLORED TRANSPARENT shadow: the colored (Beer-Lambert/Fresnel) analog of the soft opaque trace, kept as a
+// parallel signal and folded onto opaque visibility only at the final upsample.
 inline constexpr Name s_SwTransparentSoftShaderName("engine/graphics/shadow/sw_shadow_transparent_soft_cs");
-// Soft opaque shadow (soft-ray-traced-shadow feature, all light types): the half-res geometry downsample pre-pass
-// (octahedral normal + camera distance + validity, for the resolve's edge-stop) + the a-trous wavelet resolve +
-// bilateral upsample that denoises the jittered half-res opaque visibility into the full-res visibility.
+// Soft opaque shadow: half-res geometry downsample + a-trous wavelet resolve + bilateral upsample denoises the
+// jittered half-res visibility into full-res visibility.
 inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/shadow/shadow_geometry_downsample_cs");
 inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");
-// RGB variant of the soft-shadow a-trous resolve: the SAME shadow_resolve source compiled with
-// NWB_SHADOW_RESOLVE_CHANNELS=3 (via the shadow_resolve_rgb_cs wrapper .slang), a SECOND cooked pipeline that denoises the
-// COLORED soft transparent transmittance while the scalar pipeline above keeps the grayscale opaque path at 1x ALU/LDS.
+// RGB variant of the soft-shadow resolve: same source compiled with NWB_SHADOW_RESOLVE_CHANNELS=3, denoising
+// colored transparent transmittance while the scalar pipeline keeps the opaque path cheap.
 inline constexpr Name s_SoftResolveRgbShaderName("engine/graphics/shadow/shadow_resolve_rgb_cs");
-// Soft opaque shadow TEMPORAL reproject-merge: inserted per slot between
-// the half-res soft trace and the a-trous resolve, it reprojects the current world position through a stashed previous-
-// frame worldToClip and accumulates the noisy per-frame trace into a variance-clamped/antilag temporal history (so the
-// per-frame SPP can drop and static receivers converge smooth, while a moving occluder leaves no ghost trail).
+// Soft opaque TEMPORAL reproject-merge: sits between the half-res trace and the resolve, reprojecting through the
+// stashed previous worldToClip into a variance-clamped history so static receivers converge while moving occluders
+// leave no ghost trail.
 inline constexpr Name s_SoftReprojectMergeShaderName("engine/graphics/shadow/shadow_reproject_merge_cs");
 
 

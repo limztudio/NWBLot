@@ -4559,8 +4559,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(extinctionSharedComputeEmulationOutputStatesGraphOwned){
-        // Keep the retained output concrete rather than placing it in a duplicate-expanding resource set.  The
-        // alternating phases need their distinct UAV/VertexBuffer uses preserved by the compiler.
+        // Keep the retained output concrete so the compiler preserves alternating uses.
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{
             extinctionResourceScratch
         };
@@ -4597,8 +4596,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         extinctionSharedComputeEmulationScheduling.forceSubmissionBoundary = false;
         extinctionSharedComputeEmulationScheduling.allowPacketMerge = true;
         extinctionSharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Integration and later Accumulation consume the terminal raster.  Every immediate D/R successor carries
-        // its explicit dependency, so retaining this one Graphics packet remains FrontierSafe.
+        // Integration and Accumulation consume the terminal raster; successors carry dependencies.
         extinctionSharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto addExtinctionSharedComputeEmulationPhase = [
             this,
@@ -4725,8 +4723,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
         m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTaskCount =
             extinctionSharedComputeEmulationPhaseCount;
-        // The terminal raster is the Extinction semantic endpoint.  The common typed Integration task immediately
-        // follows it, so packet ranges, timing, and accepted-token ownership remain graph-derived.
+        // Terminal raster is the Extinction endpoint; Integration follows with graph-derived ownership.
         m_avboitSystem.taskGraphStage().m_extinctionTask = extinctionSharedComputeEmulationDependency;
     }
     else{
@@ -4752,8 +4749,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
     }
-    // Integration is one semantic Compute-preferred successor. The compiler owns both its queue and the
-    // Extinction/UAV-to-Integration/SRV state lowering.
+    // Integration is a Compute-preferred successor; compiler owns queue and state lowering.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {
         ReadUse(avboitExtinction),
         ReadUse(avboitControl),

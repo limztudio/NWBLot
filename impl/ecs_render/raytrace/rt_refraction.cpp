@@ -95,7 +95,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         return true;
     };
 
-    // A separately compiled shader keeps RayQuery/SPIR-V ray-tracing capabilities off unsupported devices.
+    // A separate shader keeps ray-tracing capabilities off unsupported devices.
     if(!ensurePipeline(false))
         return false;
     const bool hardwareReady = m_rayTracingState.m_refractionHardwareTracingEnabled && shadowVisibilityHardwareSupported()
@@ -141,8 +141,7 @@ bool RendererRayTracingSystem::recordRefractionResolve(
     if(!resources.valid() || !targets.bindless.valid() || targets.width == 0u || targets.height == 0u)
         return false;
 
-    // The graph owns all transitions and the frozen TLAS/geometry/material declarations. In particular this method
-    // neither builds an acceleration structure nor recompiles/switches a pipeline while recording a packet.
+    // The graph owns transitions and frozen declarations; this records without rebuilds.
     __hidden_rt_refraction::RefractionPushConstants push;
     push.width = targets.width;
     push.height = targets.height;

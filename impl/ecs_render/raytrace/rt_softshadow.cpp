@@ -100,7 +100,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
         state.setPipeline(pipeline.get());
-        // Set 0 is push-only. Keep it represented so fixed heap sets retain their pipeline-layout indices.
+        // Set 0 is push-only; keep it so heap sets retain layout indices.
         return state;
     };
     const auto bindHeap = [&](const Core::ComputePipelineHandle& pipeline){
@@ -108,9 +108,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     };
 
     if(dispatchOpaqueGeometry){
-        // Geometry downsample: the shared graph already declares its descriptor-visible inputs and the first geometry
-        // cache UAV state. Direct compatibility callers retain the native prologue; all later soft-shadow lifecycle
-        // transitions remain local to this task.
+        // Graph declares downsample inputs; later soft-shadow transitions stay local.
         if(!graphEntryStatesOwned){
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -229,8 +227,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             targets.bindless.shadowHistAStorage.slot(), targets.bindless.shadowMomentsAStorage.slot()
         }
     ;
-    // The merge writes the NEXT history/moments pair. The variance-guided wavelet must read that same pair, not the
-    // incoming A buffer on every other frame; otherwise its temporal variance is stale (and initially undefined).
+    // Merge writes the NEXT pair; the wavelet must read that same pair, never stale A.
     Core::Texture* const opaqueResolveMoments = frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get();
     const u32 opaqueResolveMomentsSlot = frontIsA ? targets.bindless.shadowMomentsB.slot() : targets.bindless.shadowMomentsA.slot();
     if(dispatchOpaqueResolve && opaqueTemporalActive){

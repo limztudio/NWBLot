@@ -41,8 +41,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Constructed during preflight and never mutated after publication. Graph declarations copy these bytes into
-// their own immutable upload storage; retained snapshots also pin the exact CPU and GPU generations.
+// Built during preflight, immutable after publication. Graph declarations copy these bytes into their own
+// upload storage; retained snapshots also pin the CPU and GPU generations.
 struct RayTracingOpticalSceneUpload{
     Vector<u8, Core::Alloc::GlobalArena> bytes;
     u32 instanceCount = 0u;

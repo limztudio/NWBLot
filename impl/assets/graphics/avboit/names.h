@@ -27,8 +27,8 @@ namespace AssetsGraphicsAvboit{
 
 inline constexpr Name s_DepthWarpComputeShaderName("engine/graphics/avboit/depth_warp_cs");
 inline constexpr Name s_IntegrateComputeShaderName("engine/graphics/avboit/integrate_cs");
-// Cook-generated per-material AVBOIT PS names are cook-private. The renderer binds them through the resolved Name
-// stored on the cooked material, not by re-deriving from a shared prefix.
+// Cook-generated per-material AVBOIT PS names are cook-private; the renderer binds the resolved Name on the
+// cooked material instead of re-deriving from a prefix.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

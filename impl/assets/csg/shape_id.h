@@ -27,15 +27,14 @@ inline constexpr CsgShapeTypeId s_InvalidCsgShapeTypeId = 0u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CSG evaluator modules are cooked independently from runtime registration.  Keep their compact GPU dispatch ID a
-// deterministic projection of the canonical Name hash rather than an insertion-order ordinal.  The cooker and runtime
-// both reject the extremely unlikely 32-bit collision, so this is a stable ABI rather than a best-effort hash lookup.
+// CSG evaluator modules cook independently from runtime registration. Keep the GPU dispatch ID a deterministic
+// projection of the Name hash, not an insertion ordinal. Cooker and runtime both reject 32-bit collisions,
+// so this is a stable ABI.
 [[nodiscard]] inline CsgShapeTypeId CsgShapeTypeIdFromName(const Name& shapeName){
     if(!shapeName)
         return s_InvalidCsgShapeTypeId;
 
-    // NameHash deliberately exposes its fixed, canonical lanes as part of the Name ABI.  Do not use HashValue here:
-    // it returns usize and would make the cooked GPU ID depend on host word size.
+    // NameHash lanes are part of the Name ABI; HashValue returns usize and would make the cooked ID host-dependent.
     const NameHash& shapeHash = shapeName.hash();
     u64 foldedHash = shapeHash.qwords[0u];
     for(u32 lane = 1u; lane < NameDetail::s_HashLaneCount; ++lane){

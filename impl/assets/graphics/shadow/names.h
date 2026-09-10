@@ -25,18 +25,14 @@ namespace AssetsGraphicsShadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hardware OPAQUE shadow trace: inline RayQuery compute (binary "any opaque hit -> shadowed"). The colored TRANSPARENT
-// shadow is cast by the software traversal below and multiplied onto this opaque mask (the hybrid split).
+// Hardware OPAQUE trace: inline RayQuery compute (any opaque hit -> shadowed). The colored TRANSPARENT shadow
+// comes from software traversal below and multiplies onto this mask (the hybrid split).
 inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayquery_cs");
-// Hardware (RayQuery) SOFT OPAQUE half-res trace: the HW analog of s_SwSoftOpaqueShaderName. One thread per HALF-res
-// pixel casts SPP cone-jittered opaque RayQuery rays and writes the averaged single-frame visibility into the SAME
-// half-res soft buffer the SW path writes, so the shared geometry-downsample -> temporal reproject-merge -> a-trous
-// resolve -> bilateral upsample denoise chain turns the HW opaque shadow into a soft shadow exactly as on the SW path.
+// Hardware SOFT OPAQUE half-res trace: the HW analog of s_SwSoftOpaqueShaderName. Each half-res pixel casts SPP
+// cone-jittered rays into the shared soft buffer, so the common denoise chain softens HW shadows as on the SW path.
 inline constexpr Name s_RayQuerySoftShaderName("engine/graphics/shadow/shadow_rayquery_soft_cs");
-// Software (compute) shadow traversal, decomposed into one named kernel per pass. Each pass composes only the concern
-// .slangi files it needs, defines its occluder class at compile time, and declares its own minimal binding subset + push
-// struct. The renderer creates one pipeline per pass and dispatches the full-res opaque prepass, the soft opaque half-res
-// trace, then the transparent coarse path with compacted/adaptive/uniform resolve variants.
+// Software shadow traversal: one named kernel per pass, each composing only its needed .slangi files with a
+// compile-time occluder class and minimal bindings.
 inline constexpr Name s_SwOpaquePrepassShaderName("engine/graphics/shadow/sw_shadow_opaque_prepass_cs");
 inline constexpr Name s_SwSoftOpaqueShaderName("engine/graphics/shadow/sw_shadow_soft_opaque_cs");
 inline constexpr Name s_SwTransparentCoarseShaderName("engine/graphics/shadow/sw_shadow_transparent_coarse_cs");

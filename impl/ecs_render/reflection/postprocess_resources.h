@@ -60,7 +60,7 @@ struct ReflectionPostprocessSnapshot{
     bool spatialEnabled = false;
 };
 
-// Only the extra opaque history bank and spatial destination live here. Glass stays on its smooth transport path.
+// Only the extra opaque history bank and spatial destination live here.
 class RendererReflectionPostprocess final : NoCopy{
 public:
     RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);

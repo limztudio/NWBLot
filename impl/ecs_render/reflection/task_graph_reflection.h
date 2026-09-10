@@ -28,8 +28,7 @@ namespace RendererTaskGraphDetail{
 struct ReflectionGraphInputs{
     Core::GpuGraphResourceId opaqueDepth;
     Core::GpuGraphResourceId opaqueColor;
-    // Surface reads include the view/deferred selectors, both F0/roughness textures, opaque depth/normal and
-    // captured glass depth/normal. Hardware additionally reads the frozen scene/material/lighting declarations.
+    // Surface reads cover view/deferred selectors, F0/roughness, depth/normal, glass captures.
     const Core::GpuTaskResourceUse* surfaceReads = nullptr;
     usize surfaceReadCount = 0u;
     const Core::GpuTaskResourceUse* hardwareReads = nullptr;
@@ -51,9 +50,7 @@ struct ReflectionGraphResult{
     [[nodiscard]] bool valid()const noexcept{ return completion.valid(); }
 };
 
-// Input arrays are copied by graph declaration; their scratch lifetime need not reach recording. The preparation
-// outcome and diagnostic latches are frame-owned and must outlive the accepted/discarded packet. Feedback imports,
-// frozen selectors and accepted/discarded publication stay inside this reflection graph domain.
+// Inputs copy at declaration; outcomes and latches are frame-owned past packet lifetime.
 [[nodiscard]] ReflectionGraphResult DeclareReflectionTasks(
     Core::GpuTaskGraph& graph,
     Core::GraphicsRuntime& graphics,

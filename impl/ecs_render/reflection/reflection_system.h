@@ -83,8 +83,7 @@ struct ReflectionDepthPyramidSnapshot{
     }
 };
 
-// Resource handles and descriptor slots are copied together before graph declaration. Only the parameter value
-// varies per frame; no recording callback consults the live resource owner or creates descriptors/pipelines.
+// Copy handles and slots together before declaration; only parameter values vary per frame.
 struct ReflectionFrameSnapshot{
     ReflectionFrameParameters parameters;
     Core::TextureHandle opaqueRadiance;
@@ -116,7 +115,7 @@ class RendererReflectionSystem final : NoCopy{
 public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
 
-    // The caller joins submitted work and discards pending graph snapshots before invalidation/device teardown.
+    // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, const ReflectionSettings& settings);
     void pollStatistics();

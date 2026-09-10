@@ -72,9 +72,9 @@ struct ReflectionFeedbackOutcome{
 
 [[nodiscard]] ReflectionFeedbackOutcome ResolveReflectionFeedbackOutcome(const ReflectionFeedbackPlan& plan, bool hardwareReady)noexcept;
 
-// Accepted writers publish feedback; accepted classification without a writer only invalidates control state.
-// All users share one physical Graphics queue, so declared hazards order reuse without CPU waits.
-// An unprovable accepted token quarantines the generation until reset after the renderer joins GPU work.
+// Accepted writers publish feedback; writer-less classification only invalidates control.
+// One shared Graphics queue; declared hazards order reuse without CPU waits.
+// An unprovable token quarantines the generation until reset after join.
 class ReflectionFeedbackState : NoCopy{
 public:
     explicit ReflectionFeedbackState(u16 deviceGeneration);

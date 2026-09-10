@@ -94,7 +94,7 @@ struct ReflectionStatistics{
     u32 screenReturns = 0u;
     u32 feedbackBypassedPixels = 0u;
     u32 feedbackProbeTiles = 0u;
-    // Actual hierarchy loads, excluding projection rejection and bypass. May exceed u32 at large native extents.
+    // Actual hierarchy loads; may exceed u32 at large extents.
     u64 screenIterations = 0u;
     u32 screenLimitMisses = 0u;
 };

@@ -56,7 +56,7 @@ struct ReflectionHistoryOutcome{
 
 [[nodiscard]] ReflectionHistoryOutcome ResolveReflectionHistoryOutcome(const ReflectionHistoryPlan& plan, bool hardwareReady)noexcept;
 
-// CPU acceptance chooses banks; GPU queue ordering protects image reuse. This owner never waits for GPU completion.
+// CPU acceptance chooses banks; GPU ordering protects reuse; owner never waits.
 class ReflectionHistoryState : NoCopy{
 public:
     explicit ReflectionHistoryState(u16 deviceGeneration);

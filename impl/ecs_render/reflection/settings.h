@@ -47,7 +47,7 @@ struct ReflectionSettings{
     // Scene queries per admitted path, including optional initial-medium discovery.
     u32 maxOpticalQueries = NWB_OPTICAL_DEFAULT_QUERIES;
     u32 screenMaxSteps = 96u;
-    // World-space surface uncertainty, acceptance confidence and normalized viewport-edge fade width.
+    // Surface uncertainty, confidence, and edge-fade width.
     f32 screenThickness = 0.03f;
     f32 screenConfidenceThreshold = 0.8f;
     f32 screenEdgeFade = 0.05f;
@@ -63,7 +63,7 @@ struct ReflectionSettings{
     bool spatialFilterEnabled = true;
 };
 
-// Settings are an external control boundary; reject invalid values before shaders or history state see them.
+// Settings are an external boundary; reject invalid values early.
 [[nodiscard]] bool ValidateReflectionSettings(const ReflectionSettings& settings);
 
 

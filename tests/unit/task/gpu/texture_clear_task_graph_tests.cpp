@@ -87,6 +87,8 @@ struct TextureClearTestContext{
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ 0u, 1u },
         .queueClass = Graphics::CommandQueue::Graphics,
         .capabilities = QueueCapabilities(
@@ -94,33 +96,31 @@ struct TextureClearTestContext{
             Graphics::GpuQueueCapability::Compute,
             Graphics::GpuQueueCapability::Transfer
         ),
-        .familyIndex = 0u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 1u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ 1u, 1u },
         .queueClass = Graphics::CommandQueue::Compute,
         .capabilities = QueueCapabilities(
             Graphics::GpuQueueCapability::Compute,
             Graphics::GpuQueueCapability::Transfer
         ),
-        .familyIndex = 1u,
-        .queueIndex = 0u,
         .dedicated = true,
     };
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 2u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ 2u, 1u },
         .queueClass = Graphics::CommandQueue::Transfer,
         .capabilities = Graphics::GpuQueueCapability::Transfer,
-        .familyIndex = 2u,
-        .queueIndex = 0u,
         .dedicated = true,
     };
 }
@@ -644,8 +644,8 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         );
         ASSERT_TRUE(rejectedResource.valid());
         Graphics::QueueSubmissionToken acceptedToken{
-            .queue = Graphics::CommandQueue::Graphics,
             .value = 1u,
+            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
         };

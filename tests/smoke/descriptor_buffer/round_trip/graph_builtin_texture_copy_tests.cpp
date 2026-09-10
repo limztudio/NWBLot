@@ -113,6 +113,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -120,19 +122,17 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
                 | static_cast<u8>(GpuQueueCapability::Compute)
                 | static_cast<u8>(GpuQueueCapability::Transfer)
             ),
-            .familyIndex = graphicsFamily,
-            .queueIndex = 0u,
             .dedicated = false,
         },
     };
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = transferFamily,
-            .queueIndex = 0u,
             .dedicated = true,
         };
         ++queueCount;
@@ -304,8 +304,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAt
         })
     ;
     const QueueSubmissionToken staleToken{
-        .queue = CommandQueue::Graphics,
         .value = 7u,
+        .queue = CommandQueue::Graphics,
     };
     QueueSubmissionToken acceptedToken = staleToken;
     const GpuTaskId task = graph.addCopyTextureTask(
@@ -320,6 +320,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAt
     EXPECT_FALSE(acceptedToken.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -327,8 +329,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRejectsUnboundTailAt
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -437,8 +437,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInResolveTextureTaskRejectsSingleSamp
         },
     };
     QueueSubmissionToken acceptedToken{
-        .queue = CommandQueue::Graphics,
         .value = 1u,
+        .queue = CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };

@@ -631,6 +631,8 @@ struct Result{
     if(!device.getQueue(CommandQueue::Graphics) || graphicsFamily == Limit<u32>::s_Max)
         return false;
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = graphicsFamily,
+        .queueIndex = 0u,
         .id = GpuPhysicalQueueId{
             device.getPhysicalQueueIndex(CommandQueue::Graphics),
             device.getDeviceGeneration(),
@@ -641,8 +643,6 @@ struct Result{
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = graphicsFamily,
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{

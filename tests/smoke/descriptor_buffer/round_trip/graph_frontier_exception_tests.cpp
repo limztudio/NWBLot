@@ -159,11 +159,11 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedCla
     ASSERT_TRUE(thirdTask.valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -293,11 +293,11 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResol
     ASSERT_TRUE(thirdTask.valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -413,11 +413,11 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierWorkerExceptionIsTerminal){
         ASSERT_TRUE(thirdTask.valid());
 
         const GpuPhysicalQueueInfo graphicsQueue{
+            .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(GpuQueueCapability::Graphics),
-            .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-            .queueIndex = 0u,
             .dedicated = false,
         };
         const GpuTaskGraphQueueTopology topology{

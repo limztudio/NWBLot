@@ -268,6 +268,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
     ASSERT_TRUE(finalizeTask.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -275,8 +277,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -466,6 +466,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
     }
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -473,8 +475,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{

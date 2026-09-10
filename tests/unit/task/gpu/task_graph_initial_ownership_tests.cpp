@@ -217,8 +217,8 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
     );
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 7u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
     };
@@ -281,8 +281,8 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
     );
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 7u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
     };
@@ -330,8 +330,8 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .destinationQueue = graphicsQueue.id,
             .completion = sharedCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
-                .queue = Graphics::CommandQueue::Graphics,
                 .value = 7u,
+                .queue = Graphics::CommandQueue::Graphics,
                 .physicalQueueIndex = graphicsQueue.id.index,
                 .deviceGeneration = graphicsQueue.id.deviceGeneration,
             },
@@ -345,8 +345,8 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .destinationQueue = graphicsQueue.id,
             .completion = sharedCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
-                .queue = Graphics::CommandQueue::Compute,
                 .value = 11u,
+                .queue = Graphics::CommandQueue::Compute,
                 .physicalQueueIndex = computeQueue.id.index,
                 .deviceGeneration = computeQueue.id.deviceGeneration,
             },
@@ -378,8 +378,8 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
     const Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
     const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
     const Graphics::QueueSubmissionToken completionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 7u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
     };
@@ -443,8 +443,8 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
             .destinationQueue = computeQueue.id,
             .completion = graphicsCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
-                .queue = Graphics::CommandQueue::Graphics,
                 .value = 7u,
+                .queue = Graphics::CommandQueue::Graphics,
                 .physicalQueueIndex = graphicsQueue.id.index,
                 .deviceGeneration = graphicsQueue.id.deviceGeneration,
             },
@@ -458,8 +458,8 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
             .destinationQueue = graphicsQueue.id,
             .completion = computeCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
-                .queue = Graphics::CommandQueue::Compute,
                 .value = 11u,
+                .queue = Graphics::CommandQueue::Compute,
                 .physicalQueueIndex = computeQueue.id.index,
                 .deviceGeneration = computeQueue.id.deviceGeneration,
             },

@@ -121,8 +121,8 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         .destinationSlice = {},
     };
     Graphics::QueueSubmissionToken acceptedToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -133,8 +133,8 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     };
     const auto expectRejected = [&]{
         acceptedToken = Graphics::QueueSubmissionToken{
-            .queue = Graphics::CommandQueue::Graphics,
             .value = 1u,
+            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
         };
@@ -167,8 +167,8 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
             .destinationSlice = rejectedDestinationSlice,
         };
         Graphics::QueueSubmissionToken rejectedToken{
-            .queue = Graphics::CommandQueue::Graphics,
             .value = 1u,
+            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
         };
@@ -551,8 +551,8 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         .destination = destinationResource,
     };
     Graphics::QueueSubmissionToken acceptedToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -600,8 +600,8 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
             .destinationSubresources = rejectedDestinationSubresources,
         };
         Graphics::QueueSubmissionToken rejectedToken{
-            .queue = Graphics::CommandQueue::Graphics,
             .value = 1u,
+            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
         };

@@ -99,6 +99,8 @@ TEST_F(DescriptorBufferRoundTripTest, PublishedGraphListReaderSerializesSubmissi
     ASSERT_TRUE(task.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
         .id = graphicsQueue,
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -106,8 +108,6 @@ TEST_F(DescriptorBufferRoundTripTest, PublishedGraphListReaderSerializesSubmissi
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = 0u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{

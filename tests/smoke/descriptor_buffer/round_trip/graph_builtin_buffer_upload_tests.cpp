@@ -98,8 +98,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
         .setScheduling(scheduling)
     ;
     const QueueSubmissionToken staleToken{
-        .queue = CommandQueue::Graphics,
         .value = 7u,
+        .queue = CommandQueue::Graphics,
     };
     ASSERT_TRUE(staleToken.valid());
     QueueSubmissionToken acceptedToken = staleToken;
@@ -173,6 +173,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -180,19 +182,17 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadBufferTaskCopiesGraphOwnedBlo
                 | static_cast<u8>(GpuQueueCapability::Compute)
                 | static_cast<u8>(GpuQueueCapability::Transfer)
             ),
-            .familyIndex = graphicsFamily,
-            .queueIndex = 0u,
             .dedicated = false,
         },
     };
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = transferFamily,
-            .queueIndex = 0u,
             .dedicated = true,
         };
         ++queueCount;
@@ -387,8 +387,8 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
         false,
     };
     const QueueSubmissionToken staleToken{
-        .queue = CommandQueue::Graphics,
         .value = 17u,
+        .queue = CommandQueue::Graphics,
     };
     QueueSubmissionToken occupancyAcceptedToken = staleToken;
     QueueSubmissionToken extinctionAcceptedToken = staleToken;
@@ -454,6 +454,8 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
     EXPECT_FALSE(accumulationAcceptedToken.valid());
 
     const GpuPhysicalQueueInfo graphicsQueue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -461,8 +463,6 @@ TEST_F(DescriptorBufferRoundTripTest, AvboitPhaseUploadsKeepImmutableSnapshotsIs
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{

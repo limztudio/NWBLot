@@ -99,27 +99,17 @@ TEST(HostReadbackSync, BuildsExactWholeBufferHostDependency){
 
 TEST(HostReadbackSync, CollectsEveryExactQueueFamilyWithoutLegacyLaneGatesOrFixedCapacity){
     constexpr GpuPhysicalQueueInfo s_Queues[] = {
-        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
-            .familyIndex = 2u },
-        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
-            .familyIndex = 4u },
-        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
-            .familyIndex = 2u },
-        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
-            .familyIndex = 6u },
-        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = 8u },
-        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = 10u },
-        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
-            .familyIndex = 12u },
-        { .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute,
-            .familyIndex = 14u },
-        { .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = 16u },
-        { .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics,
-            .familyIndex = 18u },
-        { .id = {}, .familyIndex = VK_QUEUE_FAMILY_IGNORED },
+        { .familyIndex = 2u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
+        { .familyIndex = 4u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
+        { .familyIndex = 2u, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
+        { .familyIndex = 6u, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
+        { .familyIndex = 8u, .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer },
+        { .familyIndex = 10u, .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer },
+        { .familyIndex = 12u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
+        { .familyIndex = 14u, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
+        { .familyIndex = 16u, .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer },
+        { .familyIndex = 18u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
+        { .familyIndex = VK_QUEUE_FAMILY_IGNORED, .id = {} },
     };
     constexpr u32 s_ExpectedFamilies[] = { 2u, 4u, 6u, 8u, 10u, 12u, 14u, 16u, 18u };
     Alloc::ScratchArena scratchArena(s_HostReadbackTestArena);

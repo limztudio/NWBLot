@@ -1378,6 +1378,8 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccu
     ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[0u], tasks[0u], recordedGraph));
     const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
     ASSERT_NE(recordingAttemptGeneration, 0u);
+    // Recording only declares demand; the frame preamble owns pool creation.
+    ASSERT_TRUE(timing.materializeRequestedQueries(device));
     const GpuTimingRecorderStatistics prefixStatistics = timing.statistics(device);
     // Four task scopes and six packet scopes share three identities. Preparation must include the still-unrecorded
     // suffix, the packet-only policy, and the envelope-only packet, while excluding the final untimed packet.

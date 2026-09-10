@@ -127,7 +127,6 @@ Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
         .graphGeneration = 51u,
         .planGeneration = 52u,
         .recordingAttemptGeneration = 53u,
-        .deviceGeneration = 17u,
         .compile = {
             .taskCount = 78u,
             .resourceCount = 2u,
@@ -206,6 +205,7 @@ Telemetry::FrameGraphRuntimeStatistics MakeFrameGraphRuntimeStatistics(){
             .recoverySubmissionCount = 8u,
             .submissionSeconds = 0.021,
         },
+        .deviceGeneration = 17u,
         .present = true,
     };
 }
@@ -218,8 +218,8 @@ Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueR
             .graphGeneration = 51u,
             .planGeneration = 52u,
             .recordingAttemptGeneration = 53u,
-            .deviceGeneration = 17u,
             .queue = { .index = 1u, .deviceGeneration = 17u },
+            .deviceGeneration = 17u,
             .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
             .compile = {
                 .taskCount = 50u,
@@ -272,8 +272,8 @@ Telemetry::FrameGraphPhysicalQueueRuntimeStatistics MakeFrameGraphPhysicalQueueR
         .graphGeneration = 51u,
         .planGeneration = 52u,
         .recordingAttemptGeneration = 53u,
-        .deviceGeneration = 17u,
         .queue = { .index = 3u, .deviceGeneration = 17u },
+        .deviceGeneration = 17u,
         .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .compile = {
             .taskCount = 28u,
@@ -477,45 +477,45 @@ void BuildTestPacketSubmissionFrameGraph(
     });
 
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
+        .packetGeneration = 72u,
+        .taskCount = 2u,
+        .commandListCount = 1u,
         .ownerNodeIndex = 0u,
         .packetIndex = 2u,
-        .packetGeneration = 72u,
         .queue = { .index = 1u, .deviceGeneration = 17u },
         .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-        .taskCount = 2u,
-        .commandListCount = 1u,
         .plannedWaitTokenCount = 1u,
         .sameQueueWaitElisionCount = 1u,
+        .submissionSeconds = 0.375,
         .joinsAcceptedQueueFrontier = true,
         .recoverySubmission = true,
-        .submissionSeconds = 0.375,
     });
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .packetIndex = 0u,
         .packetGeneration = 72u,
-        .queue = { .index = 1u, .deviceGeneration = 17u },
-        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
         .taskCount = 2u,
         .commandListCount = 1u,
+        .ownerNodeIndex = 0u,
+        .packetIndex = 0u,
+        .queue = { .index = 1u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
         .plannedWaitTokenCount = 2u,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .submissionSeconds = 0.125,
     });
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-        .ownerNodeIndex = 0u,
-        .packetIndex = 1u,
         .packetGeneration = 72u,
-        .queue = { .index = 3u, .deviceGeneration = 17u },
-        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .taskCount = 1u,
         .commandListCount = 2u,
+        .ownerNodeIndex = 0u,
+        .packetIndex = 1u,
+        .queue = { .index = 3u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .plannedWaitTokenCount = 3u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 2u,
-        .joinsAcceptedQueueFrontier = true,
         .submissionSeconds = 0.25,
+        .joinsAcceptedQueueFrontier = true,
     });
 }
 

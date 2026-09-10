@@ -170,7 +170,7 @@ TEST(EcsGraphics, CompositeOpticalPolicyMatchesFiveWordPushAbiAndGatesAuxiliaryR
     EXPECT_TRUE(ContainsText(shader, "uint opaqueReflectionSlot;\n    uint glassReflectionSlot;\n    uint reflectionDebugView;"));
     EXPECT_TRUE(ContainsText(shader, "opaqueReflectionSlot != 0xffffffffu"));
     EXPECT_TRUE(ContainsText(shader, "glassReflectionSlot != 0xffffffffu"));
-    EXPECT_TRUE(ContainsText(shader, "frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)"));
+    EXPECT_TRUE(ContainsText(shader, "frontColor + frontTransmittance * (transmitted.rgb + half3(glassReflection.rgb))"));
 }
 
 

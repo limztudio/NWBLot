@@ -204,8 +204,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadsAcceptExplicitDept
         .regions = regions,
         .regionCount = LengthOf(regions),
         .finalState = ResourceStates::DepthWrite,
-        .queue = CommandQueue::Transfer,
         .acceptedToken = &batchToken,
+        .queue = CommandQueue::Transfer,
     }));
     ASSERT_TRUE(batchToken.valid());
     EXPECT_EQ(batchToken.queue, CommandQueue::Graphics);

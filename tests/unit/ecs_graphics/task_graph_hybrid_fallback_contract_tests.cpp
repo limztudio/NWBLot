@@ -126,7 +126,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
         hybridTailRecordEndOffset - hybridTailRecordOffset
     );
     const usize hybridTailRecordValidationEndOffset = hybridTailRecord.find(
-        "// The tail may record SW-BVH timing scopes"
+        "// The tail shares the accepting packet's timing ticket for SW-BVH scopes."
     );
     ASSERT_NE(hybridTailRecordValidationEndOffset, AStringView::npos);
     const AStringView hybridTailRecordValidation = hybridTailRecord.substr(0u, hybridTailRecordValidationEndOffset);

@@ -105,13 +105,13 @@ struct ReportFixture{
         for(u32 remaining = packetCount; remaining != 0u; --remaining){
             const u32 packetIndex = remaining - 1u;
             packets.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
-                .ownerNodeIndex = ownerIndex,
-                .packetIndex = packetIndex,
                 .packetGeneration = owner.planGeneration,
-                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
-                .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
                 .taskCount = 1u,
                 .commandListCount = 1u,
+                .ownerNodeIndex = ownerIndex,
+                .packetIndex = packetIndex,
+                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
+                .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
             });
         }
     }

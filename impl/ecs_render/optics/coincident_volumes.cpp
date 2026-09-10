@@ -205,8 +205,10 @@ void RendererOpticalVolumeSelection::select(
         const Core::ECS::EntityID suppressed = replace ? previous.entity : candidate.entity;
         if(replace)
             entry.value() = current;
-        const bool added = m_suppressed.insert(suppressed).second;
-        NWB_ASSERT(added);
+        if(!m_suppressed.insert(suppressed).second){
+            NWB_ASSERT(false);
+            continue;
+        }
     }
 }
 

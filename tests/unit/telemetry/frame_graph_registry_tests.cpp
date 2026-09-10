@@ -49,16 +49,16 @@ public:
 ){
     for(u32 packetIndex = 0u; packetIndex < 19u; ++packetIndex){
         Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
-            .ownerNodeIndex = owner.index,
-            .packetIndex = packetIndex,
             .packetGeneration = 52u,
-            .queue = { .index = 1u, .deviceGeneration = 17u },
-            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
             .taskCount = packetIndex == 0u ? 2u : 1u,
             .commandListCount = packetIndex == 0u ? 2u : 1u,
+            .ownerNodeIndex = owner.index,
+            .packetIndex = packetIndex,
+            .queue = { .index = 1u, .deviceGeneration = 17u },
+            .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
             .joinsAcceptedQueueFrontier = packetIndex != 18u,
             .recoverySubmission = packetIndex < 5u,
-            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
         };
         if(packetIndex < 5u){
             statistics.plannedWaitTokenCount = 1u;
@@ -78,16 +78,16 @@ public:
 
     for(u32 queuePacketIndex = 0u; queuePacketIndex < 11u; ++queuePacketIndex){
         Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
-            .ownerNodeIndex = owner.index,
-            .packetIndex = 19u + queuePacketIndex,
             .packetGeneration = 52u,
-            .queue = { .index = 3u, .deviceGeneration = 17u },
-            .queueClass = Telemetry::FrameGraphQueueClass::Compute,
             .taskCount = 1u,
             .commandListCount = queuePacketIndex == 0u ? 2u : 1u,
+            .ownerNodeIndex = owner.index,
+            .packetIndex = 19u + queuePacketIndex,
+            .queue = { .index = 3u, .deviceGeneration = 17u },
+            .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
             .joinsAcceptedQueueFrontier = queuePacketIndex != 10u,
             .recoverySubmission = queuePacketIndex < 3u,
-            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
         };
         if(queuePacketIndex == 0u){
             statistics.plannedWaitTokenCount = 7u;

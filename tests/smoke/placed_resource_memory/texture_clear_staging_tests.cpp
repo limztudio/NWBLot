@@ -177,8 +177,8 @@ static void CountDiscardedClear(void* const rawResult){
         return false;
 
     acceptedToken = QueueSubmissionToken{
-        .queue = CommandQueue::Graphics,
         .value = 1u,
+        .queue = CommandQueue::Graphics,
     };
     const GpuPhysicalQueueId graphicsQueue = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
     const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(graphicsQueue);

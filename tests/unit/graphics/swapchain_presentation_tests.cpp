@@ -137,33 +137,33 @@ TEST(SwapChainPresentation, RestrictsGraphPresentationSignalsToPrimaryGraphicsTr
         .deviceGeneration = 7u,
     };
     const GpuPhysicalQueueInfo primaryGraphicsInfo{
+        .familyIndex = 3u,
+        .queueIndex = 0u,
         .id = primaryGraphicsQueue,
         .queueClass = Core::CommandQueue::Graphics,
         .capabilities = Core::GpuQueueCapability::Graphics,
-        .familyIndex = 3u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuPhysicalQueueInfo sameFamilyAuxiliaryGraphicsInfo{
+        .familyIndex = primaryGraphicsInfo.familyIndex,
+        .queueIndex = 1u,
         .id = GpuPhysicalQueueId{
             .index = 2u,
             .deviceGeneration = primaryGraphicsQueue.deviceGeneration,
         },
         .queueClass = Core::CommandQueue::Graphics,
         .capabilities = Core::GpuQueueCapability::Graphics,
-        .familyIndex = primaryGraphicsInfo.familyIndex,
-        .queueIndex = 1u,
         .dedicated = false,
     };
     const GpuPhysicalQueueInfo crossFamilyAuxiliaryGraphicsInfo{
+        .familyIndex = 4u,
+        .queueIndex = 0u,
         .id = GpuPhysicalQueueId{
             .index = 3u,
             .deviceGeneration = primaryGraphicsQueue.deviceGeneration,
         },
         .queueClass = Core::CommandQueue::Graphics,
         .capabilities = Core::GpuQueueCapability::Graphics,
-        .familyIndex = 4u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
 

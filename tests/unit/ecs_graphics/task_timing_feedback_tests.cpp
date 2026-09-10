@@ -40,8 +40,8 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
     const Core::GpuPhysicalQueueId& queue
 ){
     return Core::QueueSubmissionToken{
-        .queue = key.queue,
         .value = 1u,
+        .queue = key.queue,
         .physicalQueueIndex = queue.index,
         .deviceGeneration = queue.deviceGeneration,
     };
@@ -55,13 +55,13 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
     const f64 durationSeconds
 ){
     return Core::GpuTimingSample{
-        .scopeName = scopeName,
         .sourceFrameIndex = sourceFrameIndex,
         .durationSeconds = durationSeconds,
-        .physicalQueue = queue,
+        .scopeName = scopeName,
         .attribution = attribution,
-        .published = true,
         .comparableRange = {},
+        .physicalQueue = queue,
+        .published = true,
     };
 }
 
@@ -70,13 +70,13 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
     const Core::GpuPhysicalQueueId& queue
 ){
     return Core::GpuTimingSample{
-        .scopeName = NAME_NONE,
         .sourceFrameIndex = 0u,
         .durationSeconds = 0.0,
-        .physicalQueue = queue,
+        .scopeName = NAME_NONE,
         .attribution = attribution,
-        .published = false,
         .comparableRange = {},
+        .physicalQueue = queue,
+        .published = false,
     };
 }
 

@@ -293,8 +293,8 @@ u64 Queue::submit(
 
     const u64 submissionID = m_lastSubmittedID + 1u;
     const QueueSubmissionToken submissionToken{
-        .queue = m_queueID,
         .value = submissionID,
+        .queue = m_queueID,
         .physicalQueueIndex = m_physicalQueue.index,
         .deviceGeneration = m_physicalQueue.deviceGeneration,
     };

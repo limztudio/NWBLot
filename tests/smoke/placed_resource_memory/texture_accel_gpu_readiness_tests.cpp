@@ -562,8 +562,8 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
         .setScheduling(uploadScheduling)
     ;
     QueueSubmissionToken acceptedToken{
-        .queue = CommandQueue::Graphics,
         .value = 7u,
+        .queue = CommandQueue::Graphics,
     };
     const GpuTaskId uploadTask = graph.addUploadBufferTask(
         uploadDesc,

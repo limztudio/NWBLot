@@ -278,9 +278,16 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         "idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()"
     ));
 
+    EXPECT_TRUE(ContainsText(
+        rendererResources,
+        "Pipeline compatibility setup uses the stable framebuffer-zero prototype"
+    ));
+    EXPECT_TRUE(ContainsText(
+        ui,
+        "Compat setup uses the stable framebuffer-zero prototype"
+    ));
     for(const AStringView setupSource : { rendererResources, ui }){
-        EXPECT_TRUE(ContainsText(setupSource, "Pipeline compatibility setup uses the stable framebuffer-zero prototype"));
-        EXPECT_TRUE(ContainsText(setupSource, "m_graphics.getFramebuffer(0u)"));
+        EXPECT_TRUE(ContainsText(setupSource, "getFramebuffer(0u)"));
         EXPECT_FALSE(ContainsText(setupSource, "getCurrentFramebuffer"));
     }
 }
@@ -643,7 +650,7 @@ TEST(EcsGraphics, PresentPassDiscardsOnlyItsFullOverwriteLoad){
 
     const usize presentStart = presentFile.find("bool RendererDeferredSystem::renderDeferredPresent(");
     const usize presentEnd = presentFile.find(
-        "////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////",
+        "//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////",
         presentStart
     );
     ASSERT_NE(presentStart, AStringView::npos);

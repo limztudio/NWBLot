@@ -75,11 +75,11 @@ void GpuTimingAccumulator::collect(
             if(retirementPending){
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{
-                        .scopeName = m_scopeName,
                         .sourceFrameIndex = record.frameIndex,
-                        .physicalQueue = record.physicalQueue,
+                        .scopeName = m_scopeName,
                         .attribution = record.attribution,
                         .comparableRange = {},
+                        .physicalQueue = record.physicalQueue,
                     },
                     .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
                 });
@@ -97,12 +97,12 @@ void GpuTimingAccumulator::collect(
             if(record.attribution != s_NoGpuTimingSampleAttribution){
                 completedSamples.push_back(SampleDispatch{
                     .sample = GpuTimingSample{
-                        .scopeName = m_scopeName,
                         .sourceFrameIndex = record.frameIndex,
-                        .physicalQueue = record.physicalQueue,
+                        .scopeName = m_scopeName,
                         .attribution = record.attribution,
-                        .published = false,
                         .comparableRange = {},
+                        .physicalQueue = record.physicalQueue,
+                        .published = false,
                     },
                     .subscriptionIdentityLimit = subscriptionIdentityLimit,
                 });
@@ -140,13 +140,13 @@ void GpuTimingAccumulator::collect(
         if(record.attribution != s_NoGpuTimingSampleAttribution){
             completedSamples.push_back(SampleDispatch{
                 .sample = GpuTimingSample{
-                    .scopeName = m_scopeName,
                     .sourceFrameIndex = record.frameIndex,
                     .durationSeconds = publishSample ? durationSeconds : 0.0,
-                    .physicalQueue = record.physicalQueue,
+                    .scopeName = m_scopeName,
                     .attribution = record.attribution,
-                    .published = publishSample,
                     .comparableRange = comparableRange,
+                    .physicalQueue = record.physicalQueue,
+                    .published = publishSample,
                 },
                 .subscriptionIdentityLimit = subscriptionIdentityLimit,
             });
@@ -311,10 +311,10 @@ bool GpuTimingAccumulator::beginQuery(
     record.reservation = m_nextReservation;
     outScope = GpuTimingScope{
         .scopeName = m_scopeName,
-        .index = index,
-        .epoch = epoch,
         .reservation = record.reservation,
         .timerQueryRecording = timerQueryRecording,
+        .index = index,
+        .epoch = epoch,
     };
     ++m_recordedScopeCount;
     return true;
@@ -687,11 +687,11 @@ bool GpuTimingAccumulator::retireMarkedAttribution(SampleDispatch& outDispatch)n
 
         outDispatch = SampleDispatch{
             .sample = GpuTimingSample{
-                .scopeName = m_scopeName,
                 .sourceFrameIndex = record.frameIndex,
-                .physicalQueue = record.physicalQueue,
+                .scopeName = m_scopeName,
                 .attribution = record.attribution,
                 .comparableRange = {},
+                .physicalQueue = record.physicalQueue,
             },
             .subscriptionIdentityLimit = record.retirementSubscriptionIdentityLimit,
         };
@@ -732,11 +732,11 @@ void GpuTimingAccumulator::retireAttributions(
 
         outSamples.push_back(SampleDispatch{
             .sample = GpuTimingSample{
-                .scopeName = m_scopeName,
                 .sourceFrameIndex = record.frameIndex,
-                .physicalQueue = record.physicalQueue,
+                .scopeName = m_scopeName,
                 .attribution = record.attribution,
                 .comparableRange = {},
+                .physicalQueue = record.physicalQueue,
             },
             .subscriptionIdentityLimit = record.retirementNotificationPending
                 ? record.retirementSubscriptionIdentityLimit

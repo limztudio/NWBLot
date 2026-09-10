@@ -299,36 +299,36 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const u16 index,
     const Graphics::GpuQueueCapability::Mask capabilities){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ index, 1u },
         .queueClass = Graphics::CommandQueue::Graphics,
         .capabilities = capabilities,
-        .familyIndex = 0u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(const u16 index){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 1u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ index, 1u },
         .queueClass = Graphics::CommandQueue::Compute,
         .capabilities = QueueCapabilities(
             Graphics::GpuQueueCapability::Compute,
             Graphics::GpuQueueCapability::Transfer
         ),
-        .familyIndex = 1u,
-        .queueIndex = 0u,
         .dedicated = true,
     };
 }
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 2u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ index, 1u },
         .queueClass = Graphics::CommandQueue::Transfer,
         .capabilities = Graphics::GpuQueueCapability::Transfer,
-        .familyIndex = 2u,
-        .queueIndex = 0u,
         .dedicated = true,
     };
 }

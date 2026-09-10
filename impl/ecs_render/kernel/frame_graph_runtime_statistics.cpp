@@ -64,7 +64,6 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
         .graphGeneration = compileStatistics.graphGeneration,
         .planGeneration = compileStatistics.planGeneration,
         .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
-        .deviceGeneration = compileStatistics.deviceGeneration,
         .compile = {
             .taskCount = static_cast<u64>(compileStatistics.taskCount),
             .resourceCount = static_cast<u64>(compileStatistics.resourceCount),
@@ -165,6 +164,7 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .recoverySubmissionCount = static_cast<u64>(submissionStatistics.recoverySubmissionCount),
             .submissionSeconds = submissionStatistics.submissionSeconds,
         },
+        .deviceGeneration = compileStatistics.deviceGeneration,
         .present = true,
     };
     if(!Core::Telemetry::IsValidFrameGraphRuntimeStatistics(result))
@@ -185,23 +185,23 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
         return {};
 
     const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord result{
+        .packetGeneration = statistics.packet.generation,
+        .taskCount = static_cast<u64>(statistics.taskCount),
+        .commandListCount = static_cast<u64>(statistics.nativeCommandListCount),
         .ownerNodeIndex = ownerNodeIndex,
         .packetIndex = statistics.packet.index,
-        .packetGeneration = statistics.packet.generation,
         .queue = {
             .index = statistics.queue.index,
             .deviceGeneration = statistics.queue.deviceGeneration,
         },
         .queueClass = queueClass,
-        .taskCount = static_cast<u64>(statistics.taskCount),
-        .commandListCount = static_cast<u64>(statistics.nativeCommandListCount),
         .plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),
         .sameQueueWaitElisionCount = static_cast<u64>(statistics.sameQueueWaitElisionCount),
         .timelineWaitCount = static_cast<u64>(statistics.timelineWaitCount),
         .mergedTimelineWaitCount = static_cast<u64>(statistics.mergedTimelineWaitCount),
+        .submissionSeconds = statistics.submissionSeconds,
         .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
         .recoverySubmission = statistics.isRecoverySubmission,
-        .submissionSeconds = statistics.submissionSeconds,
     };
     if(!Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(result))
         return {};
@@ -240,11 +240,11 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
         .graphGeneration = compileStatistics.graphGeneration,
         .planGeneration = compileStatistics.planGeneration,
         .recordingAttemptGeneration = recordingStatistics.recordingAttemptGeneration,
-        .deviceGeneration = compileStatistics.deviceGeneration,
         .queue = {
             .index = compileStatistics.queue.index,
             .deviceGeneration = compileStatistics.queue.deviceGeneration,
         },
+        .deviceGeneration = compileStatistics.deviceGeneration,
         .queueClass = queueClass,
         .compile = {
             .taskCount = static_cast<u64>(compileStatistics.taskCount),

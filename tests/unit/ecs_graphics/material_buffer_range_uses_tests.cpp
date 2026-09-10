@@ -112,13 +112,13 @@ TEST(MaterialBufferRangeUses, ActiveFramePrefixesDoNotSynchronizeUnusedCapacity)
         ASSERT_TRUE(reader.valid());
 
         const Core::GpuPhysicalQueueInfo queue{
+            .familyIndex = 0u,
+            .queueIndex = 0u,
             .id = { 0u, 1u },
             .queueClass = Core::CommandQueue::Graphics,
             .capabilities = static_cast<Core::GpuQueueCapability::Mask>(
                 Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
             ),
-            .familyIndex = 0u,
-            .queueIndex = 0u,
             .dedicated = false,
         };
         const Core::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };

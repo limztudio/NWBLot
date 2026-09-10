@@ -278,6 +278,10 @@ public:
             m_meshSkinningSystem->markLiveRuntimeMeshes(requests);
     }
 
+    [[nodiscard]] virtual bool hasRuntimeMeshBinding(const NWB::Core::ECS::EntityID entity)const override{
+        return m_meshSkinningSystem && m_meshSkinningSystem->hasRuntimeMeshBinding(entity);
+    }
+
 
 private:
     NWB::Impl::MeshSystem* m_meshSystem = nullptr;

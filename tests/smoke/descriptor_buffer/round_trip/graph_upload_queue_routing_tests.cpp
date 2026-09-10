@@ -385,9 +385,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureBatchUsesAuxiliaryGraphic
         .regions = regions,
         .regionCount = LengthOf(regions),
         .finalState = ResourceStates::ShaderResource,
-        .queue = CommandQueue::Graphics,
-        .acceptedToken = &uploadToken,
         .physicalInitialState = ResourceStates::ShaderResource,
+        .acceptedToken = &uploadToken,
+        .queue = CommandQueue::Graphics,
         .hasPhysicalInitialState = true,
     }));
     ASSERT_TRUE(uploadToken.valid());

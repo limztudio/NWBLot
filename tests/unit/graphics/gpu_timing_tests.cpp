@@ -257,8 +257,8 @@ TEST(TimerQueryResult, ConvertsStraightSixtyFourBitTickRange){
         .beginTicks = 100u,
         .endTicks = 145u,
         .secondsPerTick = 0.25,
-        .timestampValidBits = 64u,
         .physicalQueue = { .index = 2u, .deviceGeneration = 11u },
+        .timestampValidBits = 64u,
         .comparableAcrossSubmissions = true,
     };
 
@@ -275,8 +275,8 @@ TEST(TimerQueryResult, MasksHighBitsAndWrapsPartialWidth){
         .beginTicks = 0x1fau,
         .endTicks = 0x105u,
         .secondsPerTick = 0.5,
-        .timestampValidBits = 8u,
         .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+        .timestampValidBits = 8u,
         .comparableAcrossSubmissions = true,
     };
 
@@ -293,8 +293,8 @@ TEST(TimerQueryResult, WrapsFullWidthWithoutShiftingBySixtyFour){
         .beginTicks = Limit<u64>::s_Max - 3u,
         .endTicks = 5u,
         .secondsPerTick = 1.0,
-        .timestampValidBits = 64u,
         .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+        .timestampValidBits = 64u,
         .comparableAcrossSubmissions = true,
     };
 
@@ -309,8 +309,8 @@ TEST(TimerQueryResult, RetainsNearFullWidthDurationWithoutPublishingAbsoluteRang
         .beginTicks = (u64{ 1u } << 63u) - 3u,
         .endTicks = 2u,
         .secondsPerTick = 0.5,
-        .timestampValidBits = 63u,
         .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+        .timestampValidBits = 63u,
         .comparableAcrossSubmissions = true,
     };
 
@@ -325,8 +325,8 @@ TEST(TimerQueryResult, ComparableRangeRequiresCapabilityAndPhysicalQueue){
         .beginTicks = 10u,
         .endTicks = 20u,
         .secondsPerTick = 1.0,
-        .timestampValidBits = 64u,
         .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+        .timestampValidBits = 64u,
         .comparableAcrossSubmissions = false,
     };
 
@@ -346,8 +346,8 @@ TEST(TimerQueryResult, RejectsUnknownOrOutOfRangeWidths){
         .beginTicks = 10u,
         .endTicks = 20u,
         .secondsPerTick = 1.0,
-        .timestampValidBits = 0u,
         .physicalQueue = {},
+        .timestampValidBits = 0u,
         .comparableAcrossSubmissions = false,
     };
 

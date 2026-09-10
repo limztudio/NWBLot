@@ -143,8 +143,8 @@ QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore sem
         return {};
 
     return QueueSubmissionToken{
-        .queue = queue->m_queueID,
         .value = submittedID,
+        .queue = queue->m_queueID,
         .physicalQueueIndex = executionQueue.index,
         .deviceGeneration = executionQueue.deviceGeneration,
     };

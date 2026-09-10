@@ -131,13 +131,13 @@ void PrepareFixture(StatisticsFixture& fixture, const u32 packetCount, const u32
         const u32 packetIndex = shuffled % packetsPerOwner;
         const u16 queueIndex = (packetIndex & 1u) == 0u ? 1u : 3u;
         const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packet{
-            .ownerNodeIndex = ownerIndex,
-            .packetIndex = packetIndex,
             .packetGeneration = 72u,
-            .queue = { .index = queueIndex, .deviceGeneration = 17u },
-            .queueClass = queueIndex == 1u ? Telemetry::FrameGraphQueueClass::Graphics : Telemetry::FrameGraphQueueClass::Compute,
             .taskCount = 1u,
             .commandListCount = 1u,
+            .ownerNodeIndex = ownerIndex,
+            .packetIndex = packetIndex,
+            .queue = { .index = queueIndex, .deviceGeneration = 17u },
+            .queueClass = queueIndex == 1u ? Telemetry::FrameGraphQueueClass::Graphics : Telemetry::FrameGraphQueueClass::Compute,
         };
         if(!builder.addPacketSubmissionStatistics(Telemetry::FrameGraphNodeHandle{ ownerIndex }, packet))
             return false;
@@ -272,13 +272,13 @@ TEST(Telemetry, PacketStatisticsInvalidInputDoesNotConsumeIdentity){
     queue.planGeneration = 72u;
     EXPECT_TRUE(builder.addPhysicalQueueRuntimeStatistics(Telemetry::FrameGraphNodeHandle{ 0u }, queue));
     Telemetry::FrameGraphPacketSubmissionStatisticsRecord packet{
-        .ownerNodeIndex = 0u,
-        .packetIndex = 0u,
         .packetGeneration = 74u,
-        .queue = { .index = 1u, .deviceGeneration = 17u },
-        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
         .taskCount = 1u,
         .commandListCount = 1u,
+        .ownerNodeIndex = 0u,
+        .packetIndex = 0u,
+        .queue = { .index = 1u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
     };
     EXPECT_FALSE(builder.addPacketSubmissionStatistics(Telemetry::FrameGraphNodeHandle{ 0u }, packet));
     packet.packetGeneration = 72u;

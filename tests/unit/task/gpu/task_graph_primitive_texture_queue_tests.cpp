@@ -310,8 +310,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     );
     ASSERT_TRUE(multisampleCompressedResource.valid());
     Graphics::QueueSubmissionToken compressedRejectedToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -341,8 +341,8 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     );
     ASSERT_TRUE(multisampleRectResource.valid());
     Graphics::QueueSubmissionToken rectRejectedToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };

@@ -158,6 +158,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     ).valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -165,8 +167,6 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -474,6 +474,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
     ;
     GpuPhysicalQueueInfo queues[2u] = {
         GpuPhysicalQueueInfo{
+            .familyIndex = graphicsFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Graphics),
             .queueClass = CommandQueue::Graphics,
             .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -481,19 +483,17 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
                 | static_cast<u8>(GpuQueueCapability::Compute)
                 | static_cast<u8>(GpuQueueCapability::Transfer)
             ),
-            .familyIndex = graphicsFamily,
-            .queueIndex = 0u,
             .dedicated = false,
         },
     };
     usize queueCount = 1u;
     if(dedicatedTransfer){
         queues[queueCount] = GpuPhysicalQueueInfo{
+            .familyIndex = transferFamily,
+            .queueIndex = 0u,
             .id = BackendQueueId(device, CommandQueue::Transfer),
             .queueClass = CommandQueue::Transfer,
             .capabilities = GpuQueueCapability::Transfer,
-            .familyIndex = transferFamily,
-            .queueIndex = 0u,
             .dedicated = true,
         };
         ++queueCount;

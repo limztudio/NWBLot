@@ -530,10 +530,10 @@ TEST_F(BufferGpuReadinessTest, CreationRejectsUnknownQueueSharingBeforeAllocatio
         nativeBuffer,
         validNativeDesc,
         GraphicsBackend::NativeBufferProvenance{
+            .queueFamilyIndices = usesConcurrentSharing ? nativeQueueFamilies.data() : nullptr,
             .usage = s_NativeUsage,
             .sharingMode = nativeQueueFamilies.sharingMode(),
             .queueFamilyIndexCount = usesConcurrentSharing ? nativeQueueFamilies.size() : 0u,
-            .queueFamilyIndices = usesConcurrentSharing ? nativeQueueFamilies.data() : nullptr,
         }
     );
     ASSERT_TRUE(retry);
@@ -603,9 +603,9 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             exclusiveDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = &queueFamilyIndex,
                 .usage = s_NativeUsage,
                 .queueFamilyIndexCount = 1u,
-                .queueFamilyIndices = &queueFamilyIndex,
             }
         ).get() != nullptr;
     });
@@ -615,10 +615,10 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             graphicsDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = &queueFamilyIndex,
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = 1u,
-                .queueFamilyIndices = &queueFamilyIndex,
             }
         ).get() != nullptr;
     });
@@ -628,10 +628,10 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             graphicsDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = nullptr,
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = 2u,
-                .queueFamilyIndices = nullptr,
             }
         ).get() != nullptr;
     });
@@ -641,10 +641,10 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             exclusiveDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = queueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(queueFamilies.size()),
-                .queueFamilyIndices = queueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -654,10 +654,10 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             graphicsDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = duplicateQueueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(duplicateQueueFamilies.size()),
-                .queueFamilyIndices = duplicateQueueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -667,10 +667,10 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
             nativeBuffer,
             graphicsDesc,
             GraphicsBackend::NativeBufferProvenance{
+                .queueFamilyIndices = outOfRangeQueueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(outOfRangeQueueFamilies.size()),
-                .queueFamilyIndices = outOfRangeQueueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -846,10 +846,10 @@ TEST_F(BufferGpuReadinessTest, ConcurrentNativeSharingCopiesFamiliesAndEnforcesE
                 nativeBuffer,
                 desc,
                 GraphicsBackend::NativeBufferProvenance{
+                    .queueFamilyIndices = omittedQueueFamilies.data(),
                     .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                     .sharingMode = VK_SHARING_MODE_CONCURRENT,
                     .queueFamilyIndexCount = omittedQueueFamilies.size(),
-                    .queueFamilyIndices = omittedQueueFamilies.data(),
                 }
             ).get() != nullptr;
         });
@@ -876,10 +876,10 @@ TEST_F(BufferGpuReadinessTest, ConcurrentNativeSharingCopiesFamiliesAndEnforcesE
         nativeBuffer,
         desc,
         GraphicsBackend::NativeBufferProvenance{
+            .queueFamilyIndices = nativeQueueFamilies.data(),
             .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
             .sharingMode = VK_SHARING_MODE_CONCURRENT,
             .queueFamilyIndexCount = nativeQueueFamilies.size(),
-            .queueFamilyIndices = nativeQueueFamilies.data(),
         }
     );
     ASSERT_TRUE(buffer);

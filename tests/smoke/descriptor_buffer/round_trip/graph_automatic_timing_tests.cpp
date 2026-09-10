@@ -343,6 +343,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
         EXPECT_TRUE(recordedGraph.packetSnapshot(envelopeOnlyPacket).has_value());
         EXPECT_FALSE(recordedGraph.packetSnapshot(packetOnlyPacket).has_value());
         EXPECT_FALSE(recordedGraph.packetSnapshot(taskPacket).has_value());
+        ASSERT_TRUE(alternateTiming.materializeRequestedQueries(device));
         const GpuTimingRecorderStatistics alternateTimingStatistics = alternateTiming.statistics(device);
         ASSERT_TRUE(alternateTimingStatistics.valid());
         EXPECT_EQ(alternateTimingStatistics.preparedScopeCount, 4u);

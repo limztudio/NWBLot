@@ -135,9 +135,9 @@ MakeValidPacketSubmissionStatistics()noexcept{
         .graphGeneration = 11u,
         .planGeneration = 12u,
         .recordingAttemptGeneration = 13u,
-        .deviceGeneration = 7u,
         .packet = { .index = 0u, .generation = 12u },
         .queue = { .index = 2u, .deviceGeneration = 7u },
+        .deviceGeneration = 7u,
         .queueClass = NWB::Core::CommandQueue::Compute,
         .taskCount = 1u,
         .nativeCommandListCount = 1u,
@@ -540,6 +540,8 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
     const NWB::Core::GpuTaskGraph::DeclarationReadView declarationAccess(graph);
     ASSERT_TRUE(declarationAccess.valid());
     const NWB::Core::GpuPhysicalQueueInfo queue{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
         .id = NWB::Core::GpuPhysicalQueueId{ 0u, 1u },
         .queueClass = NWB::Core::CommandQueue::Graphics,
         .capabilities = static_cast<NWB::Core::GpuQueueCapability::Mask>(
@@ -547,8 +549,6 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
             | static_cast<u8>(NWB::Core::GpuQueueCapability::Compute)
             | static_cast<u8>(NWB::Core::GpuQueueCapability::Transfer)
         ),
-        .familyIndex = 0u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const NWB::Core::GpuTaskGraphQueueTopology topology{

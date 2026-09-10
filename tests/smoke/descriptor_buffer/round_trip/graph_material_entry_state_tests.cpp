@@ -223,6 +223,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCsgClipBufferEntryStatesRecordWi
     ASSERT_TRUE(csgClipTask.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -230,8 +232,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedCsgClipBufferEntryStatesRecordWi
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -414,6 +414,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialFrameEntryStatesRecordWi
     ASSERT_TRUE(materialTask.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -421,8 +423,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialFrameEntryStatesRecordWi
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -571,6 +571,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
     ASSERT_TRUE(materialTask.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -578,8 +580,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialGeometryEntryStatesReuse
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{
@@ -726,6 +726,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialSampledTextureEntryState
     ASSERT_TRUE(materialTask.valid());
 
     const GpuPhysicalQueueInfo queue{
+        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
+        .queueIndex = 0u,
         .id = BackendQueueId(device, CommandQueue::Graphics),
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(
@@ -733,8 +735,6 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedMaterialSampledTextureEntryState
             | static_cast<u8>(GpuQueueCapability::Compute)
             | static_cast<u8>(GpuQueueCapability::Transfer)
         ),
-        .familyIndex = device.getQueueFamilyIndex(CommandQueue::Graphics),
-        .queueIndex = 0u,
         .dedicated = false,
     };
     const GpuTaskGraphQueueTopology topology{

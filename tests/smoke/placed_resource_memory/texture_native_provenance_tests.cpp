@@ -182,9 +182,9 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             exclusiveDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = &queueFamilyIndex,
                 .usage = s_NativeUsage,
                 .queueFamilyIndexCount = 1u,
-                .queueFamilyIndices = &queueFamilyIndex,
             }
         ).get() != nullptr;
     });
@@ -194,10 +194,10 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             graphicsDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = &queueFamilyIndex,
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = 1u,
-                .queueFamilyIndices = &queueFamilyIndex,
             }
         ).get() != nullptr;
     });
@@ -207,10 +207,10 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             graphicsDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = nullptr,
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = 2u,
-                .queueFamilyIndices = nullptr,
             }
         ).get() != nullptr;
     });
@@ -220,10 +220,10 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             exclusiveDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = queueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(queueFamilies.size()),
-                .queueFamilyIndices = queueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -233,10 +233,10 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             graphicsDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = duplicateQueueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(duplicateQueueFamilies.size()),
-                .queueFamilyIndices = duplicateQueueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -246,10 +246,10 @@ TEST_F(TextureNativeProvenanceTest, MalformedProvenanceRejectsWithoutTopologySki
             nativeImage,
             graphicsDesc,
             GraphicsBackend::NativeTextureProvenance{
+                .queueFamilyIndices = outOfRangeQueueFamilies.data(),
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
                 .queueFamilyIndexCount = static_cast<u32>(outOfRangeQueueFamilies.size()),
-                .queueFamilyIndices = outOfRangeQueueFamilies.data(),
             }
         ).get() != nullptr;
     });
@@ -476,10 +476,10 @@ TEST_F(TextureNativeProvenanceTest, ConcurrentNativeSharingCopiesFamiliesAndDoes
                 nativeImage,
                 desc,
                 GraphicsBackend::NativeTextureProvenance{
+                    .queueFamilyIndices = omittedQueueFamilies.data(),
                     .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
                     .sharingMode = VK_SHARING_MODE_CONCURRENT,
                     .queueFamilyIndexCount = omittedQueueFamilies.size(),
-                    .queueFamilyIndices = omittedQueueFamilies.data(),
                 }
             ).get() != nullptr;
         });
@@ -494,10 +494,10 @@ TEST_F(TextureNativeProvenanceTest, ConcurrentNativeSharingCopiesFamiliesAndDoes
         nativeImage,
         desc,
         GraphicsBackend::NativeTextureProvenance{
+            .queueFamilyIndices = nativeQueueFamilies.data(),
             .usage = VK_IMAGE_USAGE_SAMPLED_BIT,
             .sharingMode = VK_SHARING_MODE_CONCURRENT,
             .queueFamilyIndexCount = nativeQueueFamilies.size(),
-            .queueFamilyIndices = nativeQueueFamilies.data(),
         }
     );
     ASSERT_TRUE(texture);

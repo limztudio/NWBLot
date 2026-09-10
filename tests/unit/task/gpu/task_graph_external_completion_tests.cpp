@@ -33,8 +33,8 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::QueueSubmissionToken token{
-        .queue = Graphics::CommandQueue::Transfer,
         .value = 31u,
+        .queue = Graphics::CommandQueue::Transfer,
         .physicalQueueIndex = 2u,
         .deviceGeneration = 1u,
     };

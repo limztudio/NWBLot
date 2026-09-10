@@ -19,20 +19,20 @@ using namespace TelemetryTestDetail;
 
 TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
     Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
-        .ownerNodeIndex = 0u,
-        .packetIndex = 1u,
         .packetGeneration = 72u,
-        .queue = { .index = 3u, .deviceGeneration = 17u },
-        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .taskCount = 2u,
         .commandListCount = 1u,
+        .ownerNodeIndex = 0u,
+        .packetIndex = 1u,
+        .queue = { .index = 3u, .deviceGeneration = 17u },
+        .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .plannedWaitTokenCount = 3u,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 1u,
+        .submissionSeconds = 0.125,
         .joinsAcceptedQueueFrontier = true,
         .recoverySubmission = true,
-        .submissionSeconds = 0.125,
     };
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
 

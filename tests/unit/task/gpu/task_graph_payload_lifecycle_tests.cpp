@@ -463,8 +463,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     Graphics::GpuTaskGraph graph(testArena.arena);
     Graphics::GpuTaskDesc desc;
     Graphics::QueueSubmissionToken token{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -475,8 +475,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     EXPECT_FALSE(token.valid());
 
     token = Graphics::QueueSubmissionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -486,8 +486,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     EXPECT_FALSE(token.valid());
 
     token = Graphics::QueueSubmissionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -497,8 +497,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     EXPECT_FALSE(token.valid());
 
     token = Graphics::QueueSubmissionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -508,8 +508,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     EXPECT_FALSE(token.valid());
 
     token = Graphics::QueueSubmissionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };
@@ -519,8 +519,8 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     EXPECT_FALSE(token.valid());
 
     token = Graphics::QueueSubmissionToken{
-        .queue = Graphics::CommandQueue::Graphics,
         .value = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
     };

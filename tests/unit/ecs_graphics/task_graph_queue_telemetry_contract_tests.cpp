@@ -168,8 +168,8 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
     EXPECT_TRUE(ContainsText(commandHeader, "Borrowed immutable topology view; its producer owns the storage."));
     EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaStatistics{"));
     EXPECT_TRUE(ContainsText(commandHeader, "struct GpuCommandArenaWorkerStatistics{"));
-    EXPECT_TRUE(ContainsText(commandHeader, "Direct recording is always queryable"));
-    EXPECT_TRUE(ContainsText(commandHeader, "nativeHandleStorageLowerBoundBytes counts only the"));
+    EXPECT_TRUE(ContainsText(commandHeader, "Direct recording is domain/index {0,0}"));
+    EXPECT_TRUE(ContainsText(commandHeader, "The storage estimate covers client-visible pool and"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "GpuPhysicalQueueTopology queueTopology()const & noexcept;"));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "Pointer- and slice-bearing results borrow immutable plan storage."));
     EXPECT_TRUE(ContainsText(compiledGraphHeader, "deliberately reject calls on a temporary proof."));

@@ -43,6 +43,8 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_ver
 
 [[nodiscard]] inline Graphics::GpuPhysicalQueueInfo GraphicsQueue(){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ 0u, 1u },
         .queueClass = Graphics::CommandQueue::Graphics,
         .capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(
@@ -50,22 +52,20 @@ inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_ver
             | static_cast<u8>(Graphics::GpuQueueCapability::Compute)
             | static_cast<u8>(Graphics::GpuQueueCapability::Transfer)
         ),
-        .familyIndex = 0u,
-        .queueIndex = 0u,
         .dedicated = false,
     };
 }
 
 [[nodiscard]] inline Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(){
     return Graphics::GpuPhysicalQueueInfo{
+        .familyIndex = 1u,
+        .queueIndex = 0u,
         .id = Graphics::GpuPhysicalQueueId{ 1u, 1u },
         .queueClass = Graphics::CommandQueue::Compute,
         .capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(
             static_cast<u8>(Graphics::GpuQueueCapability::Compute)
             | static_cast<u8>(Graphics::GpuQueueCapability::Transfer)
         ),
-        .familyIndex = 1u,
-        .queueIndex = 0u,
         .dedicated = true,
     };
 }

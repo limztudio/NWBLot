@@ -709,10 +709,10 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
                 );
                 outToken = TimerQueryRecordingToken{
                     .query = &query,
-                    .physicalQueue = queueInfo->id,
                     .queryIncarnation = query.m_incarnation,
                     .generation = query.m_cycleGeneration,
                     .resetAuthorizationGeneration = claim.consumedResetAuthorizationGeneration,
+                    .physicalQueue = queueInfo->id,
                 };
                 beginRecorded = true;
             }

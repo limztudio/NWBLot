@@ -410,8 +410,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         .regions = regions,
         .regionCount = LengthOf(regions),
         .finalState = ResourceStates::ShaderResource,
-        .acceptedToken = &acceptedToken,
         .physicalInitialState = ResourceStates::Unknown,
+        .acceptedToken = &acceptedToken,
         .hasPhysicalInitialState = true,
     }));
     ASSERT_TRUE(acceptedToken.valid());

@@ -422,11 +422,11 @@ bool BackendContext::createVulkanSwapChain(){
         textureDesc.isRenderTarget = true;
         textureDesc.queueSharing = ResourceQueueSharing::Graphics;
         const NativeTextureProvenance nativeProvenance{
+            .queueFamilyIndices = desc.pQueueFamilyIndices,
             .usage = desc.imageUsage,
             .flags = swapChainImageFlags,
             .sharingMode = desc.imageSharingMode,
             .queueFamilyIndexCount = desc.queueFamilyIndexCount,
-            .queueFamilyIndices = desc.pQueueFamilyIndices,
             .initialStateKnown = false,
         };
 

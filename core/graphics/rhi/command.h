@@ -129,10 +129,9 @@ struct GpuCommandArenaStatistics{
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
-// Immutable snapshot for one logical recording worker on one physical queue. Direct recording is always queryable
-// as domain/index {0,0}; explicit shards use the exact domain/index retained by GpuRecordedPacket. Fields are
-// sampled independently from thread-safe counters and may advance during the query. The native-storage estimate is
-// a lower bound over VkCommandPool/VkCommandBuffer handle objects only; opaque driver memory is deliberately absent.
+// Snapshot for one recording worker on one physical queue. Direct recording is domain/index {0,0}; shards use the
+// GpuRecordedPacket domain/index. Counters sample independently and may advance during the query; the storage
+// estimate covers handle objects only, not opaque driver memory.
 struct GpuCommandArenaWorkerStatistics{
     GpuPhysicalQueueId queue;
     u64 recordingWorkerDomain = 0u;
@@ -155,8 +154,8 @@ struct GpuCommandArenaWorkerStatistics{
 typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
-// One recorded begin/end cycle. The exact query, device-generation queue, monotonically allocated generation, and
-// captured reset authorization prevent stale command buffers from closing or revoking a different cycle after reuse.
+// One recorded begin/end cycle. Query, queue, generation, and reset authorization together stop a stale
+// command buffer from closing or revoking another cycle after reuse.
 struct TimerQueryRecordingToken{
     TimerQuery* query = nullptr;
     u64 queryIncarnation = 0u;
@@ -170,8 +169,8 @@ struct TimerQueryRecordingToken{
     }
 };
 
-// One exact command-list marker. Native recording identity prevents a stale scope from closing a marker on a reused
-// command list, while markerSerial distinguishes owners at the same nesting depth.
+// One command-list marker. Native recording identity blocks stale closes on a reused list; markerSerial
+// separates owners at the same nesting depth.
 struct CommandMarkerRecordingToken{
     u64 recordingLeaseSerial = 0u;
     u64 nativeRecordingID = 0u;
@@ -183,9 +182,8 @@ struct CommandMarkerRecordingToken{
     }
 };
 
-// Raw device-timestamp values for one timer query. Vulkan exposes only the low timestampValidBits from one physical
-// queue family, so ordinary durations use modular tick arithmetic. Absolute endpoints are available only when the
-// logical device enabled and successfully probed calibrated timestamps and the exact queue exposes all 64 bits.
+// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use
+// modular tick arithmetic; absolute endpoints need probed calibrated timestamps plus a full 64-bit queue.
 struct TimerQueryResult{
     u64 beginTicks = 0u;
     u64 endTicks = 0u;

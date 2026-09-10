@@ -37,12 +37,9 @@ namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// NVIDIA Nsight Aftermath ships only as a runtime shared library exposing a C decoder API; there is no
-// rgd-style CLI tool. The engine emits a '.nv-gpudmp' into the package on device-lost, so this decode is
-// best-effort: it runs only when a dump is present in the package and the runtime + entry points resolve,
-// and it never fails the surrounding ingest (ProcessCrashUpload rejects on a thrown exception). The runtime
-// is loaded dynamically so the logserver still runs (and decodes everything else) on hosts without the
-// NVIDIA runtime present next to it.
+// Aftermath ships only as a runtime shared library with a C decoder API (no CLI tool). This decode is best-effort:
+// it runs only when a dump is present and the runtime resolves, and never fails the surrounding ingest. Dynamic
+// loading keeps the logserver running on hosts without the NVIDIA runtime.
 #if defined(NWB_WITH_AFTERMATH)
 
 
@@ -55,9 +52,8 @@ inline constexpr usize s_AftermathMaxJsonBytes = 8u * 1024u * 1024u; // decoded 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves the Aftermath decoder entry points from the dynamically loaded runtime. The logserver never links
-// the import lib, so a missing runtime is not a hard dependency: load() simply fails and the dump is left
-// undecoded. The library is freed when this object goes out of scope.
+// Resolves decoder entry points from the dynamically loaded runtime. No import-lib link, so a missing runtime
+// just leaves the dump undecoded; the library frees on scope exit.
 struct AftermathDecoder{
     SharedLibrary library;
     PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder createDecoder = nullptr;

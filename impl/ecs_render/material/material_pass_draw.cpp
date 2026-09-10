@@ -47,14 +47,11 @@ static void SetCsgHeapResourceStates(
     if(!csgClipBufferStatesGraphOwned)
         csgSystem.setCsgClipBufferStates(commandList, *csgResources);
     if(csgBindingUse.receiverSurface && !receiverSurfaceImageStatesGraphOwned){
-        // Compatibility callers still stage the heap-selected receiver-event images themselves. The normal graph
-        // declares this exact StorageImage pair before its receiver-surface task records.
+        // Compat callers stage receiver-event images; graph declares the pair first.
         csgSystem.setCsgReceiverSurfaceImageStates(commandList, deferredTargets);
     }
     if(csgBindingUse.intervalSample && !intervalSampleImageStatesGraphOwned){
-        // Cap/interval sampling loads through StorageImage aliases, so its heap descriptors require GENERAL rather
-        // than the sampled-image shader-read layout. The normal opaque graph declares the same UAV use at its
-        // combine-to-sample boundary; AVBOIT and direct compatibility callers retain this native bridge.
+        // Cap/interval sampling needs GENERAL descriptors; compat callers keep the native bridge.
         csgSystem.setCsgIntervalSampleImageStates(commandList, deferredTargets);
     }
 }

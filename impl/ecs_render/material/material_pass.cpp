@@ -623,8 +623,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 csgWorkRegionMeshViewState
             ))
                 return false;
-            // The cap shader evaluates the same cook-generated surface hook as the receiver using this typed
-            // material context; rangeInfo.w still carries the deferred BXDF id for the G-buffer target.
+            // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.
             csgRange.shadingModelId = materialInfo->shadingModelId;
             csgRange.surfaceDispatchId = materialInfo->shadowTransmittanceModelId;
             csgRange.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
@@ -668,7 +667,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     };
 
     for(auto&& [entity, renderer] : rendererView){
-        // Every pass consumes the same frozen selection before assigning its dense instance indices.
+        // Every pass consumes the same frozen selection before assigning indices.
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 

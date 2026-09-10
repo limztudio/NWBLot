@@ -59,8 +59,7 @@ namespace RendererTaskGraphDetail{
     Vector<MeshSourceRef, Core::Alloc::ScratchArena> uniqueMeshes{ scratchArena };
     uniqueMeshes.reserve(drawItemCount);
     {
-        // Draw snapshots own these buffers for the whole call. Identify a complete source tuple before reserving
-        // per-buffer storage, so repeated instances cost one pointer each instead of a full buffer-table entry.
+        // Identify source tuples first so repeated instances cost one pointer each.
         const auto hashSources = [](const MeshSourceRef& mesh){
             usize hash = 0u;
             ForEachMaterialPassMeshSourceBuffer(*mesh, [&](const Core::BufferHandle& buffer){
@@ -90,7 +89,7 @@ namespace RendererTaskGraphDetail{
             meshSources.emplace(AddSize(drawItemCount, drawItemCount), hashSources, equalSources, scratchArena);
         const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
             const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-            // Descriptors and counts belong to each draw and must also be valid on a repeated source tuple.
+            // Descriptors stay valid on repeated source tuples.
             if(!mesh.valid())
                 return false;
             if(!meshSources || meshSources->insert(MeshSourceRef(&mesh)).second)

@@ -62,8 +62,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItems drawItems{ scratchArena };
     payload.plan.materialize(drawItems);
-    // The graph imported the exact persistent output handles retained by the frozen plan. Reject a corrupted
-    // materialized stream instead of dispatching into a descriptor target outside that set.
+    // Reject corrupted streams instead of dispatching outside the imported handle set.
     if(!payload.plan.matches(drawItems.computeDrawItems))
         return false;
     if(

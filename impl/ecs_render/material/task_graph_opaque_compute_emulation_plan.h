@@ -56,8 +56,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         for(const MaterialPassDrawItem& drawItem : sourceDrawItems.computeDrawItems){
-            // This first split is deliberately regular opaque-only. A CSG binding may need clip/image state and
-            // maintains a different producer/raster ordering contract, so it remains on the combined callback.
+            // First split is opaque-only; CSG stays on the combined callback.
             if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None){
                 reset();
                 return false;
@@ -70,9 +69,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            // The original callback interleaves dispatch and raster specifically because a second instance can
-            // overwrite this whole persistent buffer.  This first graph-owned slice deliberately declines that
-            // case rather than moving either draw across a potentially aliasing producer.
+            // Decline aliasing producers rather than moving draws across them.
             if(!outputs.insert(mesh.emulationVertexBuffer.get())){
                 reset();
                 return false;

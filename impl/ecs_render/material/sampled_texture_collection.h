@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One collection borrows its output and scratch owner. Only this collector mutates the output during its lifetime.
+// One collector owns mutation of its borrowed output during its lifetime.
 template<typename OutputArena>
 class MaterialSampledTextureCollector final : NoCopy{
     friend class ShadowMaterialSampledTextureCollector;
@@ -123,7 +123,7 @@ private:
 using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>;
 
 
-// Each reference observes the current resolved cache. Rejection preserves the successfully collected prefix.
+// Rejection preserves the successfully collected prefix.
 [[nodiscard]] bool AppendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
     const RendererMaterialResourceState& resources,
@@ -137,14 +137,14 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, 
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
     Core::Alloc::ScratchArena& scratchArena
 );
-// Creation names are checked sequentially, so a later missing name preserves the already published named prefix.
+// Names check sequentially; a missing name preserves the published prefix.
 [[nodiscard]] bool MergePreparedShadowMaterialSampledTextures(
     const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures,
     MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector
 );
 
 
-// Each material validates into reused temporary owning storage before any of its textures enter the output.
+// Materials validate into reused storage before textures enter the output.
 class ShadowMaterialSampledTextureCollector final : NoCopy{
 private:
     struct PendingTextures{

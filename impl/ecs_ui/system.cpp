@@ -607,8 +607,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
-    // A world without RendererSystem still has a complete immutable overlay snapshot, so prefer the standalone
-    // graph path. An arbitrary ImGui callback remains graph-owned but must use the synchronous legacy task below.
+    // Worlds without RendererSystem still snapshot overlays; prefer the standalone path.
     if(prepareTaskGraphPresentation(frame))
         return true;
     return prepareFrameResources(frame, false);
@@ -649,8 +648,7 @@ bool UiSystem::prepareFrameResources(const Core::AcquiredPresentationFrame& fram
     }
 
     if(__hidden_ui::HasTextureRequests(*drawData)){
-        // Both the renderer-owned and standalone graph routes retain prepared textures until task declaration.
-        // The synchronous callback graph still uses the same declaration-time resource preparation.
+        // Both graph routes retain prepared textures until task declaration.
         if(!prepareTextureRequests(*drawData))
             return false;
     }
@@ -981,7 +979,7 @@ bool UiSystem::declareTaskGraphDrawUploads(
             Core::GpuUploadBufferTaskDesc{
                 .source = blob,
                 .destination = destination,
-                // The dynamic UI buffers restore Common as their keep-initial-state contract when each packet closes.
+                // Dynamic UI buffers restore Common when each packet closes.
                 .finalState = Core::ResourceStates::Common,
             }
         );
@@ -1035,8 +1033,7 @@ bool UiSystem::prepareTaskGraphPresentation(const Core::AcquiredPresentationFram
         && m_taskGraphDrawSnapshot.valid
         && !m_taskGraphDrawCommands.empty()
     ;
-    // A font/texture update can arrive before any visible ImGui command. Keep it in the shared graph with a
-    // terminal completion packet rather than submitting it outside graph ownership after scene presentation.
+    // Font/texture updates may precede visible commands; keep them in the shared graph.
     m_taskGraphPresentationHasWork = m_frameFinished && drawData && (
         hasDrawWork || __hidden_ui::HasPendingTextureUploads(*drawData)
     );
@@ -1055,8 +1052,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     const Core::GpuGraphResourceId backbuffer,
     const Core::GpuTaskId previousTask
 ){
-    // A failed optional tail may rebuild the renderer graph in the same ImGui frame.  Retain only a same-generation
-    // claim; graph-owned blobs and imported IDs from the discarded attempt must never suppress the retry.
+    // Failed tails may rebuild the graph; retain same-generation claims only.
     if(m_taskGraphPresentationClaimed){
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid())

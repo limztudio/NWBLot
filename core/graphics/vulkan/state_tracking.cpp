@@ -59,8 +59,7 @@ void StateTracker::rollbackRecordingAttempt()noexcept{
     if(!m_recordingAttemptActive)
         return;
 
-    // Journaling precedes the potentially throwing map insertion. A missing key is therefore the valid unwind state
-    // for an insertion that did not publish; a successfully or partially published entry is erased below.
+    // Journaling precedes the throwing insertion, so a missing key is the valid unwind state for an unpublished entry.
     for(Texture* texture : m_attemptPermanentTextures){
         const auto found = m_permanentTextureStates.find(texture);
         if(found != m_permanentTextureStates.end())

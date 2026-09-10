@@ -28,8 +28,7 @@ using TextureStateKey = GraphicsBackend::TextureSubresourceStateKey;
 
 
 // ScratchArena reclaims one most-recent allocation per alignment bucket. Keep each temporary index in one fixed
-// allocation so destruction rewinds it exactly; node/bucket hash containers can leave non-LIFO storage behind and
-// grow the arena on every repeated fan-in query.
+// allocation so destruction rewinds exactly; hash containers can leave non-LIFO storage and grow the arena per query.
 template<typename Key, typename Hash, typename Equal>
 class ScratchStateIndexMap final : NoCopy{
 private:

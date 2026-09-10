@@ -26,8 +26,8 @@ namespace __hidden_vulkan_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Queue timeline values are only meaningful within one logical-device lifetime. Physical queue indices are assigned
-// by the Device registry (not CommandQueue ordinals) and the generation makes a recreated Device reject old tokens.
+// Timeline values live within one logical-device lifetime. Indices come from the Device registry
+// (not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{

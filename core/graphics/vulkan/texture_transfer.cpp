@@ -48,8 +48,8 @@ namespace __hidden_texture_transfer{
     return true;
 }
 
-// Buffer-image copies address exactly one image aspect. Keep image provenance validation against the texture's
-// complete native metadata, but lower the selected public upload plane into its own Vulkan aspect and byte layout.
+// Buffer-image copies address exactly one image aspect. Validate against the texture's full native metadata,
+// then lower the selected upload plane into its own Vulkan aspect and byte layout.
 [[nodiscard]] inline bool ResolveTextureUploadCopyAspect(
     const TextureDesc& textureDesc,
     const VkImageAspectFlags textureAspectMask,

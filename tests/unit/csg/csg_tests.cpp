@@ -703,9 +703,9 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
 
     const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(
         scratchArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         8u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         12u,
         cuts,
         2u,
@@ -719,9 +719,9 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     NWB::Impl::CsgDeformStats previewStats;
     EXPECT_TRUE(NWB::Impl::PreviewCsgDeformCuts(
         scratchArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         8u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         12u,
         cuts,
         2u,
@@ -741,9 +741,9 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     EXPECT_TRUE(NWB::Impl::CommitCsgDeformCuts(
         scratchArena,
         commitArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         8u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         12u,
         cuts,
         2u,
@@ -806,9 +806,9 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     const NWB::Impl::CsgDeformBuildOptions options;
     const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(
         scratchArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         3u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         1u,
         &cut,
         1u,
@@ -821,9 +821,9 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     NWB::Impl::CsgDeformStats previewStats;
     EXPECT_FALSE(NWB::Impl::PreviewCsgDeformCuts(
         scratchArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         3u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         1u,
         &cut,
         1u,
@@ -839,9 +839,9 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     EXPECT_FALSE(NWB::Impl::CommitCsgDeformCuts(
         scratchArena,
         commitArena,
-        inputVertices,
+        MakeNotNull(inputVertices),
         3u,
-        inputTriangles,
+        MakeNotNull(inputTriangles),
         1u,
         &cut,
         1u,

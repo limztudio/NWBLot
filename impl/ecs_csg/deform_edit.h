@@ -129,9 +129,9 @@ static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay c
 // Shared viability classifier used by both preview and commit.
 [[nodiscard]] CsgDeformViability CheckCsgDeformCutsViability(
     Core::Alloc::ScratchArena& scratchArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     usize cutCount,
@@ -141,9 +141,9 @@ static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay c
 // Preview rebuild into scratch storage. Same code path as commit.
 [[nodiscard]] bool PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     usize cutCount,
@@ -158,9 +158,9 @@ static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay c
 [[nodiscard]] bool CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     usize cutCount,

@@ -95,15 +95,13 @@ inline constexpr u32 s_ReserveSlack = 1u;
 }
 
 [[nodiscard]] bool ValidTopology(
-    const CsgDeformVertex* vertices,
+    NotNull<const CsgDeformVertex*> vertices,
     const usize vertexCount,
-    const CsgDeformTriangle* triangles,
+    NotNull<const CsgDeformTriangle*> triangles,
     const usize triangleCount
 ){
-    NWB_ASSERT(vertices != nullptr);
-    NWB_ASSERT(triangles != nullptr);
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-        const CsgDeformTriangle& triangle = triangles[triangleIndex];
+        const CsgDeformTriangle& triangle = triangles.get()[triangleIndex];
         for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
             if(triangle.indices[corner] >= vertexCount)
                 return false;
@@ -113,14 +111,13 @@ inline constexpr u32 s_ReserveSlack = 1u;
 }
 
 [[nodiscard]] bool FiniteInput(
-    const CsgDeformVertex* vertices,
+    NotNull<const CsgDeformVertex*> vertices,
     const usize vertexCount,
     CsgDeformViabilityReason::Enum& outReason
 ){
     outReason = CsgDeformViabilityReason::Ok;
-    NWB_ASSERT(vertices != nullptr);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        if(!FiniteVertex(vertices[vertexIndex])){
+        if(!FiniteVertex(vertices.get()[vertexIndex])){
             outReason = CsgDeformViabilityReason::NonFiniteInput;
             return false;
         }
@@ -738,9 +735,9 @@ struct DeformRebuildResult{
 
 [[nodiscard]] bool RebuildSequentialCuts(
     ScratchArena& scratchArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     const usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     const usize cutCount,
@@ -754,7 +751,7 @@ struct DeformRebuildResult{
     outTriangles.clear();
     outResult.stats.inputVertexCount = static_cast<u32>(inputVertexCount);
     outResult.stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
-    if(!inputVertices || !inputTriangles || inputVertexCount == 0u || inputTriangleCount == 0u){
+    if(inputVertexCount == 0u || inputTriangleCount == 0u){
         outResult.viability.viable = false;
         outResult.viability.reason = CsgDeformViabilityReason::EmptyInput;
         return false;
@@ -785,9 +782,9 @@ struct DeformRebuildResult{
     outVertices.reserve(inputVertexCount + cutCount * 16u);
     outTriangles.reserve(inputTriangleCount * 2u + cutCount * 16u);
     for(usize vertexIndex = 0u; vertexIndex < inputVertexCount; ++vertexIndex)
-        outVertices.push_back(inputVertices[vertexIndex]);
+        outVertices.push_back(inputVertices.get()[vertexIndex]);
     for(usize triangleIndex = 0u; triangleIndex < inputTriangleCount; ++triangleIndex)
-        outTriangles.push_back(inputTriangles[triangleIndex]);
+        outTriangles.push_back(inputTriangles.get()[triangleIndex]);
 
     CsgDeformTriangleVector<ScratchArena> scratchKept(scratchArena);
     Vector<f32, ScratchArena> scratchDistances(scratchArena);
@@ -863,9 +860,9 @@ struct DeformRebuildResult{
 
 CsgDeformViability CheckCsgDeformCutsViability(
     Core::Alloc::ScratchArena& scratchArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     const usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     const usize cutCount,
@@ -893,9 +890,9 @@ CsgDeformViability CheckCsgDeformCutsViability(
 
 bool PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     const usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     const usize cutCount,
@@ -929,9 +926,9 @@ bool PreviewCsgDeformCuts(
 bool CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
-    const CsgDeformVertex* inputVertices,
+    NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
-    const CsgDeformTriangle* inputTriangles,
+    NotNull<const CsgDeformTriangle*> inputTriangles,
     const usize inputTriangleCount,
     const CsgDeformCutDesc* cuts,
     const usize cutCount,

@@ -518,9 +518,8 @@ bool GpuTimingRecorder::beginDeferredScope(
 ){
     if(!beginScope(scopeName, device, commandList, attribution, false, outScope))
         return false;
-    // The frame transaction owns this reservation until the end packet is accepted. The begin packet's submission
-    // ticket deliberately has no rollback handle for it: a later recovery endpoint may be required after that begin
-    // has already executed on the device timeline.
+    // The frame transaction owns this reservation until the accepted end packet. The begin ticket has no rollback
+    // handle: a recovery endpoint may be needed after that begin already executed on the device timeline.
     if(outScope.submissionTicket)
         outScope.submissionTicket->cancelScopePublication(outScope.submissionPublicationIndex);
     outScope.submissionTicket = nullptr;

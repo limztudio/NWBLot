@@ -555,10 +555,8 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    // Normalize against the exact selected queue rather than its broad API class. Auxiliary queues may expose a
-    // strict Graphics-only, Compute-only, or Transfer-only capability set even when their class shares a facade.
-    // Cross-queue semaphore waits make an unsupported producer scope available before this command list; lower that
-    // side to NONE instead of naming an illegal local access.
+    // Normalize against the exact queue, not its broad API class. Cross-queue semaphore waits already make an
+    // unsupported producer scope available, so lower that side to NONE instead of an illegal local access.
     VkDependencyInfo queueCompatibleDepInfo = depInfo;
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
     Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};

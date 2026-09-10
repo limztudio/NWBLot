@@ -26,9 +26,8 @@ namespace __hidden_graphics_graph_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Before per-upload timing exists, retain small setup copies on Graphics. Large asset payloads are the first
-// Transfer migration target; callers that know a small upload benefits from a dedicated transport can still request
-// CommandQueue::Transfer explicitly.
+// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first;
+// callers that know a small upload benefits can still request CommandQueue::Transfer explicitly.
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
 
@@ -41,9 +40,8 @@ constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 }
 
 
-// A returned setup resource has no external-completion object that a later direct consumer can wait on. Retain the
-// historical readiness rule by recording one explicit graph packet on every declared consumer queue. Its dependency
-// on the producer lowers the exact timeline wait, and later native work on that queue follows it in queue order.
+// A returned setup resource has no external-completion object for later direct consumers. Record one explicit
+// graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
 struct SetupUploadReadinessBridgeGraphTask{
     struct Payload{};
 
@@ -60,8 +58,8 @@ struct SetupUploadReadinessBridgeGraphTask{
     }
 };
 
-// A standalone graph does not own a renderer finalization packet. Predeclare this no-op Graphics tail so a later
-// normal-packet rejection can join every already-accepted physical queue before this synchronous call returns.
+// A standalone graph owns no renderer finalization packet. Predeclare this no-op Graphics tail so a later
+// rejection can join every accepted physical queue before this call returns.
 struct StandaloneTaskGraphRecoveryTask{
     struct Payload{};
 

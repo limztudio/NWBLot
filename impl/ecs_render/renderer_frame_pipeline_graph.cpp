@@ -586,9 +586,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     );
 
 
-// The CSG working setÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Âpeel targets, receiver-event/span images, and removed-interval outputsÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Âis declared by
-    // the graph. Its exact clear/StorageImage handoffs are visible here; the wider CSG target lifecycle remains in
-    // native compatibility producers for its own bounded migration.
+// The CSG working set (peel targets, receiver-event/span images, removed-interval outputs) is declared by
+    // the graph; the wider CSG target lifecycle stays in native compatibility producers.
     const Core::GpuGraphResourceId csgCapBackNormal = importTexture(
         deferredTargets.csgCapBackNormal,
         Name("render.deferred.csg_cap_back_normal"),

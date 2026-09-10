@@ -1643,7 +1643,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         if(graphOwnsNonTemporalAccumulatorClear){
             Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
             accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
-            // The direct accumulator clear must remain in the accepted Hardware Caustics producer/timing packet.
+            // Direct accumulator clear stays in the accepted producer/timing packet.
             accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
             Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
@@ -1719,7 +1719,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
             accumulatorDecayScheduling.allowPacketMerge = true;
             accumulatorDecayScheduling.mergeWithPrevious = true;
-            // The direct accumulator decay must remain in the accepted Hardware Caustics producer/timing packet.
+            // Direct accumulator decay stays in the accepted producer/timing packet.
             accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
             EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
             EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
@@ -2460,8 +2460,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitPrePayload.transparentCsgIntervalTargetsGraphOwned = true;
         avboitPrePayload.transparentCsgIntervalPeelTargetStatesGraphOwned = true;
         avboitPrePayload.transparentCsgReceiverSurfaceImageStatesGraphOwned = true;
-        // The following Span/Combine callbacks own their exact UAV handoffs, while direct and aggregate
-        // compatibility calls retain native fences.
+        // Span/Combine callbacks own exact UAV handoffs; compat calls keep native fences.
         avboitPrePayload.deferTransparentCsgIntervalCombine = true;
         avboitPrePayload.transparentCsgClipBufferStatesGraphOwned = true;
         avboitPrePayload.transparentCsgMaterialFrameStatesGraphOwned = true;

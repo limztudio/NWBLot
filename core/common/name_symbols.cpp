@@ -218,8 +218,7 @@ private:
             owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
             const AStringView text(snapshot.ownerName.logText());
             const NameHash hash = ComputeNameHash(text);
-            // Verify stored text before using it: a binary-only Name contains fallback hex, and long text can truncate.
-            // Insert after the census releases its lock and without callbacks, including exception-path shutdown.
+            // Verify stored text first; insert after the census releases its lock.
             if(snapshot.ownerName == Name(hash))
                 NWB_FATAL_ASSERT(insert(hash, text));
         }

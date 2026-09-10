@@ -126,9 +126,7 @@ namespace CookEntryRegistryDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Resolves a cook entry's `virtualPath` to a Name either way it is stored: Name entries pass through
-// unchanged, while string entries (e.g. material, which needs readable text for generated-shader paths and
-// `#include`s) are hashed on demand. Dedup and cooked output always key by the same Name.
+// Resolves a cook entry's virtualPath to a Name; strings hash on demand.
 [[nodiscard]] inline const Name& ToCookEntryName(const Name& virtualPath){
     return virtualPath;
 }

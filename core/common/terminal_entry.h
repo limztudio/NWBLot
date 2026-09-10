@@ -26,9 +26,7 @@ namespace TerminalErrorExitPolicy{
     };
 };
 
-// Used only by application entry functions that return immediately with the terminal result. Keep any state
-// needed by error reporting outside invoke, so its lifetime continues after the application work unwinds.
-// Native worker exceptions terminate at their thread boundary; this helper never transports exceptions.
+// Entry helper only; keep error-reporting state outside invoke; never transports exceptions.
 template<typename Error, typename Invoke, typename ErrorHandler, typename UnexpectedHandler>
 [[nodiscard]] inline int InvokeTerminalEntry(
     Invoke&& invoke,

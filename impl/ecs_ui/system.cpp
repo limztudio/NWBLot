@@ -1840,8 +1840,7 @@ bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
     )
         return false;
 
-    // submitStandaloneTaskGraph() records synchronously. The pointer/generation guard turns the opaque callback
-    // boundary into a fail-closed record contract if another ImGui frame unexpectedly replaces the live arrays.
+    // Standalone records synchronously; pointer/generation guard keeps the callback fail-closed.
     setCurrentContext();
     if(ImGui::GetDrawData() != drawData)
         return false;
@@ -1858,8 +1857,7 @@ bool UiSystem::recordTaskGraphUploadCompletion()const{
 }
 
 void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
-    // The overlay has explicit dependencies on every texture upload.  Publishing the ImGui status only here keeps
-    // a rejected upload visible to the next frame instead of claiming a texture was updated before its packet ran.
+    // Overlay depends on every upload; publish status here so rejected uploads stay visible.
     m_textureUploadBatch.complete(true);
     m_frameStarted = false;
     m_frameFinished = false;
@@ -1875,8 +1873,7 @@ void UiSystem::confirmTaskGraphPresentationSubmission()noexcept{
 }
 
 void UiSystem::retainTaskGraphPresentationForRetry()noexcept{
-    // A rejected terminal never consumed the live ImGui arrays. Release only graph-generation state so the next
-    // acquired frame can rebuild an immutable snapshot without invoking another UI update or advancing generation.
+    // Rejected terminals never consumed live arrays; release generation state only.
     m_textureUploadBatch.complete(false);
     m_taskGraphPresentationRetryPending = true;
     m_taskGraphPresentationPrepared = false;
@@ -1892,15 +1889,13 @@ void UiSystem::retainTaskGraphPresentationForRetry()noexcept{
 }
 
 void UiSystem::discardStandaloneLegacyTaskGraphPresentation()noexcept{
-    // A failed opaque packet may have reached recording after it prepared graph-owned texture blobs. Keep every
-    // status pending until the caller either retains a callback-free frame or requests recreation.
+    // Failed opaque packets may have prepared blobs; keep statuses pending.
     m_textureUploadBatch.complete(false);
     m_taskGraphLegacyPresentationClaimed = false;
 }
 
 bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
-    // prepareFrameResources() has already created/refreshed every requested texture and its descriptor. This
-    // texture-only graph is used only when there is no visible raster work to keep in the same transaction.
+    // Textures already created; texture-only graph runs only without raster work.
     if(!__hidden_ui::HasPendingTextureUploads(drawData))
         return true;
 

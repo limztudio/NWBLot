@@ -5532,8 +5532,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         accumulationSharedComputeEmulationScheduling.forceSubmissionBoundary = false;
         accumulationSharedComputeEmulationScheduling.allowPacketMerge = true;
         accumulationSharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Every phase is an explicit immediate successor. Keep the full alternating chain in AVBOIT Pre despite
-        // Composite's later Compute consumer so one command list owns the timing scope and finalizer handoff.
+        // Keep the full alternating chain in AVBOIT Pre so one list owns timing and handoff.
         accumulationSharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto addAccumulationSharedComputeEmulationPhase = [
             this,
@@ -5663,8 +5662,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
         m_avboitSystem.taskGraphStage().m_accumulationSharedComputeEmulationTaskCount =
             accumulationSharedComputeEmulationPhaseCount;
-        // The terminal raster is the existing Accumulation semantic endpoint: it feeds the unchanged finalizer,
-        // timing ticket, state cache, record range, and accepted-token publication path.
+        // Terminal raster is the Accumulation endpoint feeding finalizer, timing, and tokens.
         m_avboitSystem.taskGraphStage().m_accumulationTask = accumulationSharedComputeEmulationDependency;
     }
     else{
@@ -5702,8 +5700,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     accumulationFinalizeScheduling.forceSubmissionBoundary = false;
     accumulationFinalizeScheduling.allowPacketMerge = true;
     accumulationFinalizeScheduling.mergeWithPrevious = true;
-    // The finalizer is Accumulation's direct semantic tail and must retain its timing/acceptance packet before
-    // Lighting observes the restored shader-readable depth state from another queue.
+    // Finalizer is Accumulation's tail; retain its timing/acceptance packet before Lighting.
     accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc accumulationFinalizeDesc;
     accumulationFinalizeDesc
@@ -5742,8 +5739,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
 
 
-    // Live Lighting joins Shadow/Software, Surfel GI, AVBOIT, and Hardware Caustics through internal graph edges.
-    // Active lagged Lighting instead reads history and stays independent from the current-frame producers.
+    // Live Lighting joins current producers via graph edges; lagged Lighting reads history.
     const Core::GpuTaskId hardwareLightingDependencies[] = {
         m_deferredShadowVisibilityTask,
         m_deferredSurfelGiTask,
@@ -5756,9 +5752,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredSurfelGiTask,
         avboitFinalTask,
     };
-    // Lagged Lighting normally reads its shared G-buffer inputs from the accepted prefix while history supplies the
-    // temporal effects. Transparent AVBOIT accumulation temporarily binds current deferred depth as DepthRead, so
-    // its finalizer must complete before Lighting can observe ShaderResource layout again.
+    // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
     const Core::GpuTaskId laggedLightingDependencies[] = {
         m_graphicsPrefixTask,
         avboitFinalTask,

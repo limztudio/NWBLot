@@ -124,8 +124,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
         ;
-        // The target-generation selector is a UniformBuffer heap entry; the local layout carries its slot plus the
-        // effective swap-chain mode so HDR can retain linear values until final presentation.
+        // Local layout carries the heap slot plus the swap-chain mode.
         bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
         m_deferredState.m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -140,9 +139,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         return false;
     }
 
-    // The deferred-lighting compute harness includes the cook-generated BXDF dispatch module assembled from every
-    // material's `bxdf`. The engine ships no default BXDF and projects do not select a lighting shader -- shading is
-    // entirely material-driven (see EmitDeferredBxdfDispatchModule).
+    // Shading is material-driven via the generated BXDF dispatch.
     if(!m_shaderSystem.loadShader(
         m_deferredState.m_lightingComputeShader,
         AssetsGraphicsDeferred::s_LightingComputeShaderName,
@@ -227,9 +224,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
         NWB_SCENE_MAX_LIGHTS
     );
 
-    // Caustic-light classification: rank the opted-in directional/spot lights and assign a caustic slot into
-    // each chosen light's params.w, gated on the scene holding at least one refractive instance gathered earlier by
-    // ray-tracing preflight and passed through the root-owned frame contract.
+    // Rank caustic lights into params.w; needs a refractive instance.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
         outLightData,
         causticLightImportance,
@@ -237,11 +232,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
         rayTracingInput.refractiveInstanceCount
     );
     outRayTracingClassification.causticLightCount = causticLightCount;
-    // Soft opaque shadow (all light types): record which shadow slots hold a light (params.z >= 0), regardless of type.
-    // The soft path traces + denoises + upsamples exactly these slots (once per set bit): a directional light softens by
-    // its constant angular radius, a point/spot light by the distance-dependent cone its source sphere subtends -- both
-    // handled inside the trace, so every slot light is soft. A light can land on any slot index (the slot allocator
-    // ranks by importance, not type), so this is a scattered bitmask, not a contiguous range.
+    // Bitmask of shadow slots holding a light.
     u32 softShadowSlotMask = 0u;
     for(u32 i = 0u; i < lightCount; ++i){
         const f32 slot = outLightData[i].params.z;
@@ -260,8 +251,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
         && m_deferredState.m_lightGpuDataCount == lightCount
         && NWB_MEMCMP(m_deferredState.m_lightGpuData, outLightData, lightByteCount) == 0
     ;
-    // A zero-light scene has no copyable payload. The graph still transitions the buffer for a later SRV use,
-    // while acceptance records the empty CPU mirror below.
+    // A zero-light scene has nothing to copy; still record the empty mirror.
     outLightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
     outLightCount = lightCount;
 
@@ -285,8 +275,7 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const bool sceneShadingUploadRequired
 ){
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
-    // A zero-light frame has no blob to upload, but it must still commit its empty CPU mirror once its dependent
-    // prefix packet accepts. Otherwise a transition from a nonempty list would be treated as changed forever.
+    // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
         NWB_ASSERT(lightData || lightByteCount == 0u);
         if(lightByteCount != 0u){
@@ -330,8 +319,7 @@ bool RendererDeferredSystem::renderDeferredLighting(
         : targets.bindless.slotsBufferDescriptor
     ;
 
-    // The compiled task graph owns every packet-boundary bindless transition, including the lagged-history variant.
-    // This thunk keeps only its descriptor upload and native lighting commands.
+    // Boundary transitions are graph-owned; this thunk holds upload + dispatch.
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredLighting, m_graphics.getDevice(), commandList);
 

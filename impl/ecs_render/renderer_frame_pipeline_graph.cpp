@@ -1110,8 +1110,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-    // Effects start from the accepted graphics-prefix packet and remain compiler-owned through the deferred suffix.
-    // Shadow/Software are declared first so their queue assignments are stable before Surf, AVBOIT, and Lighting.
+    // Effects start from the prefix packet; declare Shadow/Software first for stable queue assignment.
     if(!declareDeferredShadowVisibilityTask(
         deferredTargets,
         deferredLightingResources,
@@ -1170,8 +1169,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ? m_deferredShadowVisibilityTask
         : m_deferredSoftwareCausticsTask
     ;
-    // Surfel GI remains the terminal effects task. Declaring it before hardware/AVBOIT preserves the established
-    // effects -> surfel -> suffix order without renderer-side completion stitching.
+    // Declare Surfel GI before hardware/AVBOIT to keep effects -> surfel -> suffix order.
     if(!declareDeferredSurfelGiTask(
         deferredTargets,
         deferredLightingResources,
@@ -1208,8 +1206,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
 
 
-    // Hardware Caustics belongs to this graph so the live irradiance producer/consumer transition is compiler-owned.
-    // It is declared before Lighting: declaration order establishes the live current-irradiance RAW edge, while the lagged route uses distinct current/history targets and intentionally has no Hardware-to-Lighting dependency.
+    // Declare Hardware Caustics before Lighting so declaration order owns the live irradiance RAW edge.
     if(declaresHardwareCaustics){
         const Core::GpuGraphResourceId causticAccumulator = importTexture(
             deferredTargets.causticAccumulator,

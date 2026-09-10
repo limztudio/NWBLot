@@ -18,7 +18,17 @@
 
 
 NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class GraphicsRuntime;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_CORE_END
 
 
@@ -57,6 +67,8 @@ struct RayTracingOpticalSceneSnapshot{
 class RayTracingOpticalSceneResources final : NoCopy{
 public:
     RayTracingOpticalSceneResources(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Name identity);
+
+public:
     void invalidate();
     void resetPrepared()noexcept{ m_prepared = false; }
     [[nodiscard]] bool prepare(const RayTracingOpticalSceneGather& gather);

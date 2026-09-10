@@ -630,9 +630,8 @@ u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
 }
 
 u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
-    // executeCommandLists() uses this on a rejected submit to retire CPU-side upload/scratch bookkeeping. A
-    // VK_ERROR_DEVICE_LOST rejection has already marked the device terminal, so do not issue a second timeline query
-    // while performing that cleanup.
+    // Rejected-submit cleanup retires CPU-side bookkeeping; device-lost already marked the device terminal,
+    // so skip the second timeline query here.
     if(isDeviceLost())
         return 0;
 

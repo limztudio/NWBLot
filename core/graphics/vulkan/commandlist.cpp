@@ -1069,7 +1069,7 @@ bool CommandList::recordAndValidateCommandCapability(
     if(!publicCommandStateAccessible())
         return false;
 #if defined(NWB_DEBUG)
-    // Declaration diagnostics must see the attempted native operation even when its exact physical queue rejects it.
+    // Diagnostics must record the attempted operation even when its physical queue rejects it.
     if(m_taskCapabilityTracking){
         m_taskCapabilitiesUsed = static_cast<GpuQueueCapability::Mask>(
             static_cast<u8>(m_taskCapabilitiesUsed) | static_cast<u8>(requiredCapabilities)

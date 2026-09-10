@@ -62,8 +62,7 @@ void LoadVolkDeviceDispatch(
     NWB_ASSERT(device != VK_NULL_HANDLE);
     ScopedLock lock(__hidden_vulkan_dispatch::GetVolkTableLoadMutex());
 
-    // Volk's table loader still obtains vkGetDeviceProcAddr through one process-global slot. Pair the owning
-    // instance-table refresh and device-table load under one initialization lock, then use only the resulting tables.
+    // Volk loads vkGetDeviceProcAddr through one process-global slot; refresh both tables under one lock.
     volkLoadInstanceTable(&instanceDispatch, instance);
     volkLoadDeviceTable(&deviceDispatch, device);
 }

@@ -401,8 +401,7 @@ bool BackendContext::createFrameSyncQueries(){
     if(!m_rhiDevice)
         return false;
 
-    // Presentation acquires one fence per in-flight frame. Create the fixed pool with the device/swap-chain
-    // resources so present() only recycles completed fences instead of allocating Vulkan objects in the frame loop.
+    // One fence per in-flight frame, created with device/swap-chain resources so present() only recycles.
     while(!m_framesInFlight.empty())
         m_framesInFlight.pop();
     m_queryPool.clear();

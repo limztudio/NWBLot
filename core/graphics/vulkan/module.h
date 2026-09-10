@@ -42,18 +42,16 @@ namespace ObjectTypes{
 class Device;
 typedef Handle<Device> DeviceHandle;
 
-// Canonical native queue construction identity. Enumerate every queue created by VkDeviceQueueCreateInfo exactly
-// once, including queues used only for presentation. Device materializes stable synchronized states from this table,
-// and scheduler-visible physical queues reference those states by index.
+// Canonical native queue construction identity. Enumerate every VkDeviceQueueCreateInfo queue exactly once,
+// including presentation-only queues; scheduler-visible queues reference these states by index.
 struct VulkanNativeQueueDesc{
     VkQueue queue = VK_NULL_HANDLE;
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = Limit<u32>::s_Max;
 };
 
-// One canonical native queue exposed to the RHI scheduler. The projection may contain more than one entry with the
-// same broad class; `primaryForClass` only preserves legacy CommandQueue-based callers while graph packets use the
-// physical ID assigned by Device.
+// One canonical native queue for the RHI scheduler. `primaryForClass` only serves legacy CommandQueue callers;
+// graph packets use the Device-assigned physical ID.
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;
     CommandQueue::Enum queueClass = CommandQueue::kCount;

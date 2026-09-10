@@ -17,9 +17,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Immutable facts supplied by the owner of an imported VkImage. The owner must report the values used to create
-// the image; a concurrent queue-family list is borrowed for this call and copied by Texture. initialStateKnown
-// describes whether TextureDesc::initialState already reflects the image's current state.
+// Immutable facts from the owner of an imported VkImage; values must match creation. A concurrent queue-family
+// list is borrowed for the call and copied by Texture.
 using NativeTextureProvenance = NativeResourceProvenance<VkImageUsageFlags, VkImageCreateFlags>;
 
 

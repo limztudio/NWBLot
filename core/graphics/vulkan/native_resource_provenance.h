@@ -17,9 +17,8 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Immutable facts supplied by the owner of an imported Vulkan buffer or image. The owner must report the values
-// used to create the resource; a concurrent queue-family list is borrowed for this call and copied by Buffer or
-// Texture. initialStateKnown describes whether the descriptor initialState already reflects current GPU state.
+// Immutable facts from the owner of an imported buffer or image; values must match creation. A concurrent
+// queue-family list is borrowed for the call and copied by Buffer or Texture.
 template<typename UsageFlags, typename CreateFlags>
 struct NativeResourceProvenance{
     UsageFlags usage = 0u;

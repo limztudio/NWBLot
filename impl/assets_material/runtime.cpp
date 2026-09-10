@@ -463,9 +463,8 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    // Optional per-material AVBOIT pass pixel shaders (present only for surface-authored transparent materials):
-    // accumulate, then occupancy, then extinction -- each a presence flag followed by the shader name hash,
-    // mirroring how a stage shader is stored. All three carry the material's SAME shader-decided surface.renderCoverage.
+    // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction,
+    // each a presence flag plus shader name hash.
     const auto readOptionalAvboitPixelShader = [&](const NotNull<const tchar*> passLabel, Core::Assets::AssetRef<Shader>& outShaderRef) -> bool{
         u32 hasShader = 0u;
         if(!ReadPOD(binary, cursor, hasShader)){

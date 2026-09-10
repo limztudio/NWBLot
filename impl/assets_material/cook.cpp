@@ -574,10 +574,8 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
     AppendPOD(outBinary, material.shadingModelId());
     AppendPOD(outBinary, material.shadowTransmittanceModelId());
 
-    // Optional per-material AVBOIT pass pixel shaders: accumulate, then occupancy, then extinction -- each a
-    // presence flag + the shader name hash, mirroring a stage-shader entry. Present only for a surface-authored
-    // transparent material; loadBinary reads them back in this order. All three carry the material's SAME
-    // shader-decided surface.renderCoverage, so the renderer can bind a per-material PS for every AVBOIT pass.
+    // Optional per-material AVBOIT pixel shaders (accumulate, occupancy, extinction): each a presence flag plus
+    // shader name hash, present only for surface-authored transparent materials and read back in this order.
     const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<Shader>& shaderRef){
         if(shaderRef.valid()){
             AppendPOD(outBinary, static_cast<u32>(1u));

@@ -31,8 +31,7 @@ class Texture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// AVBOIT uses a per-material pixel shader for each transparent pass. These references are a single atomic contract:
-// a transparent material needs all three pass shaders, while an opaque material must not carry any of them.
+// Transparent materials need all three pass shaders; opaque materials carry none.
 [[nodiscard]] inline bool HasValidMaterialAvboitPixelShaderContract(
     const bool transparent,
     const Core::Assets::AssetRef<Shader>& accumulatePixelShader,
@@ -99,8 +98,7 @@ namespace MaterialResourceKind{
 }
 
 
-// Resource fields always name an engine or project asset. The field type determines the expected asset family; the
-// renderer resolves that path to a global bindless slot at runtime.
+// Resource fields name an engine/project asset resolved to a heap slot at runtime.
 namespace MaterialResourceSource{
     enum Enum : u32{
         None = 0u,

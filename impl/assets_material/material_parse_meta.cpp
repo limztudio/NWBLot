@@ -433,9 +433,7 @@ static bool ParseMaterialInterface(
         return false;
     }
 
-    // The interface names a `.bind` carrying the extension explicitly (like `surface`/`bxdf`). Validate it, then
-    // strip the extension: the stored interface name must match the discovered .bind's virtual path, which is
-    // derived with the extension removed.
+    // The interface names a `.bind`; strip the extension to match the discovered virtual path.
     ::Path<ScratchArena> interfacePathPath(scratchArena, interfacePath);
     ScratchString extension = PathToString(scratchArena, interfacePathPath.extension());
     CanonicalizeTextInPlace(extension);
@@ -451,8 +449,7 @@ static bool ParseMaterialInterface(
             ch = '/';
     }
 
-    // Store the readable interface path text; the Name it hashes to is produced on demand (bind lookup / identity
-    // compare / cooked Material). Validate that the text forms a valid Name first, failing early with a clear message.
+    // Store path text; the Name hash is produced on demand.
     if(!Name(AStringView(strippedInterface))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface '{}' is invalid")
             , PathToString<tchar>(nwbFilePath)
@@ -469,11 +466,7 @@ static bool ParseMaterialInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Parses an optional material field whose value is a `project/`-rooted virtual path carrying a
-// dedicated extension (e.g. `bxdf` -> ".bxdf", `surface` -> ".surface"), mirroring how `interface` names a
-// `.bind`. Parse only validates the format + stores the virtual path verbatim (forward slashes, original case);
-// the cross-asset phase (volume_prepare) resolves it to an absolute source against all asset roots (only known
-// there). Existence is enforced there / by the dependency-checksum, so parse stays filesystem-light.
+// Parses a `project/`-rooted virtual path field; the cross-asset phase resolves it.
 static bool ParseMaterialVirtualAssetField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -540,8 +533,7 @@ static bool ParseMaterialVirtualAssetField(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional at parse; required at cook (AssignMaterialShadingModelIds rejects any material lacking a bxdf -- the
-// engine ships no default).
+// Optional at parse; required at cook.
 static bool ParseMaterialBxdf(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -557,8 +549,7 @@ static bool ParseMaterialBxdf(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional. When present (and `shaders` is omitted), the cross-asset phase generates this material's G-buffer
-// pixel shader from this surface hook fragment.
+// Optional; generates the G-buffer PS when `shaders` is omitted.
 static bool ParseMaterialSurface(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,

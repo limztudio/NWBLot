@@ -507,9 +507,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
         indexFlags.canHaveRawViews = true;
         indexFlags.accelStructBuildInput = rtSupported;
-        // The dedicated async shadow packet reads this reconstructed stream alongside the Graphics-side build
-        // and raster packets. Keep the sharing contract consistent with the other shadow trace inputs so it
-        // never needs an ownership transfer during the Graphics -> Compute overlap.
+        // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
             m_graphics,
@@ -532,17 +530,11 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         );
 
         createdMesh.blasBuildPending = rtSupported;
-        // The software BVH is built for the no-RT fallback AND, on RT hardware, for the HYBRID transparent shadow (the
-        // HW pass casts opaque shadows; the SW traversal casts the colored transparent shadow). The raw views above
-        // support both routes; buildPendingMeshSwBvh only runs on RT hardware when a transparent occluder needs it.
+        // SW-BVH covers no-RT fallback and hybrid transparent shadows on RT hardware.
         createdMesh.swBvhBuildPending = swShadow || rtSupported;
     }
 
-    // Flat per-triangle-corner shadow/caustic trace attribute buffer, indexed as primitive*3+corner in lockstep
-    // with the reconstructed triangle index buffer above. This preserves raster normal semantics: smooth edges share
-    // normal refs, hard edges carry separate refs even when the position is shared. Built unconditionally alongside
-    // the index buffer (neither backend is known at mesh-creation time); both shadow backends read it as a
-    // ByteAddressBuffer, so it always carries a raw view; the structured stride also exposes a plain SRV.
+    // Flat per-corner trace attributes in lockstep with the index buffer; always carries a raw view.
     {
         const usize attributeCount = mesh.meshletPrimitiveIndices().size();
         Core::Alloc::ScratchArena scratchArena(

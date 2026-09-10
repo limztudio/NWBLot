@@ -17,9 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CSG carries no per-pass descriptor sets.  Its persistent selector and interval state are global UniformBuffer
-// heap entries, while target images are global StorageImage entries.  This header remains as a narrow include point
-// for the material pass's CSG state-transition helpers.
+// CSG uses global heap entries; this header is the include point for its helpers.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

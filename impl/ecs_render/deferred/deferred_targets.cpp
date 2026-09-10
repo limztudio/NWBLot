@@ -144,9 +144,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         return false;
     };
 
-    // One target may need both sampled and storage views.  Keep a persistent StorageImage descriptor for every
-    // writable target; shader aliases choose the appropriate 2D/2DArray/typed view while explicit command-list
-    // transitions select SHADER_READ_ONLY vs GENERAL for each use.
+    // Keep a persistent StorageImage descriptor per writable target; aliases select views.
     auto registerStorageTexture = [&heap](
         Core::GpuDescriptorHandle& handle,
         Core::Texture* texture,
@@ -180,8 +178,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         return false;
     };
 
-    // Shared scene buffers: the light list rides the StorageBuffer table (structured SRV), the scene-shading cbuffer
-    // the UniformBuffer table. Both are read-only per-frame singletons the lighting shader selects by slot.
+    // Shared scene buffers are read-only per-frame singletons selected by slot.
     auto registerStructuredBuffer = [&heap](Core::GpuDescriptorHandle& handle, Core::Buffer* buffer) -> bool{
         handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!handle.valid())

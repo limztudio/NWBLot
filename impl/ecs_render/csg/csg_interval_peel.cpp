@@ -139,11 +139,9 @@ static void DispatchCsgIntervalCompute(
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipeline);
-    // This CSG layout owns only the dispatch push range.  Images, view data, and CSG context are selected from the
-    // global descriptor heap, so no pipeline-local resource descriptor is installed.
+    // Push-only layout; the rest is heap-selected.
     commandList.setComputeState(computeState);
-    // The CSG pipeline carries the persistent heap layouts at sets 0/1; bind after setComputeState installs that
-    // pipeline layout so its StorageImage table resolves the target-generation slots.
+    // Bind after setComputeState so the StorageImage table resolves.
     heap.bindCompute(commandList, *pipeline);
 
     const CsgIntervalDispatchPushConstants pushConstants =
@@ -185,8 +183,7 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
     )
         return false;
 
-    // The work rectangle and heap slot are both resolved after preflight chose this frame's target generation.
-    // Freeze them before graph recording so retry/acceptance cannot observe later mutable renderer state.
+    // Freeze rect and slot before recording; later state must not leak in.
     outState = CsgIntervalDetail::BuildCsgIntervalSampleState(
         targets,
         csgFrameData,
@@ -196,8 +193,7 @@ bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
 }
 
 void RendererCsgSystem::invalidateCsgIntervalPeelPipelines(){
-    // Target descriptors are target-generation heap entries, not pipeline-local descriptor objects. Pipelines remain reusable
-    // across target replacement; CreateIntervalCapFillPipeline refreshes its framebuffer-dependent variant.
+    // Pipelines stay reusable; only the framebuffer variant refreshes.
 }
 
 void RendererCsgSystem::dispatchCsgIntervalPeels(
@@ -218,12 +214,10 @@ void RendererCsgSystem::dispatchCsgIntervalPeels(
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgIntervalPeel, m_graphics.getDevice(), commandList);
 
-    // Opaque G-buffer and prepared-transparent AVBOIT graph tasks declare these exact peel-array StorageImage
-    // states before this thunk records. Direct compatibility callers retain the historical native setup.
+    // Graph tasks declare peel states; compatibility callers keep native setup.
     if(!intervalPeelTargetStatesGraphOwned)
         CsgIntervalDetail::SetCsgIntervalPeelStorageStates(commandList, targets);
-    // The graph declares the heap-selected view CBV for prepared material streams. Direct and compatibility callers
-    // retain the established native setup.
+    // Compatibility callers keep native setup.
     if(!materialFrameStatesGraphOwned)
         commandList.setBufferState(frameBindings.meshView.buffer.get(), Core::ResourceStates::ConstantBuffer);
     if(!csgClipBufferStatesGraphOwned)
@@ -328,8 +322,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
 
     if(!intervalSampleImageStatesGraphOwned)
         CsgIntervalDetail::SetCsgIntervalSampleStorageStates(commandList, targets);
-    // The cap-fill surface evaluator reaches typed words, mesh instances, and the view through heap slots. Prepared
-    // graph tasks declare those shared states before this thunk records; compatibility callers retain this bridge.
+    // Compatibility callers keep this bridge.
     if(!materialFrameStatesGraphOwned){
         commandList.setBufferState(frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.setBufferState(frameBindings.instanceBuffer.get(), Core::ResourceStates::ShaderResource);

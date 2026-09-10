@@ -21,6 +21,10 @@ NWB_BEGIN
 
 namespace __hidden_reflection_optical_scene{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 using namespace Tests::Smoke;
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
@@ -223,6 +227,10 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
     return true;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -230,6 +238,10 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
 
 
 namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName){
     using namespace __hidden_reflection_optical_scene;
@@ -250,6 +262,10 @@ bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::Wor
     }
     return CreateOpticalObjects(context, world, caseName);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

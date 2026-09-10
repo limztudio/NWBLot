@@ -107,21 +107,42 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     return true;
 }
 
-[[nodiscard]] f32 PlaneSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
-    const f32 nx = parameter0.x;
-    const f32 ny = parameter0.y;
-    const f32 nz = parameter0.z;
-    f32 position[4u] = {};
-    SIMDConvertDetail::StoreF32(position, shapePosition);
-    return position[0u] * nx + position[1u] * ny + position[2u] * nz + parameter0.w;
+namespace CsgDeformShapeKind{
+    enum Enum : u8{
+        Invalid,
+        Plane,
+        Box,
+        Sphere,
+        Capsule,
+    };
+};
+
+[[nodiscard]] CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType){
+    static const Name s_PlaneShape("engine/csg/plane");
+    static const Name s_BoxShape("engine/csg/box");
+    static const Name s_SphereShape("engine/csg/sphere");
+    static const Name s_CapsuleShape("engine/csg/capsule");
+    if(shapeType == s_PlaneShape)
+        return CsgDeformShapeKind::Plane;
+    if(shapeType == s_BoxShape)
+        return CsgDeformShapeKind::Box;
+    if(shapeType == s_SphereShape)
+        return CsgDeformShapeKind::Sphere;
+    if(shapeType == s_CapsuleShape)
+        return CsgDeformShapeKind::Capsule;
+    return CsgDeformShapeKind::Invalid;
 }
 
-[[nodiscard]] f32 BoxSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
-    f32 position[4u] = {};
-    SIMDConvertDetail::StoreF32(position, shapePosition);
-    const f32 qx = Abs(position[0u]) - parameter0.x;
-    const f32 qy = Abs(position[1u]) - parameter0.y;
-    const f32 qz = Abs(position[2u]) - parameter0.z;
+// Scalar SDFs take shape-space xyz directly. One lane extraction per vertex in
+// ShapeDistances feeds all cutter kinds without per-vertex SIMD stores.
+[[nodiscard]] f32 PlaneSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
+    return shapeX * parameter0.x + shapeY * parameter0.y + shapeZ * parameter0.z + parameter0.w;
+}
+
+[[nodiscard]] f32 BoxSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
+    const f32 qx = Abs(shapeX) - parameter0.x;
+    const f32 qy = Abs(shapeY) - parameter0.y;
+    const f32 qz = Abs(shapeZ) - parameter0.z;
     const f32 outsideX = qx > 0.0f ? qx : 0.0f;
     const f32 outsideY = qy > 0.0f ? qy : 0.0f;
     const f32 outsideZ = qz > 0.0f ? qz : 0.0f;
@@ -130,20 +151,16 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     return outside + inside;
 }
 
-[[nodiscard]] f32 SphereSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
-    f32 position[4u] = {};
-    SIMDConvertDetail::StoreF32(position, shapePosition);
-    return Sqrt(position[0u] * position[0u] + position[1u] * position[1u] + position[2u] * position[2u]) - parameter0.x;
+[[nodiscard]] f32 SphereSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
+    return Sqrt(shapeX * shapeX + shapeY * shapeY + shapeZ * shapeZ) - parameter0.x;
 }
 
-[[nodiscard]] f32 CapsuleSignedDistance(const SIMDVector shapePosition, const Float4& parameter0){
-    f32 position[4u] = {};
-    SIMDConvertDetail::StoreF32(position, shapePosition);
+[[nodiscard]] f32 CapsuleSignedDistance(const f32 shapeX, const f32 shapeY, const f32 shapeZ, const Float4& parameter0){
     const f32 halfHeight = parameter0.y;
-    const f32 clampedY = position[1u] < -halfHeight ? -halfHeight : (position[1u] > halfHeight ? halfHeight : position[1u]);
-    const f32 dx = position[0u];
-    const f32 dy = position[1u] - clampedY;
-    const f32 dz = position[2u];
+    const f32 clampedY = shapeY < -halfHeight ? -halfHeight : (shapeY > halfHeight ? halfHeight : shapeY);
+    const f32 dx = shapeX;
+    const f32 dy = shapeY - clampedY;
+    const f32 dz = shapeZ;
     return Sqrt(dx * dx + dy * dy + dz * dz) - parameter0.x;
 }
 
@@ -159,38 +176,86 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
         outReason = CsgDeformViabilityReason::InvalidCutter;
         return false;
     }
+    const CsgDeformShapeKind::Enum shapeKind = ClassifyDeformShape(shape.shapeType);
+    if(shapeKind == CsgDeformShapeKind::Invalid){
+        outReason = CsgDeformViabilityReason::InvalidCutter;
+        return false;
+    }
     const usize vertexCount = vertices.size();
     outDistances.clear();
     outDistances.resize(vertexCount, 0.0f);
 
+    // Cutter dispatch happens once per cut. Each specialized loop extracts lanes
+    // once per vertex and snaps the epsilon band inline, so ClipShell needs no
+    // second pass and preview/commit observe identical distances.
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
-    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        const CsgDeformVertex& vertex = vertices[vertexIndex];
-        const SIMDVector worldPosition = VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f);
-        const SIMDVector shapePosition = Vector4Transform(worldPosition, worldToShape);
-
-        f32 distance = 0.0f;
-        if(shape.shapeType == Name("engine/csg/plane"))
-            distance = PlaneSignedDistance(shapePosition, shape.parameter0);
-        else if(shape.shapeType == Name("engine/csg/box"))
-            distance = BoxSignedDistance(shapePosition, shape.parameter0);
-        else if(shape.shapeType == Name("engine/csg/sphere"))
-            distance = SphereSignedDistance(shapePosition, shape.parameter0);
-        else if(shape.shapeType == Name("engine/csg/capsule"))
-            distance = CapsuleSignedDistance(shapePosition, shape.parameter0);
-        else{
-            outReason = CsgDeformViabilityReason::InvalidCutter;
-            return false;
+    const Float4 parameter0 = shape.parameter0;
+    switch(shapeKind){
+    case CsgDeformShapeKind::Plane:{
+        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+            const CsgDeformVertex& vertex = vertices[vertexIndex];
+            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
+            f32 distance = PlaneSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            if(!FiniteFloat(distance)){
+                outReason = CsgDeformViabilityReason::NonFiniteInput;
+                return false;
+            }
+            if(Abs(distance) <= epsilon)
+                distance = 0.0f;
+            outDistances[vertexIndex] = distance;
         }
-
-        if(!FiniteFloat(distance)){
-            outReason = CsgDeformViabilityReason::NonFiniteInput;
-            return false;
-        }
-        static_cast<void>(epsilon);
-        outDistances[vertexIndex] = distance;
+        return true;
     }
-    return true;
+    case CsgDeformShapeKind::Box:{
+        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+            const CsgDeformVertex& vertex = vertices[vertexIndex];
+            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
+            f32 distance = BoxSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            if(!FiniteFloat(distance)){
+                outReason = CsgDeformViabilityReason::NonFiniteInput;
+                return false;
+            }
+            if(Abs(distance) <= epsilon)
+                distance = 0.0f;
+            outDistances[vertexIndex] = distance;
+        }
+        return true;
+    }
+    case CsgDeformShapeKind::Sphere:{
+        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+            const CsgDeformVertex& vertex = vertices[vertexIndex];
+            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
+            f32 distance = SphereSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            if(!FiniteFloat(distance)){
+                outReason = CsgDeformViabilityReason::NonFiniteInput;
+                return false;
+            }
+            if(Abs(distance) <= epsilon)
+                distance = 0.0f;
+            outDistances[vertexIndex] = distance;
+        }
+        return true;
+    }
+    case CsgDeformShapeKind::Capsule:{
+        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+            const CsgDeformVertex& vertex = vertices[vertexIndex];
+            const SIMDVector shapePosition = Vector4Transform(VectorSet(vertex.position.x, vertex.position.y, vertex.position.z, 1.0f), worldToShape);
+            f32 distance = CapsuleSignedDistance(VectorGetX(shapePosition), VectorGetY(shapePosition), VectorGetZ(shapePosition), parameter0);
+            if(!FiniteFloat(distance)){
+                outReason = CsgDeformViabilityReason::NonFiniteInput;
+                return false;
+            }
+            if(Abs(distance) <= epsilon)
+                distance = 0.0f;
+            outDistances[vertexIndex] = distance;
+        }
+        return true;
+    }
+    default:
+        break;
+    }
+    outReason = CsgDeformViabilityReason::InvalidCutter;
+    return false;
 }
 
 // Canonical edge id keeps (a,b) and (b,a) identical without hashing pointers.
@@ -340,10 +405,6 @@ void EmitTriangle(
     outReason = CsgDeformViabilityReason::Ok;
     if(!ShapeDistances(shape, inOutVertices, epsilon, scratchDistances, outReason))
         return false;
-    for(f32& distance : scratchDistances){
-        if(Abs(distance) <= epsilon)
-            distance = 0.0f;
-    }
 
     EdgeSplitMap edgeSplits(0, EdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
     edgeSplits.reserve(inOutTriangles.size() * 3u + 1u);

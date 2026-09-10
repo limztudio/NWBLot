@@ -456,6 +456,11 @@ public:
     // Declares the capacity a scope needs. When capture is inactive this records the request without allocating GPU
     // query pools, so a later capture activation can materialize them before its first frame preamble.
     [[nodiscard]] bool prepareScopeQueries(const Name& scopeName, Device& device, u32 queryCount);
+    // Declares the capacity a scope needs without touching the device. Packet recording runs inside the
+    // render/submission path, so it must use this: GPU query pools are created only in the frame preamble
+    // via materializeRequestedQueries(). A newly declared scope skips its samples until the next preamble
+    // materializes its pool (see QueryCapacityUnavailable).
+    [[nodiscard]] bool requestScopeQueries(const Name& scopeName, u32 queryCount);
     // Publishes the timestamp intersection of an unordered pair of packet envelopes. Reversed exact duplicates are
     // idempotent. An output name is exclusive: it cannot be an input or query scope, and an input cannot later become
     // an output. A zero-valued sample means both packets completed but did not overlap; no sample is published when
@@ -477,7 +482,7 @@ public:
         usize queueOutputCount
     );
     // Materializes every declared scope during Graphics' frame preamble. Capture can be toggled on at runtime, but
-    // recording never creates a query pool: scopes and their capacity must be declared through prepareScopeQueries().
+    // recording never creates a query pool: scopes and their capacity must be declared through requestScopeQueries().
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     // Record a device-timeline reset of every available timer-query pool onto a reset-capable command buffer. Graphics
     // normally emits this in its frame preamble, allowing render-pass and transfer-only timestamp positions to consume

@@ -93,7 +93,6 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
     GpuTimingRecorder* const timingRecorder,
-    Device& device,
     Alloc::ScratchArena& scratchArena){
     bool recordsTiming = false;
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
@@ -177,7 +176,9 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
     }
     for(const Name& scopeName : scopeOrder){
         const u32 occurrenceCount = scopeOccurrences.find(scopeName).value();
-        if(!timingRecorder->prepareScopeQueries(scopeName, device, occurrenceCount * s_MaxFramesInFlight))
+        // Recording runs inside render/submission: declare demand only. The frame preamble owns GPU pool
+        // creation through materializeRequestedQueries(), so this path never calls device.createTimerQuery().
+        if(!timingRecorder->requestScopeQueries(scopeName, occurrenceCount * s_MaxFramesInFlight))
             return false;
     }
     return true;
@@ -922,7 +923,6 @@ bool GpuNativePacketRecorder::prepareRecordingAttempt(
         declarationAccess,
         planAccess,
         m_timingRecorder,
-        m_device,
         timingScratchArena
     ))
         return false;

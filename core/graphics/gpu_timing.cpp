@@ -307,6 +307,20 @@ bool GpuTimingRecorder::prepareScopeQueries(const Name& scopeName, Device& devic
     return materialized;
 }
 
+bool GpuTimingRecorder::requestScopeQueries(const Name& scopeName, const u32 queryCount){
+    ScopedLock lock(m_mutex);
+    syncActiveState();
+    if(!scopeName)
+        return false;
+
+    GpuTimingAccumulator* accumulator = findOrCreateAccumulator(scopeName);
+    if(!accumulator)
+        return false;
+
+    accumulator->requestQueries(queryCount);
+    return true;
+}
+
 bool GpuTimingRecorder::prepareOverlapMetric(
     const Name& firstScope,
     const Name& secondScope,

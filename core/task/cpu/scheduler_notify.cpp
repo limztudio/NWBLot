@@ -31,8 +31,7 @@ u32 CpuTaskScheduler::workerWakeMaskLocked()const noexcept{
 }
 
 void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
-    // Masks are computed with the queue mutex held. Parkers check ready work before atomically releasing that same mutex.
-    // A claimed task wakes the next eligible parked worker before its callback starts, including newly enabled spill work.
+    // Masks compute under the queue mutex; claimed tasks wake the next parked worker first.
     for(u32 affinity = 0u; affinity < 3u; ++affinity){
         if((wakeMask & (1u << affinity)) != 0u)
             m_workerChanged[affinity].notify_one();

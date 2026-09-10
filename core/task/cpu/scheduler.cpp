@@ -98,14 +98,14 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     const u32 reserved = Min(config.reservedThreadCount, available);
     m_workerCount = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? available - reserved : config.workerCount;
     m_placements.reserve(m_workerCount);
-    // Reserve fastest CPUs for the caller by default; explicit worker counts retain all available processor identities.
+    // Reserve fastest CPUs for the caller by default.
     const usize first = config.workerCount == CpuTaskSchedulerConfig::s_AutomaticWorkerCount ? reserved : 0u;
     for(u32 worker = 0u; worker < m_workerCount; ++worker){
         CpuWorkerPlacement placement;
         if(!topology.empty()){
             const usize usable = topology.size() - Min(first, topology.size() - 1u);
             usize selected = first + static_cast<usize>(worker) % usable;
-            // A small explicit budget still includes both capacity classes when at least two workers are requested.
+            // Small budgets still span both capacity classes when two or more workers exist.
             if(m_workerCount > 1u && static_cast<usize>(m_workerCount) < usable){
                 selected = first + static_cast<usize>(worker) * (usable - 1u) / (m_workerCount - 1u);
             }

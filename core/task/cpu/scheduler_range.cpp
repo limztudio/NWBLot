@@ -68,7 +68,7 @@ void CpuTaskScheduler::parallelRange(
                 ContainerDetail::ReserveGrowingCapacity(node.olderCanceledGenerations, AddSize(node.olderCanceledGenerations.size(), 1u));
             const usize first = begin + chunk * chunkSize + Min(chunk, remainder);
             const usize last = first + chunkSize + (chunk < remainder ? 1u : 0u);
-            // These internal captures are trivial pointers and bounds. No user callable is copied or invoked under the lock.
+            // Internal captures are trivial; no user callable runs under the lock.
             node.function = [context, invoke, first, last](){ invoke(context, first, last); };
         }
         const usize outstanding = AddSize(m_outstanding, chunkCount);

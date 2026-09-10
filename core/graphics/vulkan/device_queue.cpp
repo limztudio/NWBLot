@@ -723,8 +723,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     ))
         return {};
 
-    // The hook runs only after this submission's queue and timeline waits validate. Its native signal is passed as
-    // submission-local data into Queue::submit, so a concurrent submit cannot consume the presentation semaphore.
+    // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
     const Queue::SubmissionSignal* localSignals = nullptr;
     usize localSignalCount = 0u;

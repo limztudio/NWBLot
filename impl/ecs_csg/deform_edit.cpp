@@ -73,8 +73,8 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     const CsgDeformTriangle* triangles,
     const usize triangleCount
 ){
-    if(!vertices || !triangles)
-        return false;
+    NWB_ASSERT(vertices != nullptr);
+    NWB_ASSERT(triangles != nullptr);
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle& triangle = triangles[triangleIndex];
         for(usize corner = 0u; corner < 3u; ++corner){
@@ -91,10 +91,7 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     CsgDeformViabilityReason::Enum& outReason
 ){
     outReason = CsgDeformViabilityReason::Ok;
-    if(!vertices){
-        outReason = CsgDeformViabilityReason::NonFiniteInput;
-        return false;
-    }
+    NWB_ASSERT(vertices != nullptr);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         if(!FiniteVertex(vertices[vertexIndex])){
             outReason = CsgDeformViabilityReason::NonFiniteInput;
@@ -400,14 +397,9 @@ void EmitTriangle(
     const usize triangleCount = inOutTriangles.size();
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle triangle = inOutTriangles[triangleIndex];
-        if(
-            triangle.indices[0u] >= inOutVertices.size()
-            || triangle.indices[1u] >= inOutVertices.size()
-            || triangle.indices[2u] >= inOutVertices.size()
-        ){
-            outReason = CsgDeformViabilityReason::InvalidTopology;
-            return false;
-        }
+        NWB_ASSERT(triangle.indices[0u] < inOutVertices.size());
+        NWB_ASSERT(triangle.indices[1u] < inOutVertices.size());
+        NWB_ASSERT(triangle.indices[2u] < inOutVertices.size());
         const f32 distances[3u] = {
             scratchDistances[triangle.indices[0u]],
             scratchDistances[triangle.indices[1u]],
@@ -477,16 +469,14 @@ struct CutLoopEdge{
     u32 second = 0u;
 };
 
-[[nodiscard]] bool CollectBoundaryEdges(
+void CollectBoundaryEdges(
     ScratchArena& scratchArena,
-    const CsgDeformVertexVector<ScratchArena>& vertices,
     const CsgDeformTriangleVector<ScratchArena>& triangles,
     Vector<CutLoopEdge, ScratchArena>& outEdges
 ){
-    static_cast<void>(vertices);
     outEdges.clear();
     if(triangles.empty())
-        return true;
+        return;
     HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchArena> edgeUses(0, EdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
     edgeUses.reserve(triangles.size() * 3u + 1u);
     for(const CsgDeformTriangle& triangle : triangles){
@@ -517,7 +507,6 @@ struct CutLoopEdge{
         }
     }
     // Deterministic boundary order: traversal input matches emitted triangle order.
-    return true;
 }
 
 [[nodiscard]] bool OrderBoundaryLoop(
@@ -610,7 +599,6 @@ struct CutLoopEdge{
 }
 
 [[nodiscard]] bool FillCapLoop(
-    ScratchArena& scratchArena,
     const Float4& loopNormal,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
@@ -627,8 +615,7 @@ struct CutLoopEdge{
     SIMDVector centerUvVec = VectorZero();
     SIMDVector centerColorVec = VectorZero();
     for(const u32 vertexIndex : loop){
-        if(vertexIndex >= inOutVertices.size())
-            return false;
+        NWB_ASSERT(vertexIndex < inOutVertices.size());
         const CsgDeformVertex& vertex = inOutVertices[vertexIndex];
         centerPositionVec = VectorAdd(centerPositionVec, LoadFloat(vertex.position));
         centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
@@ -658,7 +645,6 @@ struct CutLoopEdge{
         EmitTriangle(inOutTriangles, centerIndex, second, first);
         ++outCapTriangles;
     }
-    static_cast<void>(scratchArena);
     return true;
 }
 
@@ -667,13 +653,10 @@ struct CutLoopEdge{
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
     Vector<CutLoopEdge, ScratchArena>& scratchEdges,
-    Vector<u32, ScratchArena>& scratchLoop,
     u32& outCapTriangles
 ){
     outCapTriangles = 0u;
-    static_cast<void>(scratchLoop);
-    if(!CollectBoundaryEdges(scratchArena, inOutVertices, inOutTriangles, scratchEdges))
-        return false;
+    CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return true;
     // Peel one closed loop at a time from the boundary set; leftover edges fail viability.
@@ -714,7 +697,7 @@ struct CutLoopEdge{
         if(!CapNormal(inOutVertices, loop, loopNormal))
             return false;
         u32 loopCaps = 0u;
-        if(!FillCapLoop(scratchArena, loopNormal, inOutVertices, inOutTriangles, loop, loopCaps))
+        if(!FillCapLoop(loopNormal, inOutVertices, inOutTriangles, loop, loopCaps))
             return false;
         outCapTriangles += loopCaps;
     }
@@ -782,7 +765,6 @@ struct DeformRebuildResult{
     CsgDeformTriangleVector<ScratchArena> scratchKept(scratchArena);
     Vector<f32, ScratchArena> scratchDistances(scratchArena);
     Vector<CutLoopEdge, ScratchArena> scratchEdges(scratchArena);
-    Vector<u32, ScratchArena> scratchLoop(scratchArena);
 
     u32 appliedCuts = 0u;
     u32 capTriangles = 0u;
@@ -811,7 +793,7 @@ struct DeformRebuildResult{
             }
             if(options.fillCaps){
                 u32 cutCaps = 0u;
-                if(!FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, scratchLoop, cutCaps)){
+                if(!FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
                     outResult.viability.viable = false;
                     outResult.viability.reason = CsgDeformViabilityReason::CapLoopFailed;
                     return false;
@@ -931,6 +913,7 @@ bool CommitCsgDeformCuts(
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles,
     CsgDeformStats& outStats
 ){
+    static_cast<void>(commitArena);
     outStats = CsgDeformStats{};
     outVertices.clear();
     outTriangles.clear();

@@ -770,7 +770,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     ;
 
 
-    // The optional history copy is declared in this graph after Present, but records only after its accepted producer snapshots exist. Active lighting samples the history resources above, so reuse those exact graph identities for copy destinations and import only the current producer images that are otherwise absent.
+    // History copy declared after Present; reuse active-lighting identities for copy destinations.
     Core::GpuGraphResourceId historyCopyShadowVisibility;
     Core::GpuGraphResourceId historyCopyCausticIrradiance;
     Core::GpuGraphResourceId historyCopySurfelIrradiance;
@@ -811,7 +811,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-    // AVBOIT shares the deferred graph's G-buffer and current bindless imports. Its private targets remain distinct resources, while the compiler owns every producer/consumer state seed through Lighting and Composite on both the live and active-lagged routes.
+    // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
     const Core::GpuGraphResourceId avboitLowRaster = importAvboitTexture(
         deferredTargets.avboit.lowRasterTarget,
         Name("render.avboit.low_raster"),
@@ -1053,8 +1053,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
 
-    // Graphics-prefix declaration publishes the current light classification. Freeze shadow routing only after that
-    // owner-mediated handoff so transparent folding never observes the prior frame's soft-shadow mask.
+    // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.
     const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
         m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
     ;

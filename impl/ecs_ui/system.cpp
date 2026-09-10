@@ -547,7 +547,7 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
     if(width == 0 || height == 0)
         return true;
 
-    // Pipeline compatibility setup uses the stable framebuffer-zero prototype, not a currently acquired image.
+    // Compat setup uses the stable framebuffer-zero prototype, not an acquired image.
     Core::Framebuffer* framebuffer = m_graphics.getFramebuffer(0u);
     return !framebuffer || ensureRenderResources(framebuffer);
 }
@@ -568,8 +568,7 @@ void UiSystem::invalidateResources(){
 #endif
     }
 
-    // Descriptor heap entries retain the backing textures/sampler through their deferred-free quarantine. Graphics
-    // invalidates render passes while the device is still live, so retire descriptors before releasing those resources.
+    // Heap entries retain backing resources through quarantine; retire descriptors first.
     releaseDescriptorHeapResources();
     m_textures.clear();
     m_textureUploadBatch.reset();

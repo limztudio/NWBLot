@@ -233,8 +233,7 @@ bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
     UiTextureResource* resource = static_cast<UiTextureResource*>(textureData.BackendUserData);
     const void* uploadPixels = nullptr;
     usize uploadRowPitch = 0u;
-    // Validate the caller data before allocating a replacement.  The graph path rebuilds this transient conversion
-    // when it snapshots immutable upload bytes; the legacy path uses the same helper immediately before recording.
+    // Validate caller data first; graph path rebuilds the conversion at snapshot.
     if(!__hidden_ui::BuildUploadPixels(textureData, m_textureUploadScratch, uploadPixels, uploadRowPitch))
         return false;
     static_cast<void>(uploadPixels);
@@ -259,8 +258,7 @@ bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
             .setFormat(Core::Format::RGBA8_UNORM)
             .setInitialState(Core::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
-            // ImGui texture updates may prefer Transfer/Compute. Keep all producer/consumer families concurrent from
-            // creation; a one-family device still keeps the ordinary exclusive mode.
+            // Texture updates may prefer Transfer/Compute; keep families concurrent from creation.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setName(__hidden_ui::UiTextureName(static_cast<usize>(textureData.UniqueID)))
         ;

@@ -276,8 +276,7 @@ private:
     UiTextureResourceVector m_textures;
     UiTextureUploadBatch m_textureUploadBatch;
     UiTextureUploadVector m_textureUploadScratch;
-    // Graph declaration snapshots both ImGui's transient upload bytes and the draw commands that consume them.
-    // GpuTaskGraph then retains all late-record inputs independently of the next ImGui frame.
+    // Declaration snapshots transient upload bytes and draw commands; graph retains inputs.
     UiTextureUploadVector m_taskGraphVertexUpload;
     UiTextureUploadVector m_taskGraphIndexUpload;
     TaskGraphDrawCommandVector m_taskGraphDrawCommands;
@@ -291,15 +290,13 @@ private:
     bool m_inputRegistered = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
-    // A rejected callback-free graph retains the live ImGui arrays until a later acquired frame can rebuild their
-    // graph-owned snapshot. The accepted terminal is the only healthy path that consumes that retained frame.
+    // Rejected graphs retain live arrays until a later frame rebuilds their snapshot.
     bool m_taskGraphPresentationRetryPending = false;
     // These frame-local flags keep one graph-generation claim for the draw list and retained uploads.
     bool m_taskGraphPresentationPrepared = false;
     bool m_taskGraphPresentationHasWork = false;
     bool m_taskGraphPresentationClaimed = false;
-    // This opaque callback route is graph-submitted but deliberately records a live ImGui callback synchronously.
-    // Keep it separate from the immutable overlay claim above.
+    // Opaque callback route records live ImGui synchronously; keep it separate.
     bool m_taskGraphLegacyPresentationClaimed = false;
     bool m_taskGraphDrawUploadsPrepared = false;
     bool m_wantsKeyboardCapture = false;

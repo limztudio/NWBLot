@@ -40,9 +40,7 @@ inline constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 [[nodiscard]] inline Core::GpuTaskSchedulingHint UploadScheduling(const usize byteCount){
     const bool preferDedicatedTransport = byteCount >= s_TransferPreferredUploadMinimumBytes;
     Core::GpuTaskSchedulingHint scheduling;
-    // Tiny UI deltas stay on Graphics. Large refreshes may use Transfer first, Compute second; built-in uploads
-    // capture immutable blobs onto a fresh command list, so independent packets record together once dependencies
-    // are ready.
+    // Tiny deltas stay on Graphics; large refreshes may use Transfer/Compute.
     scheduling.cost = preferDedicatedTransport ? Core::GpuTaskCostHint::Medium : Core::GpuTaskCostHint::Tiny;
     scheduling.overlapPreferred = preferDedicatedTransport;
     scheduling.avoidQueueCrossing = !preferDedicatedTransport;

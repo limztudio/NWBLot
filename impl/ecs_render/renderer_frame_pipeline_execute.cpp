@@ -30,8 +30,7 @@ namespace RendererFramePipelineExecuteDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These fixed arrays describe the maximum number of independently retained lifecycle callbacks and timing tickets.
-// They are capacities, not a runtime packet-count assumption.
+// Capacities, not a runtime packet-count assumption.
 inline constexpr usize s_DeferredStateLifecycleCallbackCapacity = 6u;
 inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphTimingTicketCapacity;
 
@@ -48,8 +47,7 @@ inline constexpr usize s_DeferredTimingTicketCapacity = 15u + s_AvboitTaskGraphT
 void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_frameGraphSourceFrameIndex = m_graphics.getFrameIndex();
 
-    // Preserve the exact accepted frontier even when frame-graph capture was disabled for the completed frame. The
-    // tracker owns persistent history; every graph artifact below is about to be reset for the next declaration.
+    // Preserve the accepted frontier; artifacts below reset for the next frame.
     if(m_deferredLightingTaskGraphValid){
         Core::Alloc::ScratchArena queueAssignmentTelemetryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);

@@ -130,8 +130,7 @@ RendererFramePipeline::RendererFramePipeline(
     m_deferredTaskTimingFeedback.activate();
 }
 RendererFramePipeline::~RendererFramePipeline(){
-    // Resolve graph payloads eagerly while every callback owner is alive. Declaration order independently keeps graph
-    // storage destruction ahead of those owners after the externally serialized render lifecycle has quiesced.
+    // Resolve payloads eagerly while owners are alive.
     m_deferredLightingTaskGraph.reset();
     m_deferredTaskTimingFeedback.deactivate();
 }
@@ -240,7 +239,7 @@ void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
 }
 
 void RendererFramePipeline::resetInvalidatedResourceStateHandoffs()noexcept{
-    // The shadow-preparation packet owns its serial export; only retained cross-frame state is reset here.
+    // Only retained cross-frame state resets here.
     resetTargetGenerationStateHandoffs();
     m_shadowPreparePersistentState.reset();
 }

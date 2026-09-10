@@ -38,8 +38,7 @@ namespace RendererTaskGraphDetail{
     static_cast<void>(context);
     if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
         return false;
-    // A transparent CSG upload has no safe native fallback: accepting its packet without the paired frozen
-    // stream would leave the declared clears and later CSG consumers detached from their interval producer.
+    // A CSG upload without its frozen stream would detach clears and consumers.
     if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)
         return false;
 

@@ -68,9 +68,7 @@ namespace RendererTaskGraphDetail{
         payload.csgPlan.materialize(drawItems, csgFrameData);
     else
         payload.plan.materialize(drawItems);
-    // The following raster task is deliberately graph-owned and cannot safely fall back to its local bridge.
-    // Reject a late material/pipeline loss so the packet is discarded and the next frame re-preflights instead
-    // of accepting an all-or-nothing Accumulation phase with stale generated vertices.
+    // Reject late losses so the packet is discarded and the next frame re-preflights.
     if(
         !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
         || (csgComputeEmulation && (
@@ -92,8 +90,7 @@ namespace RendererTaskGraphDetail{
         graphics.getDevice(),
         commandList
     );
-    // Accumulation's raster half records after this producer in the selected terminal Graphics packet. Close
-    // the opening command-list marker now; its consumer owns finishTiming/discard.
+    // Close the marker now; the raster consumer owns finishTiming/discard.
     if(!Core::FinishSplitGpuTimingMarker(payload.accumulationTiming))
         return false;
     Core::ViewportState viewportState;
@@ -158,8 +155,7 @@ namespace RendererTaskGraphDetail{
         return false;
 
     if(payload.phase == Phase::Generate){
-        // A preceding raster phase leaves dynamic rendering active. End it before the timing marker and
-        // compute-state bind, matching the retained local D/R interleaving order.
+        // End the prior raster phase before the marker and compute bind.
         commandList.endRenderPass();
         if(payload.beginTiming){
             if(payload.accumulationTiming->has_value())
@@ -170,8 +166,7 @@ namespace RendererTaskGraphDetail{
                 graphics.getDevice(),
                 commandList
             );
-            // The range spans serial callbacks, but this opening command list still needs its marker closed
-            // before recording advances to the raster consumer.
+            // Close the marker before advancing to the raster consumer.
             if(!Core::FinishSplitGpuTimingMarker(payload.accumulationTiming))
                 return false;
         }
@@ -213,7 +208,7 @@ namespace RendererTaskGraphDetail{
             payload.accumulationTiming->value().finishTiming(commandList);
             payload.accumulationTiming->reset();
         }
-        // The next generator must never bind a compute pipeline while dynamic rendering remains active.
+        // Never bind compute while dynamic rendering is active.
         commandList.endRenderPass();
     }
     return true;
@@ -262,7 +257,7 @@ namespace RendererTaskGraphDetail{
             &payload.frameBindings,
             preparedAccumulationInstanceCount,
             preparedAccumulationMaterialTypedByteCount,
-            // The following mergeable Graphics finalizer owns every accumulation-framebuffer handoff.
+            // The mergeable finalizer owns the framebuffer handoff.
             true,
             payload.accumulationCsgIntervalSampleImageStatesGraphOwned,
             payload.accumulationCsgClipBufferStatesGraphOwned,

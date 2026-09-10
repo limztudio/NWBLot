@@ -266,11 +266,7 @@ private:
     bool& m_flag;
 };
 
-// Rotating thread_local scratch buffers backing Name::c_str()/logText() in opt/fin (where there is no per-object
-// m_debugName). A single shared buffer would alias when two Name text results are live in one expression (e.g. two
-// Names in one log call), silently returning two pointers to the same last-written text. Rotating across a small ring
-// lets up to s_SymbolTextBufferCount results coexist on a thread. Still bounded: more simultaneously-live results
-// than the ring size will alias (acceptable -- this is a diagnostic/log path, not a value carrier).
+// Rotating thread-local scratch for Name text in opt/fin; ring avoids aliasing in one expression.
 inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
 inline constexpr usize s_SymbolTextBufferCount = 8u;
 [[nodiscard]] inline char* NextSymbolTextBuffer(){

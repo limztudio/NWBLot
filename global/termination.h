@@ -11,8 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Always-active terminal leaf for violated ownership and lifetime invariants. Diagnostic assertions may report the
-// condition first, but they must never be the only operation preventing unsafe cleanup in assertion-free builds.
+// Always-active terminal leaf for violated invariants; never rely on assertions alone.
 [[noreturn]] inline void TerminateInvariant()noexcept{
     std::abort();
 }

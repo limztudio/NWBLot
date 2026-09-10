@@ -160,17 +160,14 @@ struct ArenaMemoryOwnerSnapshot{
     ArenaMemoryStats stats;
 };
 
-// Records live for the process lifetime. Each read protects the live arena census against construction and
-// destruction, adding retired history exactly once. Owner peak is the largest individual arena highwater.
-// Traversal captures the current head, so report allocations cannot extend its own traversal indefinitely.
+// Records live for process lifetime; traversal captures head to stay bounded.
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(
     const ArenaMemoryOwnerRecord& record,
     ArenaMemoryOwnerSnapshot& outSnapshot
 )noexcept;
 
-// Raw heap activity is an inclusive backing total, separate from named arenas. Per-thread cumulative counters
-// support frees on another thread and retain exited-thread history. Heap peak is the highest sampled usage.
+// Raw heap total is separate from named arenas; per-thread counters retain exited history.
 void RecordHeapMemoryAllocation(u64 bytes)noexcept;
 void RecordHeapMemoryReallocation(u64 oldBytes, u64 newBytes)noexcept;
 void RecordHeapMemoryDeallocation(u64 bytes)noexcept;

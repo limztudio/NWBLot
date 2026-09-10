@@ -390,9 +390,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_extinctionComputeEmulationTask
         );
     }();
-    // A shared generated-vertex output requires the exact alternating D/R chain to remain packet-local. Otherwise
-    // an intervening dispatch could overwrite the retained output before its corresponding raster phase consumes
-    // the compiler-owned VertexBuffer handoff.
+    // Shared outputs need a packet-local D/R chain.
     const bool avboitExtinctionSharedComputeEmulationMerged = [&](){
         const usize phaseCount = taskGraphStage.m_extinctionSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){
@@ -453,9 +451,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
         avboitExtinctionComputeEmulationMerged
         && avboitExtinctionSharedComputeEmulationMerged
     ;
-    // Accumulation's measurement spans the generator and raster consumer. Require their exact packet order so the
-    // graph, rather than a callback-local transition, owns the output UAV-to-VertexBuffer handoff before the
-    // following graph-owned attachment finalizer.
+    // Require exact packet order so the graph owns the output handoff.
     const bool avboitAccumulationComputeEmulationMerged = [&](){
         if(!taskGraphStage.m_accumulationComputeEmulationTask.valid())
             return true;
@@ -487,9 +483,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             taskGraphStage.m_accumulationComputeEmulationTask
         );
     }();
-    // A shared output needs more than the ordinary producer/raster endpoint check: every alternating D/R callback
-    // must be packet-local, or a later local bridge could overwrite the retained output between the compiler-owned
-    // UAV and VertexBuffer phases.
+    // Shared outputs need packet-local D/R callbacks.
     const bool avboitAccumulationSharedComputeEmulationMerged = [&](){
         const usize phaseCount = taskGraphStage.m_accumulationSharedComputeEmulationTaskCount;
         if(phaseCount == 0u){

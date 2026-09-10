@@ -483,15 +483,11 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     const Core::GpuTaskId shadowVisibilityDependency[] = { m_deferredShadowVisibilityTask };
 
 
-// Black irradiance is the no-producer result. Start the existing Software Caustics Compute packet with this
-    // typed CopyDest clear, then explicitly merge the producer callback into it below. A fresh temporal
-    // accumulator adds a second typed zero clear before the producer; its CPU initialized mirror commits only on
-    // that producer packet's acceptance.
+// Black is the no-producer result; merge the producer into this packet.
     Core::GpuTaskSchedulingHint irradianceClearScheduling;
     irradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     irradianceClearScheduling.allowPacketMerge = true;
-    // This starts the independent effect packet, so choose the auxiliary lane rather than inheriting Shadow
-    // Visibility's same-class transport. All following direct successors retain this selected lane.
+    // Start an independent packet on the auxiliary lane; successors keep it.
     EnableSameFamilyComputeEffectRouting(irradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(irradianceClearScheduling);
     Core::GpuTaskDesc irradianceClearDesc;
@@ -523,7 +519,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     if(graphOwnsNonTemporalAccumulatorClear){
         Core::GpuTaskSchedulingHint accumulatorNonTemporalClearScheduling = irradianceClearScheduling;
         accumulatorNonTemporalClearScheduling.mergeWithPrevious = true;
-        // The direct accumulator clear must remain in the accepted Software Caustics producer/timing packet.
+        // Keep the clear in the accepted producer packet.
         accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorNonTemporalClearScheduling);
         Core::GpuTaskDesc accumulatorNonTemporalClearDesc;
@@ -560,7 +556,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorBootstrapClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorBootstrapClearScheduling.allowPacketMerge = true;
         accumulatorBootstrapClearScheduling.mergeWithPrevious = true;
-        // The direct accumulator clear must remain in the accepted Software Caustics producer/timing packet.
+        // Keep the clear in the accepted producer packet.
         accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
         EnableCrossFamilyComputeEffectRouting(accumulatorBootstrapClearScheduling);
@@ -599,7 +595,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         accumulatorDecayScheduling.cost = Core::GpuTaskCostHint::Tiny;
         accumulatorDecayScheduling.allowPacketMerge = true;
         accumulatorDecayScheduling.mergeWithPrevious = true;
-        // The direct accumulator decay must remain in the accepted Software Caustics producer/timing packet.
+        // Keep decay in the accepted producer packet.
         accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;
         EnableSameFamilyComputeEffectRouting(accumulatorDecayScheduling);
         EnableCrossFamilyComputeEffectRouting(accumulatorDecayScheduling);
@@ -644,7 +640,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     causticsScheduling.forceSubmissionBoundary = false;
     causticsScheduling.allowPacketMerge = true;
     causticsScheduling.mergeWithPrevious = true;
-    // Photon, geometry, and resolve stages are direct serial successors in one Software Caustics timing packet.
+    // Stages stay serial successors in one timing packet.
     causticsScheduling.allowMergeAcrossConsumerFrontier = true;
     Core::GpuTaskDesc photonDesc;
     photonDesc

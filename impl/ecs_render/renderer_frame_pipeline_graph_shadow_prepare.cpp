@@ -112,8 +112,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         }
     }
 
-    // All trace backing buffers and their heap entries are finalized by preflight. Retain the resolved descriptor
-    // slots now, before the graph is compiled, so recording never rereads mutable heap handles.
+    // Trace buffers finalized by preflight; retain slots before compile.
     RayTraceMaterialContextSlots rayTraceMaterialContextSlots;
     if(!m_raytracingSystem.snapshotRayTraceMaterialContextSlots(rayTraceMaterialContextSlots)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
@@ -516,8 +515,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
 
 
 // Opaque and healthy hybrid hardware TLAS builds retain their preflight instance stream inside Shadow
-    // Preparation itself. They do not add an upload packet: the existing first Graphics packet owns the native
-    // build and its acceptance cache.
+    // Preparation itself; first Graphics packet owns the native build.
     const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
     if(sceneTlasBuildGraphOwned && !rayTracingShadowResources.sceneTlas){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
@@ -539,16 +537,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
-    // Keep the hybrid HW-to-SW continuation inside the first accepting packet, but make its recording boundary
-    // explicit. The tail remains absent for pure-HW and pure-SW routes, whose established aggregate callbacks stay
-    // untouched.
+    // Keep hybrid HW-to-SW tail in first packet with explicit boundary; pure routes untouched.
     const bool hybridSoftwareTailGraphOwned =
         m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted()
         && m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
     ;
-    // A healthy hybrid preflight retains the opaque-HW material context before it publishes the software context
-    // consumed by the tail. If that tail later declines to record, it restores the frozen HW bytes from these
-    // graph-owned blobs without re-gathering material descriptors.
+    // Healthy hybrid retains HW context; declining tail restores frozen bytes from blobs.
     Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
     Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
     Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;

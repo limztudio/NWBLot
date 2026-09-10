@@ -972,8 +972,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         ? m_deferredHardwareCausticsTask
         : m_deferredSoftwareCausticsTask
     ;
-    // A fresh history-selector upload must share Deferred Lighting's acceptance boundary so its imported wait and
-    // selector publication cannot accept independently of the consumer.
+    // History-selector uploads must share Lighting's acceptance boundary.
     const bool laggedLightingHistorySlotsUploadMergedIntoLightingPacket =
         !m_deferredLaggedLightingHistorySlotsUploadTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -981,8 +980,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredLaggedLightingHistorySlotsUploadTask
         )
     ;
-    // Resolve the terminal task, queue, signal hook, and accepted token through the compiler-owned presentation
-    // endpoint instead of mirroring generated packet identity in renderer policy.
+    // Resolve the terminal endpoint through the compiler, not renderer policy.
     const Core::GpuCompiledPresentEndpoint* const presentationEndpoint =
         deferredCompiledPlan.presentEndpoint();
     const Core::GpuTaskId terminalPresentationTask = presentationEndpoint
@@ -1015,8 +1013,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
     const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue =
         deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
-    // The clear must remain in GI's semantic packet. If it split, the standard effects range would either gain a
-    // hidden submission or record an output write outside the acceptance/timing endpoint it protects.
+    // Keep the clear in GI's packet; a split would escape its endpoint.
     const bool surfelGiOutputClearMergedIntoGiPacket =
         m_deferredSurfelGiIrradianceClearTask.valid()
         && deferredCompiledPlan.tasksSharePacket(
@@ -1024,10 +1021,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredSurfelGiTask
         )
     ;
-    // A prepared Surfel GI frame splits age/free, its per-frame cell-head reset, hash build, Spawn, trace-build-
-    // args, trace, and resolve from the final upsample. Every callback must still share the semantic GI packet,
-    // including one async timing interval and the existing effects acceptance endpoint. A missing prefix denotes
-    // compatibility callback.
+    // Every GI callback must share the semantic packet.
     const bool surfelGiPreparedPrefixMergedIntoGiPacket =
         (
             !m_deferredSurfelGiAgeFreeTask.valid()

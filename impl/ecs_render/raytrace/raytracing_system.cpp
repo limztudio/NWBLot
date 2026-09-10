@@ -1874,9 +1874,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     const bool backendReady = ensureSwShadowPipeline();
     m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
-    // Soft opaque shadow (all light types): build the geometry-downsample + a-trous resolve pipelines and heap-slot payloads so
-    // the render can denoise the half-res jittered opaque trace into the full-res visibility. Non-fatal to shadows -- a
-    // failure leaves m_softShadowReady false and the slot lights keep their hard opaque mask.
+    // Soft opaque shadow: downsample + a-trous pipelines denoise half-res trace; non-fatal.
     m_rayTracingState.m_softShadowReady =
         backendReady
         && ensureShadowGeometryDownsamplePipeline()
@@ -1885,10 +1883,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     if(backendReady && !m_rayTracingState.m_softShadowReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow resource preparation failed; shadows hard this frame"));
 
-    // Soft opaque shadow TEMPORAL accumulation: build the reproject-merge pipeline + its two front/back heap-slot
-    // payloads AND the two temporal SOFT_HALF resolve variants (the a-trous then reads the accumulated history instead of the
-    // raw trace). Always on when the resources build; non-fatal: a failure leaves m_softShadowTemporalReady false and the
-    // soft path feeds the raw trace straight into the a-trous (the Stage-1/2 spatial-only fallback).
+    // Temporal accumulation: reproject-merge plus SOFT_HALF variants; falls back to spatial.
     m_rayTracingState.m_softShadowTemporalReady =
         m_rayTracingState.m_softShadowReady
         && ensureShadowReprojectMergePipeline()
@@ -1896,13 +1891,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
-    // Soft COLORED TRANSPARENT shadow: build the RGB a-trous resolve pipeline + the parallel transparent resolve
-    // heap-slot payloads (over the transparent half-res buffers), gated on the opaque soft path being ready (it shares the
-    // geometry cache + the resolve binding layout + the ping-pong scratch). Non-fatal: a failure leaves m_softTransparentReady
-    // false so the soft transparent fold is skipped and the transparent coarse/adaptive fallback runs (no double-fold --
-    // they are exclusive). The transparent TEMPORAL path additionally needs the (shared) merge pipeline + the
-    // parallel transparent merge heap-slot payloads; a failure there leaves m_softTransparentTemporalReady false and the transparent
-    // resolve reads the raw colored trace straight into the RGB a-trous (the spatial fallback).
+    // Colored transparent shadow: RGB resolve gated on opaque path; falls back to coarse/adaptive.
     m_rayTracingState.m_softTransparentReady =
         m_rayTracingState.m_softShadowReady
         && ensureSoftTransparentResolvePipeline()

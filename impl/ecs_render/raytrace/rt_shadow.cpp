@@ -658,8 +658,7 @@ struct ShadowTransparentSoftFoldGraphTask{
 };
 
 
-// Shadow visibility owns its graph task; RendererFramePipeline composes the optional software-caustics successor into the
-// same packet chain. It still provides declaration-filtered external state for producers outside that graph.
+// Shadow visibility owns its graph task; pipeline composes the caustics successor.
 struct ShadowVisibilityGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;

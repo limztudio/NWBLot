@@ -76,7 +76,7 @@ struct SceneLightGpuData{
     Float4 colorIntensity = Float4(1.f, 1.f, 1.f, 1.f);
     // x = range, y = light type, z = shadow slot (negative = no slot), w = caustic slot (negative = no slot).
     Float4 params = Float4(0.f, 0.f, -1.f, -1.f);
-    // Soft-shadow source size: x = directional angular radius (radians), y = punctual source radius (world units); z/w reserved.
+    // Soft-shadow source size: x = angular radius, y = punctual radius; z/w reserved.
     Float4 params2 = Float4(
         NWB::Impl::Scene::LightDefaults::s_DirectionalAngularRadius,
         NWB::Impl::Scene::LightDefaults::s_PunctualSourceRadius,

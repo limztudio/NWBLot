@@ -17,10 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Minimal RAII loader for a platform shared library (.dll / .so). Opens by a tchar name (matching the
-// platform's native string type), resolves C entry points by their narrow symbol name, and frees the library
-// on destruction. For optional runtime dependencies that are loaded dynamically rather than linked, so a
-// missing library is a recoverable condition instead of a load-time failure.
+// Minimal RAII loader for platform shared libraries (.dll / .so) for optional runtime dependencies.
 class SharedLibrary{
 public:
     SharedLibrary() = default;

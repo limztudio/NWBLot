@@ -9,17 +9,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Global descriptor heap - shader-side binding contract.
-//
-// These numbers ARE the contract between the shader and the host. They must match, exactly:
-//   - the set indices in GpuDescriptorHeapAbi (resourceSetIndex = 0, samplerSetIndex = 1), and
-//   - the per-class register-space binding numbers GpuDescriptorHeap::getRegisterSlot() adds to each table.
-// Pipeline-local BindingLayout objects carry push constants only and therefore consume no descriptor sets. The global
-// heap can occupy the lowest contiguous sets without colliding with local pipeline state.
-// createBindlessLayout() sets binding.binding = item.slot directly (no classic 128/256/384 offset), so the resource
-// table is one set carrying nine flat bindings, one per non-sampler class; the sampler table is a second set.
-// A third, fixed one-descriptor TLAS set is deliberately separate from the resource array because acceleration
-// structures are encoded directly into per-generation descriptor-buffer blocks through vkGetDescriptorEXT.
+// Global descriptor heap binding contract. Must match GpuDescriptorHeapAbi sets
+// and GpuDescriptorHeap::getRegisterSlot() bindings. Pipeline-local layouts use
+// push constants only, so the global heap can use the lowest sets.
 #define NWB_BINDLESS_HEAP_RESOURCE_SET 0
 #define NWB_BINDLESS_HEAP_SAMPLER_SET  1
 #define NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET 2

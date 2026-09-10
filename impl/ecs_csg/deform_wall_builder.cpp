@@ -7,16 +7,21 @@
 #include "deform_cutter_field.h"
 #include "deform_validator.h"
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 using ScratchArena = Core::Alloc::ScratchArena;
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
     // SIMD blend keeps positions/normals/tangents/uvs/colors on vector lanes.
@@ -40,9 +45,7 @@ CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, 
 }
 
 bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
-    // SIMD normalize keeps xyz length/normalize on vector lanes. The degenerate
-    // fallback and w/handedness stay scalar so both preview and commit pick the
-    // identical deterministic branch.
+    // SIMD normalize keeps xyz length/normalize on vector lanes. The degeneratefallback and w/handedness stay scalar so both preview and commit pick the identical deterministic branch.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){
@@ -210,7 +213,9 @@ bool CsgDeformWallBuilder::ClipShell(
     return true;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 NWB_IMPL_END
 

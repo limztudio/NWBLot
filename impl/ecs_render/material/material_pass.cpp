@@ -271,8 +271,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         nullptr,
         frameBindings
     };
-    // CSG may opt in only through its own frozen alias-free producer. This remains separate from the regular flag
-    // so mixed streams cannot suppress the local interleaving required by an unowned CSG output.
+    // CSG opts in only via its own frozen producer; keep it separate from the regular flag.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
         deferredTargets,
@@ -443,7 +442,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             return appendDefaultMutableMaterialTypedBytes(materialInfo, outRange);
 
         const MaterialTypedByteVector* mutableTypedBytes = nullptr;
-        // Prepared-only render gathers must never populate or rebuild the persistent override cache.
+        // Prepared-only gathers must never populate the persistent override cache.
         const bool mutableTypedBytesReady = lookupMode == RendererResourceLookupMode::CreateMissing
             ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
             : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
@@ -467,8 +466,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     ) -> bool{
         NWB_ASSERT(mesh.valid());
 
-        // Mesh resource creation establishes every persistent source-stream descriptor.  Preparation and render
-        // merely validate those bindings, keeping descriptor allocation outside material-pass hot paths.
+        // Mesh creation establishes source-stream descriptors; preparation only validates them.
         if(!m_meshSystem.meshGeometryHeapHandlesReady(mesh))
             return false;
 
@@ -557,8 +555,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!pipelineReady)
             return false;
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
-        // Freeze the primary handles before the receiver-surface lookup below; creating its sibling cache entry can
-        // grow the pipeline map and invalidate this lookup pointer.
+        // Freeze primary handles first; sibling cache creation may invalidate this pointer.
         const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot =
             __hidden_material_pass::CapturePipelineResourceSnapshot(*pipelineResources)
         ;

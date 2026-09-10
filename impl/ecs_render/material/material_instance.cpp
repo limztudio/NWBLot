@@ -63,10 +63,7 @@ namespace __hidden_material_instance{
 }
 
 
-// Single source of truth for the cache-validity check shared by the prepare and the find paths.
-// Both must compare the same set of identity/revision fields, otherwise the find-only path can disagree with
-// the prepare path about whether a cached entry is still live. Centralizing the comparison keeps the two in
-// lockstep and removes the inverted-logic duplication between the two call sites.
+// Single source of truth for cache validity shared by prepare and find paths.
 [[nodiscard]] static bool materialInstanceMutableCacheEntryMatches(
     const MaterialInstanceMutableCacheEntry& cacheEntry,
     const MaterialSurfaceInfo& materialInfo,
@@ -301,9 +298,7 @@ bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
     outInstance = InstanceGpuData{};
     outConstantByteOffset = 0u;
 
-    // Constant block: appended raw (its content is per-material, not deduped against other materials' blocks),
-    // exactly as the draw pass's appendConstantMaterialTypedBytes does, so its byte offset locates this
-    // occluder's constant block in the combined buffer.
+    // Constant block appended raw, mirroring the draw pass append.
     ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
     if(!ECSRenderDetail::AppendMaterialTypedByteRange(
         inOutMaterialTypedBytes,
@@ -312,8 +307,7 @@ bool RendererMaterialSystem::appendShadowOccluderMaterialContext(
     ))
         return false;
 
-    // Mutable block: the per-instance override bytes (or the material default), content-deduped so instances
-    // sharing identical mutable storage share one appended range -- mirroring the draw pass.
+    // Mutable block content-deduped, mirroring the draw pass.
     const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
     const MaterialTypedByteVector* mutableTypedBytes = nullptr;
     if(!prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes))

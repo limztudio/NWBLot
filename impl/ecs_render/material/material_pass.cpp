@@ -222,8 +222,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     commandList.endRenderPass();
 
-    // The graph producer creates this measurement before its dispatches. Without it, the producer intentionally
-    // recorded no output, so a raster-only consumer must not read a stale generated-vertex buffer.
+    // Producer creates this measurement before dispatches; without it output is intentionally empty.
     const bool emulationOutputStatesGraphOwned =
         emulationOutputEntryStateGraphOwned
         || csgEmulationOutputEntryStateGraphOwned
@@ -234,15 +233,13 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     ))
         return;
 
-    // Graph declaration froze the draw ordering and published all stream bytes before this task records. Keep this
-    // consumer side-effect free: in particular, never replace its mesh-view, material, or CSG buffer contents.
+    // Declaration froze ordering and published bytes; keep this consumer side-effect free.
     if(!frameBindings.frameReady(instanceCount, materialTypedByteCount)){
         discardEmulationOutputTiming();
         return;
     }
     const bool regularDrawResourcesReady = materialPassDrawResourcesReady(drawItems.regular, frameBindings);
-    // An active output handoff covers every regular compute draw. If a late resource check disagrees with the
-    // producer, reject this prepared raster rather than consuming a buffer the current packet did not generate.
+    // Active handoff covers every regular draw; reject on late resource disagreement.
     if(emulationOutputEntryStateGraphOwned && !regularDrawResourcesReady){
         discardEmulationOutputTiming();
         return;

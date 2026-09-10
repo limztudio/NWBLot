@@ -19,8 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One liveness query owns its requested identities and found flags. Providers only mark matches; no state survives
-// the owning prune operation. The capacity hint is the number of retained runtime entries, including duplicates.
+// One liveness query owns identities and flags; no state survives the prune.
 class RuntimeMeshRequestSet final : NoCopy{
 private:
     struct Key{

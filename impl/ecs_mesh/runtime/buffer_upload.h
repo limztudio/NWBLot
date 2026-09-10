@@ -43,9 +43,7 @@ namespace BufferSetupFailure{
     };
 };
 
-// ByteAddressBuffer::Load reads one aligned 32-bit word even when a meshlet needs only one byte from that word.
-// Give every raw byte stream a zero-filled tail through the end of its final word so terminal u8 decodes stay within
-// the descriptor range.  The caller continues to own and publish the logical byte count separately.
+// ByteAddress loads whole words; zero-fill tails so terminal u8 decodes stay in range.
 inline constexpr usize s_RawByteLoadAlignmentBytes = sizeof(u32);
 
 template<typename PayloadT>
@@ -130,8 +128,7 @@ template<typename PayloadVector>
         return outBuffer ? BufferSetupFailure::None : BufferSetupFailure::CreateFailed;
     }
 
-    // GraphicsRuntime::setupBuffer records its upload before this temporary payload is destroyed.  Explicitly zero the
-    // physically allocated tail rather than relying on backend allocation contents.
+    // Upload records before payload dies; explicitly zero the allocated tail.
     Vector<u8, Core::Alloc::GlobalArena> paddedPayload{arena};
     paddedPayload.assign(payload.begin(), payload.end());
     paddedPayload.resize(paddedByteCount, 0u);

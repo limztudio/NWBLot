@@ -99,8 +99,7 @@ struct RuntimeMeshLocalBounds{
     Float3Int maxBounds = Float3Int(0.f, 0.f, 0.f, 0);
 
     [[nodiscard]] bool valid()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsValidFlag) != 0; }
-    // A valid non-finite bound is a deliberately conservative signal: consumers must retain the bounds payload for
-    // transforms but cannot use it to reject live deformed geometry.
+    // Non-finite bounds are conservative; keep payload for transforms, skip culling.
     [[nodiscard]] bool finite()const noexcept{ return (minBounds.w & s_RuntimeMeshBoundsFiniteFlag) != 0; }
 };
 
@@ -112,8 +111,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     RuntimeMeshLocalBounds localBounds;
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshletCount = 0u;
-    // Logical triangle-corner count. The backing raw u8 buffer is physically word-padded for ByteAddressBuffer
-    // decoding, so its byte size must not be used as this count.
+    // Logical corner count; backing buffer is word-padded, never use its byte size.
     u32 meshletPrimitiveIndexCount = 0u;
     Name meshKey = NAME_NONE;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported

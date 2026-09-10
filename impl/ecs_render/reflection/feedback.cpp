@@ -23,7 +23,7 @@ namespace __hidden_reflection_feedback{
 
 
 [[nodiscard]] bool SameScreenSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
-    // Temporal sampling count, spatial filtering and diagnostic presentation do not change deterministic smooth rays.
+    // Sampling/filter/diagnostics leave smooth rays unchanged.
     return
         a.traceMode == b.traceMode && a.samplingSeed == b.samplingSeed
         && a.maxHardwareRaysPerFrame == b.maxHardwareRaysPerFrame && a.maxOpticalQueries == b.maxOpticalQueries
@@ -126,7 +126,7 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(
     ;
     result.reused = result.eligible && m_eligible && !result.reset;
     result.previousBank = m_acceptedBank;
-    // Classification may submit before the complete header writer is rejected. Never overwrite the accepted bank.
+    // Never overwrite the accepted bank.
     result.currentBank = m_acceptedSequence != 0u ? 1u - m_acceptedBank : 0u;
     if(!m_quarantined && result.reset && (!enabled || settings.traceMode != ReflectionTraceMode::Hybrid || settings.maxHardwareRaysPerFrame == 0u))
         result.resetReason = ReflectionFeedbackResetReason::Disabled;
@@ -171,7 +171,7 @@ bool ReflectionFeedbackState::accept(
             || token.value <= m_acceptedToken.value
         ))
     ){
-        // The callback says GPU work was accepted, so discard semantics cannot prove this bank safe to overwrite.
+        // Accepted work blocks discard-based overwrite proof.
         m_quarantined = true;
         return false;
     }

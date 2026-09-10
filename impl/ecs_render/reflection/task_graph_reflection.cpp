@@ -47,8 +47,7 @@ namespace __hidden_reflection_tasks{
         if(existing.valid())
             return existing;
     }
-    // Reflection producers overwrite every used subresource. Explicit Unknown preserves a fresh native Undefined while
-    // accepted retained state/handoffs remain authoritative when recording later frames and consumer packets.
+    // Producers overwrite everything; Unknown preserves fresh Undefined.
     return graph.importTexture(
         texture,
         TextureResourceDesc(texture->getCreationDescription().name, "Reflection Output").setInitialState(Core::ResourceStates::Unknown)
@@ -107,8 +106,7 @@ struct UploadParametersTask{
         const ReflectionSampleBase sampleBase = ComputeReflectionSampleBase(parameters.sampleIndex);
         parameters.sampleBaseX = sampleBase.x;
         parameters.sampleBaseY = sampleBase.y;
-        // The immutable frame value is copied into command-list staging here, after the shared scene preparation
-        // outcome is known. An unavailable scene cannot enqueue work or bind its stale TLAS generation.
+        // Stage the frame value after scene prep; a missing scene enqueues nothing.
         commandList.writeBuffer(*payload.buffer, &parameters, sizeof(parameters));
         return true;
     }

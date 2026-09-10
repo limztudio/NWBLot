@@ -98,8 +98,7 @@ void ReflectionStatisticsState::accept(
         slot->metadata.feedbackReset = feedback->reset;
         slot->metadata.feedbackResetReason = feedback->resetReason;
     }
-    // An accepted copy with an invalid token remains quarantined until owner invalidation. Never recycle memory
-    // whose GPU completion cannot be proved, even when a caller violates the accepted-token contract.
+    // Never recycle memory whose GPU completion is unproved.
 }
 
 bool ReflectionStatisticsState::pending(

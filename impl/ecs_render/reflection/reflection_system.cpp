@@ -79,7 +79,7 @@ bool RendererReflectionSystem::prepareResources(
     const ReflectionSettings& settings){
     using namespace __hidden_reflection_resources;
     const u64 pixelCount = static_cast<u64>(width) * height;
-    // Packed pixels cover both surface families; queue addresses additionally require u32 byte offsets.
+    // Packed pixels cover both families; queue addresses need byte offsets.
     if(width == 0u || height == 0u || pixelCount > static_cast<u64>(s_MaxU32) / 2u)
         return false;
     const u64 boundedCapacity = Max(static_cast<u64>(1u), Min(pixelCount * 2u, static_cast<u64>(settings.maxHardwareRaysPerFrame)));
@@ -358,7 +358,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     parameters.screenConfidenceThreshold = settings.screenConfidenceThreshold;
     parameters.screenEdgeFade = settings.screenEdgeFade;
     parameters.diagnosticsEnabled = settings.diagnosticsEnabled ? 1u : 0u;
-    // Recording resolves the actual hardware outcome and a successful reservation before enabling any bank access.
+    // Bank access needs a resolved outcome plus a reservation.
     parameters.feedbackFlags = 0u;
     parameters.feedbackProbeIndex = snapshot.feedback.plan.probeIndex;
     parameters.feedbackReadSlot = snapshot.feedback.previous.valid() ? snapshot.feedback.previous.descriptor.slot() : 0u;
@@ -373,7 +373,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         ReflectionStatistics metadata;
         metadata.frameIndex = frameIndex;
         metadata.feedbackRequested = settings.screenFeedbackEnabled;
-        // Diagnostics also populate the bound when feedback is disabled; an unused cleared zero is never published as fact.
+        // Never publish an unused zero as fact.
         metadata.schedulingCounterValid = settings.diagnosticsEnabled;
         metadata.graphicsFrameIndex = m_graphics.getFrameIndex();
         metadata.samplingSeed = settings.samplingSeed;
@@ -453,8 +453,7 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
         heap.free(descriptor);
         return false;
     }
-    // Publish the replacement only after allocation and descriptor writing succeeded. Accepted command lists and
-    // frozen graph snapshots retain the old buffer; descriptor retirement protects its old selector independently.
+    // Publish only after success; retirement protects the old selector.
     if(m_descriptors[Queue].valid())
         heap.free(m_descriptors[Queue]);
     m_descriptors[Queue] = descriptor;

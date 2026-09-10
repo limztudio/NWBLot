@@ -12,27 +12,20 @@
 #define NWB_SKINNED_MESH_SET 0
 #define NWB_SKINNED_MESH_BOUNDS_SET 0
 
-// Bindings 0..11 are intentional skinning-stream ABI gaps. Their persistent buffers are selected
-// through a heap UniformBuffer slot payload and fetched from the global StorageBuffer heap. Do not repurpose or
-// renumber the holes.
-// Binding 12 is an intentional selector-CBV ABI gap. The stream-slot payload is a global UniformBuffer heap entry
-// selected by push constants; preserve this number rather than reusing it.
+// Bindings 0..11 are skinning-stream ABI gaps: persistent buffers are heap-selected through a
+// UniformBuffer slot payload. Binding 12 is the selector-CBV ABI gap; preserve both numbers.
 #define NWB_SKINNED_MESH_BINDING_BINDLESS_RESOURCES 12
 
-// Bindings 0..5 are intentional meshlet-bounds ABI gaps. The heap UniformBuffer slot payload
-// selects every source and output buffer through the global StorageBuffer heap. Do not repurpose or renumber the
-// holes.
-// Binding 6 is an intentional selector-CBV ABI gap; resources are selected from the global heap.
+// Bindings 0..5 are meshlet-bounds ABI gaps: every source and output buffer is heap-selected through
+// the global StorageBuffer heap. Binding 6 is the selector-CBV ABI gap; preserve both numbers.
 #define NWB_SKINNED_MESH_BOUNDS_BINDING_BINDLESS_RESOURCES 6
 
-// Per-frame skinned-normal repack into the RT attribute buffer: re-derives the triangle-corner shading normals from
-// the current-frame deformed (attribute-stream) skinned normals so the RT shadow + caustic traces bend on the live
-// pose, not the bind pose. Reproduces BuildMeshletTriangleAttributes (meshlet_vertex_attributes.h) on the GPU.
+// Per-frame skinned-normal repack into the RT attribute buffer: re-derives triangle-corner shading normals from
+// current-frame deformed skinned normals so RT traces bend on the live pose, not the bind pose.
 #define NWB_SKINNED_MESH_REPACK_SET 0
 
-// Bindings 0..5 are intentional repack ABI gaps. The heap UniformBuffer slot payload selects every
-// source and output buffer through the global StorageBuffer heap. Do not repurpose or renumber the holes.
-// Binding 6 is an intentional selector-CBV ABI gap; resources are selected from the global heap.
+// Bindings 0..5 are repack ABI gaps: every source and output buffer is heap-selected. Binding 6 is the
+// selector-CBV ABI gap; preserve both numbers.
 #define NWB_SKINNED_MESH_REPACK_BINDING_BINDLESS_RESOURCES 6
 
 

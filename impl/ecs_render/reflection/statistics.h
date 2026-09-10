@@ -34,7 +34,7 @@ namespace ReflectionHistoryResetReason{
     };
 };
 
-// A completed accepted reflection copy, independently of whether later presentation work succeeded.
+// A completed accepted reflection copy, regardless of later presentation outcome.
 struct ReflectionStatistics{
     u64 sequence = 0u;
     u64 generation = 0u;

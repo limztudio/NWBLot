@@ -70,8 +70,7 @@ struct ReflectionFeedbackSnapshot{
     }
 };
 
-// Creation belongs to preflight. Frozen snapshots retain buffers; heap retirement protects old descriptors.
-// Invalidation follows the renderer's join/discard boundary and invalidates outstanding control generations.
+// Creation belongs to preflight; frozen snapshots retain buffers.
 class RendererReflectionFeedback final : NoCopy{
 public:
     RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);

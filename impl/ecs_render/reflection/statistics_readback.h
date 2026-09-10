@@ -49,8 +49,7 @@ struct ReflectionStatisticsReservationKey{
     [[nodiscard]] bool valid()const noexcept{ return sequence != 0u && generation != 0u; }
 };
 
-// CPU lifecycle shared by the resource owner and graph leases. Completion is supplied only after a physical GPU
-// token has completed; keeping this state independent of allocation makes rejection and reuse directly testable.
+// CPU lifecycle shared by owner and leases; completion follows GPU token completion.
 class ReflectionStatisticsState : NoCopy{
 private:
     struct Slot{
@@ -63,7 +62,7 @@ public:
     static constexpr u32 s_SlotCount = 3u;
 
     explicit ReflectionStatisticsState(u16 deviceGeneration);
-    // The resource owner joins GPU work before invalidation; stale graph callbacks cannot affect the next epoch.
+    // Owner joins GPU work before invalidation; stale callbacks cannot affect next epoch.
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionStatisticsReservationKey reserve(const ReflectionStatistics& metadata)noexcept;
     void discard(const ReflectionStatisticsReservationKey& key)noexcept;

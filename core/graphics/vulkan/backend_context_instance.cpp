@@ -181,9 +181,7 @@ bool BackendContext::createVulkanInstance(){
         return false;
     }
 
-    // createDevice() rebuilds its device-extension sets, so retain this instance-level capability separately.
-    // VK_EXT_swapchain_colorspace must have been enabled on the already-created instance before HDR10 surface
-    // color spaces can be selected later.
+    // createDevice rebuilds extension sets; retain this instance capability separately.
     m_hdr10ColorSpaceExtensionEnabled = isInstanceExtensionEnabled(VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
 
     {

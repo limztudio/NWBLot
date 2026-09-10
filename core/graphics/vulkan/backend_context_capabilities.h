@@ -162,7 +162,7 @@ inline void QueryPhysicalDeviceFeatureSupport(
         outSupport.maintenance4.maintenance4 = outSupport.vulkan13.maintenance4;
     }
 
-    // Publish a pointer-free snapshot. Query chains are temporary and must never survive a copy of this value.
+    // Publish a pointer-free snapshot; query chains must never survive a copy.
     outSupport.features.pNext = nullptr;
     outSupport.vulkan11.pNext = nullptr;
     outSupport.vulkan12.pNext = nullptr;

@@ -19,11 +19,9 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Phase 11 capture is opt-in tooling. Native packet recording remains the ordinary runtime path unless a caller
-// explicitly supplies a capture object; its byte stream contains graph IDs, never backend pointers.
+// Phase 11 capture is opt-in; native recording stays the ordinary path.
 namespace GpuCommandIrOpcode{
-    // This is the original in-memory built-in capture enum. Keep its width and ordinal values stable for callers
-    // that inspect GpuCommandIrBuiltinTaskRecord; the byte stream has its own extensible u16 opcode below.
+    // Original in-memory capture enum; keep width and ordinals stable.
     enum Enum : u8{
         CopyBuffer = 0u,
         CopyTexture = 1u,

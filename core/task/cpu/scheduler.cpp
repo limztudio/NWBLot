@@ -254,7 +254,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
                 visit(reachable.parent);
             }
         }
-        // Reserve all dependency storage before publishing any edge. Duplicate predecessors are valid fan-in edges.
+        // Reserve dependency storage first; duplicate predecessors are valid fan-in.
         m_searchStack.clear();
         m_searchStack.reserve(dependencyCount);
         for(usize index = 0u; index < dependencyCount; ++index){
@@ -458,8 +458,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
         for(const TaskHandle dependent : node.dependents)
             visit(dependent);
     }
-    // Only exhausted searches are reusable. Removing nodes/edges preserves negatives; publication invalidates them.
-    // The wait identity avoids retaining a scope pointer after its owner returns or destroys that scope.
+    // Only exhausted searches are reusable; publication invalidates negatives.
     for(const u32 visited : m_searchStack)
         m_scopeNegativeVisits[visited] = m_scopeSearchGeneration;
     return false;
@@ -593,7 +592,7 @@ void CpuTaskScheduler::retire(TaskHandle handle)noexcept{
             if(!node || node->state != TaskState::Retiring)
                 return;
         }
-        // A task retains its callable until every descendant completes. Capture destruction precedes dependent publication.
+        // Tasks retain callables until descendants complete; destruction precedes publication.
         node->function.reset();
         TaskHandle parentToRetire;
         u32 wakeMask;

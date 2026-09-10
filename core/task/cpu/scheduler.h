@@ -146,7 +146,7 @@ public:
 
 
 public:
-    // Concurrent submission is supported from any thread; producers must finish before scheduler destruction.
+    // Concurrent submission from any thread; producers must finish before destruction.
     template<typename Func>
     TaskHandle submit(Func&& function, CpuTaskOptions options = {}){
         return submitTask(TaskFunction(Forward<Func>(function)), nullptr, options, nullptr, 0u);
@@ -171,9 +171,9 @@ public:
     void pumpMainThread();
     [[nodiscard]] bool isComplete(TaskHandle handle)const;
     [[nodiscard]] CpuTaskSchedulerStatistics statistics()const;
-    // Register labels during setup and reuse their compact handles in task options and scopes.
+    // Register labels during setup; reuse handles in options and scopes.
     [[nodiscard]] CpuTaskProfileLabel registerProfileLabel(const Name& name);
-    // Capture changes discard buffered events and stale timers. Zero configured capacity disables profiling.
+    // Capture changes discard buffered events; zero capacity disables profiling.
     void setProfiling(bool enabled, u64 frameIndex = 0u);
     [[nodiscard]] usize readProfileEvents(CpuTaskProfileEvent* output, usize capacity)noexcept;
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
@@ -315,7 +315,7 @@ public:
 
 
 public:
-    // The same scope accepts concurrent producers from any thread. Join producers before destroying the scope.
+    // Scopes accept concurrent producers; join before destroying the scope.
     template<typename Func>
     TaskHandle submit(Func&& function, CpuTaskOptions options = {}){
         return m_scheduler.submitTask(CpuTaskScheduler::TaskFunction(Forward<Func>(function)), this, options, nullptr, 0u);

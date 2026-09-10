@@ -45,9 +45,7 @@ namespace __hidden_aftermath{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Aftermath generates the crash dump asynchronously on a driver thread after device-lost; poll its status
-// until the dump callback has run (Finished) or collection failed, bounded so a hung driver cannot wedge the
-// device-lost path. NVIDIA recommends waiting "a couple of seconds".
+// Aftermath dumps asynchronously after device-lost; poll bounded so hung drivers cannot wedge.
 inline constexpr u32 s_PollIntervalMilliseconds = 50u;
 inline constexpr u32 s_MaxWaitMilliseconds = 5000u;
 

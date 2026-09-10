@@ -84,13 +84,9 @@ public:
     void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 
-    // Enable/disable perf capture independently of telemetry. Flips BOTH halves of the GPU-timing double gate
-    // (the perf-session sink AND the graphics query recorder), so per-pass GPU timestamps are actually collected
-    // without standing up a telemetry upload session. Public so a project can opt into a live readout via the
-    // ProjectRuntimeContext perfCapture callback (the only other caller is setTelemetryCapture).
+    // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
     void setPerfCapture(const Perf::CaptureOptions& options);
-    // Read-only access to the captured timing data (per-pass cpu/gpu views, memory, frame index). The Session owns
-    // the per-scope stats GpuTimingRecorder feeds; this is how a project reads per-pass GPU times for display.
+    // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const{ return m_perfSession; }
 
     [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry(){ return m_frameGraphRegistry; }

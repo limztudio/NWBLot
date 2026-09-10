@@ -96,8 +96,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
     request.requiredCapabilities = Core::GpuQueueCapability::Compute;
     request.preferredQueue = Core::GpuQueuePreference::Graphics;
     request.allowFallback = false;
-    // Runtime skinning remains immediately before the renderer on the primary Graphics transport. The graph owns
-    // this ordering now; a later async-compute migration can opt into a distinct physical queue deliberately.
+    // Skinning stays just before the renderer on Graphics; graph owns the ordering.
     request.compilerMayOverridePreference = false;
     return request;
 }
@@ -123,8 +122,7 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Deformation produces the three skinned streams as graph-declared UAV writes. The following graph task consumes
-// position/normal as ShaderResource inputs for bounds/repack, so the compiler owns their UAV-to-SRV handoff.
+// Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
@@ -154,8 +152,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 };
 
 
-// Bounds and normal repack consume the deformation stage (or graph-owned rest copies) and publish their respective
-// UAV outputs. Their accepted callback is the sole dirty-state commit point for the complete packet.
+// Bounds/repack consume deformation and publish UAV outputs; accepted callback commits.
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
@@ -193,8 +190,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
 };
 
 
-// Every generated output ends the packet in a descriptor-visible ShaderResource state. This getter-only task owns
-// tail-only finalization (including deformation tangent) without replaying a native state bridge.
+// Outputs end in ShaderResource state; finalizer owns tail-only finalization.
 struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
@@ -386,9 +382,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
         }
     );
 
-    // A frame may have no native skinning submission after bindings are removed. Keep the accepted state source
-    // useful for surviving generations, but filter out retired buffers now so its ownership handles cannot pin an
-    // otherwise-pruned runtime mesh indefinitely.
+    // Frames may lack native submissions; filter retired buffers so handles pin nothing.
     if(
         m_acceptedSkinningState.valid()
         && !replaceAcceptedSkinningState(*m_acceptedSkinningState.source(), scratchArena)
@@ -839,9 +833,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     if(!BuildMeshSkinningGraphResourceUses(dispatchPlans.data(), dispatchPlans.size(), scratchArena, resourceUses))
         return false;
 
-    // Retain the accepted prior-frame state with the graph task that consumes it, rather than selecting a native
-    // packet-record override after compilation.  The source stays serial by contract, while all current-frame
-    // deformation/bounds dependencies remain compiler-owned.
+    // Retain prior-frame state with its consuming task; source stays serial by contract.
     const Core::GpuTaskExternalStateSource previousFrameStateSources[] = {
         Core::GpuTaskExternalStateSource{
             .states = m_acceptedSkinningState.source(),
@@ -1102,8 +1094,7 @@ void MeshSkinningSystem::pruneRuntimeResources(){
             continue;
         }
 
-        // Heap descriptors retain their backing buffers independently of this cache. Retire the generation before
-        // erasing it so the heap's in-flight quarantine can release both descriptor storage and retained resources.
+        // Heap descriptors retain backing buffers; retire before erasing for quarantine.
         releaseRuntimeResourceBindlessHeapHandles(resources);
         it = m_runtimeResources.erase(it);
     }

@@ -128,13 +128,14 @@ private:
         }
     };
 
+    // 8-byte snapshots first, then 4-byte, then small tail to avoid padding.
     struct ScopeRecord : NoCopy{
         Name name = NAME_NONE;
-        MemorySource::Enum source = MemorySource::ExplicitScope;
         MemorySnapshot previousSnapshot;
         MemorySnapshot lastSnapshot;
         MemoryDelta lastDelta;
         u32 generation = 0u;
+        MemorySource::Enum source = MemorySource::ExplicitScope;
 
         explicit ScopeRecord(const Name& scopeName, const MemorySource::Enum memorySource)
             : name(scopeName)

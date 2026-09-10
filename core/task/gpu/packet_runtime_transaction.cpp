@@ -733,9 +733,9 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .graphGeneration = m_generation,
         .planGeneration = m_planGeneration,
         .recordingAttemptGeneration = m_recordingAttemptGeneration,
-        .deviceGeneration = m_deviceGeneration,
         .packet = packetID,
         .queue = packet.queue,
+        .deviceGeneration = m_deviceGeneration,
         .queueClass = queueInfo->queueClass,
         .taskCount = packet.taskCount,
         .nativeCommandListCount = runtime.nativeCommandListCount,
@@ -765,8 +765,8 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         .graphGeneration = m_generation,
         .planGeneration = m_planGeneration,
         .recordingAttemptGeneration = m_recordingAttemptGeneration,
-        .deviceGeneration = m_deviceGeneration,
         .queue = queue,
+        .deviceGeneration = m_deviceGeneration,
         .queueClass = queueInfo->queueClass,
     };
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){

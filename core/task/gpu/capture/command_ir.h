@@ -228,12 +228,10 @@ static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRectUIntRecord>, "Comma
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
 
 
+// 8-byte members first, then 4-byte, then small tail to avoid padding.
 struct GpuCommandIrBuiltinTaskRecord{
-    GpuCommandIrOpcode::Enum opcode = GpuCommandIrOpcode::CopyBuffer;
     GpuTaskId task;
     GpuSubmissionPacketId packet;
-    GpuPhysicalQueueId queue;
-
     GpuGraphResourceId source;
     GpuGraphResourceId destination;
     u64 sourceOffsetBytes = 0u;
@@ -243,12 +241,13 @@ struct GpuCommandIrBuiltinTaskRecord{
     TextureSlice destinationSlice;
     TextureSubresourceSet destinationSubresources = s_AllSubresources;
     Rect clearRect;
-
-    GpuClearTextureTaskValueType::Enum clearTextureValueType = GpuClearTextureTaskValueType::UInt;
     Color floatClearValue;
     UIntColor uintClearValue;
     IntColor intClearValue;
+    GpuPhysicalQueueId queue;
     f32 depthClearValue = 1.f;
+    GpuCommandIrOpcode::Enum opcode = GpuCommandIrOpcode::CopyBuffer;
+    GpuClearTextureTaskValueType::Enum clearTextureValueType = GpuClearTextureTaskValueType::UInt;
     u8 stencilClearValue = 0u;
     bool clearDepth = false;
     bool clearStencil = false;
@@ -284,10 +283,11 @@ namespace GpuCommandIrStreamValidationError{
     };
 };
 
+// 8-byte members first, then 1-byte tail to avoid padding.
 struct GpuCommandIrStreamValidationResult{
-    GpuCommandIrStreamValidationError::Enum error = GpuCommandIrStreamValidationError::None;
     usize byteOffset = 0u;
     u64 recordIndex = Limit<u64>::s_Max;
+    GpuCommandIrStreamValidationError::Enum error = GpuCommandIrStreamValidationError::None;
     bool complete = false;
 
     [[nodiscard]] constexpr bool valid()const noexcept{

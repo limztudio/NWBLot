@@ -149,16 +149,17 @@ struct GpuTaskGraphPacketTimingEnvelopeOptions{
     [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
 };
 
+// 8-byte members first, then small head enum packed with the bool tail.
 struct GpuTaskGraphCompileOptions{
-    GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
-    // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
-    // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
-    bool allowMetadataOnlyTasks = false;
+    f64 declarationSeconds = 0.0;
     // Caller-owned wall time spent declaring/building the graph before this compiler begins. Accepted plans retain
     // finite nonnegative values separately from the compiler-only total duration; other values normalize to zero.
-    f64 declarationSeconds = 0.0;
+    // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
+    // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
+    GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
+    bool allowMetadataOnlyTasks = false;
 };
 
 

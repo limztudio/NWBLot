@@ -140,6 +140,7 @@ struct CommandListParameters{
     // Manual nonzero worker indices may leave the domain at zero when the caller deliberately owns that namespace.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
+    // NOTE: u32 kept last; append new fields above the domain pair. queueType stays first (reset in setQueueType).
 
     constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
         queueType = value;

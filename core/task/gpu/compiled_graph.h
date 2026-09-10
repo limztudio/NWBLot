@@ -364,11 +364,12 @@ struct GpuTaskGraphCompileStatistics{
 // Immutable-by-value accepted-plan telemetry for one exact physical queue. Barrier counts belong to the compiled
 // task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the
 // matching acquire belongs to its consumer queue.
+// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
-    u16 deviceGeneration = 0u;
     GpuPhysicalQueueId queue;
+    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize taskCount = 0u;
     usize packetCount = 0u;

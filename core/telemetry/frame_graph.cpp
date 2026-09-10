@@ -432,10 +432,10 @@ template<typename EncodedStatisticsT>
         .graphGeneration = encoded.graphGeneration,
         .planGeneration = encoded.planGeneration,
         .recordingAttemptGeneration = encoded.recordingAttemptGeneration,
-        .deviceGeneration = encoded.deviceGeneration,
         .compile = DecodeCompileRuntimeStatistics(encoded.compile),
         .recording = DecodeRecordingRuntimeStatistics(encoded.recording),
         .submission = DecodeSubmissionRuntimeStatistics(encoded.submission),
+        .deviceGeneration = encoded.deviceGeneration,
         .present = true,
     };
     return IsValidFrameGraphRuntimeStatistics(outStatistics);
@@ -839,8 +839,8 @@ template<typename EncodedStatisticsT>
             .graphGeneration = ownerStatistics.graphGeneration,
             .planGeneration = ownerStatistics.planGeneration,
             .recordingAttemptGeneration = ownerStatistics.recordingAttemptGeneration,
-            .deviceGeneration = ownerStatistics.deviceGeneration,
             .queue = DecodeQueue(encoded.queue),
+            .deviceGeneration = ownerStatistics.deviceGeneration,
             .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
             .compile = DecodePhysicalQueueCompileRuntimeStatistics(encoded.compile),
             .recording = DecodePhysicalQueueRecordingRuntimeStatistics(encoded.recording),
@@ -892,20 +892,20 @@ template<typename EncodedStatisticsT>
         return false;
 
     outStatistics = {
-        .ownerNodeIndex = encoded.ownerNodeIndex,
-        .packetIndex = encoded.packetIndex,
         .packetGeneration = encoded.packetGeneration,
-        .queue = DecodeQueue(encoded.queue),
-        .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
         .taskCount = encoded.taskCount,
         .commandListCount = encoded.commandListCount,
+        .ownerNodeIndex = encoded.ownerNodeIndex,
+        .packetIndex = encoded.packetIndex,
+        .queue = DecodeQueue(encoded.queue),
+        .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
         .plannedWaitTokenCount = encoded.plannedWaitTokenCount,
         .sameQueueWaitElisionCount = encoded.sameQueueWaitElisionCount,
         .timelineWaitCount = encoded.timelineWaitCount,
         .mergedTimelineWaitCount = encoded.mergedTimelineWaitCount,
+        .submissionSeconds = encoded.submissionSeconds,
         .joinsAcceptedQueueFrontier = encoded.joinsAcceptedQueueFrontier != 0u,
         .recoverySubmission = encoded.recoverySubmission != 0u,
-        .submissionSeconds = encoded.submissionSeconds,
     };
     return IsValidFrameGraphPacketSubmissionStatistics(outStatistics);
 }

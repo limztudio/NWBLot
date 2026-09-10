@@ -42,11 +42,11 @@ struct GpuRecordedPacket{
     // Exact graph-publication identities let reset/destruction revoke an unsubmitted list without touching a later
     // recording that happens to reuse the same retained CommandList object.
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
-    u8 commandListCount = 0u;
     // These fields are written before commandListCount publishes the slot. They intentionally describe the packet
     // after graph lowering, so compile tooling can distinguish declared work from the native work that was recorded.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
+    u8 commandListCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
@@ -59,6 +59,7 @@ struct GpuRecordedPacket{
     // and scheduler-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
+    // NOTE: u32 tail kept last; extending this snapshot appends above the domain pair.
 };
 
 
@@ -104,12 +105,13 @@ struct GpuTaskGraphRecordingStatistics{
 // Immutable-by-value native recording telemetry for one exact physical queue in one compiled graph recording
 // attempt. The queue identity includes its device generation, so an auxiliary same-class queue or a recreated
 // device cannot alias this result. Counts include only successfully published native packet slots.
+// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     GpuPhysicalQueueId queue;
+    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize packetCount = 0u;
     usize taskCount = 0u;
@@ -652,13 +654,14 @@ struct GpuTaskGraphSubmissionStatistics{
 // compiled-plan handle whose packet reached Accepted through Device::executeCommandLists(); every rejected or
 // unresolved lifecycle state deliberately returns an invalid value. Wait counters preserve the
 // native submitter decomposition: planned tokens equal same-queue elisions plus emitted and merged timeline waits.
+// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
+    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize taskCount = 0u;
     usize nativeCommandListCount = 0u;
@@ -691,12 +694,13 @@ struct GpuTaskGraphPacketSubmissionStatistics{
 // result. Every accepted-packet counter represents a submitter-owned native submission. `rejectedSubmissionCount`
 // separately reports packets rejected after the transaction reserves the submit path, including a failure before
 // the backend execute call.
+// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     GpuPhysicalQueueId queue;
+    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;

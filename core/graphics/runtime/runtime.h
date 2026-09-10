@@ -51,6 +51,7 @@ public:
         QueueSubmissionToken* acceptedToken = nullptr;
     };
 
+    // 8-byte members first, then 4-byte, then small tail to avoid padding.
     struct TextureSetupDesc{
         TextureDesc textureDesc;
         const void* data = nullptr;
@@ -58,12 +59,12 @@ public:
         usize uploadDataSize = 0;
         usize rowPitch = 0;
         usize depthPitch = 0;
+        QueueSubmissionToken* acceptedToken = nullptr;
         u32 arraySlice = 0;
         u32 mipLevel = 0;
         // See BufferSetupDesc::queue. A non-retained Unknown initial state publishes CopyDest; a retained upload
         // requires a concrete initial state and is rejected otherwise.
         CommandQueue::Enum queue = CommandQueue::kCount;
-        QueueSubmissionToken* acceptedToken = nullptr;
         // Automatic preserves the legacy one-plane behavior for color, depth-only, and stencil-only formats.
         // D24S8/D32S8 require the caller to select one concrete aspect because Vulkan copies their depth and
         // stencil planes from independently laid out CPU payloads.
@@ -90,14 +91,15 @@ public:
     // Leave hasPhysicalInitialState false to preserve the legacy descriptor-state import.  Set it true to declare
     // the actual native state of the destination before the upload; an explicit Unknown means a fresh Vulkan image
     // begins in UNDEFINED rather than TextureDesc::initialState.
+    // 8-byte members first, then 4-byte, then small tail to avoid padding.
     struct TextureUploadBatchDesc{
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;
         usize regionCount = 0u;
         ResourceStates::Mask finalState = ResourceStates::Unknown;
-        CommandQueue::Enum queue = CommandQueue::kCount;
-        QueueSubmissionToken* acceptedToken = nullptr;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
+        QueueSubmissionToken* acceptedToken = nullptr;
+        CommandQueue::Enum queue = CommandQueue::kCount;
         bool hasPhysicalInitialState = false;
     };
 

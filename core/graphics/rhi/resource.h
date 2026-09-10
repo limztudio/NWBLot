@@ -89,10 +89,11 @@ namespace ResourceQueueSharing{
 
 // Physical admission facts for one resource. The backend owns the family list; consumers retaining the snapshot
 // past the call boundary must copy it.
+// 8-byte member first, then 4-byte, then 1-byte tail to avoid padding.
 struct ResourceQueueAdmissionSnapshot{
-    ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
     const u32* queueFamilyIndices = nullptr;
     u32 queueFamilyIndexCount = 0u;
+    ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
     bool usesConcurrentSharing = false;
 
     [[nodiscard]] constexpr bool valid()const noexcept{
@@ -154,6 +155,7 @@ namespace ResourceStates{
 typedef u32 MipLevel;
 typedef u32 ArraySlice;
 
+// Members kept size-sorted (8-byte, then 4-byte, then 1-byte) to avoid padding.
 struct TextureDesc{
     Name name;
     Color clearValue;
@@ -351,6 +353,7 @@ typedef GraphicsBackend::Handle<InputLayout> InputLayoutHandle;
 // Buffer
 
 
+// 8-byte members first, then 4-byte, then 1-byte tail to avoid padding.
 struct BufferDesc{
     Name debugName;
     u64 byteSize = 0;
@@ -359,6 +362,7 @@ struct BufferDesc{
     ResourceStates::Mask initialState = ResourceStates::Common;
     Format::Enum format = Format::UNKNOWN; // for typed buffer views
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
     bool canHaveUAVs = false;
     bool canHaveTypedViews = false;
     bool canHaveRawViews = false;
@@ -379,8 +383,6 @@ struct BufferDesc{
 
     // see TextureDesc::keepInitialState
     bool keepInitialState = false;
-
-    CpuAccessMode::Enum cpuAccess = CpuAccessMode::None;
 
     constexpr BufferDesc& setByteSize(u64 value){ byteSize = value; return *this; }
     constexpr BufferDesc& setStructStride(u32 value){ structStride = value; return *this; }

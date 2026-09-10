@@ -973,7 +973,6 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .id = GpuGraphResourceId{ static_cast<u32>(index), m_generation },
         .identity = resource.identity,
         .markerLabel = markerLabel(resource.markerLabelOffset, resource.markerLabelSize),
-        .type = resource.type,
         .initialState = resource.initialState,
         .externalFinalState = resource.externalFinalState,
         .externalFinalReleaseDestinationQueue = resource.externalFinalReleaseDestinationQueue,
@@ -986,16 +985,17 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
             ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
             : nullptr,
         .initialOwnerHandoffSourceCount = resource.initialOwnerHandoffSourceCount,
-        .queueSharing = resource.queueSharing,
         .initialAvailabilityCompletion = resource.initialAvailabilityCompletion,
         .queueAdmission = ResourceQueueAdmissionSnapshot{
-            .admittedQueueClasses = resource.queueSharing,
             .queueFamilyIndices = resource.queueFamilyIndexCount != 0u
                 ? m_queueFamilyIndices.data() + resource.queueFamilyIndexOffset
                 : nullptr,
             .queueFamilyIndexCount = resource.queueFamilyIndexCount,
+            .admittedQueueClasses = resource.queueSharing,
             .usesConcurrentSharing = resource.usesConcurrentSharing,
         },
+        .type = resource.type,
+        .queueSharing = resource.queueSharing,
         .hasQueueAdmission = resource.hasQueueAdmission,
         .hasBackendResource = resource.texture != nullptr || resource.buffer != nullptr || resource.accelStruct != nullptr,
     };

@@ -233,18 +233,18 @@ static bool GetVariantBytecode(
     }
 
     const ShaderCook::ShaderCompilerRequest compileRequest = {
-        entry.name,
-        entry.stage.view(),
-        entry.targetProfile.view(),
-        entry.entryPoint,
-        variantName,
-        compileDefines.data(),
-        static_cast<u32>(compileDefines.size()),
-        includeDirectories,
-        dependencies,
-        sourcePath,
-        cachePaths.bytecodePath,
-        entry.optimizationLevel
+        .shaderName = entry.name,
+        .stage = entry.stage.view(),
+        .targetProfile = entry.targetProfile.view(),
+        .entryPoint = entry.entryPoint,
+        .variantName = variantName,
+        .defines = compileDefines.data(),
+        .includeDirectories = includeDirectories,
+        .dependencies = dependencies,
+        .sourcePath = sourcePath,
+        .outputPath = cachePaths.bytecodePath,
+        .defineCount = static_cast<u32>(compileDefines.size()),
+        .optimizationLevel = entry.optimizationLevel,
     };
     if(!shaderCook.compileVariant(compileRequest, outBytecode))
         return false;

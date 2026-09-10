@@ -635,7 +635,6 @@ struct VulkanContext{
     PFN_vkGetInstanceProcAddr getInstanceProcAddr = nullptr;
     VolkInstanceTable instanceDispatch = {};
     VolkDeviceTable deviceDispatch = {};
-    u16 deviceGeneration = 0u;
     VkAllocationCallbacks* allocationCallbacks = nullptr;
     VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 
@@ -689,6 +688,7 @@ struct VulkanContext{
     i32 auxiliaryAsyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryTransferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
+    u16 deviceGeneration = 0u;
     bool asyncComputeLaneEnabled = false;
     bool transferQueueEnabled = false;
 
@@ -720,10 +720,10 @@ struct VulkanContext{
 
 
     explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
-        : deviceGeneration(generation)
-        , objectArena(allocatorRef.getObjectArena())
+        : objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
         , cpuScheduler(cpuSchedulerRef)
+        , deviceGeneration(generation)
     {}
     VulkanContext(
         GraphicsAllocator& allocatorRef,
@@ -742,11 +742,11 @@ struct VulkanContext{
         , getInstanceProcAddr(getInstanceProcAddress)
         , instanceDispatch(instanceDispatchTable)
         , deviceDispatch(deviceDispatchTable)
-        , deviceGeneration(generation)
         , allocationCallbacks(allocCb)
         , objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
         , cpuScheduler(cpuSchedulerRef)
+        , deviceGeneration(generation)
     {}
 };
 
@@ -822,17 +822,17 @@ struct RetainedTextureStateCommit{
     ArraySlice arraySlice = 0;
 };
 
+// 8-byte strides first, then 4-byte, then small tail to avoid padding.
 struct AccelStructGeometryBuildSignature{
-    VkGeometryTypeKHR geometryType = VK_GEOMETRY_TYPE_MAX_ENUM_KHR;
-    VkGeometryFlagsKHR geometryFlags = 0u;
-    u32 primitiveCount = 0u;
-
-    VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
-    VkFormat radiusFormat = VK_FORMAT_UNDEFINED;
-    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
     VkDeviceSize vertexStride = 0u;
     VkDeviceSize radiusStride = 0u;
     VkDeviceSize indexStride = 0u;
+    VkGeometryTypeKHR geometryType = VK_GEOMETRY_TYPE_MAX_ENUM_KHR;
+    VkGeometryFlagsKHR geometryFlags = 0u;
+    u32 primitiveCount = 0u;
+    VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
+    VkFormat radiusFormat = VK_FORMAT_UNDEFINED;
+    VkIndexType indexType = VK_INDEX_TYPE_NONE_KHR;
     u32 maxVertex = 0u;
     VkRayTracingLssIndexingModeNV lssIndexingMode = VK_RAY_TRACING_LSS_INDEXING_MODE_MAX_ENUM_NV;
     VkRayTracingLssPrimitiveEndCapsModeNV lssEndCapsMode = VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_MAX_ENUM_NV;
@@ -1485,9 +1485,9 @@ public:
     // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
         return ResourceQueueAdmissionSnapshot{
-            .admittedQueueClasses = m_creationDesc.queueSharing,
             .queueFamilyIndices = m_bufferQueueFamilyIndices.empty() ? nullptr : m_bufferQueueFamilyIndices.data(),
             .queueFamilyIndexCount = static_cast<u32>(m_bufferQueueFamilyIndices.size()),
+            .admittedQueueClasses = m_creationDesc.queueSharing,
             .usesConcurrentSharing = m_bufferInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
         };
     }
@@ -1623,9 +1623,9 @@ public:
     // Task-graph declarations copy this production admission snapshot while retaining the Texture itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
         return ResourceQueueAdmissionSnapshot{
-            .admittedQueueClasses = m_creationDesc.queueSharing,
             .queueFamilyIndices = m_imageQueueFamilyIndices.empty() ? nullptr : m_imageQueueFamilyIndices.data(),
             .queueFamilyIndexCount = static_cast<u32>(m_imageQueueFamilyIndices.size()),
+            .admittedQueueClasses = m_creationDesc.queueSharing,
             .usesConcurrentSharing = m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT,
         };
     }

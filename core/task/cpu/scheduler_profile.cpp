@@ -139,7 +139,16 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
             label = node->scope->m_profileLabel;
         ancestor = node->parent;
     }
-    return { Timer{}, kind, task, label, m_profileFrameIndex, m_profileEpoch, workerIndex, affinity };
+    return {
+        .begin = Timer{},
+        .task = task,
+        .frameIndex = m_profileFrameIndex,
+        .captureEpoch = m_profileEpoch,
+        .workerIndex = workerIndex,
+        .label = label,
+        .kind = kind,
+        .affinity = affinity,
+    };
 }
 
 void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Timer end)noexcept{

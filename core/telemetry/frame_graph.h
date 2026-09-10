@@ -254,14 +254,15 @@ struct FrameGraphSubmissionRuntimeStatistics{
     f64 submissionSeconds = 0.0;
 };
 
+// Small tail packed together to avoid padding.
 struct FrameGraphRuntimeStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     FrameGraphCompileRuntimeStatistics compile;
     FrameGraphRecordingRuntimeStatistics recording;
     FrameGraphSubmissionRuntimeStatistics submission;
+    u16 deviceGeneration = 0u;
     bool present = false;
 };
 
@@ -313,12 +314,13 @@ struct FrameGraphPhysicalQueueSubmissionRuntimeStatistics{
     f64 submissionSeconds = 0.0;
 };
 
+// Small members packed with queueClass to avoid padding.
 struct FrameGraphPhysicalQueueRuntimeStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
-    u16 deviceGeneration = 0u;
     FrameGraphPhysicalQueueId queue;
+    u16 deviceGeneration = 0u;
     FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
     FrameGraphPhysicalQueueCompileRuntimeStatistics compile;
     FrameGraphPhysicalQueueRecordingRuntimeStatistics recording;
@@ -334,21 +336,22 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
 // marked present contain every native submission for every runtime-statistics owner, including an exact empty table
 // when no owner submitted native work. Packet generation is the immutable plan generation. Wait counts exclude
 // backend-internal waits outside the graph.
+// 8-byte members first, then 4-byte, then small tail to avoid padding.
 struct FrameGraphPacketSubmissionStatisticsRecord{
-    u32 ownerNodeIndex = Limit<u32>::s_Max;
-    u32 packetIndex = Limit<u32>::s_Max;
     u64 packetGeneration = 0u;
-    FrameGraphPhysicalQueueId queue;
-    FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
     u64 taskCount = 0u;
     u64 commandListCount = 0u;
+    u32 ownerNodeIndex = Limit<u32>::s_Max;
+    u32 packetIndex = Limit<u32>::s_Max;
+    FrameGraphPhysicalQueueId queue;
+    FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
     u64 plannedWaitTokenCount = 0u;
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
+    f64 submissionSeconds = 0.0;
     bool joinsAcceptedQueueFrontier = false;
     bool recoverySubmission = false;
-    f64 submissionSeconds = 0.0;
 };
 
 #pragma pack(push, 1)
@@ -1251,13 +1254,14 @@ struct FrameGraphEdgePayload{
     u8 flags = 0u;
 };
 
+// 8-byte members first, then 2/1-byte tail to avoid padding.
 struct FrameGraphPayload{
-    u16 wireVersion = 0u;
-    u64 frameIndex = 0u;
     Vector<FrameGraphNodePayload, TelemetryArena> nodes;
     Vector<FrameGraphEdgePayload, TelemetryArena> edges;
     Vector<FrameGraphPhysicalQueueRuntimeStatisticsRecord, TelemetryArena> physicalQueueRuntimeStatistics;
     Vector<FrameGraphPacketSubmissionStatisticsRecord, TelemetryArena> packetSubmissionStatistics;
+    u64 frameIndex = 0u;
+    u16 wireVersion = 0u;
     bool physicalQueueRuntimeStatisticsPresent = false;
     bool packetSubmissionStatisticsPresent = false;
 

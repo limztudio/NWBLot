@@ -87,14 +87,15 @@ private:
         Name name;
     };
 
+    // 8-byte members first, then small tail to avoid padding.
     struct ProfileSample{
         Timer begin;
-        CpuTaskProfileKind::Enum kind;
         CpuTaskHandle task;
-        CpuTaskProfileLabel label;
         u64 frameIndex;
         u64 captureEpoch;
         usize workerIndex;
+        CpuTaskProfileLabel label;
+        CpuTaskProfileKind::Enum kind;
         CpuAffinity::Enum affinity;
     };
 

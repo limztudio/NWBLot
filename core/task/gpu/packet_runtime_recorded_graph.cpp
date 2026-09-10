@@ -694,8 +694,8 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         .graphGeneration = storage.generation,
         .planGeneration = storage.planGeneration,
         .recordingAttemptGeneration = storage.recordingAttemptGeneration,
-        .deviceGeneration = storage.deviceGeneration,
         .queue = queue,
+        .deviceGeneration = storage.deviceGeneration,
         .queueClass = queueInfo->queueClass,
     };
     for(usize packetIndex = 0u; packetIndex < storage.packetCount; ++packetIndex){

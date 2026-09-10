@@ -72,11 +72,11 @@ struct GpuTaskGraphInitialOwnerHandoffSourceView{
     const CommandListResourceStateHandoff* stateSource = nullptr;
 };
 
+// 8-byte members first, then 4-byte, then 1-byte tail to avoid padding.
 struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
     Name identity = NAME_NONE;
     AStringView markerLabel;
-    GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
@@ -90,11 +90,12 @@ struct GpuTaskGraphResourceView{
     // source that names its selected physical consumer queue; broad or ambiguous uses fail compilation.
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
-    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     GpuExternalCompletionId initialAvailabilityCompletion;
     // Typed resource imports own an exact copy of the backend's immutable physical admission facts. Metadata-only
     // resources have no snapshot and retain the logical queue-sharing resolver.
     ResourceQueueAdmissionSnapshot queueAdmission;
+    GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
     bool hasQueueAdmission = false;
     bool hasBackendResource = false;
 };
@@ -662,21 +663,21 @@ private:
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
         // Lifecycle callbacks are scoped to one graph-owned recording attempt. A retry only re-arms every task
         // after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
-        mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
         mutable u64 lifecycleAttemptGeneration = 0u;
         mutable u64 recordingClaimGeneration = 0u;
         mutable u64 submissionClaimGeneration = 0u;
         mutable u64 discardNotificationGeneration = 0u;
+        mutable TaskLifecycleState lifecycleState = TaskLifecycleState::Declared;
         mutable bool recordThunkInProgress = false;
         mutable bool recordThunkCompleted = false;
     };
 
+    // 8-byte members first, then 4-byte, then 2/1-byte tail to avoid padding.
     struct GpuGraphResourceNode{
         Name identity = NAME_NONE;
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
-        u16 deviceGeneration = 0u;
         // The graph retains its own immutable copy for late recording. Repeated typed imports compare this owned
         // value, never the producer allocation address, so retired snapshot storage cannot alias through ABA reuse.
         CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
@@ -694,6 +695,7 @@ private:
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
+        u16 deviceGeneration = 0u;
         GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
         ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
         bool usesConcurrentSharing = false;
@@ -742,16 +744,17 @@ private:
         u32 memberCount = 0u;
     };
 
+    // Small members packed before 4-byte offsets to avoid padding.
     struct GpuGraphPipelineNode{
         Name identity = NAME_NONE;
         GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
+        u16 deviceGeneration = 0u;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         GraphicsPipelineHandle graphicsPipeline;
         ComputePipelineHandle computePipeline;
         MeshletPipelineHandle meshletPipeline;
         RayTracingPipelineHandle rayTracingPipeline;
-        u16 deviceGeneration = 0u;
     };
 
     struct GpuExternalCompletionNode{

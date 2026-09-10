@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Members kept size-sorted (8-byte, then 1-byte tail) to avoid padding.
 struct ShadowPrepareGeometryInputs{
     const PreparedMeshBlasBuildVector& blasBuilds;
     const PreparedMeshSwBvhBuildVector& softwareBuilds;

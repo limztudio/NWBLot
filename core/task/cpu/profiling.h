@@ -28,14 +28,15 @@ namespace CpuTaskProfileKind{
     };
 };
 
+// 8-byte members first, then 1-byte tail to avoid padding.
 struct CpuTaskProfileEvent{
-    CpuTaskProfileKind::Enum kind = CpuTaskProfileKind::Execution;
     CpuTaskHandle task;
     Name label;
     u64 durationNanoseconds = 0u;
     u64 frameIndex = 0u;
     u64 captureEpoch = 0u;
     usize workerIndex = 0u;
+    CpuTaskProfileKind::Enum kind = CpuTaskProfileKind::Execution;
     CpuAffinity::Enum affinity = CpuAffinity::Any;
 };
 

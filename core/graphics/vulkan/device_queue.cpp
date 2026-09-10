@@ -117,15 +117,15 @@ bool Device::registerPhysicalQueue(
     }
 
     const GpuPhysicalQueueInfo info{
+        .familyIndex = nativeQueue.familyIndex,
+        .queueIndex = nativeQueue.queueIndex,
+        .timestampValidBits = desc.timestampValidBits,
         .id = GpuPhysicalQueueId{
             static_cast<u16>(m_physicalQueueInfos.size()),
             m_deviceGeneration,
         },
         .queueClass = desc.queueClass,
         .capabilities = desc.capabilities,
-        .familyIndex = nativeQueue.familyIndex,
-        .queueIndex = nativeQueue.queueIndex,
-        .timestampValidBits = desc.timestampValidBits,
         .dedicated = desc.dedicated,
     };
     Queue* const queue = NewArenaObject<Queue>(m_context.objectArena, m_context, *this, info, nativeQueue);
@@ -769,8 +769,8 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     );
     const QueueSubmissionToken submissionToken = submissionAccepted
         ? QueueSubmissionToken{
-            .queue = queue->m_queueID,
             .value = submittedID,
+            .queue = queue->m_queueID,
             .physicalQueueIndex = executionQueue.index,
             .deviceGeneration = executionQueue.deviceGeneration,
         }

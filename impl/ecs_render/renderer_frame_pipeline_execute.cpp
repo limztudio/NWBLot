@@ -885,9 +885,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
         );
     }();
-    // Receiver-surface CSG can independently retain the compatibility path, but when its alias-free producer is
-    // declared it must share G-buffer's primary Graphics packet for the same compiler-owned UAV-to-VertexBuffer
-    // handoff and semantic prefix range.
+    // Declared producers must share G-buffer's packet for the same handoff.
     const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged =
         !m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
         || (
@@ -900,9 +898,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
         )
     ;
-    // Interval-sample emulation starts after Combine, but Combine retains its own semantic timing packet and may
-    // safely split at a compiler frontier. The producer/raster pair itself must stay contiguous in one Graphics
-    // packet before accepting the timing scope that crosses their command-list recording.
+    // The producer/raster pair must stay contiguous in one packet.
     const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = [&](){
         if(!m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
             return true;
@@ -931,9 +927,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             LengthOf(sequence)
         );
     }();
-    // The opaque CSG work-region clear keeps its original one-range timing scope in first/last typed primitives.
-    // They must remain with G-buffer's rebound Graphics ticket; a split would bind query ownership to a different
-    // native submission even though the compiler still preserves resource ordering.
+    // Keep the clear with G-buffer's ticket; a split would rebind ownership.
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixCsgIntervalClearQueue =
         m_graphicsPrefixCsgIntervalClearTask.valid()
             ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixCsgIntervalClearTask)

@@ -214,8 +214,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         && registerStorageTexture(bindless.causticIrradianceStorage, targets.causticIrradiance.get(), targets.causticIrradianceFormat, Core::TextureDimension::Texture2D)
         && registerTexture(bindless.surfelIrradiance, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.surfelIrradianceStorage, targets.surfelIrradiance.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
-        // The surfel GI resolve/upsample pair selects every persistent buffer and frame image through heap slots in
-        // push constants; both writable irradiance views therefore have StorageImage registrations.
+        // Surfel resolve selects buffers via heap slots; writable views need StorageImage registration.
         && registerTexture(bindless.surfelIrradianceHalf, Core::GpuDescriptorClass::SampledImage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, ECSRenderDetail::s_FramebufferSubresources, Core::TextureDimension::Texture2D)
         && registerStorageTexture(bindless.surfelIrradianceHalfStorage, targets.surfelIrradianceHalf.get(), targets.surfelIrradianceFormat, Core::TextureDimension::Texture2D)
         && registerSampler(bindless.sampler, m_deferredState.m_sampler.get())

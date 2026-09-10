@@ -52,8 +52,7 @@ struct CsgReceiverRangeGpuData{
     u32 shadingModelId = 0u;
     Float34 worldToReceiver = ::Float34Identity();
     CsgBoundsGpuData localBounds;
-    // The cap-fill material context packs as a uint4 after localBounds:
-    //   x = cook-generated surface-dispatch id, y = constant material byte offset, z = mesh instance index.
+    // Cap-fill context packs as uint4: dispatch id, byte offset, instance index.
     u32 surfaceDispatchId = Limit<u32>::s_Max;
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;

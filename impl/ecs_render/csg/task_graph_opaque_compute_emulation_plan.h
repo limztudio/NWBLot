@@ -110,7 +110,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 reset();
                 return false;
             }
-            // Earlier regular output ownership and preceding receiver outputs both exclude this receiver.
+            // Earlier ownership and receiver outputs both exclude this receiver.
             if(!outputs.insert(mesh.emulationVertexBuffer.get())){
                 reset();
                 return false;
@@ -278,8 +278,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
 };
 
 
-// Prepared transparent CSG exposes receiver-surface -> span before the following interval-combine callback. The
-// later phase-local occupancy uploads depend on Combine so they cannot overwrite its frozen CSG buffers first.
+// Transparent CSG exposes surface->span before combine; occupancy uploads depend on Combine.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

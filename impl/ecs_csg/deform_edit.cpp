@@ -560,7 +560,7 @@ void CollectBoundaryEdges(
     outLoop.reserve(edges.size());
     outLoop.push_back(cursor);
     {
-        const auto seed = std::find_if(
+        const auto seed = ::FindIf(
             remaining.begin(),
             remaining.end(),
             [cursor](const CutLoopEdge& edge){ return edge.first == cursor || edge.second == cursor; }

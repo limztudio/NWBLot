@@ -69,8 +69,7 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     outLoop.clear();
     if(edges.empty())
         return true;
-    // Boundary edges keep source-triangle winding, so consecutive edges meet
-    // head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
+    // Boundary edges keep source-triangle winding, so consecutive edges meet head-to-tail or tail-to-tail. Walk them undirected for one closed ring.
     Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
     remaining = edges;
     u32 start = remaining.front().first;
@@ -240,9 +239,7 @@ bool CsgDeformCapBuilder::FillCutCaps(
                     ++edgeIndex;
             }
         }
-        // Open boundary chains (e.g. cuts across an open sheet) carry no closable
-        // volume loop; they stay viable cap-free. Only a closed but degenerate
-        // loop fails viability.
+        // Open boundary chains (e.g. cuts across an open sheet) carry no closable volume loop; they stay viable cap-free. Only a closed but degenerate loop fails viability.
         if(!CsgDeformCapBuilder::OrderBoundaryLoop(scratchArena, loopEdges, loop))
             continue;
         Float4 loopNormal;

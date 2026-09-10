@@ -28,6 +28,13 @@ NWB_IMPL_BEGIN
 // - Walls are the kept split triangles with interpolated attributes.
 // - Caps fill cut boundary loops with a deterministic fan.
 // - One epsilon, one edge-cache rule, one cap orientation rule for both preview and commit.
+// Default cutter/build values. Named so preview and commit observe one default.
+inline constexpr f32 s_DefaultDistanceEpsilon = 0.00001f;
+inline constexpr f32 s_DefaultShapeParameterX = 0.0f;
+inline constexpr f32 s_DefaultShapeParameterY = 1.0f;
+inline constexpr f32 s_DefaultShapeParameterZ = 0.0f;
+inline constexpr f32 s_DefaultShapeParameterW = 0.0f;
+
 struct CsgDeformVertex{
     Float3U position;
     Float4 normal;
@@ -60,7 +67,7 @@ using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 struct CsgDeformShape{
     Name shapeType = NAME_NONE;
     Float34 worldToShape = Float34Identity();
-    Float4 parameter0 = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4 parameter0 = Float4(s_DefaultShapeParameterX, s_DefaultShapeParameterY, s_DefaultShapeParameterZ, s_DefaultShapeParameterW);
 };
 
 static_assert(IsStandardLayout_V<CsgDeformShape>, "CsgDeformShape must stay layout-stable for deform rebuild");
@@ -75,7 +82,7 @@ static_assert(IsStandardLayout_V<CsgDeformCutDesc>, "CsgDeformCutDesc must stay 
 static_assert(IsTriviallyCopyable_V<CsgDeformCutDesc>, "CsgDeformCutDesc must stay cheap to copy in deform rebuild");
 
 struct CsgDeformBuildOptions{
-    f32 distanceEpsilon = 0.00001f;
+    f32 distanceEpsilon = s_DefaultDistanceEpsilon;
     bool fillCaps = true;
 };
 

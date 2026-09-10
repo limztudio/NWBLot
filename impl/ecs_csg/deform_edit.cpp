@@ -23,8 +23,35 @@ namespace __hidden_csg_deform_edit{
 using ScratchArena = Core::Alloc::ScratchArena;
 
 inline constexpr f32 s_MinEpsilon = 0.0000001f;
-inline constexpr usize s_MaxDeformVertices = 1u << 20u;
-inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
+inline constexpr f32 s_SplitDenominatorEpsilon = 0.0000001f;
+inline constexpr f32 s_NormalizeEpsilon = 0.000001f;
+inline constexpr f32 s_NormalizeEpsilonSq = s_NormalizeEpsilon * s_NormalizeEpsilon;
+inline constexpr f32 s_LoopAreaEpsilonSq = s_MinEpsilon * s_MinEpsilon;
+inline constexpr f32 s_OptionEpsilonLow = 0.0f;
+inline constexpr f32 s_OptionEpsilonHigh = 1.0f;
+inline constexpr f32 s_KeepDistanceZero = 0.0f;
+inline constexpr f32 s_OneWeight = 1.0f;
+inline constexpr f32 s_AffineW = 1.0f;
+inline constexpr f32 s_ShapeWMask = 0.0f;
+inline constexpr f32 s_NegativeOne = -1.0f;
+inline constexpr f32 s_UpAxisX = 0.0f;
+inline constexpr f32 s_UpAxisY = 1.0f;
+inline constexpr f32 s_UpAxisZ = 0.0f;
+inline constexpr f32 s_FallbackTangentX = 1.0f;
+inline constexpr f32 s_FallbackTangentY = 0.0f;
+inline constexpr f32 s_FallbackTangentZ = 0.0f;
+inline constexpr f32 s_FallbackTangentW = 1.0f;
+inline constexpr f32 s_CapNormalW = 0.0f;
+inline constexpr u32 s_DeformCapacityShift = 20u;
+inline constexpr usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;
+inline constexpr usize s_MaxDeformTriangles = 1u << s_DeformCapacityShift;
+inline constexpr u32 s_EdgeKeyHalfBits = 32u;
+inline constexpr u32 s_EdgeHashShift = 33u;
+inline constexpr u32 s_TriangleCornerCount = 3u;
+inline constexpr u32 s_MinLoopVertices = 3u;
+inline constexpr u32 s_EdgesPerTriangle = 3u;
+inline constexpr u32 s_KeptReserveMultiplier = 2u;
+inline constexpr u32 s_ReserveSlack = 1u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,7 +91,7 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
 }
 
 [[nodiscard]] bool ValidOptions(const CsgDeformBuildOptions& options){
-    return options.distanceEpsilon > 0.0f && options.distanceEpsilon < 1.0f;
+    return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
 
 [[nodiscard]] bool ValidTopology(
@@ -77,7 +104,7 @@ inline constexpr usize s_MaxDeformTriangles = 1u << 20u;
     NWB_ASSERT(triangles != nullptr);
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle& triangle = triangles[triangleIndex];
-        for(usize corner = 0u; corner < 3u; ++corner){
+        for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){
             if(triangle.indices[corner] >= vertexCount)
                 return false;
         }
@@ -135,12 +162,12 @@ namespace CsgDeformShapeKind{
 
 [[nodiscard]] f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
     // 3-lane helpers ignore w, so the affine w=1 lane needs no masking.
-    const SIMDVector halfExtents = VectorSetW(parameter0, 0.0f);
+    const SIMDVector halfExtents = VectorSetW(parameter0, s_ShapeWMask);
     const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), halfExtents);
     const SIMDVector outsideVec = VectorMax(q, VectorZero());
     const f32 outside = VectorGetX(Vector3Length(outsideVec));
     const f32 insideComp = VectorGetX(Vector3MinComponent(q));
-    const f32 inside = insideComp < 0.0f ? insideComp : 0.0f;
+    const f32 inside = insideComp < s_KeepDistanceZero ? insideComp : s_KeepDistanceZero;
     return outside + inside;
 }
 
@@ -152,7 +179,7 @@ namespace CsgDeformShapeKind{
     const f32 halfHeight = VectorGetY(parameter0);
     const f32 shapeY = VectorGetY(shapePosition);
     const f32 clampedY = shapeY < -halfHeight ? -halfHeight : (shapeY > halfHeight ? halfHeight : shapeY);
-    const SIMDVector delta = VectorSubtract(shapePosition, VectorSet(0.0f, clampedY, 0.0f, 0.0f));
+    const SIMDVector delta = VectorSubtract(shapePosition, VectorSet(s_ShapeWMask, clampedY, s_ShapeWMask, s_ShapeWMask));
     return VectorGetX(Vector3Length(delta)) - VectorGetX(parameter0);
 }
 
@@ -186,14 +213,14 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Plane:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
             f32 distance = PlaneSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
             }
             if(Abs(distance) <= epsilon)
-                distance = 0.0f;
+                distance = s_KeepDistanceZero;
             outDistances[vertexIndex] = distance;
         }
         return true;
@@ -201,14 +228,14 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Box:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
             f32 distance = BoxSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
             }
             if(Abs(distance) <= epsilon)
-                distance = 0.0f;
+                distance = s_KeepDistanceZero;
             outDistances[vertexIndex] = distance;
         }
         return true;
@@ -216,14 +243,14 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Sphere:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
             f32 distance = SphereSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
             }
             if(Abs(distance) <= epsilon)
-                distance = 0.0f;
+                distance = s_KeepDistanceZero;
             outDistances[vertexIndex] = distance;
         }
         return true;
@@ -231,14 +258,14 @@ namespace CsgDeformShapeKind{
     case CsgDeformShapeKind::Capsule:{
         for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
             const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), 1.0f), worldToShape);
+            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
             f32 distance = CapsuleSignedDistance(shapePosition, parameter0);
             if(!FiniteFloat(distance)){
                 outReason = CsgDeformViabilityReason::NonFiniteInput;
                 return false;
             }
             if(Abs(distance) <= epsilon)
-                distance = 0.0f;
+                distance = s_KeepDistanceZero;
             outDistances[vertexIndex] = distance;
         }
         return true;
@@ -254,7 +281,7 @@ namespace CsgDeformShapeKind{
 [[nodiscard]] u64 EdgeKey(const u32 first, const u32 second){
     const u32 lo = first < second ? first : second;
     const u32 hi = first < second ? second : first;
-    return (static_cast<u64>(lo) << 32u) | static_cast<u64>(hi);
+    return (static_cast<u64>(lo) << s_EdgeKeyHalfBits) | static_cast<u64>(hi);
 }
 
 struct EdgeSplitRecord{
@@ -263,7 +290,7 @@ struct EdgeSplitRecord{
 };
 
 struct EdgeSplitKeyHash{
-    [[nodiscard]] usize operator()(const u64 key)const noexcept{ return static_cast<usize>(key ^ (key >> 33u)); }
+    [[nodiscard]] usize operator()(const u64 key)const noexcept{ return static_cast<usize>(key ^ (key >> s_EdgeHashShift)); }
 };
 
 using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchArena>;
@@ -272,7 +299,7 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
     // SIMD blend keeps positions/normals/tangents/uvs/colors on vector lanes.
     // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise.
     const f32 blend = SaturateFloat(firstWeight);
-    const f32 other = 1.0f - blend;
+    const f32 other = s_OneWeight - blend;
     const SIMDVector blendVec = VectorReplicate(blend);
     const SIMDVector otherVec = VectorReplicate(other);
     CsgDeformVertex mixed;
@@ -293,7 +320,7 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
     // SIMD normalize keeps xyz length/normalize on vector lanes. The degenerate
     // fallback and w/handedness stay scalar so both preview and commit pick the
     // identical deterministic branch.
-    constexpr f32 s_NormalizeEpsilonSq = 0.000001f * 0.000001f;
+    // s_NormalizeEpsilonSq is file-scoped so preview and commit share one threshold.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){
@@ -305,25 +332,25 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
         vertex.normal.w = fallbackW;
     }
     else{
-        vertex.normal.x = 0.0f;
-        vertex.normal.y = 1.0f;
-        vertex.normal.z = 0.0f;
+        vertex.normal.x = s_UpAxisX;
+        vertex.normal.y = s_UpAxisY;
+        vertex.normal.z = s_UpAxisZ;
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
     if(tangentLengthSq > s_NormalizeEpsilonSq){
         const SIMDVector normalized = Vector3Normalize(tangentVec);
-        const f32 handedness = VectorGetW(tangentVec) < 0.0f ? -1.0f : 1.0f;
+        const f32 handedness = VectorGetW(tangentVec) < s_KeepDistanceZero ? s_NegativeOne : s_OneWeight;
         vertex.tangent.x = VectorGetX(normalized);
         vertex.tangent.y = VectorGetY(normalized);
         vertex.tangent.z = VectorGetZ(normalized);
         vertex.tangent.w = handedness;
     }
     else{
-        vertex.tangent.x = 1.0f;
-        vertex.tangent.y = 0.0f;
-        vertex.tangent.z = 0.0f;
-        vertex.tangent.w = 1.0f;
+        vertex.tangent.x = s_FallbackTangentX;
+        vertex.tangent.y = s_FallbackTangentY;
+        vertex.tangent.z = s_FallbackTangentZ;
+        vertex.tangent.w = s_FallbackTangentW;
     }
     return FiniteVertex(vertex);
 }
@@ -347,7 +374,7 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
         return true;
     }
     const f32 denominator = firstDistance - secondDistance;
-    if(!FiniteFloat(denominator) || Abs(denominator) < 0.0000001f)
+    if(!FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
         return false;
     // firstWeight lands on second when secondDistance is zero.
     const f32 firstWeight = SaturateFloat(Abs(secondDistance / denominator));
@@ -390,9 +417,9 @@ void EmitTriangle(
         return false;
 
     EdgeSplitMap edgeSplits(0, EdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
-    edgeSplits.reserve(inOutTriangles.size() * 3u + 1u);
+    edgeSplits.reserve(inOutTriangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     scratchKept.clear();
-    scratchKept.reserve(inOutTriangles.size() * 2u + 1u);
+    scratchKept.reserve(inOutTriangles.size() * s_KeptReserveMultiplier + s_ReserveSlack);
 
     const usize triangleCount = inOutTriangles.size();
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
@@ -400,12 +427,12 @@ void EmitTriangle(
         NWB_ASSERT(triangle.indices[0u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[1u] < inOutVertices.size());
         NWB_ASSERT(triangle.indices[2u] < inOutVertices.size());
-        const f32 distances[3u] = {
+        const f32 distances[s_TriangleCornerCount] = {
             scratchDistances[triangle.indices[0u]],
             scratchDistances[triangle.indices[1u]],
             scratchDistances[triangle.indices[2u]],
         };
-        const bool kept[3u] = { distances[0u] >= 0.0f, distances[1u] >= 0.0f, distances[2u] >= 0.0f };
+        const bool kept[s_TriangleCornerCount] = { distances[0u] >= s_KeepDistanceZero, distances[1u] >= s_KeepDistanceZero, distances[2u] >= s_KeepDistanceZero };
         const u32 keepCount = (kept[0u] ? 1u : 0u) + (kept[1u] ? 1u : 0u) + (kept[2u] ? 1u : 0u);
         if(keepCount == 3u){
             EmitTriangle(scratchKept, triangle.indices[0u], triangle.indices[1u], triangle.indices[2u]);
@@ -415,18 +442,18 @@ void EmitTriangle(
             continue;
         if(keepCount == 1u){
             u32 keepCorner = 0u;
-            for(u32 corner = 0u; corner < 3u; ++corner){
+            for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
                 if(kept[corner]){
                     keepCorner = corner;
                     break;
                 }
             }
             const u32 keepVertex = triangle.indices[keepCorner];
-            const u32 dropA = triangle.indices[(keepCorner + 1u) % 3u];
-            const u32 dropB = triangle.indices[(keepCorner + 2u) % 3u];
+            const u32 dropA = triangle.indices[(keepCorner + 1u) % s_TriangleCornerCount];
+            const u32 dropB = triangle.indices[(keepCorner + 2u) % s_TriangleCornerCount];
             const f32 keepDistance = distances[keepCorner];
-            const f32 dropDistanceA = distances[(keepCorner + 1u) % 3u];
-            const f32 dropDistanceB = distances[(keepCorner + 2u) % 3u];
+            const f32 dropDistanceA = distances[(keepCorner + 1u) % s_TriangleCornerCount];
+            const f32 dropDistanceB = distances[(keepCorner + 2u) % s_TriangleCornerCount];
             u32 splitA = 0u;
             u32 splitB = 0u;
             if(!SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropA, keepDistance, dropDistanceA, splitA))
@@ -437,18 +464,18 @@ void EmitTriangle(
             continue;
         }
         u32 dropCorner = 0u;
-        for(u32 corner = 0u; corner < 3u; ++corner){
+        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             if(!kept[corner]){
                 dropCorner = corner;
                 break;
             }
         }
         const u32 dropVertex = triangle.indices[dropCorner];
-        const u32 keepA = triangle.indices[(dropCorner + 1u) % 3u];
-        const u32 keepB = triangle.indices[(dropCorner + 2u) % 3u];
+        const u32 keepA = triangle.indices[(dropCorner + 1u) % s_TriangleCornerCount];
+        const u32 keepB = triangle.indices[(dropCorner + 2u) % s_TriangleCornerCount];
         const f32 dropDistance = distances[dropCorner];
-        const f32 keepDistanceA = distances[(dropCorner + 1u) % 3u];
-        const f32 keepDistanceB = distances[(dropCorner + 2u) % 3u];
+        const f32 keepDistanceA = distances[(dropCorner + 1u) % s_TriangleCornerCount];
+        const f32 keepDistanceB = distances[(dropCorner + 2u) % s_TriangleCornerCount];
         u32 splitA = 0u;
         u32 splitB = 0u;
         if(!SplitEdgeVertex(inOutVertices, edgeSplits, keepA, dropVertex, keepDistanceA, dropDistance, splitA))
@@ -478,14 +505,14 @@ void CollectBoundaryEdges(
     if(triangles.empty())
         return;
     HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchArena> edgeUses(0, EdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
-    edgeUses.reserve(triangles.size() * 3u + 1u);
+    edgeUses.reserve(triangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
     for(const CsgDeformTriangle& triangle : triangles){
-        const u64 edges[3u] = {
+        const u64 edges[s_TriangleCornerCount] = {
             EdgeKey(triangle.indices[0u], triangle.indices[1u]),
             EdgeKey(triangle.indices[1u], triangle.indices[2u]),
             EdgeKey(triangle.indices[2u], triangle.indices[0u]),
         };
-        for(u32 corner = 0u; corner < 3u; ++corner){
+        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto found = edgeUses.find(edges[corner]);
             if(found == edgeUses.end())
                 edgeUses.emplace(edges[corner], 1u);
@@ -495,12 +522,12 @@ void CollectBoundaryEdges(
     }
     outEdges.reserve(triangles.size());
     for(const CsgDeformTriangle& triangle : triangles){
-        const u32 corners[3u][2u] = {
+        const u32 corners[s_TriangleCornerCount][2u] = {
             { triangle.indices[0u], triangle.indices[1u] },
             { triangle.indices[1u], triangle.indices[2u] },
             { triangle.indices[2u], triangle.indices[0u] },
         };
-        for(u32 corner = 0u; corner < 3u; ++corner){
+        for(u32 corner = 0u; corner < s_TriangleCornerCount; ++corner){
             const auto found = edgeUses.find(EdgeKey(corners[corner][0u], corners[corner][1u]));
             if(found != edgeUses.end() && found.value() == 1u)
                 outEdges.push_back(CutLoopEdge{ corners[corner][0u], corners[corner][1u] });
@@ -577,8 +604,8 @@ void CollectBoundaryEdges(
     const Vector<u32, ScratchArena>& loop,
     Float4& outNormal
 ){
-    outNormal = Float4(0.0f, 1.0f, 0.0f, 0.0f);
-    if(loop.size() < 3u)
+    outNormal = Float4(s_UpAxisX, s_UpAxisY, s_UpAxisZ, s_CapNormalW);
+    if(loop.size() < s_MinLoopVertices)
         return false;
     // SIMD fan-area accumulation keeps edge subtract/cross/add on vector lanes.
     const SIMDVector originVec = LoadFloat(vertices[loop[0u]].position);
@@ -591,10 +618,10 @@ void CollectBoundaryEdges(
         areaVec = VectorAdd(areaVec, Vector3Cross(edgeA, edgeB));
     }
     const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
-    if(!(areaLengthSq > 0.0000001f * 0.0000001f))
+    if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return false;
     const SIMDVector normalized = Vector3Normalize(areaVec);
-    outNormal = Float4(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), 0.0f);
+    outNormal = Float4(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), s_CapNormalW);
     return true;
 }
 
@@ -606,7 +633,7 @@ void CollectBoundaryEdges(
     u32& outCapTriangles
 ){
     outCapTriangles = 0u;
-    if(loop.size() < 3u)
+    if(loop.size() < s_MinLoopVertices)
         return false;
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return false;
@@ -628,7 +655,7 @@ void CollectBoundaryEdges(
     CsgDeformVertex center;
     StoreFloat(centerPositionAvg, center.position);
     center.normal = loopNormal;
-    center.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+    center.tangent = Float4(s_FallbackTangentX, s_FallbackTangentY, s_FallbackTangentZ, s_FallbackTangentW);
     StoreFloat(centerUvAvg, center.uv0);
     StoreFloat(centerColorAvg, center.color);
     if(!NormalizeDeformVertex(center))

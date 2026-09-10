@@ -50,17 +50,17 @@
 #define NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT 3u
 #define NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE 1u
 #define NWB_AVBOIT_PUSH_PARAMS_SELF_OCCLUSION_SLICE_BIAS 2u
-// w selects optical capture or primary-layer sampling without growing the transparent-draw ABI.
+// w selects capture vs primary-layer sampling.
 #define NWB_AVBOIT_PUSH_PARAMS_REFRACTION_CAPTURE 3u
 #define NWB_AVBOIT_REFRACTION_DISABLED 0.0
 #define NWB_AVBOIT_REFRACTION_CAPTURE 1.0
 #define NWB_AVBOIT_REFRACTION_ACCUMULATE 2.0
-// x is reserved for per-frame presentation policy: linear radiance may exceed one in HDR10 while coverage alpha stays bounded.
+// x carries per-frame presentation policy.
 #define NWB_AVBOIT_PUSH_PARAMS_PRESENTATION_MODE 0u
 #define NWB_AVBOIT_PRESENTATION_SDR 0.0
 #define NWB_AVBOIT_PRESENTATION_HDR10 1.0
 #define NWB_AVBOIT_PRESENTATION_HDR10_THRESHOLD 0.5
-// AVBOIT consumes the shared DeferredBindlessResourceSlots payload through the global UniformBuffer heap. The descriptor slot stays in this uint4 lane, so transparent draw constants stay within the portable 128-byte budget.
+// Shared bindless slots ride this lane to stay within the push-constant budget.
 #define NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES 0u
 #define NWB_AVBOIT_PUSH_HEAP_SLOT_CSG_CONTEXT 1u
 #define NWB_AVBOIT_PUSH_CONSTANT_BYTE_SIZE 64u

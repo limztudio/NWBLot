@@ -64,8 +64,7 @@ static Core::TextureHandle CreateTransmittanceVolume(
         .setFormat(format)
         .setDimension(Core::TextureDimension::Texture3D)
         .setInUAV(true)
-        // Integration writes this volume on AsyncCompute and accumulation samples it on Graphics. The ordered
-        // cross-lane submissions provide execution and memory dependencies without a queue-family ownership ping-pong.
+        // Cross-lane submissions own the execution/memory dependencies.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName("engine/avboit/transmittance_volume")
         .setClearValue(Core::Color(1.f, 1.f, 1.f, 1.f))
@@ -89,7 +88,7 @@ static Core::BufferHandle CreateU32Buffer(
         .setByteSize(byteSize)
         .setStructStride(sizeof(u32))
         .setCanHaveUAVs(true)
-        // Occupancy/extinction raster passes and the interleaved compute kernels exchange these work buffers.
+        // Shared by raster passes and interleaved compute kernels.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setDebugName(debugName)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
@@ -112,8 +111,7 @@ static Core::BufferHandle CreateU32Buffer(
 
 
 void RendererAvboitSystem::resetAvboitFrameTargets(AvboitFrameTargets& targets){
-    // AVBOIT owns its five transient work-buffer registrations plus the writable transmittance StorageImage. The
-    // shared deferred slot-payload descriptor is borrowed, so release only owned descriptors before their targets.
+    // Release owned descriptors only; the slot payload is borrowed.
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         heap.free(targets.coverageBufferDescriptor);
@@ -224,7 +222,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         return false;
     }
 
-    // Capture a concrete primary interface; color/coverage accumulation cannot reconstruct one after blending.
+    // Capture the primary interface before blending loses it.
     avboitTargets.foregroundAccumColor = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, accumColorFormat,
         "engine/avboit/foreground_color", transparentBlack, true);
@@ -266,8 +264,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         .addColorAttachment(avboitTargets.refractionNormalIor.get(), ECSRenderDetail::s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionTintCoverage.get(), ECSRenderDetail::s_FramebufferSubresources)
         .addColorAttachment(avboitTargets.refractionInstance.get(), ECSRenderDetail::s_FramebufferSubresources)
-        // The shared PS's fourth output carries reflection inputs during capture. Keep them separate from the
-        // foreground extinction that ordinary AVBOIT clears and accumulates after this pass.
+        // Fourth output carries reflection inputs; keep it off foreground extinction.
         .addColorAttachment(avboitTargets.refractionSpecularRoughness.get(), ECSRenderDetail::s_FramebufferSubresources)
         .setDepthAttachment(avboitTargets.refractionDepth.get(), ECSRenderDetail::s_FramebufferSubresources);
     avboitTargets.refractionFramebuffer = device.createFramebuffer(refractionFramebufferDesc);
@@ -395,8 +392,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         return false;
     }
 
-    // AVBOIT material passes share DeferredBindlessFrameResources::slotsBuffer. That buffer is created after all
-    // frame targets are registered in the global heap, so pass setup waits for the deferred target builder.
+    // Pass setup waits for the deferred target builder.
     createdTargets.avboit = Move(avboitTargets);
     m_avboitState.m_targetsNeedClear = true;
     return true;

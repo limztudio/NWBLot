@@ -184,8 +184,7 @@ namespace __hidden_gpu_command_ir_replay_lowering{
     }
 }
 
-// The graph-only preflight cannot validate native ownership, backing, or CommandList-local permanent states. Scan
-// the complete selected packet before taking the recording lease so a late backend failure cannot partially lower.
+// Preflight cannot check native ownership, so scan the packet before taking the recording lease.
 [[nodiscard]] static GpuCommandIrReplayResult ValidateBackendOperandPacket(
     const BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -318,9 +317,7 @@ static void LowerOperation(
     }
 }
 
-// Direct Vulkan lowering is intentionally a prototype with a single opcode. Scan the complete selected packet
-// after graph-aware preflight and before issuing any native command so an unsupported later record cannot leave an
-// earlier copy in the command buffer.
+// Direct lowering supports one opcode; scan the packet before emitting any native command.
 [[nodiscard]] static GpuCommandIrReplayResult ValidateDirectVulkanOpcodeSupport(
     const BinaryByteView bytes,
     const GpuSubmissionPacketId packet,
@@ -441,9 +438,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
         return backendPreflight;
 
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
-    // Preflight above establishes graph and backend legality before any void Core::CommandList operation can mutate
-    // its state tracker. The byte view and graph are caller-stable for this tooling call, so this final walk can
-    // lower without allocating a duplicate command list or per-command object graph.
+    // Preflight already proved legality, so this walk can lower without a duplicate command list.
     GpuCommandIrStreamReader reader(bytes);
     GpuCommandIrBuiltinTaskRecord record;
     u64 recordIndex = 0u;
@@ -467,9 +462,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
             continue;
         }
 
-        // The graph and bytes are immutable for the call. These resolution checks defend the release build if a
-        // caller violates that contract before replay begins; no revalidation is possible after a native command
-        // has been emitted, so concurrent mutation remains unsupported by design.
+        // The graph and bytes are caller-stable; concurrent mutation stays unsupported.
         if(!graph.validResource(record.destination) || (
             (record.opcode == GpuCommandIrOpcode::CopyBuffer || record.opcode == GpuCommandIrOpcode::CopyTexture)
             && !graph.validResource(record.source)
@@ -570,9 +563,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
 
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
 
-    // The caller has already lowered the graph-owned state seed and packet barriers into commandList. This second
-    // reader walk deliberately bypasses CommandList::copyBuffer, so it can measure/directly exercise only Vulkan
-    // command emission without resurrecting automatic state tracking in the replay path.
+    // Barriers are already lowered; bypass copyBuffer to exercise raw Vulkan emission only.
     GpuCommandIrStreamReader reader(bytes);
     GpuCommandIrBuiltinTaskRecord record;
     u64 recordIndex = 0u;
@@ -597,8 +588,7 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
             continue;
         }
 
-        // Preflight above and the direct-opcode scan establish the normal contract. Repeat only the resolution
-        // checks needed to turn caller mutation into a diagnostic instead of dereferencing a stale graph ID.
+        // Preflight proved the contract; repeat only resolution checks against stale IDs.
         if(
             record.opcode != GpuCommandIrOpcode::CopyBuffer
             || !graph.validResource(record.source)

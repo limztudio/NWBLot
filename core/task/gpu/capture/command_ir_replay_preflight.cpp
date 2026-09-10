@@ -641,9 +641,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             );
         }
 
-        // Captures normally span the packet range passed to GpuNativePacketRecorder. The requested packet is a
-        // self-contained lowering scope, so semantic validation deliberately filters other packet bodies after the
-        // stream's complete syntax has already been checked above.
+        // The packet is a self-contained scope; filter other packets after the full syntax check above.
         if(record.packet != packet){
             ++recordIndex;
             continue;

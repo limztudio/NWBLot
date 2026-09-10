@@ -559,8 +559,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         RuntimeMeshBufferUpload::BufferFlags attributeFlags;
         attributeFlags.canHaveRawViews = true;
-        // Hybrid transparent shadow tracing consumes the same corner attributes on AsyncCompute after Graphics
-        // has prepared the frame, so this trace-only stream is a shared read input too.
+        // Hybrid tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
             m_graphics,
@@ -927,15 +926,13 @@ void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail
     outBuffers.reserve(m_meshState.m_meshes.size() * 5u);
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         const MeshResources& mesh = meshIt.value();
-        // A frozen BLAS plan can fall back to the native current-mesh build when runtime geometry changes between
-        // preflight and recording. Retain every live source pair and backing buffer, not only the frozen inputs.
+        // Frozen BLAS may fall back to native builds; retain every live source and backing buffer.
         if(mesh.blas){
             outBuffers.push_back(mesh.positionBuffer);
             outBuffers.push_back(mesh.triangleIndexBuffer);
             outBuffers.push_back(mesh.blas->getBackingBufferHandle());
         }
-        // Preserve both mesh-local SW state buffers across route changes. A hybrid native build may leave these UAVs
-        // before the next frame switches to software-only frozen recording.
+        // Preserve mesh-local SW buffers across route changes for hybrid-to-software switches.
         outBuffers.push_back(mesh.swBvhNodeBuffer);
         outBuffers.push_back(mesh.swBvhParentBuffer);
     }

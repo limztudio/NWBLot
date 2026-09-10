@@ -24,7 +24,7 @@
 #define NWB_REFLECTION_MODE_HARDWARE 2u
 #define NWB_REFLECTION_MODE_HYBRID 3u
 
-// Counter byte offsets. Candidates and the feedback receiver bound drive scheduling; remaining counters describe executed work.
+// Counter byte offsets: candidates and the feedback receiver bound drive scheduling.
 #define NWB_REFLECTION_COUNTER_CANDIDATES 0u
 #define NWB_REFLECTION_COUNTER_HARDWARE_RAYS 4u
 #define NWB_REFLECTION_COUNTER_HARDWARE_HITS 8u
@@ -51,7 +51,7 @@
 #define NWB_REFLECTION_COUNTER_RESERVED 92u
 #define NWB_REFLECTION_COUNTER_SIZE 96u
 
-// Twelve std140 lanes. Targets own their descriptors; this immutable frame payload only borrows their selectors.
+// Twelve std140 lanes: targets own descriptors; this frame payload only borrows selectors.
 #define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
     FIELD(width, 0u) \
     FIELD(height, 0u) \

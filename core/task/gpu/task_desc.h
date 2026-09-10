@@ -158,17 +158,11 @@ struct GpuGraphResourceDesc{
     // Typed imports inherit their resource descriptor state only when this field was left unspecified; an explicit
     // Unknown preserves Vulkan's fresh-resource UNDEFINED origin for the graph's first writer.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
-    // Optional required state when graph work completes. The compiler applies this to every terminal range the
-    // graph declared for an imported texture, buffer, or acceleration structure and publishes it in the accepted
-    // packet's native state snapshot. Unknown leaves the resource's final state under ordinary task ownership.
+    // Optional required state at completion; Unknown leaves final state under task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
-    // Optional physical queue that receives an exclusive imported texture, buffer, or acceleration structure after
-    // its final graph use. The compiler emits the terminal state export first, then a release to this exact destination. The accepted
-    // terminal packet token and recorded state snapshot form the external handoff consumed by subsequent native
-    // work or a later graph import.
+    // Optional queue receiving exclusive imports after final use; token plus snapshot form the handoff.
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
-    // Optional owner of an exclusive imported texture, buffer, or acceleration structure before its first graph
-    // use. An exact first-packet match needs no extra synchronization because submission order on one physical queue is sufficient.
+    // Optional pre-first-use owner; exact first-packet matches need no extra sync.
     GpuPhysicalQueueId initialOwnerQueue;
     // A different first packet is permitted only when an already-recorded external producer released ownership to
     // this exact physical queue, exports the state snapshot below, and supplies the completion node imported into

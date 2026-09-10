@@ -39,10 +39,9 @@ struct CpuWorkerPlacement{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Query during initialization on the thread that will create the workers. Honors process CPU sets and inherited affinity.
-// Returns false with an empty result when usable processor identities cannot be established; never invents CPU indices.
+// Query on the worker-creating thread; honors CPU sets; never invents indices.
 [[nodiscard]] bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements);
-// Applies one processor identity, including Windows groups and Linux indices beyond 63.
+// Applies one processor identity, including groups and indices beyond 63.
 [[nodiscard]] bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
 
 [[nodiscard]] u32 QueryCpuCoreCount(CpuAffinity::Enum type);

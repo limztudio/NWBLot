@@ -25,23 +25,20 @@ namespace GraphicsBackend{
 };
 
 
-// Command lists and state handoffs need this queue identity without pulling in device.h (which itself includes
-// command.h through the public graphics API).
+// Queue identity for command lists and state handoffs (avoids pulling in device.h).
 namespace CommandQueue{
     enum Enum : u8{
         Graphics = 0,
         Compute,
-        // Optional physical copy transport. It exists only when Vulkan exposes a distinct dedicated
-        // transfer-only family; task-graph fallback continues to use Compute or Graphics otherwise.
+        // Optional copy transport, only when Vulkan exposes a distinct transfer-only family.
         Transfer,
 
         kCount
     };
 };
 
-// A task may request a capability class, but native recording and submission need to name the exact Vulkan queue
-// that owns its command pool and timeline. Physical IDs are scoped to one logical-device generation; an invalid
-// ID deliberately cannot be used as an ownership or retirement key.
+// Native recording names the exact Vulkan queue owning the command pool and timeline. IDs are scoped to
+// one logical-device generation; an invalid ID is never an ownership or retirement key.
 struct GpuPhysicalQueueId{
     u16 index = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
@@ -57,9 +54,8 @@ inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysica
     return !(lhs == rhs);
 }
 
-// A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
-// empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
-// Physical queue identity prevents a token from a retired logical-device generation from naming current work.
+// Completion edge from an accepted submission. `valid()` is false for rejected or empty work; a
+// sync-only submission may still produce a token for dependency forwarding.
 struct QueueSubmissionToken{
     u64 value = 0;
     CommandQueue::Enum queue = CommandQueue::kCount;
@@ -94,8 +90,7 @@ namespace GpuQueueCapability{
     NWB_DEFINE_GRAPHICS_MASK_OPERATORS(Mask)
 };
 
-// `queueClass` retains broad API capability validation. `id` selects the real native transport, including when a
-// device exposes more than one queue of the same class.
+// `queueClass` keeps API capability validation; `id` selects the native transport.
 struct GpuPhysicalQueueInfo{
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
@@ -113,11 +108,9 @@ struct GpuPhysicalQueueTopology{
     usize queueCount = 0u;
 };
 
-// Current backend-native command storage for one physical queue. Counts cover the direct worker-zero path and
-// every explicit recording-worker shard. A snapshot is sampled from thread-safe counters, so fields may advance
-// independently while recording/submission is concurrent. nativeHandleStorageLowerBoundBytes counts only the
-// client-visible native pool and command-buffer handle objects; opaque driver allocations and wrapper/container
-// capacity are deliberately excluded.
+// Current backend-native command storage for one physical queue. Snapshots sample thread-safe counters,
+// so fields may advance during recording/submission. The storage estimate covers client-visible pool and
+// command-buffer handles only, not opaque driver memory or wrapper capacity.
 struct GpuCommandArenaStatistics{
     GpuPhysicalQueueId queue;
     u64 workerArenaCount = 0u;

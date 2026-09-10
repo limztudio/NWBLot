@@ -26,33 +26,22 @@ namespace MaterialAssetMetadataSchema{
 
 
 static constexpr AStringView s_InterfaceField = "interface";
-// Optional. A `project/`-rooted `.surface` fragment that defines this material's nwbMaterialSurface()
-// hook (the per-pixel G-buffer surface: base color + normal + BXDF params). When present (and `shaders` is
-// absent), the cook generates this material's G-buffer pixel shader by wrapping the fragment with the engine
-// pixel-shader authoring + the material's typed `.bind`, and points the material's mesh stage at the shared
-// engine mesh shader. Transparent or refractive materials must use this project-owned hook: AVBOIT and shadow
-// optical passes consume the same surface contract. A material declares either `surface` (cook generates its
-// shaders) or `shaders` (explicit), not both.
+// Optional `project/`-rooted `.surface` fragment defining nwbMaterialSurface().
+// The cook wraps it with the engine pixel authoring + typed `.bind`. Transparent or
+// refractive materials must use it; declares either `surface` or `shaders`, not both.
 static constexpr AStringView s_SurfaceField = "surface";
-// Optional. Explicit stage->project-shader virtual-name map. When omitted, the cook generates the pixel shader from
-// `surface` and assigns the shared engine mesh shader. Explicit stages are supported only for opaque,
-// non-refractive materials because the current schema has no separate AVBOIT/shadow optical hook.
+// Optional explicit stage->shader map. Only for opaque, non-refractive materials.
 static constexpr AStringView s_ShadersField = "shaders";
 static constexpr AStringView s_ShaderVariantField = "shader_variant";
 static constexpr AStringView s_ParametersField = "parameters";
-// Required render-property flags. Opaque/single-sided/non-refractive materials must still author explicit zeroes so
-// older metadata shapes are rejected instead of silently inheriting defaults.
+// Required flags. Explicit zeroes keep older metadata shapes rejected.
 static constexpr AStringView s_TransparentField = "transparent";
 static constexpr AStringView s_TwoSidedField = "two_sided";
-// The dedicated refractive-caster classification flag (SEPARATE from `transparent`). Authored exactly like
-// `transparent`/`two_sided` as a bare 0/1 flag (`asset.refractive = 1;`). The material decides ONLY this boolean;
-// the actual refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side -- the `.surface` hook returns them
-// via NwbMeshSurface -- mirroring how the colored-shadow transmittance is shader-decided.
+// Refractive-caster flag (separate from `transparent`), authored as a bare 0/1 flag.
+// Refraction values stay shader-side via NwbMeshSurface.
 static constexpr AStringView s_RefractiveField = "refractive";
-// Required (at cook): a `project/`-rooted virtual path with the dedicated `.bxdf` extension (e.g.
-// "project/shaders/lambert.bxdf") authoring the deferred lighting BXDF for this material's surfaces. The cook
-// resolves it, assigns each unique BXDF a shading-model id, generates the deferred lighting dispatch module from
-// them, and bakes this material's id into its cooked asset. The engine never ships a default BXDF.
+// Required `project/`-rooted `.bxdf` path for deferred lighting. The cook assigns the
+// shading-model id and bakes it into the cooked asset. No engine default BXDF.
 static constexpr AStringView s_BxdfField = "bxdf";
 
 static constexpr AStringView s_AllowedAssetFields[] = {

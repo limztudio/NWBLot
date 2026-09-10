@@ -54,9 +54,7 @@ struct DeferredPresentGraphTask{
 };
 
 
-// This graph-owned terminal task records the published frame-timing endpoint after every presentation contributor.
-// It intentionally has no discarded hook: a rejected endpoint must remain available to FrameRecoveryGraphTask's
-// non-publishing recovery submission.
+// Terminal task records the frame-timing endpoint; rejected endpoints stay for recovery.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

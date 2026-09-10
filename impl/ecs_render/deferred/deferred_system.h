@@ -107,8 +107,7 @@ public:
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
 
 public:
-    // Resolves immutable per-frame data before graph declaration. The shared renderer publishes changed payloads
-    // through built-in graph uploads and confirms these CPU mirrors only after the packet accepts.
+    // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] bool prepareSceneShadingBufferUploads(
         f32 fallbackAspectRatio,
         const RayTracingLightingClassificationInput& rayTracingInput,

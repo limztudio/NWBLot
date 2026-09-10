@@ -58,9 +58,7 @@ struct GbufferGraphTask{
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
         bool regularComputeEmulationOutputStatesGraphOwned = false;
-        // Two or three shared-output regular compute draws are recorded by serial successor tasks. G-buffer
-        // retains only regular mesh rasterization, starts the original timing range, and leaves it open for the
-        // terminal shared raster task to finish.
+        // G-buffer keeps regular rasterization; terminal shared task finishes the timing range.
         bool regularSharedComputeEmulationDrawsGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
         bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;

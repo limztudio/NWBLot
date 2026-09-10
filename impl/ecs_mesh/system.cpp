@@ -82,7 +82,7 @@ RenderableMeshResolution::Enum MeshSystem::resolveRenderableMeshStatus(
     if(!resolveMesh(entity, mesh)){
         if(findMesh(entity) || m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
             return RenderableMeshResolution::Unavailable;
-        // Only unresolved entities need attachment discovery; ready runtime/static paths keep their existing lookups.
+        // Only unresolved entities need attachment discovery.
         for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
             if(provider && provider->hasRuntimeMeshBinding(entity))
                 return RenderableMeshResolution::Unavailable;

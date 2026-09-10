@@ -671,7 +671,7 @@ struct VulkanContext{
     // Descriptor-buffer limits used for layout and offsets.
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptorBufferProperties{};
     VkPhysicalDeviceCooperativeVectorPropertiesNV coopVecProperties{};
-    // Retains the cooperative-vector feature bits enabled in the device-create chain, not a later physical-device probe.
+    // Cooperative-vector feature bits from the device-create chain, not a later probe.
     VkPhysicalDeviceCooperativeVectorFeaturesNV coopVecFeatures{};
     VkPhysicalDeviceMeshShaderFeaturesEXT meshShaderFeatures{};
     VkPhysicalDeviceMeshShaderPropertiesEXT meshShaderProperties{};
@@ -2693,7 +2693,7 @@ public:
 private:
     BindingLayoutDesc m_desc;
     BindlessLayoutDesc m_bindlessDesc;
-    // Only push-only layouts own a reusable zero-set pipeline layout. Bindless layouts are composed by concrete pipelines.
+    // Only push-only layouts own a reusable zero-set pipeline layout.
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
     Vector<VkDescriptorSetLayout, Alloc::GlobalArena> m_descriptorSetLayouts;
     // Driver-created set size, segment, and binding offsets.
@@ -3085,8 +3085,8 @@ public:
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && isRecordingUnchecked();
     }
-    // Sticky for the current open/close attempt. A failed native capability or command semantic check invalidates
-    // the complete list; close discards its native buffer and open is the only operation that starts a fresh attempt.
+    // Sticky for the open/close attempt: any failed capability or semantic check invalidates the list; close
+    // discards its native buffer and only open starts a fresh attempt.
     [[nodiscard]] bool commandRecordingFailed()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && commandRecordingFailedUnchecked();
@@ -3161,8 +3161,7 @@ public:
     void copyTexture(Texture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
     void copyTexture(StagingTexture& dest, const TextureSlice& destSlice, Texture& src, const TextureSlice& srcSlice);
     void copyTexture(Texture& dest, const TextureSlice& destSlice, StagingTexture& src, const TextureSlice& srcSlice);
-    // Fallible variants are for graph recorders, which must reject a packet rather than claim an accepted lifecycle
-    // when staging allocation or native preflight fails. The established void methods remain the faÃ§ade contract.
+    // Fallible variants let graph recorders reject a packet instead of claiming a lifecycle when staging or preflight fails.
     [[nodiscard]] bool tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
@@ -3226,8 +3225,8 @@ public:
     [[nodiscard]] bool canResetTimerQueryHere()const;
     [[nodiscard]] bool beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& outToken);
     [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
-    // Lifetime closure may only consume the claim created by beginTimerQuery() on this same command buffer. It never
-    // appends retention or claim storage, reports diagnostics, or invokes observers.
+    // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention,
+    // diagnostics, or observers.
     [[nodiscard]] bool endTimerQueryFromExistingClaim(
         TimerQuery& query,
         const TimerQueryRecordingToken& token
@@ -3274,8 +3273,8 @@ private:
     }
     [[nodiscard]] bool canRecordTimerQueryHereUnchecked()const noexcept;
     [[nodiscard]] bool canResetTimerQueryHereUnchecked()const noexcept;
-    // Returns false only when graph publication temporarily prevents inspection. A true result reports whether this
-    // exact native recording lease contains the requested query cycle's begin and end claims.
+    // False only when graph publication blocks inspection. True reports whether this exact native lease holds
+    // the requested cycle's begin and end claims.
     [[nodiscard]] bool inspectExactTimerQueryRecordingEndpoints(
         const TimerQueryRecordingToken& token,
         u64 recordingLeaseSerial,
@@ -3285,8 +3284,8 @@ private:
     [[nodiscard]] bool beginGraphRecordingOwnership(u64 recordingLeaseSerial);
     void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
     void cancelGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
-    // A recorded graph may outlive its own strong reference through a task-retained handle. Revoke only that
-    // graph's exact still-unsubmitted publication; accepted, submitting, or later recording identities are untouched.
+    // A recorded graph may outlive its strong reference via a task-retained handle. Revoke only that graph's
+    // still-unsubmitted publication.
     void revokeGraphRecordingPublication(u64 recordingLeaseSerial)noexcept;
     [[nodiscard]] bool beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noexcept;
     void acceptGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;

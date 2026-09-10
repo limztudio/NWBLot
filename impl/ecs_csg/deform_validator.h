@@ -21,10 +21,6 @@ NWB_IMPL_BEGIN
 // Owns finiteness, topology, and option checks so preview and commit share one classifier before any cutter, wall, or cap work runs.
 class CsgDeformValidator final : NoCopy{
 public:
-    CsgDeformValidator() = delete;
-
-
-public:
     [[nodiscard]] static bool FiniteFloat(const f32 value);
     [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex);
     [[nodiscard]] static f32 SaturateFloat(const f32 value);
@@ -41,6 +37,10 @@ public:
         const usize vertexCount,
         CsgDeformViabilityReason::Enum& outReason
     );
+
+
+public:
+    CsgDeformValidator() = delete;
 };
 
 

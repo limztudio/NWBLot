@@ -17,8 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Captures the CPU state that becomes true only when the command list that produced it was accepted by the GPU queue.
-// Keeping this separate from recording ensures a rejected dispatch remains retryable on the next frame.
+// Captures CPU state true only when the producing command list was accepted.
 struct MeshSkinningSubmissionCommit{
     u32 editRevision = 0u;
     RuntimeMeshDirtyFlags handledDirtyFlags = RuntimeMeshDirtyFlag::None;

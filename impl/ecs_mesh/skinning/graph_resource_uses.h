@@ -31,7 +31,7 @@ struct MeshSkinningGraphResourceUses{
     {}
 };
 
-// Each call rebuilds ordered uses from immutable frame dispatch plans. Rejected declarations leave all outputs empty.
+// Each call rebuilds ordered uses from immutable plans; rejection empties outputs.
 [[nodiscard]] bool BuildMeshSkinningGraphResourceUses(
     const MeshSkinningGraphDispatchPlan* plans,
     usize planCount,

@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller resolves the instance from the current binding handle. Identity queries retain no GPU buffers.
+// Caller resolves instances from binding handles; queries retain no GPU buffers.
 [[nodiscard]] bool ResolveSkinnedRuntimeMeshIdentity(
     Core::ECS::EntityID entity,
     RuntimeMeshHandle runtimeMesh,
@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
     Name& outMeshKey,
     u64& outVersion
 );
-// Rejection clears all output ownership; successful descriptors retain the complete raster and optional RT roles.
+// Rejection clears outputs; success retains raster and optional RT roles.
 [[nodiscard]] bool BuildSkinnedRuntimeMeshDesc(
     Core::ECS::EntityID entity,
     RuntimeMeshHandle runtimeMesh,

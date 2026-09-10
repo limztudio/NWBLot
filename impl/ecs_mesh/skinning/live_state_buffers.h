@@ -27,8 +27,7 @@ struct MeshSkinningStateBufferResources{
     const Core::BufferHandle* bindlessResourceSlotsBuffer = nullptr;
 };
 
-// One collection visits every live binding in world order, independently of render visibility. The output owns
-// one handle per distinct buffer in first-occurrence order; the collector retains no state between collections.
+// One collection visits live bindings in world order; collector retains no state.
 class MeshSkinningStateBufferCollector final : NoCopy{
 private:
     using BufferIndex = HashSet<Core::Buffer*, Core::Alloc::ScratchArena>;

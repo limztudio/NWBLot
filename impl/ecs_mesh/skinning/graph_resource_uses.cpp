@@ -42,8 +42,7 @@ struct ResourceUseEntry{
     ResourceUseInfo info;
 };
 
-// Inline storage covers every role emitted by one plan in this phase. Larger collections index only actual unique
-// resource identities, and finish all index growth before output allocation. The scratch tables belong to this call.
+// Inline storage covers one plan's roles; larger sets index unique identities only.
 template<usize InlineCapacity>
 struct ResourceUseCollector : NoCopy{
     using Index = HashMap<Core::GpuGraphResourceId, ResourceUseInfo, ResourceHash, EqualTo<Core::GpuGraphResourceId>, Core::Alloc::ScratchArena>;

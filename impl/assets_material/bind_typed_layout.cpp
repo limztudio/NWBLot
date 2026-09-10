@@ -449,8 +449,7 @@ static bool BuildMaterialTypedLayoutDefaultValue(
 ){
     outDefaultValue = {};
 
-    // Resource fields store an initially-zero global-heap slot word. Their material-authored asset path is carried
-    // by MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
+    // Resource slots start zero; asset paths patch in once the heap is live.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
 

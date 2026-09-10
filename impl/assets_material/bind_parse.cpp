@@ -357,8 +357,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
 
-    // Resource fields declare only their shader-visible type. Each material supplies the concrete engine or project
-    // asset path in its parameters block, so a bind interface cannot carry a fixture, texture asset, or any identity.
+    // Resource fields declare only their type; materials supply the asset path.
     if(isResourceField){
         if(field.attributes.empty())
             return true;

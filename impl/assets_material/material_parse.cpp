@@ -82,7 +82,7 @@ bool ValidateMaterialCookInterfaces(
             return false;
         }
 
-        // The interface is stored as text; build the Name hash key the bind lookup + typed-layout machinery need.
+        // Build the Name key the bind lookup needs.
         const Name materialInterfaceName(AStringView(materialEntry.materialInterface));
         const auto bindEntryIt = materialBindLookup.find(materialInterfaceName);
         if(bindEntryIt == materialBindLookup.end()){

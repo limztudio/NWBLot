@@ -60,8 +60,6 @@ inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysica
 // A completion edge produced only by an accepted queue submission. `valid()` is intentionally false for rejected or
 // empty work, while an accepted synchronization-only submission may still produce a token for dependency forwarding.
 // Physical queue identity prevents a token from a retired logical-device generation from naming current work.
-// Field order is size-descending: the 8-byte completion value leads so the 1-byte queue class and both 2-byte
-// physical-queue fields share one 8-byte lane instead of stranding 7 bytes of padding (24 -> 16 bytes).
 struct QueueSubmissionToken{
     u64 value = 0;
     CommandQueue::Enum queue = CommandQueue::kCount;
@@ -98,8 +96,6 @@ namespace GpuQueueCapability{
 
 // `queueClass` retains broad API capability validation. `id` selects the real native transport, including when a
 // device exposes more than one queue of the same class.
-// Field order is size-descending: the three 4-byte indices lead and the two 1-byte class flags plus the 1-byte
-// dedicated flag share one lane with the 4-byte queue id instead of stranding tail padding (24 -> 20 bytes).
 struct GpuPhysicalQueueInfo{
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
@@ -168,8 +164,6 @@ typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 // One recorded begin/end cycle. The exact query, device-generation queue, monotonically allocated generation, and
 // captured reset authorization prevent stale command buffers from closing or revoking a different cycle after reuse.
-// Field order is size-descending: the 8-byte query pointer and three 8-byte generations lead so the 4-byte queue id
-// shares the tail lane instead of stranding 4 bytes of padding (40 -> 32 bytes).
 struct TimerQueryRecordingToken{
     TimerQuery* query = nullptr;
     u64 queryIncarnation = 0u;

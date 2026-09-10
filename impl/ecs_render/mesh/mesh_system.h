@@ -53,8 +53,7 @@ namespace ECSRenderDetail{
         bool backingFresh = false;
         bool nativeBuildsBlas = false;
     };
-    // Owning cross-domain view of mesh-bound acceleration resources. Consumers may prepare changes against this
-    // value, but only RendererMeshSystem may publish them into the live mesh registry.
+    // Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
     struct MeshRayTracingResourceSnapshot{
         Name meshName = NAME_NONE;
         Core::BufferHandle positionBuffer;
@@ -162,7 +161,7 @@ public:
     void invalidateResources();
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
-    // Graph declaration resolves already-prepared draw-item keys without touching assets or mutating mesh state.
+    // Graph declaration resolves prepared keys without touching assets or mesh state.
     [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
@@ -192,8 +191,7 @@ public:
     [[nodiscard]] bool createMeshViewBuffer();
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const;
     [[nodiscard]] bool snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;
-    // Resolves the immutable per-frame view payload before graph declaration.  The caller publishes it through a
-    // graph-owned upload task, then confirms the CPU mirror only after that packet accepts.
+    // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
     [[nodiscard]] bool prepareMeshViewBufferUpload(
         f32 fallbackAspectRatio,
         ECSRenderDetail::MeshViewGpuData& outViewState,
@@ -211,8 +209,7 @@ private:
     void releaseMeshFrameHeapHandles();
 
 private:
-    // Persistent mesh descriptors are established while the resource is created.  Material preparation and draw
-    // paths may only consume the ready handles so neither can allocate descriptor-heap entries mid-frame.
+    // Mesh descriptors are established at creation; draw paths only consume ready handles.
     [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
     [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);

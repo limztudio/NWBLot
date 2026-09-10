@@ -101,8 +101,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuUploadBufferTaskDesc{
                 .source = bindlessSlotsBlob,
                 .destination = currentBindlessSlots,
-                // This selector persists its descriptor-visible state across packet closes. The built-in upload
-                // performs its intrinsic CopyDest transition, then publishes ConstantBuffer to Shadow Preparation.
+                // Selector persists across packet closes; upload publishes ConstantBuffer.
                 .finalState = Core::ResourceStates::ConstantBuffer,
             }
         );
@@ -216,8 +215,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuUploadBufferTaskDesc{
                 .source = causticEmissionTargetsBlob,
                 .destination = causticEmissionTargets,
-                // This automatic-state buffer publishes Common. Shadow Preparation owns the following SRV handoff
-                // and thereby becomes the single producer observed by later software or hardware caustic packets.
+                // Buffer publishes Common; Shadow Preparation owns the SRV handoff.
                 .finalState = Core::ResourceStates::Common,
             }
         );
@@ -274,8 +272,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuUploadBufferTaskDesc{
                 .source = surfelFrameConstantsBlob,
                 .destination = surfelFrameConstants,
-                // This automatic-state constant buffer publishes Common. Shadow Preparation owns the following CB
-                // handoff and therefore becomes the accepted cross-queue producer for Surfel GI.
+                // Buffer publishes Common; Shadow Preparation owns the CB handoff.
                 .finalState = Core::ResourceStates::Common,
             }
         );
@@ -480,8 +477,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             Core::GpuUploadBufferTaskDesc{
                 .source = sceneBvhNodesBlob,
                 .destination = sceneBvhNodes,
-                // Automatic-state software scene-BVH storage publishes Common. Shadow Preparation becomes the SRV
-                // handoff producer observed by the later Compute shadow, caustic, and surfel consumers.
+                // Scene-BVH storage publishes Common; Shadow Preparation owns the SRV handoff.
                 .finalState = Core::ResourceStates::Common,
             }
         );

@@ -121,8 +121,7 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     return true;
 }
 
-// This is intentionally broader than the immutable overlay task. An ImGui callback is opaque to the backend, and
-// the graph must preserve the existing primary-Graphics command-list contract while capability tracking remains on.
+// Opaque callbacks need broader queues; preserve the primary-Graphics contract.
 [[nodiscard]] static Core::GpuQueueRequest OpaquePresentationQueueRequest(){
     return Core::GpuQueueRequest{
         static_cast<Core::GpuQueueCapability::Mask>(
@@ -352,9 +351,7 @@ struct UiSystem::StandaloneTextureUploadCompletionTask{
 };
 
 
-// An ImDrawCmd callback owns opaque user state, so it cannot enter the immutable overlay packet. The synchronous
-// standalone recorder may invoke it against the live ImGui arrays while the graph orders ordinary UI resources
-// around it.
+// Opaque callbacks cannot enter the immutable packet; record them synchronously.
 struct UiSystem::StandaloneLegacyPresentationTask{
     struct Payload{
         UiSystem* ui = nullptr;

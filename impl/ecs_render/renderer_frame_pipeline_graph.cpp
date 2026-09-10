@@ -3598,8 +3598,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         occupancyComputeEmulationScheduling.forceSubmissionBoundary = false;
         occupancyComputeEmulationScheduling.allowPacketMerge = true;
         occupancyComputeEmulationScheduling.mergeWithPrevious = true;
-        // Depth Warp is a later Compute consumer. Retain the immediate producer/raster pair in AVBOIT Pre's
-        // Graphics packet so one timing ticket and graph-owned UAV-to-VertexBuffer handoff remain authoritative.
+        // Keep producer/raster pair in AVBOIT Pre Graphics packet for one authoritative handoff.
         occupancyComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         Core::GpuTaskDesc occupancyComputeEmulationDesc;
         occupancyComputeEmulationDesc
@@ -3637,8 +3636,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(occupancySharedComputeEmulationOutputStatesGraphOwned){
-        // The one retained output appears in every phase, so keep it as an exact resource rather than placing it
-        // in a resource set whose duplicate expansion would erase the alternating UAV/VertexBuffer uses.
+        // Retained output appears in every phase; keep it exact to preserve alternating uses.
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedGenerateResourceUses{
             avboitPreResourceScratch
         };
@@ -3675,8 +3673,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         occupancySharedComputeEmulationScheduling.forceSubmissionBoundary = false;
         occupancySharedComputeEmulationScheduling.allowPacketMerge = true;
         occupancySharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Every phase is an explicit immediate successor. Keep the full alternating chain in AVBOIT Pre despite
-        // Depth Warp's later Compute consumer so one command list owns the timing scope and its output handoff.
+        // Keep the full alternating chain in AVBOIT Pre so one list owns timing and handoff.
         occupancySharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto addOccupancySharedComputeEmulationPhase = [
             this,
@@ -5525,8 +5522,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         avboitAccumulationScheduling.allowMergeAcrossConsumerFrontier = true;
     }
     if(accumulationSharedComputeEmulationOutputStatesGraphOwned){
-        // The one retained output appears in every phase, so keep it as an exact resource rather than placing it
-        // in a resource set whose duplicate expansion would erase the alternating UAV/VertexBuffer uses.
+        // Retained output appears in every phase; keep it exact to preserve alternating uses.
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{
             accumulationResourceScratch
         };

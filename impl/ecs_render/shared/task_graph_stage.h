@@ -25,7 +25,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared-output compute emulation alternates one generate and one raster phase for every retained regular
+// Shared-output emulation alternates one generate and one raster phase per draw.
 // Keep supported range in contract; domains stay independent of RendererFramePipeline.
 inline constexpr usize s_SharedComputeEmulationPhasesPerDraw = 2u;
 inline constexpr usize s_SharedComputeEmulationMinimumDrawCount = 2u;
@@ -50,14 +50,12 @@ inline constexpr usize s_SharedComputeEmulationMaximumPhaseCount =
         && (phaseCount % s_SharedComputeEmulationPhasesPerDraw) == 0u;
 }
 
-// Immutable frame facts used while declaring the graph. Queue assignment remains a compiler result; this
-// carries only the features and external-history availability that change which semantic tasks exist.
+// Immutable frame facts for graph declaration; queue assignment stays a compiler result.
 struct RendererFrameGraphFeatures{
     bool frameLaggedAsyncLightingEnabled = false;
     bool laggedLightingHistoryReady = false;
     bool laggedLightingHistoryReadReady = false;
-    // A prior Transfer history-copy tail still reads the live producer targets. The next shadow/caustic writers
-    // must wait for it even when current-frame Lighting does not sample history.
+    // A prior history-copy tail still reads live targets; next writers must wait for it.
     bool laggedLightingHistoryWriterWaitPending = false;
     bool hasTransparentRenderers = false;
     bool hardwareCaustics = false;
@@ -73,8 +71,7 @@ struct RendererFrameGraphFeatures{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A domain publishes this narrow boundary only after it has declared its internal task topology. Downstream
-// consumers can depend on the semantic stage without becoming coupled to domain-local task identifiers.
+// Domains publish this boundary after declaring topology; downstream avoids local coupling.
 struct RendererTaskGraphTransparencyStage{
     Core::GpuTaskId firstTask;
     Core::GpuTaskId completionTask;

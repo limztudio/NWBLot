@@ -46,8 +46,7 @@ namespace ECSRenderDetail{
         }
     };
 
-    // Mesh owns the descriptor-registration transaction for all three frame bindings. This retained snapshot keeps
-    // each buffer paired with the exact heap handle published in that transaction while a graph packet is pending.
+    // Mesh owns the registration transaction; snapshot pairs buffers with published handles.
     struct MeshFrameBindingSnapshot{
         Core::BufferHandle instanceBuffer;
         Core::BufferHandle materialTypedBuffer;

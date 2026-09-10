@@ -34,7 +34,7 @@ struct MeshFrameHeapSlots{
     u32 instance = 0u;
     u32 materialTyped = 0u;
     u32 view = 0u;
-    // Compute-emulation's writable generated-vertex buffer. Mesh-shader/raster draws leave this lane zero.
+    // Emulation writable vertex buffer; mesh-shader draws leave this lane zero.
     u32 generatedVertex = 0u;
 };
 

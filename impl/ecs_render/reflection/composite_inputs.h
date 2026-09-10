@@ -17,8 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Root wiring retains the matching textures and declares their graph reads. Compositing consumes only this frozen
-// selector contract, without access to reflection's queues, history, pipelines, or mutable frame state.
+// Root wiring retains textures and declares reads; compositing sees only this contract.
 struct ReflectionCompositeInputs{
     u32 opaqueRadianceSlot = 0xffffffffu;
     u32 glassRadianceSlot = 0xffffffffu;

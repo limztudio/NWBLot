@@ -17,8 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The frame coordinator combines facts from their owning domains. An unavailable or unstamped input disables
-// temporal reuse; structural ECS mutation versions and GPU allocation identities alone do not prove stable content.
+// Unavailable or unstamped inputs disable temporal reuse; versions alone prove nothing.
 struct ReflectionSceneContentStamp{
     u64 geometry = 0u;
     u64 material = 0u;

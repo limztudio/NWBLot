@@ -42,8 +42,7 @@ class Material;
 class Mesh;
 class RendererMaterialSystem;
 
-// Prepared static geometry and effective material inputs. The byte view is borrowed only during select();
-// the retained frame selection contains entity IDs, never pointers into material or scratch storage.
+// Prepared static inputs; retained selection holds entity IDs, never borrowed pointers.
 struct CoincidentOpticalVolumeCandidate{
     Core::ECS::EntityID entity;
     Core::Assets::AssetRef<Mesh> mesh;
@@ -64,8 +63,7 @@ struct CoincidentOpticalVolumeCandidate{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The frame pipeline owns one selection and freezes it before raster, RT and caustic preparation diverge.
-// Every consumer uses the same decision; dense raster and RT indices retain their separate existing ABIs.
+// Pipeline owns one frozen selection shared by all consumers; raster/RT keep their ABIs.
 class RendererOpticalVolumeSelection final : NoCopy{
 public:
     explicit RendererOpticalVolumeSelection(Core::Alloc::GlobalArena& arena);

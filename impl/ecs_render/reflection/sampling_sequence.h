@@ -22,7 +22,7 @@ struct ReflectionSampleBase{
     u32 y = 0u;
 };
 
-// Precompute the first two Sobol dimensions once per frame. Pixel-specific digital scrambling stays in the shader.
+// Precompute two Sobol dimensions per frame; scrambling stays in the shader.
 [[nodiscard]] ReflectionSampleBase ComputeReflectionSampleBase(u32 sampleIndex)noexcept;
 
 

@@ -5082,8 +5082,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
             avboitAccumulationPayload.accumulationPhasePrepared = true;
             accumulationStreamsUploaded = true;
-            // A phase may graph-own exactly one alias-free compute stream. Mixed regular/CSG work retains the
-            // established local interleaving because one producer/raster handoff cannot preserve its draw order.
+            // A phase owns one alias-free stream; mixed work keeps local interleaving.
             accumulationRegularComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
                 && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
                 && accumulationMaterialSampledTexturesCollected
@@ -5273,7 +5272,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     accumulationResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
 
 
-    // accumulationFramebuffer binds deferred depth read-only, which Vulkan tracks as DepthRead rather than SRV.
+    // accumulationFramebuffer binds depth read-only, tracked as DepthRead.
     accumulationResourceUses.push_back(ReadUse(depth, Core::ResourceStates::DepthRead));
     accumulationResourceUses.push_back(ReadUse(avboitTransmittance));
     accumulationResourceUses.push_back(ReadUse(avboitDepthWarp));
@@ -5292,11 +5291,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationResourceUses.push_back(ReadBufferUse(csgReceiverRanges, accumulationReceiverRange));
             accumulationResourceUses.push_back(ReadBufferUse(csgCutters, accumulationCutterRange));
             accumulationResourceUses.push_back(ReadUse(csgClipContextSlots, Core::ResourceStates::ConstantBuffer));
-            // This remains the full-resolution interval producer's state; accumulation only samples it.
+            // Interval producer owns this state; accumulation only samples it.
             accumulationResourceUses.push_back(ReadUse(csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
             if(accumulationCsgIntervalSampleImageStatesGraphOwned){
-                // The prepared transparent interval producer wrote these aliases. Accumulation loads them through
-                // StorageImage descriptors, so the graph lowers its same-UAV handoff before this thunk records.
+                // Interval producer wrote these aliases; graph lowers the same-UAV handoff.
                 accumulationResourceUses.push_back(ReadTextureUse(
                     csgRemovedIntervalDepth,
                     csgRemovedIntervalSubresources,

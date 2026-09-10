@@ -37,6 +37,7 @@
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
+#include <impl/ecs_render/deferred/task_graph_suffix_builder.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
@@ -6013,204 +6014,48 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!refractionResolveTask.valid())
         return;
 
-    // Composite remains a distinct packet and joins both graph-owned AVBOIT and Lighting. It retains the current
-    // bindless selector in lagged mode rather than inheriting Lighting's history selector.
-    const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(
-        deferredTargets.compositeColor,
-        Name("render.deferred_composite.composite_color"),
-        "Composite Color"
-    );
-    const Core::GpuGraphResourceId compositeBindlessSlots = currentBindlessSlots;
-    if(
-        !avboitAccumColor.valid()
-        || !avboitAccumExtinction.valid()
-        || !compositeColor.valid()
-        || !compositeBindlessSlots.valid()
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
-        return;
-    }
-
-    const Core::GpuTaskResourceUse compositeResourceUses[] = {
-        ReadUse(opaqueColor),
-        ReadUse(reflectionGraph.opaqueRadiance),
-        ReadUse(reflectionGraph.glassRadiance),
-        ReadUse(avboitAccumColor),
-        ReadUse(avboitAccumExtinction),
-        ReadUse(avboitForegroundColor),
-        ReadUse(avboitForegroundExtinction),
-        ReadUse(refractionResolve),
-        ReadUse(
-            compositeBindlessSlots,
-            Core::ResourceStates::ConstantBuffer
-        ),
-        WriteUse(compositeColor, Core::ResourceStates::UnorderedAccess),
-    };
-    Core::GpuTaskSchedulingHint compositeScheduling;
-    compositeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    compositeScheduling.avoidQueueCrossing = useLaggedLightingHistory;
-    compositeScheduling.forceSubmissionBoundary = true;
-    compositeScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId compositeDependencies[] = {
-        m_deferredLightingTask,
-        avboitFinalTask,
-        refractionResolveTask,
-        reflectionGraph.completion,
-    };
-    Core::GpuTaskDesc compositeDesc;
-    compositeDesc
-        .setIdentity(Name("render.deferred_composite"))
-        .setMarkerLabel("Deferred Composite")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(compositeScheduling)
-        .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
-        .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
-    ;
-    m_deferredCompositeTask = m_deferredSystem.declareDeferredCompositeTask(
+    DeferredGraphSuffixBuilder suffixBuilder(
         m_deferredLightingTaskGraph,
-        compositeDesc,
-        deferredTargets,
-        compositeTimingTicket,
-        reflectionCompositeInputs
-    );
-    if(!m_deferredCompositeTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
-        return;
-    }
-
-    const Core::GpuExternalCompletionId backBufferAvailability =
-        m_deferredLightingTaskGraph.importExternalCompletion(
-            Core::GpuExternalCompletionDesc{}
-                .setIdentity(Name("render.deferred_present.backbuffer_availability"))
-                .setMarkerLabel("Presentation Back Buffer Availability")
-                .setToken(presentationFrame.backBuffer.availabilityCompletion)
-        )
-    ;
-    if(!backBufferAvailability.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
-        return;
-    }
-
-    Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(
-        Name("render.deferred_present.backbuffer"),
-        "Presentation Back Buffer"
-    );
-    backBufferDesc
-        .setInitialState(presentationFrame.backBuffer.nativeInitialState)
-        .setInitialAvailabilityCompletion(backBufferAvailability)
-        .setExternalFinalState(Core::ResourceStates::Present)
-    ;
-    const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importTexture(
-        presentationFrame.backBuffer.texture,
-        backBufferDesc
-    );
-    if(!backbuffer.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
-        return;
-    }
-
-    const Core::GpuTaskResourceUse presentResourceUses[] = {
-        ReadUse(compositeColor),
-        ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteTextureUse(
-            backbuffer,
-            presentationFramebufferDesc.colorAttachments[0].subresources,
-            Core::ResourceStates::RenderTarget
-        ),
-    };
-    Core::GpuTaskSchedulingHint presentScheduling;
-    presentScheduling.cost = Core::GpuTaskCostHint::Medium;
-    presentScheduling.avoidQueueCrossing = useLaggedLightingHistory;
-    presentScheduling.forceSubmissionBoundary = true;
-    presentScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId presentDependencies[] = {
-        m_deferredCompositeTask,
-        m_deferredSurfelGiTask,
-    };
-    const usize presentDependencyCount = useLaggedLightingHistory ? LengthOf(presentDependencies) : 1u;
-    Core::GpuTaskDesc presentDesc;
-    presentDesc
-        .setIdentity(Name("render.deferred_present"))
-        .setMarkerLabel("Deferred Present")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(presentScheduling)
-        .setDependencies(presentDependencies, presentDependencyCount)
-        .setResourceUses(presentResourceUses, LengthOf(presentResourceUses))
-    ;
-    m_deferredPresentTask = m_deferredLightingTaskGraph.addTask<DeferredPresentGraphTask>(
-        presentDesc,
-        DeferredPresentGraphTask::Payload{
-            .deferredSystem = &m_deferredSystem,
-            .graphics = &m_graphics,
-            .targets = &deferredTargets,
-            .presentationFrame = presentationFrame,
-            .backBuffer = backbuffer,
-            .asyncFinalTiming = &asyncFinalTiming,
-            .timingTicket = &presentTimingTicket,
-            .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
-        }
-    );
-    if(!m_deferredPresentTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
-        return;
-    }
-
-    // UI/overlay work must be declared before the independent diagnostic and history-copy tails. Its explicit
-    // dependency on Deferred Present makes it the final presentation contributor that the timing endpoint follows,
-    // instead of leaving GraphicsRuntime::render() to submit a later untracked backbuffer write.
-    m_deferredPresentationOverlayRequired =
+        m_deferredSystem,
+        m_graphics,
         m_preparedTaskGraphPresentationContributor
-        && m_preparedTaskGraphPresentationContributor->hasTaskGraphPresentationWork()
-    ;
-    if(m_deferredPresentationOverlayRequired){
-        m_deferredPresentationOverlayTask = m_preparedTaskGraphPresentationContributor->declareTaskGraphPresentation(
-            m_deferredLightingTaskGraph,
-            presentationFrame,
-            backbuffer,
-            m_deferredPresentTask
-        );
-        if(!m_deferredPresentationOverlayTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
-            return;
-        }
-    }
-
-    // The critical-path query must end after the last graph-owned presentation contributor, while recovery keeps a
-    // separate non-publishing endpoint for a rejected suffix. The distinct packet is also the only packet that may
-    // carry the swap-chain presentation signal.
-    const Core::GpuTaskId frameTimingEndDependency = m_deferredPresentationOverlayTask.valid()
-        ? m_deferredPresentationOverlayTask
-        : m_deferredPresentTask
-    ;
-    Core::GpuTaskSchedulingHint frameTimingEndScheduling;
-    frameTimingEndScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    frameTimingEndScheduling.forceSubmissionBoundary = true;
-    frameTimingEndScheduling.allowPacketMerge = false;
-    Core::GpuTaskDesc frameTimingEndDesc;
-    frameTimingEndDesc
-        .setIdentity(Name("render.frame_timing_end"))
-        .setMarkerLabel("Frame Timing End")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(frameTimingEndScheduling)
-        .setDependencies(&frameTimingEndDependency, 1u)
-    ;
-    m_deferredFrameTimingEndTask = m_deferredLightingTaskGraph.addTask<FrameTimingEndGraphTask>(
-        frameTimingEndDesc,
-        FrameTimingEndGraphTask::Payload{
-            .frameTimingTransaction = &frameTimingTransaction,
-        }
     );
-    if(!m_deferredFrameTimingEndTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
+    DeferredGraphSuffixResult suffixResult;
+    if(!suffixBuilder.declare(
+        DeferredGraphSuffixInputs{
+            .targets = &deferredTargets,
+            .opaqueColor = opaqueColor,
+            .avboitAccumColor = avboitAccumColor,
+            .avboitAccumExtinction = avboitAccumExtinction,
+            .avboitForegroundColor = avboitForegroundColor,
+            .avboitForegroundExtinction = avboitForegroundExtinction,
+            .refractionResolve = refractionResolve,
+            .currentBindlessSlots = currentBindlessSlots,
+            .reflectionGraph = reflectionGraph,
+            .reflectionCompositeInputs = reflectionCompositeInputs,
+            .lightingTask = m_deferredLightingTask,
+            .avboitFinalTask = avboitFinalTask,
+            .refractionResolveTask = refractionResolveTask,
+            .surfelGiTask = m_deferredSurfelGiTask,
+            .presentationFrame = &presentationFrame,
+            .presentationFramebufferDesc = &presentationFramebufferDesc,
+            .useLaggedLightingHistory = useLaggedLightingHistory,
+        },
+        deferredTargets,
+        reflectionCompositeInputs,
+        compositeTimingTicket,
+        presentTimingTicket,
+        asyncFinalTiming,
+        m_deferredShadowVisibilityTask,
+        frameTimingTransaction,
+        suffixResult
+    ))
         return;
-    }
-    if(!m_deferredLightingTaskGraph.declarePresentEndpoint(Core::GpuPresentEndpoint{
-        .producer = m_deferredFrameTimingEndTask,
-        .backBuffer = backbuffer,
-    })){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
-        return;
-    }
+    m_deferredCompositeTask = suffixResult.compositeTask;
+    m_deferredPresentationOverlayRequired = suffixResult.overlayRequired;
+    m_deferredPresentationOverlayTask = suffixResult.overlayTask;
+    m_deferredPresentTask = suffixResult.presentTask;
+    m_deferredFrameTimingEndTask = suffixResult.frameTimingEndTask;
 
     // Keep this diagnostic behind the terminal presentation endpoint so whole-normal execution cannot absorb its
     // independent Transfer-preferred tail and it cannot delay lighting or presentation.

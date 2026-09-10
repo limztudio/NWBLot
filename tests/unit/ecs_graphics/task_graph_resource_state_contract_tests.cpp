@@ -76,7 +76,7 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_suffix_builder.cpp", "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
     const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
     const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
     const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
@@ -252,7 +252,7 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
 
     AString taskGraphSource;
     AString avboitTargetsSource;
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_suffix_builder.cpp", "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_targets.cpp", avboitTargetsSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView avboitTargets(avboitTargetsSource.data(), avboitTargetsSource.size());
@@ -261,6 +261,7 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     ASSERT_NE(lightingOffset, AStringView::npos);
     ASSERT_NE(compileOffset, AStringView::npos);
     const AStringView deferredLighting = taskGraph.substr(lightingOffset, compileOffset - lightingOffset);
+    const AStringView deferredSuffix = taskGraph;
 
     EXPECT_TRUE(ContainsText(
         deferredLighting,
@@ -270,7 +271,8 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
         "    };"
     ));
-    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 11u);
+    EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 10u);
+    EXPECT_EQ(CountText(deferredSuffix, "importFirstWriteTexture("), 11u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
@@ -322,9 +324,9 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
         "        deferredTargets.opaqueColor,"
     ));
     EXPECT_TRUE(ContainsText(
-        deferredLighting,
+        deferredSuffix,
         "const Core::GpuGraphResourceId compositeColor = importFirstWriteTexture(\n"
-        "        deferredTargets.compositeColor,"
+        "        targets.compositeColor,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,

@@ -380,6 +380,8 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
             "deferred/task_graph_present_task.cpp",
             "kernel/task_graph_frame_timing_end_task.h",
             "kernel/task_graph_frame_timing_end_task.cpp",
+            "deferred/task_graph_suffix_builder.h",
+            "deferred/task_graph_suffix_builder.cpp",
             "renderer_frame_pipeline_graph.cpp",
         },
         taskGraphSource
@@ -407,7 +409,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(taskGraph, "setDependencies(&frameTimingEndDependency, 1u)"));
     EXPECT_TRUE(ContainsText(taskGraph, "frameTimingTransaction->recordEnd(commandList)"));
     EXPECT_TRUE(ContainsText(taskGraph, "declarePresentEndpoint(Core::GpuPresentEndpoint{"));
-    EXPECT_TRUE(ContainsText(taskGraph, ".producer = m_deferredFrameTimingEndTask,"));
+    EXPECT_TRUE(ContainsText(taskGraph, ".producer = outResult.frameTimingEndTask,"));
     EXPECT_TRUE(ContainsText(taskGraph, ".backBuffer = backbuffer,"));
 
     const AStringView shadowPrepare = taskGraph.substr(shadowPrepareOffset, meshViewSetupOffset - shadowPrepareOffset);

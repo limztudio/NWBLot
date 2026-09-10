@@ -483,6 +483,15 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp",
         presentationBuildSource
     ));
+    {
+        AString suffixSource;
+        ASSERT_TRUE(ReadTextFile(
+            repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_suffix_builder.cpp",
+            suffixSource
+        ));
+        presentationBuildSource += "\n\n";
+        presentationBuildSource.append(suffixSource.data(), suffixSource.size());
+    }
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_present_task.h",
         presentationTaskHeaderSource
@@ -534,7 +543,7 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     ));
     EXPECT_TRUE(ContainsText(
         presentationBuild,
-        "const Core::GpuGraphResourceId backbuffer = m_deferredLightingTaskGraph.importTexture(\n"
+        "const Core::GpuGraphResourceId backbuffer = m_graph.importTexture(\n"
         "        presentationFrame.backBuffer.texture,"
     ));
     EXPECT_TRUE(ContainsText(
@@ -549,7 +558,7 @@ TEST(EcsGraphics, RendererPresentationGraphBindsExactAcquiredTexture){
     EXPECT_TRUE(ContainsText(
         presentationBuild,
         "declarePresentEndpoint(Core::GpuPresentEndpoint{\n"
-        "        .producer = m_deferredFrameTimingEndTask,\n"
+        "        .producer = outResult.frameTimingEndTask,\n"
         "        .backBuffer = backbuffer,"
     ));
 

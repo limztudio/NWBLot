@@ -73,6 +73,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_prefix_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_present_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_present_task.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_suffix_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_suffix_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_graph_frame_recovery_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_graph_frame_recovery_task.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_graph_frame_timing_end_task.cpp"

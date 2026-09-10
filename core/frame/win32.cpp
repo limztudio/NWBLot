@@ -72,8 +72,7 @@ template<typename FunctionT>
     if(!procedure)
         return nullptr;
 
-    // GetProcAddress returns a function pointer with a generic signature. Copy its Windows ABI representation
-    // instead of using an incompatible function-pointer cast that GNU-compatible frontends diagnose.
+    // GetProcAddress returns a generic pointer; copy its ABI instead of casting.
     FunctionT result = nullptr;
     NWB_MEMCPY(&result, sizeof(result), &procedure, sizeof(procedure));
     return result;

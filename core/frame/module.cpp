@@ -73,8 +73,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
 }
 Frame::~Frame()noexcept(false){
-    // Telemetry upload and graphics teardown can invoke throwing callbacks. During terminal unwind, quiesce only
-    // scheduler-owned captures and detach callback-free platform state so the original exception survives.
+    // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
     if(UncaughtExceptionCount() > 0){
         m_cpuTasks.drain();
         cleanupPlatform();
@@ -192,8 +191,7 @@ bool Frame::updateFrame(f32 delta){
         return false;
     }
 
-    // The callback interval ended before graphics work. Delay recording it until this frame will publish so a
-    // failed callback, quit, or graphics frame cannot leave a pending sample to be aggregated into a later frame.
+    // Callback interval ended before graphics; delay recording until the frame will publish.
     if(recordProjectUpdateTiming)
         cpuTiming.recordSample(projectUpdateTimingScope, projectUpdateSeconds, sampleFrameIndex);
 

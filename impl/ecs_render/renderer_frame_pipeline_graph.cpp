@@ -3071,9 +3071,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
             avboitOccupancyPayload.occupancyPhasePrepared = true;
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
-            // A phase may graph-own exactly one alias-free compute stream. Mixed regular/CSG work retains the
-            // established local interleaving because a single producer/raster handoff cannot preserve its draw
-            // order.
+            // A phase owns one alias-free stream; mixed work keeps local interleaving.
             occupancyRegularComputeEmulationPlanCaptured = occupancyDrawItems.csg.computeDrawItems.empty()
                 && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
                 && occupancyMaterialSampledTexturesCollected
@@ -3090,10 +3088,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                     occupancyUploadScratch
                 )
             ;
-            // The all-compute two-through-five-draw case can preserve one shared generated output only
-            // as an explicit D(A) -> R(A) -> D(B) -> R(B) [-> D(C) -> R(C) -> D(D) -> R(D) -> D(E) -> R(E)]
-            // sequence. Keep mesh and CSG work out of this narrow slice so the aggregate Occupancy callback is
-            // never partially replayed around its phases.
+            // All-compute draws share one output only as an explicit D/R sequence; keep mesh/CSG out.
             occupancySharedComputeEmulationPlanCaptured = !occupancyRegularComputeEmulationPlanCaptured
                 && occupancyDrawItems.regular.meshDrawItems.empty()
                 && occupancyDrawItems.csg.empty()

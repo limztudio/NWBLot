@@ -1497,16 +1497,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
     appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
 
-    // The declaration-owned source imports the prior cache. The normal executor builds the sparse
-    // AS/software-BVH candidate after recording every ordinary packet and commits it only when Shadow Preparation
-    // accepts.
+    // Build the sparse candidate after recording; commit on Shadow Preparation accept.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_shadowPreparePersistentState);
     m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
     const auto submitFrameRecoveryPacket = [&]() -> bool {
-        // Retire the accepted frame scope after a rejected packet. The transaction supplies one latest token from
-        // every other accepted physical queue directly to the graph-marked recovery packet; Graphics order covers
-        // its own accepted prefix without a redundant timeline wait.
+        // Retire the scope after rejection; Graphics order needs no extra wait.
         if(device.requiresRecreation()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
             m_deferredFrameRecoveryArmed = false;
@@ -1558,8 +1554,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     const auto recoverPendingFrameThenDiscardUnaccepted = [&]() -> bool {
         const bool recovered = recoverPendingFrameSubmission();
-        // Recovery must record and submit while this packet remains Declared. Once it has accepted (or its own
-        // rejection discarded the timing transaction), reject every remaining normal packet in the shared graph.
+        // Record/submit while Declared; then reject remaining normal packets.
         return discardUnacceptedGraphPackets() && recovered;
     };
     const auto failFrameRenderRecovery = [&](){
@@ -1567,7 +1562,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             return;
         m_frameRenderRecoveryFailed = true;
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: cannot safely continue after an unresolved frame recovery submission; requesting device recreation"));
-        // Defer device recreation until accepted work cannot be invalidated.
+        // Defer recreation until accepted work is safe.
         m_graphics.requestDeviceRecreation();
     };
 

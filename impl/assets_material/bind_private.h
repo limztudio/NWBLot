@@ -100,7 +100,7 @@ static constexpr AStringView s_DefaultAttribute = "default";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Cross-TU helper declarations (definitions de-static'd in their domain .cpp).
+// Cross-TU helpers (defined de-static'd in their domain .cpp).
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
 

@@ -26,7 +26,7 @@ namespace MaterialCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// deferred lighting BXDF dispatch (per-material shading model id + generated dispatch module)
+// Deferred BXDF dispatch.
 static constexpr AStringView s_DeferredBxdfFunctionMacro = "NWB_DEFERRED_BXDF_FUNCTION";
 static constexpr AStringView s_DeferredBxdfModelPrefix = "nwbDeferredBxdfModel";
 static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/bxdf_dispatch.slangi";
@@ -35,11 +35,7 @@ static constexpr AStringView s_DeferredBxdfModuleSubPath = "deferred/generated/b
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Sentinel shadow-transmittance id for a material that contributes NO surface hook (it declares explicit opaque
-// `shaders` instead of a `.surface`). The dense surface-authored ids start at 0, so a surface-less material must
-// NOT reuse 0 (that aliases the first real surface hook). This reserved id is never emitted as a `case` in the
-// generated dispatch switch. The shadow path never evaluates a surface for that opaque caster; GI reaches the
-// dispatch's documented no-surface fallback instead of accidentally invoking model zero.
+// Sentinel id for surface-less materials; never emitted as a dispatch case.
 static constexpr u32 s_ShadowTransmittanceNoSurfaceModelId = Limit<u32>::s_Max;
 
 

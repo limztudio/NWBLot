@@ -190,8 +190,7 @@ bool ResolveMaterialBindDependencyInterface(
             return false;
         }
 
-        // The shader depends on at least one material's generated `.bind` interface, so it reads the typed
-        // material constants and must receive the typed binding.
+        // Reads typed material constants, so it needs the typed binding.
         outDependsOnMaterialBind = true;
         if(dependsOnMultipleInterfaces)
             continue;
@@ -203,12 +202,7 @@ bool ResolveMaterialBindDependencyInterface(
         }
 
         if(outInterfaceName != dependencyInterfaceName){
-            // More than one DISTINCT interface: this is a generic consumer of a cook-generated dispatch module,
-            // not a per-material shader. The shadow-transmittance dispatch #includes every surface material's
-            // `.bind`, namespace-isolated by EmitShadowTransmittanceDispatchModule, so it can evaluate each
-            // occluder's transmittance hook by shading-model id. Such a shader still reads the typed binding above
-            // but has NO single owning interface; only per-material pixel shaders (exactly one interface) carry one for
-            // material_validation to match against the material's declaration.
+            // Generic dispatch consumer: no single owning interface.
             outInterfacePath.clear();
             outInterfaceName = NAME_NONE;
             dependsOnMultipleInterfaces = true;
@@ -749,8 +743,7 @@ static void AppendMaterialBindFieldAccessor(
 }
 
 
-// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded
-// directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
+// Resources load from their patched slot, never from the aggregate struct.
 static bool AppendMaterialBindResourceFieldAccessor(
     const AStringView includePath,
     const MaterialLayoutFieldType::Enum fieldType,
@@ -1033,8 +1026,7 @@ bool BuildMaterialBindIncludeSourceImpl(
     outSource += "\n";
     AppendMaterialBindGeneratedSeparator(outSource, 3u);
 
-    // The struct + instance emission below appends many small fragments in a tight loop; reserve once from the
-    // authored names so the repeated += appends grow in place instead of reallocating on nearly every append.
+    // Reserve once so fragment appends grow in place.
     {
         usize estimatedStructBytes = 0u;
         for(const MaterialBindStruct& bindStruct : entry.structs){

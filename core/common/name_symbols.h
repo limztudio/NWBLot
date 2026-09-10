@@ -46,25 +46,20 @@ using NameDetail::IsNameHashTokenChar;
 [[nodiscard]] bool Resolve(const NameHash& hash, char* outText, usize outTextSize);
 
 void InstallRuntimeRegistry();
-// Detaches the record/resolve callbacks from name.h so no Name::c_str()/ctor reaches the RuntimeRegistry afterwards.
-// Must run before the RuntimeRegistry's function-local static is destroyed at process exit -- otherwise a Name
-// resolved/recorded during static teardown would dereference the destroyed registry (use-after-free).
+// Detaches record/resolve callbacks so no Name use reaches the registry afterwards. Runs before the registry's
+// function-local static is destroyed, so static-teardown Name use cannot dereference it.
 void UninstallRuntimeRegistry();
 void ClearRuntimeSymbols();
 
 [[nodiscard]] bool LoadLine(AStringView line);
 [[nodiscard]] bool WriteDefaultFile();
 
-// Number of symbols currently in the runtime registry. A client uses this as a cheap "grew since last upload" gate
-// for the cross-process symbol upload.
+// Symbol count, used as a cheap "grew since last upload" gate for the cross-process upload.
 [[nodiscard]] usize EntryCount();
-// Serializes the whole runtime registry to the `.namesym` text format (same bytes WriteDefaultFile would write),
-// appended to outText. Used to push the symbol table to a remote log server over the wire.
+// Serializes the registry to `.namesym` text (same bytes WriteDefaultFile writes) for the wire push to a log server.
 void Serialize(AString<Alloc::GlobalArena>& outText);
 
-// Ingest a whole `.namesym` document (newline-separated) into the runtime registry. The transport (file or wire)
-// only differs in where the bytes come from; both feed each line to LoadLine. Used by LoadFile + the server's
-// /namesym upload handler.
+// Ingests a whole `.namesym` document; file and wire transports differ only in where the bytes come from.
 [[nodiscard]] inline bool LoadFromMemory(const AStringView text){
     bool loadedAny = false;
     usize lineBegin = 0u;

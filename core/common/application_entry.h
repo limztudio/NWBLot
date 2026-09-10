@@ -29,9 +29,8 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
-// RAII so the Name record/resolve callbacks are detached on EVERY exit path (normal return, init-failure, exception)
-// before static teardown, preventing a use-after-free if a Name is resolved/recorded during shutdown. WriteDefaultFile
-// reads the RuntimeRegistry directly (not via the callbacks), so it still works after the scope uninstalls.
+// RAII detach of Name callbacks on every exit path, before static teardown. WriteDefaultFile reads the registry
+// directly, so it still works after uninstall.
 class ScopedNameSymbolRegistry final{
 public:
     ScopedNameSymbolRegistry(){ NameSymbols::InstallRuntimeRegistry(); }

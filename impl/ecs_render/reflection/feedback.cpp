@@ -18,6 +18,10 @@ NWB_IMPL_BEGIN
 
 namespace __hidden_reflection_feedback{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] bool SameScreenSettings(const ReflectionSettings& a, const ReflectionSettings& b)noexcept{
     // Temporal sampling count, spatial filtering and diagnostic presentation do not change deterministic smooth rays.
     return
@@ -32,6 +36,10 @@ namespace __hidden_reflection_feedback{
         && a.environmentBottom.y == b.environmentBottom.y && a.environmentBottom.z == b.environmentBottom.z
     ;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

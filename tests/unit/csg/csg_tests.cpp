@@ -5,6 +5,7 @@
 #include <core/common/module.h>
 #include <core/ecs/module.h>
 #include <impl/ecs_csg/module.h>
+#include <impl/ecs_csg/deform_edit.h>
 
 #include <tests/common/ecs_test_world.h>
 #include <gtest/gtest.h>
@@ -651,6 +652,209 @@ TEST(Csg, CsgShapeRegistryProjectShape){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
+    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    auto makeVertex = [](const f32 x, const f32 y, const f32 z){
+        NWB::Impl::CsgDeformVertex vertex;
+        vertex.position = Float3U(x, y, z);
+        vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+        vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+        vertex.uv0 = Float2U(0.5f, 0.5f);
+        vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+        return vertex;
+    };
+
+    // Closed unit cube so each planar cut leaves a closable boundary loop for caps.
+    const NWB::Impl::CsgDeformVertex inputVertices[] = {
+        makeVertex(-1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, -1.0f, -1.0f),
+        makeVertex(1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, 1.0f, -1.0f),
+        makeVertex(-1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, -1.0f, 1.0f),
+        makeVertex(1.0f, 1.0f, 1.0f),
+        makeVertex(-1.0f, 1.0f, 1.0f),
+    };
+    const NWB::Impl::CsgDeformTriangle inputTriangles[] = {
+        { { 0u, 1u, 2u } }, { { 0u, 2u, 3u } },
+        { { 4u, 6u, 5u } }, { { 4u, 7u, 6u } },
+        { { 0u, 4u, 5u } }, { { 0u, 5u, 1u } },
+        { { 2u, 6u, 7u } }, { { 2u, 7u, 3u } },
+        { { 0u, 3u, 7u } }, { { 0u, 7u, 4u } },
+        { { 1u, 5u, 6u } }, { { 1u, 6u, 2u } },
+    };
+
+    // Two sequential plane cuts: keep x >= -0.5, then keep y >= -0.5.
+    // Plane SDF keeps distance >= 0 with parameter0 = (normal, distance).
+    NWB::Impl::CsgDeformCutDesc cuts[2u];
+    cuts[0u].active = true;
+    cuts[0u].shape.shapeType = Name("engine/csg/plane");
+    cuts[0u].shape.worldToShape = ::Float34Identity();
+    cuts[0u].shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.5f);
+    cuts[1u].active = true;
+    cuts[1u].shape.shapeType = Name("engine/csg/plane");
+    cuts[1u].shape.worldToShape = ::Float34Identity();
+    cuts[1u].shape.parameter0 = Float4(0.0f, 1.0f, 0.0f, 0.5f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+
+    const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(
+        scratchArena,
+        inputVertices,
+        8u,
+        inputTriangles,
+        12u,
+        cuts,
+        2u,
+        options
+    );
+    EXPECT_TRUE(viability.viable);
+    EXPECT_EQ(viability.reason, NWB::Impl::CsgDeformViabilityReason::Ok);
+
+    NWB::Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    NWB::Impl::CsgDeformStats previewStats;
+    EXPECT_TRUE(NWB::Impl::PreviewCsgDeformCuts(
+        scratchArena,
+        inputVertices,
+        8u,
+        inputTriangles,
+        12u,
+        cuts,
+        2u,
+        options,
+        previewVertices,
+        previewTriangles,
+        previewStats
+    ));
+    EXPECT_GT(previewVertices.size(), 8u);
+    EXPECT_GT(previewTriangles.size(), 0u);
+    EXPECT_EQ(previewStats.appliedCutCount, 2u);
+    EXPECT_GT(previewStats.capTriangleCount, 0u);
+
+    NWB::Impl::CsgDeformVertexVector<Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    NWB::Impl::CsgDeformStats commitStats;
+    EXPECT_TRUE(NWB::Impl::CommitCsgDeformCuts(
+        scratchArena,
+        commitArena,
+        inputVertices,
+        8u,
+        inputTriangles,
+        12u,
+        cuts,
+        2u,
+        options,
+        commitVertices,
+        commitTriangles,
+        commitStats
+    ));
+    EXPECT_EQ(commitVertices.size(), previewVertices.size());
+    EXPECT_EQ(commitTriangles.size(), previewTriangles.size());
+    EXPECT_EQ(commitStats.outputVertexCount, previewStats.outputVertexCount);
+    EXPECT_EQ(commitStats.outputTriangleCount, previewStats.outputTriangleCount);
+    EXPECT_EQ(commitStats.capTriangleCount, previewStats.capTriangleCount);
+
+    // Sequential order matters: the second cut refines the first cut's output.
+    // Every triangle-referenced kept vertex must satisfy both half-spaces.
+    // (Unreferenced source verts are retained verbatim and never welded.)
+    for(const NWB::Impl::CsgDeformTriangle& triangle : commitTriangles){
+        for(const u32 index : triangle.indices){
+            ASSERT_LT(index, commitVertices.size());
+            EXPECT_GE(commitVertices[index].position.x, -0.5001f);
+            EXPECT_GE(commitVertices[index].position.y, -0.5001f);
+        }
+    }
+    // Seam-safe rebuild never welds or drops source verts: originals survive verbatim.
+    EXPECT_EQ(commitVertices[0u].position.x, -1.0f);
+    EXPECT_EQ(commitVertices[0u].position.y, -1.0f);
+    EXPECT_EQ(commitVertices[2u].position.x, 1.0f);
+    EXPECT_EQ(commitVertices[2u].position.y, 1.0f);
+    // The second cut refines the first cut's output: at least one split vertex sits on x == -0.5.
+    bool foundCutWall = false;
+    for(const NWB::Impl::CsgDeformVertex& vertex : commitVertices){
+        if(vertex.position.x > -0.5001f && vertex.position.x < -0.4999f)
+            foundCutWall = true;
+    }
+    EXPECT_TRUE(foundCutWall);
+}
+
+TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
+    Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    Core::Alloc::GlobalArena commitArena(s_ScratchArena);
+
+    NWB::Impl::CsgDeformVertex vertex;
+    vertex.position = Float3U(-5.0f, 0.0f, 0.0f);
+    vertex.normal = Float4(0.0f, 0.0f, 1.0f, 0.0f);
+    vertex.tangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
+    vertex.uv0 = Float2U(0.0f, 0.0f);
+    vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
+    const NWB::Impl::CsgDeformVertex inputVertices[] = { vertex, vertex, vertex };
+    const NWB::Impl::CsgDeformTriangle inputTriangles[] = { { { 0u, 1u, 2u } } };
+
+    // Cut keeps x >= 0; the whole triangle sits at x == -5, fully outside the kept
+    // half-space, so both preview and commit must agree on NoKeptGeometry failure.
+    NWB::Impl::CsgDeformCutDesc cut;
+    cut.active = true;
+    cut.shape.shapeType = Name("engine/csg/plane");
+    cut.shape.worldToShape = ::Float34Identity();
+    cut.shape.parameter0 = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+
+    const NWB::Impl::CsgDeformBuildOptions options;
+    const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(
+        scratchArena,
+        inputVertices,
+        3u,
+        inputTriangles,
+        1u,
+        &cut,
+        1u,
+        options
+    );
+    EXPECT_FALSE(viability.viable);
+
+    NWB::Impl::CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
+    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
+    NWB::Impl::CsgDeformStats previewStats;
+    EXPECT_FALSE(NWB::Impl::PreviewCsgDeformCuts(
+        scratchArena,
+        inputVertices,
+        3u,
+        inputTriangles,
+        1u,
+        &cut,
+        1u,
+        options,
+        previewVertices,
+        previewTriangles,
+        previewStats
+    ));
+
+    NWB::Impl::CsgDeformVertexVector<Core::Alloc::GlobalArena> commitVertices(commitArena);
+    NWB::Impl::CsgDeformTriangleVector<Core::Alloc::GlobalArena> commitTriangles(commitArena);
+    NWB::Impl::CsgDeformStats commitStats;
+    EXPECT_FALSE(NWB::Impl::CommitCsgDeformCuts(
+        scratchArena,
+        commitArena,
+        inputVertices,
+        3u,
+        inputTriangles,
+        1u,
+        &cut,
+        1u,
+        options,
+        commitVertices,
+        commitTriangles,
+        commitStats
+    ));
+    EXPECT_TRUE(commitVertices.empty());
+    EXPECT_TRUE(commitTriangles.empty());
+}
+
+
 
 
 };

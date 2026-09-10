@@ -150,8 +150,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         Core::GpuUploadBufferTaskDesc{
             .source = rayTraceMaterialContextSlotsBlob,
             .destination = materialContextSlots,
-            // Automatic-state selector buffers publish Common. Shadow Preparation owns the following
-            // ConstantBuffer transition and becomes the cross-queue producer for later trace consumers.
+            // Selector buffers publish Common; Shadow Preparation owns the next transition.
             .finalState = Core::ResourceStates::Common,
         }
     );
@@ -798,21 +797,18 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourcesImported = resourcesImported && sceneTlas.valid();
         if(sceneTlas.valid()){
             if(sceneTlasBuildGraphOwned){
-                // The frozen native recorder only builds. The graph lowers its required Write entry state here and
-                // the state-only successor below lowers the final Read handoff through the same retained backing.
+                // Frozen recorder only builds; graph lowers Write entry, successor lowers Read handoff.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructWrite));
                 accelStructFinalizeResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
             }
             else{
-                // Direct compatibility builders still publish their native Write -> Read sequence inside Shadow
-                // Preparation. Keep the graph-visible final handoff unchanged for those routes.
+                // Compat builders keep their native sequence; final handoff stays unchanged.
                 resourceUses.push_back(ReadWriteUse(sceneTlas, Core::ResourceStates::AccelStructRead));
             }
         }
     }
     for(const ECSRenderDetail::MeshBlasGraphState& state : liveMeshBlasGraphStates){
-        // A frozen plan owns its retained handles even if a record-time replacement later sends it through the
-        // native compatibility fallback. Do not collide a replacement with the frozen graph identity here.
+        // Frozen plans own retained handles; never collide replacements with frozen identities.
         if(geometryResources.isPreparedMeshBlasBuild(state.meshName))
             continue;
 
@@ -828,13 +824,11 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         resourcesImported = resourcesImported && blas.valid();
         if(blas.valid()){
             if(state.nativeBuildsBlas){
-                // Direct hybrid compatibility and frozen opaque plans both record the native write/read sequence
-                // here. The typed graph resource seeds its retained backing state on the next declaration.
+                // Compat and frozen plans record native sequences; backing seeds on next declaration.
                 resourceUses.push_back(ReadWriteUse(blas, Core::ResourceStates::AccelStructRead));
             }
             else{
-                // State-only import: a later rejected preparation can re-pend this static BLAS, and its next build
-                // must seed the true accepted AccelStructRead state instead of BufferDesc::initialState.
+                // State-only import; rejected preparation re-pends and seeds accepted state.
                 resourceUses.push_back(ReadUse(blas, Core::ResourceStates::AccelStructRead));
             }
         }

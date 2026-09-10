@@ -34,14 +34,8 @@ inline constexpr f32 s_OneWeight = 1.0f;
 inline constexpr f32 s_AffineW = 1.0f;
 inline constexpr f32 s_ShapeWMask = 0.0f;
 inline constexpr f32 s_NegativeOne = -1.0f;
-inline constexpr f32 s_UpAxisX = 0.0f;
-inline constexpr f32 s_UpAxisY = 1.0f;
-inline constexpr f32 s_UpAxisZ = 0.0f;
-inline constexpr f32 s_FallbackTangentX = 1.0f;
-inline constexpr f32 s_FallbackTangentY = 0.0f;
-inline constexpr f32 s_FallbackTangentZ = 0.0f;
-inline constexpr f32 s_FallbackTangentW = 1.0f;
-inline constexpr f32 s_CapNormalW = 0.0f;
+inline constexpr Float4 s_UpAxis = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+inline constexpr Float4 s_FallbackTangent = Float4(1.0f, 0.0f, 0.0f, 1.0f);
 inline constexpr u32 s_DeformCapacityShift = 20u;
 inline constexpr usize s_MaxDeformVertices = 1u << s_DeformCapacityShift;
 inline constexpr usize s_MaxDeformTriangles = 1u << s_DeformCapacityShift;
@@ -329,9 +323,9 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
         vertex.normal.w = fallbackW;
     }
     else{
-        vertex.normal.x = s_UpAxisX;
-        vertex.normal.y = s_UpAxisY;
-        vertex.normal.z = s_UpAxisZ;
+        vertex.normal.x = s_UpAxis.x;
+        vertex.normal.y = s_UpAxis.y;
+        vertex.normal.z = s_UpAxis.z;
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
@@ -344,10 +338,7 @@ using EdgeSplitMap = HashMap<u64, u32, EdgeSplitKeyHash, EqualTo<u64>, ScratchAr
         vertex.tangent.w = handedness;
     }
     else{
-        vertex.tangent.x = s_FallbackTangentX;
-        vertex.tangent.y = s_FallbackTangentY;
-        vertex.tangent.z = s_FallbackTangentZ;
-        vertex.tangent.w = s_FallbackTangentW;
+        vertex.tangent = s_FallbackTangent;
     }
     return FiniteVertex(vertex);
 }
@@ -601,7 +592,7 @@ void CollectBoundaryEdges(
     const Vector<u32, ScratchArena>& loop,
     Float4& outNormal
 ){
-    outNormal = Float4(s_UpAxisX, s_UpAxisY, s_UpAxisZ, s_CapNormalW);
+    outNormal = s_UpAxis;
     if(loop.size() < s_MinLoopVertices)
         return false;
     // SIMD fan-area accumulation keeps edge subtract/cross/add on vector lanes.
@@ -618,7 +609,7 @@ void CollectBoundaryEdges(
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return false;
     const SIMDVector normalized = Vector3Normalize(areaVec);
-    outNormal = Float4(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), s_CapNormalW);
+    outNormal = Float4(VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), s_UpAxis.w);
     return true;
 }
 
@@ -652,7 +643,7 @@ void CollectBoundaryEdges(
     CsgDeformVertex center;
     StoreFloat(centerPositionAvg, center.position);
     center.normal = loopNormal;
-    center.tangent = Float4(s_FallbackTangentX, s_FallbackTangentY, s_FallbackTangentZ, s_FallbackTangentW);
+    center.tangent = s_FallbackTangent;
     StoreFloat(centerUvAvg, center.uv0);
     StoreFloat(centerColorAvg, center.color);
     if(!NormalizeDeformVertex(center))

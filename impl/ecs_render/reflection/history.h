@@ -71,8 +71,6 @@ public:
     void accept(const ReflectionHistoryPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
 
 private:
-    // Field order is alignment-descending: the 8-byte stamp/generation lanes lead and the 4-byte mutex plus the
-    // 2-byte device generation pack with the 1-byte flags (200 -> 192 bytes).
     ReflectionSceneContentStamp m_stamp;
     ReflectionSettings m_settings;
     u64 m_generation = 1u;

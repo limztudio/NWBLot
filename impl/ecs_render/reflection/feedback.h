@@ -90,8 +90,6 @@ public:
     [[nodiscard]] bool accept(const ReflectionFeedbackPlan& plan, const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
 
 private:
-    // Field order is alignment-descending: the 8-byte stamp/generation lanes lead, the 4-byte token/indices share
-    // one lane, and the 2-byte device generation packs with the 1-byte flags plus the 4-byte mutex (208 -> 200).
     ReflectionSceneContentStamp m_stamp;
     ReflectionSettings m_settings;
     u64 m_generation = 1u;

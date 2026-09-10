@@ -336,11 +336,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         restoreShadowCpuState();
         restorePostGbufferEffectsCpuState();
     };
-    // The current graph must retain this token even if Surfel GI consumes the completed diagnostic while recording.
+    // Retain this token even if Surfel GI consumes the diagnostic.
     const Core::QueueSubmissionToken surfelCounterReadbackCompletionToken = rayTracingCpuState.surfelCountReadbackSubmissionToken;
 
-    // Each semantic prefix stage starts with its own ticket. After frontier-safe compilation, tasks that share a
-    // native packet are rebound to one ticket, while a split prefix retains one complete ticket per submission.
+    // Prefix stages start separate; shared packets rebind to one ticket.
     Core::GpuTimingSubmissionTicket shadowPrepareTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixMeshViewSetupTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket graphicsPrefixSceneShadingSetupTimingTicket(m_graphics.gpuTiming());
@@ -373,8 +372,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         &graphicsPrefixCsgIntervalSampleTimingTicket,
         &graphicsPrefixNormalizeTimingTicket,
     };
-    // The optional AsyncPrefix query spans Mesh View Setup through Normalize, so it is only valid when compilation
-    // keeps those endpoints in one native submission.
+    // AsyncPrefix is valid only when the endpoints share one submission.
     bool asyncPrefixTimingSpansOnePacket = true;
     Optional<Core::GpuTimingMeasure> asyncPrefixTiming;
     Optional<Core::GpuTimingMeasure> deferredClearTiming;
@@ -395,16 +393,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         )],
         .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     };
-    // The small shared-output opaque sequence spans G-buffer's mesh prelude and four, six, eight, or ten graph callbacks.
-    // Keep its measurement alive through graph declaration, recording, submission, and rejection just like CSG
-    // intervals.
+    // Keep this measurement alive like CSG intervals.
     Optional<Core::GpuTimingMeasure> opaqueRegularSharedComputeEmulationTiming;
-    // Opaque CSG interval-sample compute/raster can span two graph callbacks while retaining the old material scope.
+    // Interval-sample compute/raster may span two callbacks.
     Optional<Core::GpuTimingMeasure> opaqueCsgIntervalSampleComputeEmulationTiming;
     Core::GpuTimingSubmissionTicket shadowVisibilityTimingTicket(m_graphics.gpuTiming());
-    // The prepared soft-transparent route spans opaque resolve across its first-wavelet and tail callbacks, and
-    // begins transparent resolve in temporal merge when active (otherwise its first wavelet). The terminal fold
-    // still closes the aggregate Shadow Visibility range. The monolithic task leaves these empty.
+    // The terminal fold still closes the Shadow Visibility range.
     Optional<Core::GpuTimingMeasure> shadowVisibilityAsyncTiming;
     Optional<Core::GpuTimingMeasure> shadowVisibilityTiming;
     Optional<Core::GpuTimingMeasure> opaqueSoftResolveTiming;
@@ -414,12 +408,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     u32 shadowVisibilityOpaqueFrameIndex = 0u;
     Core::GpuTimingSubmissionTicket softwareCausticsTimingTicket(m_graphics.gpuTiming());
     Core::GpuTimingSubmissionTicket surfelGiTimingTicket(m_graphics.gpuTiming());
-    // Age/free begins this interval and the remaining GI callback closes it after the graph-owned cell-head clear.
+    // Age/free opens it; the GI callback closes it.
     Optional<Core::GpuTimingMeasure> surfelGiAsyncTiming;
     Core::GpuTimingSubmissionTicket hardwareCausticsTimingTicket(m_graphics.gpuTiming());
-    // A warm temporal decay starts this interval in its graph task and the selected photon producer closes it.
+    // Decay opens it; the photon producer closes it.
     Optional<Core::GpuTimingMeasure> causticPhotonTiming;
-    // Geometry downsample begins the resolve interval and wavelet resolve closes it in the same selected packet.
+    // Downsample opens it; wavelet resolve closes it.
     Optional<Core::GpuTimingMeasure> causticResolveTiming;
     const bool clearAvboitTargets = m_avboitSystem.shouldClearTargets(hasTransparentRenderers);
     Core::GpuTimingSubmissionTicket avboitPreTimingTicket(m_graphics.gpuTiming());
@@ -441,7 +435,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .timingTicket = &avboitPreTimingTicket,
         .scope = RendererGpuTimingScope::s_CsgIntervalClear,
     };
-    // Prepared transparent CSG begins this interval in AVBOIT Pre and closes it in its graph-owned Combine callback.
+    // Pre opens it; Combine closes it.
     Optional<Core::GpuTimingMeasure> transparentCsgIntervalsTiming;
     // The split Occupancy handoff starts this interval in its compute producer and closes it in the raster consumer.
     Optional<Core::GpuTimingMeasure> avboitOccupancyComputeEmulationTiming;

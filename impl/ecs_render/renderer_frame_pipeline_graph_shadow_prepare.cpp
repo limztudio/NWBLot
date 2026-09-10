@@ -842,16 +842,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     if(pureSoftwareMeshSwBvhBuildsGraphOwned && !ResolvePreparedSoftwareBvhGraphResources(
         m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, pureSoftwareMeshSwBvhGraphResources
     )){
-        // Keep the established aggregate direct path if a future preflight leaves any frozen operation
-        // without an exact graph identity. Never mix a partial typed-clear chain with native sentinels.
+        // Keep the aggregate direct path for operations without exact graph identity.
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: pure software BVH build is missing graph resources; retaining aggregate compatibility recorder"));
         pureSoftwareMeshSwBvhBuildsGraphOwned = false;
     }
 
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){
-        // Every operation shares sort keys, payload, and visit-counter scratch. Its built-in clears must therefore
-        // remain immediately adjacent to its compute callback, and the entire chain must remain in Shadow
-        // Preparation's accepting Graphics packet despite later Compute consumers of the final traversal state.
+        // Operations share scratch; keep clears adjacent in the accepting packet.
         Core::GpuTaskSchedulingHint clearScheduling;
         clearScheduling.cost = Core::GpuTaskCostHint::Tiny;
         clearScheduling.forceSubmissionBoundary = false;

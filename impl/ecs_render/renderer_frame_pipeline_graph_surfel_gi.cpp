@@ -353,9 +353,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     }
 
 
-// A prepared normal Surfel GI frame can split its age/free, per-frame cell-head reset, hash build, Spawn,
-    // trace-build-args, trace, and resolve. Keep unavailable resources or pipelines on the established monolithic
-    // compatibility callback; otherwise the graph owns each handoff in one selected Compute packet.
+// Prepared Surfel GI splits stages across the graph; unavailable resources stay monolithic.
     const bool graphOwnsSurfelGiResolve =
         hasSurfelWork
         && shadowInstanceMaterials.valid()
@@ -425,11 +423,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     ;
     const usize surfelGiExternalDependencyCount = surfelCounterReadbackCompletion.valid() ? 1u : 0u;
 
-    // A fresh persistent field must clear before the snapshot reads it. The four typed clear primitives and their
-    // resource-free lifecycle tail form one Compute-preferred, Transfer-capable graph packet; the lifecycle task
-    // publishes its CPU
-    // mirror only after every clear recorded and that packet accepts. Once initialized, the two fixed regions become
-    // one graph-owned copy task; compiler declarations own every CopySource/CopyDest transition and handoff.
+    // Fresh fields clear before snapshot reads; lifecycle publishes its mirror after packet accepts.
     Core::GpuTaskId surfelGiDependency = effectsTask;
     if(hasSurfelWork){
         if(
@@ -447,9 +441,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         if(m_raytracingSystem.needsSurfelResourceInitialization()){
             Core::GpuTaskSchedulingHint initializationScheduling;
             initializationScheduling.cost = Core::GpuTaskCostHint::Medium;
-            // Explicit merging keeps the first clear as a new packet under the renderer's FrontierSafe policy, then
-            // lets its serial successors share that packet. Do not force a boundary here: that would also forbid the
-            // following typed clears from joining their own initialization packet.
+            // Merge serial successors into the first clear's packet; never force a boundary here.
             initializationScheduling.allowPacketMerge = true;
             Core::GpuTaskDesc poolClearDesc;
             poolClearDesc

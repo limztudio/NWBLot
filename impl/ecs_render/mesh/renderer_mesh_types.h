@@ -63,20 +63,16 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
-    // The compute-emulation output is selected from the global StorageBuffer heap through the fourth mesh push lane.
+    // Emulation output selected via fourth mesh push lane.
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
-    // One persistent StorageBuffer heap handle per mesh-source ABI slot. They are created with this mesh resource
-    // and retired before runtime meshes are replaced, so material preparation and render only consume them.
+    // One heap handle per ABI slot; retired before runtime meshes are replaced.
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
-    // The software-BVH build consumes these two stable read-only streams through the global StorageBuffer heap.
-    // They are deliberately separate from geometryHeapHandles: triangleIndexBuffer is the reconstructed RT stream,
-    // not one of the raster mesh-source bindings above.
+    // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.
     Core::GpuDescriptorHandle swBvhPositionHeapHandle;
     Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle;
     Core::BufferHandle swBvhNodeBuffer;     // per-mesh software LBVH nodes (no-hardware-RT shadow fallback)
     Core::BufferHandle swBvhParentBuffer;   // per-mesh software LBVH parent links (persist across refits)
-    // Build/refit and traversal share these global StorageBuffer descriptors. The build selects both through push
-    // constants; traversal uses the node handle in its per-instance material record.
+    // Build and traversal share these descriptors; build via push constants.
     Core::GpuDescriptorHandle swBvhNodeHeapHandle;
     Core::GpuDescriptorHandle swBvhParentHeapHandle;
     u32 meshletCount = 0;
@@ -87,11 +83,9 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     bool blasBuildPending = false;
-    // A newly allocated backing store starts in Common until a direct build or accepted graph handoff publishes
-    // its native state. Retained generations must use that accepted state rather than a descriptor guess.
+    // New backing starts in Common until a build or accepted handoff publishes state.
     bool blasBackingFresh = false;
-    // Direct recording only queues a state handoff. This marker is consumed after Shadow Preparation accepts and
-    // cleared on discard so a rejected backing allocation remains Common for its retry.
+    // Direct recording queues a handoff; cleared on discard so rejected backing stays Common.
     bool blasBackingStateHandoffPending = false;
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology

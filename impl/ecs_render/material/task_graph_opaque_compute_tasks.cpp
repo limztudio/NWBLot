@@ -119,8 +119,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-    // G-buffer starts the one preserved Opaque Regular range only after its exact frozen material resources
-    // are ready. A later defensive miss must be a no-op instead of rasterizing stale generated vertices.
+    // G-buffer starts the preserved range only when frozen resources are ready; later miss is a no-op.
     if(!payload.opaqueRegularTiming->has_value()){
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();

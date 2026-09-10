@@ -110,26 +110,23 @@ struct GpuTimingSample{
     u64 sourceFrameIndex = 0u;
     f64 durationSeconds = 0.0;
     Name scopeName = NAME_NONE;
-    // Exact accepted native queue for every attributed query outcome. This remains valid when the backend exposes
-    // duration timestamps but cannot expose an absolute cross-submission comparable range.
+    // Accepted native queue per attributed outcome; stays valid when the backend exposes durations
+    // but no absolute cross-submission comparable range.
     GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;
     GpuComparableTimestampRange comparableRange;
     GpuPhysicalQueueId physicalQueue;
-    // False retires a previously attributed query whose value became unavailable for publication, such as after a
-    // capture epoch change. durationSeconds is meaningful only when this is true.
+    // False retires an attributed query whose value became unavailable (e.g. capture epoch change).
+    // durationSeconds is meaningful only when true.
     bool published = false;
-    // Valid only for a published result whose backend queue exposes absolute comparable timestamps. Unpublished
-    // retirement notifications retain physicalQueue but deliberately keep this range invalid even when raw query
-    // data existed.
+    // Valid only for a published result with absolute comparable timestamps. Unpublished retirements keep
+    // physicalQueue but leave this range invalid even when raw query data existed.
 };
 
-// The listener context belongs to its caller. Callbacks run without the registration or query-state locks; a
-// recursive callback gate serializes their context access. External unsubscription waits for active callbacks
-// before returning, so the caller may then release its context. Unsubscription from a thread whose callback stack
-// already contains that registration cannot wait for itself; its context must remain alive until that callback stack
-// unwinds. Callback exceptions restore the registration's active-callback state, increment the recorder failure
-// count, and propagate to the application exception boundary. A false GpuTimingSample::published notification only
-// retires caller attribution; it never represents usable timing data.
+// Listener context belongs to its caller. Callbacks run unlocked; a recursive gate serializes context access.
+// External unsubscription waits for active callbacks, so the caller may then release its context. A callback-stack
+// unsubscription cannot wait for itself; its context must outlive that stack. Callback exceptions restore state,
+// bump the recorder failure count, and propagate to the application boundary. An unpublished notification only
+// retires attribution, never timing data.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;
@@ -138,8 +135,8 @@ struct GpuTimingSampleListener{
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr; }
 };
 
-// Identifies one independently owned listener registration. Identities are process-unique and are never reused, so
-// delayed dispatch snapshots cannot resolve a removed subscription to a replacement context.
+// Subscription identities are process-unique and never reused, so delayed snapshots cannot resolve
+// a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;
     friend constexpr bool operator==(

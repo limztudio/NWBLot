@@ -119,8 +119,7 @@ namespace ECSRenderDetail{
 
     const bool csgSampleStateReady = csgResourcesReady;
     if(deferredResourcesReady && csgSampleStateReady && csgFrameData.hasWork()){
-        // Every opaque CSG frame byte is now captured in immutable graph uploads. Native recording consumes those
-        // declared resources without rewriting the clip-context or interval-sample uniform payloads.
+        // Graph uploads are immutable; native recording consumes them as-is.
         csgSystem.dispatchCsgIntervalPeels(
             commandList,
             deferredTargets,
@@ -133,8 +132,7 @@ namespace ECSRenderDetail{
         );
     }
 
-    // Attachment clears begin the first raster segment after pre-raster compute. Any barrier-driven continuation
-    // resumes with LOAD, while the default STORE actions preserve all G-buffer data for later graph packets.
+    // Clears begin the first segment; continuations resume with LOAD.
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_BASE_COLOR_LOCATION] = ECSRenderDetail::s_ClearColor;
     renderPassParameters.colorClearValues[NWB_MESH_GBUFFER_NORMAL_LOCATION] =
@@ -179,8 +177,7 @@ namespace ECSRenderDetail{
                     graphics.getDevice(),
                     commandList
                 );
-                // The timestamps span ordered graph callbacks; the marker must still close in this producer
-                // callback before its command list can be finalized.
+                // Close the marker before finalizing this command list.
                 if(!Core::FinishSplitGpuTimingMarker(payload.regularSharedComputeEmulationTiming))
                     return false;
                 if(!regularDrawItemsForGbuffer->empty()){

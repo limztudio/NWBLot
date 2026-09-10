@@ -241,8 +241,7 @@ bool RendererDeferredSystem::renderDeferredComposite(
 ){
     NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
-    // Packet-boundary states for these bindless resources are emitted from the compiled task graph.  This thunk
-    // retains only the commands intrinsic to composite recording.
+    // Boundary states are graph-owned; this thunk holds only composite commands.
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredComposite, m_graphics.getDevice(), commandList);
 
@@ -291,8 +290,7 @@ bool RendererDeferredSystem::renderDeferredPresent(
 
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_DeferredPresent, m_graphics.getDevice(), commandList);
 
-    // The full-screen triangle overwrites the complete acquired image. Discarding its old contents avoids a tile
-    // restore on integrated GPUs, while STORE preserves the rendered image for UI composition and presentation.
+    // Discard avoids a tile restore; STORE keeps the image for UI and present.
     Core::RenderPassParameters renderPassParameters;
     renderPassParameters.colorAttachmentActions[0u].loadAction = Core::RenderPassLoadAction::Discard;
     renderPassParameters.colorAttachmentActions[0u].storeAction = Core::RenderPassStoreAction::Store;

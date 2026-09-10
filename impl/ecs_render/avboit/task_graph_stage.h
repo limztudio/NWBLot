@@ -21,8 +21,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// AVBOIT owns every graph-local task identifier required to declare and validate its transparency stage. The host
-// observes the typed first/completion boundary published by transparencyStage() and owns whole-graph execution.
+// AVBOIT owns its stage identifiers; the host observes the typed boundary and owns execution.
 struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_clearFirstTask;
     Core::GpuTaskId m_clearTask;

@@ -180,8 +180,7 @@ public:
         bool extinctionMaterialGeometryStatesGraphOwned = false,
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr,
-        // A distinct frozen CSG-only producer may own this handoff. Keep it separate from the regular flag so
-        // mixed CSG streams retain their local dispatch/raster interleaving.
+        // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
         bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void renderAvboitAccumulatePass(
@@ -193,20 +192,16 @@ public:
         const ECSRenderDetail::MeshFrameBindingSnapshot* preparedAccumulationFrameBindings = nullptr,
         usize preparedAccumulationInstanceCount = 0u,
         usize preparedAccumulationMaterialTypedByteCount = 0u,
-        // The normal task-graph path declares the two accumulation attachments and read-only deferred depth as
-        // ShaderResource in a following Graphics finalizer. Direct compatibility callers retain their explicit
-        // framebuffer-state bridge.
+        // Graph declares accumulation attachments and depth in a finalizer; compat keeps its bridge.
         bool accumulationFinalStatesGraphOwned = false,
-        // The prepared interval producer can hand its StorageImage outputs to graph-owned accumulation sampling.
-        // Direct and other compatibility callers retain the native UAV handoff by leaving this false.
+        // Interval producer may hand StorageImage outputs to graph-owned sampling.
         bool accumulationCsgIntervalSampleImageStatesGraphOwned = false,
         bool accumulationCsgClipBufferStatesGraphOwned = false,
         bool accumulationMaterialFrameStatesGraphOwned = false,
         bool accumulationMaterialGeometryStatesGraphOwned = false,
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr,
-        // A distinct frozen CSG-only producer may own this handoff. Keep it separate from the regular flag so
-        // mixed CSG streams retain their local dispatch/raster interleaving.
+        // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
         bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false
     );
     void dispatchAvboitDepthWarp(

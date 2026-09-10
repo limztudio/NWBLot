@@ -70,9 +70,7 @@ struct CsgCutterGpuData{
     Float4 parameter1 = Float4(0.f, 0.f, 0.f, 0.f);
 };
 
-// The CSG context lives in one global UniformBuffer heap entry.  Its first lane selects the persistent
-// StorageBuffer inputs; its second lane selects the target-generation deferred slots and interval-sample state.
-// No CSG pass binds this payload through a pipeline-local resource descriptor.
+// CSG context is one global UniformBuffer entry; no pass binds it locally.
 struct CsgClipContextSlots{
     u32 receiverRanges = 0u;
     u32 cutters = 0u;
@@ -84,8 +82,7 @@ struct CsgClipContextSlots{
     u32 padding1 = 0u;
 };
 
-// This uniform payload feeds the interval-sampling CSG shaders through the slot selected by CsgClipContextSlots.
-// It remains a graph-owned immutable frame blob when the opaque deferred graph is active.
+// Interval-sampling payload via CsgClipContextSlots; immutable frame blob when active.
 struct CsgIntervalSampleStateGpuData{
     u32 workMinX = 0u;
     u32 workMinY = 0u;

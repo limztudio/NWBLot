@@ -81,9 +81,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphTask{
 };
 
 
-// Interval-sample CSG compute emulation is split only for pairwise-distinct generated outputs. It follows
-// interval combine and precedes the existing CSG material/cap raster callback, keeping the output handoff and the
-// original Opaque CSG timing range inside that one semantic Graphics packet.
+// Split interval-sample emulation only for distinct outputs; keep timing in one packet.
 struct OpaqueCsgIntervalSampleComputeEmulationGraphTask{
     struct Payload{
         Core::GraphicsRuntime* graphics = nullptr;

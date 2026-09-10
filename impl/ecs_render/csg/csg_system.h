@@ -121,12 +121,10 @@ public:
     [[nodiscard]] bool createCsgIntervalSampleStateBuffer();
     [[nodiscard]] bool reserveCsgReceiverRangeBufferCapacity(usize rangeCount);
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
-    // Renderer preparation owns CSG buffer growth and descriptor registration.  Material/draw paths only verify and
-    // consume these resources after this prepass has completed.
+    // Preparation owns CSG buffer growth; draw paths consume after prepass.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const;
-    // Capture all descriptor-derived CSG uniform bytes while preflight has frozen the current buffer and target
-    // generations. The deferred graph retains these values as immutable blobs before native recording begins.
+    // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,

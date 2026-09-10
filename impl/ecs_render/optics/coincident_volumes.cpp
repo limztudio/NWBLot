@@ -119,7 +119,7 @@ void RendererOpticalVolumeSelection::prepare(
             || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != NAME_NONE)
         );
     };
-    // Count the opt-in set before reserving its wide records; an opaque-heavy world needs no candidate allocation.
+    // Count opt-ins first; opaque-heavy worlds need no candidate allocation.
     usize candidateCapacity = 0u;
     for(auto&& [entity, renderer] : rendererView){
         if(mergingEnabled(renderer))
@@ -143,7 +143,7 @@ void RendererOpticalVolumeSelection::prepare(
         RenderableMeshDesc mesh;
         if(!meshSystem->resolveRenderableMesh(entity, mesh) || mesh.runtime || !mesh.mesh.valid())
             continue;
-        // Runtime providers and CSG can change the boundary independently of the static mesh/material inputs.
+        // Runtime providers and CSG can change boundaries; skip them here.
         if(
             world.tryGetComponent<StaticCsgMeshComponent>(entity)
             || world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
@@ -189,8 +189,7 @@ void RendererOpticalVolumeSelection::select(
     using RepresentativeMap = HashMap<CandidatePointer, CandidatePointer, CandidateHasher, CandidateEqual, Core::Alloc::ScratchArena>;
     RepresentativeMap representatives(0u, CandidateHasher{}, CandidateEqual{}, scratchArena);
     representatives.reserve(candidateCount);
-    // Membership and effective inputs are inspected each frame: public component values may change without an
-    // ECS structural mutation. No material revisions, hash-only equality or borrowed byte views are cached.
+    // Inspect membership each frame; components may change without structural mutation.
     for(usize index = 0u; index < candidateCount; ++index){
         const Candidate& candidate = candidates[index];
         if(!ValidCandidate(candidate))

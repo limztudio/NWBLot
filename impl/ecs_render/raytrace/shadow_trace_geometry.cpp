@@ -137,8 +137,7 @@ bool FreezePreparedShadowTraceGeometryBuffers(
             bufferIndex.add((mesh.*s_BufferMembers[memberIndex]).get(), memberIndex, meshIndex);
     }
 
-    // Keep accepted invisible meshes: their last Prefix tail is still their real state. Prune only resources whose
-    // owning mesh has been removed, so the retained handles cannot pin retired mesh storage indefinitely.
+    // Keep accepted invisible meshes; prune only resources whose mesh was removed.
     usize retainedCount = 0u;
     for(usize acceptedIndex = 0u; acceptedIndex < acceptedBuffers.size(); ++acceptedIndex){
         BufferRecord* const record = bufferIndex.find(acceptedBuffers[acceptedIndex].get());

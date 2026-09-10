@@ -33,8 +33,7 @@ struct PreparedMeshSwBvhGraphResources{
 using PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena>;
 
 
-// The caller reserves output storage at its declaration phase boundary. Keep complete owning snapshots in build
-// order; a missing graph identity clears every row so the caller can retain its aggregate native fallback.
+// Caller reserves output at its phase boundary; a missing identity clears every row.
 [[nodiscard]] bool ResolvePreparedSoftwareBvhGraphResources(
     const Core::GpuTaskGraph& graph,
     const PreparedMeshSwBvhBuildVector& builds,

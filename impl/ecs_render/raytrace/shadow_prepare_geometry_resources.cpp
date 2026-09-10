@@ -67,7 +67,7 @@ void ShadowPrepareGeometryResources::gatherBuildInputs(
                 !appendBuildInput(m_blasBuildInputs, build.positionBuffer, s_BlasRole)
                 || !appendBuildInput(m_blasBuildInputs, build.triangleIndexBuffer, s_BlasRole)
             ){
-                // A missing frozen stream retains the complete native BLAS/SW bridge instead of rejecting the packet.
+                // A missing frozen stream keeps the native bridge instead of rejecting the packet.
                 blasInputStatesGraphOwned = false;
                 softwareInputStatesGraphOwned = false;
                 clearBuildInputs();
@@ -207,8 +207,7 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
         static_assert(IsNothrowMoveConstructible_V<ResourceIndex>);
         m_resources.emplace(Move(resources));
     }
-    // Only resolved requests receive trace membership. Unrelated trace IDs consume no index storage, and a stale
-    // generation remains distinct even when its index matches a current resource. Shape validation stays in partition.
+    // Only resolved requests gain trace membership; stale generations stay distinct.
     for(usize index = 0u; index < m_inputs.traceResourceCount; ++index){
         if(BufferRequest* const request = findResolvedRequest(m_inputs.traceResources[index]))
             request->listedForTrace = true;

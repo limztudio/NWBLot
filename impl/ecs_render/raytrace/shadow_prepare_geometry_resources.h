@@ -27,8 +27,7 @@ struct ShadowPrepareGeometryInputs{
     bool blasBuildsGraphOwned = false;
 };
 
-// One declaration owns this selection and its scratch storage. Inputs remain frozen, and each preparation/gather
-// phase runs once. Only this helper writes the output vectors. Graph imports may occur between gather and partition.
+// One declaration owns selection and scratch; inputs stay frozen, phases run once.
 class ShadowPrepareGeometryResources final : NoCopy{
 private:
     struct BufferRequest{

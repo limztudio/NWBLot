@@ -44,8 +44,7 @@ bool PostGbufferNormalizeGraphTask::record(
         return false;
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-    // The graph's explicit uses below lower the ordinary G-buffer, scene, descriptor, and dynamically selected
-    // trace-geometry states before this task records.
+    // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
     if(
         shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
         && payload.asyncPrefixTiming

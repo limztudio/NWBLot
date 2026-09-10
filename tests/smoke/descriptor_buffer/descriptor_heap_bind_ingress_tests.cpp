@@ -319,8 +319,7 @@ TEST_F(DescriptorHeapBindIngressTest, RejectsForeignHeapHybridLayoutAndWrongCurr
     const GpuDescriptorHeapAbi abi = Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi();
     GraphicsBackend::GpuDescriptorHeap foreignHeap(localDevice);
 
-    // The renderer owns the device's persistent descriptor-buffer heap. A foreign heap exercises identity validation,
-    // while an independent layout exercises pipeline-layout validation without allocating another manager segment.
+    // A foreign heap covers identity validation; an independent layout covers pipeline-layout validation.
     BindlessLayoutDesc foreignSamplerLayoutDesc;
     foreignSamplerLayoutDesc
         .setLayoutType(BindlessLayoutType::MutableSampler)

@@ -20,9 +20,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Manager is enabled and its two global segments report a non-zero device address after device init. The bound
-// address is what vkCmdBindDescriptorBuffersEXT hands to the command buffer; a zero address would mean the segment
-// buffer was never allocated/mapped. This is the gate every subsequent case depends on.
+// Both global segments must report a non-zero device address; later cases depend on it.
 TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
     auto& mgr = manager();
 
@@ -34,9 +32,7 @@ TEST_F(DescriptorBufferRoundTripTest, ManagerEnabledAndSegmentsMapped){
 }
 
 
-// Carve one storage-buffer descriptor out of the resource segment and confirm writeDescriptor succeeds via the
-// vkGetDescriptorEXT path. Free returns the range to the free list. Storage buffer is the descriptor class every
-// raytrace pass binds, so it is the most representative round trip.
+// Storage buffers are the most representative round trip.
 TEST_F(DescriptorBufferAllocationTest, RoundTripsStorageBufferDescriptor){
     auto& device = DescriptorBufferRoundTripTest::device();
     auto& mgr = manager();
@@ -58,9 +54,7 @@ TEST_F(DescriptorBufferAllocationTest, RoundTripsStorageBufferDescriptor){
     const auto segment = mgr.allocate(GraphicsBackend::DescriptorBufferSegmentKind::Resource, descriptorSize, mgr.getOffsetAlignmentBytes());
     ASSERT_TRUE(segment.valid());
 
-    // The authoritative round-trip signal is writeDescriptor's return: a failed vkGetDescriptorEXT returns false and
-    // logs at ERROR (the capturing logger would surface it). Byte-level inspection of the mapped segment is private
-    // to the manager; the conversion trusts the return value plus the non-zero-size gate below.
+    // writeDescriptor's return is the round-trip signal; segment bytes stay manager-private.
     const DescriptorWriteItem item = DescriptorWriteItem::RawBuffer_UAV(0u, storageBuffer.get());
     const bool wrote = mgr.writeDescriptor(item, segment, segment.offsetBytes, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
     EXPECT_TRUE(wrote);

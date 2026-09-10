@@ -70,8 +70,7 @@ protected:
         if(!localManager.isEnabled())
             return;
 
-        // Descriptor-manager ingress tests own the manager's segments. The renderer heap is a separate client that may
-        // consume an entire device-limited range, so release it before direct manager allocation tests.
+        // Release the renderer heap before direct manager allocation tests.
         auto& heap = localDevice.getDescriptorHeap();
         heap.shutdown();
         ASSERT_FALSE(heap.isInitialized());

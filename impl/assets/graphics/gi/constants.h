@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Sampling and trace-distance policy shared by the GI shader paths. Keep these in the macro-only header so both
-// software and hardware trace variants, plus their surfel producer, retain one deterministic sequence and ray span.
+// Sampling and trace-distance policy shared by the GI shader paths. Macro-only so SW/HW trace variants and the surfel producer share one sequence and ray span.
 #define NWB_GI_FIBONACCI_GOLDEN_ANGLE 2.39996323f
 #define NWB_GI_FRAME_ROTATION_SEQUENCE_FRACTION 0.61803398875f
 #define NWB_GI_FULL_TURN_RADIANS 6.28318530718f

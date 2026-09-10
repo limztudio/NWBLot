@@ -10,16 +10,15 @@
 
 
 // Scheduling constants for the heap-only caustic resolve.
-// The splat accumulator is a decay EMA; resolve exposure scales by (1 - decayFactor) to preserve static brightness.
+// The splat accumulator is a decay EMA; resolve exposure scales by (1 - decayFactor).
 #define NWB_CAUSTIC_RESOLVE_GROUP_SIZE 8
 
-// NwbCausticResolvePushConstants.stage values. The C++ dispatch and shader branch both consume this ABI.
+// NwbCausticResolvePushConstants.stage values shared by the C++ dispatch and shader branch.
 #define NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE 0u
 #define NWB_CAUSTIC_RESOLVE_STAGE_WAVELET 1u
 #define NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE 2u
 
-// R32_UINT accumulator Texture2DArray layers, one per RGB flux channel. The host allocation and every producer/
-// consumer must agree on this array ABI.
+// R32_UINT accumulator Texture2DArray layers, one per RGB flux channel.
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT 3u
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED 0u
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_GREEN 1u

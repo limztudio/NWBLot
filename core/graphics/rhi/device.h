@@ -54,9 +54,8 @@ namespace Feature{
     };
 };
 
-// One opaque native binary semaphore signal contributed by a submission-local hook. `Object` avoids exposing a
-// backend handle type to graph code; only the native Device that owns the exact queue may decode it. This is narrow
-// by design: swap-chain presentation requires one binary signal, while timeline dependencies remain token based.
+// One opaque binary semaphore signal from a submission-local hook. Only the owning native Device may decode it;
+// presentation takes one binary signal while timeline dependencies stay token-based.
 struct QueueSubmissionNativeSignal{
     Object semaphore = Object(u64{0u});
     u64 value = 0u;
@@ -64,12 +63,9 @@ struct QueueSubmissionNativeSignal{
     [[nodiscard]] constexpr bool valid()const noexcept{ return semaphore.integer != 0u; }
 };
 
-// Called immediately before one validated native submission reaches its selected physical queue. It returns an
-// opaque binary signal that Device attaches directly to that submission, rather than appending it to a queue-global
-// pending list where another concurrent submit could consume it. A false return is an expected rejection and must
-// leave owner state failure atomic; it creates no resolution obligation. An unexpected exception is not converted
-// into rejection and unwinds to the application entry boundary, so throwing preparation must also leave owner state
-// unchanged. The hook is a borrowed one-shot value: context must outlive executeCommandLists, and copies must not be
+// Runs just before one validated submission reaches its queue. Returns a binary signal attached directly to that
+// submission, never to a queue-global pending list. False is an expected atomic rejection; an exception unwinds to
+// the application boundary, so preparation must also leave owner state unchanged.
 // retained past resolution or their owner's lifecycle.
 using QueueSubmissionPreSubmitCallback = bool(*) (
     void* context,

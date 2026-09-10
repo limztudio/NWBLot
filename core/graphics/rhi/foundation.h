@@ -23,8 +23,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Retained as an opaque declaration so GraphicsRuntime::getGraphicsAPI remains source-compatible for callers that include
-// the graphics module without the legacy backend-selection compatibility header.
+// Opaque declaration keeping GraphicsRuntime::getGraphicsAPI source-compatible without the legacy header.
 namespace GraphicsAPI{
     enum Enum : u8;
 };

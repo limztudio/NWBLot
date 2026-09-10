@@ -66,9 +66,8 @@ namespace CpuAccessMode{
     };
 };
 
-// Engine-level sharing intent for resources that may be read or written by multiple physical transports. This never
-// exposes Vulkan queue-family indices to callers. A requested set becomes concurrent Vulkan sharing only for the
-// distinct physical families the device actually created; all other resources remain exclusive by default.
+// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes
+// concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
     enum Mask : u8{
         Exclusive = 0,
@@ -88,8 +87,8 @@ namespace ResourceQueueSharing{
     }
 };
 
-// Immutable physical admission facts for one resource. The backend owns the pointed-to family list; consumers that
-// retain this snapshot beyond the resource call boundary must copy it into their own storage.
+// Physical admission facts for one resource. The backend owns the family list; consumers retaining the snapshot
+// past the call boundary must copy it.
 struct ResourceQueueAdmissionSnapshot{
     ResourceQueueSharing::Mask admittedQueueClasses = ResourceQueueSharing::Exclusive;
     const u32* queueFamilyIndices = nullptr;

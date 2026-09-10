@@ -57,8 +57,7 @@ namespace GpuCommandIrWireOpcode{
     };
 };
 
-// Same-host tooling format for now; magic/version reject incompatible layouts before decoding. Identity stays
-// graph+plan scoped so tooling may replay a captured plan.
+// Same-host tooling format; magic/version reject incompatible layouts.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
 inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 3u;
 inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
@@ -70,8 +69,7 @@ struct GpuCommandIrStreamHeaderPrefix{
     u16 reserved = 0u;
 };
 
-// v3 separates declared graph handles from compiler-generated packet handles. v1/v2 used a 32-byte header that
-// cannot name the packet plan, so the reader rejects them before decoding.
+// v3 separates graph handles from packet handles; reader rejects v1/v2.
 struct GpuCommandIrStreamHeader{
     u32 magic = s_GpuCommandIrStreamMagic;
     u16 version = s_GpuCommandIrStreamVersion;
@@ -88,8 +86,7 @@ struct GpuCommandIrHeader{
     u16 byteSize = 0u;
 };
 
-// Every v3 built-in record targets the stream header's graph and plan generations. Queue generation stays
-// command-local: it names a physical-device queue lifetime, not graph metadata.
+// v3 records target the header generations; queue generation stays command-local.
 struct GpuCommandIrRecordContext{
     u32 taskIndex = Limit<u32>::s_Max;
     u32 packetIndex = Limit<u32>::s_Max;
@@ -192,8 +189,7 @@ struct GpuCommandIrClearTextureRecord{
     u8 reserved = 0u;
 };
 
-// Version 2 adds a distinct typed record instead of changing the v1 whole-texture clear payload. This preserves
-// v1 byte layouts for tooling that retained older captures while making a work-region clear explicit in the IR.
+// v2 adds a typed record; preserves v1 layouts for older tooling.
 struct GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -259,8 +255,7 @@ struct GpuCommandIrBuiltinTaskRecord{
 };
 
 
-// The reader validates only the self-contained versioned wire contract. Graph/resource topology, resource ranges and
-// backend command legality require a later context-aware validation/replay phase.
+// Reader validates only the wire contract; topology needs a later phase.
 namespace GpuCommandIrStreamReadStatus{
     enum Enum : u8{
         Record,
@@ -303,9 +298,7 @@ struct GpuCommandIrStreamValidationResult{
     }
 };
 
-// A non-owning sequential reader for the POD stream. Its backing bytes must stay alive and unchanged while it is
-// used. `next` publishes its output and advances only after an entire record passes v1 syntax validation; `End` is
-// the only successful terminal state.
+// Non-owning sequential reader; backing bytes must stay alive and unchanged.
 class GpuCommandIrStreamReader final : NoCopy{
 public:
     explicit GpuCommandIrStreamReader(BinaryByteView bytes)noexcept;
@@ -339,13 +332,11 @@ private:
     u64 m_nextRecordIndex = 0u;
 };
 
-// Fully walks a stream with the syntax-only reader and returns either success or its first malformed location.
+// Walks a stream with the syntax reader; returns success or first bad location.
 [[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
 
 
-// Replay remains opt-in tooling. A v1 stream contains only primitive task bodies, not packet state seeds,
-// compiler barriers, ownership transfers, markers, or submission dependencies. It may therefore be lowered only
-// into a caller-owned fresh packet body after the graph recorder has established the required state.
+// Replay is opt-in; v1 streams hold task bodies only, lowered into fresh packets.
 namespace GpuCommandIrReplayError{
     enum Enum : u8{
         None,

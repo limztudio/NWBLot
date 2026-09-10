@@ -50,9 +50,7 @@ struct RayTracingOpticalSceneUpload{
     RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather);
 };
 using RayTracingOpticalSceneUploadControl = RefCounter<RayTracingOpticalSceneUpload>;
-using RayTracingOpticalSceneUploadHandle = RefCountPtr<
-    RayTracingOpticalSceneUploadControl, ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>
->;
+using RayTracingOpticalSceneUploadHandle = RefCountPtr<RayTracingOpticalSceneUploadControl, ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>>;
 
 struct RayTracingOpticalSceneSnapshot{
     Core::BufferHandle buffer;

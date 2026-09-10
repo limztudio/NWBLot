@@ -31,8 +31,7 @@ static_assert(NWB_BINDLESS_HEAP_SAMPLER_SET == NWB_BINDLESS_HEAP_RESOURCE_SET + 
 static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == NWB_BINDLESS_HEAP_SAMPLER_SET + 1u);
 
 
-// Converts the shared macro-only CPU/GPU ABI into the typed payload consumed by Core::GraphicsRuntime. This adapter stays
-// on the implementation/project side so the renderer never depends directly on asset-owned shader constants.
+// Adapts the shared ABI into the runtime payload; keeps the renderer off asset constants.
 [[nodiscard]] inline Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi(){
     Core::GpuDescriptorHeapAbi abi;
     abi.resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;

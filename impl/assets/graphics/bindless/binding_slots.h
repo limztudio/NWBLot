@@ -9,9 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Global descriptor heap binding contract. Must match GpuDescriptorHeapAbi sets
-// and GpuDescriptorHeap::getRegisterSlot() bindings. Pipeline-local layouts use
-// push constants only, so the global heap can use the lowest sets.
+// Global heap contract; pipeline-local layouts use push constants only.
 #define NWB_BINDLESS_HEAP_RESOURCE_SET 0
 #define NWB_BINDLESS_HEAP_SAMPLER_SET  1
 #define NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET 2

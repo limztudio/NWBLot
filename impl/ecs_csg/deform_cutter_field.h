@@ -35,10 +35,6 @@ namespace CsgDeformShapeKind{
 
 class CsgDeformCutterField final : NoCopy{
 public:
-    CsgDeformCutterField() = delete;
-
-
-public:
     [[nodiscard]] static CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType);
     [[nodiscard]] static f32 PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
     [[nodiscard]] static f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
@@ -51,6 +47,10 @@ public:
         Vector<f32, Core::Alloc::ScratchArena>& outDistances,
         CsgDeformViabilityReason::Enum& outReason
     );
+
+
+public:
+    CsgDeformCutterField() = delete;
 };
 
 

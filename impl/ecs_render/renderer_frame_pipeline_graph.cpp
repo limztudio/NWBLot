@@ -413,9 +413,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ))
             softwareTraceGeometryResources.push_back(resource);
     }
-    // Shadow, caustic, and surfel closest-hit dispatchers use the frozen material context to select these Texture2D
-    // assets through the bindless heap. Reuse a typed preflight import when G-buffer/AVBOIT already owns it, rather
-    // than introducing an opaque descriptor domain around the trace paths.
+    // Trace dispatchers select textures via frozen material context; reuse typed preflight import when owned.
     switch(ImportMaterialSampledTextureResources(
         m_deferredLightingTaskGraph,
         preparedTraceMaterialSampledTextures.data(),
@@ -580,7 +578,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     );
 
 
-    // The CSG working set (peel targets, receiver-event/span images, removed-interval outputs) is declared by the graph; the wider CSG target lifecycle stays in native compatibility producers.
+    // CSG working set declared here; wider target lifecycle stays in native producers.
     const Core::GpuGraphResourceId csgCapBackNormal = importTexture(
         deferredTargets.csgCapBackNormal,
         Name("render.deferred.csg_cap_back_normal"),

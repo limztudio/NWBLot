@@ -567,9 +567,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto taskIsCompiled = [&](const Core::GpuTaskId task){
         return deferredCompiledPlan.findTask(task).valid();
     };
-    // Pure-software per-mesh typed clears and their native compute callbacks are part of the same accepting Shadow
-    // Preparation packet. The semantic range still starts at Shadow Preparation, so a split would otherwise omit
-    // recorded predecessor work and allow CPU topology publication without its sentinel/compute chain.
+    // Software clears belong to the Shadow Preparation packet; a split would omit them.
     const bool shadowPrepareSoftwareBvhBuildsMerged =
         !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
             ? !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
@@ -585,8 +583,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 )
             )
     ;
-    // The optional hybrid tail records real work, but preserves the former aggregate callback's acceptance and
-    // fallback boundary by remaining in this exact first Graphics packet.
+    // The hybrid tail keeps the old acceptance boundary in this packet.
     const bool shadowPrepareHybridSoftwareTailMerged =
         !m_deferredShadowPrepareHybridSoftwareTailTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -594,9 +591,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredShadowPrepareHybridSoftwareTailTask
         )
     ;
-    // The state-only finalizer is part of the accepting Shadow Preparation contract. It may be a separate graph
-    // callback, but every frozen AS/backing transition must remain in the same first Graphics submission as its
-    // build so CPU cache publication and the retained packet-state handoff stay atomic.
+    // Frozen transitions must share the build's submission for an atomic handoff.
     const bool shadowPrepareAccelStructFinalizeMerged =
         !m_deferredShadowPrepareAccelStructFinalizeTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -604,8 +599,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredShadowPrepareAccelStructFinalizeTask
         )
     ;
-    // The prefix submission range is anchored at Shadow Preparation. A selector upload is safe only when the
-    // compiler keeps it in that exact packet; otherwise it would be recorded but omitted from the accepted range.
+    // Selector uploads must stay in the Shadow Preparation packet.
     const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket =
         !m_deferredBindlessSlotsUploadTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -613,8 +607,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_deferredBindlessSlotsUploadTask
         )
     ;
-    // This selector is consumed by later Compute trace tasks, but the prefix submission range starts at Shadow
-    // Preparation. Keep the immutable upload in that exact first packet so Shadow Preparation becomes the handoff.
+    // Keep the upload in the first packet so it becomes the handoff.
     const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket =
         !m_rayTraceMaterialContextSlotsUploadTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -622,8 +615,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_rayTraceMaterialContextSlotsUploadTask
         )
     ;
-    // The caustic input upload is optional for an empty refractive set, but a nonempty payload must live in the
-    // exact Shadow Preparation packet that owns the following ShaderResource handoff to later Compute consumers.
+    // Nonempty caustic payloads must live in the Shadow Preparation packet.
     const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket =
         !m_causticEmissionTargetsUploadTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -631,8 +623,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_causticEmissionTargetsUploadTask
         )
     ;
-    // Active surfel frames freeze a fresh constant payload before compilation. It must share Shadow Preparation's
-    // first Graphics packet so that task remains the handoff producer for the asynchronous Surfel-GI consumer.
+    // Surfel constants must share the Shadow Preparation packet.
     const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket =
         !m_surfelFrameConstantsUploadTask.valid()
         || deferredCompiledPlan.tasksSharePacket(
@@ -640,8 +631,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             m_surfelFrameConstantsUploadTask
         )
     ;
-    // This ABI-coupled triple must remain in the first accepted Graphics packet. Shadow Preparation supersedes the
-    // upload writers as the ShaderResource producer observed by later asynchronous trace passes.
+    // This triple must stay in the first accepted packet.
     const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket =
         (!m_shadowInstanceMaterialUploadTask.valid()
             || deferredCompiledPlan.tasksSharePacket(
@@ -659,8 +649,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 m_shadowMaterialTypedUploadTask
             ))
     ;
-    // Scene-BVH nodes index the companion leaf-instance stream. Keep the whole immutable pair in the accepting
-    // Shadow Preparation packet so it becomes the only ShaderResource producer exposed to later Compute work.
+    // Keep the pair in Shadow Preparation as the only producer.
     const bool sceneBvhUploadsMergedIntoShadowPreparePacket =
         m_sceneBvhNodesUploadTask.valid() == m_sceneBvhInstancesUploadTask.valid()
         && (!m_sceneBvhNodesUploadTask.valid()
@@ -675,8 +664,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 )
             ))
     ;
-    // The optional CSG callbacks alias the G-buffer task on ordinary frames. Each retains an independent semantic
-    // timing anchor when a FrontierSafe boundary splits the Graphics prefix.
+    // CSG callbacks keep an independent anchor across FrontierSafe splits.
     const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
         m_graphicsPrefixMeshViewSetupTask,
         m_graphicsPrefixSceneShadingSetupTask,

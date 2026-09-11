@@ -22,6 +22,7 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
+#include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
 #include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
 #include <impl/ecs_render/deferred/lighting_content_stamp.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
@@ -320,251 +321,42 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // G-buffer and the optional opaque CSG follow-up both declare the shared material entry batch whenever their
     // immutable draw stream exists. The selected source-geometry batch is retained and declared separately below.
     gbufferPayload.materialFrameStatesGraphOwned = hasOpaqueDrawItems;
-    Core::GpuTaskId materialDrawUploadTask = m_graphicsPrefixDeferredClearTask;
-    if(hasOpaqueDrawItems){
-        if(
-            !materialInstances.valid()
-            || !materialTyped.valid()
-            || !frameBindings.frameReady(instanceData.size(), materialTypedBytes.size())
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared opaque material draw buffers were unavailable during graph declaration"));
-            return false;
-        }
-        m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData, csgResources);
+    OpaqueUploadChainBuilder opaqueUploadChainBuilder(
+        m_deferredLightingTaskGraph,
+        m_materialSystem,
+        m_csgSystem
+    );
+    OpaqueUploadChainResult opaqueUploadChainResult;
+    if(!opaqueUploadChainBuilder.declare(
+        OpaqueUploadChainInputs{
+            .targets = &deferredTargets,
+            .frameBindings = &frameBindings,
+            .csgResources = &csgResources,
+            .drawItems = &opaqueDrawItems,
+            .instanceData = &instanceData,
+            .csgFrameData = &csgFrameData,
 #if defined(NWB_DEBUG)
-        if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: opaque material instance upload size overflows graph blob capacity"));
-            return false;
-        }
-        NWB_ASSERT(instanceData.size() == materialTypedRanges.size());
-        ECSRenderDetail::AssertMaterialTypedUploadRanges(materialTypedRanges, materialTypedBytes);
+            .materialTypedRanges = &materialTypedRanges,
 #endif
-
-        const Core::GpuUploadBlobId instanceBlob = m_deferredLightingTaskGraph.copyUploadData(
-            instanceData.data(),
-            instanceData.size() * sizeof(InstanceGpuData),
-            alignof(InstanceGpuData)
-        );
-        const Core::GpuUploadBlobId materialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
-            materialTypedBytes.data(),
-            materialTypedBytes.size(),
-            alignof(u32)
-        );
-        if(!instanceBlob.valid() || !materialTypedBlob.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable opaque material upload data"));
-            return false;
-        }
-
-        Core::GpuTaskDesc instanceUploadDesc;
-        instanceUploadDesc
-            .setIdentity(Name("render.graphics_prefix.material_instances_upload"))
-            .setMarkerLabel("Material Instances Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&materialDrawUploadTask, 1u)
-        ;
-        materialDrawUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            instanceUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = instanceBlob,
-                .destination = materialInstances,
-                // Both draw buffers use automatic Common restoration when the native packet closes.  Keep that
-                // graph-visible boundary exact; the G-buffer read below owns the transient SRV transition.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!materialDrawUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned material instance upload"));
-            return false;
-        }
-
-        Core::GpuTaskDesc materialTypedUploadDesc;
-        materialTypedUploadDesc
-            .setIdentity(Name("render.graphics_prefix.material_typed_upload"))
-            .setMarkerLabel("Material Typed Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&materialDrawUploadTask, 1u)
-        ;
-        materialDrawUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            materialTypedUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = materialTypedBlob,
-                .destination = materialTyped,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!materialDrawUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned material typed upload"));
-            return false;
-        }
-        gbufferPayload.materialDrawBuffersUploaded = true;
+            .materialTypedBytes = &materialTypedBytes,
+            .materialInstances = materialInstances,
+            .materialTyped = materialTyped,
+            .csgReceiverRanges = csgReceiverRanges,
+            .csgCutters = csgCutters,
+            .csgClipContextSlots = csgClipContextSlots,
+            .csgIntervalSampleState = csgIntervalSampleState,
+            .dependencyTask = m_graphicsPrefixDeferredClearTask,
+        },
+        opaqueUploadChainResult
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
+        return false;
     }
+    const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult.csgUploadTask;
+    const bool hasCsgFrameGpuWork = opaqueUploadChainResult.hasCsgFrameGpuWork;
+    gbufferPayload.materialDrawBuffersUploaded = opaqueUploadChainResult.materialDrawBuffersUploaded;
+    gbufferPayload.csgFrameBuffersUploaded = opaqueUploadChainResult.csgFrameBuffersUploaded;
 
-    // Freeze every opaque CSG upload byte after preflight fixed the buffer, descriptor, and target generations.
-    // Native G-buffer recording consumes these values without rebuilding either CSG uniform payload from live state.
-    const bool hasCsgFrameGpuWork = csgFrameData.hasWork();
-    Core::GpuTaskId csgFrameUploadTask = materialDrawUploadTask;
-    if(hasCsgFrameGpuWork){
-        if(
-            !csgReceiverRanges.valid()
-            || !csgCutters.valid()
-            || !csgClipContextSlots.valid()
-            || !csgIntervalSampleState.valid()
-            || !csgResources.frameReady(csgFrameData)
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared CSG frame buffers were unavailable during graph declaration"));
-            return false;
-        }
-#if defined(NWB_DEBUG)
-        if(
-            csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
-            || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG frame upload size overflows graph blob capacity"));
-            return false;
-        }
-#endif
-
-        CsgClipContextSlots csgClipContextSlotData;
-        CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
-        if(
-            !m_csgSystem.prepareCsgClipContextSlotData(
-                deferredTargets,
-                csgFrameData,
-                csgResources,
-                frameBindings,
-                csgClipContextSlotData
-            )
-            || !m_csgSystem.prepareCsgIntervalSampleStateData(
-                deferredTargets,
-                csgFrameData,
-                csgResources,
-                frameBindings,
-                csgIntervalSampleStateData
-            )
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot opaque CSG auxiliary upload data"));
-            return false;
-        }
-
-        const Core::GpuUploadBlobId receiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
-            csgFrameData.receiverRanges.data(),
-            csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
-            alignof(CsgReceiverRangeGpuData)
-        );
-        const Core::GpuUploadBlobId cuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
-            csgFrameData.cutters.data(),
-            csgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
-            alignof(CsgCutterGpuData)
-        );
-        const Core::GpuUploadBlobId clipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &csgClipContextSlotData,
-            sizeof(csgClipContextSlotData),
-            alignof(CsgClipContextSlots)
-        );
-        const Core::GpuUploadBlobId intervalSampleStateBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &csgIntervalSampleStateData,
-            sizeof(csgIntervalSampleStateData),
-            alignof(CsgIntervalSampleStateGpuData)
-        );
-        if(
-            !receiverRangesBlob.valid()
-            || !cuttersBlob.valid()
-            || !clipContextSlotsBlob.valid()
-            || !intervalSampleStateBlob.valid()
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable CSG frame upload data"));
-            return false;
-        }
-
-        Core::GpuTaskDesc receiverRangesUploadDesc;
-        receiverRangesUploadDesc
-            .setIdentity(Name("render.graphics_prefix.csg_receiver_ranges_upload"))
-            .setMarkerLabel("CSG Receiver Ranges Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&csgFrameUploadTask, 1u)
-        ;
-        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            receiverRangesUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = receiverRangesBlob,
-                .destination = csgReceiverRanges,
-                // CSG structured buffers restore Common at native packet close; G-buffer owns their transient SRV
-                // state exactly like the graph-owned material streams above.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!csgFrameUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG receiver-range upload"));
-            return false;
-        }
-
-        Core::GpuTaskDesc cuttersUploadDesc;
-        cuttersUploadDesc
-            .setIdentity(Name("render.graphics_prefix.csg_cutters_upload"))
-            .setMarkerLabel("CSG Cutters Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&csgFrameUploadTask, 1u)
-        ;
-        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            cuttersUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = cuttersBlob,
-                .destination = csgCutters,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!csgFrameUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG cutter upload"));
-            return false;
-        }
-
-        Core::GpuTaskDesc clipContextSlotsUploadDesc;
-        clipContextSlotsUploadDesc
-            .setIdentity(Name("render.graphics_prefix.csg_clip_context_slots_upload"))
-            .setMarkerLabel("CSG Clip Context Slots Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&csgFrameUploadTask, 1u)
-        ;
-        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            clipContextSlotsUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = clipContextSlotsBlob,
-                .destination = csgClipContextSlots,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!csgFrameUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG clip-context upload"));
-            return false;
-        }
-
-        Core::GpuTaskDesc intervalSampleStateUploadDesc;
-        intervalSampleStateUploadDesc
-            .setIdentity(Name("render.graphics_prefix.csg_interval_sample_state_upload"))
-            .setMarkerLabel("CSG Interval Sample State Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&csgFrameUploadTask, 1u)
-        ;
-        csgFrameUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            intervalSampleStateUploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = intervalSampleStateBlob,
-                .destination = csgIntervalSampleState,
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!csgFrameUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned CSG interval-state upload"));
-            return false;
-        }
-        gbufferPayload.csgFrameBuffersUploaded = true;
-    }
     gbufferPayload.opaqueDrawSnapshot.capture(
         opaqueDrawItems,
         csgFrameData,

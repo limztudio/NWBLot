@@ -35,8 +35,6 @@ class RendererDeferredState final : NoCopy{
 public:
     RendererDeferredState() = default;
 
-
-public:
     void invalidateResources();
 
 

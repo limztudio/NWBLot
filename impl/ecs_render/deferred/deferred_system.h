@@ -100,13 +100,11 @@ public:
         RendererShaderSystem& shaderSystem
     );
 
-public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
 
-public:
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
     [[nodiscard]] bool prepareSceneShadingBufferUploads(
         f32 fallbackAspectRatio,
@@ -171,8 +169,7 @@ private:
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
 
-private:
-    Core::Alloc::GlobalArena& m_arena;
+        Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     RendererDeferredState& m_deferredState;

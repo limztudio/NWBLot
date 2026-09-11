@@ -74,8 +74,7 @@ public:
         RendererMeshSystem& meshSystem
     );
 
-public:
-    void invalidateResources();
+        void invalidateResources();
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
     [[nodiscard]] bool createCsgClipResources();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
@@ -164,8 +163,7 @@ public:
 private:
     void releaseCsgClipContextHeapHandles();
 
-private:
-    Core::Alloc::GlobalArena& m_arena;
+        Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     CsgShapeRegistry& m_csgShapeRegistry;

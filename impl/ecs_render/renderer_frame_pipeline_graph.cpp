@@ -57,6 +57,7 @@
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
+#include <impl/ecs_render/avboit/clear_chain_builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2401,170 +2402,35 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
 
 
-    // Keep native order: uploads, serial target clears, then occupancy; graph owns all CopyDest ops.
-    Core::GpuTaskId avboitClearTask = occupancyUploadTask;
-    if(clearAvboitTargets){
-        Core::GpuTaskSchedulingHint avboitClearScheduling;
-        avboitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        avboitClearScheduling.forceSubmissionBoundary = false;
-        avboitClearScheduling.allowPacketMerge = true;
-        avboitClearScheduling.mergeWithPrevious = true;
-        // Clear chain and Occupancy share one AVBOIT Pre timing packet across consumer frontiers.
-        avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;
-        const auto makeAvboitClearTaskDesc = [&avboitClearScheduling](
-            const Name identity,
-            const AStringView markerLabel,
-            const Core::GpuTaskId& dependency
-        ){
-            Core::GpuTaskDesc clearDesc;
-            clearDesc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(avboitClearScheduling)
-                .setDependencies(&dependency, 1u)
-            ;
-            return clearDesc;
-        };
-        const auto makeAvboitFloatClearDesc = [](
-            const Core::GpuGraphResourceId destination,
-            const Core::Color& value,
-            const Core::GpuClearTextureTaskRecordHooks& recordHooks = {}
-        ){
-            Core::GpuClearTextureTaskDesc clearDesc;
-            clearDesc.destination = destination;
-            clearDesc.subresources = ECSRenderDetail::s_FramebufferSubresources;
-            clearDesc.valueType = Core::GpuClearTextureTaskValueType::Float;
-            clearDesc.floatValue = value;
-            clearDesc.recordHooks = recordHooks;
-            return clearDesc;
-        };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearBeginHooks{
-            .context = &avboitClearTimingState,
-            .beforeClear = &BeginGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
-        const Core::GpuClearTextureTaskRecordHooks avboitClearEndHooks{
-            .context = &avboitClearTimingState,
-            .afterClear = &EndGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
-        const Core::Color transparentBlack(0.f, 0.f, 0.f, 0.f);
-        avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.low_raster"),
-                "AVBOIT Clear Low Raster",
-                occupancyUploadTask
-            ),
-            makeAvboitFloatClearDesc(avboitLowRaster, transparentBlack, avboitClearBeginHooks)
-        );
-        if(!avboitClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT low-raster clear"));
-            return;
-        }
-        m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
-        avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.accum_color"),
-                "AVBOIT Clear Accumulation Color",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(avboitAccumColor, transparentBlack)
-        );
-        if(!avboitClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT accumulation-color clear"));
-            return;
-        }
-        avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.accum_extinction"),
-                "AVBOIT Clear Accumulation Extinction",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(avboitAccumExtinction, transparentBlack)
-        );
-        if(!avboitClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT accumulation-extinction clear"));
-            return;
-        }
-        const Core::GpuGraphResourceId foregroundClearTargets[] = { avboitForegroundColor, avboitForegroundExtinction };
-        for(const auto target : foregroundClearTargets){
-            avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
-                makeAvboitClearTaskDesc(target == avboitForegroundColor
-                    ? Name("render.avboit.clear.foreground_color") : Name("render.avboit.clear.foreground_extinction"),
-                    "AVBOIT Clear Foreground", avboitClearTask),
-                makeAvboitFloatClearDesc(target, transparentBlack));
-            if(!avboitClearTask.valid())
-                return;
-        }
-        const auto appendAvboitBufferClear = [&](
-            const Name identity,
-            const AStringView markerLabel,
-            const Core::GpuGraphResourceId destination,
-            const u32 value
-        ){
-            avboitClearTask = m_deferredLightingTaskGraph.addClearBufferTask(
-                makeAvboitClearTaskDesc(identity, markerLabel, avboitClearTask),
-                Core::GpuClearBufferTaskDesc{
-                    .destination = destination,
-                    .clearValue = value,
-                }
-            );
-            return avboitClearTask.valid();
-        };
-        if(
-            !appendAvboitBufferClear(
-                Name("render.avboit.clear.coverage"),
-                "AVBOIT Clear Coverage",
-                avboitCoverage,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.depth_warp"),
-                "AVBOIT Clear Depth Warp",
-                avboitDepthWarp,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.control"),
-                "AVBOIT Clear Control",
-                avboitControl,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.extinction"),
-                "AVBOIT Clear Extinction",
-                avboitExtinction,
-                0u
-            )
-            || !appendAvboitBufferClear(
-                Name("render.avboit.clear.extinction_overflow"),
-                "AVBOIT Clear Extinction Overflow",
-                avboitExtinctionOverflow,
-                NWB_AVBOIT_OVERFLOW_INVALID
-            )
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT buffer clear"));
-            return;
-        }
-        avboitClearTask = m_deferredLightingTaskGraph.addClearTextureTask(
-            makeAvboitClearTaskDesc(
-                Name("render.avboit.clear.transmittance"),
-                "AVBOIT Clear Transmittance",
-                avboitClearTask
-            ),
-            makeAvboitFloatClearDesc(
-                avboitTransmittance,
-                Core::Color(1.f, 1.f, 1.f, 1.f),
-                avboitClearEndHooks
-            )
-        );
-        if(!avboitClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT transmittance clear"));
-            return;
-        }
-        m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
+    AvboitClearChainBuilder avboitClearChainBuilder(
+        m_deferredLightingTaskGraph,
+        m_avboitSystem
+    );
+    AvboitClearChainResult avboitClearChainResult;
+    if(!avboitClearChainBuilder.declare(
+        AvboitClearChainInputs{
+            .lowRaster = avboitLowRaster,
+            .accumColor = avboitAccumColor,
+            .accumExtinction = avboitAccumExtinction,
+            .foregroundColor = avboitForegroundColor,
+            .foregroundExtinction = avboitForegroundExtinction,
+            .transmittance = avboitTransmittance,
+            .coverage = avboitCoverage,
+            .depthWarp = avboitDepthWarp,
+            .control = avboitControl,
+            .extinction = avboitExtinction,
+            .extinctionOverflow = avboitExtinctionOverflow,
+            .uploadTask = occupancyUploadTask,
+            .clearTargets = clearAvboitTargets,
+        },
+        avboitClearTimingState,
+        avboitClearChainResult
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned AVBOIT clear chain"));
+        return;
     }
+    Core::GpuTaskId avboitClearTask = avboitClearChainResult.clearTask;
+
 
     const bool occupancyCsgIntervalSampleImageStatesGraphOwned =
         avboitIntervalOutputsGraphOwned && occupancyCsgStreamsUploaded

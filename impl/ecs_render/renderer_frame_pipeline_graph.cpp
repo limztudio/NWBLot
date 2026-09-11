@@ -49,6 +49,7 @@
 #include <impl/ecs_render/csg/task_graph_opaque_interval_tasks.h>
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
+#include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
@@ -368,27 +369,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importTexture(texture, TextureResourceDesc(identity, label));
     };
-    // Outputs begin with a graph-owned write; fresh resources start Undefined.
-    const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);
-        desc.setInitialState(Core::ResourceStates::Unknown);
-        return m_deferredLightingTaskGraph.importTexture(texture, desc);
-    };
-    // Clears may start Undefined; no-clear frames import retained Common.
-    const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
-        return clearAvboitTargets
-            ? importFirstWriteTexture(texture, identity, label)
-            : importTexture(texture, identity, label)
-        ;
-    };
     const auto importBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label){
         return m_deferredLightingTaskGraph.importBuffer(buffer, BufferResourceDesc(identity, label));
-    };
-    const auto importCurrentBindlessSlots = [&](const Name& identity, const AStringView label){
-        return m_deferredLightingTaskGraph.importBuffer(
-            deferredTargets.bindless.slotsBuffer,
-            BufferResourceDesc(identity, label)
-        );
     };
     for(const PreparedShadowTraceGeometryBuffer& preparedBuffer : preparedTraceGeometry){
         Core::GpuGraphResourceDesc desc = BufferResourceDesc(preparedBuffer.identity, "Prepared Shadow Trace Geometry");
@@ -553,415 +535,95 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             return;
         }
     }
-    const Core::GpuGraphResourceId albedo = importFirstWriteTexture(
-        deferredTargets.albedo,
-        Name("render.deferred_lighting.albedo"),
-        "G-Buffer Albedo"
+    DeferredGraphResourceImportBuilder deferredGraphResourceImportBuilder(
+        m_deferredLightingTaskGraph
     );
-    const Core::GpuGraphResourceId normal = importFirstWriteTexture(
-        deferredTargets.normal,
-        Name("render.deferred_lighting.normal"),
-        "G-Buffer Normal"
-    );
-    const Core::GpuGraphResourceId worldPosition = importFirstWriteTexture(
-        deferredTargets.worldPosition,
-        Name("render.deferred_lighting.world_position"),
-        "G-Buffer World Position"
-    );
-    const Core::GpuGraphResourceId specularRoughness = importFirstWriteTexture(
-        deferredTargets.specularRoughness,
-        Name("render.deferred_lighting.specular_roughness"),
-        "G-Buffer Specular Roughness"
-    );
-    const Core::GpuGraphResourceId depth = importFirstWriteTexture(
-        deferredTargets.depth,
-        Name("render.deferred_lighting.depth"),
-        "G-Buffer Depth"
-    );
-
-
-    // CSG working set declared here; wider target lifecycle stays in native producers.
-    const Core::GpuGraphResourceId csgCapBackNormal = importTexture(
-        deferredTargets.csgCapBackNormal,
-        Name("render.deferred.csg_cap_back_normal"),
-        "CSG Cap Back Normal"
-    );
-    const Core::GpuGraphResourceId csgIntervalDepth = importTexture(
-        deferredTargets.csgIntervalDepth,
-        Name("render.deferred.csg_interval_depth"),
-        "CSG Interval Depth"
-    );
-    const Core::GpuGraphResourceId csgIntervalId = importTexture(
-        deferredTargets.csgIntervalId,
-        Name("render.deferred.csg_interval_id"),
-        "CSG Interval ID"
-    );
-    const Core::GpuGraphResourceId csgReceiverEventData = importTexture(
-        deferredTargets.csgReceiverEventData,
-        Name("render.deferred.csg_receiver_event_data"),
-        "CSG Receiver Event Data"
-    );
-    const Core::GpuGraphResourceId csgReceiverEventCount = importTexture(
-        deferredTargets.csgReceiverEventCount,
-        Name("render.deferred.csg_receiver_event_count"),
-        "CSG Receiver Event Count"
-    );
-    const Core::GpuGraphResourceId csgReceiverSpanData = importTexture(
-        deferredTargets.csgReceiverSpanData,
-        Name("render.deferred.csg_receiver_span_data"),
-        "CSG Receiver Span Data"
-    );
-    const Core::GpuGraphResourceId csgReceiverSpanCount = importTexture(
-        deferredTargets.csgReceiverSpanCount,
-        Name("render.deferred.csg_receiver_span_count"),
-        "CSG Receiver Span Count"
-    );
-    const Core::GpuGraphResourceId csgRemovedIntervalDepth = importTexture(
-        deferredTargets.csgRemovedIntervalDepth,
-        Name("render.deferred.csg_removed_interval_depth"),
-        "CSG Removed Interval Depth"
-    );
-    const Core::GpuGraphResourceId csgRemovedIntervalCapNormal = importTexture(
-        deferredTargets.csgRemovedIntervalCapNormal,
-        Name("render.deferred.csg_removed_interval_cap_normal"),
-        "CSG Removed Interval Cap Normal"
-    );
-    const Core::GpuGraphResourceId csgRemovedIntervalData = importTexture(
-        deferredTargets.csgRemovedIntervalData,
-        Name("render.deferred.csg_removed_interval_data"),
-        "CSG Removed Interval Data"
-    );
-    const Core::GpuGraphResourceId csgRemovedIntervalCount = importTexture(
-        deferredTargets.csgRemovedIntervalCount,
-        Name("render.deferred.csg_removed_interval_count"),
-        "CSG Removed Interval Count"
-    );
-    const Core::GpuGraphResourceId shadowVisibility = importTexture(
-        history ? history->shadowVisibility : deferredTargets.shadowVisibility,
-        Name("render.deferred_lighting.shadow_visibility"),
-        history ? "Lagged Shadow Visibility" : "Shadow Visibility"
-    );
-    const Core::GpuGraphResourceId causticIrradiance = importTexture(
-        history ? history->causticIrradiance : deferredTargets.causticIrradiance,
-        Name("render.deferred_lighting.caustic_irradiance"),
-        history ? "Lagged Caustic Irradiance" : "Caustic Irradiance"
-    );
-    const Core::GpuGraphResourceId surfelIrradiance = importTexture(
-        history ? history->surfelIrradiance : deferredTargets.surfelIrradiance,
-        Name("render.deferred_lighting.surfel_irradiance"),
-        history ? "Lagged Surfel Irradiance" : "Surfel Irradiance"
-    );
-    const Core::GpuGraphResourceId currentShadowVisibility = !history
-        ? shadowVisibility
-        : importTexture(
-            deferredTargets.shadowVisibility,
-            Name("render.deferred_shadow_visibility.current_output"),
-            "Shadow Visibility"
-        )
-    ;
-    const Core::GpuGraphResourceId currentCausticIrradiance = !history
-        ? causticIrradiance
-        : importTexture(
-            deferredTargets.causticIrradiance,
-            Name("render.deferred_effects.current_caustic_irradiance"),
-            "Caustic Irradiance"
-        )
-    ;
-    const Core::GpuGraphResourceId currentSurfelIrradiance = !history
-        ? surfelIrradiance
-        : importTexture(
-            deferredTargets.surfelIrradiance,
-            Name("render.deferred_surfel_gi.current_irradiance"),
-            "Surfel Irradiance"
-        )
-    ;
-    const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(
-        deferredTargets.opaqueColor,
-        Name("render.deferred_lighting.opaque_color"),
-        "Opaque Color"
-    );
-    const Core::GpuGraphResourceId sceneShading = importBuffer(
-        deferredLightingResources.sceneShadingBuffer,
-        Name("render.deferred_lighting.scene_shading"),
-        "Scene Shading"
-    );
-    const Core::GpuGraphResourceId lights = importBuffer(
-        deferredLightingResources.lightBuffer,
-        Name("render.deferred_lighting.lights"),
-        "Lights"
-    );
-    const Core::GpuGraphResourceId meshView = importBuffer(
-        meshViewBufferSnapshot.buffer,
-        Name("render.deferred.mesh_view"),
-        "Mesh View"
-    );
-    const Core::GpuGraphResourceId materialInstances = frameBindings.instanceBuffer
-        ? importBuffer(
-            frameBindings.instanceBuffer,
-            Name("render.deferred.material_instances"),
-            "Material Instances"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId materialTyped = frameBindings.materialTypedBuffer
-        ? importBuffer(
-            frameBindings.materialTypedBuffer,
-            Name("render.deferred.material_typed"),
-            "Material Typed Data"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId csgReceiverRanges = csgResources.receiverRanges
-        ? importBuffer(
-            csgResources.receiverRanges,
-            Name("render.deferred.csg_receiver_ranges"),
-            "CSG Receiver Ranges"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId csgCutters = csgResources.cutters
-        ? importBuffer(
-            csgResources.cutters,
-            Name("render.deferred.csg_cutters"),
-            "CSG Cutters"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId csgClipContextSlots = csgResources.clipContextSlots
-        ? importBuffer(
-            csgResources.clipContextSlots,
-            Name("render.deferred.csg_clip_context_slots"),
-            "CSG Clip Context Slots"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId csgIntervalSampleState = csgResources.intervalSampleState
-        ? importBuffer(
-            csgResources.intervalSampleState,
-            Name("render.deferred.csg_interval_sample_state"),
-            "CSG Interval Sample State"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-    const Core::GpuGraphResourceId bindlessSlots = history
-        ? importBuffer(
-            history->slotsBuffer,
-            Name("render.deferred_lighting.bindless_slots"),
-            "Lagged Deferred Bindless Slots"
-        )
-        : importCurrentBindlessSlots(
-            Name("render.deferred_lighting.bindless_slots"),
-            "Deferred Bindless Slots"
-        )
-    ;
-    const Core::GpuGraphResourceId currentBindlessSlots =
-        !history || deferredTargets.bindless.slotsBuffer.get() == history->slotsBuffer.get()
-            ? bindlessSlots
-            : importCurrentBindlessSlots(
-                Name("render.deferred_composite.bindless_slots"),
-                "Deferred Bindless Slots"
-            )
-    ;
-    const Core::GpuGraphResourceId materialContextSlots = rayTracingGraphResources.materialContextSlotsBuffer
-        ? importBuffer(
-            rayTracingGraphResources.materialContextSlotsBuffer,
-            Name("render.deferred.material_context_slots"),
-            "Ray Trace Material Context Slots"
-        )
-        : Core::GpuGraphResourceId{}
-    ;
-
-
-    // History copy declared after Present; reuse active-lighting identities for copy destinations.
-    Core::GpuGraphResourceId historyCopyShadowVisibility;
-    Core::GpuGraphResourceId historyCopyCausticIrradiance;
-    Core::GpuGraphResourceId historyCopySurfelIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationShadowVisibility;
-    Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance;
-    Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance;
-    if(capturesLaggedLightingHistory){
-        historyCopyShadowVisibility = currentShadowVisibility;
-        historyCopyCausticIrradiance = currentCausticIrradiance;
-        historyCopySurfelIrradiance = history
-            ? currentSurfelIrradiance
-            : surfelIrradiance
-        ;
-        historyCopyDestinationShadowVisibility = history
-            ? shadowVisibility
-            : importFirstWriteTexture(
-                captureHistory->shadowVisibility,
-                Name("render.lagged_history_copy.history_shadow_visibility"),
-                "History Shadow Visibility"
-            )
-        ;
-        historyCopyDestinationCausticIrradiance = history
-            ? causticIrradiance
-            : importFirstWriteTexture(
-                captureHistory->causticIrradiance,
-                Name("render.lagged_history_copy.history_caustic_irradiance"),
-                "History Caustic Irradiance"
-            )
-        ;
-        historyCopyDestinationSurfelIrradiance = history
-            ? surfelIrradiance
-            : importFirstWriteTexture(
-                captureHistory->surfelIrradiance,
-                Name("render.lagged_history_copy.history_surfel_irradiance"),
-                "History Surfel Irradiance"
-            )
-        ;
-    }
-
-
-    // AVBOIT shares deferred G-buffer and imports; compiler owns state seeds through Lighting/Composite.
-    const Core::GpuGraphResourceId avboitLowRaster = importAvboitTexture(
-        deferredTargets.avboit.lowRasterTarget,
-        Name("render.avboit.low_raster"),
-        "AVBOIT Low Raster"
-    );
-    const Core::GpuGraphResourceId avboitAccumColor = importAvboitTexture(
-        deferredTargets.avboit.accumColor,
-        Name("render.avboit.accum_color"),
-        "AVBOIT Accumulated Color"
-    );
-    const Core::GpuGraphResourceId avboitAccumExtinction = importAvboitTexture(
-        deferredTargets.avboit.accumExtinction,
-        Name("render.avboit.accum_extinction"),
-        "AVBOIT Accumulated Extinction"
-    );
-    const Core::GpuGraphResourceId refractionDepth = importAvboitTexture(
-        deferredTargets.avboit.refractionDepth, Name("render.avboit.refractionDepth"), "AVBOIT refractionDepth");
-    const Core::GpuGraphResourceId refractionNormalIor = importAvboitTexture(
-        deferredTargets.avboit.refractionNormalIor, Name("render.avboit.refractionNormalIor"), "AVBOIT refractionNormalIor");
-    const Core::GpuGraphResourceId refractionTintCoverage = importAvboitTexture(
-        deferredTargets.avboit.refractionTintCoverage, Name("render.avboit.refractionTintCoverage"), "AVBOIT refractionTintCoverage");
-    const Core::GpuGraphResourceId refractionInstance = importAvboitTexture(
-        deferredTargets.avboit.refractionInstance, Name("render.avboit.refractionInstance"), "AVBOIT refractionInstance");
-    const Core::GpuGraphResourceId refractionSpecularRoughness = importAvboitTexture(
-        deferredTargets.avboit.refractionSpecularRoughness, Name("render.avboit.refractionSpecularRoughness"), "AVBOIT Refraction Specular Roughness");
-    const Core::GpuGraphResourceId refractionResolve = importAvboitTexture(
-        deferredTargets.avboit.refractionResolve, Name("render.avboit.refractionResolve"), "AVBOIT refractionResolve");
-    const Core::GpuGraphResourceId avboitForegroundColor = importAvboitTexture(
-        deferredTargets.avboit.foregroundAccumColor, Name("render.avboit.avboitForegroundColor"), "AVBOIT avboitForegroundColor");
-    const Core::GpuGraphResourceId avboitForegroundExtinction = importAvboitTexture(
-        deferredTargets.avboit.foregroundAccumExtinction, Name("render.avboit.avboitForegroundExtinction"), "AVBOIT avboitForegroundExtinction");
-    const Core::GpuGraphResourceId avboitTransmittance = importAvboitTexture(
-        deferredTargets.avboit.transmittanceTexture,
-        Name("render.avboit.transmittance"),
-        "AVBOIT Transmittance"
-    );
-    const Core::GpuGraphResourceId avboitCoverage = importBuffer(
-        deferredTargets.avboit.coverageBuffer,
-        Name("render.avboit.coverage"),
-        "AVBOIT Coverage"
-    );
-    const Core::GpuGraphResourceId avboitDepthWarp = importBuffer(
-        deferredTargets.avboit.depthWarpBuffer,
-        Name("render.avboit.depth_warp"),
-        "AVBOIT Depth Warp"
-    );
-    const Core::GpuGraphResourceId avboitControl = importBuffer(
-        deferredTargets.avboit.controlBuffer,
-        Name("render.avboit.control"),
-        "AVBOIT Control"
-    );
-    const Core::GpuGraphResourceId avboitExtinction = importBuffer(
-        deferredTargets.avboit.extinctionBuffer,
-        Name("render.avboit.extinction"),
-        "AVBOIT Extinction"
-    );
-    const Core::GpuGraphResourceId avboitExtinctionOverflow = importBuffer(
-        deferredTargets.avboit.extinctionOverflowBuffer,
-        Name("render.avboit.extinction_overflow"),
-        "AVBOIT Extinction Overflow"
-    );
-    const Core::GpuGraphResourceId avboitMaterialDomain = m_deferredLightingTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.avboit.material_domain"), "Transparent Materials and Geometry")
-    );
-    const Core::GpuGraphResourceId avboitCsgDomain = m_deferredLightingTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.avboit.csg_domain"), "Transparent CSG Intervals")
-    );
-    if(
-        !albedo.valid()
-        || !normal.valid()
-        || !worldPosition.valid()
-        || !specularRoughness.valid()
-        || !refractionSpecularRoughness.valid()
-        || !depth.valid()
-        || !csgCapBackNormal.valid()
-        || !csgIntervalDepth.valid()
-        || !csgIntervalId.valid()
-        || !csgReceiverEventData.valid()
-        || !csgReceiverEventCount.valid()
-        || !csgReceiverSpanData.valid()
-        || !csgReceiverSpanCount.valid()
-        || !csgRemovedIntervalDepth.valid()
-        || !csgRemovedIntervalCapNormal.valid()
-        || !csgRemovedIntervalData.valid()
-        || !csgRemovedIntervalCount.valid()
-        || !shadowVisibility.valid()
-        || !causticIrradiance.valid()
-        || !surfelIrradiance.valid()
-        || !currentShadowVisibility.valid()
-        || !currentCausticIrradiance.valid()
-        || !currentSurfelIrradiance.valid()
-        || !opaqueColor.valid()
-        || !sceneShading.valid()
-        || !lights.valid()
-        || !meshView.valid()
-        || !bindlessSlots.valid()
-        || !currentBindlessSlots.valid()
-        || (rayTracingGraphResources.materialContextSlotsBuffer && !materialContextSlots.valid())
-        || (capturesLaggedLightingHistory && (
-            !historyCopyShadowVisibility.valid()
-            || !historyCopyCausticIrradiance.valid()
-            || !historyCopySurfelIrradiance.valid()
-            || !historyCopyDestinationShadowVisibility.valid()
-            || !historyCopyDestinationCausticIrradiance.valid()
-            || !historyCopyDestinationSurfelIrradiance.valid()
-        ))
-        || !avboitLowRaster.valid()
-        || !avboitAccumColor.valid()
-        || !avboitAccumExtinction.valid()
-        || !avboitTransmittance.valid()
-        || !avboitCoverage.valid()
-        || !avboitDepthWarp.valid()
-        || !avboitControl.valid()
-        || !avboitExtinction.valid()
-        || !avboitExtinctionOverflow.valid()
-        || !avboitMaterialDomain.valid()
-        || !avboitCsgDomain.valid()
-    ){
+    DeferredGraphResourceImportResult deferredGraphResources;
+    if(!deferredGraphResourceImportBuilder.declare(
+        DeferredGraphResourceImportInputs{
+            .targets = &deferredTargets,
+            .lightingResources = &deferredLightingResources,
+            .frameBindings = &frameBindings,
+            .meshViewSnapshot = &meshViewBufferSnapshot,
+            .csgResources = &csgResources,
+            .rayTracingResources = &rayTracingGraphResources,
+            .history = history,
+            .captureHistory = captureHistory,
+            .clearAvboitTargets = clearAvboitTargets,
+            .capturesLaggedLightingHistory = capturesLaggedLightingHistory,
+        },
+        deferredGraphResources
+    )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-lighting graph resources"));
         return;
     }
-    const Core::TextureSubresourceSet csgPeelSubresources(
-        0u,
-        1u,
-        0u,
-        deferredTargets.csgPeelLayerCount
-    );
-    const Core::TextureSubresourceSet csgReceiverEventDataSubresources(
-        0u,
-        1u,
-        0u,
-        deferredTargets.csgReceiverEventLayerCount
-    );
-    const Core::TextureSubresourceSet csgReceiverEventCountSubresources(0u, 1u, 0u, 1u);
-    const Core::TextureSubresourceSet csgReceiverSpanDataSubresources(
-        0u,
-        1u,
-        0u,
-        deferredTargets.csgReceiverSpanLayerCount
-    );
-    const Core::TextureSubresourceSet csgReceiverSpanCountSubresources(0u, 1u, 0u, 1u);
-    const Core::TextureSubresourceSet csgRemovedIntervalSubresources(
-        0u,
-        1u,
-        0u,
-        deferredTargets.csgRemovedIntervalLayerCount
-    );
-    const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources(0u, 1u, 0u, 1u);
+    const Core::GpuGraphResourceId albedo = deferredGraphResources.albedo;
+    const Core::GpuGraphResourceId normal = deferredGraphResources.normal;
+    const Core::GpuGraphResourceId worldPosition = deferredGraphResources.worldPosition;
+    const Core::GpuGraphResourceId specularRoughness = deferredGraphResources.specularRoughness;
+    const Core::GpuGraphResourceId depth = deferredGraphResources.depth;
+    const Core::GpuGraphResourceId csgCapBackNormal = deferredGraphResources.csgCapBackNormal;
+    const Core::GpuGraphResourceId csgIntervalDepth = deferredGraphResources.csgIntervalDepth;
+    const Core::GpuGraphResourceId csgIntervalId = deferredGraphResources.csgIntervalId;
+    const Core::GpuGraphResourceId csgReceiverEventData = deferredGraphResources.csgReceiverEventData;
+    const Core::GpuGraphResourceId csgReceiverEventCount = deferredGraphResources.csgReceiverEventCount;
+    const Core::GpuGraphResourceId csgReceiverSpanData = deferredGraphResources.csgReceiverSpanData;
+    const Core::GpuGraphResourceId csgReceiverSpanCount = deferredGraphResources.csgReceiverSpanCount;
+    const Core::GpuGraphResourceId csgRemovedIntervalDepth = deferredGraphResources.csgRemovedIntervalDepth;
+    const Core::GpuGraphResourceId csgRemovedIntervalCapNormal = deferredGraphResources.csgRemovedIntervalCapNormal;
+    const Core::GpuGraphResourceId csgRemovedIntervalData = deferredGraphResources.csgRemovedIntervalData;
+    const Core::GpuGraphResourceId csgRemovedIntervalCount = deferredGraphResources.csgRemovedIntervalCount;
+    const Core::GpuGraphResourceId shadowVisibility = deferredGraphResources.shadowVisibility;
+    const Core::GpuGraphResourceId causticIrradiance = deferredGraphResources.causticIrradiance;
+    const Core::GpuGraphResourceId surfelIrradiance = deferredGraphResources.surfelIrradiance;
+    const Core::GpuGraphResourceId currentShadowVisibility = deferredGraphResources.currentShadowVisibility;
+    const Core::GpuGraphResourceId currentCausticIrradiance = deferredGraphResources.currentCausticIrradiance;
+    const Core::GpuGraphResourceId currentSurfelIrradiance = deferredGraphResources.currentSurfelIrradiance;
+    const Core::GpuGraphResourceId opaqueColor = deferredGraphResources.opaqueColor;
+    const Core::GpuGraphResourceId sceneShading = deferredGraphResources.sceneShading;
+    const Core::GpuGraphResourceId lights = deferredGraphResources.lights;
+    const Core::GpuGraphResourceId meshView = deferredGraphResources.meshView;
+    const Core::GpuGraphResourceId materialInstances = deferredGraphResources.materialInstances;
+    const Core::GpuGraphResourceId materialTyped = deferredGraphResources.materialTyped;
+    const Core::GpuGraphResourceId csgReceiverRanges = deferredGraphResources.csgReceiverRanges;
+    const Core::GpuGraphResourceId csgCutters = deferredGraphResources.csgCutters;
+    const Core::GpuGraphResourceId csgClipContextSlots = deferredGraphResources.csgClipContextSlots;
+    const Core::GpuGraphResourceId csgIntervalSampleState = deferredGraphResources.csgIntervalSampleState;
+    const Core::GpuGraphResourceId bindlessSlots = deferredGraphResources.bindlessSlots;
+    const Core::GpuGraphResourceId currentBindlessSlots = deferredGraphResources.currentBindlessSlots;
+    const Core::GpuGraphResourceId materialContextSlots = deferredGraphResources.materialContextSlots;
+    const Core::GpuGraphResourceId historyCopyShadowVisibility = deferredGraphResources.historyCopyShadowVisibility;
+    const Core::GpuGraphResourceId historyCopyCausticIrradiance = deferredGraphResources.historyCopyCausticIrradiance;
+    const Core::GpuGraphResourceId historyCopySurfelIrradiance = deferredGraphResources.historyCopySurfelIrradiance;
+    const Core::GpuGraphResourceId historyCopyDestinationShadowVisibility = deferredGraphResources.historyCopyDestinationShadowVisibility;
+    const Core::GpuGraphResourceId historyCopyDestinationCausticIrradiance = deferredGraphResources.historyCopyDestinationCausticIrradiance;
+    const Core::GpuGraphResourceId historyCopyDestinationSurfelIrradiance = deferredGraphResources.historyCopyDestinationSurfelIrradiance;
+    const Core::GpuGraphResourceId avboitLowRaster = deferredGraphResources.avboitLowRaster;
+    const Core::GpuGraphResourceId avboitAccumColor = deferredGraphResources.avboitAccumColor;
+    const Core::GpuGraphResourceId avboitAccumExtinction = deferredGraphResources.avboitAccumExtinction;
+    const Core::GpuGraphResourceId refractionDepth = deferredGraphResources.refractionDepth;
+    const Core::GpuGraphResourceId refractionNormalIor = deferredGraphResources.refractionNormalIor;
+    const Core::GpuGraphResourceId refractionTintCoverage = deferredGraphResources.refractionTintCoverage;
+    const Core::GpuGraphResourceId refractionInstance = deferredGraphResources.refractionInstance;
+    const Core::GpuGraphResourceId refractionSpecularRoughness = deferredGraphResources.refractionSpecularRoughness;
+    const Core::GpuGraphResourceId refractionResolve = deferredGraphResources.refractionResolve;
+    const Core::GpuGraphResourceId avboitForegroundColor = deferredGraphResources.avboitForegroundColor;
+    const Core::GpuGraphResourceId avboitForegroundExtinction = deferredGraphResources.avboitForegroundExtinction;
+    const Core::GpuGraphResourceId avboitTransmittance = deferredGraphResources.avboitTransmittance;
+    const Core::GpuGraphResourceId avboitCoverage = deferredGraphResources.avboitCoverage;
+    const Core::GpuGraphResourceId avboitDepthWarp = deferredGraphResources.avboitDepthWarp;
+    const Core::GpuGraphResourceId avboitControl = deferredGraphResources.avboitControl;
+    const Core::GpuGraphResourceId avboitExtinction = deferredGraphResources.avboitExtinction;
+    const Core::GpuGraphResourceId avboitExtinctionOverflow = deferredGraphResources.avboitExtinctionOverflow;
+    const Core::GpuGraphResourceId avboitMaterialDomain = deferredGraphResources.avboitMaterialDomain;
+    const Core::GpuGraphResourceId avboitCsgDomain = deferredGraphResources.avboitCsgDomain;
+    const Core::TextureSubresourceSet csgPeelSubresources = deferredGraphResources.csgPeelSubresources;
+    const Core::TextureSubresourceSet csgReceiverEventDataSubresources = deferredGraphResources.csgReceiverEventDataSubresources;
+    const Core::TextureSubresourceSet csgReceiverEventCountSubresources = deferredGraphResources.csgReceiverEventCountSubresources;
+    const Core::TextureSubresourceSet csgReceiverSpanDataSubresources = deferredGraphResources.csgReceiverSpanDataSubresources;
+    const Core::TextureSubresourceSet csgReceiverSpanCountSubresources = deferredGraphResources.csgReceiverSpanCountSubresources;
+    const Core::TextureSubresourceSet csgRemovedIntervalSubresources = deferredGraphResources.csgRemovedIntervalSubresources;
+    const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources = deferredGraphResources.csgRemovedIntervalCountSubresources;
 
     if(!declareDeferredShadowPrepareTask(
         deferredTargets,

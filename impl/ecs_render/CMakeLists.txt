@@ -67,6 +67,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/transparent_csg_interval_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/transparent_csg_interval_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/csg_interval_target_clear.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_resource_import_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_resource_import_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_gbuffer_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_gbuffer_task.h"

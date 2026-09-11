@@ -31,9 +31,6 @@ struct MeshSkinningStateBufferResources{
 class MeshSkinningStateBufferCollector final : NoCopy{
 private:
     using BufferIndex = HashSet<Core::Buffer*, Core::Alloc::ScratchArena>;
-
-
-private:
     static constexpr usize s_InlineBufferCount = 32u;
 
 
@@ -44,8 +41,6 @@ public:
     );
     MeshSkinningStateBufferCollector(MeshSkinningStateBufferCollector&&) = delete;
 
-
-public:
     void collect(const MeshSkinningRuntimeInstance* instance, const MeshSkinningStateBufferResources& resources);
 
 
@@ -53,8 +48,6 @@ private:
     void retainBuffer(const Core::BufferHandle& buffer);
     void promoteBufferIndex();
 
-
-private:
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& m_buffers;
     Core::Alloc::ScratchArena& m_scratchArena;
     Core::Buffer* m_inlineBuffers[s_InlineBufferCount] = {};

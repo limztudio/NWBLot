@@ -88,8 +88,6 @@ private:
 public:
     MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
 
-
-public:
     void prepareResources(Core::ECS::World& world);
     void clear();
 

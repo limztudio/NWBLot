@@ -175,6 +175,7 @@ private:
     void commitFrameTargets(DeferredFrameTargets&& targets);
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();
+    void resetFrameTaskState();
     // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only
     // when the imported target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;

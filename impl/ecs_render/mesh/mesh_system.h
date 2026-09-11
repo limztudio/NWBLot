@@ -108,6 +108,7 @@ private:
     static constexpr u32 s_MeshletLocalVertexRefBindingSlot = NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS;
     static constexpr u32 s_MeshletPrimitiveIndexBindingSlot = NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES;
 
+
 public:
     template<typename BindingHandler>
     static void forEachMeshSourceBindingSlot(BindingHandler&& handler){
@@ -148,6 +149,7 @@ public:
         });
     }
 
+
 public:
     RendererMeshSystem(
         Core::Alloc::GlobalArena& arena,
@@ -157,6 +159,8 @@ public:
         RendererMeshState& meshState
     );
 
+
+public:
     void invalidateResources();
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
@@ -206,6 +210,7 @@ public:
 
     void releaseMeshFrameHeapHandles();
 
+
 private:
     // Mesh descriptors are established at creation; draw paths only consume ready handles.
     [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
@@ -215,6 +220,7 @@ private:
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
 
     void releaseAllMeshGeometryHeapHandles();
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

@@ -45,8 +45,6 @@ class ShaderCook{
 public:
     using CookArena = Core::Alloc::GlobalArena;
     using CookString = AString<CookArena>;
-
-public:
     template<typename T>
     using CookVector = Vector<T, CookArena>;
 
@@ -119,7 +117,6 @@ public:
     };
 
 
-public:
     struct IncludeEntry{
         CookString source;
         CookMap<CookString, DefineEntry> defineValues;
@@ -171,11 +168,8 @@ private:
 public:
     ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
 
-
-public:
     inline bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
-public:
     bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
     bool parseShaderMeta(
         const Path& nwbFilePath,
@@ -265,11 +259,7 @@ private:
         return entries;
     }
 
-
-private:
     CookArena& m_memoryArena;
-
-private:
     Core::GlobalUniquePtr<IShaderCompiler> m_compiler;
 };
 

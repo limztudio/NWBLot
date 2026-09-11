@@ -28,9 +28,7 @@ NWB_IMPL_BEGIN
 
 class RendererRayTracingSystem;
 
-
 struct DeferredFrameTargets;
-
 
 // Hardware caustics stage owns photon plus geometry plus resolve-wavelet declaration.
 struct HardwareCausticsStageInputs{
@@ -90,11 +88,13 @@ public:
         RendererRayTracingSystem& raytracingSystem
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const HardwareCausticsStageInputs& inputs,
         HardwareCausticsStageResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;
@@ -109,3 +109,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -34,6 +34,8 @@ public:
         : m_requests(arena)
     {}
 
+
+public:
     void reset(){ m_requests.clear(); }
     [[nodiscard]] bool empty()const{ return m_requests.empty(); }
 

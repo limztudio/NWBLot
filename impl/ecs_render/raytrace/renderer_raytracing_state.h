@@ -6,13 +6,10 @@
 
 
 #include <impl/global.h>
-
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
-
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
-
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 
 #include <global/containers.h>
@@ -342,7 +339,6 @@ struct RtCausticState{
 
 
 struct RtSurfelGiState{
-
     // Device-lifetime, heap-only one-bounce surfel GI stays outside resizable frame targets.
     Core::BindingLayoutHandle m_surfelSpawnBindingLayout;
     Core::BindingLayoutHandle m_surfelAgeFreeBindingLayout;
@@ -439,12 +435,15 @@ struct RtRefractionState{
 class RendererRayTracingState final : NoCopy, public RtSceneBvhState, public RtShadowState, public RtSoftShadowState, public RtCausticState, public RtSurfelGiState, public RtRefractionState{
     friend class RendererRayTracingSystem;
 
+
 public:
     // RtShadowState needs the renderer arena for its persistent tables.
     explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
         : RtShadowState(arena)
     {}
 
+
+public:
     [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
     void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
     void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;

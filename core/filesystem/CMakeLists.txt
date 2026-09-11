@@ -3,6 +3,7 @@ target_sources(nwb_filesystem PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/volume_build.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/volume_file_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/volume_io.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/volume_segment_compact.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/volume_metadata.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/filesystem.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/factory.cpp"

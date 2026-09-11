@@ -6,7 +6,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Use lowercase `snake_case` filenames for C++ source and headers.
 - Start files with the project banner style:
   - `// limztudio@gmail.com`
-  - A long `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` separator line.
+  - A long separator line of exactly 128 `/` characters (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`).
+  - Do not use shorter separator runs (e.g. 114 slashes); normalize to 128.
 - Use `#pragma once` in C++-only headers.
 - Exception: headers shared across C++ and shader preprocessing must not use `#pragma once`.
   - Use an explicit include-guard shape instead:
@@ -15,14 +16,15 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - header contents
   - `#endif`
   - Do not `#undef` the include guard or the public macros declared by the header.
-- Separate major file sections with the long slash separator and optional section comments.
+- Separate major file sections with the 128-slash separator and optional section comments.
   - Keep exactly two blank lines before and after every file-scope separator line, including banner-adjacent separators (after the banner separator, before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
   - Keep comments on one line when the full sentence still scans easily; do not hard-wrap a short comment into two lines.
+- String literals that embed the file separator for bounds searches must use exactly the same 128-slash run; do not lengthen or shorten the literal.
 - Designated initializers must follow struct declaration order (e.g. `GpuTimingSample`: `sourceFrameIndex`, then `scopeName`, then `attribution`, then `comparableRange`, then `physicalQueue`, then `published`).
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.
 - Use UTF-8 encoding for source files.
-- Use Windows-style newlines (`CRLF`) for all C++ source files and authored asset text files (`.nwb`, `.slang`, `.slangi`, `.bind`).
+- Use Windows-style newlines (`CRLF`) for all C++ source files and authored asset text files (`.nwb`, `.slang`, `.slangi`, `.bind`, `.bxdf`, `.surface`).
 - Do not commit LF-only or mixed line endings in those files.
 
 ## 2. Namespace style
@@ -98,7 +100,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `return`
   - `    value.valid() && value.visible`
   - `;`
-- Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`.
+- Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
 - Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
 - For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
   - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`
@@ -331,6 +333,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - If a result genuinely conveys no actionable information to any caller, make that operation a `void` command instead of suppressing its return at individual call sites. Keep `[[maybe_unused]]` for non-call values such as unused callback parameters or compile-time expressions only.
   - `static_cast<void>(param)` to silence an unused parameter is unrelated to this rule and remains fine.
 - Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
+- Handle container-insertion failures with an explicit branch (`if(!insert...){ NWB_ASSERT(false); continue/return; }`); do not leave a bare `NWB_ASSERT(added)` after the insert with no failure path.
 - For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
   - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.
 
@@ -400,6 +403,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Prefer `public` sections first, then `private`/`protected` sections, except for an early top `private:` helper section when needed for static helper/factory declarations.
 - Once the member-variable section begins, do not declare additional member functions afterward.
 - Prefer declaring `operator==` and `operator!=` outside the class/struct scope.
+- Write designated initializers (`.member = ...`) in struct declaration order. Do not group tail/flag fields at the end when the declaration puts small scalars or generation fields earlier. This includes padding-optimized declarations (pointer, 8-byte, then 4-byte members first with the small tail last); follow the declaration, not logical grouping.
 
 ## 13. Declaration/Definition Order
 - In `.cpp` files, function definitions must follow the declaration order from the corresponding class/struct declaration.
@@ -458,6 +462,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `CoolStuff/Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
 - Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
 - Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files for `.slang`, `.slangi`, and `.bind`.
+- The same banner rule applies to authored shader hook fragments (`.bxdf`, `.surface`): start with `// limztudio@gmail.com` plus the 128-slash separator and end with the closing separator plus the exact EOF rule.
 - Keep `.nwb` metadata files as declarative metascript text without the source-file banner, but still use UTF-8 and CRLF line endings.
 - After the shader banner separator, keep exactly two blank lines before the first shader directive, define, include, or include guard (`#define`, `#include`, `#ifndef`, etc.). Do not collapse this gap.
 - Stage entry files (`.slang`) put feature defines first when needed, then includes, declarations/resources, helpers, and the entry point, separated by file-scope long separators.

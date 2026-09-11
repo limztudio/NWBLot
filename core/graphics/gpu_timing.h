@@ -67,10 +67,7 @@ struct GpuTimingScopeDefinition{
 // default-invalid value keeps ordinary timing scopes out of the optional completed-sample listener path.
 class GpuTimingSampleAttribution final{
     friend class GpuTimingRecorder;
-    friend constexpr bool operator==(
-        const GpuTimingSampleAttribution& lhs,
-        const GpuTimingSampleAttribution& rhs
-    )noexcept;
+    friend constexpr bool operator==(const GpuTimingSampleAttribution& lhs, const GpuTimingSampleAttribution& rhs)noexcept;
 
 
 public:
@@ -136,10 +133,7 @@ struct GpuTimingSampleListener{
 // a removed subscription to a replacement context.
 class GpuTimingSampleSubscription final{
     friend class GpuTimingRecorder;
-    friend constexpr bool operator==(
-        const GpuTimingSampleSubscription& lhs,
-        const GpuTimingSampleSubscription& rhs
-    )noexcept;
+    friend constexpr bool operator==(const GpuTimingSampleSubscription& lhs, const GpuTimingSampleSubscription& rhs)noexcept;
 
 
 public:
@@ -284,6 +278,8 @@ public:
         , m_timingScope(timingScope)
     {}
 
+
+public:
     [[nodiscard]] bool setCaptureEnabled(bool enabled, u64 subscriptionIdentityLimit)noexcept;
     void collect(
         Device& device,
@@ -372,6 +368,7 @@ class GpuTimingRecorder final : NoCopy{
     friend class GpuTimingMeasure;
     friend class GpuTimingSubmissionTicket;
 
+
 private:
     class BeginQueryPublicationUnwindScope;
     class PrerequisiteTrackingUnwindScope;
@@ -413,9 +410,15 @@ private:
     using SampleDispatchVector = GpuTimingAccumulator::SampleDispatchVector;
 
 
+private:
+    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
+
+
 public:
     GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink& timing);
 
+
+public:
     void setQueryCollectionEnabled(bool enabled);
     // Every valid registration receives attributed samples captured in a dispatch batch. New listeners begin with
     // the next batch; removing one registration never replaces or clears another consumer.
@@ -557,8 +560,6 @@ private:
 
 
 private:
-    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
-
     Alloc::GlobalArena& m_arena;
     Perf::TimingSink& m_timing;
     GpuTimingMetricCorrelator m_metricCorrelator;
@@ -605,6 +606,7 @@ class GpuTimingSubmissionTicket final : NoCopy{
     friend class GpuRecordedGraph;
     friend class GpuTaskScheduler;
     friend class GpuTimingRecorder;
+
 
 private:
     class PreparedSubmissionUnwindScope;
@@ -654,6 +656,8 @@ public:
     explicit GpuTimingSubmissionTicket(GpuTimingRecorder& recorder);
     ~GpuTimingSubmissionTicket()noexcept;
 
+
+public:
     // Validates that every supplied command list still owns a ready command buffer, submits them together in their
     // supplied order, and resolves every timing scope recorded under this ticket. A partial split submission is
     // rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.
@@ -809,6 +813,8 @@ public:
     );
     ~GpuTimingMeasure()noexcept;
 
+
+public:
     // A timing scope may span ordered primary command buffers. Close only its exact debug-marker lease on the command
     // list that opened it before that list is closed, then emit the ending timestamp on the later command list.
     [[nodiscard]] bool finishMarker();

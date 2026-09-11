@@ -7,6 +7,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_replay_preflight.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/capture/command_ir_stream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiled_graph.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiled_graph_read_view.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiled_graph.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler.h"

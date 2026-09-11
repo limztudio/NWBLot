@@ -16,6 +16,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `#endif`
   - Do not `#undef` the include guard or the public macros declared by the header.
 - Separate major file sections with the long slash separator and optional section comments.
+  - Keep exactly two blank lines before and after every file-scope separator line, including banner-adjacent separators (after the banner separator, before/after `#pragma once`, include groups, `NWB_*_BEGIN`/`NWB_*_END`, section comments, and the final separator).
+  - Keep comments on one line when the full sentence still scans easily; do not hard-wrap a short comment into two lines.
+- Designated initializers must follow struct declaration order (e.g. `GpuTimingSample`: `sourceFrameIndex`, then `scopeName`, then `attribution`, then `comparableRange`, then `physicalQueue`, then `published`).
 - Source files must end with `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` followed by exactly two blank lines.
 - Exact EOF rule for source files: after the final separator line, keep exactly two newline terminators (`\n\n`, or `\r\n\r\n` on Windows). Do not keep one or three.
 - Use UTF-8 encoding for source files.

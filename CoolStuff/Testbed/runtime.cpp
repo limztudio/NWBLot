@@ -46,22 +46,15 @@ static constexpr f32 s_DefaultDirectionalLightPitch = s_PI * s_QuarterTurnFracti
 static constexpr f32 s_DefaultDirectionalLightYaw = s_PI * s_QuarterTurnFraction;   // 45 degrees around the up axis
 static constexpr f32 s_DefaultDirectionalLightRoll = 0.0f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 1.0f;
-static constexpr f32 s_DefaultDirectionalLightColorR = 1.0f;
-static constexpr f32 s_DefaultDirectionalLightColorG = 0.96f;
-static constexpr f32 s_DefaultDirectionalLightColorB = 0.88f;
+static constexpr Float4 s_DefaultDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f);
 static constexpr f32 s_CharacterCameraTargetY = 0.85f;
 // Orbit the camera to the +Z side and yaw 180 degrees so it faces back along -Z onto the model's front.
 static constexpr f32 s_CameraStartYaw = s_PI;
-static constexpr f32 s_PointLightPositionX = 1.5f;
-static constexpr f32 s_PointLightPositionY = 1.6f;
-static constexpr f32 s_PointLightPositionZ = 1.5f;
-static constexpr f32 s_PointLightColorR = 0.6f;
-static constexpr f32 s_PointLightColorG = 0.74f;
-static constexpr f32 s_PointLightColorB = 1.0f;
+static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
+static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
 static constexpr f32 s_PointLightIntensity = 2.0f;
 static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
-static constexpr f32 s_UiInitialPositionX = 18.0f;
-static constexpr f32 s_UiInitialPositionY = 18.0f;
+static constexpr Float2U s_UiInitialPosition = Float2U(18.0f, 18.0f);
 static constexpr f32 s_UiInitialWidth = 360.0f;
 static constexpr f32 s_UiInitialHeightAuto = 0.0f;
 static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"};
@@ -258,7 +251,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 }
 
 void ProjectTestbed::drawUiControls(){
-    ImGui::SetNextWindowPos(ImVec2(__hidden_runtime::s_UiInitialPositionX, __hidden_runtime::s_UiInitialPositionY), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(__hidden_runtime::s_UiInitialPosition.x, __hidden_runtime::s_UiInitialPosition.y), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(__hidden_runtime::s_UiInitialWidth, __hidden_runtime::s_UiInitialHeightAuto), ImGuiCond_FirstUseEver);
     if(!ImGui::Begin("NWB Testbed")){
         ImGui::End();
@@ -306,25 +299,13 @@ bool ProjectTestbed::onStartup(){
         __hidden_runtime::s_DefaultDirectionalLightPitch,
         __hidden_runtime::s_DefaultDirectionalLightYaw,
         __hidden_runtime::s_DefaultDirectionalLightRoll,
-        Float4(
-            __hidden_runtime::s_DefaultDirectionalLightColorR,
-            __hidden_runtime::s_DefaultDirectionalLightColorG,
-            __hidden_runtime::s_DefaultDirectionalLightColorB
-        ),
+        __hidden_runtime::s_DefaultDirectionalLightColor,
         __hidden_runtime::s_DefaultDirectionalLightIntensity
     );
     const auto pointLight = NWB::Impl::Scene::CreatePointLightEntity(
         *m_world,
-        Float4(
-            __hidden_runtime::s_PointLightPositionX,
-            __hidden_runtime::s_PointLightPositionY,
-            __hidden_runtime::s_PointLightPositionZ
-        ),
-        Float4(
-            __hidden_runtime::s_PointLightColorR,
-            __hidden_runtime::s_PointLightColorG,
-            __hidden_runtime::s_PointLightColorB
-        ),
+        __hidden_runtime::s_PointLightPosition,
+        __hidden_runtime::s_PointLightColor,
         __hidden_runtime::s_PointLightIntensity,
         __hidden_runtime::s_PointLightRange
     );

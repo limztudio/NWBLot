@@ -84,10 +84,9 @@ static constexpr f32 s_CharacterLift = 0.0f;
 // sits on -Z looking toward +Z, so the green BACK wall is at +Z (the far end, IN VIEW) and the box is OPEN on the -Z side
 // (behind the camera) -- all three wall colours + the ceiling are visible. Reuses the ground plane mesh + opaque material
 // + per-instance colour_tint (no new assets).
-static constexpr f32 s_BoxHalfX = 4.0f;                    // side walls at +-4 (just outside the +-3.24 character spread)
-static constexpr f32 s_BoxHalfZ = 4.5f;                    // +Z back wall at +4.5; open -Z front at -4.5 (camera at -4.8 looks in)
+static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);                    // x: side walls at +-4 (just outside the +-3.24 character spread); y: +Z back wall at +4.5; open -Z front at -4.5 (camera at -4.8 looks in)
 static constexpr f32 s_BoxHeight = 4.0f;                   // wall height / ceiling y (point light at 2.6 stays inside)
-static constexpr f32 s_GroundScale = 2.0f * s_BoxHalfZ;    // floor spans the box depth (+-4.5) so it meets the side + back walls
+static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;    // floor spans the box depth (+-4.5) so it meets the side + back walls
 
 static constexpr f32 s_CameraDistance = 4.8f;
 static constexpr f32 s_CameraHeight = 1.8f;
@@ -254,7 +253,7 @@ private:
             s_SmokeSurfaceMaterialInterface,
             colorTint,
             Float4(0.0f, s_BoxHeight, 0.0f, 0.0f),
-            Float4(2.0f * s_BoxHalfX, 1.0f, 2.0f * s_BoxHalfZ, 0.0f)
+            Float4(2.0f * s_BoxHalf.x, 1.0f, 2.0f * s_BoxHalf.y, 0.0f)
         );
         if(entity.valid()){
             if(auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity))
@@ -340,9 +339,9 @@ public:
 
         // GI box: three coloured walls + a ceiling around the crowd (see the s_BoxHalf* notes). Distinct saturated hues so
         // each wall's indirect bounce reads as a different colour on the floor + characters; the ceiling is a warm fill.
-        m_wallPosX = createWall(Float4(s_BoxHalfX, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalfZ); // +X red
-        m_wallNegX = createWall(Float4(-s_BoxHalfX, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalfZ); // -X blue
-        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalfZ, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalfX); // +Z green (far back wall, faces -Z toward the crowd)
+        m_wallPosX = createWall(Float4(s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.80f, 0.08f, 0.08f, 1.0f), -90.0f, 2.0f * s_BoxHalf.y); // +X red
+        m_wallNegX = createWall(Float4(-s_BoxHalf.x, s_BoxHeight * 0.5f, 0.0f, 0.0f), Float4(0.08f, 0.12f, 0.80f, 1.0f), 90.0f, 2.0f * s_BoxHalf.y); // -X blue
+        m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalf.x); // +Z green (far back wall, faces -Z toward the crowd)
         m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));                                                                             // warm off-white ceiling
 
         m_characterOwners.reserve(s_CharacterCount);

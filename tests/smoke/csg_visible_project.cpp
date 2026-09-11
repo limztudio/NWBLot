@@ -44,16 +44,14 @@ using CsgVisibleMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 
 static constexpr f32 s_CameraTargetY = 0.75f;
 static constexpr f32 s_CameraStartDepth = 6.5f;
-static constexpr f32 s_CameraStartX = 0.0f;
-static constexpr f32 s_CameraStartY = s_CameraTargetY;
+static constexpr Float2U s_CameraStart = Float2U(0.0f, s_CameraTargetY);
 static constexpr f32 s_DefaultDirectionalLightPitch = -0.65f;
 static constexpr f32 s_DefaultDirectionalLightYaw = 0.45f;
 static constexpr f32 s_DefaultDirectionalLightIntensity = 3.0f;
 static constexpr f32 s_CubeRotationSpeed = 0.25f;
 static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 static constexpr f32 s_ShapeGridCenterY = s_CameraTargetY;
-static constexpr f32 s_ShapeGridHalfSpacingX = 1.55f;
-static constexpr f32 s_ShapeGridHalfSpacingY = 1.05f;
+static constexpr Float2U s_ShapeGridHalfSpacing = Float2U(1.55f, 1.05f);
 static constexpr f32 s_ReceiverBaseScale = 0.72f;
 static constexpr f32 s_ReceiverScale = 1.08f;
 static constexpr f32 s_CutterScale = s_ReceiverScale / s_ReceiverBaseScale;
@@ -135,10 +133,10 @@ static void ApplyCubeRotation(
 
 [[nodiscard]] static Float4 CsgVisibleShapePosition(const usize shapeSlot){
     switch(shapeSlot){
-    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacingX, s_ShapeGridCenterY + s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacingX, s_ShapeGridCenterY + s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacingX, s_ShapeGridCenterY - s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
-    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacingX, s_ShapeGridCenterY - s_ShapeGridHalfSpacingY, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Plane: return Float4(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Box: return Float4(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY + s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Sphere: return Float4(-s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY - s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
+    case CsgVisibleShapeSlot::Capsule: return Float4(s_ShapeGridHalfSpacing.x, s_ShapeGridCenterY - s_ShapeGridHalfSpacing.y, 0.0f, 0.0f);
     default: return Float4(0.0f, s_CameraTargetY, 0.0f, 0.0f);
     }
 }
@@ -278,7 +276,7 @@ public:
         auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
         activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(
             *m_world,
-            Float4(s_CameraStartX, s_CameraStartY, -s_CameraStartDepth)
+            Float4(s_CameraStart.x, s_CameraStart.y, -s_CameraStartDepth)
         );
         const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,

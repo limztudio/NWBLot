@@ -233,6 +233,10 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - First include the matching local header (`#include "file.h"`).
 - Then include project/external headers.
 - Keep includes grouped with a blank line between groups.
+- Blank line only between include groups (local `impl/` group, then `core/` group, then `global/` group), not between every single include line (see `renderer_raytracing_state.h` include-collapse fix).
+- Do not leave a blank line immediately after a `struct`/`class` opener (`struct X{` then member/comment directly, see `RtSurfelGiState` fix).
+- Do not indent member declarations to 8 spaces and do not leave a mis-indented label body; members use 4-space indent under their label (see `csg_system.h` + `deferred_system.h` `invalidateResources` / `m_arena` fix).
+- Keep the file-end shape: final 128-slash separator followed by exactly two newline terminators with no trailing spaces (see `hardware_caustics_stage_builder.h` EOF fix).
 - Exception for precompiled-header translation units: if the project requires PCH (`/Yu`), include `pch.h` first, then include the matching local header immediately after.
 
 ## 6. Type and API usage
@@ -395,14 +399,19 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Static helper/factory functions should be declared in an early dedicated section, not in the middle/bottom of the class after normal API blocks.
 - If a static helper must be `private`, place a `private:` helper section near the top of the class (after aliases/helpers) before the main `public` API sections.
 - Reusing the same access specifier (`public:`, `private:`, `protected:`) for category separation is allowed and preferred.
-- When the category changes significantly, separate sections with two blank lines.
+- Repeat the same access label for every category change (e.g. ctor block, then `public:` API block, then `private:` helper block, then `private:` member block). Do not merge same-label categories into a single label block (earlier `core/task/gpu/packet_runtime.h` + `task_graph.h` merge was wrong and was reverted).
+- When the category changes significantly, separate sections with two blank lines (two empty lines between the last declaration and the next access label, even when the label text repeats).
 - When the category change is minor, one blank line is enough.
+- Do not place `public:` before the leading friend block. Friends open the class with no label (`class X{` then `friend ...` directly, see `RendererRayTracingSystem` fix).
+- Keep a short friend `operator==` on one line with no space before qualifiers: `friend constexpr bool operator==(const T& lhs, const T& rhs)noexcept;`. Do not split it across lines (see `GpuTimingSampleAttribution` + `GpuTimingSampleSubscription` fix).
+- A lone `= delete` copy/move line that changes category still gets its own repeated label with two blank lines before it (see `BasisLibrary` copy-assign + `initialize` fix).
 - Static member variables are declared before non-static member variables.
 - Constructors/destructor are declared together with no empty line between them.
 - If operator overload members exist, place them right after constructor/destructor declarations.
 - Prefer `public` sections first, then `private`/`protected` sections, except for an early top `private:` helper section when needed for static helper/factory declarations.
 - Once the member-variable section begins, do not declare additional member functions afterward.
 - Prefer declaring `operator==` and `operator!=` outside the class/struct scope.
+- When `operator==` must stay a `friend` inside the class, keep it single-line as above; never multiline-split a short friend comparison.
 - Write designated initializers (`.member = ...`) in struct declaration order. Do not group tail/flag fields at the end when the declaration puts small scalars or generation fields earlier. This includes padding-optimized declarations (pointer, 8-byte, then 4-byte members first with the small tail last); follow the declaration, not logical grouping.
 
 ## 13. Declaration/Definition Order

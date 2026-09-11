@@ -22,6 +22,7 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
+#include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
 #include <impl/ecs_render/deferred/lighting_content_stamp.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
@@ -190,224 +191,55 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources(0u, 1u, 0u, 1u);
 
-    ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
-    ECSRenderDetail::SceneShadingGpuData sceneShadingState;
-    u32 sceneLightCount = 0u;
-    const RayTracingLightingClassificationInput rayTracingLightingInput = m_raytracingSystem.snapshotLightingClassificationInput();
-    RayTracingLightingClassification rayTracingLightingClassification;
-    bool sceneLightUploadRequired = false;
-    bool sceneShadingUploadRequired = false;
-    if(!m_deferredSystem.prepareSceneShadingBufferUploads(
-        meshViewAspectRatio,
-        rayTracingLightingInput,
-        sceneLightData,
-        LengthOf(sceneLightData),
-        sceneLightCount,
-        rayTracingLightingClassification,
-        sceneLightUploadRequired,
-        sceneShadingState,
-        sceneShadingUploadRequired
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare immutable scene-shading upload data"));
-        return false;
-    }
-
-    outSceneLightingContentHash = ComputeSceneLightingContentHash(sceneShadingState, sceneLightData, sceneLightCount);
-
-    Core::GpuTaskSchedulingHint meshViewSetupScheduling;
-    meshViewSetupScheduling.cost = Core::GpuTaskCostHint::Medium;
-    meshViewSetupScheduling.forceSubmissionBoundary = false;
-    meshViewSetupScheduling.allowPacketMerge = true;
-    Core::GpuTaskDesc meshViewSetupDesc;
-    meshViewSetupDesc
-        .setIdentity(Name("render.graphics_prefix.mesh_view_setup"))
-        .setMarkerLabel("Mesh View Setup")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(meshViewSetupScheduling)
-        .setDependencies(&shadowPrepareTask, 1u)
-    ;
-    m_graphicsPrefixMeshViewSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
-        meshViewSetupDesc,
-        ECSRenderDetail::MeshViewSetupGraphTask::Payload{
-            .graphics = &m_graphics,
+    PrefixSceneUploadBuilder prefixSceneUploadBuilder(
+        m_deferredLightingTaskGraph,
+        m_deferredSystem,
+        m_meshSystem,
+        m_raytracingSystem,
+        m_graphics
+    );
+    PrefixSceneUploadResult prefixSceneUploadResult;
+    if(!prefixSceneUploadBuilder.declare(
+        PrefixSceneUploadInputs{
+            .meshViewState = &meshViewState,
+            .meshView = meshView,
+            .lights = lights,
+            .sceneShading = sceneShading,
+            .shadowPrepareTask = shadowPrepareTask,
+            .meshViewAspectRatio = meshViewAspectRatio,
+            .meshViewUploadRequired = meshViewUploadRequired,
             .asyncPrefixTiming = &asyncPrefixTiming,
-            .timingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
+            .meshViewSetupTimingTicket = timingTicketSlot(PrefixTimingSlot::MeshViewSetup),
+            .sceneShadingSetupTimingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup),
             .asyncPrefixTimingSpansOnePacket = asyncPrefixTimingSpansOnePacket,
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
-        }
-    );
-    if(!m_graphicsPrefixMeshViewSetupTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare mesh-view setup task"));
+            .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
+            .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
+            .outSceneLightingContentHash = &outSceneLightingContentHash,
+        },
+        prefixSceneUploadResult
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
         return false;
     }
-
+    m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult.meshViewSetupTask;
+    m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult.sceneShadingSetupTask;
+    const RayTracingLightingClassification rayTracingLightingClassification =
+        prefixSceneUploadResult.lightingClassification
+    ;
+    ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
+    NWB_MEMCPY(
+        sceneLightData,
+        sizeof(sceneLightData),
+        prefixSceneUploadResult.lightData,
+        sizeof(prefixSceneUploadResult.lightData)
+    );
+    const u32 sceneLightCount = prefixSceneUploadResult.lightCount;
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
     immutableUploadScheduling.forceSubmissionBoundary = false;
     immutableUploadScheduling.allowPacketMerge = true;
     immutableUploadScheduling.mergeWithPrevious = true;
-
-    Core::GpuTaskId meshViewUploadTask = m_graphicsPrefixMeshViewSetupTask;
-    if(meshViewUploadRequired){
-        const Core::GpuUploadBlobId meshViewBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &meshViewState,
-            sizeof(meshViewState),
-            alignof(ECSRenderDetail::MeshViewGpuData)
-        );
-        Core::GpuTaskDesc meshViewUploadDesc;
-        meshViewUploadDesc
-            .setIdentity(Name("render.graphics_prefix.mesh_view_upload"))
-            .setMarkerLabel("Mesh View Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&m_graphicsPrefixMeshViewSetupTask, 1u)
-        ;
-        meshViewUploadTask = meshViewBlob.valid()
-            ? m_deferredLightingTaskGraph.addUploadBufferTask(
-                meshViewUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = meshViewBlob,
-                    .destination = meshView,
-                    // The backing buffer deliberately restores Common when a native packet closes.  Declare that
-                    // exact graph-visible boundary here; the G-buffer consumer below owns the Common ->
-                    // ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
-        if(!meshViewUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned mesh-view upload"));
-            return false;
-        }
-    }
-
-    Core::GpuTaskSchedulingHint meshViewCommitScheduling = immutableUploadScheduling;
-    Core::GpuTaskDesc meshViewCommitDesc;
-    meshViewCommitDesc
-        .setIdentity(Name("render.graphics_prefix.mesh_view_upload_commit"))
-        .setMarkerLabel("Mesh View Upload Commit")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(meshViewCommitScheduling)
-        .setDependencies(&meshViewUploadTask, 1u)
-    ;
-    const Core::GpuTaskId meshViewCommitTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
-        meshViewCommitDesc,
-        ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{
-            .meshSystem = &m_meshSystem,
-            .viewState = meshViewState,
-            .uploadRequired = meshViewUploadRequired,
-            .ready = &m_graphicsPrefixMeshViewSetupReady,
-        }
-    );
-    if(!meshViewCommitTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare mesh-view upload commit"));
-        return false;
-    }
-
-    Core::GpuTaskId sceneUploadTask = meshViewCommitTask;
-    if(sceneLightUploadRequired){
-        const usize sceneLightByteCount = static_cast<usize>(sceneLightCount) * sizeof(sceneLightData[0u]);
-        const Core::GpuUploadBlobId sceneLightBlob = m_deferredLightingTaskGraph.copyUploadData(
-            sceneLightData,
-            sceneLightByteCount,
-            alignof(ECSRenderDetail::SceneLightGpuData)
-        );
-        Core::GpuTaskDesc sceneLightUploadDesc;
-        sceneLightUploadDesc
-            .setIdentity(Name("render.graphics_prefix.scene_lights_upload"))
-            .setMarkerLabel("Scene Lights Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&sceneUploadTask, 1u)
-        ;
-        sceneUploadTask = sceneLightBlob.valid()
-            ? m_deferredLightingTaskGraph.addUploadBufferTask(
-                sceneLightUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = sceneLightBlob,
-                    .destination = lights,
-                    // These shared frame buffers retain Common between native packets.  The first declared reader
-                    // owns the transition to ShaderResource.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
-        if(!sceneUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned scene-light upload"));
-            return false;
-        }
-    }
-
-    if(sceneShadingUploadRequired){
-        const Core::GpuUploadBlobId sceneShadingBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &sceneShadingState,
-            sizeof(sceneShadingState),
-            alignof(ECSRenderDetail::SceneShadingGpuData)
-        );
-        Core::GpuTaskDesc sceneShadingUploadDesc;
-        sceneShadingUploadDesc
-            .setIdentity(Name("render.graphics_prefix.scene_shading_upload"))
-            .setMarkerLabel("Scene Shading Upload")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(immutableUploadScheduling)
-            .setDependencies(&sceneUploadTask, 1u)
-        ;
-        sceneUploadTask = sceneShadingBlob.valid()
-            ? m_deferredLightingTaskGraph.addUploadBufferTask(
-                sceneShadingUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = sceneShadingBlob,
-                    .destination = sceneShading,
-                    // See the light upload above: preserve the resource's automatic Common boundary and let the
-                    // first declared reader lower its ConstantBuffer transition.
-                    .finalState = Core::ResourceStates::Common,
-                }
-            )
-            : Core::GpuTaskId{}
-        ;
-        if(!sceneUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned scene-shading upload"));
-            return false;
-        }
-    }
-
-    Core::GpuTaskSchedulingHint sceneShadingSetupScheduling;
-    sceneShadingSetupScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    sceneShadingSetupScheduling.forceSubmissionBoundary = false;
-    sceneShadingSetupScheduling.allowPacketMerge = true;
-    sceneShadingSetupScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc sceneShadingSetupDesc;
-    sceneShadingSetupDesc
-        .setIdentity(Name("render.graphics_prefix.scene_shading_setup"))
-        .setMarkerLabel("Scene Shading Setup")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(sceneShadingSetupScheduling)
-        .setDependencies(&sceneUploadTask, 1u)
-    ;
-    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload;
-    sceneShadingSetupPayload.deferredSystem = &m_deferredSystem;
-    sceneShadingSetupPayload.timingTicket = timingTicketSlot(PrefixTimingSlot::SceneShadingSetup);
-    sceneShadingSetupPayload.ready = &m_graphicsPrefixSceneShadingSetupReady;
-    NWB_MEMCPY(
-        sceneShadingSetupPayload.lightData,
-        sizeof(sceneShadingSetupPayload.lightData),
-        sceneLightData,
-        sizeof(sceneLightData)
-    );
-    sceneShadingSetupPayload.sceneShadingState = sceneShadingState;
-    sceneShadingSetupPayload.lightCount = sceneLightCount;
-    sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
-    sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;
-    m_graphicsPrefixSceneShadingSetupTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::SceneShadingSetupGraphTask>(
-        sceneShadingSetupDesc,
-        Move(sceneShadingSetupPayload)
-    );
-    if(!m_graphicsPrefixSceneShadingSetupTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare scene-shading setup task"));
-        return false;
-    }
 
 
     // G-buffer color/depth clears are render-pass load operations in GbufferGraphTask, so their tile contents never

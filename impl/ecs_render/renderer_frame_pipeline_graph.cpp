@@ -59,6 +59,7 @@
 #include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
 #include <impl/ecs_render/avboit/clear_chain_builder.h>
+#include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1318,11 +1319,23 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ECSRenderDetail::MaterialTypedInstanceRangeVector occupancyMaterialTypedRanges{ occupancyUploadScratch };
 #endif
         MaterialTypedByteDataVector occupancyMaterialTypedBytes{ occupancyUploadScratch };
-        m_materialSystem.gatherMaterialPassDrawItems(
-            deferredTargets.avboit.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitOccupancy,
-            true,
-            csgFrameState,
+        AvboitPassUploadHelper occupancyUploadHelper(m_materialSystem);
+        AvboitPassUploadResult occupancyUploadResult;
+        if(!occupancyUploadHelper.gather(
+            AvboitPassUploadInputs{
+                .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
+                .pass = MaterialPipelinePass::AvboitOccupancy,
+                .csgFrameState = &csgFrameState,
+                .frameBindings = &frameBindings,
+                .csgResources = &csgResources,
+                .meshViewState = &meshViewState,
+                .materialInstances = materialInstances,
+                .materialTyped = materialTyped,
+                .csgReceiverRanges = csgReceiverRanges,
+                .csgCutters = csgCutters,
+                .csgClipContextSlots = csgClipContextSlots,
+                .csgIntervalSampleState = Core::GpuGraphResourceId{},
+            },
             occupancyDrawItems,
             occupancyInstanceData,
             occupancyCsgFrameData,
@@ -1330,33 +1343,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             occupancyMaterialTypedRanges,
 #endif
             occupancyMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly,
-            &meshViewState
-        );
+            occupancyUploadResult
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
+            return;
+        }
 
-        const bool occupancyHasCsgDrawItems = !occupancyDrawItems.csg.empty();
-        if(!occupancyDrawItems.empty()){
-            if(
-                !materialInstances.valid()
-                || !materialTyped.valid()
-                || !frameBindings.frameReady(
-                    occupancyInstanceData.size(),
-                    occupancyMaterialTypedBytes.size()
-                )
-                || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.regular, frameBindings)
-                || (occupancyHasCsgDrawItems && (
-                    !occupancyCsgFrameData.hasWork()
-                    ||
-                    !csgReceiverRanges.valid()
-                    || !csgCutters.valid()
-                    || !csgClipContextSlots.valid()
-                    || !csgResources.frameReady(occupancyCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(occupancyDrawItems.csg, frameBindings)
-                ))
-            ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
-                return;
-            }
+        const bool occupancyHasCsgDrawItems = occupancyUploadResult.hasCsgDrawItems;
+        if(occupancyUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = {
                 &occupancyDrawItems.regular,
@@ -2285,11 +2279,23 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ECSRenderDetail::MaterialTypedInstanceRangeVector extinctionMaterialTypedRanges{ extinctionUploadScratch };
 #endif
         MaterialTypedByteDataVector extinctionMaterialTypedBytes{ extinctionUploadScratch };
-        m_materialSystem.gatherMaterialPassDrawItems(
-            deferredTargets.avboit.lowFramebuffer.get(),
-            MaterialPipelinePass::AvboitExtinction,
-            true,
-            csgFrameState,
+        AvboitPassUploadHelper extinctionUploadHelper(m_materialSystem);
+        AvboitPassUploadResult extinctionUploadResult;
+        if(!extinctionUploadHelper.gather(
+            AvboitPassUploadInputs{
+                .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
+                .pass = MaterialPipelinePass::AvboitExtinction,
+                .csgFrameState = &csgFrameState,
+                .frameBindings = &frameBindings,
+                .csgResources = &csgResources,
+                .meshViewState = &meshViewState,
+                .materialInstances = materialInstances,
+                .materialTyped = materialTyped,
+                .csgReceiverRanges = csgReceiverRanges,
+                .csgCutters = csgCutters,
+                .csgClipContextSlots = csgClipContextSlots,
+                .csgIntervalSampleState = csgIntervalSampleState,
+            },
             extinctionDrawItems,
             extinctionInstanceData,
             extinctionCsgFrameData,
@@ -2297,33 +2303,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionMaterialTypedRanges,
 #endif
             extinctionMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly,
-            &meshViewState
-        );
+            extinctionUploadResult
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
+            return;
+        }
 
-        const bool extinctionHasCsgDrawItems = !extinctionDrawItems.csg.empty();
-        if(!extinctionDrawItems.empty()){
-            if(
-                !materialInstances.valid()
-                || !materialTyped.valid()
-                || !frameBindings.frameReady(
-                    extinctionInstanceData.size(),
-                    extinctionMaterialTypedBytes.size()
-                )
-                || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.regular, frameBindings)
-                || (extinctionHasCsgDrawItems && (
-                    !extinctionCsgFrameData.hasWork()
-                    || !csgReceiverRanges.valid()
-                    || !csgCutters.valid()
-                    || !csgClipContextSlots.valid()
-                    || !csgIntervalSampleState.valid()
-                    || !csgResources.frameReady(extinctionCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(extinctionDrawItems.csg, frameBindings)
-                ))
-            ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
-                return;
-            }
+        const bool extinctionHasCsgDrawItems = extinctionUploadResult.hasCsgDrawItems;
+        if(extinctionUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = {
                 &extinctionDrawItems.regular,
@@ -3194,11 +3181,23 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ECSRenderDetail::MaterialTypedInstanceRangeVector accumulationMaterialTypedRanges{ accumulationUploadScratch };
 #endif
         MaterialTypedByteDataVector accumulationMaterialTypedBytes{ accumulationUploadScratch };
-        m_materialSystem.gatherMaterialPassDrawItems(
-            deferredTargets.avboit.accumulationFramebuffer.get(),
-            MaterialPipelinePass::AvboitAccumulate,
-            true,
-            csgFrameState,
+        AvboitPassUploadHelper accumulationUploadHelper(m_materialSystem);
+        AvboitPassUploadResult accumulationUploadResult;
+        if(!accumulationUploadHelper.gather(
+            AvboitPassUploadInputs{
+                .framebuffer = deferredTargets.avboit.accumulationFramebuffer.get(),
+                .pass = MaterialPipelinePass::AvboitAccumulate,
+                .csgFrameState = &csgFrameState,
+                .frameBindings = &frameBindings,
+                .csgResources = &csgResources,
+                .meshViewState = &meshViewState,
+                .materialInstances = materialInstances,
+                .materialTyped = materialTyped,
+                .csgReceiverRanges = csgReceiverRanges,
+                .csgCutters = csgCutters,
+                .csgClipContextSlots = csgClipContextSlots,
+                .csgIntervalSampleState = csgIntervalSampleState,
+            },
             accumulationDrawItems,
             accumulationInstanceData,
             accumulationCsgFrameData,
@@ -3206,33 +3205,14 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationMaterialTypedRanges,
 #endif
             accumulationMaterialTypedBytes,
-            RendererResourceLookupMode::PreparedOnly,
-            &meshViewState
-        );
+            accumulationUploadResult
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
+            return;
+        }
 
-        const bool accumulationHasCsgDrawItems = !accumulationDrawItems.csg.empty();
-        if(!accumulationDrawItems.empty()){
-            if(
-                !materialInstances.valid()
-                || !materialTyped.valid()
-                || !frameBindings.frameReady(
-                    accumulationInstanceData.size(),
-                    accumulationMaterialTypedBytes.size()
-                )
-                || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.regular, frameBindings)
-                || (accumulationHasCsgDrawItems && (
-                    !accumulationCsgFrameData.hasWork()
-                    || !csgReceiverRanges.valid()
-                    || !csgCutters.valid()
-                    || !csgClipContextSlots.valid()
-                    || !csgIntervalSampleState.valid()
-                    || !csgResources.frameReady(accumulationCsgFrameData)
-                    || !m_materialSystem.materialPassDrawResourcesReady(accumulationDrawItems.csg, frameBindings)
-                ))
-            ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
-                return;
-            }
+        const bool accumulationHasCsgDrawItems = accumulationUploadResult.hasCsgDrawItems;
+        if(accumulationUploadResult.hasDrawItems){
 
             const MaterialPassDrawItems* const accumulationMaterialGeometryDrawSets[] = {
                 &accumulationDrawItems.regular,

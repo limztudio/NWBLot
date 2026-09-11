@@ -88,6 +88,8 @@ public:
         advance();
     }
 
+
+public:
     bool parseInto(MString& outAssetType, MString& outAssetVariable){
         if(!parseStatements())
             return false;

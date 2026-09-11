@@ -63,6 +63,12 @@ template<usize N>
 
 
 class Parser{
+private:
+    using ScratchPath = Vector<MStringView, Alloc::ScratchArena>;
+    using ScratchNameList = Vector<MStringView, Alloc::ScratchArena>;
+    using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
+
+
 public:
     Parser(
         MStringView source,
@@ -82,8 +88,6 @@ public:
         advance();
     }
 
-
-public:
     bool parseInto(MString& outAssetType, MString& outAssetVariable){
         if(!parseStatements())
             return false;
@@ -103,11 +107,6 @@ public:
 
 
 private:
-    using ScratchPath = Vector<MStringView, Alloc::ScratchArena>;
-    using ScratchNameList = Vector<MStringView, Alloc::ScratchArena>;
-    using ScratchString = BasicString<MChar, Alloc::ScratchArena>;
-
-
     bool parseStatements(){
         while(m_current.type != TokenType::EndOfFile){
             if(!parseStatement())

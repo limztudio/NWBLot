@@ -37,8 +37,6 @@ public:
     BasisLibrary(const BasisLibrary&) = delete;
     BasisLibrary& operator=(const BasisLibrary&) = delete;
 
-
-public:
     [[nodiscard]] bool initialize(){
         m_initialized = basisu::basisu_encoder_init(false);
         if(m_initialized)

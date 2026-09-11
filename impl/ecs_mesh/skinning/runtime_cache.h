@@ -88,6 +88,8 @@ private:
 public:
     MeshSkinningRuntimeCache(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::Assets::AssetManager& assetManager);
 
+
+public:
     void prepareResources(Core::ECS::World& world);
     void clear();
 
@@ -96,6 +98,7 @@ public:
     [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const;
     [[nodiscard]] u32 editRevision(RuntimeMeshHandle handle)const;
     [[nodiscard]] bool bumpEditRevision(RuntimeMeshHandle handle, RuntimeMeshDirtyFlags dirtyFlags);
+
 
 private:
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);

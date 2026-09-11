@@ -27,6 +27,7 @@ NWB_CORE_BEGIN
 
 
 class GraphicsRuntime;
+
 namespace ECS{
     class World;
 };
@@ -54,6 +55,7 @@ class RendererMaterialSystem;
 class RendererRayTracingState;
 class RendererOpticalVolumeSelection;
 struct MaterialSurfaceInfo;
+
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
     struct MeshViewBufferSnapshot;
@@ -204,16 +206,83 @@ namespace RayTracingShadowVisibilityTaskDetail{
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
-
 class RendererRayTracingSystem final : NoCopy{
+    struct SurfelGiInitializationLifecycleGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask;
+    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask;
+    friend struct RayTracingSurfelGiTaskDetail::SurfelGiGraphTask;
+
+
+private:
+    enum class PreparedShadowMaterialContextRoute : u8{
+        None,
+        Hardware,
+        Software,
+    };
+
+    // Resolve resources pair backing targets with their pushed heap slots.
+    struct SoftShadowResolvePassResources{
+        Core::Texture* softHalfTexture = nullptr;
+        Core::Texture* inputColorTexture = nullptr;
+        Core::Texture* momentsTexture = nullptr;
+        Core::Texture* outputTexture = nullptr;
+        u32 softHalf = 0u;
+        u32 inputColor = 0u;
+        u32 moments = 0u;
+        u32 outputStorage = 0u;
+    };
+    // Heap-only soft resolve dispatch description.
+    struct SoftShadowResolveDispatch{
+        Core::ComputePipeline* pipeline = nullptr;
+        SoftShadowResolvePassResources firstWaveletResources;
+        SoftShadowResolvePassResources outputHalfAResources;
+        SoftShadowResolvePassResources outputHalfBResources;
+        SoftShadowResolvePassResources upsampleResources;
+        Core::Texture* visibilityTexture = nullptr;
+        u32 visibilityStorage = 0u;
+        u32 sceneShading = 0u;
+        bool temporalMomentsValid = false;
+        // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
+        bool graphOwnsFirstWaveletInputState = false;
+        // A split transparent temporal merge also publishes the selected moments input for the first wavelet.
+        bool graphOwnsWaveletMomentsEntryState = false;
+        // The split opaque first-wavelet callback inherits its output UAV state from the graph.
+        bool graphOwnsFirstWaveletOutputState = false;
+        // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions
+        // locally after its in-callback downsample.
+        bool graphOwnsWaveletGeometryEntryState = false;
+        // Both prepared opaque and transparent resolve callbacks inherit these descriptor-visible upsample reads.
+        bool graphOwnsUpsampleStaticEntryStates = false;
+        // The one-wavelet opaque resolve tail inherits both of these exact states from the preceding callback.
+        bool graphOwnsUpsampleInputColorEntryState = false;
+        bool graphOwnsUpsampleVisibilityOutputState = false;
+        bool firstWaveletWritesHalfA = true;
+        SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
+        // Must be odd so the selected upsample input is the final ping-pong result.
+        u32 waveletPassCount = 1u;
+    };
+
+
 public:
     RendererRayTracingSystem(
         Core::Alloc::GlobalArena& arena,
@@ -919,27 +988,6 @@ public:
 
 
 private:
-    struct SurfelGiInitializationLifecycleGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask;
-    friend struct RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask;
-    friend struct RayTracingSurfelGiTaskDetail::SurfelGiGraphTask;
-    enum class PreparedShadowMaterialContextRoute : u8{
-        None,
-        Hardware,
-        Software,
-    };
-
     [[nodiscard]] bool preparePendingMeshBlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena);
@@ -1149,47 +1197,7 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
-    // Resolve resources pair backing targets with their pushed heap slots.
-    struct SoftShadowResolvePassResources{
-        Core::Texture* softHalfTexture = nullptr;
-        Core::Texture* inputColorTexture = nullptr;
-        Core::Texture* momentsTexture = nullptr;
-        Core::Texture* outputTexture = nullptr;
-        u32 softHalf = 0u;
-        u32 inputColor = 0u;
-        u32 moments = 0u;
-        u32 outputStorage = 0u;
-    };
-    // Heap-only soft resolve dispatch description.
-    struct SoftShadowResolveDispatch{
-        Core::ComputePipeline* pipeline = nullptr;
-        SoftShadowResolvePassResources firstWaveletResources;
-        SoftShadowResolvePassResources outputHalfAResources;
-        SoftShadowResolvePassResources outputHalfBResources;
-        SoftShadowResolvePassResources upsampleResources;
-        Core::Texture* visibilityTexture = nullptr;
-        u32 visibilityStorage = 0u;
-        u32 sceneShading = 0u;
-        bool temporalMomentsValid = false;
-        // The prepared graph may already lower a transparent trace or temporal-merge output before the first wavelet.
-        bool graphOwnsFirstWaveletInputState = false;
-        // A split transparent temporal merge also publishes the selected moments input for the first wavelet.
-        bool graphOwnsWaveletMomentsEntryState = false;
-        // The split opaque first-wavelet callback inherits its output UAV state from the graph.
-        bool graphOwnsFirstWaveletOutputState = false;
-        // The transparent fold can inherit its geometry read from the graph; opaque geometry still transitions
-        // locally after its in-callback downsample.
-        bool graphOwnsWaveletGeometryEntryState = false;
-        // Both prepared opaque and transparent resolve callbacks inherit these descriptor-visible upsample reads.
-        bool graphOwnsUpsampleStaticEntryStates = false;
-        // The one-wavelet opaque resolve tail inherits both of these exact states from the preceding callback.
-        bool graphOwnsUpsampleInputColorEntryState = false;
-        bool graphOwnsUpsampleVisibilityOutputState = false;
-        bool firstWaveletWritesHalfA = true;
-        SoftShadowUpsampleFold::Enum fold = SoftShadowUpsampleFold::Overwrite;
-        // Must be odd so the selected upsample input is the final ping-pong result.
-        u32 waveletPassCount = 1u;
-    };
+
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(
         Core::CommandList& commandList,
@@ -1367,6 +1375,7 @@ private:
     [[nodiscard]] bool ensureShadowInstanceMaterialBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowInstanceContextBuffer(usize instanceCount);
     [[nodiscard]] bool ensureShadowMaterialTypedBuffer(usize byteCount);
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

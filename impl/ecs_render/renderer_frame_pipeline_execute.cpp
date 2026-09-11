@@ -296,7 +296,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();
 
     // Preserve mirrors so rejected recordings retry exactly.
-    const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_raytracingSystem.captureFrameCpuState();
+    const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_rayTracingState.captureFrameCpuState();
     const bool avboitTargetsNeedClear = m_avboitSystem.captureTargetClearState();
     const bool deferredBindlessSlotsUploaded = deferredTargets.bindless.slotsUploaded;
     const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources =
@@ -312,14 +312,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
 
     const auto restoreShadowCpuState = [&](){
-        m_raytracingSystem.restoreShadowPacketCpuState(rayTracingCpuState);
+        m_rayTracingState.restoreShadowPacketCpuState(rayTracingCpuState);
     };
 
     const auto restoreCausticsCpuState = [&](){
-        m_raytracingSystem.restoreCausticPacketCpuState(rayTracingCpuState);
+        m_rayTracingState.restoreCausticPacketCpuState(rayTracingCpuState);
     };
     const auto restoreSurfelGiCpuState = [&](){
-        m_raytracingSystem.restoreSurfelGiPacketCpuState(rayTracingCpuState);
+        m_rayTracingState.restoreSurfelGiPacketCpuState(rayTracingCpuState);
     };
     const auto restoreAvboitCpuState = [&](){
         m_avboitSystem.restoreTargetClearState(avboitTargetsNeedClear);
@@ -1387,7 +1387,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         shadowPrepareTimingTicket.discard();
         discardGraphicsPrefixTimingTickets();
         // No packet accepted yet; restore the CPU-only classification.
-        m_raytracingSystem.restorePreparedLightingCpuState(rayTracingCpuState);
+        m_rayTracingState.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
     const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;

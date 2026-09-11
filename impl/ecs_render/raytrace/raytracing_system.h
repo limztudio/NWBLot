@@ -216,7 +216,7 @@ namespace RayTracingShadowVisibilityTaskDetail{
 
 
 class RendererRayTracingSystem final : NoCopy{
-    struct SurfelGiInitializationLifecycleGraphTask;
+public:
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask;
@@ -234,6 +234,8 @@ class RendererRayTracingSystem final : NoCopy{
 
 
 private:
+    struct SurfelGiInitializationLifecycleGraphTask;
+
     enum class PreparedShadowMaterialContextRoute : u8{
         None,
         Hardware,
@@ -296,8 +298,6 @@ public:
     );
     ~RendererRayTracingSystem();
 
-
-public:
     // Domain invalidation retires every descriptor generation before dropping its backing handles.
     void invalidateResources();
     void releaseSceneTlasHeapHandle();
@@ -325,8 +325,6 @@ public:
     [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
     void confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept;
 
-
-public:
     // Retire an accepted readback before graph declaration so native packet recording stays CPU-side-effect-free.
     void retireCompletedAdaptiveShadowStatisticsReadback();
     // A graph-owned adaptive plan cannot publish its CPU mirror while recording. The Shadow Visibility task commits
@@ -337,7 +335,6 @@ public:
         const Core::QueueSubmissionToken& submissionToken
     );
 
-public:
     void logCapabilityOnce();
 
     [[nodiscard]] bool prepareRefractionResources();

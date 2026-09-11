@@ -7,6 +7,8 @@
 
 #include <impl/global.h>
 
+#include <impl/ecs_render/raytrace/graph_snapshots.h>
+
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
@@ -442,6 +444,12 @@ public:
     explicit RendererRayTracingState(Core::Alloc::GlobalArena& arena)
         : RtShadowState(arena)
     {}
+
+    [[nodiscard]] RayTracingFrameCpuStateSnapshot captureFrameCpuState()const noexcept;
+    void restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
+    void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
 
 
 private:

@@ -133,53 +133,6 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
     }
 }
 
-RayTracingFrameCpuStateSnapshot RendererRayTracingSystem::captureFrameCpuState()const noexcept{
-    return RayTracingFrameCpuStateSnapshot{
-        .surfelCountReadbackSubmissionToken = m_rayTracingState.m_surfelCountReadbackSubmissionToken,
-        .softShadowFrameIndex = m_rayTracingState.m_softShadowFrameIndex,
-        .causticTemporalReuseFrameCount = m_rayTracingState.m_causticTemporalReuseFrameCount,
-        .swCausticFrameIndex = m_rayTracingState.m_swCausticFrameIndex,
-        .hwCausticFrameIndex = m_rayTracingState.m_hwCausticFrameIndex,
-        .surfelFrameIndex = m_rayTracingState.m_surfelFrameIndex,
-        .surfelCountReadbackFrame = m_rayTracingState.m_surfelCountReadbackFrame,
-        .softShadowSlotMask = m_rayTracingState.m_softShadowSlotMask,
-        .causticLightCount = m_rayTracingState.m_causticLightCount,
-        .swShadowDispatchLogged = m_rayTracingState.m_swShadowDispatchLogged,
-        .causticAccumulatorInitialized = m_rayTracingState.m_causticAccumulatorInitialized,
-        .swCausticDispatchLogged = m_rayTracingState.m_swCausticDispatchLogged,
-        .hwCausticDispatchLogged = m_rayTracingState.m_hwCausticDispatchLogged,
-        .causticEmissionGateLogged = m_rayTracingState.m_causticEmissionGateLogged,
-        .surfelSeeded = m_rayTracingState.m_surfelSeeded,
-    };
-}
-
-void RendererRayTracingSystem::restoreShadowPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
-    m_rayTracingState.m_softShadowFrameIndex = snapshot.softShadowFrameIndex;
-    m_rayTracingState.m_swShadowDispatchLogged = snapshot.swShadowDispatchLogged;
-}
-
-void RendererRayTracingSystem::restoreCausticPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
-    m_rayTracingState.m_causticAccumulatorInitialized = snapshot.causticAccumulatorInitialized;
-    m_rayTracingState.m_causticTemporalReuseFrameCount = snapshot.causticTemporalReuseFrameCount;
-    m_rayTracingState.m_swCausticFrameIndex = snapshot.swCausticFrameIndex;
-    m_rayTracingState.m_hwCausticFrameIndex = snapshot.hwCausticFrameIndex;
-    m_rayTracingState.m_swCausticDispatchLogged = snapshot.swCausticDispatchLogged;
-    m_rayTracingState.m_hwCausticDispatchLogged = snapshot.hwCausticDispatchLogged;
-    m_rayTracingState.m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
-}
-
-void RendererRayTracingSystem::restoreSurfelGiPacketCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
-    m_rayTracingState.m_surfelFrameIndex = snapshot.surfelFrameIndex;
-    m_rayTracingState.m_surfelSeeded = snapshot.surfelSeeded;
-    m_rayTracingState.m_surfelCountReadbackFrame = snapshot.surfelCountReadbackFrame;
-    m_rayTracingState.m_surfelCountReadbackSubmissionToken = snapshot.surfelCountReadbackSubmissionToken;
-}
-
-void RendererRayTracingSystem::restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept{
-    m_rayTracingState.m_softShadowSlotMask = snapshot.softShadowSlotMask;
-    m_rayTracingState.m_causticLightCount = snapshot.causticLightCount;
-    m_rayTracingState.m_causticEmissionGateLogged = snapshot.causticEmissionGateLogged;
-}
 
 RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotShadowPreparationResources()const{
     return RayTracingShadowPreparationResourceSnapshot{

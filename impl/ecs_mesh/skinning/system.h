@@ -202,6 +202,18 @@ public:
     using ShaderPathResolveCallback = Function<
         bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)
     >;
+
+
+private:
+    [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
+        const MeshSkinningRuntimeInstance& instance,
+        usize& outPositionBytes,
+        usize& outNormalBytes,
+        usize& outTangentBytes
+    );
+
+
+public:
     MeshSkinningSystem(
         Core::Alloc::GlobalArena& arena,
         Core::ECS::World& world,
@@ -212,6 +224,8 @@ public:
     );
     virtual ~MeshSkinningSystem()override;
 
+
+public:
     virtual void update(Core::ECS::World& world, f32 delta)override;
     virtual bool validateResources(u32 width, u32 height, u32 sampleCount)override;
     virtual bool prepareResources(Core::Framebuffer* framebuffer)override;
@@ -222,14 +236,8 @@ public:
     [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
-private:
-    [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
-        const MeshSkinningRuntimeInstance& instance,
-        usize& outPositionBytes,
-        usize& outNormalBytes,
-        usize& outTangentBytes
-    );
 
+private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();

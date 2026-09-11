@@ -74,7 +74,9 @@ public:
         RendererMeshSystem& meshSystem
     );
 
-        void invalidateResources();
+
+public:
+    void invalidateResources();
     [[nodiscard]] CsgFrameState buildFrameState(Core::Alloc::ScratchArena& scratchArena, IMaterialSurfaceLookup& materialSurfaceLookup);
     [[nodiscard]] bool createCsgClipResources();
     [[nodiscard]] bool createCsgPeelTargets(DeferredFrameTargets& targets);
@@ -160,10 +162,13 @@ public:
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     )const;
 
+
 private:
     void releaseCsgClipContextHeapHandles();
 
-        Core::Alloc::GlobalArena& m_arena;
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     CsgShapeRegistry& m_csgShapeRegistry;

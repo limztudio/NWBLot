@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>

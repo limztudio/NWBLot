@@ -23,6 +23,7 @@
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/deferred/opaque_upload_chain_builder.h>
+#include <impl/ecs_render/deferred/opaque_csg_interval_clear_builder.h>
 #include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
 #include <impl/ecs_render/deferred/lighting_content_stamp.h>
 #include <impl/ecs_render/deferred/task_graph_gbuffer_task.h>
@@ -451,84 +452,30 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // readiness checks. This preserves the old defensive clear timing while making its two actual CopyDest writes
     // and the following UAV handoff visible to the graph.
     Core::GpuTaskId csgIntervalClearTask = csgFrameUploadTask;
-    if(hasOpaqueCsgFrameWork){
-        Core::GpuTaskSchedulingHint csgIntervalClearScheduling;
-        csgIntervalClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        csgIntervalClearScheduling.forceSubmissionBoundary = false;
-        csgIntervalClearScheduling.allowPacketMerge = true;
-        csgIntervalClearScheduling.mergeWithPrevious = true;
-        const auto makeCsgIntervalClearTaskDesc = [&csgIntervalClearScheduling](
-            const Name identity,
-            const AStringView markerLabel,
-            const Core::GpuTaskId& dependency
-        ){
-            Core::GpuTaskDesc clearDesc;
-            clearDesc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(csgIntervalClearScheduling)
-                .setDependencies(&dependency, 1u)
-            ;
-            return clearDesc;
-        };
-        const Core::Rect csgClearRect = csgFrameData.workRegion.resolveRect(deferredTargets.width, deferredTargets.height);
-        const Core::GpuClearTextureTaskRecordHooks csgIntervalClearBeginHooks{
-            .context = &csgIntervalClearTimingState,
-            .beforeClear = &BeginGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
-        const Core::GpuClearTextureTaskRecordHooks csgIntervalClearEndHooks{
-            .context = &csgIntervalClearTimingState,
-            .afterClear = &EndGraphClearTimingRecord,
-            .discarded = &DiscardGraphClearTimingRecord,
-        };
-        m_graphicsPrefixCsgIntervalClearFirstTask = m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
-            makeCsgIntervalClearTaskDesc(
-                Name("render.graphics_prefix.csg_interval_clear"),
-                "CSG Interval Id Clear",
-                csgFrameUploadTask
-            ),
-            Core::GpuClearTextureRectUIntTaskDesc{
-                .destination = csgIntervalId,
-                .subresources = csgPeelSubresources,
-                .rect = csgClearRect,
-                .uintValue = Core::UIntColor(0u),
-                .recordHooks = csgIntervalClearBeginHooks,
-            }
-        );
-        if(!m_graphicsPrefixCsgIntervalClearFirstTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
-            return false;
-        }
-        Core::GpuTaskSchedulingHint csgIntervalClearTailScheduling = csgIntervalClearScheduling;
-        // The timing endpoint must remain in the first clear's Graphics packet even when another queue observes the
-        // interval id. The explicit immediate dependency satisfies FrontierSafe's consumer-frontier override.
-        csgIntervalClearTailScheduling.allowMergeAcrossConsumerFrontier = true;
-        Core::GpuTaskDesc csgIntervalClearTailDesc;
-        csgIntervalClearTailDesc
-            .setIdentity(Name("render.graphics_prefix.csg_receiver_event_count_clear"))
-            .setMarkerLabel("CSG Receiver Event Count Clear")
-            .setQueue(GraphicsUploadQueueRequest())
-            .setScheduling(csgIntervalClearTailScheduling)
-            .setDependencies(&m_graphicsPrefixCsgIntervalClearFirstTask, 1u)
-        ;
-        m_graphicsPrefixCsgIntervalClearTask = m_deferredLightingTaskGraph.addClearTextureRectUIntTask(
-            csgIntervalClearTailDesc,
-            Core::GpuClearTextureRectUIntTaskDesc{
-                .destination = csgReceiverEventCount,
-                .subresources = csgReceiverEventCountSubresources,
-                .rect = csgClearRect,
-                .uintValue = Core::UIntColor(0u),
-                .recordHooks = csgIntervalClearEndHooks,
-            }
-        );
-        if(!m_graphicsPrefixCsgIntervalClearTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
-            return false;
-        }
-        csgIntervalClearTask = m_graphicsPrefixCsgIntervalClearTask;
+    OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(
+        m_deferredLightingTaskGraph
+    );
+    OpaqueCsgIntervalClearResult opaqueCsgIntervalClearResult;
+    if(!opaqueCsgIntervalClearBuilder.declare(
+        OpaqueCsgIntervalClearInputs{
+            .targets = &deferredTargets,
+            .csgFrameData = &csgFrameData,
+            .csgIntervalId = csgIntervalId,
+            .csgReceiverEventCount = csgReceiverEventCount,
+            .csgPeelSubresources = csgPeelSubresources,
+            .csgReceiverEventCountSubresources = csgReceiverEventCountSubresources,
+            .dependencyTask = csgFrameUploadTask,
+            .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
+        },
+        csgIntervalClearTimingState,
+        opaqueCsgIntervalClearResult
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
+        return false;
     }
+    m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult.clearFirstTask;
+    m_graphicsPrefixCsgIntervalClearTask = opaqueCsgIntervalClearResult.clearTask;
+    csgIntervalClearTask = opaqueCsgIntervalClearResult.clearTask;
 
     // Capacity grows independently of each frozen draw stream. Synchronize only the bytes uploaded for this pass.
     const Core::BufferRange materialInstanceRange(0u, instanceData.size() * sizeof(InstanceGpuData));

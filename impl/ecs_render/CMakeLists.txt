@@ -77,6 +77,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/prefix_scene_upload_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/opaque_upload_chain_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/opaque_upload_chain_builder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/opaque_csg_interval_clear_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/opaque_csg_interval_clear_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_gbuffer_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/task_graph_gbuffer_task.h"

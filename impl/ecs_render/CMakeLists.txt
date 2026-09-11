@@ -172,6 +172,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/shadow_trace_geometry.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/raytracing_system.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/graph_snapshots.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/hardware_caustics_stage_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/hardware_caustics_stage_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_detail.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_scene_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/scene_resources.h"

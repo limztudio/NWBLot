@@ -100,6 +100,8 @@ public:
         RendererShaderSystem& shaderSystem
     );
 
+
+public:
     [[nodiscard]] DeferredLightingGraphResources lightingGraphResources()const noexcept;
     void invalidateSceneLightingUploadMirrors()noexcept;
     void invalidateResources();
@@ -169,7 +171,9 @@ private:
     void resetLaggedLightingHistoryResources(DeferredFrameTargets& targets);
     [[nodiscard]] bool createLaggedLightingHistoryResources(DeferredFrameTargets& targets);
 
-        Core::Alloc::GlobalArena& m_arena;
+
+private:
+    Core::Alloc::GlobalArena& m_arena;
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     RendererDeferredState& m_deferredState;

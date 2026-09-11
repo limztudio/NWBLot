@@ -42,6 +42,7 @@ public:
         : m_stream(stream)
     {}
 
+public:
     template<usize Length>
     NwbTextOutputStream& operator<<(const char (&text)[Length]){
         writeText(AStringView(text, Length - 1u));
@@ -70,6 +71,8 @@ public:
         return *this;
     }
 
+
+public:
     void precision(const StreamSize precision){ m_stream.precision(precision); }
 
     [[nodiscard]] explicit operator bool()const{ return static_cast<bool>(m_stream); }
@@ -98,6 +101,8 @@ private:
             m_stream.write(data + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
     }
 
+
+private:
     BasicOutputFileStream<char>& m_stream;
 };
 

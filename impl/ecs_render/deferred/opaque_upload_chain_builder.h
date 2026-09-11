@@ -71,11 +71,13 @@ public:
         RendererCsgSystem& csgSystem
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const OpaqueUploadChainInputs& inputs,
         OpaqueUploadChainResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;
@@ -91,3 +93,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

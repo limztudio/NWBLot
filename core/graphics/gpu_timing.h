@@ -75,9 +75,6 @@ class GpuTimingSampleAttribution final{
 
 public:
     constexpr GpuTimingSampleAttribution() = default;
-
-
-public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 
@@ -147,9 +144,6 @@ class GpuTimingSampleSubscription final{
 
 public:
     constexpr GpuTimingSampleSubscription() = default;
-
-
-public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 
@@ -290,8 +284,6 @@ public:
         , m_timingScope(timingScope)
     {}
 
-
-public:
     [[nodiscard]] bool setCaptureEnabled(bool enabled, u64 subscriptionIdentityLimit)noexcept;
     void collect(
         Device& device,
@@ -424,8 +416,6 @@ private:
 public:
     GpuTimingRecorder(Alloc::GlobalArena& arena, Perf::TimingSink& timing);
 
-
-public:
     void setQueryCollectionEnabled(bool enabled);
     // Every valid registration receives attributed samples captured in a dispatch batch. New listeners begin with
     // the next batch; removing one registration never replaces or clears another consumer.
@@ -664,8 +654,6 @@ public:
     explicit GpuTimingSubmissionTicket(GpuTimingRecorder& recorder);
     ~GpuTimingSubmissionTicket()noexcept;
 
-
-public:
     // Validates that every supplied command list still owns a ready command buffer, submits them together in their
     // supplied order, and resolves every timing scope recorded under this ticket. A partial split submission is
     // rejected before reaching Vulkan so a cross-list timing scope can never be left waiting for a missing endpoint.

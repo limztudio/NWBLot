@@ -35,6 +35,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_pipeline_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_query.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_queue.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_queue_topology.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_submission_lifecycle.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/dispatch.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/extensions.cpp"

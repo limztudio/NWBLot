@@ -216,7 +216,6 @@ namespace RayTracingShadowVisibilityTaskDetail{
 
 
 class RendererRayTracingSystem final : NoCopy{
-public:
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask;
     friend struct RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask;
@@ -298,6 +297,8 @@ public:
     );
     ~RendererRayTracingSystem();
 
+
+public:
     // Domain invalidation retires every descriptor generation before dropping its backing handles.
     void invalidateResources();
     void releaseSceneTlasHeapHandle();

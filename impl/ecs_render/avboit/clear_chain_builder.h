@@ -56,12 +56,14 @@ public:
         RendererAvboitSystem& avboitSystem
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const AvboitClearChainInputs& inputs,
         GraphClearTimingRecordState& clearTimingState,
         AvboitClearChainResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

@@ -72,11 +72,13 @@ public:
         Core::GraphicsRuntime& graphics
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const PrefixSceneUploadInputs& inputs,
         PrefixSceneUploadResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

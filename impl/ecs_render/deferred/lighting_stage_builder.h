@@ -67,6 +67,7 @@ public:
         RendererDeferredSystem& deferredSystem
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const DeferredLightingStageInputs& inputs,
@@ -74,6 +75,7 @@ public:
         Core::GpuTimingSubmissionTicket& timingTicket,
         DeferredLightingStageResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

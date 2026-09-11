@@ -78,6 +78,7 @@ public:
         RendererAvboitSystem& avboitSystem
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const TransparentCsgIntervalProducerInputs& inputs,
@@ -87,6 +88,7 @@ public:
         GraphClearTimingRecordState& intervalClearTimingState,
         TransparentCsgIntervalProducerResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

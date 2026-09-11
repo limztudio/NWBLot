@@ -52,12 +52,14 @@ public:
         Core::GpuTaskGraph& graph
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const OpaqueCsgIntervalClearInputs& inputs,
         GraphClearTimingRecordState& clearTimingState,
         OpaqueCsgIntervalClearResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

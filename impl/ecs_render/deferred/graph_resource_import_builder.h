@@ -117,6 +117,7 @@ class DeferredGraphResourceImportBuilder final : NoCopy{
 public:
     explicit DeferredGraphResourceImportBuilder(Core::GpuTaskGraph& graph);
 
+
 public:
     [[nodiscard]] bool declare(
         const DeferredGraphResourceImportInputs& inputs,

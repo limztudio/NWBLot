@@ -64,6 +64,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_accessors.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_declaration_view.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_storage.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_teardown.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_telemetry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_clear_value.h"
     "${CMAKE_CURRENT_LIST_DIR}/timing_feedback.cpp"

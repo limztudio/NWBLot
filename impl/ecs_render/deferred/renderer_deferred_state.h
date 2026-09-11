@@ -32,9 +32,12 @@ class RendererDeferredSystem;
 class RendererDeferredState final : NoCopy{
     friend class RendererDeferredSystem;
 
+
 public:
     RendererDeferredState() = default;
 
+
+public:
     void invalidateResources();
 
 

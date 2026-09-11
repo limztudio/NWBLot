@@ -157,7 +157,6 @@ public:
         RendererMeshState& meshState
     );
 
-public:
     void invalidateResources();
     [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
     [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
@@ -205,7 +204,6 @@ public:
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
-private:
     void releaseMeshFrameHeapHandles();
 
 private:
@@ -216,7 +214,6 @@ private:
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
 
-private:
     void releaseAllMeshGeometryHeapHandles();
 
 private:

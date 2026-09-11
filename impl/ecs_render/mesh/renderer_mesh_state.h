@@ -38,8 +38,6 @@ public:
 private:
     void invalidateResources();
 
-
-private:
     HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_meshes;
     Core::BufferHandle m_meshViewBuffer;
     ECSRenderDetail::MeshFrameBindingSnapshot m_frameBindings;

@@ -50,6 +50,7 @@
 #include <impl/ecs_render/csg/task_graph_transparent_interval_tasks.h>
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
+#include <impl/ecs_render/deferred/lighting_stage_builder.h>
 
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
@@ -4996,161 +4997,46 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         : m_avboitSystem.taskGraphStage().m_occupancyTask
     ;
 
-    const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {
-        m_deferredLightingHistoryReadReadyCompletion,
-    };
-    const Core::GpuExternalCompletionId* const lightingExternalDependencies = useLaggedLightingHistory
-        ? laggedLightingExternalDependencies
-        : nullptr
-    ;
-    const usize lightingExternalDependencyCount = useLaggedLightingHistory
-        ? LengthOf(laggedLightingExternalDependencies)
-        : 0u
-    ;
-
-
-    // Live Lighting joins current producers via graph edges; lagged Lighting reads history.
-    const Core::GpuTaskId hardwareLightingDependencies[] = {
-        m_deferredShadowVisibilityTask,
-        m_deferredSurfelGiTask,
-        avboitFinalTask,
-        m_deferredHardwareCausticsTask,
-    };
-    const Core::GpuTaskId softwareLightingDependencies[] = {
-        m_deferredShadowVisibilityTask,
-        m_deferredSoftwareCausticsTask,
-        m_deferredSurfelGiTask,
-        avboitFinalTask,
-    };
-    // Lagged Lighting reads prefix inputs plus history; finalizer restores depth layout first.
-    const Core::GpuTaskId laggedLightingDependencies[] = {
-        m_graphicsPrefixTask,
-        avboitFinalTask,
-    };
-    const usize laggedLightingDependencyCount = hasTransparentRenderers ? 2u : 1u;
-    const Core::GpuTaskId laggedLightingSelectorUploadDependencies[] = { m_graphicsPrefixTask };
-    const bool laggedBindlessSlotsGraphOwned = useLaggedLightingHistory && !history->slotsUploaded;
-    if(laggedBindlessSlotsGraphOwned){
-        const Core::GpuUploadBlobId laggedBindlessSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-            &history->slots,
-            sizeof(history->slots),
-            alignof(DeferredBindlessResourceSlots)
-        );
-        if(!laggedBindlessSlotsBlob.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain lagged lighting-history selector upload data"));
-            return;
-        }
-
-        Core::GpuTaskSchedulingHint uploadScheduling;
-        uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-        uploadScheduling.forceSubmissionBoundary = false;
-        uploadScheduling.allowPacketMerge = true;
-        Core::GpuTaskDesc uploadDesc;
-        uploadDesc
-            .setIdentity(Name("render.lagged_lighting.bindless_slots_upload"))
-            .setMarkerLabel("Lagged Lighting Bindless Slots Upload")
-            .setQueue(ComputeUploadQueueRequest())
-            .setScheduling(uploadScheduling)
-            .setDependencies(
-                laggedLightingSelectorUploadDependencies,
-                LengthOf(laggedLightingSelectorUploadDependencies)
-            )
-        ;
-        m_deferredLaggedLightingHistorySlotsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-            uploadDesc,
-            Core::GpuUploadBufferTaskDesc{
-                .source = laggedBindlessSlotsBlob,
-                .destination = bindlessSlots,
-                // Automatic-state selector buffers publish Common; Deferred Lighting owns the following
-                // ConstantBuffer transition in this same externally gated packet.
-                .finalState = Core::ResourceStates::Common,
-            }
-        );
-        if(!m_deferredLaggedLightingHistorySlotsUploadTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare lagged lighting-history selector upload"));
-            return;
-        }
-    }
-    const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = {
-        m_graphicsPrefixTask,
-        m_deferredLaggedLightingHistorySlotsUploadTask,
-        avboitFinalTask,
-    };
-    const Core::GpuTaskId* const lightingDependencies = declaresHardwareCaustics
-        ? (useLaggedLightingHistory ? laggedLightingDependencies : hardwareLightingDependencies)
-        : (useLaggedLightingHistory ? laggedLightingDependencies : softwareLightingDependencies)
-    ;
-    const Core::GpuTaskId* const resolvedLightingDependencies = laggedBindlessSlotsGraphOwned
-        ? laggedLightingWithSelectorDependencies
-        : lightingDependencies
-    ;
-    const usize lightingDependencyCount = laggedBindlessSlotsGraphOwned
-        ? (hasTransparentRenderers ? 3u : 2u)
-        : (useLaggedLightingHistory
-            ? laggedLightingDependencyCount
-            : LengthOf(hardwareLightingDependencies))
-    ;
-    // Active lagged Lighting receives compiler-owned state seeds for its shared prefix inputs while it reads
-    // history. Transparent depth is the explicit exception: the finalizer dependency above orders its temporary
-    // AVBOIT DepthRead layout before Lighting samples ShaderResource state.
-    const Core::GpuTaskResourceUse resourceUses[] = {
-        ReadTextureUse(
-            albedo,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ),
-        ReadTextureUse(
-            normal,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ),
-        ReadTextureUse(
-            worldPosition,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ),
-        ReadTextureUse(
-            depth,
-            ECSRenderDetail::s_FramebufferSubresources,
-            Core::ResourceStates::ShaderResource
-        ),
-        ReadTextureUse(shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources),
-        ReadTextureUse(causticIrradiance, ECSRenderDetail::s_FramebufferSubresources),
-        ReadTextureUse(surfelIrradiance, ECSRenderDetail::s_FramebufferSubresources),
-        ReadUse(
-            sceneShading,
-            Core::ResourceStates::ConstantBuffer
-        ),
-        ReadUse(lights, Core::ResourceStates::ShaderResource),
-        ReadUse(bindlessSlots, Core::ResourceStates::ConstantBuffer),
-        WriteTextureUse(opaqueColor, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess),
-    };
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = !laggedBindlessSlotsGraphOwned;
-    scheduling.allowPacketMerge = laggedBindlessSlotsGraphOwned;
-    scheduling.mergeWithPrevious = laggedBindlessSlotsGraphOwned;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("render.deferred_lighting"))
-        .setMarkerLabel("Deferred Lighting")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(scheduling)
-        .setDependencies(resolvedLightingDependencies, lightingDependencyCount)
-        .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
-        .setResourceUses(resourceUses, LengthOf(resourceUses))
-    ;
-    m_deferredLightingTask = m_deferredSystem.declareDeferredLightingTask(
+    DeferredLightingStageBuilder deferredLightingStageBuilder(
         m_deferredLightingTaskGraph,
-        desc,
-        deferredTargets,
-        useLaggedLightingHistory,
-        lightingTimingTicket
+        m_deferredSystem
     );
-    if(!m_deferredLightingTask.valid()){
+    DeferredLightingStageResult deferredLightingStageResult;
+    if(!deferredLightingStageBuilder.declare(
+        DeferredLightingStageInputs{
+            .targets = &deferredTargets,
+            .albedo = albedo,
+            .normal = normal,
+            .worldPosition = worldPosition,
+            .depth = depth,
+            .shadowVisibility = shadowVisibility,
+            .causticIrradiance = causticIrradiance,
+            .surfelIrradiance = surfelIrradiance,
+            .sceneShading = sceneShading,
+            .lights = lights,
+            .bindlessSlots = bindlessSlots,
+            .opaqueColor = opaqueColor,
+            .graphicsPrefixTask = m_graphicsPrefixTask,
+            .shadowVisibilityTask = m_deferredShadowVisibilityTask,
+            .surfelGiTask = m_deferredSurfelGiTask,
+            .avboitFinalTask = avboitFinalTask,
+            .hardwareCausticsTask = m_deferredHardwareCausticsTask,
+            .softwareCausticsTask = m_deferredSoftwareCausticsTask,
+            .historyReadReadyCompletion = m_deferredLightingHistoryReadReadyCompletion,
+            .history = history,
+            .useLaggedLightingHistory = useLaggedLightingHistory,
+            .declaresHardwareCaustics = declaresHardwareCaustics,
+            .hasTransparentRenderers = hasTransparentRenderers,
+        },
+        m_deferredLaggedLightingHistorySlotsUploadTask,
+        lightingTimingTicket,
+        deferredLightingStageResult
+    )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-lighting graph task"));
         return;
     }
+    m_deferredLightingTask = deferredLightingStageResult.lightingTask;
+
 
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     reflectionContentStamp.geometry = sceneResources.contentStamp.geometry;

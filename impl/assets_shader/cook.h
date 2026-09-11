@@ -164,10 +164,23 @@ private:
         {}
     };
 
+    template<typename MapT>
+    struct DefineEntryPtr{
+        const typename MapT::key_type* key;
+        const typename MapT::mapped_type* value;
+    };
+    template<typename MapT>
+    using ScratchDefineEntryVector = Vector<
+        DefineEntryPtr<MapT>,
+        Core::Alloc::ScratchArena
+    >;
+
 
 public:
     ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
 
+
+public:
     inline bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
 
     bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
@@ -238,17 +251,6 @@ public:
 
 private:
     template<typename MapT>
-    struct DefineEntryPtr{
-        const typename MapT::key_type* key;
-        const typename MapT::mapped_type* value;
-    };
-    template<typename MapT>
-    using ScratchDefineEntryVector = Vector<
-        DefineEntryPtr<MapT>,
-        Core::Alloc::ScratchArena
-    >;
-
-    template<typename MapT>
     ScratchDefineEntryVector<MapT> sortedDefineEntries(const MapT& map, Core::Alloc::ScratchArena& scratchArena){
         using EntryPtr = DefineEntryPtr<MapT>;
         ScratchDefineEntryVector<MapT> entries{scratchArena};
@@ -259,6 +261,8 @@ private:
         return entries;
     }
 
+
+private:
     CookArena& m_memoryArena;
     Core::GlobalUniquePtr<IShaderCompiler> m_compiler;
 };

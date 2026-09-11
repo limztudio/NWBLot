@@ -42,8 +42,6 @@ public:
         : m_stream(stream)
     {}
 
-
-public:
     template<usize Length>
     NwbTextOutputStream& operator<<(const char (&text)[Length]){
         writeText(AStringView(text, Length - 1u));
@@ -100,8 +98,6 @@ private:
             m_stream.write(data + chunkBegin, static_cast<StreamSize>(text.size() - chunkBegin));
     }
 
-
-private:
     BasicOutputFileStream<char>& m_stream;
 };
 

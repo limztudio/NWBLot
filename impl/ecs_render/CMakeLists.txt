@@ -74,6 +74,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/material_upload_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/geometry_preparation_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/geometry_preparation_builder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/compute_emulation_capture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/compute_emulation_capture.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_graph_resource_snapshot.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_emulation_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_tasks.cpp"

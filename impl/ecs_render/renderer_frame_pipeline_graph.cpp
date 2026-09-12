@@ -67,6 +67,7 @@
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>
 #include <impl/ecs_render/avboit/geometry_preparation_builder.h>
+#include <impl/ecs_render/avboit/compute_emulation_capture.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1455,48 +1456,31 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             avboitOccupancyPayload.occupancyPhasePrepared = true;
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
             // A phase owns one alias-free stream; mixed work keeps local interleaving.
-            occupancyRegularComputeEmulationPlanCaptured = occupancyDrawItems.csg.computeDrawItems.empty()
-                && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                && occupancyMaterialSampledTexturesCollected
-                && avboitOccupancyComputeEmulationPayload.plan.capture(occupancyDrawItems.regular, occupancyUploadScratch)
-            ;
-            occupancyCsgComputeEmulationPlanCaptured = occupancyDrawItems.regular.computeDrawItems.empty()
-                && occupancyCsgStreamsUploaded
-                && avboitIntervalOutputsGraphOwned
-                && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                && occupancyMaterialSampledTexturesCollected
-                && avboitOccupancyComputeEmulationPayload.csgPlan.capture(
-                    occupancyDrawItems.csg,
-                    occupancyCsgFrameData,
-                    occupancyUploadScratch
-                )
-            ;
-            // All-compute draws share one output only as an explicit D/R sequence; keep mesh/CSG out.
-            occupancySharedComputeEmulationPlanCaptured = !occupancyRegularComputeEmulationPlanCaptured
-                && occupancyDrawItems.regular.meshDrawItems.empty()
-                && occupancyDrawItems.csg.empty()
-                && avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                && occupancyMaterialSampledTexturesCollected
-                && occupancySharedComputeEmulationPlan.capture(
-                    occupancyDrawItems.regular,
-                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
-                )
-                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
-                    occupancySharedComputeEmulationPlan.drawCount
-                )
-            ;
-            NWB_ASSERT(
-                !(occupancyRegularComputeEmulationPlanCaptured && occupancyCsgComputeEmulationPlanCaptured)
-            );
-            NWB_ASSERT(
-                !occupancySharedComputeEmulationPlanCaptured
-                || (!occupancyRegularComputeEmulationPlanCaptured
-                    && !occupancyCsgComputeEmulationPlanCaptured)
-            );
-            if(occupancySharedComputeEmulationPlanCaptured){
-                occupancySharedComputeEmulationInstanceCount = occupancyInstanceData.size();
-                occupancySharedComputeEmulationMaterialTypedByteCount = occupancyMaterialTypedBytes.size();
-            }
+            AvboitComputeEmulationCapture occupancyComputeEmulationCapture;
+            AvboitComputeEmulationCaptureResult occupancyComputeEmulationCaptureResult;
+            if(!occupancyComputeEmulationCapture.capture(
+                AvboitComputeEmulationCaptureInputs{
+                    .drawItems = &occupancyDrawItems,
+                    .csgFrameData = &occupancyCsgFrameData,
+                    .geometryOwned = avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned,
+                    .sampledTexturesCollected = occupancyMaterialSampledTexturesCollected,
+                    .csgStreamsUploaded = occupancyCsgStreamsUploaded,
+                    .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
+                },
+                avboitOccupancyComputeEmulationPayload.plan,
+                avboitOccupancyComputeEmulationPayload.csgPlan,
+                occupancyUploadScratch,
+                occupancyInstanceData.size(),
+                occupancyMaterialTypedBytes.size(),
+                occupancyComputeEmulationCaptureResult
+            ))
+                return;
+            occupancyRegularComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.regularCaptured;
+            occupancyCsgComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.csgCaptured;
+            occupancySharedComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.sharedCaptured;
+            occupancySharedComputeEmulationPlan = occupancyComputeEmulationCaptureResult.sharedPlan;
+            occupancySharedComputeEmulationInstanceCount = occupancyComputeEmulationCaptureResult.sharedInstanceCount;
+            occupancySharedComputeEmulationMaterialTypedByteCount = occupancyComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
         }
         else{
             // Graph phase stays authoritative for empty sets; retain snapshot to skip native re-gather.
@@ -1769,42 +1753,31 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             avboitExtinctionPayload.extinctionPhasePrepared = true;
             extinctionStreamsUploaded = true;
             // Mixed work keeps local interleaving; one handoff cannot preserve per-draw order.
-            extinctionRegularComputeEmulationPlanCaptured = extinctionDrawItems.csg.computeDrawItems.empty()
-                && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                && extinctionMaterialSampledTexturesCollected
-                && avboitExtinctionComputeEmulationPayload.plan.capture(extinctionDrawItems.regular, extinctionUploadScratch)
-            ;
-            extinctionCsgComputeEmulationPlanCaptured = extinctionDrawItems.regular.computeDrawItems.empty()
-                && extinctionCsgStreamsUploaded
-                && avboitIntervalOutputsGraphOwned
-                && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                && extinctionMaterialSampledTexturesCollected
-                && avboitExtinctionComputeEmulationPayload.csgPlan.capture(
-                    extinctionDrawItems.csg,
-                    extinctionCsgFrameData,
-                    extinctionUploadScratch
-                )
-            ;
-            extinctionSharedComputeEmulationPlanCaptured = !extinctionRegularComputeEmulationPlanCaptured
-                && extinctionDrawItems.regular.meshDrawItems.empty()
-                && extinctionDrawItems.csg.empty()
-                && avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                && extinctionMaterialSampledTexturesCollected
-                && extinctionSharedComputeEmulationPlan.capture(
-                    extinctionDrawItems.regular,
-                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
-                )
-                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
-                    extinctionSharedComputeEmulationPlan.drawCount
-                )
-            ;
-            if(extinctionSharedComputeEmulationPlanCaptured){
-                extinctionSharedComputeEmulationInstanceCount = extinctionInstanceData.size();
-                extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionMaterialTypedBytes.size();
-            }
-            NWB_ASSERT(!(extinctionRegularComputeEmulationPlanCaptured && extinctionCsgComputeEmulationPlanCaptured));
-            NWB_ASSERT(!(extinctionRegularComputeEmulationPlanCaptured && extinctionSharedComputeEmulationPlanCaptured));
-            NWB_ASSERT(!(extinctionCsgComputeEmulationPlanCaptured && extinctionSharedComputeEmulationPlanCaptured));
+            AvboitComputeEmulationCapture extinctionComputeEmulationCapture;
+            AvboitComputeEmulationCaptureResult extinctionComputeEmulationCaptureResult;
+            if(!extinctionComputeEmulationCapture.capture(
+                AvboitComputeEmulationCaptureInputs{
+                    .drawItems = &extinctionDrawItems,
+                    .csgFrameData = &extinctionCsgFrameData,
+                    .geometryOwned = avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned,
+                    .sampledTexturesCollected = extinctionMaterialSampledTexturesCollected,
+                    .csgStreamsUploaded = extinctionCsgStreamsUploaded,
+                    .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
+                },
+                avboitExtinctionComputeEmulationPayload.plan,
+                avboitExtinctionComputeEmulationPayload.csgPlan,
+                extinctionUploadScratch,
+                extinctionInstanceData.size(),
+                extinctionMaterialTypedBytes.size(),
+                extinctionComputeEmulationCaptureResult
+            ))
+                return;
+            extinctionRegularComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.regularCaptured;
+            extinctionCsgComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.csgCaptured;
+            extinctionSharedComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.sharedCaptured;
+            extinctionSharedComputeEmulationPlan = extinctionComputeEmulationCaptureResult.sharedPlan;
+            extinctionSharedComputeEmulationInstanceCount = extinctionComputeEmulationCaptureResult.sharedInstanceCount;
+            extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
         }
         else{
             // Keep graph ownership for empty phases; skip native re-gather of mutable state.
@@ -2043,54 +2016,37 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             avboitAccumulationPayload.accumulationPhasePrepared = true;
             accumulationStreamsUploaded = true;
             // A phase owns one alias-free stream; mixed work keeps local interleaving.
-            accumulationRegularComputeEmulationPlanCaptured = accumulationDrawItems.csg.computeDrawItems.empty()
-                && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                && accumulationMaterialSampledTexturesCollected
-                && avboitAccumulationComputeEmulationPayload.plan.capture(accumulationDrawItems.regular, accumulationUploadScratch)
-            ;
-            accumulationCsgComputeEmulationPlanCaptured = accumulationDrawItems.regular.computeDrawItems.empty()
-                && accumulationCsgStreamsUploaded
-                && avboitIntervalOutputsGraphOwned
-                && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                && accumulationMaterialSampledTexturesCollected
-                && avboitAccumulationComputeEmulationPayload.csgPlan.capture(
-                    accumulationDrawItems.csg,
-                    accumulationCsgFrameData,
-                    accumulationUploadScratch
-                )
-            ;
-            // All-compute draws share one output only as an explicit D/R sequence; keep mesh/CSG out.
-            accumulationSharedComputeEmulationPlanCaptured = !accumulationRegularComputeEmulationPlanCaptured
-                && accumulationDrawItems.regular.meshDrawItems.empty()
-                && accumulationDrawItems.csg.empty()
-                && avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                && accumulationMaterialSampledTexturesCollected
-                && accumulationSharedComputeEmulationPlan.capture(
-                    accumulationDrawItems.regular,
-                    ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
-                )
-                && ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
-                    accumulationSharedComputeEmulationPlan.drawCount
-                )
-            ;
-            NWB_ASSERT(
-                !(accumulationRegularComputeEmulationPlanCaptured && accumulationCsgComputeEmulationPlanCaptured)
-            );
-            NWB_ASSERT(
-                !accumulationSharedComputeEmulationPlanCaptured
-                || (!accumulationRegularComputeEmulationPlanCaptured
-                    && !accumulationCsgComputeEmulationPlanCaptured)
-            );
+            AvboitComputeEmulationCapture accumulationComputeEmulationCapture;
+            AvboitComputeEmulationCaptureResult accumulationComputeEmulationCaptureResult;
+            if(!accumulationComputeEmulationCapture.capture(
+                AvboitComputeEmulationCaptureInputs{
+                    .drawItems = &accumulationDrawItems,
+                    .csgFrameData = &accumulationCsgFrameData,
+                    .geometryOwned = avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned,
+                    .sampledTexturesCollected = accumulationMaterialSampledTexturesCollected,
+                    .csgStreamsUploaded = accumulationCsgStreamsUploaded,
+                    .intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned,
+                },
+                avboitAccumulationComputeEmulationPayload.plan,
+                avboitAccumulationComputeEmulationPayload.csgPlan,
+                accumulationUploadScratch,
+                accumulationInstanceData.size(),
+                accumulationMaterialTypedBytes.size(),
+                accumulationComputeEmulationCaptureResult
+            ))
+                return;
+            accumulationRegularComputeEmulationPlanCaptured = accumulationComputeEmulationCaptureResult.regularCaptured;
+            accumulationCsgComputeEmulationPlanCaptured = accumulationComputeEmulationCaptureResult.csgCaptured;
+            accumulationSharedComputeEmulationPlanCaptured = accumulationComputeEmulationCaptureResult.sharedCaptured;
+            accumulationSharedComputeEmulationPlan = accumulationComputeEmulationCaptureResult.sharedPlan;
+            accumulationSharedComputeEmulationInstanceCount = accumulationComputeEmulationCaptureResult.sharedInstanceCount;
+            accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
             if(
                 accumulationRegularComputeEmulationPlanCaptured
                 || accumulationCsgComputeEmulationPlanCaptured
             ){
                 avboitAccumulationComputeEmulationPayload.instanceCount = accumulationInstanceData.size();
                 avboitAccumulationComputeEmulationPayload.materialTypedByteCount = accumulationMaterialTypedBytes.size();
-            }
-            if(accumulationSharedComputeEmulationPlanCaptured){
-                accumulationSharedComputeEmulationInstanceCount = accumulationInstanceData.size();
-                accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationMaterialTypedBytes.size();
             }
         }
         else{

@@ -2,13 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/geometry_preparation_builder.h>
-
-
-#include <core/graphics/vulkan/backend.h>
+#include "geometry_preparation_builder.h"
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
+
+#include <core/graphics/vulkan/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +94,7 @@ struct PhaseIdentities{
     const __hidden_geometry_preparation::PhaseIdentities identities =
         __hidden_geometry_preparation::IdentitiesForPhase(inputs.phase)
     ;
-    outResult.geometryOwned = GatherPreparedMaterialGeometryResourceSet(
+    outResult.geometryOwned = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(
         m_graph,
         inputs.drawItemSets,
         inputs.drawItemSetCount,
@@ -110,7 +109,7 @@ struct PhaseIdentities{
     }
     outResult.sampledTexturesCollected =
         outResult.geometryOwned
-        && GatherPreparedMaterialSampledTextureResourceSet(
+        && RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
             m_materialSystem,
             m_graph,
             inputs.drawItemSets,
@@ -136,3 +135,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

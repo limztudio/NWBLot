@@ -49,11 +49,6 @@ void AppendFrameGraphRecordingRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics
 );
-void AppendSubmissionRuntimeStatisticsJson(
-    AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
-    const bool recoverySubmissionCountPresent
-);
 void AppendFrameGraphSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
     const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,

@@ -521,7 +521,7 @@ bool TextureMipDecoder::decodeLdr(
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
     if(__hidden_texture_mip_decoder::IsLdrCompressedFormat(format)){
-        const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * s_UastcBytesPerBlock;
+        const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock;
         if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.blockCountY){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory"));
             return false;
@@ -530,7 +530,7 @@ bool TextureMipDecoder::decodeLdr(
         sliceUploadByteCount = static_cast<usize>(rowPitch64 * mip.blockCountY);
     }
     else{
-        const u64 rowPitch64 = static_cast<u64>(mip.width) * s_RgbaBytesPerTexel;
+        const u64 rowPitch64 = static_cast<u64>(mip.width) * __hidden_texture_mip_decoder::s_RgbaBytesPerTexel;
         if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.height){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: RGBA8 mip row pitch exceeds addressable memory"));
             return false;
@@ -547,9 +547,9 @@ bool TextureMipDecoder::decodeLdr(
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         u8* const destination = outUpload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         bool decoded = false;
-        if(IsAstc4x4LdrFormat(format))
+        if(__hidden_texture_mip_decoder::IsAstc4x4LdrFormat(format))
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
-        else if(IsBc7LdrFormat(format))
+        else if(__hidden_texture_mip_decoder::IsBc7LdrFormat(format))
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsBc7(textureAsset, mip, mipLevel, sliceIndex, destination, sliceUploadByteCount);
         else
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
@@ -575,8 +575,8 @@ bool TextureMipDecoder::decodeHdr(
     }
 
     const u64 rowPitch64 = compressedOutput
-        ? static_cast<u64>(mip.blockCountX) * s_UastcBytesPerBlock
-        : static_cast<u64>(mip.width) * s_Rgba16FloatBytesPerTexel
+        ? static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock
+        : static_cast<u64>(mip.width) * __hidden_texture_mip_decoder::s_Rgba16FloatBytesPerTexel
     ;
     const u32 rowCount = compressedOutput ? mip.blockCountY : mip.height;
     if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / rowCount){

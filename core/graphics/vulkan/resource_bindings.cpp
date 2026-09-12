@@ -285,20 +285,6 @@ bool ValidateDescriptorBufferBindingFootprint(
     return true;
 }
 
-constexpr bool UsesDescriptorBufferInfo(ResourceType::Enum type){
-    switch(type){
-    case ResourceType::ConstantBuffer:
-    case ResourceType::VolatileConstantBuffer:
-    case ResourceType::StructuredBuffer_SRV:
-    case ResourceType::StructuredBuffer_UAV:
-    case ResourceType::RawBuffer_SRV:
-    case ResourceType::RawBuffer_UAV:
-        return true;
-    default:
-        return false;
-    }
-}
-
 // Global heap resource type; TLAS uses its own immutable one-descriptor layout.
 constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type){
     return IsSupportedDescriptorBindingType(type);

@@ -200,6 +200,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/raytracing_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/raytracing_frame_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/raytracing_shadow_material_context.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/prepared_software_bvh_graph_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/prepared_software_bvh_graph_resources.h"

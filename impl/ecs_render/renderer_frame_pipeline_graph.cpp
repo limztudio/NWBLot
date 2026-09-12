@@ -898,58 +898,60 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
 
     // Declare Hardware Caustics before Lighting so declaration order owns the live irradiance RAW edge.
-    HardwareCausticsStageBuilder hardwareCausticsStageBuilder(
-        m_deferredLightingTaskGraph,
-        m_raytracingSystem
-    );
-    HardwareCausticsStageResult hardwareCausticsStageResult;
-    if(!hardwareCausticsStageBuilder.declare(
-        HardwareCausticsStageInputs{
-            .targets = &deferredTargets,
-            .lightingResources = &deferredLightingResources,
-            .meshViewSnapshot = &meshViewBufferSnapshot,
-            .rayTracingResources = &rayTracingGraphResources,
-            .features = &features,
-            .worldPosition = worldPosition,
-            .depth = depth,
-            .currentCausticIrradiance = currentCausticIrradiance,
-            .currentBindlessSlots = currentBindlessSlots,
-            .sceneShading = sceneShading,
-            .lights = lights,
-            .materialContextSlots = materialContextSlots,
-            .hardwareTraceAttributeSet = hardwareTraceAttributeSet,
-            .hardwareTraceAttributeResources = hardwareTraceAttributeResources.data(),
-            .hardwareTraceAttributeResourceCount = hardwareTraceAttributeResources.size(),
-            .traceMaterialSampledTextureSet = traceMaterialSampledTextureSet,
-            .graphicsPrefixTask = m_graphicsPrefixTask,
-            .shadowPreparationReady = &m_shadowPreparationOutcome.ready,
-            .historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,
-            .accumulatorPersistentState = &m_hardwareCausticAccumulatorPersistentState,
-            .declaresHardwareCaustics = declaresHardwareCaustics,
-            .producerDispatched = &m_deferredCausticProducerDispatched,
-            .timingTicket = &hardwareCausticsTimingTicket,
-            .photonTiming = &causticPhotonTiming,
-            .resolveTiming = &causticResolveTiming,
-        },
-        hardwareCausticsStageResult
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics stage"));
-        return;
+    if(declaresHardwareCaustics){
+        HardwareCausticsStageBuilder hardwareCausticsStageBuilder(
+            m_deferredLightingTaskGraph,
+            m_raytracingSystem
+        );
+        HardwareCausticsStageResult hardwareCausticsStageResult;
+        if(!hardwareCausticsStageBuilder.declare(
+            HardwareCausticsStageInputs{
+                .targets = &deferredTargets,
+                .lightingResources = &deferredLightingResources,
+                .meshViewSnapshot = &meshViewBufferSnapshot,
+                .rayTracingResources = &rayTracingGraphResources,
+                .features = &features,
+                .worldPosition = worldPosition,
+                .depth = depth,
+                .currentCausticIrradiance = currentCausticIrradiance,
+                .currentBindlessSlots = currentBindlessSlots,
+                .sceneShading = sceneShading,
+                .lights = lights,
+                .materialContextSlots = materialContextSlots,
+                .hardwareTraceAttributeSet = hardwareTraceAttributeSet,
+                .hardwareTraceAttributeResources = hardwareTraceAttributeResources.data(),
+                .hardwareTraceAttributeResourceCount = hardwareTraceAttributeResources.size(),
+                .traceMaterialSampledTextureSet = traceMaterialSampledTextureSet,
+                .graphicsPrefixTask = m_graphicsPrefixTask,
+                .shadowPreparationReady = &m_shadowPreparationOutcome.ready,
+                .historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,
+                .accumulatorPersistentState = &m_hardwareCausticAccumulatorPersistentState,
+                .declaresHardwareCaustics = declaresHardwareCaustics,
+                .producerDispatched = &m_deferredCausticProducerDispatched,
+                .timingTicket = &hardwareCausticsTimingTicket,
+                .photonTiming = &causticPhotonTiming,
+                .resolveTiming = &causticResolveTiming,
+            },
+            hardwareCausticsStageResult
+        )){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics stage"));
+            return;
+        }
+        m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult.causticIrradianceClearTask;
+        m_deferredCausticAccumulatorNonTemporalClearTask = hardwareCausticsStageResult.causticAccumulatorNonTemporalClearTask;
+        m_deferredCausticAccumulatorBootstrapClearTask = hardwareCausticsStageResult.causticAccumulatorBootstrapClearTask;
+        m_deferredCausticAccumulatorDecayTask = hardwareCausticsStageResult.causticAccumulatorDecayTask;
+        m_deferredCausticPhotonTask = hardwareCausticsStageResult.causticPhotonTask;
+        m_deferredCausticGeometryTask = hardwareCausticsStageResult.causticGeometryTask;
+        m_deferredCausticResolvePrepareTask = hardwareCausticsStageResult.causticResolvePrepareTask;
+        m_deferredCausticResolveWaveletTask = hardwareCausticsStageResult.causticResolveWaveletTask;
+        m_deferredCausticResolveSecondWaveletTask = hardwareCausticsStageResult.causticResolveSecondWaveletTask;
+        m_deferredCausticResolveThirdWaveletTask = hardwareCausticsStageResult.causticResolveThirdWaveletTask;
+        m_deferredCausticResolveFourthWaveletTask = hardwareCausticsStageResult.causticResolveFourthWaveletTask;
+        m_deferredCausticResolveFifthWaveletTask = hardwareCausticsStageResult.causticResolveFifthWaveletTask;
+        m_deferredCausticResolveUpsampleTask = hardwareCausticsStageResult.causticResolveUpsampleTask;
+        m_deferredHardwareCausticsTask = hardwareCausticsStageResult.hardwareCausticsTask;
     }
-    m_deferredCausticIrradianceClearTask = hardwareCausticsStageResult.causticIrradianceClearTask;
-    m_deferredCausticAccumulatorNonTemporalClearTask = hardwareCausticsStageResult.causticAccumulatorNonTemporalClearTask;
-    m_deferredCausticAccumulatorBootstrapClearTask = hardwareCausticsStageResult.causticAccumulatorBootstrapClearTask;
-    m_deferredCausticAccumulatorDecayTask = hardwareCausticsStageResult.causticAccumulatorDecayTask;
-    m_deferredCausticPhotonTask = hardwareCausticsStageResult.causticPhotonTask;
-    m_deferredCausticGeometryTask = hardwareCausticsStageResult.causticGeometryTask;
-    m_deferredCausticResolvePrepareTask = hardwareCausticsStageResult.causticResolvePrepareTask;
-    m_deferredCausticResolveWaveletTask = hardwareCausticsStageResult.causticResolveWaveletTask;
-    m_deferredCausticResolveSecondWaveletTask = hardwareCausticsStageResult.causticResolveSecondWaveletTask;
-    m_deferredCausticResolveThirdWaveletTask = hardwareCausticsStageResult.causticResolveThirdWaveletTask;
-    m_deferredCausticResolveFourthWaveletTask = hardwareCausticsStageResult.causticResolveFourthWaveletTask;
-    m_deferredCausticResolveFifthWaveletTask = hardwareCausticsStageResult.causticResolveFifthWaveletTask;
-    m_deferredCausticResolveUpsampleTask = hardwareCausticsStageResult.causticResolveUpsampleTask;
-    m_deferredHardwareCausticsTask = hardwareCausticsStageResult.hardwareCausticsTask;
 
     AvboitPreGraphTask::Payload avboitPrePayload{ m_arena };
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{ m_arena };
@@ -2379,3 +2381,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

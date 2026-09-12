@@ -451,7 +451,6 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     // The clear is intentionally keyed to the semantic opaque-CSG frame flag, rather than the later native
     // readiness checks. This preserves the old defensive clear timing while making its two actual CopyDest writes
     // and the following UAV handoff visible to the graph.
-    Core::GpuTaskId csgIntervalClearTask = csgFrameUploadTask;
     OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(
         m_deferredLightingTaskGraph
     );
@@ -475,7 +474,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult.clearFirstTask;
     m_graphicsPrefixCsgIntervalClearTask = opaqueCsgIntervalClearResult.clearTask;
-    csgIntervalClearTask = opaqueCsgIntervalClearResult.clearTask;
+    const Core::GpuTaskId csgIntervalClearTask = hasOpaqueCsgFrameWork ? opaqueCsgIntervalClearResult.clearTask : csgFrameUploadTask;
 
     // Capacity grows independently of each frozen draw stream. Synchronize only the bytes uploaded for this pass.
     const Core::BufferRange materialInstanceRange(0u, instanceData.size() * sizeof(InstanceGpuData));

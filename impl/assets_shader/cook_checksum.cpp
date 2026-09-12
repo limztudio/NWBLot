@@ -43,11 +43,11 @@ template<typename T, typename V>
 using CookMap = ShaderCook::CookMap<T, V>;
 template<typename T>
 using CookHashSet = ShaderCook::CookHashSet<T>;
-using ScratchString = AString<Alloc::ScratchArena>;
+using ScratchString = AString<Core::Alloc::ScratchArena>;
 template<typename T>
-using ScratchVector = Vector<T, Alloc::ScratchArena>;
+using ScratchVector = Vector<T, Core::Alloc::ScratchArena>;
 template<typename T>
-using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Alloc::ScratchArena>;
+using ScratchHashSet = HashSet<T, Hasher<T>, EqualTo<T>, Core::Alloc::ScratchArena>;
 
 struct NormalizedDependencyRootAlias{
     Path root;
@@ -104,7 +104,7 @@ bool ShaderCook::computeDependencyChecksum(
     const CookVector<Path>& dependencies,
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
     u64& outChecksum,
-    Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
     static constexpr u8 s_NewlineByte = '\n';
@@ -188,7 +188,7 @@ bool ShaderCook::computeDependencyChecksum(
 
     Sort(sortedDependencies.begin(), sortedDependencies.end(), [](const SortedDependencyItem& lhs, const SortedDependencyItem& rhs){ return lhs.canonicalPath < rhs.canonicalPath; });
 
-    Vector<u8, Alloc::ScratchArena> dependencyBytes{scratchArena};
+    Vector<u8, Core::Alloc::ScratchArena> dependencyBytes{scratchArena};
     for(const SortedDependencyItem& item : sortedDependencies){
         outChecksum = UpdateFnv64TextExact(outChecksum, AStringView(item.canonicalPath));
         outChecksum = UpdateFnv64(outChecksum, &s_NewlineByte, 1);
@@ -226,7 +226,7 @@ bool ShaderCook::computeSourceChecksum(
     const AStringView variantSignature,
     const u64 dependencyChecksum,
     u64& outChecksum,
-    Alloc::ScratchArena& scratchArena
+    Core::Alloc::ScratchArena& scratchArena
 ){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';

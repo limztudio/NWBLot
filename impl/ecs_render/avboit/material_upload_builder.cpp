@@ -2,14 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/avboit/material_upload_builder.h>
-
-
-#include <core/graphics/vulkan/backend.h>
+#include "material_upload_builder.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
+
+#include <core/graphics/vulkan/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,7 +134,7 @@ struct UploadIdentities{
         return false;
     }
 
-    const UploadIdentities identities = __hidden_material_upload::IdentitiesForPhase(inputs.phase);
+    const __hidden_material_upload::UploadIdentities identities = __hidden_material_upload::IdentitiesForPhase(inputs.phase);
     const Core::GpuUploadBlobId instanceBlob = m_graph.copyUploadData(
         instanceData.data(),
         instanceData.size() * sizeof(InstanceGpuData),
@@ -311,3 +310,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

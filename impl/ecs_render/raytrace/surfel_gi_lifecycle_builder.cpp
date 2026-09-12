@@ -2,14 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/raytrace/surfel_gi_lifecycle_builder.h>
+#include "surfel_gi_lifecycle_builder.h"
 
-
-#include <core/graphics/vulkan/backend.h>
-
+#include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+
+#include <core/graphics/vulkan/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

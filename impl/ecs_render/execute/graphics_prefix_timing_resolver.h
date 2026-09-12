@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 
+#include <core/graphics/gpu_timing_types.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <core/task/gpu/task_graph.h>
 
@@ -70,3 +71,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

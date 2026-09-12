@@ -2,13 +2,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/opaque_csg_interval_clear_builder.h>
-
-
-#include <core/graphics/vulkan/backend.h>
+#include "opaque_csg_interval_clear_builder.h"
 
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+
+#include <core/graphics/vulkan/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,8 +36,6 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
 ){
     using namespace RendererTaskGraphDetail;
     outResult = OpaqueCsgIntervalClearResult{};
-    outResult.clearTask = inputs.dependencyTask;
-    outResult.clearFirstTask = inputs.dependencyTask;
     if(!inputs.targets || !inputs.csgFrameData || !inputs.dependencyTask.valid())
         return false;
     if(!inputs.hasOpaqueCsgFrameWork)

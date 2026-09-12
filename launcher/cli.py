@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Root launcher entry point (`python launcher/cli.py`)."""
+"""Root launcher shim (canonical entry: `python -m launcher`)."""
 
 from __future__ import annotations
 

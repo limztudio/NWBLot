@@ -15,6 +15,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/material_parse.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_parse_meta.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_bind_codegen.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/material_bind_dependency.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_dispatch_codegen.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_generated_shaders.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/bind.cpp"

@@ -22,13 +22,13 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer*
-    GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::s_activeFinalizer = nullptr
-;
+thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::s_activeFinalizer = nullptr;
 
 
-GpuTaskScheduler::SubmissionAttemptExceptionFinalizer*
-GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::activeFor(
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::activeFor(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,

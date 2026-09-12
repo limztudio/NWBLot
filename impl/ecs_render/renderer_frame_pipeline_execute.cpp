@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -486,103 +487,18 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const auto taskIsCompiled = [&](const Core::GpuTaskId task){
         return deferredCompiledPlan.findTask(task).valid();
     };
-    // Software clears belong to the Shadow Preparation packet; a split would omit them.
-    const bool shadowPrepareSoftwareBvhBuildsMerged =
-        !m_deferredShadowPrepareSoftwareBvhBuildFirstTask.valid()
-            ? !m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-            : (
-                m_deferredShadowPrepareSoftwareBvhBuildLastTask.valid()
-                && deferredCompiledPlan.tasksSharePacket(
-                    m_deferredShadowPrepareTask,
-                    m_deferredShadowPrepareSoftwareBvhBuildFirstTask
-                )
-                && deferredCompiledPlan.tasksSharePacket(
-                    m_deferredShadowPrepareTask,
-                    m_deferredShadowPrepareSoftwareBvhBuildLastTask
-                )
-            )
-    ;
-    // The hybrid tail keeps the old acceptance boundary in this packet.
-    const bool shadowPrepareHybridSoftwareTailMerged =
-        !m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_deferredShadowPrepareHybridSoftwareTailTask
-        )
-    ;
-    // Frozen transitions must share the build's submission for an atomic handoff.
-    const bool shadowPrepareAccelStructFinalizeMerged =
-        !m_deferredShadowPrepareAccelStructFinalizeTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_deferredShadowPrepareAccelStructFinalizeTask
-        )
-    ;
-    // Selector uploads must stay in the Shadow Preparation packet.
-    const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket =
-        !m_deferredBindlessSlotsUploadTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_deferredBindlessSlotsUploadTask
-        )
-    ;
-    // Keep the upload in the first packet so it becomes the handoff.
-    const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket =
-        !m_rayTraceMaterialContextSlotsUploadTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_rayTraceMaterialContextSlotsUploadTask
-        )
-    ;
-    // Nonempty caustic payloads must live in the Shadow Preparation packet.
-    const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket =
-        !m_causticEmissionTargetsUploadTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_causticEmissionTargetsUploadTask
-        )
-    ;
-    // Surfel constants must share the Shadow Preparation packet.
-    const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket =
-        !m_surfelFrameConstantsUploadTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredShadowPrepareTask,
-            m_surfelFrameConstantsUploadTask
-        )
-    ;
-    // This triple must stay in the first accepted packet.
-    const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket =
-        (!m_shadowInstanceMaterialUploadTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowPrepareTask,
-                m_shadowInstanceMaterialUploadTask
-            ))
-        && (!m_shadowInstanceUploadTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowPrepareTask,
-                m_shadowInstanceUploadTask
-            ))
-        && (!m_shadowMaterialTypedUploadTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowPrepareTask,
-                m_shadowMaterialTypedUploadTask
-            ))
-    ;
-    // Keep the pair in Shadow Preparation as the only producer.
-    const bool sceneBvhUploadsMergedIntoShadowPreparePacket =
-        m_sceneBvhNodesUploadTask.valid() == m_sceneBvhInstancesUploadTask.valid()
-        && (!m_sceneBvhNodesUploadTask.valid()
-            || (
-                deferredCompiledPlan.tasksSharePacket(
-                    m_deferredShadowPrepareTask,
-                    m_sceneBvhNodesUploadTask
-                )
-                && deferredCompiledPlan.tasksSharePacket(
-                    m_deferredShadowPrepareTask,
-                    m_sceneBvhInstancesUploadTask
-                )
-            ))
-    ;
+    ShadowPreparePacketValidator shadowPreparePacketValidator(MakeNotNull(this));
+    ShadowPreparePacketValidationResult shadowPreparePacket;
+    shadowPreparePacketValidator.validate(deferredCompiledPlan, shadowPreparePacket);
+    const bool shadowPrepareSoftwareBvhBuildsMerged = shadowPreparePacket.softwareBvhBuildsMerged;
+    const bool shadowPrepareHybridSoftwareTailMerged = shadowPreparePacket.hybridSoftwareTailMerged;
+    const bool shadowPrepareAccelStructFinalizeMerged = shadowPreparePacket.accelStructFinalizeMerged;
+    const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.bindlessSlotsUploadMerged;
+    const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.rayTraceMaterialContextSlotsUploadMerged;
+    const bool causticEmissionTargetsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.causticEmissionTargetsUploadMerged;
+    const bool surfelFrameConstantsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.surfelFrameConstantsUploadMerged;
+    const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.shadowMaterialContextUploadsMerged;
+    const bool sceneBvhUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.sceneBvhUploadsMerged;
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
     const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
         m_graphicsPrefixMeshViewSetupTask,

@@ -105,6 +105,8 @@ enum class DeferredGraphicsPrefixTimingSlot : u8{
 
 
 class RendererFramePipeline final : NoCopy{
+    friend class ShadowPreparePacketValidator;
+
 private:
     // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline, while the
     // transition-only report lets the opt-in Vulkan smoke prove which accepted-history branch actually ran.

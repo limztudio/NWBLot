@@ -43,6 +43,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_execute.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/execute/shadow_prepare_packet_validator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/execute/shadow_prepare_packet_validator.h"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/task_timing_feedback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_stage.h"

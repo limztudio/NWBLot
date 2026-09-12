@@ -7,6 +7,7 @@
 #include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
+#include <impl/ecs_render/execute/surfel_caustics_merge_validator.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -595,211 +596,39 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredCompiledPlan.queueInfoForTask(m_deferredLaggedLightingHistoryTask);
     const Core::GpuPhysicalQueueInfo* const deferredFrameRecoveryQueue =
         deferredCompiledPlan.queueInfoForTask(m_deferredFrameRecoveryTask);
-    const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredHardwareCausticsTask);
-    const Core::GpuPhysicalQueueInfo* const surfelGiQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiTask);
-    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiPreparationTask);
-    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiSnapshotCopyTask);
-    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue =
-        deferredCompiledPlan.queueInfoForTask(m_deferredSurfelGiCounterReadbackTask);
-    // Keep the clear in GI's packet; a split would escape its endpoint.
-    const bool surfelGiOutputClearMergedIntoGiPacket =
-        m_deferredSurfelGiIrradianceClearTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredSurfelGiIrradianceClearTask,
-            m_deferredSurfelGiTask
-        )
-    ;
-    // Every GI callback must share the semantic packet.
-    const bool surfelGiPreparedPrefixMergedIntoGiPacket =
-        (
-            !m_deferredSurfelGiAgeFreeTask.valid()
-            && !m_deferredSurfelGiCellHeadClearTask.valid()
-            && !m_deferredSurfelGiHashBuildTask.valid()
-            && !m_deferredSurfelGiSpawnTask.valid()
-            && !m_deferredSurfelGiTraceBuildArgsTask.valid()
-            && !m_deferredSurfelGiTraceTask.valid()
-            && !m_deferredSurfelGiResolveTask.valid()
-        )
-        || (
-            m_deferredSurfelGiAgeFreeTask.valid()
-            && m_deferredSurfelGiCellHeadClearTask.valid()
-            && m_deferredSurfelGiHashBuildTask.valid()
-            && m_deferredSurfelGiSpawnTask.valid()
-            && m_deferredSurfelGiTraceBuildArgsTask.valid()
-            && m_deferredSurfelGiTraceTask.valid()
-            && m_deferredSurfelGiResolveTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiAgeFreeTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiCellHeadClearTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiHashBuildTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiSpawnTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiTraceBuildArgsTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiTraceTask,
-                m_deferredSurfelGiTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiResolveTask,
-                m_deferredSurfelGiTask
-            )
-        )
-    ;
-    // The lifecycle tail must share the first clear's packet.
-    const bool surfelGiInitializationLifecycleMergedIntoPreparationPacket =
-        !m_deferredSurfelGiInitializationLifecycleTask.valid()
-        || (
-            m_deferredSurfelGiPreparationTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredSurfelGiPreparationTask,
-                m_deferredSurfelGiInitializationLifecycleTask
-            )
-        )
-    ;
-    // Keep the clear with the producer; caustic callbacks stay one submission.
-    const bool causticPhotonMergedIntoCausticsPacket =
-        m_deferredCausticPhotonTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticPhotonTask,
-            causticsTask
-        )
-    ;
-    const bool causticGeometryMergedIntoCausticsPacket =
-        m_deferredCausticGeometryTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticGeometryTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolvePrepareMergedIntoCausticsPacket =
-        m_deferredCausticResolvePrepareTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolvePrepareTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveWaveletMergedIntoCausticsPacket =
-        m_deferredCausticResolveWaveletTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveWaveletTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveSecondWaveletMergedIntoCausticsPacket =
-        m_deferredCausticResolveSecondWaveletTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveSecondWaveletTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveThirdWaveletMergedIntoCausticsPacket =
-        m_deferredCausticResolveThirdWaveletTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveThirdWaveletTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveFourthWaveletMergedIntoCausticsPacket =
-        m_deferredCausticResolveFourthWaveletTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveFourthWaveletTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveFifthWaveletMergedIntoCausticsPacket =
-        m_deferredCausticResolveFifthWaveletTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveFifthWaveletTask,
-            causticsTask
-        )
-    ;
-    const bool causticResolveUpsampleMergedIntoCausticsPacket =
-        m_deferredCausticResolveUpsampleTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticResolveUpsampleTask,
-            causticsTask
-        )
-    ;
-    const bool causticIrradianceClearMergedIntoCausticsPacket =
-        m_deferredCausticIrradianceClearTask.valid()
-        && deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticIrradianceClearTask,
-            causticsTask
-        )
-    ;
-    // CPU reset commits only after the shared packet accepts.
-    const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket =
-        !m_deferredCausticAccumulatorNonTemporalClearTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticAccumulatorNonTemporalClearTask,
-            causticsTask
-        )
-    ;
-    // Keep the bootstrap clear in the producer packet; no hidden writers.
-    const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket =
-        !m_deferredCausticAccumulatorBootstrapClearTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticAccumulatorBootstrapClearTask,
-            causticsTask
-        )
-    ;
-    // Keep decay in the packet; a split would break the UAV dependency.
-    const bool causticAccumulatorDecayMergedIntoCausticsPacket =
-        !m_deferredCausticAccumulatorDecayTask.valid()
-        || deferredCompiledPlan.tasksSharePacket(
-            m_deferredCausticAccumulatorDecayTask,
-            causticsTask
-        )
-    ;
-    // Keep Snapshot Copy and the GI endpoint separate with distinct boundaries.
-    const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =
-        !m_deferredSurfelGiSnapshotCopyTask.valid()
-        || !deferredCompiledPlan.tasksSharePacket(
-            m_deferredSurfelGiSnapshotCopyTask,
-            m_deferredSurfelGiTask
-        )
-    ;
-    const bool surfelCounterReadbackFollowsPresentation = !m_deferredSurfelGiCounterReadbackTask.valid()
-        || (
-            deferredCompiledPlan.taskPrecedesOrSharesPacket(
-                terminalPresentationTask,
-                m_deferredSurfelGiCounterReadbackTask
-            )
-            && !deferredCompiledPlan.tasksSharePacket(
-                terminalPresentationTask,
-                m_deferredSurfelGiCounterReadbackTask
-            )
-        )
-    ;
-    const bool laggedLightingHistoryFollowsPresentation = !captureLaggedLightingHistory
-        || (
-            deferredCompiledPlan.taskPrecedesOrSharesPacket(
-                terminalPresentationTask,
-                m_deferredLaggedLightingHistoryTask
-            )
-            && !deferredCompiledPlan.tasksSharePacket(
-                terminalPresentationTask,
-                m_deferredLaggedLightingHistoryTask
-            )
-        )
-    ;
+    SurfelCausticsMergeValidator surfelCausticsMergeValidator(MakeNotNull(this));
+    SurfelCausticsMergeValidationResult surfelCausticsMerge;
+    surfelCausticsMergeValidator.validate(
+        deferredCompiledPlan,
+        causticsTask,
+        terminalPresentationTask,
+        captureLaggedLightingHistory,
+        surfelCausticsMerge
+    );
+    const Core::GpuPhysicalQueueInfo* const hardwareCausticsQueue = surfelCausticsMerge.hardwareCausticsQueue;
+    const Core::GpuPhysicalQueueInfo* const surfelGiQueue = surfelCausticsMerge.surfelGiQueue;
+    const Core::GpuPhysicalQueueInfo* const surfelGiPreparationQueue = surfelCausticsMerge.surfelGiPreparationQueue;
+    const Core::GpuPhysicalQueueInfo* const surfelGiSnapshotCopyQueue = surfelCausticsMerge.surfelGiSnapshotCopyQueue;
+    const Core::GpuPhysicalQueueInfo* const surfelGiCounterReadbackQueue = surfelCausticsMerge.surfelGiCounterReadbackQueue;
+    const bool surfelGiOutputClearMergedIntoGiPacket = surfelCausticsMerge.surfelGiOutputClearMergedIntoGiPacket;
+    const bool surfelGiPreparedPrefixMergedIntoGiPacket = surfelCausticsMerge.surfelGiPreparedPrefixMergedIntoGiPacket;
+    const bool surfelGiInitializationLifecycleMergedIntoPreparationPacket = surfelCausticsMerge.surfelGiInitializationLifecycleMergedIntoPreparationPacket;
+    const bool causticPhotonMergedIntoCausticsPacket = surfelCausticsMerge.causticPhotonMergedIntoCausticsPacket;
+    const bool causticGeometryMergedIntoCausticsPacket = surfelCausticsMerge.causticGeometryMergedIntoCausticsPacket;
+    const bool causticResolvePrepareMergedIntoCausticsPacket = surfelCausticsMerge.causticResolvePrepareMergedIntoCausticsPacket;
+    const bool causticResolveWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveWaveletMergedIntoCausticsPacket;
+    const bool causticResolveSecondWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveSecondWaveletMergedIntoCausticsPacket;
+    const bool causticResolveThirdWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveThirdWaveletMergedIntoCausticsPacket;
+    const bool causticResolveFourthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFourthWaveletMergedIntoCausticsPacket;
+    const bool causticResolveFifthWaveletMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveFifthWaveletMergedIntoCausticsPacket;
+    const bool causticResolveUpsampleMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket;
+    const bool causticIrradianceClearMergedIntoCausticsPacket = surfelCausticsMerge.causticIrradianceClearMergedIntoCausticsPacket;
+    const bool causticAccumulatorNonTemporalClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorNonTemporalClearMergedIntoCausticsPacket;
+    const bool causticAccumulatorBootstrapClearMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorBootstrapClearMergedIntoCausticsPacket;
+    const bool causticAccumulatorDecayMergedIntoCausticsPacket = surfelCausticsMerge.causticAccumulatorDecayMergedIntoCausticsPacket;
+    const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;
+    const bool surfelCounterReadbackFollowsPresentation = surfelCausticsMerge.surfelCounterReadbackFollowsPresentation;
+    const bool laggedLightingHistoryFollowsPresentation = surfelCausticsMerge.laggedLightingHistoryFollowsPresentation;
     const auto discardGraphicsPrefixTimingTickets = [&graphicsPrefixOwnedTimingTickets](){
         for(Core::GpuTimingSubmissionTicket* const timingTicket : graphicsPrefixOwnedTimingTickets)
             timingTicket->discard();

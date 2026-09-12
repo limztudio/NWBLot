@@ -46,6 +46,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/execute/opaque_emulation_merge_validator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/execute/opaque_emulation_merge_validator.h"
     "${CMAKE_CURRENT_LIST_DIR}/execute/shadow_prepare_packet_validator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/execute/surfel_caustics_merge_validator.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/execute/surfel_caustics_merge_validator.h"
     "${CMAKE_CURRENT_LIST_DIR}/execute/shadow_prepare_packet_validator.h"
     "${CMAKE_CURRENT_LIST_DIR}/execute/graphics_prefix_timing_resolver.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/execute/graphics_prefix_timing_resolver.h"

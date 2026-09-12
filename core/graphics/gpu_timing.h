@@ -72,6 +72,9 @@ class GpuTimingSampleAttribution final{
 
 public:
     constexpr GpuTimingSampleAttribution() = default;
+
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 
@@ -138,6 +141,9 @@ class GpuTimingSampleSubscription final{
 
 public:
     constexpr GpuTimingSampleSubscription() = default;
+
+
+public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return m_identity != 0u; }
 
 

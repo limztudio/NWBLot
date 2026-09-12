@@ -146,6 +146,8 @@ public:
     WindowsCommandLineArgs(const WindowsCommandLineArgs&) = delete;
     WindowsCommandLineArgs& operator=(const WindowsCommandLineArgs&) = delete;
 
+
+public:
     [[nodiscard]] bool valid()const{ return m_argv != nullptr; }
     [[nodiscard]] isize argc()const{ return static_cast<isize>(m_argc); }
     [[nodiscard]] wchar** argv()const{ return m_argv; }

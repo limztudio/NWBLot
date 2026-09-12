@@ -25,6 +25,8 @@ public:
     SharedLibrary(const SharedLibrary&) = delete;
     SharedLibrary& operator=(const SharedLibrary&) = delete;
 
+
+public:
     [[nodiscard]] bool open(const tchar* name){
         if(m_handle)
             return true;

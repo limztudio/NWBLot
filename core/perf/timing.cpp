@@ -32,16 +32,18 @@ void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex){
 
     if(m_currentStats.sampleCount == 0u){
         m_currentStats.firstSampleFrameIndex = sampleFrameIndex;
+        m_currentStats.lastSampleFrameIndex = sampleFrameIndex;
         m_currentStats.minSeconds = seconds;
         m_currentStats.maxSeconds = seconds;
     }
     else{
+        m_currentStats.firstSampleFrameIndex = Min(m_currentStats.firstSampleFrameIndex, sampleFrameIndex);
+        m_currentStats.lastSampleFrameIndex = Max(m_currentStats.lastSampleFrameIndex, sampleFrameIndex);
         if(seconds < m_currentStats.minSeconds)
             m_currentStats.minSeconds = seconds;
         if(seconds > m_currentStats.maxSeconds)
             m_currentStats.maxSeconds = seconds;
     }
-    m_currentStats.lastSampleFrameIndex = sampleFrameIndex;
     m_currentStats.lastSeconds = seconds;
     m_currentStats.seconds += seconds;
     ++m_currentStats.sampleCount;

@@ -492,6 +492,55 @@ TEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample){
     EXPECT_EQ(stats.lastSampleFrameIndex, 41u);
 }
 
+TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLastArrivalDuration){
+    TestArena testArena;
+    Core::Perf::TimingRecorder timing(testArena.arena);
+    timing.setEnabled(true);
+    Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
+    Core::Alloc::ScratchArena scratchArena(s_GpuTimingMetricScratchArena);
+    const Name firstScope("tests/timing/overlap/catch_up_first");
+    const Name secondScope("tests/timing/overlap/catch_up_second");
+    const Name outputScope("tests/timing/overlap/catch_up_output");
+    const Core::GpuComparableTimestampRange firstRange{
+        .beginTicks = 10u,
+        .endTicks = 30u,
+        .secondsPerTick = 0.25,
+        .physicalQueue = { .index = 0u, .deviceGeneration = 3u },
+    };
+    const Core::GpuComparableTimestampRange newerRange{
+        .beginTicks = 18u,
+        .endTicks = 34u,
+        .secondsPerTick = 0.25,
+        .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
+    };
+    Core::GpuComparableTimestampRange olderRange = newerRange;
+    olderRange.beginTicks = 26u;
+    Core::GpuTimingSinkSampleVector samples{ scratchArena };
+    ASSERT_TRUE(correlator.prepareOverlapMetric(firstScope, secondScope, outputScope));
+    correlator.recordTimestampRange(firstScope, 50u, firstRange, samples, scratchArena);
+    correlator.recordTimestampRange(firstScope, 51u, firstRange, samples, scratchArena);
+    correlator.recordTimestampRange(secondScope, 51u, newerRange, samples, scratchArena);
+    correlator.recordTimestampRange(secondScope, 50u, olderRange, samples, scratchArena);
+    ASSERT_EQ(samples.size(), 2u);
+    EXPECT_EQ(samples[0u].sourceFrameIndex, 51u);
+    EXPECT_EQ(samples[1u].sourceFrameIndex, 50u);
+    EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 3.0);
+    EXPECT_DOUBLE_EQ(samples[1u].durationSeconds, 1.0);
+    for(const Core::GpuTimingSinkSample& sample : samples)
+        timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);
+    timing.publishFrame(52u);
+
+    const Core::Perf::TimingStats& stats = timing.stats(outputScope);
+    ASSERT_EQ(stats.sampleCount, 2u);
+    EXPECT_EQ(stats.publishFrameIndex, 52u);
+    EXPECT_EQ(stats.firstSampleFrameIndex, 50u);
+    EXPECT_EQ(stats.lastSampleFrameIndex, 51u);
+    EXPECT_DOUBLE_EQ(stats.seconds, 4.0);
+    EXPECT_DOUBLE_EQ(stats.minSeconds, 1.0);
+    EXPECT_DOUBLE_EQ(stats.maxSeconds, 3.0);
+    EXPECT_DOUBLE_EQ(stats.lastSeconds, 1.0);
+}
+
 TEST(GpuTimingOverlapRegistration, DiscardPreservesRegistrationAndResetClearsIt){
     TestArena testArena;
     Core::Perf::TimingRecorder timing(testArena.arena);

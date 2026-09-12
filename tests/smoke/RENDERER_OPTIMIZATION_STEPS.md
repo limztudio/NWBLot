@@ -7,6 +7,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | Step | Work | Status |
 | --- | --- | --- |
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
+| Measurement correction | Preserve source-frame bounds for out-of-order timing samples | Complete; CPU and native regressions pass |
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
@@ -115,3 +116,13 @@ The runner reports `control_uncertain`: opaque and deferred-lighting intervals d
 Evidence: `__artifacts/reflection_optimization_steps/step4/`, including `opt_unit_native_junit.xml`, the preserved initial `opt_capture_junit.xml` failure, `opt_fixed_capture_junit.xml`, `dbg_junit.xml`, frozen arms, raw campaign logs and `benchmark_optical_clear/report.json`. Report SHA256 is `52f7b9d03518387336689a54f3cd45487f0a5743b2a3c92717aa7fa6da5f78d1`. Balanced power and 78% battery were reported before and after acquisition; frequency/thermal telemetry was unavailable. No build, cook or GPU test overlapped timing.
 
 Reproduce the native proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_ecs_graphics_tests|nwb_raytrace_tests)$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.
+
+## CPU measurement prerequisite: correct asynchronous source-frame bounds
+
+While preparing the CPU gathering comparison, review found that reused GPU query slots can publish source frame 51 before frame 50 in one timing batch. The performance accumulator previously used arrival endpoints as its frame bounds, producing 51..50; other arrival orders could produce an apparently valid interval that omitted an earlier source frame. That could misattribute a batch at a warm-up or measurement boundary.
+
+The performance owner now maintains the minimum and maximum source frames. Sample delivery order, duration totals, minimum/maximum durations, last-arrival duration, publication index, binary layout and allocation behavior are unchanged. No sorting or renderer policy change is involved.
+
+A CPU regression drives the real overlap correlator with distinct durations and reversed frame completion. A native regression actually releases and reuses one of two timer-query slots, checks callback order 51 then 50, and verifies aggregate bounds 50..51 without duplicate publication. Both optimized and debug graphics-resource, telemetry and native descriptor-buffer suites passed; the existing main-thread frame timing lifecycle test also passed. The new native regression did not skip. Evidence is under `__artifacts/reflection_optimization_steps/step5/benchmark_support_fixed_opt_junit.xml`, `benchmark_support_dbg_junit.xml`, and `benchmark_support_dbg_full_ctest.log`; the reviewed proposal is under `timing_source_span/`.
+
+This is a measurement correctness fix, with no rendering speedup claim. Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset.

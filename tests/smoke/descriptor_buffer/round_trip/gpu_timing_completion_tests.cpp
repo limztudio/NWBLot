@@ -165,6 +165,100 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingAcceptedSubmissionCompletionGates
     timing.resetQueries();
 }
 
+// Slot zero is released while slot one retains an older unsubmitted recording. Reusing slot zero must not turn
+// the next catch-up publication's source-frame bounds into slot traversal order or reorder listener samples.
+TEST_F(DescriptorBufferRoundTripTest, GpuTimingReusedSlotsPublishSourceBoundsWithoutReorderingSamples){
+    auto& device = DescriptorBufferRoundTripTest::device();
+    auto& timing = s_scope->graphics().gpuTiming();
+    auto& timingSink = s_scope->gpuTimingSink();
+    const GpuTimingScopeDefinition scopeDefinition("tests/timing_reused_slot_source_bounds");
+
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+    s_scope->setGpuTimingEnabled(true);
+    ASSERT_TRUE(timing.prepareScopeQueries(scopeDefinition.identity, device, 2u));
+    GpuTimingSampleCapture completedSamples;
+    ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
+    ASSERT_TRUE(sampleListener.valid());
+
+    auto seedCommandList = device.createCommandList();
+    auto olderCommandList = device.createCommandList();
+    auto newerCommandList = device.createCommandList();
+    ASSERT_NE(seedCommandList.get(), nullptr);
+    ASSERT_NE(olderCommandList.get(), nullptr);
+    ASSERT_NE(newerCommandList.get(), nullptr);
+    GpuTimingSubmissionTicket seedTicket(timing);
+    GpuTimingSubmissionTicket olderTicket(timing);
+    GpuTimingSubmissionTicket newerTicket(timing);
+    const auto recordScope = [&](
+        const u64 frameIndex,
+        CommandList& commandList,
+        GpuTimingSubmissionTicket& ticket,
+        const GpuTimingSampleAttribution attribution){
+        timing.beginFrame(frameIndex);
+        GpuTimingSubmissionTicket::RecordingScope timingRecording(ticket);
+        commandList.open();
+        bool recorded = false;
+        {
+            GpuTimingMeasure measure(timing, scopeDefinition, device, commandList, attribution);
+            recorded = measure.valid();
+        }
+        commandList.close();
+        return recorded;
+    };
+
+    ASSERT_TRUE(recordScope(49u, *seedCommandList, seedTicket, s_NoGpuTimingSampleAttribution));
+    CommandList* seedLists[] = { seedCommandList.get() };
+    ASSERT_TRUE(seedTicket.submit(device, seedLists, LengthOf(seedLists)));
+    ASSERT_TRUE(device.waitForIdle());
+    const GpuTimingSampleAttribution olderAttribution = timing.allocateSampleAttribution();
+    const GpuTimingSampleAttribution newerAttribution = timing.allocateSampleAttribution();
+    ASSERT_TRUE(olderAttribution.valid());
+    ASSERT_TRUE(newerAttribution.valid());
+    ASSERT_TRUE(recordScope(50u, *olderCommandList, olderTicket, olderAttribution));
+
+    // The seed occupies slot zero until this collect; the unsubmitted frame-50 query keeps slot one reserved.
+    timing.collect(device, 50u);
+    const Perf::TimingStats seedStats = timingSink.stats(scopeDefinition.identity);
+    ASSERT_EQ(seedStats.sampleCount, 1u);
+    EXPECT_EQ(seedStats.firstSampleFrameIndex, 49u);
+    EXPECT_EQ(seedStats.lastSampleFrameIndex, 49u);
+    EXPECT_EQ(completedSamples.sampleCount, 0u);
+    ASSERT_TRUE(recordScope(51u, *newerCommandList, newerTicket, newerAttribution));
+    CommandList* olderLists[] = { olderCommandList.get() };
+    CommandList* newerLists[] = { newerCommandList.get() };
+    ASSERT_TRUE(olderTicket.submit(device, olderLists, LengthOf(olderLists)));
+    ASSERT_TRUE(newerTicket.submit(device, newerLists, LengthOf(newerLists)));
+    ASSERT_TRUE(device.waitForIdle());
+
+    timing.collect(device, 52u);
+    ASSERT_EQ(completedSamples.sampleCount, 2u);
+    const GpuTimingSample& first = completedSamples.samples[0u];
+    const GpuTimingSample& last = completedSamples.samples[1u];
+    EXPECT_EQ(first.sourceFrameIndex, 51u);
+    EXPECT_EQ(first.attribution, newerAttribution);
+    EXPECT_EQ(last.sourceFrameIndex, 50u);
+    EXPECT_EQ(last.attribution, olderAttribution);
+    EXPECT_TRUE(first.published);
+    EXPECT_TRUE(last.published);
+    const Perf::TimingStats& stats = timingSink.stats(scopeDefinition.identity);
+    ASSERT_EQ(stats.sampleCount, 2u);
+    EXPECT_EQ(stats.publishFrameIndex, 52u);
+    EXPECT_EQ(stats.firstSampleFrameIndex, 50u);
+    EXPECT_EQ(stats.lastSampleFrameIndex, 51u);
+    EXPECT_DOUBLE_EQ(stats.seconds, first.durationSeconds + last.durationSeconds);
+    EXPECT_DOUBLE_EQ(stats.minSeconds, Min(first.durationSeconds, last.durationSeconds));
+    EXPECT_DOUBLE_EQ(stats.maxSeconds, Max(first.durationSeconds, last.durationSeconds));
+    EXPECT_DOUBLE_EQ(stats.lastSeconds, last.durationSeconds);
+    EXPECT_EQ(timing.statistics(device).materializedQueryCount, 2u);
+
+    timing.collect(device, 53u);
+    EXPECT_EQ(completedSamples.sampleCount, 2u);
+    EXPECT_FALSE(timingSink.stats(scopeDefinition.identity).valid());
+    s_scope->setGpuTimingEnabled(false);
+    timing.resetQueries();
+}
+
 #endif
 
 

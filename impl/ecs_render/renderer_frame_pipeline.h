@@ -106,6 +106,7 @@ enum class DeferredGraphicsPrefixTimingSlot : u8{
 
 class RendererFramePipeline final : NoCopy{
     friend class ShadowPreparePacketValidator;
+    friend class DeferredFrameTailBuilder;
 
 private:
     // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline, while the
@@ -174,6 +175,11 @@ public:
 
 private:
     [[nodiscard]] bool prepareGpuTimingScopes();
+    [[nodiscard]] bool prepareDeferredGraphPacketEnvelopeMetrics(
+        const Core::GpuTaskGraph::DeclarationReadView& graph,
+        const Core::GpuCompiledGraph::ReadView& compiledGraph,
+        Core::Alloc::ScratchArena& scratchArena
+    );
     void commitFrameTargets(DeferredFrameTargets&& targets);
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();

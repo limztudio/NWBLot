@@ -109,9 +109,6 @@ public:
         RendererMaterialSystem& materialSystem,
         RendererAvboitSystem& avboitSystem
     );
-
-
-public:
     [[nodiscard]] bool declare(
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,

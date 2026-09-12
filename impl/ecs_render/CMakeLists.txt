@@ -85,6 +85,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/deferred/graph_resource_import_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/lighting_stage_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/lighting_stage_builder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/frame_tail_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/frame_tail_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/prefix_scene_upload_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/prefix_scene_upload_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/opaque_upload_chain_builder.cpp"

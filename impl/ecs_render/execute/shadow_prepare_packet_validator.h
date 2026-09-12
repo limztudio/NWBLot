@@ -46,9 +46,6 @@ struct ShadowPreparePacketValidationResult{
 class ShadowPreparePacketValidator final : NoCopy{
 public:
     explicit ShadowPreparePacketValidator(NotNull<RendererFramePipeline*> pipeline);
-
-
-public:
     void validate(
         const Core::GpuCompiledGraph::ReadView& compiledPlan,
         ShadowPreparePacketValidationResult& outResult

@@ -51,6 +51,7 @@
 #include <impl/ecs_render/csg/transparent_csg_interval_builder.h>
 #include <impl/ecs_render/deferred/graph_resource_import_builder.h>
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
+#include <impl/ecs_render/deferred/frame_tail_builder.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
 
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
@@ -140,6 +141,24 @@ namespace __hidden_task_graph_deferred_lighting{
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool RendererFramePipeline::prepareDeferredGraphPacketEnvelopeMetrics(
+    const Core::GpuTaskGraph::DeclarationReadView& graph,
+    const Core::GpuCompiledGraph::ReadView& compiledGraph,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
+        graph,
+        compiledGraph,
+        m_graphics.gpuTiming(),
+        m_graphics.getFrameIndex(),
+        scratchArena
+    );
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2813,144 +2832,24 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredPresentTask = suffixResult.presentTask;
     m_deferredFrameTimingEndTask = suffixResult.frameTimingEndTask;
 
-    // Keep this diagnostic behind the terminal presentation endpoint so whole-normal execution cannot absorb its
-    // independent Transfer-preferred tail and it cannot delay lighting or presentation.
-    declareDeferredSurfelCountReadbackTask(rayTracingSurfelResources);
-
-    if(capturesLaggedLightingHistory){
-        // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains
-        // the imports itself. The array slices stay explicit only in the native copy body.
-        Core::GpuCopyTextureTaskRegion historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 2u] = {};
-        for(u32 shadowSlot = 0u; shadowSlot < NWB_SCENE_SHADOW_SLOT_COUNT; ++shadowSlot){
-            Core::GpuCopyTextureTaskRegion& region = historyCopyRegions[shadowSlot];
-            region.source = historyCopyShadowVisibility;
-            region.destination = historyCopyDestinationShadowVisibility;
-            region.sourceSlice.setArraySlice(shadowSlot);
-            region.destinationSlice.setArraySlice(shadowSlot);
-        }
-        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT].source = historyCopyCausticIrradiance;
-        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT].destination = historyCopyDestinationCausticIrradiance;
-        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 1u].source = historyCopySurfelIrradiance;
-        historyCopyRegions[NWB_SCENE_SHADOW_SLOT_COUNT + 1u].destination = historyCopyDestinationSurfelIrradiance;
-        Core::GpuTaskSchedulingHint historyCopyScheduling;
-        historyCopyScheduling.cost = Core::GpuTaskCostHint::Medium;
-        historyCopyScheduling.forceSubmissionBoundary = true;
-        historyCopyScheduling.allowPacketMerge = false;
-        const Core::GpuTaskId historyCopyDependencies[] = { m_deferredFrameTimingEndTask };
-        Core::GpuTaskDesc historyCopyDesc;
-        historyCopyDesc
-            .setIdentity(Name("render.lagged_history_copy"))
-            .setMarkerLabel("Lagged Lighting History Copy")
-            .setQueue(TransferQueueRequest())
-            .setScheduling(historyCopyScheduling)
-            .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
-        ;
-        m_deferredLaggedLightingHistoryTask = m_deferredLightingTaskGraph.addCopyTextureTask(
-            historyCopyDesc,
-            Core::GpuCopyTextureTaskDesc{
-                .regions = historyCopyRegions,
-                .regionCount = LengthOf(historyCopyRegions),
-                .acceptedToken = &m_laggedLightingHistorySubmissionToken,
-            }
-        );
-        if(!m_deferredLaggedLightingHistoryTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
-            return;
-        }
-    }
-
-    // Recovery is a late independent Graphics tail. It deliberately has no packet dependency on normal work: a
-    // rejected suffix must not prevent it from retiring the accepted frame prefix. Its compiled packet asks the
-    // graph transaction to join every accepted non-Graphics physical queue at submit time.
-    const Core::GpuGraphResourceId recoveryDomain = m_deferredLightingTaskGraph.importHazardDomain(
-        HazardDomainDesc(Name("render.frame_recovery.timing"), "Frame Recovery Timing")
-    );
-    if(!recoveryDomain.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
-        return;
-    }
-
-    const Core::GpuTaskResourceUse recoveryResourceUses[] = {
-        ReadWriteUse(recoveryDomain, Core::ResourceStates::Common),
-    };
-    Core::GpuTaskSchedulingHint recoveryScheduling;
-    recoveryScheduling.cost = Core::GpuTaskCostHint::Tiny;
-    recoveryScheduling.forceSubmissionBoundary = true;
-    recoveryScheduling.allowPacketMerge = false;
-    recoveryScheduling.joinsAcceptedQueueFrontier = true;
-    recoveryScheduling.isRecoverySubmission = true;
-    Core::GpuTaskDesc recoveryDesc;
-    recoveryDesc
-        .setIdentity(Name("render.frame_recovery"))
-        .setMarkerLabel("Frame Recovery")
-        .setQueue(GraphicsQueueRequest())
-        .setScheduling(recoveryScheduling)
-        .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
-    ;
-    m_deferredFrameRecoveryTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
-        recoveryDesc,
-        ECSRenderDetail::FrameRecoveryGraphTask::Payload{
+    DeferredFrameTailBuilder deferredFrameTailBuilder(MakeNotNull(this));
+    DeferredFrameTailResult deferredFrameTailResult;
+    if(!deferredFrameTailBuilder.declare(
+        DeferredFrameTailInputs{
+            .surfelResources = &rayTracingSurfelResources,
+            .historyCopyShadowVisibility = historyCopyShadowVisibility,
+            .historyCopyCausticIrradiance = historyCopyCausticIrradiance,
+            .historyCopySurfelIrradiance = historyCopySurfelIrradiance,
+            .historyCopyDestinationShadowVisibility = historyCopyDestinationShadowVisibility,
+            .historyCopyDestinationCausticIrradiance = historyCopyDestinationCausticIrradiance,
+            .historyCopyDestinationSurfelIrradiance = historyCopyDestinationSurfelIrradiance,
             .frameTimingTransaction = &frameTimingTransaction,
-            .armed = &m_deferredFrameRecoveryArmed,
-            .retiresFrameTiming = &m_deferredFrameRecoveryRetiresTiming,
-        }
-    );
-    if(!m_deferredFrameRecoveryTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
-        return;
-    }
-
-    // The backend owns physical queue discovery and identity. The renderer consumes this immutable view directly so
-    // graph packets can target multiple same-class native queues without rebuilding a class-shaped topology here.
-    const Core::GpuTaskGraphQueueTopology topology = device.getPhysicalQueueTopology();
-    if(!topology.queues || topology.queueCount == 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: no native physical queue registry is available for the deferred graph"));
-        return;
-    }
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    Core::GpuTaskGraphCompileOptions compileOptions;
-    // A graphics prefix can now split immediately after work that enables a different physical queue. This exposes
-    // the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
-    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
-    // Time the accepted normal-rendering packets from the packet containing frame-timing begin through the graph-owned
-    // presentation endpoint. Late readback, history-copy, and recovery tails retain separate diagnostic/lifecycle policy.
-    compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;
-    compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;
-    m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
-    compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);
-    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-    if(!compiler.compile(
-        declarations,
-        m_deferredLightingTaskGraphAnalysis,
-        topology,
-        m_deferredLightingTaskGraphQueueAssignments,
-        m_deferredLightingCompiledGraph,
-        scratchArena,
-        compileOptions
-    )){
-        const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
-        const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph compilation failed: analysis={} task={} resource={} queue={} queueTask={}")
-            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
-            , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
-        );
-        return;
-    }
-    const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
-    if(
-        !compiledPlan.validFor(declarations)
-        || !__hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics(
-        declarations,
-        compiledPlan,
-        m_graphics.gpuTiming(),
-        m_graphics.getFrameIndex(),
-        scratchArena
+            .declarationBegin = &declarationBegin,
+            .capturesLaggedLightingHistory = capturesLaggedLightingHistory,
+        },
+        deferredFrameTailResult
     ))
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
-    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingTaskGraphValid = true;
+        return;
 
 
 }

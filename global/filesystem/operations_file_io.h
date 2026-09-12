@@ -8,6 +8,9 @@
 #include "operations.h"
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename ArenaT>
 [[nodiscard]] inline u64 FileSize(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)

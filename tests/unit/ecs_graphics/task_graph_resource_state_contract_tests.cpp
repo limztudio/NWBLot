@@ -72,22 +72,29 @@ TEST(EcsGraphics, LaggedLightingSelectorHasNoNativeCompatibilityDispatcher){
     AString deferredHeaderSource;
     AString deferredTargetsSource;
     AString deferredLightingSource;
-    AString taskGraphSource;
+    AString lightingStageSource;
+    AString rootGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_targets.cpp", deferredTargetsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_lighting.cpp", deferredLightingSource));
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_suffix_builder.cpp", "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "lighting_stage_builder.cpp", lightingStageSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
     const AStringView deferredHeader(deferredHeaderSource.data(), deferredHeaderSource.size());
     const AStringView deferredTargets(deferredTargetsSource.data(), deferredTargetsSource.size());
     const AStringView deferredLighting(deferredLightingSource.data(), deferredLightingSource.size());
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView lightingStage(lightingStageSource.data(), lightingStageSource.size());
+    const AStringView rootGraph(rootGraphSource.data(), rootGraphSource.size());
 
     EXPECT_FALSE(ContainsText(deferredHeader, "uploadLaggedLightingHistoryResources"));
     EXPECT_FALSE(ContainsText(deferredTargets, "uploadLaggedLightingHistoryResources"));
     EXPECT_FALSE(ContainsText(deferredTargets, "history.slotsBuffer.get(), &history.slots"));
     EXPECT_FALSE(ContainsText(deferredLighting, "laggedBindlessSlotsGraphOwned"));
-    EXPECT_TRUE(ContainsText(taskGraph, "render.lagged_lighting.bindless_slots_upload"));
-    EXPECT_TRUE(ContainsText(taskGraph, "laggedBindlessSlotsGraphOwned"));
+    EXPECT_TRUE(ContainsText(lightingStage, "render.lagged_lighting.bindless_slots_upload"));
+    EXPECT_TRUE(ContainsText(lightingStage, "laggedBindlessSlotsGraphOwned"));
+    EXPECT_TRUE(ContainsText(lightingStage, "outUploadTask = historySlotsUploadTask;"));
+    EXPECT_TRUE(ContainsText(lightingStage, ".setDependencies(resolvedLightingDependencies, lightingDependencyCount)"));
+    EXPECT_TRUE(ContainsText(rootGraph, "if(!deferredLightingStageBuilder.declare("));
+    EXPECT_TRUE(ContainsText(rootGraph, "m_deferredLaggedLightingHistorySlotsUploadTask,"));
 }
 
 
@@ -102,10 +109,19 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     AString systemHeaderSource;
     AString shadowVisibilityTaskGraphSource;
     AString deferredLightingTaskGraphSource;
+    AString lightingStageSource;
+    AString hardwareCausticsStageSource;
+    AString frameTailSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", systemHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilityTaskGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "lighting_stage_builder.cpp", lightingStageSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareCausticsStageSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "frame_tail_builder.cpp", frameTailSource));
+    const AStringView lightingStage(lightingStageSource.data(), lightingStageSource.size());
+    const AStringView hardwareCausticsStage(hardwareCausticsStageSource.data(), hardwareCausticsStageSource.size());
+    const AStringView frameTail(frameTailSource.data(), frameTailSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
     const AStringView shadowVisibility(shadowVisibilityTaskGraphSource.data(), shadowVisibilityTaskGraphSource.size());
@@ -167,7 +183,8 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     ), 1u);
     EXPECT_TRUE(ContainsText(render, "device.queueGetCompletedInstance("));
     EXPECT_FALSE(ContainsText(render, "consumeLaggedLightingHistoryWriterDrain"));
-    EXPECT_TRUE(ContainsText(lighting, ".acceptedToken = &m_laggedLightingHistorySubmissionToken"));
+    EXPECT_TRUE(ContainsText(frameTail, ".acceptedToken = &inputs.historyCopySubmissionToken"));
+    EXPECT_TRUE(ContainsText(lighting, ".historyCopySubmissionToken = m_laggedLightingHistorySubmissionToken"));
     EXPECT_TRUE(ContainsText(lighting, "if(useLaggedLightingHistory){"));
     EXPECT_TRUE(ContainsText(lighting, "if(features.laggedLightingHistoryWriterWaitPending){"));
     EXPECT_EQ(CountText(lighting, ".setToken(laggedLightingHistoryReadReadyToken)"), 1u);
@@ -175,9 +192,9 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     EXPECT_TRUE(ContainsText(lighting, "render.deferred_lighting.lagged_history_read_ready"));
     EXPECT_TRUE(ContainsText(lighting, "render.deferred_lighting.lagged_history_writer_drain"));
     EXPECT_TRUE(ContainsText(
-        lighting,
+        lightingStage,
         "const Core::GpuExternalCompletionId laggedLightingExternalDependencies[] = {\n"
-        "        m_deferredLightingHistoryReadReadyCompletion,"
+        "        inputs.historyReadReadyCompletion,"
     ));
     EXPECT_TRUE(ContainsText(
         lighting,
@@ -186,10 +203,12 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
         "            : Core::GpuExternalCompletionId{}"
     ));
     EXPECT_TRUE(ContainsText(
-        lighting,
-        "hardwareExternalDependencies = features.laggedLightingHistoryWriterWaitPending\n"
-        "            ? &m_deferredLightingHistoryWriterDrainCompletion"
+        hardwareCausticsStage,
+        "hardwareExternalDependencies = inputs.features->laggedLightingHistoryWriterWaitPending\n"
+        "            ? &(*inputs.historyWriterDrainCompletion)"
     ));
+    EXPECT_TRUE(ContainsText(lighting, ".historyReadReadyCompletion = m_deferredLightingHistoryReadReadyCompletion,"));
+    EXPECT_TRUE(ContainsText(lighting, ".historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,"));
     EXPECT_FALSE(ContainsText(lighting, "m_deferredLightingHistoryCompletion"));
     EXPECT_EQ(CountText(system, "m_deferredLightingHistoryReadReadyCompletion = {};"), 2u);
     EXPECT_EQ(CountText(system, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 2u);
@@ -250,29 +269,34 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
+    AString importBuilderSource;
+    AString suffixBuilderSource;
+    AString rootGraphSource;
     AString avboitTargetsSource;
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "deferred/task_graph_suffix_builder.cpp", "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "graph_resource_import_builder.cpp", importBuilderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_suffix_builder.cpp", suffixBuilderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_targets.cpp", avboitTargetsSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView deferredLighting(importBuilderSource.data(), importBuilderSource.size());
+    const AStringView deferredSuffix(suffixBuilderSource.data(), suffixBuilderSource.size());
+    const AStringView rootGraph(rootGraphSource.data(), rootGraphSource.size());
     const AStringView avboitTargets(avboitTargetsSource.data(), avboitTargetsSource.size());
-    const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    const usize compileOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
-    ASSERT_NE(lightingOffset, AStringView::npos);
-    ASSERT_NE(compileOffset, AStringView::npos);
-    const AStringView deferredLighting = taskGraph.substr(lightingOffset, compileOffset - lightingOffset);
-    const AStringView deferredSuffix = taskGraph;
 
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
-        "        Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);\n"
+        "        Core::GpuGraphResourceDesc desc = RendererTaskGraphDetail::TextureResourceDesc(identity, label);\n"
         "        desc.setInitialState(Core::ResourceStates::Unknown);\n"
-        "        return m_deferredLightingTaskGraph.importTexture(texture, desc);\n"
+        "        return m_graph.importTexture(texture, desc);\n"
         "    };"
     ));
     EXPECT_EQ(CountText(deferredLighting, "importFirstWriteTexture("), 10u);
-    EXPECT_EQ(CountText(deferredSuffix, "importFirstWriteTexture("), 11u);
+    EXPECT_TRUE(ContainsText(rootGraph, "if(!deferredGraphResourceImportBuilder.declare("));
+    EXPECT_TRUE(ContainsText(rootGraph, ".clearAvboitTargets = clearAvboitTargets,"));
+    EXPECT_TRUE(ContainsText(rootGraph, ".capturesLaggedLightingHistory = capturesLaggedLightingHistory,"));
+    EXPECT_TRUE(ContainsText(deferredSuffix, "desc.setInitialState(Core::ResourceStates::Unknown);"));
+    EXPECT_TRUE(ContainsText(deferredSuffix, "return m_graph.importTexture(texture, desc);"));
+    EXPECT_EQ(CountText(deferredSuffix, "importFirstWriteTexture("), 1u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
         "const auto importAvboitTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){\n"
@@ -300,27 +324,27 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     ), 1u);
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId albedo = importFirstWriteTexture(\n"
+        "outResult.albedo = importFirstWriteTexture(\n"
         "        deferredTargets.albedo,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId normal = importFirstWriteTexture(\n"
+        "outResult.normal = importFirstWriteTexture(\n"
         "        deferredTargets.normal,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId worldPosition = importFirstWriteTexture(\n"
+        "outResult.worldPosition = importFirstWriteTexture(\n"
         "        deferredTargets.worldPosition,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId depth = importFirstWriteTexture(\n"
+        "outResult.depth = importFirstWriteTexture(\n"
         "        deferredTargets.depth,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId opaqueColor = importFirstWriteTexture(\n"
+        "outResult.opaqueColor = importFirstWriteTexture(\n"
         "        deferredTargets.opaqueColor,"
     ));
     EXPECT_TRUE(ContainsText(
@@ -330,35 +354,35 @@ TEST(EcsGraphics, DeferredFirstWriteTextureImportsPreserveNativeOrigins){
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "historyCopyDestinationShadowVisibility = history\n"
-        "            ? shadowVisibility\n"
+        "outResult.historyCopyDestinationShadowVisibility = history\n"
+        "            ? outResult.shadowVisibility\n"
         "            : importFirstWriteTexture("
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "historyCopyDestinationCausticIrradiance = history\n"
-        "            ? causticIrradiance\n"
+        "outResult.historyCopyDestinationCausticIrradiance = history\n"
+        "            ? outResult.causticIrradiance\n"
         "            : importFirstWriteTexture("
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "historyCopyDestinationSurfelIrradiance = history\n"
-        "            ? surfelIrradiance\n"
+        "outResult.historyCopyDestinationSurfelIrradiance = history\n"
+        "            ? outResult.surfelIrradiance\n"
         "            : importFirstWriteTexture("
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId shadowVisibility = importTexture(\n"
+        "outResult.shadowVisibility = importTexture(\n"
         "        history ? history->shadowVisibility : deferredTargets.shadowVisibility,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId causticIrradiance = importTexture(\n"
+        "outResult.causticIrradiance = importTexture(\n"
         "        history ? history->causticIrradiance : deferredTargets.causticIrradiance,"
     ));
     EXPECT_TRUE(ContainsText(
         deferredLighting,
-        "const Core::GpuGraphResourceId surfelIrradiance = importTexture(\n"
+        "outResult.surfelIrradiance = importTexture(\n"
         "        history ? history->surfelIrradiance : deferredTargets.surfelIrradiance,"
     ));
 }

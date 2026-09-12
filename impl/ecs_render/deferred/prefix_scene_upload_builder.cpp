@@ -2,10 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/deferred/prefix_scene_upload_builder.h>
-
-
-#include <core/graphics/vulkan/backend.h>
+#include "prefix_scene_upload_builder.h"
 
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/lighting_content_stamp.h>
@@ -13,7 +10,8 @@
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
-#include <impl/ecs_render/raytrace/raytracing_system.h>
+
+#include <core/graphics/vulkan/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -29,13 +27,11 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     Core::GpuTaskGraph& graph,
     RendererDeferredSystem& deferredSystem,
     RendererMeshSystem& meshSystem,
-    RendererRayTracingSystem& raytracingSystem,
     Core::GraphicsRuntime& graphics
 )
     : m_graph(graph)
     , m_deferredSystem(deferredSystem)
     , m_meshSystem(meshSystem)
-    , m_raytracingSystem(raytracingSystem)
     , m_graphics(graphics){
 }
 
@@ -72,13 +68,12 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
     ECSRenderDetail::SceneShadingGpuData sceneShadingState;
     u32 sceneLightCount = 0u;
-    const RayTracingLightingClassificationInput rayTracingLightingInput = m_raytracingSystem.snapshotLightingClassificationInput();
     RayTracingLightingClassification rayTracingLightingClassification;
     bool sceneLightUploadRequired = false;
     bool sceneShadingUploadRequired = false;
     if(!m_deferredSystem.prepareSceneShadingBufferUploads(
         inputs.meshViewAspectRatio,
-        rayTracingLightingInput,
+        inputs.rayTracingLightingInput,
         sceneLightData,
         LengthOf(sceneLightData),
         sceneLightCount,
@@ -293,3 +288,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

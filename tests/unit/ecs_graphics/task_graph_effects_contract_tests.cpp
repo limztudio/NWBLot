@@ -80,12 +80,15 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
 
     AString surfelSource;
     AString surfelTaskGraphSource;
+    AString readbackSource;
     AString systemSource;
     AString rayTracingSystemSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", surfelSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelTaskGraphSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
+    const AStringView readbackOwner(readbackSource.data(), readbackSource.size());
     const AStringView surfel(surfelSource.data(), surfelSource.size());
     const AStringView surfelTaskGraph(surfelTaskGraphSource.data(), surfelTaskGraphSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
@@ -101,9 +104,9 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     EXPECT_TRUE(ContainsText(counter, ".setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)"));
     EXPECT_TRUE(ContainsText(counter, ".setDebugName(Name(\"surfel_counter\"))"));
 
-    const usize readbackOffset = surfelTaskGraph.find("void RendererFramePipeline::declareDeferredSurfelCountReadbackTask");
+    const usize readbackOffset = readbackOwner.find("void RendererFramePipeline::declareDeferredSurfelCountReadbackTask");
     ASSERT_NE(readbackOffset, AStringView::npos);
-    const AStringView readback = surfelTaskGraph.substr(readbackOffset);
+    const AStringView readback = readbackOwner.substr(readbackOffset);
     EXPECT_TRUE(ContainsText(readback, "rayTracingSurfelResources.counterBuffer"));
     EXPECT_TRUE(ContainsText(readback, ".source = counter,"));
     EXPECT_TRUE(ContainsText(readback, ".setQueue(TransferQueueRequest())"));
@@ -181,10 +184,10 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString taskGraphSource;
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", taskGraphSource));
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
-    const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
+    const usize lightingOffset = taskGraph.find("bool HardwareCausticsStageBuilder::declare(");
     ASSERT_NE(lightingOffset, AStringView::npos);
     const AStringView lighting = taskGraph.substr(lightingOffset);
 
@@ -201,40 +204,23 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
+    AString softwareSource;
+    AString hardwareSource;
+    AString callerSource;
     AString systemSource;
     AString systemHeaderSource;
-    ASSERT_TRUE(ReadRendererSources(
-        repoRoot,
-        {
-            "renderer_frame_pipeline_graph_caustics.cpp",
-            "renderer_frame_pipeline_graph_surfel_gi.cpp",
-            "renderer_frame_pipeline_graph.cpp",
-        },
-        taskGraphSource
-    ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", softwareSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", callerSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", systemHeaderSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
+    const AStringView softwareCaustics(softwareSource.data(), softwareSource.size());
+    const AStringView hardwareCaustics(hardwareSource.data(), hardwareSource.size());
+    const AStringView caller(callerSource.data(), callerSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView systemHeader(systemHeaderSource.data(), systemHeaderSource.size());
-
-    const usize softwareCausticsOffset = taskGraph.find("bool RendererFramePipeline::declareDeferredSoftwareCausticsTask");
-    const usize surfelGiOffset = taskGraph.find("bool RendererFramePipeline::declareDeferredSurfelGiTask", softwareCausticsOffset);
-    const usize deferredLightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph", surfelGiOffset);
-    const usize hardwareCausticsOffset = taskGraph.find("if(declaresHardwareCaustics){", deferredLightingOffset);
-    const usize avboitOffset = taskGraph.find("AvboitPreGraphTask::Payload", hardwareCausticsOffset);
-    ASSERT_NE(softwareCausticsOffset, AStringView::npos);
-    ASSERT_NE(surfelGiOffset, AStringView::npos);
-    ASSERT_NE(deferredLightingOffset, AStringView::npos);
-    ASSERT_NE(hardwareCausticsOffset, AStringView::npos);
-    ASSERT_NE(avboitOffset, AStringView::npos);
-    ASSERT_LT(softwareCausticsOffset, surfelGiOffset);
-    ASSERT_LT(surfelGiOffset, deferredLightingOffset);
-    ASSERT_LT(deferredLightingOffset, hardwareCausticsOffset);
-    ASSERT_LT(hardwareCausticsOffset, avboitOffset);
-    const AStringView softwareCaustics = taskGraph.substr(softwareCausticsOffset, surfelGiOffset - softwareCausticsOffset);
-    const AStringView hardwareCaustics = taskGraph.substr(hardwareCausticsOffset, avboitOffset - hardwareCausticsOffset);
+    EXPECT_TRUE(ContainsText(caller, ".accumulatorPersistentState = &m_hardwareCausticAccumulatorPersistentState,"));
+    EXPECT_TRUE(ContainsText(caller, "if(!hardwareCausticsStageBuilder.declare("));
 
     const usize softwareGeometryOffset = softwareCaustics.find("geometryResourceUses.push_back(ReadTextureUse(");
     const usize softwarePrepareOffset = softwareCaustics.find("constexpr bool s_CausticResolvePrepareWritesHalf", softwareGeometryOffset);
@@ -298,8 +284,8 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_EQ(CountText(system, "m_hardwareCausticAccumulatorPersistentState.reset();"), 1u);
     EXPECT_TRUE(ContainsText(systemHeader, "Core::GpuPersistentResourceStateCache m_hardwareCausticAccumulatorPersistentState;"));
     EXPECT_TRUE(ContainsText(hardwareCaustics, "const Core::GpuTaskExternalStateSource accumulatorStateSources[]"));
-    EXPECT_TRUE(ContainsText(hardwareCaustics, ".states = m_hardwareCausticAccumulatorPersistentState.source(),"));
-    EXPECT_TRUE(ContainsText(hardwareCaustics, "m_hardwareCausticAccumulatorPersistentState.valid()"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, ".states = (*inputs.accumulatorPersistentState).source(),"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "(*inputs.accumulatorPersistentState).valid()"));
     EXPECT_EQ(
         CountText(
             hardwareCaustics,
@@ -346,22 +332,37 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 
     AString softwareCausticsSource;
     AString surfelGiSource;
-    AString deferredLightingSource;
+    AString hardwareCausticsSource;
+    AString softwareResolveSource;
+    AString hardwareResolveSource;
+    AString avboitClearSource;
+    AString avboitOccupancySource;
+    AString avboitAccumulationSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp", softwareCausticsSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", deferredLightingSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/software_caustics_resolve_chain.cpp", softwareResolveSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/hardware_caustics_resolve_chain.cpp", hardwareResolveSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/clear_chain_builder.cpp", avboitClearSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/occupancy_record_builder.cpp", avboitOccupancySource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/accumulation_record_builder.cpp", avboitAccumulationSource));
     const AStringView softwareCaustics(softwareCausticsSource.data(), softwareCausticsSource.size());
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
-    const AStringView hardwareCaustics(deferredLightingSource.data(), deferredLightingSource.size());
-    const AStringView avboitOccupancy(deferredLightingSource.data(), deferredLightingSource.size());
-    const AStringView avboitAccumulation(deferredLightingSource.data(), deferredLightingSource.size());
+    const AStringView hardwareCaustics(hardwareCausticsSource.data(), hardwareCausticsSource.size());
+    const AStringView softwareResolve(softwareResolveSource.data(), softwareResolveSource.size());
+    const AStringView hardwareResolve(hardwareResolveSource.data(), hardwareResolveSource.size());
+    const AStringView avboitClear(avboitClearSource.data(), avboitClearSource.size());
+    const AStringView avboitOccupancy(avboitOccupancySource.data(), avboitOccupancySource.size());
+    const AStringView avboitAccumulation(avboitAccumulationSource.data(), avboitAccumulationSource.size());
 
     EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorNonTemporalClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorBootstrapClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(softwareCaustics, "accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(softwareCaustics, "causticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(softwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
-    EXPECT_TRUE(ContainsText(softwareCaustics, "render.software_caustics.resolve_timing_close"));
+    EXPECT_TRUE(ContainsText(softwareCaustics, "resolveChainInputs.baseScheduling = geometryScheduling;"));
+    EXPECT_TRUE(ContainsText(softwareResolve, "Core::GpuTaskSchedulingHint resolvePrepareScheduling = inputs.baseScheduling;"));
+    EXPECT_TRUE(ContainsText(softwareResolve, "render.software_caustics.resolve_timing_close"));
 
     EXPECT_TRUE(ContainsText(surfelGi, "surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(surfelGi, ".setDependencies(&surfelGiDependency, 1u)"));
@@ -372,9 +373,11 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     EXPECT_TRUE(ContainsText(hardwareCaustics, "accumulatorDecayScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(hardwareCaustics, "hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(hardwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
-    EXPECT_TRUE(ContainsText(hardwareCaustics, "render.hardware_caustics.resolve_timing_close"));
+    EXPECT_TRUE(ContainsText(hardwareCaustics, "resolveChainInputs.baseScheduling = hardwareGeometryScheduling;"));
+    EXPECT_TRUE(ContainsText(hardwareResolve, "Core::GpuTaskSchedulingHint hardwareResolvePrepareScheduling = inputs.baseScheduling;"));
+    EXPECT_TRUE(ContainsText(hardwareResolve, "render.hardware_caustics.resolve_timing_close"));
 
-    EXPECT_TRUE(ContainsText(avboitOccupancy, "avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
+    EXPECT_TRUE(ContainsText(avboitClear, "avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(avboitOccupancy, "avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(avboitOccupancy, ".setDependencies(&occupancyDependency, 1u)"));
     EXPECT_TRUE(ContainsText(avboitAccumulation, "accumulationFinalizeScheduling.allowMergeAcrossConsumerFrontier = true;"));
@@ -449,18 +452,8 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString sharedTaskGraphStageSource;
-    AString taskGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "task_graph_stage.h", sharedTaskGraphStageSource));
-    ASSERT_TRUE(ReadRendererSources(
-        repoRoot,
-        {
-            "renderer_frame_pipeline_graphics_prefix.cpp",
-            "renderer_frame_pipeline_graph.cpp",
-        },
-        taskGraphSource
-    ));
     const AStringView sharedTaskGraphStage(sharedTaskGraphStageSource.data(), sharedTaskGraphStageSource.size());
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
 
     EXPECT_TRUE(ContainsText(sharedTaskGraphStage, "s_SharedComputeEmulationMaximumDrawCount = 5u;"));
     EXPECT_TRUE(ContainsText(
@@ -469,31 +462,53 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
         "    s_SharedComputeEmulationMaximumDrawCount * s_SharedComputeEmulationPhasesPerDraw;"
     ));
 
-    const AStringView fifthPhaseIdentities[] = {
-        "render.graphics_prefix.opaque_shared_compute_emulation_generate_e",
-        "render.graphics_prefix.opaque_shared_compute_emulation_raster_e",
-        "render.avboit.occupancy.shared_compute_emulation_generate_e",
-        "render.avboit.occupancy.shared_compute_emulation_raster_e",
-        "render.avboit.extinction.shared_compute_emulation_generate_e",
-        "render.avboit.extinction.shared_compute_emulation_raster_e",
-        "render.avboit.accumulation.shared_compute_emulation_generate_e",
-        "render.avboit.accumulation.shared_compute_emulation_raster_e",
+    struct ExpectedFifthDraw{
+        AStringView path;
+        AStringView generateIdentity;
+        AStringView rasterIdentity;
+        AStringView generateMarker;
+        AStringView rasterMarker;
     };
-    for(const AStringView identity : fifthPhaseIdentities)
-        EXPECT_TRUE(ContainsText(taskGraph, identity));
-
-    const AStringView fifthPhaseMarkers[] = {
-        "Opaque Shared Compute Emulation Generate E",
-        "Opaque Shared Compute Emulation Raster E",
-        "AVBOIT Occupancy Shared Compute Emulation Generate E",
-        "AVBOIT Occupancy Shared Compute Emulation Raster E",
-        "AVBOIT Extinction Shared Compute Emulation Generate E",
-        "AVBOIT Extinction Shared Compute Emulation Raster E",
-        "AVBOIT Accumulation Shared Compute Emulation Generate E",
-        "AVBOIT Accumulation Shared Compute Emulation Raster E",
+    const ExpectedFifthDraw draws[] = {
+        {
+            "renderer_frame_pipeline_graphics_prefix.cpp",
+            "render.graphics_prefix.opaque_shared_compute_emulation_generate_e",
+            "render.graphics_prefix.opaque_shared_compute_emulation_raster_e",
+            "Opaque Shared Compute Emulation Generate E",
+            "Opaque Shared Compute Emulation Raster E",
+        },
+        {
+            "avboit/occupancy_record_builder.cpp",
+            "render.avboit.occupancy.shared_compute_emulation_generate_e",
+            "render.avboit.occupancy.shared_compute_emulation_raster_e",
+            "AVBOIT Occupancy Shared Compute Emulation Generate E",
+            "AVBOIT Occupancy Shared Compute Emulation Raster E",
+        },
+        {
+            "avboit/extinction_record_builder.cpp",
+            "render.avboit.extinction.shared_compute_emulation_generate_e",
+            "render.avboit.extinction.shared_compute_emulation_raster_e",
+            "AVBOIT Extinction Shared Compute Emulation Generate E",
+            "AVBOIT Extinction Shared Compute Emulation Raster E",
+        },
+        {
+            "avboit/accumulation_record_builder.cpp",
+            "render.avboit.accumulation.shared_compute_emulation_generate_e",
+            "render.avboit.accumulation.shared_compute_emulation_raster_e",
+            "AVBOIT Accumulation Shared Compute Emulation Generate E",
+            "AVBOIT Accumulation Shared Compute Emulation Raster E",
+        },
     };
-    for(const AStringView marker : fifthPhaseMarkers)
-        EXPECT_TRUE(ContainsText(taskGraph, marker));
+    for(const ExpectedFifthDraw& draw : draws){
+        SCOPED_TRACE(draw.path.data());
+        AString source;
+        ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / draw.path.data(), source));
+        const AStringView owner(source.data(), source.size());
+        EXPECT_TRUE(ContainsText(owner, draw.generateIdentity));
+        EXPECT_TRUE(ContainsText(owner, draw.rasterIdentity));
+        EXPECT_TRUE(ContainsText(owner, draw.generateMarker));
+        EXPECT_TRUE(ContainsText(owner, draw.rasterMarker));
+    }
 }
 
 
@@ -567,69 +582,77 @@ TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
-    AString taskGraphSource;
-    ASSERT_TRUE(ReadRendererSources(repoRoot, { "renderer_frame_pipeline_graph.cpp" }, taskGraphSource));
-    const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
-
-    const usize schedulingOffset = taskGraph.find("Core::GpuTaskSchedulingHint avboitComputeScheduling");
-    const usize accumulationOffset = taskGraph.find("AvboitAccumulationGraphTask::Payload", schedulingOffset);
-    ASSERT_NE(schedulingOffset, AStringView::npos);
-    ASSERT_NE(accumulationOffset, AStringView::npos);
-    ASSERT_LT(schedulingOffset, accumulationOffset);
-    const AStringView naturalComputeStages = taskGraph.substr(schedulingOffset, accumulationOffset - schedulingOffset);
-
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.forceSubmissionBoundary = false"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowPacketMerge = true"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.mergeWithPrevious = true"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);"));
-    EXPECT_FALSE(ContainsText(naturalComputeStages, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowTimingFeedbackRouting = true"));
-    EXPECT_TRUE(ContainsText(naturalComputeStages, "avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true"));
-    const usize depthWarpDescOffset = naturalComputeStages.find("Core::GpuTaskDesc depthWarpDesc;");
-    const usize depthWarpFailureOffset = naturalComputeStages.find(
-        "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
-        depthWarpDescOffset
-    );
-    const usize integrationDescOffset = naturalComputeStages.find("Core::GpuTaskDesc integrationDesc;", depthWarpFailureOffset);
-    const usize integrationFailureOffset = naturalComputeStages.find(
-        "if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid())",
-        integrationDescOffset
-    );
-    ASSERT_NE(depthWarpDescOffset, AStringView::npos);
-    ASSERT_NE(depthWarpFailureOffset, AStringView::npos);
-    ASSERT_NE(integrationDescOffset, AStringView::npos);
-    ASSERT_NE(integrationFailureOffset, AStringView::npos);
-    ASSERT_LT(depthWarpDescOffset, depthWarpFailureOffset);
-    ASSERT_LT(depthWarpFailureOffset, integrationDescOffset);
-    ASSERT_LT(integrationDescOffset, integrationFailureOffset);
-    const AStringView depthWarpStage = naturalComputeStages.substr(
-        depthWarpDescOffset,
-        depthWarpFailureOffset - depthWarpDescOffset
-    );
-    const AStringView integrationStage = naturalComputeStages.substr(
-        integrationDescOffset,
-        integrationFailureOffset - integrationDescOffset
-    );
-    for(const AStringView computeStage : { depthWarpStage, integrationStage }){
-        EXPECT_TRUE(ContainsText(computeStage, ".setQueue(ComputeQueueRequest())"));
-        EXPECT_TRUE(ContainsText(computeStage, ".setScheduling(avboitComputeScheduling)"));
-        EXPECT_TRUE(ContainsText(computeStage, ".setTimingMetadata(avboitComputeStageTiming)"));
-        EXPECT_FALSE(ContainsText(computeStage, "GraphicsComputeQueueRequest()"));
+    AString builderSource;
+    AString callerSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "compute_effect_chain_builder.cpp", builderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", callerSource));
+    const AStringView builder(builderSource.data(), builderSource.size());
+    const AStringView caller(callerSource.data(), callerSource.size());
+    struct StageContract{
+        AStringView function;
+        AStringView description;
+        AStringView validGuard;
+        AStringView identity;
+        AStringView callerGuard;
+    };
+    const StageContract stages[] = {
+        {
+            "bool AvboitComputeEffectChainBuilder::declareDepthWarp(",
+            "Core::GpuTaskDesc depthWarpDesc;",
+            "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",
+            "render.avboit.depth_warp",
+            "if(!avboitComputeEffectChainBuilder.declareDepthWarp(",
+        },
+        {
+            "bool AvboitComputeEffectChainBuilder::declareIntegration(",
+            "Core::GpuTaskDesc integrationDesc;",
+            "if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid())",
+            "render.avboit.integration",
+            "if(!avboitComputeEffectChainBuilder.declareIntegration(",
+        },
+    };
+    for(const StageContract& stage : stages){
+        SCOPED_TRACE(stage.function.data());
+        const usize begin = builder.find(stage.function);
+        ASSERT_NE(begin, AStringView::npos);
+        const usize end = builder.find("\n}", begin);
+        ASSERT_NE(end, AStringView::npos);
+        const AStringView body = builder.substr(begin, end - begin);
+        EXPECT_EQ(CountText(body, "Core::GpuTaskSchedulingHint avboitComputeScheduling;"), 1u);
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.forceSubmissionBoundary = false"));
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.allowPacketMerge = true"));
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.mergeWithPrevious = true"));
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true"));
+        EXPECT_TRUE(ContainsText(body, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);"));
+        EXPECT_FALSE(ContainsText(body, "EnableSameFamilyComputeEffectRouting(avboitComputeScheduling, false)"));
+        EXPECT_TRUE(ContainsText(body, "EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling)"));
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.allowTimingFeedbackRouting = true"));
+        EXPECT_TRUE(ContainsText(body, "avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true"));
+        EXPECT_TRUE(ContainsText(body, "const Core::GpuTaskTimingMetadata avboitComputeStageTiming ="));
+        EXPECT_TRUE(ContainsText(body, "AvboitComputeStageTimingMetadata(*inputs.targets)"));
+        EXPECT_FALSE(ContainsText(body, "AvboitIntegrationTimingMetadata"));
+        const usize desc = body.find(stage.description);
+        const usize guard = body.find(stage.validGuard, desc);
+        ASSERT_NE(desc, AStringView::npos);
+        ASSERT_NE(guard, AStringView::npos);
+        ASSERT_LT(desc, guard);
+        const AStringView declaration = body.substr(desc, guard - desc);
+        EXPECT_TRUE(ContainsText(declaration, ".setQueue(RendererTaskGraphDetail::ComputeQueueRequest())"));
+        EXPECT_TRUE(ContainsText(declaration, ".setScheduling(avboitComputeScheduling)"));
+        EXPECT_TRUE(ContainsText(declaration, ".setTimingMetadata(avboitComputeStageTiming)"));
+        EXPECT_FALSE(ContainsText(declaration, "GraphicsComputeQueueRequest()"));
+        EXPECT_EQ(CountText(declaration, stage.identity), 1u);
+        EXPECT_TRUE(ContainsText(body.substr(guard), "return false;"));
+        const usize callerBegin = caller.find(stage.callerGuard);
+        ASSERT_NE(callerBegin, AStringView::npos);
+        const usize callerEnd = caller.find("\n    }", callerBegin);
+        ASSERT_NE(callerEnd, AStringView::npos);
+        const AStringView call = caller.substr(callerBegin, callerEnd - callerBegin);
+        EXPECT_TRUE(ContainsText(call, ".targets = &deferredTargets.avboit,"));
+        EXPECT_TRUE(ContainsText(call, "return;"));
     }
-    EXPECT_TRUE(ContainsText(
-        naturalComputeStages,
-        "const Core::GpuTaskTimingMetadata avboitComputeStageTiming ="
-    ));
-    EXPECT_TRUE(ContainsText(
-        naturalComputeStages,
-        "AvboitComputeStageTimingMetadata(deferredTargets.avboit)"
-    ));
-    EXPECT_FALSE(ContainsText(naturalComputeStages, "AvboitIntegrationTimingMetadata"));
-    EXPECT_TRUE(ContainsText(depthWarpStage, "render.avboit.depth_warp"));
-    EXPECT_TRUE(ContainsText(integrationStage, "render.avboit.integration"));
-    EXPECT_FALSE(ContainsText(taskGraph, "splitAvboitStages"));
+    EXPECT_FALSE(ContainsText(builder, "splitAvboitStages"));
+    EXPECT_FALSE(ContainsText(caller, "splitAvboitStages"));
 }
 
 

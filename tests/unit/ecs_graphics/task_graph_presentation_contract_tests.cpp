@@ -244,13 +244,16 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(destroyPrepareOffset, destroySnapshotClearOffset);
     EXPECT_LT(destroySnapshotClearOffset, destroyCommitOffset);
 
-    const usize resizeLifecycleOffset = graphics.find("bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){");
-    const usize resizeJobJoinOffset = graphics.find("waitTasks();", resizeLifecycleOffset);
-    const usize resizePrepareOffset = graphics.find(
+    AString swapChainSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_swap_chain.cpp", swapChainSource));
+    const AStringView swapChain(swapChainSource.data(), swapChainSource.size());
+    const usize resizeLifecycleOffset = swapChain.find("bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){");
+    const usize resizeJobJoinOffset = swapChain.find("waitTasks();", resizeLifecycleOffset);
+    const usize resizePrepareOffset = swapChain.find(
         "prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)",
         resizeJobJoinOffset
     );
-    const usize resizeSnapshotClearOffset = graphics.find("m_acquiredPresentationFrame = {};", resizePrepareOffset);
+    const usize resizeSnapshotClearOffset = swapChain.find("m_acquiredPresentationFrame = {};", resizePrepareOffset);
     ASSERT_NE(resizeLifecycleOffset, AStringView::npos);
     ASSERT_NE(resizeJobJoinOffset, AStringView::npos);
     ASSERT_NE(resizePrepareOffset, AStringView::npos);

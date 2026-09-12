@@ -194,15 +194,15 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     AString shadowVisibilitySource;
     AString shadowSource;
     AString softShadowSource;
-    AString rayTracingSystemSource;
+    AString frameResourcesSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow.cpp", softShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", softShadowSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameResourcesSource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
     const AStringView shadowSourceView(shadowSource.data(), shadowSource.size());
     const AStringView softShadowSourceView(softShadowSource.data(), softShadowSource.size());
-    const AStringView rayTracingSystem(rayTracingSystemSource.data(), rayTracingSystemSource.size());
+    const AStringView frameResources(frameResourcesSource.data(), frameResourcesSource.size());
 
     const usize opaqueResourcesOffset = shadowVisibility.find("opaqueResourceUses.reserve(");
     const usize opaqueFirstWaveletOffset = shadowVisibility.find("opaqueFirstWaveletResourceUses.reserve(", opaqueResourcesOffset);
@@ -247,7 +247,7 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowSoftHalfB"));
 
     EXPECT_TRUE(ContainsText(shadowVisibility, "const bool softShadowHistoryReadable = rayTracingPlan.softShadowHistoryReadable;"));
-    EXPECT_TRUE(ContainsText(rayTracingSystem, "state.m_softShadowTemporalReady\n            && state.m_prevWorldToClipValid\n            && state.m_softShadowTemporalSeeded"));
+    EXPECT_TRUE(ContainsText(frameResources, "state.m_softShadowTemporalReady\n            && state.m_prevWorldToClipValid\n            && state.m_softShadowTemporalSeeded"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "if(softShadowHistoryReadable){\n                transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess)"));

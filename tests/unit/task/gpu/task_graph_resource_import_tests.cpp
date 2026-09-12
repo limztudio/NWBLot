@@ -152,10 +152,10 @@ TEST(GpuTaskGraph, CompilerOwnershipTransferDefenseRejectsMalformedSharingBefore
         .lexically_normal()
     ;
     TestAString compilerSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "task" / "gpu" / "compiler.cpp", compilerSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "task" / "gpu" / "compiler_ownership_transfer.cpp", compilerSource));
     const AStringView source(compilerSource.data(), compilerSource.size());
     const usize functionBegin = source.find("[[nodiscard]] bool AppendCompiledOwnershipTransfer(");
-    const usize functionEnd = source.find("////////////////////////////////////////////////////////////////", functionBegin);
+    const usize functionEnd = source.find("////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////", functionBegin);
     ASSERT_NE(functionBegin, AStringView::npos);
     ASSERT_NE(functionEnd, AStringView::npos);
     ASSERT_LT(functionBegin, functionEnd);

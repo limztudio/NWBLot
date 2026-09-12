@@ -171,6 +171,8 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     AString csgIntervalSource;
     AString avboitOccupancyTasksSource;
     AString taskGraphSource;
+    AString transparentBuilderSource;
+    AString uploadBuilderSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_system.h", avboitHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_pass.cpp", avboitSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
@@ -197,6 +199,10 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
         taskGraphSource
     ));
 
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "transparent_csg_interval_builder.cpp", transparentBuilderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "material_upload_builder.cpp", uploadBuilderSource));
+    const AStringView transparentBuilder(transparentBuilderSource.data(), transparentBuilderSource.size());
+    const AStringView uploadBuilder(uploadBuilderSource.data(), uploadBuilderSource.size());
     const AStringView avboitHeader(avboitHeaderSource.data(), avboitHeaderSource.size());
     const AStringView avboit(avboitSource.data(), avboitSource.size());
     const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
@@ -237,15 +243,20 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.occupancyPhasePrepared || !payload.occupancySnapshot.captured))"));
     EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))"));
     EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.accumulationPhasePrepared || !payload.accumulationSnapshot.captured))"));
-    EXPECT_TRUE(ContainsText(taskGraph, "addUploadBufferTask("));
+    EXPECT_TRUE(ContainsText(uploadBuilder, "addUploadBufferTask("));
+    EXPECT_TRUE(ContainsText(transparentBuilder, "addUploadBufferTask("));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(!transparentCsgIntervalBuilder.declare("));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(!occupancyMaterialUploadBuilder.declare("));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(!extinctionMaterialUploadBuilder.declare("));
+    EXPECT_TRUE(ContainsText(taskGraph, "if(!accumulationMaterialUploadBuilder.declare("));
 
     EXPECT_TRUE(ContainsText(avboitOccupancyTasks, "if(payload.transparentCsgStreamsUploaded != payload.transparentCsgSnapshot.captured)"));
     EXPECT_FALSE(ContainsText(avboitOccupancyTasks, "CsgFrameState"));
 
-    const usize transparentCsgCaptureOffset = taskGraph.find("avboitPrePayload.transparentCsgSnapshot.capture(");
-    const usize transparentCsgSpanCaptureOffset = taskGraph.find("avboitCsgReceiverSpanPayload.transparentCsgSnapshot.capture(");
-    const usize transparentCsgCombineCaptureOffset = taskGraph.find("avboitCsgIntervalCombinePayload.transparentCsgSnapshot.capture(");
-    const usize transparentCsgUploadedOffset = taskGraph.find("avboitPrePayload.transparentCsgStreamsUploaded = true");
+    const usize transparentCsgCaptureOffset = transparentBuilder.find("avboitPrePayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgSpanCaptureOffset = transparentBuilder.find("receiverSpanPayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgCombineCaptureOffset = transparentBuilder.find("intervalCombinePayload.transparentCsgSnapshot.capture(");
+    const usize transparentCsgUploadedOffset = transparentBuilder.find("avboitPrePayload.transparentCsgStreamsUploaded = true");
     ASSERT_NE(transparentCsgCaptureOffset, AStringView::npos);
     ASSERT_NE(transparentCsgSpanCaptureOffset, AStringView::npos);
     ASSERT_NE(transparentCsgCombineCaptureOffset, AStringView::npos);
@@ -400,6 +411,7 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     AString shadowTaskGraphSource;
     AString adaptiveLifecycleSource;
     AString uiSource;
+    AString adaptiveAcceptanceSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowTaskGraphSource));
@@ -416,6 +428,8 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
         adaptiveLifecycleSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", adaptiveAcceptanceSource));
+    const AStringView adaptiveAcceptance(adaptiveAcceptanceSource.data(), adaptiveAcceptanceSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
     const AStringView shadow(shadowSource.data(), shadowSource.size());
     const AStringView shadowTaskGraph(shadowTaskGraphSource.data(), shadowTaskGraphSource.size());
@@ -441,10 +455,10 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_FALSE(ContainsText(shadow, "m_swShadowEdgeStatsPending"));
     EXPECT_FALSE(ContainsText(adaptiveLifecycle, "confirmShadowVisibilitySubmission"));
     EXPECT_FALSE(ContainsText(adaptiveLifecycle, "PendingSubmissionUnconfirmed"));
-    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_swShadowEdgeStatsTick = plan.statsTick + 1u;"));
-    EXPECT_EQ(CountText(adaptiveLifecycle, "m_swShadowEdgeStatsPending = true;"), 1u);
-    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;"));
-    EXPECT_TRUE(ContainsText(adaptiveLifecycle, "submissionToken.physicalQueueIndex"));
+    EXPECT_TRUE(ContainsText(adaptiveAcceptance, "m_swShadowEdgeStatsTick = plan.statsTick + 1u;"));
+    EXPECT_EQ(CountText(adaptiveAcceptance, "m_swShadowEdgeStatsPending = true;"), 1u);
+    EXPECT_TRUE(ContainsText(adaptiveAcceptance, "m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;"));
+    EXPECT_TRUE(ContainsText(adaptiveAcceptance, "submissionToken.physicalQueueIndex"));
     EXPECT_TRUE(ContainsText(adaptiveLifecycle, "m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();"));
     EXPECT_FALSE(ContainsText(shadowTaskGraph, "appendOptionalWriteBuffer"));
     EXPECT_EQ(CountText(shadowTaskGraph, "addClearBufferTask("), 2u);
@@ -475,6 +489,10 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     AString uiHeaderSource;
     AString uiSource;
     AString uiTextureSource;
+    AString uiHeapSource;
+    AString transparentBuilderSource;
+    AString geometryBuilderSource;
+    AString hardwareBuilderSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets_material" / "asset.h", materialAssetHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "sampled_texture_collection.cpp", sampledTextureCollectionSource));
@@ -496,6 +514,14 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_resources.cpp", uiTextureSource));
 
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "texture_descriptor_heap.cpp", uiHeapSource));
+    const AStringView uiHeap(uiHeapSource.data(), uiHeapSource.size());
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg/transparent_csg_interval_builder.cpp", transparentBuilderSource));
+    const AStringView transparentBuilder(transparentBuilderSource.data(), transparentBuilderSource.size());
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit/geometry_preparation_builder.cpp", geometryBuilderSource));
+    const AStringView geometryBuilder(geometryBuilderSource.data(), geometryBuilderSource.size());
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/hardware_caustics_stage_builder.cpp", hardwareBuilderSource));
+    const AStringView hardwareBuilder(hardwareBuilderSource.data(), hardwareBuilderSource.size());
     const AStringView materialAssetHeader(materialAssetHeaderSource.data(), materialAssetHeaderSource.size());
     const AStringView materialSurface(materialSurfaceSource.data(), materialSurfaceSource.size());
     const AStringView sampledTextureCollection(sampledTextureCollectionSource.data(), sampledTextureCollectionSource.size());
@@ -518,19 +544,22 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     EXPECT_TRUE(ContainsText(taskGraph, "GatherPreparedMaterialSampledTextureResourceSet"));
     EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.gbuffer.material_sampled_textures"));
     EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.csg_interval_sample.material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.intervals.transparent_csg_material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.occupancy.material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.extinction.material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(taskGraph, "render.avboit.accumulation.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(transparentBuilder, "render.avboit.intervals.transparent_csg_material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(geometryBuilder, "render.avboit.occupancy.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(geometryBuilder, "render.avboit.extinction.material_sampled_textures"));
+    EXPECT_TRUE(ContainsText(geometryBuilder, "render.avboit.accumulation.material_sampled_textures"));
     EXPECT_TRUE(ContainsText(taskGraph, "render.trace_material_sampled_textures"));
-    EXPECT_TRUE(ContainsText(taskGraph, "traceMaterialSampledTextureSetUse"));
+    EXPECT_TRUE(ContainsText(hardwareBuilder, "traceMaterialSampledTextureSetUse"));
+    EXPECT_TRUE(ContainsText(hardwareBuilder, "hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;"));
+    EXPECT_TRUE(ContainsText(geometryBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
+    EXPECT_TRUE(ContainsText(transparentBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
 
     // ImGui is the other dynamic domain. Its draw command retains the selected texture and heap slot, its upload
     // path imports the exact destination, and the terminal task declares that frozen texture rather than reading
     // the mutable ImGui command list.
     EXPECT_TRUE(ContainsText(uiHeader, "Core::TextureHandle texture;"));
     EXPECT_TRUE(ContainsText(uiHeader, "Core::GpuDescriptorHandle textureHeapHandle"));
-    EXPECT_TRUE(ContainsText(uiTextures, "heap.allocate(Core::GpuDescriptorClass::SampledImage)"));
+    EXPECT_TRUE(ContainsText(uiHeap, "heap.allocate(Core::GpuDescriptorClass::SampledImage)"));
     EXPECT_TRUE(ContainsText(uiTextures, "importTaskGraphTexture(graph, *resource)"));
     EXPECT_TRUE(ContainsText(uiTextures, "graph.addUploadTextureTask("));
     EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));

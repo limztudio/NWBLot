@@ -78,10 +78,13 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
+    AString materialContextSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_shadow_material_context.cpp", materialContextSource));
 
+    const AStringView materialContext(materialContextSource.data(), materialContextSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
@@ -104,16 +107,16 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     EXPECT_FALSE(ContainsText(cacheCapture, "m_preparedSceneBvhNodeBytes.resize"));
     EXPECT_FALSE(ContainsText(cacheCapture, "m_preparedSceneBvhInstanceBytes.resize"));
 
-    const usize materialCacheCaptureOffset = rayTracing.find(
+    const usize materialCacheCaptureOffset = materialContext.find(
         "bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse("
     );
-    const usize materialCacheCaptureEndOffset = rayTracing.find(
+    const usize materialCacheCaptureEndOffset = materialContext.find(
         "bool RendererRayTracingSystem::matchesPreparedShadowMaterialContext(",
         materialCacheCaptureOffset
     );
     ASSERT_NE(materialCacheCaptureOffset, AStringView::npos);
     ASSERT_NE(materialCacheCaptureEndOffset, AStringView::npos);
-    const AStringView materialCacheCapture = rayTracing.substr(
+    const AStringView materialCacheCapture = materialContext.substr(
         materialCacheCaptureOffset,
         materialCacheCaptureEndOffset - materialCacheCaptureOffset
     );
@@ -135,16 +138,16 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     EXPECT_TRUE(ContainsText(retain, "state.m_sceneSwBvhStaticSceneHash != m_preparedSceneBvhStaticSceneHash"));
     EXPECT_TRUE(ContainsText(rayTracing, "if(!m_preparedSceneBvhReady || !m_preparedSceneBvhUploadRequired)"));
 
-    const usize materialRetainOffset = rayTracing.find(
+    const usize materialRetainOffset = materialContext.find(
         "bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads("
     );
-    const usize materialRetainEndOffset = rayTracing.find(
+    const usize materialRetainEndOffset = materialContext.find(
         "bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallbackUploads(",
         materialRetainOffset
     );
     ASSERT_NE(materialRetainOffset, AStringView::npos);
     ASSERT_NE(materialRetainEndOffset, AStringView::npos);
-    const AStringView materialRetain = rayTracing.substr(
+    const AStringView materialRetain = materialContext.substr(
         materialRetainOffset,
         materialRetainEndOffset - materialRetainOffset
     );
@@ -162,16 +165,16 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     EXPECT_TRUE(ContainsText(materialCacheRetain, "state.m_swShadowMaterialContextHash != m_preparedShadowMaterialContextHash"));
     EXPECT_TRUE(ContainsText(materialCacheRetain, "return true;"));
 
-    const usize materialConfirmOffset = rayTracing.find(
+    const usize materialConfirmOffset = materialContext.find(
         "void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()"
     );
-    const usize materialConfirmEndOffset = rayTracing.find(
-        "void RendererRayTracingSystem::clearPreparedSceneBvh()",
+    const usize materialConfirmEndOffset = materialContext.find(
+        "NWB_IMPL_END",
         materialConfirmOffset
     );
     ASSERT_NE(materialConfirmOffset, AStringView::npos);
     ASSERT_NE(materialConfirmEndOffset, AStringView::npos);
-    const AStringView materialConfirm = rayTracing.substr(
+    const AStringView materialConfirm = materialContext.substr(
         materialConfirmOffset,
         materialConfirmEndOffset - materialConfirmOffset
     );
@@ -351,6 +354,8 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
 
     AString taskGraphSource;
     AString sceneGraphSource;
+    AString hardwareCausticsSource;
+    AString preparedBuildsSource;
     AString rayTracingHeaderSource;
     AString rayTracingSource;
     AString swBvhSource;
@@ -373,11 +378,15 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_resources.cpp", meshResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_raytracing_handoff.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", rendererStateHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.cpp", rendererStateSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "hardware_caustics_stage_builder.cpp", hardwareCausticsSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "prepared_builds.h", preparedBuildsSource));
+    const AStringView hardwareCaustics(hardwareCausticsSource.data(), hardwareCausticsSource.size());
+    const AStringView preparedBuilds(preparedBuildsSource.data(), preparedBuildsSource.size());
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView sceneGraph(sceneGraphSource.data(), sceneGraphSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
@@ -391,7 +400,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
 
     EXPECT_TRUE(ContainsText(meshTypes, "bool blasBackingFresh = false;"));
     EXPECT_TRUE(ContainsText(meshTypes, "bool blasBackingStateHandoffPending = false;"));
-    EXPECT_TRUE(ContainsText(rayTracingHeader, "bool backingFresh = false;"));
+    EXPECT_TRUE(ContainsText(preparedBuilds, "bool backingFresh = false;"));
     EXPECT_TRUE(ContainsText(swBvh, "outBuild.backingFresh = meshResources.blasBackingFresh;"));
     EXPECT_TRUE(ContainsText(swBvh, "meshResources.blasBackingFresh != build.backingFresh"));
     EXPECT_EQ(CountText(swBvh, "meshResources.blasBackingFresh = true;"), 1u);
@@ -469,10 +478,18 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ));
     EXPECT_TRUE(ContainsText(taskGraph, "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\").setInitialState(sceneTlasInitialState)"));
     // Refraction and reflection use the neutral importer, forwarding the same generation-aware initial state as
-    // the direct shadow, GI, and caustic imports. Count both owners without losing coverage of the moved import.
+    // the direct shadow, GI, and caustic imports. Include the extracted caustic owner in the generation checks.
     static constexpr AStringView s_SceneTlasImport = "AccelStructResourceDesc(Name(\"render.deferred_effects.tlas\"), \"Scene TLAS\")";
-    EXPECT_EQ(CountText(taskGraph, s_SceneTlasImport) + CountText(sceneGraph, s_SceneTlasImport), 5u);
-    EXPECT_EQ(CountText(taskGraph, "sceneTlasBackingInitialState()"), 5u);
+    EXPECT_EQ(
+        CountText(taskGraph, s_SceneTlasImport) + CountText(sceneGraph, s_SceneTlasImport)
+            + CountText(hardwareCaustics, s_SceneTlasImport),
+        5u
+    );
+    EXPECT_EQ(
+        CountText(taskGraph, "sceneTlasBackingInitialState()")
+            + CountText(hardwareCaustics, "sceneTlasBackingInitialState()"),
+        5u
+    );
     EXPECT_TRUE(ContainsText(
         taskGraph,
         "ImportRayTracingSceneGraphReads(\n"
@@ -481,7 +498,8 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     EXPECT_EQ(CountText(sceneGraph, ".setInitialState(tlasInitialState)"), 1u);
     EXPECT_EQ(
         CountText(taskGraph, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())")
-            + CountText(sceneGraph, ".setInitialState(tlasInitialState)"),
+            + CountText(sceneGraph, ".setInitialState(tlasInitialState)")
+            + CountText(hardwareCaustics, ".setInitialState(m_raytracingSystem.sceneTlasBackingInitialState())"),
         4u
     );
 
@@ -534,15 +552,15 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         "meshResources.blasBackingFresh = false;"
     ));
     const usize discardMeshBuildStateOffset = meshResources.find("void RendererMeshSystem::discardRayTracingBuildState()noexcept");
-    const usize collectMeshBuildStateOffset = meshResources.find(
-        "bool RendererMeshSystem::collectSoftwareBvhParentBuildStates(",
+    const usize discardMeshBuildStateEndOffset = meshResources.find(
+        "NWB_IMPL_END",
         discardMeshBuildStateOffset
     );
     ASSERT_NE(discardMeshBuildStateOffset, AStringView::npos);
-    ASSERT_NE(collectMeshBuildStateOffset, AStringView::npos);
+    ASSERT_NE(discardMeshBuildStateEndOffset, AStringView::npos);
     const AStringView discardMeshBuildState = meshResources.substr(
         discardMeshBuildStateOffset,
-        collectMeshBuildStateOffset - discardMeshBuildStateOffset
+        discardMeshBuildStateEndOffset - discardMeshBuildStateOffset
     );
     EXPECT_TRUE(ContainsText(discardMeshBuildState, "mesh.blasBackingStateHandoffPending = false;"));
     EXPECT_TRUE(ContainsText(discardMeshBuildState, "mesh.blasBuildPending = true;"));

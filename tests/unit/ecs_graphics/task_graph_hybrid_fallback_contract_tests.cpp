@@ -27,6 +27,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     AString taskGraphSource;
     AString rayTracingHeaderSource;
     AString rayTracingSource;
+    AString materialContextSource;
     AString swBvhSource;
     AString kernelSystemHeaderSource;
     AString kernelSystemSource;
@@ -53,6 +54,10 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
 
     const AStringView taskGraph(taskGraphSource.data(), taskGraphSource.size());
     const AStringView rayTracingHeader(rayTracingHeaderSource.data(), rayTracingHeaderSource.size());
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_shadow_material_context.cpp", materialContextSource
+    ));
+    const AStringView materialContext(materialContextSource.data(), materialContextSource.size());
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
     const AStringView kernelSystemHeader(kernelSystemHeaderSource.data(), kernelSystemHeaderSource.size());
@@ -65,16 +70,16 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
     EXPECT_FALSE(ContainsText(rayTracingHeader, "hybridHardwareFallbackUploadsGraphOwned"));
     EXPECT_EQ(CountText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
     EXPECT_FALSE(ContainsText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback(Core::CommandList& commandList);"));
-    const usize retainFallbackOffset = rayTracing.find(
+    const usize retainFallbackOffset = materialContext.find(
         "bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallbackUploads("
     );
-    const usize retainFallbackEndOffset = rayTracing.find(
+    const usize retainFallbackEndOffset = materialContext.find(
         "void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept",
         retainFallbackOffset
     );
     ASSERT_NE(retainFallbackOffset, AStringView::npos);
     ASSERT_NE(retainFallbackEndOffset, AStringView::npos);
-    const AStringView retainFallback = rayTracing.substr(
+    const AStringView retainFallback = materialContext.substr(
         retainFallbackOffset,
         retainFallbackEndOffset - retainFallbackOffset
     );
@@ -180,7 +185,7 @@ TEST(EcsGraphics, HybridHardwareFallbackRequiresCompleteGraphOwnedBlobs){
         taskGraph.find("Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;")
     );
     const usize hybridFallbackRetentionEndOffset = taskGraph.find(
-        "// A fully frozen hybrid packet has a separate software-tail callback",
+        "    const bool hybridSoftwareTailInputStatesCandidate =",
         hybridFallbackRetentionOffset
     );
     ASSERT_NE(hybridFallbackRetentionOffset, AStringView::npos);

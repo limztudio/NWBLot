@@ -27,11 +27,11 @@ NWB_IMPL_BEGIN
 
 class RendererDeferredSystem;
 class RendererMeshSystem;
-class RendererRayTracingSystem;
 
 
 // Graphics-prefix scene uploads own mesh-view plus scene light/shading upload chain.
 struct PrefixSceneUploadInputs{
+    RayTracingLightingClassificationInput rayTracingLightingInput;
     const ECSRenderDetail::MeshViewGpuData* meshViewState = nullptr;
     Core::GpuGraphResourceId meshView;
     Core::GpuGraphResourceId lights;
@@ -68,7 +68,6 @@ public:
         Core::GpuTaskGraph& graph,
         RendererDeferredSystem& deferredSystem,
         RendererMeshSystem& meshSystem,
-        RendererRayTracingSystem& raytracingSystem,
         Core::GraphicsRuntime& graphics
     );
 
@@ -84,7 +83,6 @@ private:
     Core::GpuTaskGraph& m_graph;
     RendererDeferredSystem& m_deferredSystem;
     RendererMeshSystem& m_meshSystem;
-    RendererRayTracingSystem& m_raytracingSystem;
     Core::GraphicsRuntime& m_graphics;
 };
 

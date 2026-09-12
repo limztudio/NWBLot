@@ -59,14 +59,22 @@ TEST(EcsGraphics, DeferredGraphExportsAcceptedQueueAssignmentHistory){
     const usize previousRefreshOffset = render.find(
         "m_deferredLightingTaskGraphQueueAssignmentTelemetry.update("
     );
-    const usize validResetOffset = render.find("m_deferredLightingTaskGraphValid = false;", previousRefreshOffset);
-    const usize runtimeResetOffset = render.find("resetDeferredTaskGraphRuntime();", previousRefreshOffset);
+    const usize stateResetCallOffset = render.find("resetFrameTaskState();", previousRefreshOffset);
     ASSERT_NE(previousRefreshOffset, AStringView::npos);
+    ASSERT_NE(stateResetCallOffset, AStringView::npos);
+    EXPECT_LT(previousRefreshOffset, stateResetCallOffset);
+    EXPECT_TRUE(ContainsText(render, "deferred queue-assignment history refresh failed before graph reset"));
+
+    const usize stateResetOffset = resources.find("void RendererFramePipeline::resetFrameTaskState(){");
+    const usize validResetOffset = resources.find("m_deferredLightingTaskGraphValid = false;", stateResetOffset);
+    const usize runtimeResetOffset = resources.find("resetDeferredTaskGraphRuntime();", stateResetOffset);
+    ASSERT_NE(stateResetOffset, AStringView::npos);
     ASSERT_NE(validResetOffset, AStringView::npos);
     ASSERT_NE(runtimeResetOffset, AStringView::npos);
-    EXPECT_LT(previousRefreshOffset, validResetOffset);
-    EXPECT_LT(previousRefreshOffset, runtimeResetOffset);
-    EXPECT_TRUE(ContainsText(render, "deferred queue-assignment history refresh failed before graph reset"));
+    EXPECT_LT(stateResetOffset, validResetOffset);
+    EXPECT_LT(validResetOffset, runtimeResetOffset);
+    EXPECT_FALSE(ContainsText(resources.substr(stateResetOffset, runtimeResetOffset - stateResetOffset),
+        "m_deferredLightingTaskGraphQueueAssignmentTelemetry.reset();"));
 
     const usize resetHelperOffset = resources.find("void RendererFramePipeline::resetDeferredTaskGraphRuntime()");
     const usize planReadOffset = resources.find("Core::GpuCompiledGraph::ReadView planAccess(", resetHelperOffset);

@@ -277,9 +277,10 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
     const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
     const usize resetOffset = taskGraph.find("resetDeferredTaskGraphRuntime();", lightingOffset);
     const usize declarationBeginOffset = taskGraph.find("const Timer declarationBegin = TimerNow();", resetOffset);
+    const usize tailDeclarationOffset = taskGraph.find("if(!deferredFrameTailBuilder.declare(", declarationBeginOffset);
     const usize feedbackOffset = taskGraph.find(
         "m_deferredTaskTimingFeedback.configureCompileOptions(",
-        declarationBeginOffset
+        tailDeclarationOffset
     );
     const usize declarationEndOffset = taskGraph.find(
         "compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);",
@@ -289,12 +290,15 @@ TEST(EcsGraphics, DeferredGraphMeasuresDeclarationAttemptBeforeCoreCompile){
     ASSERT_NE(lightingOffset, AStringView::npos);
     ASSERT_NE(resetOffset, AStringView::npos);
     ASSERT_NE(declarationBeginOffset, AStringView::npos);
+    ASSERT_NE(tailDeclarationOffset, AStringView::npos);
     ASSERT_NE(feedbackOffset, AStringView::npos);
     ASSERT_NE(declarationEndOffset, AStringView::npos);
     ASSERT_NE(compilerOffset, AStringView::npos);
     EXPECT_TRUE(ContainsText(taskGraph, "#include <global/timer.h>"));
     EXPECT_LT(resetOffset, declarationBeginOffset);
-    EXPECT_LT(declarationBeginOffset, feedbackOffset);
+    EXPECT_LT(declarationBeginOffset, tailDeclarationOffset);
+    EXPECT_LT(tailDeclarationOffset, feedbackOffset);
+    EXPECT_TRUE(ContainsText(taskGraph.substr(tailDeclarationOffset, feedbackOffset - tailDeclarationOffset), "))\n        return;"));
     EXPECT_LT(feedbackOffset, declarationEndOffset);
     EXPECT_LT(declarationEndOffset, compilerOffset);
 }

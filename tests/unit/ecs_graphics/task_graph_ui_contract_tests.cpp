@@ -31,6 +31,12 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
+    AString uiLegacySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_legacy_presentation.cpp", uiLegacySource));
+    const AStringView uiLegacy(uiLegacySource.data(), uiLegacySource.size());
+    AString uiTasksSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_task_tasks.h", uiTasksSource));
+    const AStringView uiTasks(uiTasksSource.data(), uiTasksSource.size());
 
     EXPECT_TRUE(ContainsText(
         uiHeader,
@@ -57,16 +63,16 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     EXPECT_TRUE(ContainsText(ui, ".setExternalFinalState(Core::ResourceStates::Present)"));
     EXPECT_TRUE(ContainsText(ui, ".setToken(frame.backBuffer.availabilityCompletion)"));
 
-    const usize renderTaskOffset = ui.find("struct UiSystem::TaskGraphRenderTask{");
-    const usize uploadCompletionOffset = ui.find("struct UiSystem::TaskGraphUploadCompletionTask{", renderTaskOffset);
-    const usize legacyTaskOffset = ui.find("struct UiSystem::StandaloneLegacyPresentationTask{");
-    const usize nextTaskOffset = ui.find("UiSystem::UiSystem(", legacyTaskOffset);
+    const usize renderTaskOffset = uiTasks.find("struct UiSystem::TaskGraphRenderTask{");
+    const usize uploadCompletionOffset = uiTasks.find("struct UiSystem::TaskGraphUploadCompletionTask{", renderTaskOffset);
+    const usize legacyTaskOffset = uiTasks.find("struct UiSystem::StandaloneLegacyPresentationTask{");
+    const usize nextTaskOffset = uiTasks.find("\n};", legacyTaskOffset);
     ASSERT_NE(renderTaskOffset, AStringView::npos);
     ASSERT_NE(uploadCompletionOffset, AStringView::npos);
     ASSERT_NE(legacyTaskOffset, AStringView::npos);
     ASSERT_NE(nextTaskOffset, AStringView::npos);
-    const AStringView renderTask = ui.substr(renderTaskOffset, uploadCompletionOffset - renderTaskOffset);
-    const AStringView legacyTask = ui.substr(legacyTaskOffset, nextTaskOffset - legacyTaskOffset);
+    const AStringView renderTask = uiTasks.substr(renderTaskOffset, uploadCompletionOffset - renderTaskOffset);
+    const AStringView legacyTask = uiTasks.substr(legacyTaskOffset, nextTaskOffset - legacyTaskOffset);
     for(const AStringView task : { renderTask, legacyTask }){
         EXPECT_TRUE(ContainsText(task, "Core::AcquiredPresentationFrame frame;"));
         EXPECT_TRUE(ContainsText(task, "Core::GpuGraphResourceId backbuffer;"));
@@ -81,11 +87,8 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
         "Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation",
         standaloneOffset
     );
-    const usize legacySubmitOffset = ui.find(
-        "bool UiSystem::submitStandaloneLegacyTaskGraphPresentation",
-        legacyDeclarationOffset
-    );
-    const usize uploadGraphOffset = ui.find(
+    const usize legacySubmitOffset = uiLegacy.find("bool UiSystem::submitStandaloneLegacyTaskGraphPresentation");
+    const usize uploadGraphOffset = uiLegacy.find(
         "Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph",
         legacySubmitOffset
     );
@@ -96,11 +99,13 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     ASSERT_NE(uploadGraphOffset, AStringView::npos);
     const AStringView declaration = ui.substr(declarationOffset, standaloneOffset - declarationOffset);
     const AStringView standalone = ui.substr(standaloneOffset, legacyDeclarationOffset - standaloneOffset);
+    const usize legacyDeclarationEnd = ui.find("void UiSystem::render", legacyDeclarationOffset);
+    ASSERT_NE(legacyDeclarationEnd, AStringView::npos);
     const AStringView legacyDeclaration = ui.substr(
         legacyDeclarationOffset,
-        legacySubmitOffset - legacyDeclarationOffset
+        legacyDeclarationEnd - legacyDeclarationOffset
     );
-    const AStringView legacySubmit = ui.substr(legacySubmitOffset, uploadGraphOffset - legacySubmitOffset);
+    const AStringView legacySubmit = uiLegacy.substr(legacySubmitOffset, uploadGraphOffset - legacySubmitOffset);
 
     EXPECT_TRUE(ContainsText(
         declaration,
@@ -152,13 +157,14 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     EXPECT_EQ(CountText(ui, ".setType(Core::GpuGraphResourceType::HazardDomain)"), 1u);
 
     EXPECT_TRUE(ContainsText(
-        ui,
+        uiLegacy,
         "GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)"
     ));
     EXPECT_EQ(
         CountText(ui, "failed after its terminal packet was accepted; requesting recreation"),
-        2u
+        1u
     );
+    EXPECT_EQ(CountText(uiLegacy, "failed after its terminal packet was accepted; requesting recreation"), 1u);
     for(const AStringView submit : { standalone, legacySubmit }){
         const usize acceptedFailureOffset = submit.find("if(!m_frameFinished){");
         const usize recreationRequestOffset = submit.find("m_graphics.requestDeviceRecreation();", acceptedFailureOffset);
@@ -178,6 +184,9 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
     AString uiSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
     const AStringView ui(uiSource.data(), uiSource.size());
+    AString uiLegacySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_legacy_presentation.cpp", uiLegacySource));
+    const AStringView uiLegacy(uiLegacySource.data(), uiLegacySource.size());
 
     AString uiHeaderSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
@@ -185,25 +194,25 @@ TEST(EcsGraphics, UiPresentationSnapshotsLateRecordInputs){
 
     EXPECT_TRUE(ContainsText(uiHeader, "struct TaskGraphDrawCommand"));
     EXPECT_TRUE(ContainsText(ui, "m_taskGraphDrawCommands"));
-    EXPECT_TRUE(ContainsText(ui, "recordTaskGraphDrawSnapshot"));
+    EXPECT_TRUE(ContainsText(uiLegacy, "recordTaskGraphDrawSnapshot"));
     EXPECT_TRUE(ContainsText(ui, "graph-owned ImGui overlay cannot safely record a custom draw callback"));
     EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
 
-    const usize recordOffset = ui.find("bool UiSystem::recordTaskGraphPresentation");
-    const usize opaqueRecordOffset = ui.find("bool UiSystem::recordStandaloneLegacyTaskGraphPresentation", recordOffset);
+    const usize recordOffset = uiLegacy.find("bool UiSystem::recordTaskGraphPresentation");
+    const usize opaqueRecordOffset = uiLegacy.find("bool UiSystem::recordStandaloneLegacyTaskGraphPresentation", recordOffset);
     ASSERT_NE(recordOffset, AStringView::npos);
     ASSERT_NE(opaqueRecordOffset, AStringView::npos);
     ASSERT_LT(recordOffset, opaqueRecordOffset);
-    const AStringView recordBody = ui.substr(recordOffset, opaqueRecordOffset - recordOffset);
+    const AStringView recordBody = uiLegacy.substr(recordOffset, opaqueRecordOffset - recordOffset);
     EXPECT_TRUE(ContainsText(recordBody, "recordTaskGraphDrawSnapshot(commandList, frame, backbuffer, context)"));
     EXPECT_FALSE(ContainsText(recordBody, "ImGui::GetDrawData()"));
     EXPECT_FALSE(ContainsText(recordBody, "renderDrawData(commandList, frame.framebuffer.get()"));
 
     // The separately named opaque fallback is intentionally the sole graph task allowed to touch live callback
     // storage, and it must guard that synchronous boundary against a changed ImGui frame.
-    const usize completionOffset = ui.find("bool UiSystem::recordTaskGraphUploadCompletion", opaqueRecordOffset);
+    const usize completionOffset = uiLegacy.find("bool UiSystem::recordTaskGraphUploadCompletion", opaqueRecordOffset);
     ASSERT_NE(completionOffset, AStringView::npos);
-    const AStringView opaqueRecord = ui.substr(opaqueRecordOffset, completionOffset - opaqueRecordOffset);
+    const AStringView opaqueRecord = uiLegacy.substr(opaqueRecordOffset, completionOffset - opaqueRecordOffset);
     EXPECT_TRUE(ContainsText(opaqueRecord, "ImGui::GetDrawData() != drawData"));
     EXPECT_TRUE(ContainsText(opaqueRecord, "frameGeneration != m_frameGeneration"));
     EXPECT_TRUE(ContainsText(opaqueRecord, "renderDrawData(commandList, frame.framebuffer.get(), *drawData)"));
@@ -252,6 +261,9 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView uiInternal(uiInternalSource.data(), uiInternalSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
+    AString uiLegacySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_legacy_presentation.cpp", uiLegacySource));
+    const AStringView uiLegacy(uiLegacySource.data(), uiLegacySource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
     const AStringView uiSubmission(uiSubmissionSource.data(), uiSubmissionSource.size());
 
@@ -301,7 +313,11 @@ TEST(EcsGraphics, UiFreshTextureImportsPreserveNativeOrigins){
     EXPECT_FALSE(ContainsText(uiTextures, "__hidden_ui::TextureResourceDesc"));
     EXPECT_FALSE(ContainsText(ui, "__hidden_ui::TextureResourceDesc"));
     EXPECT_TRUE(ContainsText(ui, "appendDrawTextureUse(drawCommand)"));
-    EXPECT_TRUE(ContainsText(ui, "m_textureUploadBatch.complete(true);"));
+    const usize confirmationOffset = uiLegacy.find("void UiSystem::confirmTaskGraphPresentationSubmission()");
+    const usize retryOffset = uiLegacy.find("void UiSystem::retainTaskGraphPresentationForRetry()", confirmationOffset);
+    ASSERT_NE(confirmationOffset, AStringView::npos);
+    ASSERT_NE(retryOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(uiLegacy.substr(confirmationOffset, retryOffset - confirmationOffset), "m_textureUploadBatch.complete(true);"));
 }
 
 
@@ -325,17 +341,26 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     const AStringView graphics(graphicsSource.data(), graphicsSource.size());
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
+    AString uiFrameSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_frame.cpp", uiFrameSource));
+    const AStringView uiFrame(uiFrameSource.data(), uiFrameSource.size());
+    AString uiTasksSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_task_tasks.h", uiTasksSource));
+    const AStringView uiTasks(uiTasksSource.data(), uiTasksSource.size());
+    AString uiLegacySource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_legacy_presentation.cpp", uiLegacySource));
+    const AStringView uiLegacy(uiLegacySource.data(), uiLegacySource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
 
     EXPECT_TRUE(ContainsText(graphicsHeader, "StandaloneTaskGraphDeclaration"));
     EXPECT_TRUE(ContainsText(graphicsHeader, "submitStandaloneTaskGraph"));
     EXPECT_TRUE(ContainsText(graphics, "GraphicsRuntime::submitStandaloneTaskGraph"));
-    EXPECT_TRUE(ContainsText(ui, "StandaloneTextureUploadCompletionTask"));
-    EXPECT_TRUE(ContainsText(ui, "declareStandaloneTextureUploadGraph"));
+    EXPECT_TRUE(ContainsText(uiTasks, "StandaloneTextureUploadCompletionTask"));
+    EXPECT_TRUE(ContainsText(uiLegacy, "declareStandaloneTextureUploadGraph"));
     EXPECT_TRUE(ContainsText(ui, "submitStandaloneTaskGraphPresentation"));
-    EXPECT_TRUE(ContainsText(ui, "StandaloneLegacyPresentationTask"));
+    EXPECT_TRUE(ContainsText(uiTasks, "StandaloneLegacyPresentationTask"));
     EXPECT_TRUE(ContainsText(ui, "declareStandaloneLegacyTaskGraphPresentation"));
-    EXPECT_TRUE(ContainsText(ui, "submitStandaloneLegacyTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(uiLegacy, "submitStandaloneLegacyTaskGraphPresentation"));
     EXPECT_TRUE(ContainsText(ui, "OpaquePresentationQueueRequest"));
     EXPECT_TRUE(ContainsText(ui, "Standalone ImGui Presentation Back Buffer"));
     EXPECT_TRUE(ContainsText(ui, "ImGui Opaque Callback Domain"));
@@ -345,24 +370,35 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     EXPECT_FALSE(ContainsText(uiHeader, "m_renderCommandList"));
     EXPECT_FALSE(ContainsText(ui, "executeCommandLists("));
     EXPECT_FALSE(ContainsText(ui, "ensureRenderCommandList"));
+    EXPECT_FALSE(ContainsText(uiLegacy, "executeCommandLists("));
+    EXPECT_FALSE(ContainsText(uiTasks, "executeCommandLists("));
 
     const usize opaquePresentationOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation");
-    const usize legacySubmitOffset = ui.find("bool UiSystem::submitPreparedLegacyTextureUploads");
+    const usize legacySubmitOffset = uiLegacy.find("bool UiSystem::submitPreparedLegacyTextureUploads");
     ASSERT_NE(opaquePresentationOffset, AStringView::npos);
     ASSERT_NE(legacySubmitOffset, AStringView::npos);
-    ASSERT_LT(opaquePresentationOffset, legacySubmitOffset);
-    const AStringView opaquePresentation = ui.substr(opaquePresentationOffset, legacySubmitOffset - opaquePresentationOffset);
-    EXPECT_TRUE(ContainsText(opaquePresentation, "m_graphics.submitStandaloneTaskGraph"));
+    const usize opaquePresentationEnd = ui.find("void UiSystem::render", opaquePresentationOffset);
+    ASSERT_NE(opaquePresentationEnd, AStringView::npos);
+    const AStringView opaquePresentation = ui.substr(opaquePresentationOffset, opaquePresentationEnd - opaquePresentationOffset);
+    const usize opaqueSubmitOffset = uiLegacy.find("bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(");
+    const usize textureGraphOffset = uiLegacy.find("Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph", opaqueSubmitOffset);
+    ASSERT_NE(opaqueSubmitOffset, AStringView::npos);
+    ASSERT_NE(textureGraphOffset, AStringView::npos);
+    const AStringView opaqueSubmit = uiLegacy.substr(opaqueSubmitOffset, textureGraphOffset - opaqueSubmitOffset);
+    EXPECT_TRUE(ContainsText(opaqueSubmit, "m_graphics.submitStandaloneTaskGraph"));
+    EXPECT_TRUE(ContainsText(opaqueSubmit, "context->ui->declareStandaloneLegacyTaskGraphPresentation("));
+    EXPECT_FALSE(ContainsText(opaqueSubmit, "executeCommandLists"));
+    EXPECT_FALSE(ContainsText(opaqueSubmit, "createCommandList"));
     EXPECT_TRUE(ContainsText(opaquePresentation, "importTaskGraphTexture(graph, *textureResource)"));
     EXPECT_TRUE(ContainsText(opaquePresentation, "m_frameGeneration"));
     EXPECT_TRUE(ContainsText(opaquePresentation, "setQueue(__hidden_ui::OpaquePresentationQueueRequest())"));
-    EXPECT_TRUE(ContainsText(ui, "recordStandaloneLegacyTaskGraphPresentation"));
+    EXPECT_TRUE(ContainsText(uiLegacy, "recordStandaloneLegacyTaskGraphPresentation"));
     EXPECT_FALSE(ContainsText(opaquePresentation, "executeCommandLists"));
     EXPECT_FALSE(ContainsText(opaquePresentation, "createCommandList"));
 
-    const usize renderOffset = ui.find("void UiSystem::render", legacySubmitOffset);
+    const usize renderOffset = ui.find("void UiSystem::render");
     ASSERT_NE(renderOffset, AStringView::npos);
-    const AStringView legacySubmit = ui.substr(legacySubmitOffset, renderOffset - legacySubmitOffset);
+    const AStringView legacySubmit = uiLegacy.substr(legacySubmitOffset);
     EXPECT_TRUE(ContainsText(legacySubmit, "m_graphics.submitStandaloneTaskGraph"));
     EXPECT_TRUE(ContainsText(legacySubmit, "getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)"));
     EXPECT_TRUE(ContainsText(legacySubmit, "submissionToken,\n        graphicsQueue"));
@@ -374,12 +410,12 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     EXPECT_TRUE(ContainsText(uiTextures, "if(previousTask.valid())"));
 
     const usize presentationDeclareOffset = ui.find("Core::GpuTaskId UiSystem::declareTaskGraphPresentation");
-    const usize standaloneTextureOffset = ui.find("Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph");
+    const usize presentationDeclareEnd = ui.find("\n}", presentationDeclareOffset);
     ASSERT_NE(presentationDeclareOffset, AStringView::npos);
-    ASSERT_NE(standaloneTextureOffset, AStringView::npos);
+    ASSERT_NE(presentationDeclareEnd, AStringView::npos);
     const AStringView presentationDeclare = ui.substr(
         presentationDeclareOffset,
-        standaloneTextureOffset - presentationDeclareOffset
+        presentationDeclareEnd + 2u - presentationDeclareOffset
     );
     EXPECT_FALSE(ContainsText(presentationDeclare, "|| !previousTask.valid()"));
     EXPECT_TRUE(ContainsText(presentationDeclare, "if(previousTask.valid())"));
@@ -434,25 +470,25 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     EXPECT_TRUE(ContainsText(visibleDrawBody, "m_graphics.requestDeviceRecreation();"));
     EXPECT_TRUE(ContainsText(visibleDrawBody, "retainTaskGraphPresentationForRetry();"));
 
-    const usize updateOffset = ui.find("void UiSystem::update");
-    const usize beginFrameOffset = ui.find("void UiSystem::beginFrame", updateOffset);
+    const usize updateOffset = uiFrame.find("void UiSystem::update");
+    const usize beginFrameOffset = uiFrame.find("void UiSystem::beginFrame", updateOffset);
     ASSERT_NE(updateOffset, AStringView::npos);
     ASSERT_NE(beginFrameOffset, AStringView::npos);
-    const AStringView updateBody = ui.substr(updateOffset, beginFrameOffset - updateOffset);
+    const AStringView updateBody = uiFrame.substr(updateOffset, beginFrameOffset - updateOffset);
     const usize retryGateOffset = updateBody.find("if(m_taskGraphPresentationRetryPending)");
     const usize beginCallOffset = updateBody.find("beginFrame(delta)");
     ASSERT_NE(retryGateOffset, AStringView::npos);
     ASSERT_NE(beginCallOffset, AStringView::npos);
     EXPECT_LT(retryGateOffset, beginCallOffset);
 
-    const usize confirmOffset = ui.find("void UiSystem::confirmTaskGraphPresentationSubmission");
-    const usize retainDefinitionOffset = ui.find("void UiSystem::retainTaskGraphPresentationForRetry", confirmOffset);
-    const usize discardOffset = ui.find("void UiSystem::discardStandaloneLegacyTaskGraphPresentation", retainDefinitionOffset);
+    const usize confirmOffset = uiLegacy.find("void UiSystem::confirmTaskGraphPresentationSubmission");
+    const usize retainDefinitionOffset = uiLegacy.find("void UiSystem::retainTaskGraphPresentationForRetry", confirmOffset);
+    const usize discardOffset = uiLegacy.find("void UiSystem::discardStandaloneLegacyTaskGraphPresentation", retainDefinitionOffset);
     ASSERT_NE(confirmOffset, AStringView::npos);
     ASSERT_NE(retainDefinitionOffset, AStringView::npos);
     ASSERT_NE(discardOffset, AStringView::npos);
-    const AStringView confirmBody = ui.substr(confirmOffset, retainDefinitionOffset - confirmOffset);
-    const AStringView retainBody = ui.substr(retainDefinitionOffset, discardOffset - retainDefinitionOffset);
+    const AStringView confirmBody = uiLegacy.substr(confirmOffset, retainDefinitionOffset - confirmOffset);
+    const AStringView retainBody = uiLegacy.substr(retainDefinitionOffset, discardOffset - retainDefinitionOffset);
     EXPECT_TRUE(ContainsText(confirmBody, "m_taskGraphPresentationRetryPending = false;"));
     EXPECT_TRUE(ContainsText(retainBody, "m_textureUploadBatch.complete(false);"));
     EXPECT_TRUE(ContainsText(retainBody, "m_taskGraphPresentationRetryPending = true;"));
@@ -463,11 +499,11 @@ TEST(EcsGraphics, UiPresentationRetriesOnlyThroughStandaloneGraphs){
     EXPECT_FALSE(ContainsText(retainBody, "m_frameFinished = false;"));
     EXPECT_FALSE(ContainsText(retainBody, "m_frameGeneration"));
 
-    const usize textureCompletionTaskOffset = ui.find("struct UiSystem::StandaloneTextureUploadCompletionTask");
-    const usize legacyTaskOffset = ui.find("struct UiSystem::StandaloneLegacyPresentationTask", textureCompletionTaskOffset);
+    const usize textureCompletionTaskOffset = uiTasks.find("struct UiSystem::StandaloneTextureUploadCompletionTask");
+    const usize legacyTaskOffset = uiTasks.find("struct UiSystem::StandaloneLegacyPresentationTask", textureCompletionTaskOffset);
     ASSERT_NE(textureCompletionTaskOffset, AStringView::npos);
     ASSERT_NE(legacyTaskOffset, AStringView::npos);
-    const AStringView textureCompletionTask = ui.substr(
+    const AStringView textureCompletionTask = uiTasks.substr(
         textureCompletionTaskOffset,
         legacyTaskOffset - textureCompletionTaskOffset
     );

@@ -30,12 +30,21 @@ TEST(EcsGraphics, CsgWorkRegionsUseTheFrozenMeshViewUploadPayload){
     AString materialPassSource;
     AString csgHeaderSource;
     AString csgResourcesSource;
+    AString sceneUploadSource;
+    AString transparentCsgSource;
+    AString avboitGatherSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", graphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", prefixSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_system.h", materialHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_pass.cpp", materialPassSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_system.h", csgHeaderSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_resources.cpp", csgResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "csg_clip_resolve.cpp", csgResourcesSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "prefix_scene_upload_builder.cpp", sceneUploadSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "transparent_csg_interval_builder.cpp", transparentCsgSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "avboit_pass_upload_helper.cpp", avboitGatherSource));
+    const AStringView sceneUpload(sceneUploadSource.data(), sceneUploadSource.size());
+    const AStringView transparentCsg(transparentCsgSource.data(), transparentCsgSource.size());
+    const AStringView avboitGather(avboitGatherSource.data(), avboitGatherSource.size());
     const AStringView graph(graphSource.data(), graphSource.size());
     const AStringView prefix(prefixSource.data(), prefixSource.size());
     const AStringView materialHeader(materialHeaderSource.data(), materialHeaderSource.size());
@@ -47,7 +56,10 @@ TEST(EcsGraphics, CsgWorkRegionsUseTheFrozenMeshViewUploadPayload){
     EXPECT_EQ(CountText(prefix, "m_meshSystem.prepareMeshViewBufferUpload("), 0u);
     EXPECT_EQ(CountText(graph, "ECSRenderDetail::MeshViewGpuData meshViewState;"), 1u);
     EXPECT_FALSE(ContainsText(graph, "transparentCsgMeshViewState"));
-    EXPECT_TRUE(ContainsText(prefix, ".viewState = meshViewState,"));
+    EXPECT_TRUE(ContainsText(prefix, ".meshViewState = &meshViewState,"));
+    EXPECT_TRUE(ContainsText(sceneUpload, "const ECSRenderDetail::MeshViewGpuData& meshViewState = *inputs.meshViewState;"));
+    EXPECT_TRUE(ContainsText(sceneUpload, ".viewState = meshViewState,"));
+    EXPECT_TRUE(ContainsText(sceneUpload, "!inputs.meshViewState"));
 
     const usize prepareOffset = graph.find("m_meshSystem.prepareMeshViewBufferUpload(");
     const usize prefixDeclarationOffset = graph.find("declareDeferredGraphicsPrefixTasks(", prepareOffset);
@@ -55,7 +67,9 @@ TEST(EcsGraphics, CsgWorkRegionsUseTheFrozenMeshViewUploadPayload){
     ASSERT_NE(prefixDeclarationOffset, AStringView::npos);
     EXPECT_LT(prepareOffset, prefixDeclarationOffset);
 
-    const auto expectFrozenPreparedGather = [](const AStringView source, const AStringView passMarker){
+    const auto expectFrozenPreparedGather = [](
+        const AStringView source, const AStringView passMarker, const AStringView viewArgument
+    ){
         SCOPED_TRACE(passMarker.data());
         EXPECT_EQ(CountText(source, passMarker), 1u);
         const usize passOffset = source.find(passMarker);
@@ -64,14 +78,29 @@ TEST(EcsGraphics, CsgWorkRegionsUseTheFrozenMeshViewUploadPayload){
         ASSERT_NE(callEnd, AStringView::npos);
         const AStringView callTail = source.substr(passOffset, callEnd + 2u - passOffset);
         EXPECT_EQ(CountText(callTail, "RendererResourceLookupMode::PreparedOnly"), 1u);
-        EXPECT_EQ(CountText(callTail, "&meshViewState"), 1u);
+        EXPECT_EQ(CountText(callTail, viewArgument), 1u);
         EXPECT_FALSE(ContainsText(callTail, "nullptr"));
     };
-    expectFrozenPreparedGather(prefix, "MaterialPipelinePass::Opaque");
-    expectFrozenPreparedGather(graph, "MaterialPipelinePass::CsgReceiverSurface");
-    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitOccupancy");
-    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitExtinction");
-    expectFrozenPreparedGather(graph, "MaterialPipelinePass::AvboitAccumulate");
+    expectFrozenPreparedGather(prefix, "MaterialPipelinePass::Opaque", "&meshViewState");
+    expectFrozenPreparedGather(transparentCsg, "MaterialPipelinePass::CsgReceiverSurface", "inputs.meshViewState");
+    expectFrozenPreparedGather(avboitGather, "        inputs.pass,", "inputs.meshViewState");
+    EXPECT_TRUE(ContainsText(transparentCsg, "|| !inputs.meshViewState"));
+    EXPECT_TRUE(ContainsText(avboitGather, "|| !inputs.meshViewState"));
+
+    const auto expectFrozenBuilderInput = [graph](const AStringView inputMarker){
+        SCOPED_TRACE(inputMarker.data());
+        const usize begin = graph.find(inputMarker);
+        ASSERT_NE(begin, AStringView::npos);
+        const usize end = graph.find("},", begin);
+        ASSERT_NE(end, AStringView::npos);
+        const AStringView inputs = graph.substr(begin, end - begin);
+        EXPECT_EQ(CountText(inputs, ".meshViewState = &meshViewState,"), 1u);
+        EXPECT_FALSE(ContainsText(inputs, "nullptr"));
+    };
+    expectFrozenBuilderInput("TransparentCsgIntervalProducerInputs{");
+    expectFrozenBuilderInput(".pass = MaterialPipelinePass::AvboitOccupancy,");
+    expectFrozenBuilderInput(".pass = MaterialPipelinePass::AvboitExtinction,");
+    expectFrozenBuilderInput(".pass = MaterialPipelinePass::AvboitAccumulate,");
 
     const usize compatibilityBegin = materialPass.find("bool RendererMaterialSystem::prepareMaterialPassResources(");
     ASSERT_NE(compatibilityBegin, AStringView::npos);
@@ -436,7 +465,7 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
     const usize clipBufferStatesBegin = csgResources.find("void RendererCsgSystem::setCsgClipBufferStates(");
     ASSERT_NE(clipBufferStatesBegin, AStringView::npos);
     const usize clipBufferStatesEnd = csgResources.find(
-        "bool RendererCsgSystem::resolveCsgReceiverClipDrawInfo(",
+        "void RendererCsgSystem::releaseCsgClipContextHeapHandles(",
         clipBufferStatesBegin
     );
     ASSERT_NE(clipBufferStatesEnd, AStringView::npos);

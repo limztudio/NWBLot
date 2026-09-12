@@ -62,15 +62,26 @@ TEST(EcsGraphics, EffectsTopologyUsesSemanticTaskAnchors){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString systemSource;
+    AString validatorSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "execute" / "surfel_caustics_merge_validator.cpp", validatorSource));
+    const AStringView validator(validatorSource.data(), validatorSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
 
     EXPECT_TRUE(ContainsText(system, "const Core::GpuTaskId causticsTask"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredCausticPhotonTask,\n            causticsTask"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredCausticResolveUpsampleTask,\n            causticsTask"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredSurfelGiIrradianceClearTask,\n            m_deferredSurfelGiTask"));
-    EXPECT_TRUE(ContainsText(system, "m_deferredSurfelGiResolveTask,\n                m_deferredSurfelGiTask"));
+    EXPECT_TRUE(ContainsText(validator, "pipeline.m_deferredCausticPhotonTask,\n            causticsTask"));
+    EXPECT_TRUE(ContainsText(validator, "pipeline.m_deferredCausticResolveUpsampleTask,\n            causticsTask"));
+    EXPECT_TRUE(ContainsText(validator, "pipeline.m_deferredSurfelGiIrradianceClearTask,\n            pipeline.m_deferredSurfelGiTask"));
+    EXPECT_TRUE(ContainsText(validator, "pipeline.m_deferredSurfelGiResolveTask,\n                pipeline.m_deferredSurfelGiTask"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredSurfelGiTask)"));
+    EXPECT_TRUE(ContainsText(system, "const bool causticPhotonMergedIntoCausticsPacket = surfelCausticsMerge.causticPhotonMergedIntoCausticsPacket;"));
+    EXPECT_TRUE(ContainsText(system, "const bool causticResolveUpsampleMergedIntoCausticsPacket = surfelCausticsMerge.causticResolveUpsampleMergedIntoCausticsPacket;"));
+    EXPECT_TRUE(ContainsText(system, "const bool surfelGiOutputClearMergedIntoGiPacket = surfelCausticsMerge.surfelGiOutputClearMergedIntoGiPacket;"));
+    EXPECT_TRUE(ContainsText(system, "const bool surfelGiPreparedPrefixMergedIntoGiPacket = surfelCausticsMerge.surfelGiPreparedPrefixMergedIntoGiPacket;"));
+    EXPECT_TRUE(ContainsText(system, "|| !causticPhotonMergedIntoCausticsPacket"));
+    EXPECT_TRUE(ContainsText(system, "|| !causticResolveUpsampleMergedIntoCausticsPacket"));
+    EXPECT_TRUE(ContainsText(system, "|| !surfelGiOutputClearMergedIntoGiPacket"));
+    EXPECT_TRUE(ContainsText(system, "|| !surfelGiPreparedPrefixMergedIntoGiPacket"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredHardwareCausticsTask)"));
 
     EXPECT_FALSE(ContainsText(system, "GpuSubmissionPacketId hardwareCausticsPacket"));
@@ -168,11 +179,14 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
 
     AString systemSource;
     AString causticsSource;
+    AString resolveSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp",
         causticsSource
     ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "software_caustics_resolve_chain.cpp", resolveSource));
+    const AStringView resolve(resolveSource.data(), resolveSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView caustics(causticsSource.data(), causticsSource.size());
 
@@ -185,7 +199,7 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     ));
     EXPECT_EQ(
         CountText(caustics, ".setExternalStateSources(scratchStateSources, scratchStateSourceCount)"),
-        6u
+        4u
     );
     EXPECT_EQ(
         CountText(
@@ -194,6 +208,9 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
         ),
         1u
     );
+    EXPECT_TRUE(ContainsText(caustics, "resolveChainInputs.stateSources = scratchStateSources;"));
+    EXPECT_TRUE(ContainsText(caustics, "resolveChainInputs.stateSourceCount = scratchStateSourceCount;"));
+    EXPECT_EQ(CountText(resolve, ".setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)"), 2u);
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(
         system,
@@ -225,20 +242,30 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
 
     AString systemSource;
     AString surfelGiSource;
+    AString validatorSource;
+    AString lifecycleSource;
+    AString readbackSource;
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi.cpp", surfelGiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "execute/surfel_caustics_merge_validator.cpp", validatorSource));
+    const AStringView validator(validatorSource.data(), validatorSource.size());
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace/surfel_gi_lifecycle_builder.cpp", lifecycleSource));
+    const AStringView lifecycle(lifecycleSource.data(), lifecycleSource.size());
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
+    const AStringView readback(readbackSource.data(), readbackSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView surfelGi(surfelGiSource.data(), surfelGiSource.size());
 
     EXPECT_TRUE(ContainsText(
-        system,
-        "const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct =\n"
-        "        !m_deferredSurfelGiSnapshotCopyTask.valid()\n"
-        "        || !deferredCompiledPlan.tasksSharePacket(\n"
-        "            m_deferredSurfelGiSnapshotCopyTask,\n"
-        "            m_deferredSurfelGiTask"
+        validator,
+        "outResult.surfelGiSnapshotCopyAndTimingPacketsAreDistinct =\n"
+        "        !pipeline.m_deferredSurfelGiSnapshotCopyTask.valid()\n"
+        "        || !compiledPlan.tasksSharePacket(\n"
+        "            pipeline.m_deferredSurfelGiSnapshotCopyTask,\n"
+        "            pipeline.m_deferredSurfelGiTask"
     ));
-    EXPECT_EQ(CountText(system, "surfelGiSnapshotCopyAndTimingPacketsAreDistinct"), 2u);
+    EXPECT_EQ(CountText(validator, "outResult.surfelGiSnapshotCopyAndTimingPacketsAreDistinct ="), 1u);
+    EXPECT_TRUE(ContainsText(system, "const bool surfelGiSnapshotCopyAndTimingPacketsAreDistinct = surfelCausticsMerge.surfelGiSnapshotCopyAndTimingPacketsAreDistinct;"));
     EXPECT_TRUE(ContainsText(system, "|| !surfelGiSnapshotCopyAndTimingPacketsAreDistinct"));
     EXPECT_TRUE(ContainsText(surfelGi, ".states = m_surfelGiComputePersistentState.source(),"));
     EXPECT_TRUE(ContainsText(surfelGi, ".states = m_surfelGiCounterPersistentState.source(),"));
@@ -279,10 +306,13 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     EXPECT_TRUE(ContainsText(surfelLifecycle, "m_surfelGiComputePersistentState.commit(*context->computeStateCandidate)"));
 
     EXPECT_TRUE(ContainsText(
-        surfelGi,
-        "if(!m_deferredSurfelGiPreparationTask.valid())\n"
-        "            m_deferredSurfelGiPreparationTask = m_deferredSurfelGiSnapshotCopyTask;"
+        lifecycle,
+        "if(!outResult.preparationTask.valid())\n"
+        "        outResult.preparationTask = outResult.snapshotCopyTask;"
     ));
+    EXPECT_TRUE(ContainsText(surfelGi, "m_deferredSurfelGiPreparationTask = surfelGiLifecycleResult.preparationTask;"));
+    EXPECT_TRUE(ContainsText(surfelGi, "m_deferredSurfelGiSnapshotCopyTask = surfelGiLifecycleResult.snapshotCopyTask;"));
+    EXPECT_TRUE(ContainsText(surfelGi, "if(!surfelGiLifecycleBuilder.declare("));
     EXPECT_TRUE(ContainsText(system, "|| !surfelGiPreparedPrefixMergedIntoGiPacket"));
     EXPECT_TRUE(ContainsText(system, "|| !surfelGiInitializationLifecycleMergedIntoPreparationPacket"));
     EXPECT_FALSE(ContainsText(
@@ -297,7 +327,7 @@ TEST(EcsGraphics, SurfelGiTopologyUsesSemanticTaskAnchors){
     EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount =="));
     EXPECT_FALSE(ContainsText(system, "surfelGiPacketRange.packetCount !="));
     EXPECT_TRUE(ContainsText(
-        surfelGi,
+        readback,
         "const Core::GpuTaskId dependencies[] = {\n"
         "        m_deferredSurfelGiTask,\n"
         "        m_deferredFrameTimingEndTask,"

@@ -208,6 +208,8 @@ public:
     void populateMeshGeometryHeapSlots(InstanceGpuData& outInstance, const MeshResources& mesh)const;
     void releaseMeshGeometryHeapHandles(MeshResources& mesh);
 
+
+private:
     void releaseMeshFrameHeapHandles();
 
 

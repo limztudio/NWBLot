@@ -110,7 +110,6 @@ class RendererFramePipeline final : NoCopy{
     friend class SurfelCausticsMergeValidator;
     friend class GraphicsPrefixTimingResolver;
     friend class ShadowVisibilityMergeValidator;
-    friend class DeferredFrameTailBuilder;
 
 private:
     // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline, while the

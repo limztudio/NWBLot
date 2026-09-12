@@ -271,11 +271,14 @@ TEST(EcsGraphics, ProductionRecoveryTasksDeclareExactSubmissionRole){
 
     AString standaloneSource;
     AString deferredSource;
+    AString callerSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "runtime" / "runtime_graph_setup.cpp", standaloneSource));
     ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp",
+        repoRoot / "impl" / "ecs_render" / "deferred" / "frame_tail_builder.cpp",
         deferredSource
     ));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", callerSource));
+    const AStringView caller(callerSource.data(), callerSource.size());
     const AStringView standalone(standaloneSource.data(), standaloneSource.size());
     const AStringView deferred(deferredSource.data(), deferredSource.size());
 
@@ -300,6 +303,12 @@ TEST(EcsGraphics, ProductionRecoveryTasksDeclareExactSubmissionRole){
     );
     EXPECT_TRUE(ContainsText(deferredScheduling, "recoveryScheduling.joinsAcceptedQueueFrontier = true;"));
     EXPECT_TRUE(ContainsText(deferredScheduling, "recoveryScheduling.isRecoverySubmission = true;"));
+    EXPECT_TRUE(ContainsText(deferred, "outResult.recoveryTask = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>("));
+    const usize declareOffset = caller.find("if(!deferredFrameTailBuilder.declare(");
+    const usize publishOffset = caller.find("m_deferredFrameRecoveryTask = deferredFrameTailResult.recoveryTask;", declareOffset);
+    ASSERT_NE(declareOffset, AStringView::npos);
+    ASSERT_NE(publishOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(caller.substr(declareOffset, publishOffset - declareOffset), "return;"));
 }
 
 

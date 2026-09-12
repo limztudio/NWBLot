@@ -193,16 +193,17 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     const Core::TextureSubresourceSet csgRemovedIntervalCountSubresources(0u, 1u, 0u, 1u);
 
+    const RayTracingLightingClassificationInput rayTracingLightingInput = m_raytracingSystem.snapshotLightingClassificationInput();
     PrefixSceneUploadBuilder prefixSceneUploadBuilder(
         m_deferredLightingTaskGraph,
         m_deferredSystem,
         m_meshSystem,
-        m_raytracingSystem,
         m_graphics
     );
     PrefixSceneUploadResult prefixSceneUploadResult;
     if(!prefixSceneUploadBuilder.declare(
         PrefixSceneUploadInputs{
+            .rayTracingLightingInput = rayTracingLightingInput,
             .meshViewState = &meshViewState,
             .meshView = meshView,
             .lights = lights,

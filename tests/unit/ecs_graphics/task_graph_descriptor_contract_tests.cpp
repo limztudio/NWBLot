@@ -138,7 +138,7 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
     expectSharedBlock(renderer, "Core::BufferDesc instanceBufferDesc;", "Core::BufferHandle instanceBuffer =");
     expectSharedBlock(renderer, "Core::BufferDesc materialTypedBufferDesc;", "Core::BufferHandle materialTypedBuffer =");
     expectSharedBlock(renderer, "auto createCsgTexture =", "auto createPeelTexture =");
-    expectSharedBlock(renderer, "[[nodiscard]] static bool ReserveCsgStructuredBuffer(", "[[nodiscard]] static CsgClipCutterResolveResult::Enum");
+    expectSharedBlock(renderer, "[[nodiscard]] static bool ReserveCsgStructuredBuffer(", "Core::BufferHandle createdBuffer = graphics.createBuffer(bufferDesc);");
     expectSharedBlock(renderer, "if(!m_csgState.m_clipContextSlotsBuffer){", "EnsureCsgBufferHeapHandle(");
     expectSharedBlock(renderer, "bool RendererCsgSystem::createCsgIntervalSampleStateBuffer(){", "m_csgState.m_intervalSampleStateBuffer =");
     expectSharedBlock(renderer, "Core::BufferDesc emulationVertexBufferDesc;", "mesh.emulationVertexBuffer =");
@@ -183,6 +183,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     AString heapHeaderSource;
     AString heapSource;
     AString descriptorWriteSource;
+    AString slotAllocatorSource;
     AString nativeBindingSource;
     AString rendererExecutionSource;
     AString smokeSource;
@@ -211,6 +212,11 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     ));
     const AStringView heapHeader(heapHeaderSource.data(), heapHeaderSource.size());
     const AStringView heap(heapSource.data(), heapSource.size());
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_slot_allocator.cpp",
+        slotAllocatorSource
+    ));
+    const AStringView slotAllocator(slotAllocatorSource.data(), slotAllocatorSource.size());
     const AStringView descriptorWrite(descriptorWriteSource.data(), descriptorWriteSource.size());
     const AStringView nativeBinding(nativeBindingSource.data(), nativeBindingSource.size());
     const AStringView rendererExecution(rendererExecutionSource.data(), rendererExecutionSource.size());
@@ -241,7 +247,10 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(heap, "!m_resourceSlots.initialize(arena, resourceCapacity)"));
     EXPECT_TRUE(ContainsText(heap, "!m_samplerSlots.initialize(arena, samplerCapacity)"));
     EXPECT_TRUE(ContainsText(heap, "!m_accelStructSlots.initialize(arena, accelStructCapacity)"));
-    EXPECT_TRUE(ContainsText(heap, "!freeList.initialize(arena, newCapacity)"));
+    EXPECT_TRUE(ContainsText(slotAllocator, "bool GpuDescriptorHeap::SlotAllocator::initialize("));
+    EXPECT_TRUE(ContainsText(slotAllocator, "!freeList.initialize(arena, newCapacity)"));
+    EXPECT_TRUE(ContainsText(slotAllocator, "|| !slotStates.initialize(arena, newCapacity)"));
+    EXPECT_TRUE(ContainsText(slotAllocator, "|| !allocatedClasses.initialize(arena, newCapacity)"));
     EXPECT_TRUE(ContainsText(heap, "allocator.freeList[allocator.freeCount] = retired.handle.slot();"));
 
     const usize releasePendingBegin = heap.find("void GpuDescriptorHeap::releasePendingRecordingLease(");

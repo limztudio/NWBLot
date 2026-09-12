@@ -506,14 +506,22 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_LT(submitHostLockOffset, nativeSubmitOffset);
     EXPECT_LT(waitHostLockOffset, nativeWaitOffset);
 
-    AString deviceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
-    const AStringView fullDeviceSource(deviceSource.data(), deviceSource.size());
-    const usize semanticLockOffset = fullDeviceSource.find("queue->m_mutex.lock();");
-    const usize hostLockOffset = fullDeviceSource.find("nativeQueueState->hostMutex.lock();", semanticLockOffset);
-    const usize deviceIdleOffset = fullDeviceSource.find("vkDeviceWaitIdle(m_context.device);", hostLockOffset);
-    const usize hostUnlockOffset = fullDeviceSource.find("nativeQueueState->hostMutex.unlock();", deviceIdleOffset);
-    const usize semanticUnlockOffset = fullDeviceSource.find("queue->m_mutex.unlock();", hostUnlockOffset);
+    AString idleLifecycleSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "device_idle_lifecycle.cpp",
+        idleLifecycleSource
+    ));
+    const AStringView idleLifecycle(idleLifecycleSource.data(), idleLifecycleSource.size());
+    const usize nativeIdleOffset = idleLifecycle.find("VkResult Device::waitForNativeIdle()noexcept{");
+    const usize nativeIdleEnd = idleLifecycle.find("\n}", nativeIdleOffset);
+    ASSERT_NE(nativeIdleOffset, AStringView::npos);
+    ASSERT_NE(nativeIdleEnd, AStringView::npos);
+    const AStringView nativeIdle = idleLifecycle.substr(nativeIdleOffset, nativeIdleEnd + 2u - nativeIdleOffset);
+    const usize semanticLockOffset = nativeIdle.find("queue->m_mutex.lock();");
+    const usize hostLockOffset = nativeIdle.find("nativeQueueState->hostMutex.lock();", semanticLockOffset);
+    const usize deviceIdleOffset = nativeIdle.find("vkDeviceWaitIdle(m_context.device);", hostLockOffset);
+    const usize hostUnlockOffset = nativeIdle.find("nativeQueueState->hostMutex.unlock();", deviceIdleOffset);
+    const usize semanticUnlockOffset = nativeIdle.find("queue->m_mutex.unlock();", hostUnlockOffset);
     ASSERT_NE(semanticLockOffset, AStringView::npos);
     ASSERT_NE(hostLockOffset, AStringView::npos);
     ASSERT_NE(deviceIdleOffset, AStringView::npos);
@@ -1199,10 +1207,10 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     EXPECT_EQ(backendHeader.find("captureGpuCrash"), AStringView::npos);
 
     const usize destructorOffset = device.find("Device::~Device()noexcept{");
-    const usize waitForIdleOffset = device.find("bool Device::waitForIdle(){", destructorOffset);
+    const usize destructorEnd = device.find("\n}", destructorOffset);
     ASSERT_NE(destructorOffset, AStringView::npos);
-    ASSERT_NE(waitForIdleOffset, AStringView::npos);
-    const AStringView destructor = device.substr(destructorOffset, waitForIdleOffset - destructorOffset);
+    ASSERT_NE(destructorEnd, AStringView::npos);
+    const AStringView destructor = device.substr(destructorOffset, destructorEnd + 2u - destructorOffset);
     EXPECT_NE(destructor.find("waitForNativeIdle()"), AStringView::npos);
     EXPECT_NE(destructor.find("m_gpuDescriptorHeap.shutdownForDeviceTeardown();"), AStringView::npos);
     EXPECT_NE(destructor.find("m_descriptorBufferManager.shutdownForDeviceTeardown();"), AStringView::npos);
@@ -1338,12 +1346,23 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     EXPECT_LT(beforeShutdownJoinOffset, callbackShutdownOffset);
     EXPECT_LT(callbackShutdownOffset, afterShutdownJoinOffset);
 
-    const usize resizePreparationOffset = fullGraphicsSource.find("if(!backBufferResizing(transitionTicket))");
-    const usize resizeBackendOffset = fullGraphicsSource.find(
+    AString swapChainSource;
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "runtime" / "runtime_swap_chain.cpp",
+        swapChainSource
+    ));
+    const AStringView swapChain(swapChainSource.data(), swapChainSource.size());
+    const usize resizeOffset = swapChain.find("bool GraphicsRuntime::resizeBackBuffer(");
+    const usize resizeEnd = swapChain.find("\n}", resizeOffset);
+    ASSERT_NE(resizeOffset, AStringView::npos);
+    ASSERT_NE(resizeEnd, AStringView::npos);
+    const AStringView resize = swapChain.substr(resizeOffset, resizeEnd + 2u - resizeOffset);
+    const usize resizePreparationOffset = resize.find("if(!backBufferResizing(transitionTicket))");
+    const usize resizeBackendOffset = resize.find(
         "if(!m_backend->commitSwapChainResize(Move(transitionTicket)))",
         resizePreparationOffset
     );
-    const usize resizeCompletionOffset = fullGraphicsSource.find("if(!backBufferResized())", resizeBackendOffset);
+    const usize resizeCompletionOffset = resize.find("if(!backBufferResized())", resizeBackendOffset);
     ASSERT_NE(resizePreparationOffset, AStringView::npos);
     ASSERT_NE(resizeBackendOffset, AStringView::npos);
     ASSERT_NE(resizeCompletionOffset, AStringView::npos);
@@ -1386,7 +1405,7 @@ TEST(SwapChainPresentation, TeardownFailureDoesNotPublishADeadOrRecreatedInstanc
     );
     EXPECT_EQ(fullRhiHeader.find("BackBufferResizeCallbacks"), AStringView::npos);
     EXPECT_NE(fullGraphicsSource.find("if(beginFrameResult.status == BeginFrameStatus::ResizeRequired)"), AStringView::npos);
-    EXPECT_NE(fullGraphicsSource.find("requestDeviceRecreation();", resizeCompletionOffset), AStringView::npos);
+    EXPECT_NE(resize.find("requestDeviceRecreation();", resizeCompletionOffset), AStringView::npos);
     EXPECT_EQ(fullOrchestrationSource.find("callbacks.resizeFailed"), AStringView::npos);
 }
 

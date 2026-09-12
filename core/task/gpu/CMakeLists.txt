@@ -34,6 +34,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_recording_frontier.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_state_seed.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction_binding.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction_statistics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_exception_finalizer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction_handoff.cpp"

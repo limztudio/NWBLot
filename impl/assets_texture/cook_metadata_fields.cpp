@@ -42,8 +42,6 @@ using TextureFormat::s_TextureDataExtension;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename IntegerT>
-
 [[nodiscard]] bool ReadExactStringField(
     const Path& nwbFilePath,
     const Value& asset,

@@ -511,47 +511,6 @@ template<typename CutterTransformLoader, typename CutterHandler>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ECSRenderDetail::CsgGraphResourceSnapshot::bindingValid()const noexcept{
-    return
-        receiverRanges
-        && cutters
-        && clipContextSlots
-        && intervalSampleState
-        && receiverRangeHeapHandle.valid()
-        && receiverRangeHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && cutterHeapHandle.valid()
-        && cutterHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-        && clipContextSlotsHeapHandle.valid()
-        && clipContextSlotsHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-        && intervalSampleStateHeapHandle.valid()
-        && intervalSampleStateHeapHandle.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer
-    ;
-}
-
-bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuData& csgFrameData)const noexcept{
-    if(!csgFrameData.hasWork())
-        return true;
-
-    return
-        bindingValid()
-        && receiverRangeCapacity >= csgFrameData.receiverRanges.size()
-        && cutterCapacity >= csgFrameData.cutters.size()
-    ;
-}
-
-bool ECSRenderDetail::CsgGraphResourceSnapshot::findClipContextHeapSlot(u32& outHeapSlot)const noexcept{
-    outHeapSlot = 0u;
-    if(!clipContextSlotsHeapHandle.valid())
-        return false;
-
-    outHeapSlot = clipContextSlotsHeapHandle.slot();
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool RendererCsgSystem::createCsgClipResources(){
     auto& device = m_graphics.getDevice();
     if(!m_csgState.m_clipBindingLayout){

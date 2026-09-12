@@ -18,7 +18,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | 6 | Share pass-independent transparent preparation | Evaluated and rejected; no resolved CPU benefit or observed memory saving |
 | 7 | Reuse mip-zero depth neighborhoods | Evaluated and rejected; native/image parity passed but no measured pyramid or frame gain |
 | 8 | Reject primary refraction instances earlier in ordinary accumulation | Evaluated and rejected under the existing derivative/helper-invocation contract |
-| 9 | Replace repeated optical-bootstrap prior-event scans with a processed mask | Draft reviewed |
+| 9 | Replace repeated optical-bootstrap prior-event scans with a processed mask | Evaluated and rejected; optical parity passed but timing did not establish a benefit |
 | 10 | Test a separately compiled optical kernel for proven air origins | Experiment draft in progress |
 
 The initial audit and complete fresh rough-filter measurements remain under `__artifacts/reflection_optimization_audit_20260912/`. Implementation evidence is kept under `__artifacts/reflection_optimization_steps/`. Those generated files are local diagnostics; completed outcomes and reproducible commands are recorded here.
@@ -243,3 +243,28 @@ The preserved emitted SPIR-V provides supporting evidence from the existing shar
 The optimization is rejected under the current contracts. No candidate source is applied; the experiment patch is intentionally empty. This step makes no new rendering-test or performance claim. A future demote path would need an explicit guarantee that the required helper calculations continue, and a derivative-free material route would require a broader authored capability contract. Either route needs separate justification and qualification before changing the fragment path.
 
 Evidence remains under `__artifacts/avboit_primary_rejection_step8/`: the reviewed source manifest, empty patch, preserved emitted modules, grammar identity and instruction offsets in `emitted_shader_evidence.json`. The module SHA256 values are `4dc77f59bf455cea78419eca3800a8bbb4d50ef9de9446f0d7d5cbec4431674b` for the CSG path and `6dbaa77275ff9c63295d752c6663f8442a0fc1134d9e7be073d1b56fc3282110` for the ordinary path. The decision preserves the existing shader and its supported material/CSG behavior.
+
+## Step 9: optical-bootstrap processed mask evaluated and rejected
+
+The single-file candidate replaced repeated prior-event scans with a 32-bit processed mask over sorted bootstrap events. Duplicate positions began marked; processing an instance marked all of its matching nonduplicate positions. Query collection, event order, winding, medium insertion, material evaluation and existing limits remained unchanged. The current consumer is the hardware optical reflection resolver; refraction and caustic shaders do not currently include this bootstrap helper.
+
+Optimized and debug builds and ordinary asset cooks passed, together with all 381 active ECS graphics cases and both native raytrace upload/resource-reuse cases in each configuration. Those two native cases are not bootstrap boundary tests. The complete positive-query optical comparison passed all 60 captures in 30 baseline/candidate pairs, with actual GPU-validation startup markers in every capture. All decoded RGB values and history-qualified stable semantic statistics vectors matched; each capture supplied at least 15 stable frames. Both frozen arms contained the same executable/dependency bytes and differed in exactly the bootstrap source. Of 206 packed files, only the hardware-resolver payload and its shader index changed. The plain resolver record changed only its source checksum; its bytecode was identical. The optical variant shrank from 233,544 to 233,140 bytecode bytes, which does not establish register use or performance.
+
+The fixed `reflection-optical-inside` campaign completed all 16 launches in eight balanced pairs, retaining 1,634 completed GPU frames. Both arms used one native dispatch within one hardware timing range. Resolution, query/ray limits, warm-up, six retained intervals, minimum sample coverage and the existing 3%/0.02 ms practical gate were held fixed.
+
+| Scope | Baseline / candidate ms | Paired delta ms [95% interval] |
+| --- | ---: | --- |
+| Full GPU frame | 73.198525 / 75.703993 | +2.505468 [-7.707383, +12.432154] |
+| Hardware reflection range | 57.817986 / 60.211747 | +2.393761 [-7.821535, +12.246763] |
+
+The runner reports `control_uncertain`: opaque and lighting controls are uncertain, shadow is equivalent, and no control is classified as material drift. The practical full-frame threshold was 2.195956 ms. Large hardware-time excursions occurred in both directions, including a slower baseline in block 4 and slower candidates in blocks 7 and 8. Every trial is retained; no causal regression or improvement is inferred from the unresolved intervals. Balanced power reported 79% battery before acquisition and 78% afterward. Frequency and thermal telemetry were unavailable; no build, cook or GPU test overlapped timing.
+
+The mask candidate is rejected because it did not establish a useful gain. Its input-limit semantics were preserved: 32 successful query `Proceed` calls exhaust the event budget even if the last call would have been the final candidate, and ignored flat-alpha candidates still consume that budget. A normally completed collection can therefore store at most 31 events. The current positive optical suite exercises bootstrap events in the inside, nested-inside, total-internal-reflection and termination-limit scenes, but does not supply dedicated 31/32/33-candidate or high-count repeated-instance bootstrap geometry. Aggregate event/ray ratios do not bound individual ray counts. This result is neither an all-input floating-point proof nor a stochastic caustic image-parity claim.
+
+The original helper was restored to exact SHA256 `d31978dd23dd006c95d052e09a7969679301e1b3147bbfbc1a5f09626e520996`. Optimized and debug reflection builds and ordinary cooks passed again. The restored Opt executable, dependencies and complete authored runtime exactly match the qualified baseline identities; no candidate shader remains in production.
+
+Evidence is under `__artifacts/reflection_optimization_steps/step9/`: frozen arms, candidate JUnit/full logs, `optical_parity_v1/parity_report.json`, `packed_mask_delta.json`, `timing_inside_v1/report.json`, all raw trials, and restored build logs. The optical-parity helper's 16 offline cases also passed. Reproduction uses the full optical parity plan/run helper and the common eight-block runner with `--workload reflection-optical-inside` and one hardware dispatch per range in both arms.
+
+Optical parity report SHA256: `69f67b555b1d83922368222ebcf6386ac8de26c403e7e56e994449e36c7cc31e`.
+
+Timing report SHA256: `6444dfeef8de6c9e621dcdef6cc2821939ebde240defee5ba43904662ac64f39`.

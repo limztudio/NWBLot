@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
@@ -238,8 +237,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             m_graphics.getDevice(),
             commandList
         );
-        // The graph owns the selected history/moments plus stable previous-geometry/world reads. The geometry
-        // downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
+        // The graph owns the selected history/moments plus stable previous-geometry/world reads. The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
         dispatchMerge(
             opaqueMerge,
             graphOwnsOpaqueTraceToFirstWaveletBoundary,
@@ -249,8 +247,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         );
     }
 
-    // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into
-    // soft-B before this same wavelet, so eliminating it preserves the exact filtering input while removing a dispatch.
+    // Feed the first wavelet directly from this frame's trace or temporal merge. PREPARE was only a half-res copy into soft-B before this same wavelet, so eliminating it preserves the exact filtering input while removing a dispatch.
     Core::Texture* const opaqueWaveletInput = opaqueTemporalActive
         ? (frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get())
         : targets.shadowSoftHalfA.get()
@@ -323,9 +320,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 m_graphics.getDevice(),
                 commandList
             );
-            // The normal deferred graph already supplies the transparent trace's heap-selected traversal and
-            // descriptor buffers. Direct compatibility callers retain the native static bridge. A split graph tail
-            // additionally owns the opaque-resolve-to-transparent-trace image/UAV boundary in its prologue.
+            // The normal deferred graph already supplies the transparent trace's heap-selected traversal and descriptor buffers. Direct compatibility callers retain the native static bridge. A split graph tail additionally owns the opaque-resolve-to-transparent-trace image/UAV boundary in its prologue.
             if(!graphEntryStatesOwned){
                 transitionSwShadowTraversalResources(commandList);
                 commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -484,9 +479,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate
-    // targets.bindless. RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics
-    // submission succeeds.
+    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate targets.bindless. RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
     if(
         ((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail)
         && m_rayTracingState.m_softShadowTemporalReady

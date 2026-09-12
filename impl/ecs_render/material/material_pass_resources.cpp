@@ -309,6 +309,10 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
         instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 

@@ -744,6 +744,10 @@ void ClearDeferredCsgIntervalTargets(
     __hidden_deferred_targets::ClearCsgIntervalTargets(commandList, targets, csgSubresources, csgClearRect);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 

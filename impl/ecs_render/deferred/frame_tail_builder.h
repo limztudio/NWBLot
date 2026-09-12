@@ -55,6 +55,9 @@ struct DeferredFrameTailResult{
 class DeferredFrameTailBuilder final : NoCopy{
 public:
     explicit DeferredFrameTailBuilder(NotNull<RendererFramePipeline*> pipeline);
+
+
+public:
     [[nodiscard]] bool declare(
         const DeferredFrameTailInputs& inputs,
         DeferredFrameTailResult& outResult

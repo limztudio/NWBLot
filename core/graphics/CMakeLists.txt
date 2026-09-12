@@ -10,6 +10,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/api.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_scope_lifecycle.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_accumulator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_listener.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.cpp"

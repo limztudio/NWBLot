@@ -11,6 +11,8 @@ nwb_declare_static_library(nwb_assets_texture_loader)
 target_sources(nwb_assets_texture_loader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/loader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/loader.h"
+    "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/texture_mip_decoder.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
 )
 target_link_libraries(nwb_assets_texture_loader PUBLIC

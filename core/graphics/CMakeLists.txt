@@ -103,6 +103,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/rhi/presentation.h"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/queue_sharing.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing.h"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.h"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics.h"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_nodes.h"

@@ -66,6 +66,7 @@
 #include <impl/ecs_render/avboit/accumulation_record_builder.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>
+#include <impl/ecs_render/avboit/geometry_preparation_builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1380,36 +1381,25 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &occupancyDrawItems.regular,
                 &occupancyDrawItems.csg,
             };
-            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
+            AvboitGeometryPreparationBuilder occupancyGeometryPreparationBuilder(
                 m_deferredLightingTaskGraph,
-                occupancyMaterialGeometryDrawSets,
-                LengthOf(occupancyMaterialGeometryDrawSets),
-                occupancyMaterialGeometryScratch,
-                Name("render.avboit.occupancy.material_geometry"),
-                "AVBOIT Occupancy Material Geometry",
-                occupancyMaterialGeometrySet
+                m_materialSystem,
+                occupancyMaterialGeometryScratch
             );
-            if(!avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material geometry states"));
+            AvboitGeometryPreparationResult occupancyGeometryPreparationResult;
+            if(!occupancyGeometryPreparationBuilder.declare(
+                AvboitGeometryPreparationInputs{
+                    .drawItemSets = occupancyMaterialGeometryDrawSets,
+                    .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets),
+                    .phase = AvboitGeometryPhase::Occupancy,
+                },
+                occupancyGeometryPreparationResult
+            ))
                 return;
-            }
-            occupancyMaterialSampledTexturesCollected =
-                avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned
-                && GatherPreparedMaterialSampledTextureResourceSet(
-                    m_materialSystem,
-                    m_deferredLightingTaskGraph,
-                    occupancyMaterialGeometryDrawSets,
-                    LengthOf(occupancyMaterialGeometryDrawSets),
-                    occupancyMaterialGeometryScratch,
-                    Name("render.avboit.occupancy.material_sampled_textures"),
-                    "AVBOIT Occupancy Material Sampled Textures",
-                    occupancyMaterialSampledTextureSet
-                )
-            ;
-            if(!occupancyMaterialSampledTexturesCollected){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT occupancy material sampled textures"));
-                return;
-            }
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyGeometryPreparationResult.geometryOwned;
+            occupancyMaterialGeometrySet = occupancyGeometryPreparationResult.materialGeometrySet;
+            occupancyMaterialSampledTextureSet = occupancyGeometryPreparationResult.materialSampledTextureSet;
+            occupancyMaterialSampledTexturesCollected = occupancyGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData, csgResources);
 #if defined(NWB_DEBUG)
@@ -1705,36 +1695,25 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &extinctionDrawItems.regular,
                 &extinctionDrawItems.csg,
             };
-            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
+            AvboitGeometryPreparationBuilder extinctionGeometryPreparationBuilder(
                 m_deferredLightingTaskGraph,
-                extinctionMaterialGeometryDrawSets,
-                LengthOf(extinctionMaterialGeometryDrawSets),
-                extinctionMaterialGeometryScratch,
-                Name("render.avboit.extinction.material_geometry"),
-                "AVBOIT Extinction Material Geometry",
-                extinctionMaterialGeometrySet
+                m_materialSystem,
+                extinctionMaterialGeometryScratch
             );
-            if(!avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material geometry states"));
+            AvboitGeometryPreparationResult extinctionGeometryPreparationResult;
+            if(!extinctionGeometryPreparationBuilder.declare(
+                AvboitGeometryPreparationInputs{
+                    .drawItemSets = extinctionMaterialGeometryDrawSets,
+                    .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets),
+                    .phase = AvboitGeometryPhase::Extinction,
+                },
+                extinctionGeometryPreparationResult
+            ))
                 return;
-            }
-            extinctionMaterialSampledTexturesCollected =
-                avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned
-                && GatherPreparedMaterialSampledTextureResourceSet(
-                    m_materialSystem,
-                    m_deferredLightingTaskGraph,
-                    extinctionMaterialGeometryDrawSets,
-                    LengthOf(extinctionMaterialGeometryDrawSets),
-                    extinctionMaterialGeometryScratch,
-                    Name("render.avboit.extinction.material_sampled_textures"),
-                    "AVBOIT Extinction Material Sampled Textures",
-                    extinctionMaterialSampledTextureSet
-                )
-            ;
-            if(!extinctionMaterialSampledTexturesCollected){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT extinction material sampled textures"));
-                return;
-            }
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = extinctionGeometryPreparationResult.geometryOwned;
+            extinctionMaterialGeometrySet = extinctionGeometryPreparationResult.materialGeometrySet;
+            extinctionMaterialSampledTextureSet = extinctionGeometryPreparationResult.materialSampledTextureSet;
+            extinctionMaterialSampledTexturesCollected = extinctionGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData, csgResources);
 #if defined(NWB_DEBUG)
@@ -1990,36 +1969,25 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
                 &accumulationDrawItems.regular,
                 &accumulationDrawItems.csg,
             };
-            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = GatherPreparedMaterialGeometryResourceSet(
+            AvboitGeometryPreparationBuilder accumulationGeometryPreparationBuilder(
                 m_deferredLightingTaskGraph,
-                accumulationMaterialGeometryDrawSets,
-                LengthOf(accumulationMaterialGeometryDrawSets),
-                accumulationMaterialGeometryScratch,
-                Name("render.avboit.accumulation.material_geometry"),
-                "AVBOIT Accumulation Material Geometry",
-                accumulationMaterialGeometrySet
+                m_materialSystem,
+                accumulationMaterialGeometryScratch
             );
-            if(!avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material geometry states"));
+            AvboitGeometryPreparationResult accumulationGeometryPreparationResult;
+            if(!accumulationGeometryPreparationBuilder.declare(
+                AvboitGeometryPreparationInputs{
+                    .drawItemSets = accumulationMaterialGeometryDrawSets,
+                    .drawItemSetCount = LengthOf(accumulationMaterialGeometryDrawSets),
+                    .phase = AvboitGeometryPhase::Accumulation,
+                },
+                accumulationGeometryPreparationResult
+            ))
                 return;
-            }
-            accumulationMaterialSampledTexturesCollected =
-                avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned
-                && GatherPreparedMaterialSampledTextureResourceSet(
-                    m_materialSystem,
-                    m_deferredLightingTaskGraph,
-                    accumulationMaterialGeometryDrawSets,
-                    LengthOf(accumulationMaterialGeometryDrawSets),
-                    accumulationMaterialGeometryScratch,
-                    Name("render.avboit.accumulation.material_sampled_textures"),
-                    "AVBOIT Accumulation Material Sampled Textures",
-                    accumulationMaterialSampledTextureSet
-                )
-            ;
-            if(!accumulationMaterialSampledTexturesCollected){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT accumulation material sampled textures"));
-                return;
-            }
+            avboitAccumulationPayload.accumulationMaterialGeometryStatesGraphOwned = accumulationGeometryPreparationResult.geometryOwned;
+            accumulationMaterialGeometrySet = accumulationGeometryPreparationResult.materialGeometrySet;
+            accumulationMaterialSampledTextureSet = accumulationGeometryPreparationResult.materialSampledTextureSet;
+            accumulationMaterialSampledTexturesCollected = accumulationGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData, csgResources);
 #if defined(NWB_DEBUG)

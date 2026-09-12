@@ -134,6 +134,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_snapshot_queries.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_composite.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_targets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_history_targets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_lighting.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_telemetry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/kernel/frame_graph_runtime_statistics.cpp"

@@ -329,6 +329,13 @@ public:
     // ordering without a swap-chain beginFrame().
     [[nodiscard]] bool prepareFramePreamble();
     void render();
+
+
+private:
+    void renderWithPhaseTiming(CpuTimingPhaseBatch* phaseTiming);
+
+
+public:
     void updateAverageFrameTime(f64 elapsedTime);
     void notifyPointerScaleChanged()const;
     [[nodiscard]] bool shouldRenderUnfocused()const;

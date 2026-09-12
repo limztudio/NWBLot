@@ -9,6 +9,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
 | Measurement correction | Preserve source-frame bounds for out-of-order timing samples | Complete; CPU and native regressions pass |
 | Compiler scaling | Order discovered resource fragments without rescanning unrelated states | Complete; exact ordering and native handoffs verified |
+| CPU measurement | Separate real preparation/render callback costs and memory observations | Complete; six workloads qualified |
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
@@ -141,3 +142,13 @@ The compiler-fixed, Step5-absent fixture completed all six functional workloads,
 Evidence is under `__artifacts/reflection_optimization_steps/compiler_fragment_order/` (`opt_unit_native_junit.xml`, `opt_unit_native_full.log`, `dbg_junit.xml`, `dbg_full.log`, `opt_captures_junit.xml`) and `cpu_gather_benchmark/` (`baseline_unique_stack_diagnostic`, frozen `compiler_baseline_v3`/`compiler_candidate_v4`, and `compiler_fixed_all_timing_pilot`). Initial invalid target invocation is retained in `opt_build.log`; the corrected target build passed. The proposal patch SHA256 is `b8b5f0c71260565c31f0978848de25773d2f0a3e4c3789176e304e55e4489dc4`.
 
 Reproduce ordering and native handoff qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_gpu_task_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.
+
+## CPU gathering measurement support
+
+The opt-in `nwb_renderer_gather_benchmark` fixture adds six fixed 64-object workloads covering opaque, mixed, shared/distinct identities, mutable overrides and actual runtime mesh owners. Generic callback timing belongs to `core/graphics/runtime`; scene generation, result collection and comparison belong to `tests/smoke`. The private project asset root owns its material surface and generated identities. Preparation/render callback subtotals remain inside the existing CPU render parent, are joined before publication, and add no timer reads when capture is disabled.
+
+The acquisition contract requires 96 successful warm-up frames, 256 exact measured frames and 32 drain frames, with independent completed GPU-source coverage. Timing and memory acquisition are separate. Explicit Vulkan layers are rejected; executable/dependency/interpreter/helper/source/resource identities are preserved around trials. Incomplete controlled shutdown retains its raw evidence without a completion footer. The runtime workload holds eight real skeletal owners at distinct poses; it does not claim animated-deformation timing.
+
+Optimized and debug fixture builds and private 846-asset cooks passed. All 27 gather analysis/generator tests and 28 common A/B analysis tests passed. Generic frame timing and native timing-source tests passed in both configurations during the measurement prerequisite. The compiler-fixed optimized fixture completed all six functional timing acquisitions at 384 successful frames each; the separate shared memory acquisition passed its owner/counter contract. Earlier wrong-root, long-cache-path, CRLF identity and incomplete unique attempts remain preserved. These are correctness and acquisition results, not a two-arm speed or memory-saving claim.
+
+See [RENDERER_GATHER_BENCHMARK.md](RENDERER_GATHER_BENCHMARK.md) for build, timing and memory commands and limitations. Evidence remains under `__artifacts/reflection_optimization_steps/cpu_gather_benchmark/`, with optimized/debug build and CTest logs also under `compiler_fragment_order/` and `step5/`.

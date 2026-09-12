@@ -13,6 +13,7 @@
 #include <loader/project_entry.h>
 
 #include <core/common/log.h>
+#include <core/ecs/entity.h>
 #include <core/ecs/world.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/algorithm.h>

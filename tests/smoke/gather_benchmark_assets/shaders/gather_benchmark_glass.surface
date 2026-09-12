@@ -1,0 +1,18 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Optional benchmark-only root. Homogeneous glass keeps source gathering active; overrides change only authored tint.
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbSmokeSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const NwbSmokeRuntimeMaterial runtime = nwbMaterialBindLoadRuntime(instance);
+    const half3 tint = clamp((surface.base_color * runtime.color_tint).rgb, half3(0.01h), half3(1.0h));
+    NwbMeshSurface result = nwbMakeGlassSurface(tint, inNormal, half(1.5h), tint, half(0.2h));
+    nwbSetMeshSurfaceReflection(result, half3(0.04h), half(0.0h));
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

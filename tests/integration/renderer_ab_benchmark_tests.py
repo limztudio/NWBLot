@@ -136,6 +136,8 @@ class WorkloadPolicyTests(unittest.TestCase):
                 benchmark.configure_environment({key: "VK_LAYER_KHRONOS_validation"}, workload, Path("t"))
 
     def test_logs_require_actual_route_extent_policy_device_and_shutdown(self):
+        self.assertEqual(benchmark.device_material_signature(log_text()),
+            benchmark.device_material_signature(log_text().replace("\n", "\r\n")))
         workload = benchmark.workloads()["transparent-multi"]
         expected = benchmark.transparent_multi_log(log_text(), workload, True)
         self.assertEqual(expected["shadow_route"], "hybrid")

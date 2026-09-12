@@ -92,6 +92,7 @@ class Workload:
 
 
 def device_material_signature(text):
+    text = text.replace("\r\n", "\n")
     devices = re.findall(r"^Vulkan: created device '(.+)'$", text, re.MULTILINE)
     if len(devices) != 1:
         raise SmokeFailure("one actual Vulkan device identity is required")

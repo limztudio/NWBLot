@@ -48,6 +48,9 @@ inline constexpr Name s_GraphicsAnimateCpuTimingScope("graphics.animate");
 inline constexpr Name s_GraphicsBeginFrameCpuTimingScope("graphics.begin_frame");
 inline constexpr Name s_GraphicsFramePreambleCpuTimingScope("graphics.frame_preamble");
 inline constexpr Name s_GraphicsRenderCpuTimingScope("graphics.render");
+inline constexpr Name s_GraphicsPrepareResourcesCpuTimingScope("graphics.prepare_resources");
+inline constexpr Name s_GraphicsRenderPassesCpuTimingScope("graphics.render_passes");
+inline constexpr Name s_GraphicsPrepareResourcesFailedCpuTimingScope("graphics.prepare_resources_failed");
 inline constexpr Name s_GraphicsPresentCpuTimingScope("graphics.present");
 inline constexpr Name s_GraphicsGarbageCollectCpuTimingScope("graphics.garbage_collect");
 inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
@@ -78,20 +81,31 @@ private:
         f64 seconds = 0.0;
     };
 
-    static constexpr u32 s_MaxPhaseCount = 6u;
+    static constexpr u32 s_MaxPhaseCount = 9u;
     Array<PhaseTiming, s_MaxPhaseCount> m_phases = {};
     u32 m_phaseCount = 0u;
 
 
 public:
     void stage(const Name& scopeName, const Timer begin){
+        accumulate(scopeName, DurationInSeconds<f64>(TimerNow(), begin));
+    }
+
+    // Render passes execute on the main thread. One frame sample sums each callback without counting queue waits twice.
+    void accumulate(const Name& scopeName, const f64 seconds){
+        for(u32 index = 0u; index < m_phaseCount; ++index){
+            if(m_phases[index].scopeName == scopeName){
+                m_phases[index].seconds += seconds;
+                return;
+            }
+        }
         NWB_ASSERT(m_phaseCount < s_MaxPhaseCount);
         if(m_phaseCount >= s_MaxPhaseCount)
             return;
 
         PhaseTiming& phase = m_phases[m_phaseCount];
         phase.scopeName = scopeName;
-        phase.seconds = DurationInSeconds<f64>(TimerNow(), begin);
+        phase.seconds = seconds;
         ++m_phaseCount;
     }
 
@@ -452,6 +466,10 @@ bool GraphicsRuntime::prepareFramePreamble(){
 }
 
 void GraphicsRuntime::render(){
+    renderWithPhaseTiming(nullptr);
+}
+
+void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){
     Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();
     auto& device = getDevice();
     if(device.requiresRecreation()){
@@ -468,18 +486,31 @@ void GraphicsRuntime::render(){
     };
     TaskHandle previous;
     for(auto* renderPass : m_renderPasses){
-        previous = frameTasks.submit([this, &device, framebuffer, renderPass](){
+        previous = frameTasks.submit([this, &device, framebuffer, renderPass, phaseTiming](){
             if(m_deviceRecreationRequested || device.requiresRecreation()){
                 if(device.requiresRecreation())
                     requestDeviceRecreation();
                 return;
             }
-            if(!renderPass->prepareResources(framebuffer)){
+            Timer prepareBegin;
+            if(phaseTiming)
+                prepareBegin = TimerNow();
+            const bool resourcesPrepared = renderPass->prepareResources(framebuffer);
+            if(phaseTiming)
+                phaseTiming->stage(resourcesPrepared
+                    ? __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesCpuTimingScope
+                    : __hidden_graphics_lifecycle::s_GraphicsPrepareResourcesFailedCpuTimingScope, prepareBegin);
+            if(!resourcesPrepared){
                 NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: render pass skipped after resource preparation failed"));
                 return;
             }
 
+            Timer renderBegin;
+            if(phaseTiming)
+                renderBegin = TimerNow();
             renderPass->render(framebuffer);
+            if(phaseTiming)
+                phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderPassesCpuTimingScope, renderBegin);
 
             // Later task callbacks observe this request before touching the invalidated device generation.
             if(device.requiresRecreation())
@@ -683,7 +714,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 Timer renderBegin;
                 if(phaseTiming)
                     renderBegin = TimerNow();
-                render();
+                renderWithPhaseTiming(phaseTiming);
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsRenderCpuTimingScope, renderBegin);
 

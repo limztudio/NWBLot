@@ -450,6 +450,7 @@ TEST(MaterialSampledTextureCollection, UnexpectedResolverUnwindReleasesPendingHa
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 value){
     char text[32u] = {};
     const AStringView formatted = FormatDecimal(value, text);

@@ -653,6 +653,7 @@ TEST(Csg, CsgShapeRegistryProjectShape){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);

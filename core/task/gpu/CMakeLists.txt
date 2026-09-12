@@ -61,6 +61,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_declarations.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_imports.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_lifecycle.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_abandon.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_packet_discard.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_accessors.cpp"

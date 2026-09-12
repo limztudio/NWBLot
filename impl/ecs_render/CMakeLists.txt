@@ -144,6 +144,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_shadow_visibility_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_shadow_visibility_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_surfel_gi.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_surfel_gi_readback.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_surfel_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_surfel_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/task_graph_draw_snapshots.h"

@@ -216,6 +216,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/hardware_caustics_resolve_chain.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/software_caustics_resolve_chain.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/software_caustics_resolve_chain.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/surfel_gi_lifecycle_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/surfel_gi_lifecycle_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_detail.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_scene_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/scene_resources.h"

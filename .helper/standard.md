@@ -80,6 +80,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Use `////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////` between file-scope function definitions only when crossing a strong boundary:
   - changing to a clearly different function category/personality, or
   - moving between definitions of different classes/structs in the same `.cpp`.
+- Place a 128-slash file-scope separator between a file-scope variable-definition block and the following first function definition (see `compiled_graph_read_view.cpp` fix).
+- Keep file-scope `thread_local` variable definitions on one line (`thread_local T* Class::var = nullptr;`); do not split the type and declarator across lines with a lone `;` (see `packet_runtime_exception_finalizer.cpp` fix).
+- Keep a function-definition return-type plus qualified-name opener on one line (`ReturnType* Class::func(`); do not place a bare `ReturnType*` on its own line (see `packet_runtime_exception_finalizer.cpp` fix).
 - Prefer pre-increment/decrement (`++p`, `--p`) over post-increment/decrement (`p++`, `p--`) when behavior is equivalent.
 - For single-statement `if/for/while`, put the statement on the next line:
   - `if(condition)`

@@ -4,6 +4,7 @@ target_sources(nwb_graphics PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/render_pass.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_contract.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime_render_passes.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_feature_queries.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_graph_setup.cpp"

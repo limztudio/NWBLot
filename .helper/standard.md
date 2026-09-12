@@ -410,6 +410,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - A lone `= delete` copy/move line that changes category still gets its own repeated label with two blank lines before it (see `BasisLibrary` copy-assign + `initialize` fix).
 - Static member variables are declared before non-static member variables.
 - Constructors/destructor are declared together with no empty line between them.
+- Regular member functions must be separated from the constructor/destructor block by reopening the access label (e.g. ctor block, then two blank lines, then `public:` regular-function block, see `DeferredFrameTailBuilder::declare`, `ShadowPreparePacketValidator::validate`, `AccumulationRecordBuilder::declare` fix).
 - If operator overload members exist, place them right after constructor/destructor declarations.
 - Prefer `public` sections first, then `private`/`protected` sections, except for an early top `private:` helper section when needed for static helper/factory declarations.
 - Once the member-variable section begins, do not declare additional member functions afterward.

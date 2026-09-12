@@ -26,6 +26,8 @@ public:
     StagedDirectoryCleanupGuard(const Path& directoryPath, AStringView operationName, AStringView label = "stage directory");
     ~StagedDirectoryCleanupGuard();
 
+
+public:
     void dismiss();
 
 private:

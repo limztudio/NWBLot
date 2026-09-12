@@ -62,6 +62,9 @@ public:
     static constexpr u32 s_SlotCount = 3u;
 
     explicit ReflectionStatisticsState(u16 deviceGeneration);
+
+
+public:
     // Owner joins GPU work before invalidation; stale callbacks cannot affect next epoch.
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionStatisticsReservationKey reserve(const ReflectionStatistics& metadata)noexcept;
@@ -115,6 +118,8 @@ public:
     ~ReflectionStatisticsReservation()noexcept;
     ReflectionStatisticsReservation& operator=(ReflectionStatisticsReservation&& other)noexcept;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return m_key.valid(); }
     [[nodiscard]] u32 slotIndex()const noexcept{ return m_key.slot; }
     void accept(
@@ -139,6 +144,9 @@ struct ReflectionStatisticsReadbackSnapshot{
 class ReflectionStatisticsReadback final : NoCopy{
 public:
     ReflectionStatisticsReadback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+
+
+public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources();
     void pollCompleted();

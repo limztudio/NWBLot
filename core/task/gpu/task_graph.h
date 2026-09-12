@@ -239,6 +239,9 @@ public:
 
 private:
     GpuTaskGraphDeclarationReadView(const GpuTaskGraph& graph, TryAcquireTag)noexcept;
+
+
+private:
     void acquire(const GpuTaskGraph& graph)noexcept;
 
 

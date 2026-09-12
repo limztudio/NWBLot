@@ -144,6 +144,8 @@ class IFrameGraphContributor{
 public:
     virtual ~IFrameGraphContributor() = default;
 
+
+public:
     virtual bool appendFrameGraph(FrameGraphBuilder& builder) = 0;
 };
 

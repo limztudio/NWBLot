@@ -221,6 +221,8 @@ private:
 public:
     InputDispatcher();
 
+
+public:
     void addHandlerToFront(IInputEventHandler& handler);
     void addHandlerToBack(IInputEventHandler& handler);
     void removeHandler(IInputEventHandler& handler);

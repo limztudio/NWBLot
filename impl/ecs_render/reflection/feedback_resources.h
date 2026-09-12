@@ -74,6 +74,9 @@ struct ReflectionFeedbackSnapshot{
 class RendererReflectionFeedback final : NoCopy{
 public:
     RendererReflectionFeedback(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics);
+
+
+public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings, bool enabled);
     [[nodiscard]] ReflectionFeedbackSnapshot snapshot(

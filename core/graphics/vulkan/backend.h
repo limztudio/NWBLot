@@ -3564,6 +3564,8 @@ public:
     TimerQuery(const VulkanContext& context, u64 incarnation);
     ~TimerQuery();
 
+
+public:
     // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
     [[nodiscard]] bool discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
     // The caller has made its prior endpoint packet permanently non-submittable. Preserve the accepted begin cycle

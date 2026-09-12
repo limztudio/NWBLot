@@ -60,6 +60,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/clear_chain_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/compute_effect_chain_builder.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/compute_effect_chain_builder.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/occupancy_record_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/occupancy_record_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass_upload_helper.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass_upload_helper.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_graph_resource_snapshot.h"

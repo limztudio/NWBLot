@@ -786,6 +786,7 @@ TEST(GpuTaskGraph, PlansGraphOwnedPostGbufferTraceGeometryStates){
     EXPECT_TRUE(hasNormalizeBarrier(softwareBvh, Graphics::ResourceStates::UnorderedAccess));
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

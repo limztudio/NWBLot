@@ -1170,6 +1170,7 @@ TEST(GpuTaskGraph, PlansCsgGbufferSpanBuildCombineAndSampleUavDependenciesAcross
     EXPECT_TRUE(hasUav(sampleBarriers, compiledSample->prologueBarrierCount, removedIntervalCount, removedIntervalCountRange));
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

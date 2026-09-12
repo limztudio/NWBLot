@@ -1180,6 +1180,7 @@ TEST(GpuTaskGraph, MergesRayTraceMaterialContextUploadIntoShadowPreparePacket){
     EXPECT_EQ(compiledPlan.packet(shadowVisibilityPacket).dependencies[0u].producer, shadowPreparePacket);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

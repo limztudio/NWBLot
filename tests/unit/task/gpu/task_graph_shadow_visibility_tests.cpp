@@ -1328,6 +1328,7 @@ TEST(GpuTaskGraph, MergesGraphOwnedShadowVisibilityAllLitClearIntoMonolithicPack
     EXPECT_EQ(compiledPlan.packet(lightingPacket).dependencies[0u].producer, shadowPacket);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

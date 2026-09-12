@@ -225,6 +225,7 @@ static_assert(!HasImplicitScratchFanIn<Graphics::CommandListResourceStateHandoff
 static_assert(!HasPublicPacketRuntimeState<Graphics::GpuGraphSubmissionTransaction>);
 static_assert(!HasPublicPacketRuntime<Graphics::GpuGraphSubmissionTransaction>);
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

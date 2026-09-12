@@ -1187,6 +1187,7 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(consumerQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

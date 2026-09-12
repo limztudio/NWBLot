@@ -536,6 +536,7 @@ TEST(GpuTaskGraph, AccelStructImportsInheritBackingBufferStateKnowledge){
     EXPECT_EQ(declarations.resourceAt(unknownResource.index).initialState, Graphics::ResourceStates::Unknown);
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

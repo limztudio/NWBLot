@@ -15,7 +15,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
 | 4 | Reuse accepted optical metadata uploads | Complete; redundant upload removal proven, GPU timing inconclusive |
 | 5 | Share common hardware/software ray-scene gathering within a frame | Evaluated and rejected for current workloads after scope profiling; original routes retained |
-| 6 | Share pass-independent transparent preparation | Pending |
+| 6 | Share pass-independent transparent preparation | Evaluated and rejected; no resolved CPU benefit or observed memory saving |
 | 7 | Reuse mip-zero depth neighborhoods | Shader draft prepared; production-kernel readback tests in progress |
 | 8 | Reject primary refraction instances earlier in ordinary accumulation | Review found a derivative-safety blocker |
 | 9 | Replace repeated optical-bootstrap prior-event scans with a processed mask | Draft reviewed |
@@ -177,3 +177,32 @@ The candidate was therefore screened out before the planned 96-launch timing mat
 All 13 candidate paths were checked against their pre-candidate state, with the four new files physically absent. The restored optimized and debug ECS suites passed all 381 active cases, and both native raytrace cases ran and passed. These suites exposed one stale presentation source-contract assertion from the new generic timing helper; it now follows `renderWithPhaseTiming` while preserving acquisition/validation/render/present order and the public uninstrumented wrapper. The original failure is retained in `step5/restored_opt_junit.xml`; fixed optimized/debug results are `restored_opt_fixed_junit.xml` and `restored_dbg_junit.xml`, with complete logs alongside them. The compiler-fixed duplicate/CSG/combined-optics and GPU-validation captures also passed before closing this step.
 
 Evidence paths are relative to `__artifacts/reflection_optimization_steps/`. Candidate qualification is under `step5/{opt_junit.xml,dbg_junit.xml,initial_candidate_captures}`; scope observations are under `cpu_gather_benchmark/compiler_fixed_all_timing_pilot`. The unexecuted Step5 campaign helper and earlier failed/incomplete pilots remain as historical artifacts. Subsequent transparent-pass and shader optimizations receive independent correctness and performance decisions.
+
+## Step 6: shared transparent preparation evaluated and rejected
+
+The implemented candidate prepared one scratch-owned stream for five synchronous consumers: transparent CSG receivers, refraction capture, AVBOIT occupancy, extinction and accumulation. It resolved shared mesh, material, transform, coincident-volume and CSG lookup facts once. Prepared-only consumers borrowed existing mutable overrides during the graph declaration; pass compatibility, typed packing, partitioning and final GPU payload ownership stayed in their existing domains. Opaque-only frames bypassed record gathering. The fourteen exact candidate paths, three new files and eleven new behavior tests remain preserved under `step6/final_candidate/`; no screened-out Step5 implementation was included.
+
+The candidate passed optimized and debug ECS graphics suites with all 392 active cases, both native raytrace cases, and the recorded reflection, temporal, optical, refraction/duplicate, CSG, combined caustic optics and skinned-owner captures. Optimized qualification passed nine CTest targets; debug qualification passed seven, including refraction with actual GPU validation. The combined caustics/refraction image was also inspected. These correctness results did not establish a performance benefit.
+
+Both exact frozen arms completed canonical six-scene timing pilots before the complete predeclared matrix. All 96 launches in 48 balanced pairs completed, retaining 24,576 measured CPU frames and 24,574 completed GPU frames. Each launch had 96 warm-up, 256 measured and 32 drain successful frames. Both arms contained the same compiler and measurement fixes, private generated project, authored volume and instrumentation. The sole source delta was the reviewed fourteen-file candidate. Every report and frozen identity passed the existing acquisition checks; no timing trial was dropped, extended or selectively repeated.
+
+| Workload | CPU render baseline / candidate ms | Paired delta ms [95% interval] | Existing comparison result |
+| --- | ---: | --- | --- |
+| Opaque | 6.026364 / 5.979774 | -0.046589 [-0.108665, +0.009755] | `gpu_control_uncertain` |
+| Hybrid | 14.344387 / 14.262874 | -0.081514 [-0.493251, +0.325291] | `cpu_change_unresolved` |
+| Shared | 19.464174 / 19.370083 | -0.094091 [-0.297957, +0.104736] | `cpu_change_unresolved` |
+| Unique | 155.440141 / 155.220361 | -0.219780 [-2.067950, +1.789586] | `gpu_control_uncertain` |
+| Overrides | 19.611055 / 19.561349 | -0.049707 [-0.312453, +0.236886] | `gpu_control_uncertain` |
+| Runtime | 26.261511 / 26.400287 | +0.138777 [-0.126825, +0.398418] | `cpu_change_unresolved` |
+
+All six CPU-render intervals cross zero and none clears the unchanged practical reduction gate, `max(0.02 ms, 3% of baseline graphics.render)`. All six render-pass subtotal intervals also cross zero. Hybrid, shared and runtime pass GPU control equivalence but remain unresolved. Opaque has uncertain GPU frame, opaque and shadow controls; unique has uncertain lighting and presentation controls; overrides has an uncertain shadow control. None is classified as material control drift. Complete CPU-frame intervals remain inside the allowed positive regression bound. These results demonstrate neither a practical improvement nor a confirmed material regression, and no pooled six-workload confidence claim is made.
+
+The separate memory campaign completed all twelve acquisitions, one per workload and arm, with 256 measured frames each. Seven arena owners had complete matching observations; `avboit_transparent_csg` and `material_pass_render` remain unavailable. No comparable retained-used, retained-reserved, reallocation or individual-arena lifetime-peak reduction was observed. Task-graph allocation and deallocation counts increased together by approximately one per frame for hybrid, shared, unique and runtime, five for overrides, and 0.121 for opaque; all other comparable metrics were unchanged. These single-acquisition observations establish neither timing effects nor process-peak memory changes, and small fractional differences are not attributed precisely to the candidate.
+
+The extra shared-record and borrowed-cache lifetime machinery is rejected because the tested workloads show no justified benefit. All fourteen paths were restored to exact baseline hashes, with the three new files physically absent. Restored optimized and debug builds passed all 381 active ECS graphics cases and both native raytrace cases. The compiler, timing, temporal, spatial and accepted-upload improvements remain intact.
+
+Evidence is under `__artifacts/reflection_optimization_steps/step6/`: `baseline_v1`, `candidate_v1`, both successful timing pilots, `timing_v1`, `memory_v1`, candidate `opt_junit.xml`/`dbg_junit.xml`, and restored `restored_opt_junit.xml`/`restored_dbg_junit.xml`, with complete logs alongside them. The candidate manifest SHA256 is `ccede216ff06598c139683eb81a2e1086fd4b93bf2e36da914b3b24a289ede46`. The initial candidate pilot invocation used a nonexistent logserver path and failed before launch; its corrected invocation passed before the matrix. Balanced power and 79% battery were reported at both timing endpoints; frequency and thermal telemetry were unavailable. No build, cook or GPU test overlapped timing. Reproduction follows `RENDERER_GATHER_BENCHMARK.md` with each fixed workload and its own eight-block campaign, followed by separate memory acquisitions.
+
+Timing set report SHA256: `8a8ffdca6b5a77aba6eb9344d71b21d6190c107eb120dc34863f68592bd5297c`.
+
+Memory set report SHA256: `c15092de5856f67a92038fc03114d0a1c48ab368d3b04efb09c3bfc587cff627`.

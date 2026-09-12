@@ -1,5 +1,7 @@
 # Reflection performance and benchmark reproduction
 
+The September 12 [deferred optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md) did not establish a reliable improvement and was reverted. Its 16 trials remain separate from the September 9 results below.
+
 The eight-stage reflection implementation is complete. The optimized benchmark completed all **164 process trials in 40 balanced blocks**, retaining **120,748 completed GPU frame samples**. These measurements show that fewer hardware rays or screen-depth loads do not necessarily reduce total frame time.
 
 On the tested Qualcomm Adreno X2-90, Hardware mode was faster than Hybrid in the qualified long-miss and productive-floor comparisons. The optional screen-miss feedback reduced classification work, but none of its three paired frame comparisons established a reduction beyond the predeclared practical threshold. Feedback therefore remains disabled by default. Route and filter controls remain explicit; this single-adapter experiment does not change the general defaults.
@@ -81,7 +83,7 @@ python tests/smoke/reflection_benchmark.py @reflectionBenchmarkArgs --family opt
 if($LASTEXITCODE -ne 0){ throw 'Optical timing failed' }
 ```
 
-The runner disables reflection diagnostics, framebuffer capture, inherited mutation controls, and explicit validation layers for timing. It verifies route/settings/policy logs, normal shutdown, dimensions, actual GPU samples, executable identity, and authored resources. Known scope hashes are decoded using the repository's name algorithm; an explicitly supplied matching `.namesym` can also be used. Do not decode with an unrelated build's symbol file.
+The runner disables reflection diagnostics, framebuffer capture, and inherited mutation controls for timing. It rejects explicit validation-layer overrides; it does not silently disable a requested layer. It verifies route/settings/policy logs, normal shutdown, dimensions, actual GPU samples, executable identity, and authored resources. Known scope hashes are decoded using the repository's name algorithm; an explicitly supplied matching `.namesym` can also be used. Do not decode with an unrelated build's symbol file.
 
 Every family writes `plan.json`, incremental `trials.json`, and final `report.json`; each trial preserves launch settings, runtime logs, raw timing, normalized totals, and retained publication ranges. An incomplete family produces failure evidence without a completed inference. The artifacts for this recorded experiment are under `__artifacts/reflection_stage8_opt/final`, including operator observations and `benchmark_verification.json`. Raw artifacts are generated evidence, not committed test goldens. Report hashes below identify the exact source results.
 

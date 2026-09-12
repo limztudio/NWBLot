@@ -19,6 +19,11 @@ separately in [Reflection performance](REFLECTION_PERFORMANCE.md). Completed
 traversal counters establish work performed; they do not establish a GPU speedup.
 Screen-miss feedback remains disabled by default.
 
+The September 12 [optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md)
+passed its scoped correctness checks but did not establish a reliable speedup,
+so the speculative shader changes were reverted. That report also records the
+upstream renderer repairs and the remaining full-suite test limitations.
+
 The refraction fixture explicitly disables reflection to isolate its transmission
 comparisons. The 33-capture exact-duplicate gallery passed at the stage-two gate;
 that earlier run is separate evidence.

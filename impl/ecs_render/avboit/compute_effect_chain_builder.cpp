@@ -26,38 +26,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_avboit_compute_effect_chain{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] Core::GpuTaskSchedulingHint MakeComputeEffectScheduling(){
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Medium;
-    scheduling.forceSubmissionBoundary = false;
-    scheduling.allowPacketMerge = true;
-    scheduling.mergeWithPrevious = true;
-    scheduling.allowMergeAcrossConsumerFrontier = true;
-    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
-    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(scheduling);
-    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(scheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
-    scheduling.allowTimingFeedbackRouting = true;
-    scheduling.allowCrossClassTimingFeedbackRouting = true;
-    return scheduling;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     Core::GpuTaskGraph& graph,
     RendererAvboitSystem& avboitSystem
@@ -85,7 +53,18 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     if(!inputs.occupancyTask.valid())
         return false;
 
-    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::MakeComputeEffectScheduling();
+    Core::GpuTaskSchedulingHint avboitComputeScheduling;
+    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
+    avboitComputeScheduling.forceSubmissionBoundary = false;
+    avboitComputeScheduling.allowPacketMerge = true;
+    avboitComputeScheduling.mergeWithPrevious = true;
+    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
+    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
+    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
+    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
+    // Accepted samples use the queue class and exact transport chosen by this compile.
+    avboitComputeScheduling.allowTimingFeedbackRouting = true;
+    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
         AvboitComputeStageTimingMetadata(*inputs.targets)
     ;
@@ -156,7 +135,18 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
         return false;
 
-    const Core::GpuTaskSchedulingHint avboitComputeScheduling = __hidden_avboit_compute_effect_chain::MakeComputeEffectScheduling();
+    Core::GpuTaskSchedulingHint avboitComputeScheduling;
+    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
+    avboitComputeScheduling.forceSubmissionBoundary = false;
+    avboitComputeScheduling.allowPacketMerge = true;
+    avboitComputeScheduling.mergeWithPrevious = true;
+    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
+    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
+    RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
+    RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
+    // Accepted samples use the queue class and exact transport chosen by this compile.
+    avboitComputeScheduling.allowTimingFeedbackRouting = true;
+    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
         AvboitComputeStageTimingMetadata(*inputs.targets)
     ;

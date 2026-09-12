@@ -47,6 +47,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/extensions_cluster_operation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/event_query.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap_slot_allocator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap_descriptor_buffer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/graphics_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/host_readback_sync.cpp"

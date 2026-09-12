@@ -195,6 +195,7 @@ private:
     const GpuTaskId& task
 )noexcept;
 
+
 struct GpuTaskQueueScoringData{
     Vector<u64, Alloc::ScratchArena> taskCosts;
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
@@ -218,6 +219,86 @@ struct GpuTaskQueueScoringData{
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
+)noexcept;
+
+[[nodiscard]] bool AllowsTimingFeedbackRouting(const GpuTaskGraphTaskView& task)noexcept;
+
+[[nodiscard]] bool IsLegalTimingFeedbackRoute(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuPhysicalQueueInfo& candidate
+)noexcept;
+
+[[nodiscard]] GpuTaskTimingKey TimingHistoryKeyForQueue(
+    const GpuTaskTimingAssignmentKey& assignmentKey,
+    const CommandQueue::Enum queueClass
+)noexcept;
+
+[[nodiscard]] bool HasUsableTimingFeedback(
+    const GpuTaskGraphQueueAssignmentOptions& options,
+    const u16 deviceGeneration
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GpuTaskQueueScoringData& scoringData,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& baseQueue,
+    const usize assignedPrefixCount,
+    const bool allowCrossFamilyRouting,
+    const bool preferNonPrimaryQueue
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindDirectDependencySameClassQueue(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphTaskView& task,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueInfo& baseQueue,
+    const usize assignedPrefixCount,
+    const bool allowCrossFamilyRouting
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& staticQueue,
+    const GpuTaskTimingAssignmentKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackQueue(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphAnalysis& analysis,
+    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const GraphicsVector<u32>& assignmentIndicesByTask,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskSchedulingReachability& schedulingReachability,
+    const GpuTaskQueueScoringData& scoringData,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuTaskTimingAssignmentKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot,
+    const GpuTaskTimingFeedbackPolicy& policy,
+    const u64 frameIndex
+)noexcept;
+
+[[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphQueueTopology& topology,
+    const GpuTaskGraphTaskView& task,
+    const GpuPhysicalQueueInfo& incumbent,
+    const GpuTaskTimingAssignmentKey& key,
+    const GpuTaskTimingHistorySnapshot& historySnapshot,
+    const GpuTaskTimingFeedbackPolicy& policy,
+    const u64 frameIndex
 )noexcept;
 
 [[nodiscard]] bool IsBetterAnyQueueAssignmentCandidate(

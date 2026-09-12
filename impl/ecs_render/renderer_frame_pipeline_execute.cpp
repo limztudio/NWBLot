@@ -4,6 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
+#include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
@@ -515,69 +516,12 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     );
     const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
     const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
-    const bool shadowVisibilityPreparedTasksMerged =
-        !m_deferredShadowVisibilityOpaqueTask.valid()
-        || (
-            deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityOpaqueTask
-            )
-            && m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityOpaqueFirstWaveletTask
-            )
-            && m_deferredShadowVisibilityOpaqueResolveTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityOpaqueResolveTask
-            )
-            && m_deferredShadowVisibilityTransparentTraceTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityTransparentTraceTask
-            )
-            && (
-                !m_deferredShadowVisibilityTransparentTemporalMergeTask.valid()
-                || deferredCompiledPlan.tasksSharePacket(
-                    m_deferredShadowVisibilityTask,
-                    m_deferredShadowVisibilityTransparentTemporalMergeTask
-                )
-            )
-            && m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityTransparentFirstWaveletTask
-            )
-        )
-    ;
-    // Keep the all-lit clear in its packet; split-soft frames keep native clear.
-    const bool shadowVisibilityAllLitClearMerged = m_deferredShadowVisibilityOpaqueTask.valid()
-        ? !m_deferredShadowVisibilityAllLitClearTask.valid()
-        : m_deferredShadowVisibilityAllLitClearTask.valid()
-            && deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityAllLitClearTask
-            )
-    ;
-    // Keep the original acceptance endpoint; a split would leak state early.
-    const bool shadowVisibilityAdaptivePrimitivesMerged =
-        (!m_deferredShadowVisibilityAdaptiveStatsClearTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityAdaptiveStatsClearTask
-            ))
-        && (!m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityAdaptiveCounterClearTask
-            ))
-        && (!m_deferredShadowVisibilityAdaptiveStatsReadbackTask.valid()
-            || deferredCompiledPlan.tasksSharePacket(
-                m_deferredShadowVisibilityTask,
-                m_deferredShadowVisibilityAdaptiveStatsReadbackTask
-            ))
-    ;
+    ShadowVisibilityMergeValidator shadowVisibilityMergeValidator(MakeNotNull(this));
+    ShadowVisibilityMergeValidationResult shadowVisibilityMerge;
+    shadowVisibilityMergeValidator.validate(deferredCompiledPlan, shadowVisibilityMerge);
+    const bool shadowVisibilityPreparedTasksMerged = shadowVisibilityMerge.preparedTasksMerged;
+    const bool shadowVisibilityAllLitClearMerged = shadowVisibilityMerge.allLitClearMerged;
+    const bool shadowVisibilityAdaptivePrimitivesMerged = shadowVisibilityMerge.adaptivePrimitivesMerged;
     const Core::GpuPhysicalQueueInfo* const shadowVisibilityQueue =
         deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue =

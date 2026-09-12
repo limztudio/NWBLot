@@ -16,7 +16,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | 4 | Reuse accepted optical metadata uploads | Complete; redundant upload removal proven, GPU timing inconclusive |
 | 5 | Share common hardware/software ray-scene gathering within a frame | Evaluated and rejected for current workloads after scope profiling; original routes retained |
 | 6 | Share pass-independent transparent preparation | Evaluated and rejected; no resolved CPU benefit or observed memory saving |
-| 7 | Reuse mip-zero depth neighborhoods | Shader draft prepared; production-kernel readback tests in progress |
+| 7 | Reuse mip-zero depth neighborhoods | Evaluated and rejected; native/image parity passed but no measured pyramid or frame gain |
 | 8 | Reject primary refraction instances earlier in ordinary accumulation | Review found a derivative-safety blocker |
 | 9 | Replace repeated optical-bootstrap prior-event scans with a processed mask | Draft reviewed |
 | 10 | Test a separately compiled optical kernel for proven air origins | Experiment draft in progress |
@@ -206,3 +206,26 @@ Evidence is under `__artifacts/reflection_optimization_steps/step6/`: `baseline_
 Timing set report SHA256: `8a8ffdca6b5a77aba6eb9344d71b21d6190c107eb120dc34863f68592bd5297c`.
 
 Memory set report SHA256: `c15092de5856f67a92038fc03114d0a1c48ab368d3b04efb09c3bfc587cff627`.
+
+## Step 7: shared mip-zero depth neighborhood evaluated and rejected
+
+The single-shader candidate used a 100-element FP32 shared tile for each 8x8 mip-zero output group, replacing repeated source loads with a shared 3x3 neighborhood. All lanes initialized the tile and reached the barrier before image-tail returns. Clamp, sanitization and min/max reduction order were preserved; higher-mip reduction logic was unchanged. The pipeline added 400 bytes of shared storage and one mip-zero group barrier. Source load counts alone cannot establish a gain because the original texture path already caches neighboring samples.
+
+Baseline and candidate passed the actual production-cooker/native-readback fixture in optimized and debug configurations with no skips or validation errors. Each run contained 39 depth scenarios checking every texel in every mip and 160 spatial regression scenarios, inside two GoogleTests. Depth coverage includes literal tiny cases, odd and non-power-of-two dimensions, finite D32 and finite/invalid R32 inputs, and the supported production RG32/RGBA32 output choice. The fixture does not force both output formats or distinguish signed-zero bits.
+
+Both exact frozen Opt arms passed all 22 smooth reflection captures with required hardware availability and actual GPU-validation startup markers. Existing image, route, ray-budget and completed-statistics oracles were rerun, and every decoded RGB pixel matched between arms. This is image parity plus each suite's semantic statistics validation; cross-process asynchronous statistics totals were not compared. Baseline/candidate executable and dependency bytes were identical, and the full frozen-source difference was exactly `depth_reduce_cs.slang`. All 206 packed-file identities were checked: only its shader payload and the owning shader index changed. Every other packed payload and shader record was identical. Each arm's native Opt module exactly matched its packed bytecode, and its Opt/Dbg native modules were identical.
+
+The predeclared `reflection-screen-depth` campaign completed all 16 launches in eight balanced pairs, retaining 12,928 completed GPU frames. All required coverage, identities and opaque/lighting/shadow control-equivalence checks passed. At 960x720 the depth scope contains ten mip-reduction ranges per frame. The per-range mean is not a pyramid time; the table uses the runner's total measured pyramid work per completed frame.
+
+| Scope | Baseline / candidate ms | Paired delta ms [95% interval] |
+| --- | ---: | --- |
+| Full GPU frame | 3.598778 / 3.593588 | -0.005190 [-0.017680, +0.006145] |
+| Whole depth pyramid per GPU frame | 0.141604 / 0.142346 | +0.000742 [-0.003760, +0.004563] |
+
+The runner reports `unresolved`; the practical full-frame threshold was 0.107963 ms. Neither the pyramid nor the frame establishes an improvement, so the additional shared storage and synchronization are rejected. No regression or speedup is claimed. All trials are retained without extension or removal. Balanced power and 78% battery were reported at both endpoints; frequency and thermal telemetry were unavailable, and no build/cook/GPU test overlapped acquisition.
+
+The original shader was restored to exact SHA256 `ad1cae197a45b33d14a8786eaf5f3dea9592645022d090458c604b0a9882cbf7`. Optimized and debug native checks passed again; the rebuilt ordinary Opt executable/dependencies and authored runtime exactly match the qualified baseline identities. The rejected shader remains only in the experiment artifacts. The shared kernel test fixture is retained because it also qualifies the accepted spatial change.
+
+Evidence is under `__artifacts/reflection_optimization_steps/step7/`: frozen arms and native modules, baseline/candidate/restored native JUnit and full logs, both capture suites, `capture_comparison_v1/report.json`, `packed_depth_delta.json`, and `timing_screen_v1/report.json`. Reproduce native checks with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_reflection_kernel_tests$" -j1` and the debug preset; use the common eight-block runner with `--workload reflection-screen-depth` for timing. The new generic freeze helper's offline validation ran 36 cases: 35 passed and the symlink-creation case explicitly skipped because Windows did not grant that privilege. Both real frozen arms subsequently passed the complete source/absence/copy/delta checks.
+
+Timing report SHA256: `023a8eb8d24d447cbe1e9a6a1e50652b7cc291193a3a8acfabc4df3274114c0c`.

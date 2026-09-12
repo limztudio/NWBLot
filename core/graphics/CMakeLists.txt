@@ -15,6 +15,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metric_correlator.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_metrics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_submission.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_frame_transaction.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.h"

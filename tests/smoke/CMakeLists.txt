@@ -2,6 +2,7 @@ find_package(Python3 COMPONENTS Interpreter)
 
 if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(descriptor_buffer)
+    add_subdirectory(raytrace)
     add_subdirectory(reflection_kernel)
 endif()
 

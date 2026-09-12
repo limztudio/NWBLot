@@ -10,7 +10,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
-| 4 | Reuse accepted optical metadata uploads | Implementation draft in progress |
+| 4 | Reuse accepted optical metadata uploads | Complete; redundant upload removal proven, GPU timing inconclusive |
 | 5 | Share common hardware/software ray-scene gathering within a frame | Pending |
 | 6 | Share pass-independent transparent preparation | Pending |
 | 7 | Reuse mip-zero depth neighborhoods | Shader draft prepared; production-kernel readback tests in progress |
@@ -91,3 +91,27 @@ Retained because the mirror/ineligible workload clears the practical full-frame 
 Evidence is under `__artifacts/reflection_optimization_steps/step3/`, including frozen arms, raw logs, timing reports, JUnit results and power records. Balanced power and 79% battery were reported at both endpoints; frequency/thermal telemetry was unavailable. No build, cook, GPU test or other acquisition overlapped the campaigns. Report SHA256 values are `50715f876937c979484787455a960ff7aecdb4fd277dc02be9411ba986a21328` (mirror), `6adfbc00718a810fc8262946359aaf5f28271b38440a8f6cd3fe82172560f864` (rough), and `30606a489790060af7bc801a9833195bf658b8d86752ec5a2aaaac90d1a8de40` (filtered).
 
 Use the common frozen-arm command above with `--workload reflection-mirror-spatial`, `reflection-rough-spatial` or `reflection-rough-filtered`, and a new output directory for each complete campaign. Run the direct kernel proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_reflection_kernel_tests$" -j1` (or the debug preset).
+
+
+## Step 4: reuse the latest accepted optical metadata upload
+
+The raytrace owner preserves an immutable CPU payload only after an exact comparison of every header and instance byte. A buffer-bound residency control records which payload the GPU queue actually accepted. An unchanged accepted payload imports that writer completion and the retained Common state, with zero upload tasks and zero graph upload blobs. A changed payload retains its own bytes and publishes residency from the same native upload packet's acceptance callback. Rejected replacement, accepted replacement followed by later frame failure, A-to-B-to-A reversion, physical buffer replacement and device invalidation preserve the latest accepted-content meaning. Unknown native state/provenance is rejected, not inferred from a frame-success flag.
+
+The production upload and lifecycle helpers belong to `impl/ecs_render/raytrace`. The renderer admits frame graphs serially; successful presentation joins the asynchronous refraction reader onto primary Graphics, and accepted-prefix recovery joins the queue frontier before a later replacement upload. A previous writer token alone does not order arbitrary independent reader graphs. The new native tests deliberately wait for readback and do not claim to stress concurrent readers outside the renderer's existing join contract.
+
+Qualification exposed an existing import/consumer mismatch: a zero hardware-ray budget imported optical data despite declaring no hardware consumer. The old unconditional upload hid this; the reused import correctly failed finalization as an untouched resource with a required final state. Reflection snapshots now expose `hasHardwareWork()` and both the task declaration and frame scene-import boundary use that predicate. Refraction must also be active and have a valid hardware snapshot before requiring the shared import. The compiler contract and image oracles were preserved. The initial failed capture and crash diagnostics remain in the step artifacts.
+
+Validation: 18 new lifecycle/graph declaration tests, an additional zero-budget behavior test, and two validation-enabled native raytrace tests passed in optimized and debug builds. The full ECS graphics suite has 381 active tests. Native tests use the actual scene resource owner, real standalone task-graph submission, a real rejected native replacement, and fresh exact-byte readback after rejection. Optimized full reflection/budget, basic refraction, duplicate/overlap and mid-CSG captures passed after the fix; temporal/reset, all 30 reflected optical cases, ordinary transparency and combined caustic optics also passed during this step. Debug full reflection/budget, refraction with GPU validation, ordinary transparency and mid-CSG passed. No native test skipped. Source encoding, CRLF, banner/separator, EOF and unnamed-namespace checks passed.
+
+The complete frozen optical-clear campaign used 16 launches, eight balanced blocks, 163 retained reports and 1,606 completed GPU frames. Every required scope count and build/source/resource identity passed. Baseline executable SHA256 was `e65b5afbe0376a9b0ac232ab643ca54ef8353d869021bc646179ae0ff2d444ea`; candidate was `0923ed9f8dfc3d91b8f9da72d2c08bed11721775e143819e0dd875aeae25c9f3`. Both authored volumes were `a5e7ff4ab129877b1397ed2e911e69fd0bf8c53f41f797dd06f3c735fa8f4d12`.
+
+| Scope | Baseline / candidate ms | Paired mean delta ms [95% interval] |
+| --- | ---: | --- |
+| Full frame | 53.298711 / 51.322085 | -1.976626 [-5.763720, +0.022087] |
+| Reflection hardware | 38.191888 / 36.246358 | -1.945530 [-5.769760, +0.064468] |
+
+The runner reports `control_uncertain`: opaque and deferred-lighting intervals do not fit their equivalence tolerances, while shadow visibility does. The second block's baseline had a large hardware-reflection excursion; the paired full-frame difference for that block was -15.054110 ms. It is retained, with no additional timing trials. The unchanged shader asset identity does not explain that excursion, and the mean reduction is not attributed to upload reuse. No GPU frame-time gain or CPU timing gain is claimed. Retention is based on the native/graph proof that an unchanged accepted scene removes the persistent payload allocation, graph payload copy and physical upload rather than merely reducing a source-level operation count. CPU timing and memory profiling are separate follow-up measurements for the preparation work.
+
+Evidence: `__artifacts/reflection_optimization_steps/step4/`, including `opt_unit_native_junit.xml`, the preserved initial `opt_capture_junit.xml` failure, `opt_fixed_capture_junit.xml`, `dbg_junit.xml`, frozen arms, raw campaign logs and `benchmark_optical_clear/report.json`. Report SHA256 is `52f7b9d03518387336689a54f3cd45487f0a5743b2a3c92717aa7fa6da5f78d1`. Balanced power and 78% battery were reported before and after acquisition; frequency/thermal telemetry was unavailable. No build, cook or GPU test overlapped timing.
+
+Reproduce the native proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_ecs_graphics_tests|nwb_raytrace_tests)$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.

@@ -17,21 +17,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RayTracingOpticalSceneUpload::RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather)
-    : bytes(arena)
-    , instanceCount(static_cast<u32>(gather.instances.size()))
-{
-    const usize instanceBytes = gather.instances.size() * sizeof(RayTracingOpticalInstanceGpu);
-    bytes.resize(sizeof(gather.header) + instanceBytes);
-    NWB_MEMCPY(bytes.data(), bytes.size(), &gather.header, sizeof(gather.header));
-    if(instanceBytes != 0u)
-        NWB_MEMCPY(bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
@@ -42,8 +27,14 @@ RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(
 {}
 
 void RayTracingOpticalSceneResources::invalidate(){
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    if(heap.isInitialized() && m_resources.descriptor.valid())
+    if(m_resources.uploadState)
+        m_resources.uploadState->invalidate();
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    if(
+        heap.isInitialized() && m_resources.descriptor.valid() && m_resources.buffer
+        && m_resources.buffer->getDeviceGeneration() == device.getDeviceGeneration()
+    )
         heap.free(m_resources.descriptor);
     m_resources = {};
     m_capacity = 0u;
@@ -64,7 +55,11 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: descriptor heap is unavailable during preflight"));
         return false;
     }
-    if(!m_resources.buffer || m_capacity < byteCount){
+    if(m_resources.buffer && m_resources.buffer->getDeviceGeneration() != device.getDeviceGeneration()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: stale device resources require owner invalidation"));
+        return false;
+    }
+    if(!m_resources.buffer || !m_resources.uploadState || m_capacity < byteCount){
         Core::BufferDesc desc;
         desc
             .setByteSize(byteCount)
@@ -85,9 +80,20 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
             NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }
+        RayTracingOpticalUploadControlHandle uploadState = CreateRayTracingOpticalUploadControl(
+            m_arena, buffer, device.getPrimaryPhysicalQueue(Core::CommandQueue::Graphics)
+        );
+        if(!uploadState){
+            heap.free(descriptor);
+            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create accepted upload control"));
+            return false;
+        }
+        if(m_resources.uploadState)
+            m_resources.uploadState->invalidate();
         if(m_resources.descriptor.valid())
             heap.free(m_resources.descriptor);
         m_resources.buffer = Move(buffer);
+        m_resources.uploadState = Move(uploadState);
         m_resources.descriptor = descriptor;
         m_capacity = byteCount;
     }

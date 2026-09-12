@@ -328,7 +328,7 @@ ReflectionGraphResult DeclareReflectionTasks(
     ReflectionFeedbackReservation feedbackReservation(resources.feedback.control, resources.feedback.plan);
     const bool feedbackReserved = feedbackReservation.valid();
     const bool feedbackWrites = feedbackReserved && resources.feedback.plan.eligible && resources.parameters.hardwareEnabled != 0u;
-    const bool buildArguments = resources.parameters.hardwareEnabled != 0u && resources.parameters.maxHardwareRays > 0u;
+    const bool buildArguments = resources.hasHardwareWork();
     const DispatchStage::Enum feedbackPublicationStage = buildArguments ? DispatchStage::BuildArgs : DispatchStage::Classify;
     // A stale feedback lease disables this optimization; rendering remains available.
     Core::GpuGraphResourceId feedbackCurrent;

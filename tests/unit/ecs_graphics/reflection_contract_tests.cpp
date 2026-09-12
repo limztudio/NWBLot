@@ -177,6 +177,19 @@ TEST(EcsGraphics, GlassReflectionAttachmentSurvivesAvboitClearAndIsNeutralWhenCa
     EXPECT_FALSE(ContainsText(graph, "foregroundAccumExtinction"));
 }
 
+TEST(EcsGraphics, ReflectionHardwareWorkRequiresAnEnabledRouteAndPositiveRayBudget){
+    NWB::Impl::ReflectionFrameSnapshot snapshot;
+    snapshot.parameters.hardwareEnabled = 1u;
+    snapshot.parameters.maxHardwareRays = 0u;
+    EXPECT_FALSE(snapshot.hasHardwareWork());
+    snapshot.parameters.maxHardwareRays = 1u;
+    EXPECT_TRUE(snapshot.hasHardwareWork());
+    snapshot.parameters.maxHardwareRays = 64u;
+    EXPECT_TRUE(snapshot.hasHardwareWork());
+    snapshot.parameters.hardwareEnabled = 0u;
+    EXPECT_FALSE(snapshot.hasHardwareWork());
+}
+
 TEST(EcsGraphics, ReflectionFrameSelectorsMatchTwelveStd140LanesAndSeparateCounterBytes){
     using Parameters = NWB::Impl::ReflectionFrameParameters;
     EXPECT_EQ(sizeof(Parameters), 192u);

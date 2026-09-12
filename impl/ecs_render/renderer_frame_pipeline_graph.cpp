@@ -2188,7 +2188,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!reflectionResources.valid())
         return;
     RayTracingSceneGraphReads sceneReads;
-    if(reflectionResources.parameters.hardwareEnabled != 0u || refractionResources.usesHardwareTrace){
+    if(reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace)){
         sceneReads = ImportRayTracingSceneGraphReads(
             m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
         );

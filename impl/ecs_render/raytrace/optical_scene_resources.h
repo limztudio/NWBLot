@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "optical_scene.h"
+#include "optical_scene_upload.h"
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
@@ -41,25 +41,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Built during preflight, immutable after publication. Graph declarations copy these bytes into their own
-// upload storage; retained snapshots also pin the CPU and GPU generations.
-struct RayTracingOpticalSceneUpload{
-    Vector<u8, Core::Alloc::GlobalArena> bytes;
-    u32 instanceCount = 0u;
-
-    RayTracingOpticalSceneUpload(Core::Alloc::GlobalArena& arena, const RayTracingOpticalSceneGather& gather);
-};
-using RayTracingOpticalSceneUploadControl = RefCounter<RayTracingOpticalSceneUpload>;
-using RayTracingOpticalSceneUploadHandle = RefCountPtr<RayTracingOpticalSceneUploadControl, ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>>;
-
 struct RayTracingOpticalSceneSnapshot{
     Core::BufferHandle buffer;
     RayTracingOpticalSceneUploadHandle upload;
+    RayTracingOpticalUploadControlHandle uploadState;
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
     u32 transparentCount = 0u;
     bool boundsComplete = false;
 
-    [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid() && upload; }
+    [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
 };
 
 class RayTracingOpticalSceneResources final : NoCopy{

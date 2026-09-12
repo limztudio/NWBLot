@@ -102,6 +102,8 @@ struct ReflectionFrameSnapshot{
     ReflectionFeedbackSnapshot feedback;
     u32 frameParametersSlot = 0u;
 
+    [[nodiscard]] bool hasHardwareWork()const noexcept{ return parameters.hardwareEnabled != 0u && parameters.maxHardwareRays > 0u; }
+
     [[nodiscard]] bool valid()const noexcept{
         return
             parameters.width > 0u && parameters.height > 0u && opaqueRadiance && glassRadiance

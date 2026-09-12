@@ -130,6 +130,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_interval_peel.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_interval_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_peel_targets.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/csg/csg_clip_resolve.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_snapshot_queries.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/deferred/deferred_composite.cpp"

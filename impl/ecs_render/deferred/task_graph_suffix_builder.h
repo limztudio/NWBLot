@@ -78,6 +78,7 @@ public:
         Core::IGpuTaskGraphPresentationContributor* presentationContributor
     );
 
+
 public:
     [[nodiscard]] bool declare(
         const DeferredGraphSuffixInputs& inputs,
@@ -90,6 +91,7 @@ public:
         Core::GpuTimingFrameTransaction& frameTimingTransaction,
         DeferredGraphSuffixResult& outResult
     );
+
 
 private:
     Core::GpuTaskGraph& m_graph;

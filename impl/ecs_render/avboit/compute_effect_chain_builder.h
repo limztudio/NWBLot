@@ -79,8 +79,6 @@ public:
         AvboitDepthWarpStageResult& outResult
     );
 
-
-public:
     [[nodiscard]] bool declareIntegration(
         const AvboitIntegrationStageInputs& inputs,
         AvboitIntegrationStageResult& outResult

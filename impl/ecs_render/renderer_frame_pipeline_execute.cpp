@@ -500,62 +500,21 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const bool shadowMaterialContextUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.shadowMaterialContextUploadsMerged;
     const bool sceneBvhUploadsMergedIntoShadowPreparePacket = shadowPreparePacket.sceneBvhUploadsMerged;
     // CSG callbacks keep an independent anchor across FrontierSafe splits.
-    const Core::GpuTaskId graphicsPrefixTimingTasks[graphicsPrefixTimingTicketCount] = {
-        m_graphicsPrefixMeshViewSetupTask,
-        m_graphicsPrefixSceneShadingSetupTask,
-        m_graphicsPrefixDeferredClearTask,
-        m_graphicsPrefixGbufferTask,
-        m_graphicsPrefixCsgReceiverSpanTask.valid()
-            ? m_graphicsPrefixCsgReceiverSpanTask
-            : m_graphicsPrefixGbufferTask,
-        m_graphicsPrefixCsgIntervalCombineTask.valid()
-            ? m_graphicsPrefixCsgIntervalCombineTask
-            : m_graphicsPrefixGbufferTask,
-        m_graphicsPrefixCsgIntervalSampleTask.valid()
-            ? m_graphicsPrefixCsgIntervalSampleTask
-            : m_graphicsPrefixGbufferTask,
-        m_graphicsPrefixTask,
-    };
-    bool graphicsPrefixTimingBindingsValid = true;
-    usize graphicsPrefixUniquePacketCount = 0u;
-    for(usize prefixTaskIndex = 0u; prefixTaskIndex < graphicsPrefixTimingTicketCount; ++prefixTaskIndex){
-        const Core::GpuTaskId task = graphicsPrefixTimingTasks[prefixTaskIndex];
-        if(
-            !deferredCompiledPlan.findTask(task).valid()
-            || (
-                prefixTaskIndex != 0u
-                && !deferredCompiledPlan.taskPrecedesOrSharesPacket(
-                    graphicsPrefixTimingTasks[prefixTaskIndex - 1u],
-                    task
-                )
-            )
-        ){
-            graphicsPrefixTimingBindingsValid = false;
-            break;
-        }
-        bool sharesPacketWithEarlierTask = false;
-        for(usize earlierTaskIndex = 0u; earlierTaskIndex < prefixTaskIndex; ++earlierTaskIndex){
-            if(!deferredCompiledPlan.tasksSharePacket(
-                task,
-                graphicsPrefixTimingTasks[earlierTaskIndex]
-            ))
-                continue;
-            graphicsPrefixTimingTickets[prefixTaskIndex] = graphicsPrefixTimingTickets[earlierTaskIndex];
-            sharesPacketWithEarlierTask = true;
-            break;
-        }
-        if(!sharesPacketWithEarlierTask){
-            graphicsPrefixTimingTickets[prefixTaskIndex] = graphicsPrefixOwnedTimingTickets[prefixTaskIndex];
-            ++graphicsPrefixUniquePacketCount;
-        }
-    }
-    // Measures are submission-local; skip the scope across a frontier.
-    asyncPrefixTimingSpansOnePacket = graphicsPrefixTimingBindingsValid
-        && deferredCompiledPlan.tasksSharePacket(
-            m_graphicsPrefixMeshViewSetupTask,
-            m_graphicsPrefixTask
-        )
-    ;
+    static_assert(graphicsPrefixTimingTicketCount == GraphicsPrefixTimingResolver::s_TimingTaskCount);
+    Core::GpuTaskId graphicsPrefixTimingTasks[GraphicsPrefixTimingResolver::s_TimingTaskCount];
+    GraphicsPrefixTimingResolver graphicsPrefixTimingResolver(MakeNotNull(this));
+    GraphicsPrefixTimingResolutionResult graphicsPrefixTimingResolution;
+    graphicsPrefixTimingResolver.resolve(
+        deferredCompiledPlan,
+        graphicsPrefixTimingTickets,
+        graphicsPrefixOwnedTimingTickets,
+        graphicsPrefixTimingTicketCount,
+        graphicsPrefixTimingTasks,
+        asyncPrefixTimingSpansOnePacket,
+        graphicsPrefixTimingResolution
+    );
+    const bool graphicsPrefixTimingBindingsValid = graphicsPrefixTimingResolution.bindingsValid;
+    const usize graphicsPrefixUniquePacketCount = graphicsPrefixTimingResolution.uniquePacketCount;
     const bool shadowVisibilityPreparedTasksMerged =
         !m_deferredShadowVisibilityOpaqueTask.valid()
         || (

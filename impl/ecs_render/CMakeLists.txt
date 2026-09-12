@@ -143,6 +143,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_raytracing_handoff.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/runtime_mesh_pruning.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/mesh_view.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_surface.cpp"

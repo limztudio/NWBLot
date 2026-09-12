@@ -877,31 +877,6 @@ bool RendererMeshSystem::ensureRayTracingInputHeapHandles(
     return true;
 }
 
-void RendererMeshSystem::confirmAcceptedRayTracingStateHandoffs()noexcept{
-    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-        MeshResources& mesh = meshIt.value();
-        if(mesh.blasBackingFresh && mesh.blasBackingStateHandoffPending){
-            mesh.blasBackingFresh = false;
-            mesh.blasBackingStateHandoffPending = false;
-        }
-    }
-}
-
-void RendererMeshSystem::discardRayTracingBuildState()noexcept{
-    for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
-        MeshResources& mesh = meshIt.value();
-        mesh.blasBackingStateHandoffPending = false;
-        if(mesh.blas)
-            mesh.blasBuildPending = true;
-        if(mesh.swBvhNodeBuffer || mesh.swBvhParentBuffer){
-            mesh.swBvhBuildPending = true;
-            mesh.swBvhTopologyBuilt = false;
-        }
-        mesh.blasRefitsSinceRebuild = 0u;
-        mesh.swBvhRefitsSinceRebuild = 0u;
-    }
-}
-
 bool RendererMeshSystem::collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const{
     outStates.clear();
     outStates.reserve(m_meshState.m_meshes.size());

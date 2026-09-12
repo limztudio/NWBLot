@@ -59,6 +59,7 @@
 #include <impl/ecs_render/avboit/task_graph_accumulation_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_timing_metadata.h>
 #include <impl/ecs_render/avboit/clear_chain_builder.h>
+#include <impl/ecs_render/avboit/compute_effect_chain_builder.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 
 
@@ -2194,56 +2195,29 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         }
     }
 
-    Core::GpuTaskSchedulingHint avboitComputeScheduling;
-    avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
-    avboitComputeScheduling.forceSubmissionBoundary = false;
-    avboitComputeScheduling.allowPacketMerge = true;
-    avboitComputeScheduling.mergeWithPrevious = true;
-    avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
-    EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
-    EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
-    // Accepted samples use the queue class and exact transport chosen by this compile.
-    avboitComputeScheduling.allowTimingFeedbackRouting = true;
-    avboitComputeScheduling.allowCrossClassTimingFeedbackRouting = true;
-    const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
-        AvboitComputeStageTimingMetadata(deferredTargets.avboit)
-    ;
-    Core::GpuTaskId avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_occupancyTask;
-    if(hasTransparentRenderers){
-        const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
-            ReadUse(avboitCoverage, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(avboitDepthWarp, Core::ResourceStates::UnorderedAccess),
-            ReadWriteUse(avboitControl, Core::ResourceStates::UnorderedAccess),
-            ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-        };
-        const Core::GpuTaskId preDependency[] = { m_avboitSystem.taskGraphStage().m_occupancyTask };
-        Core::GpuTaskDesc depthWarpDesc;
-        depthWarpDesc
-            .setIdentity(Name("render.avboit.depth_warp"))
-            .setMarkerLabel("AVBOIT Depth Warp")
-            .setQueue(ComputeQueueRequest())
-            .setScheduling(avboitComputeScheduling)
-            .setTimingMetadata(avboitComputeStageTiming)
-            .setDependencies(preDependency, LengthOf(preDependency))
-            .setResourceUses(depthWarpResourceUses, LengthOf(depthWarpResourceUses))
-        ;
-        m_avboitSystem.taskGraphStage().m_depthWarpTask = m_deferredLightingTaskGraph.addTask<AvboitDepthWarpGraphTask>(
-            depthWarpDesc,
-            AvboitDepthWarpGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = &deferredTargets.avboit,
-                .timingTicket = &avboitDepthWarpTimingTicket,
-                .timingFeedback = &m_deferredTaskTimingFeedback,
-                .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp,
-            }
-        );
-        if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
-            return;
-        }
-        avboitDepthWarpCompletionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
+    AvboitComputeEffectChainBuilder avboitComputeEffectChainBuilder(
+        m_deferredLightingTaskGraph,
+        m_avboitSystem
+    );
+    AvboitDepthWarpStageResult avboitDepthWarpStageResult;
+    if(!avboitComputeEffectChainBuilder.declareDepthWarp(
+        AvboitDepthWarpStageInputs{
+            .targets = &deferredTargets.avboit,
+            .coverage = avboitCoverage,
+            .depthWarp = avboitDepthWarp,
+            .control = avboitControl,
+            .currentBindlessSlots = currentBindlessSlots,
+            .occupancyTask = m_avboitSystem.taskGraphStage().m_occupancyTask,
+            .depthWarpTimingTicket = &avboitDepthWarpTimingTicket,
+            .timingFeedback = &m_deferredTaskTimingFeedback,
+            .hasTransparentRenderers = hasTransparentRenderers,
+        },
+        avboitDepthWarpStageResult
+    )){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+        return;
     }
+    const Core::GpuTaskId avboitDepthWarpCompletionTask = avboitDepthWarpStageResult.completionTask;
 
     if(hasTransparentRenderers){
     // Snapshot Extinction after Depth Warp so phases never overwrite each other.
@@ -3112,36 +3086,21 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         return;
     }
     }
-    // Integration is a Compute-preferred successor; compiler owns queue and state lowering.
-    const Core::GpuTaskResourceUse integrationResourceUses[] = {
-        ReadUse(avboitExtinction),
-        ReadUse(avboitControl),
-        ReadUse(avboitExtinctionOverflow),
-        ReadWriteUse(avboitTransmittance, Core::ResourceStates::UnorderedAccess),
-        ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer),
-    };
-    const Core::GpuTaskId integrationDependency[] = { m_avboitSystem.taskGraphStage().m_extinctionTask };
-    Core::GpuTaskDesc integrationDesc;
-    integrationDesc
-        .setIdentity(Name("render.avboit.integration"))
-        .setMarkerLabel("AVBOIT Integration")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(avboitComputeScheduling)
-        .setTimingMetadata(avboitComputeStageTiming)
-        .setDependencies(integrationDependency, LengthOf(integrationDependency))
-        .setResourceUses(integrationResourceUses, LengthOf(integrationResourceUses))
-    ;
-    m_avboitSystem.taskGraphStage().m_integrationTask = m_deferredLightingTaskGraph.addTask<AvboitIntegrationGraphTask>(
-        integrationDesc,
-        AvboitIntegrationGraphTask::Payload{
-            .avboitSystem = &m_avboitSystem,
+    AvboitIntegrationStageResult avboitIntegrationStageResult;
+    if(!avboitComputeEffectChainBuilder.declareIntegration(
+        AvboitIntegrationStageInputs{
             .targets = &deferredTargets.avboit,
-            .timingTicket = &avboitIntegrationTimingTicket,
+            .extinction = avboitExtinction,
+            .control = avboitControl,
+            .extinctionOverflow = avboitExtinctionOverflow,
+            .transmittance = avboitTransmittance,
+            .currentBindlessSlots = currentBindlessSlots,
+            .extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask,
+            .integrationTimingTicket = &avboitIntegrationTimingTicket,
             .timingFeedback = &m_deferredTaskTimingFeedback,
-            .timingScope = &RendererGpuTimingScope::s_AvboitIntegration,
-        }
-    );
-    if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
+        },
+        avboitIntegrationStageResult
+    )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return;
     }

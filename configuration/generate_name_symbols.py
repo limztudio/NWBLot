@@ -29,7 +29,7 @@ def log(message):
     print("[namesym] {}".format(message), flush=True)
 
 
-# Resolve the CMake executable the same way launcher.py does: CMAKE_COMMAND is one executable path, so retain it as
+# Resolve the CMake executable the same way the launcher package does: CMAKE_COMMAND is one executable path, so retain it as
 # one argv item even when the path contains spaces. The project's CMake lives in a local Python venv that is not on
 # PATH, so honoring CMAKE_COMMAND lets the namesym target drive it without each caller having to edit the tree.
 def resolve_cmake_command():

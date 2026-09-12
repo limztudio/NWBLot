@@ -3,14 +3,14 @@
 
 From the repository root:
 
-    python launcher.py hybrid-shadow-boundary
+    python -m launcher hybrid-shadow-boundary
 
 The launcher builds one fixed-yaw stress-scene executable and runs it twice: the normal hybrid-shadow arm and
 a test-owned opaque-only scene baseline that naturally uses hardware shadows without a transparent software tail.
 It writes timestamped artifacts beneath ``.cozter/out/ab-results/hybrid-shadow-boundary``.
 Pass options for ``run.py`` after ``--``, for example:
 
-    python launcher.py hybrid-shadow-boundary -- --measure-seconds 30
+    python -m launcher hybrid-shadow-boundary -- --measure-seconds 30
 """
 
 from __future__ import annotations

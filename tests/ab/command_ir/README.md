@@ -10,7 +10,7 @@ cost.
 From the repository root:
 
 ```bash
-python launcher.py command-ir
+python -m launcher command-ir
 ```
 
 The default uses 4,096 copy-buffer records, 3 warm-up samples, and 11 measured samples per stage. `--records` accepts 1 through
@@ -18,7 +18,7 @@ The default uses 4,096 copy-buffer records, 3 warm-up samples, and 11 measured s
 a different adapter:
 
 ```bash
-python launcher.py command-ir --records 8192 --warmup 5 --samples 21 --adapter-index 1
+python -m launcher command-ir --records 8192 --warmup 5 --samples 21 --adapter-index 1
 ```
 
 The native and capture recording arms alternate order across measured samples to reduce fixed cache/pool ordering
@@ -57,6 +57,6 @@ safe invalidation contract for graph generation, resource IDs, pipeline IDs, des
 Run either layer's no-Vulkan verification with:
 
 ```bash
-python launcher.py command-ir --self-test
+python -m launcher command-ir --self-test
 python tests/ab/command_ir/run.py --self-test
 ```

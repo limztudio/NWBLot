@@ -3,7 +3,7 @@
 
 From the repository root:
 
-    python launcher.py frame-lagged-async-lighting
+    python -m launcher frame-lagged-async-lighting
 
 The command configures the required smoke target, builds its cooked runtime assets, and
 then runs the lifecycle validator. Pass runner-specific options after ``--``.

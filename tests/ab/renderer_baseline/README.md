@@ -8,10 +8,10 @@ output from later changes, but it is not a retired-legacy parity corpus.
 Capture a reference from the repository root:
 
 ```text
-python launcher.py renderer-baseline transparent-avboit
-python launcher.py renderer-baseline static-csg
-python launcher.py renderer-baseline skinned-csg
-python launcher.py renderer-baseline stress
+python -m launcher renderer-baseline transparent-avboit
+python -m launcher renderer-baseline static-csg
+python -m launcher renderer-baseline skinned-csg
+python -m launcher renderer-baseline stress
 ```
 
 Each run builds only its selected smoke target and writes `baseline.bmp`, `runtime.log`, and `manifest.json` under
@@ -22,7 +22,7 @@ source worktree, and an existing artifact directory is never overwritten.
 Compare a later build against an existing reference:
 
 ```text
-python launcher.py renderer-baseline transparent-avboit -- \
+python -m launcher renderer-baseline transparent-avboit -- \
   --reference-dir .cozter/out/ab-results/renderer-baseline/transparent-avboit/<timestamp> \
   --maximum-mean-abs 2.0 --maximum-changed-fraction 0.02
 ```
@@ -40,7 +40,7 @@ same-revision re-capture per profile and conservative, adapter-local comparison 
 noise. Use it for a formal forward comparison:
 
 ```text
-python launcher.py renderer-baseline transparent-avboit -- \
+python -m launcher renderer-baseline transparent-avboit -- \
   --reference-corpus current-renderer-v1
 ```
 
@@ -55,7 +55,7 @@ point the runner at a restored tree whose immediate children are the profile dir
 
 ```text
 python tests/ab/renderer_baseline/run.py --verify-corpus current-renderer-v1
-python launcher.py renderer-baseline surfel-gi -- \
+python -m launcher renderer-baseline surfel-gi -- \
   --reference-corpus current-renderer-v1 \
   --corpus-root /mnt/nwb-artifacts/current-renderer-v1
 ```

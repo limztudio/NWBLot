@@ -20,7 +20,7 @@ only; use the external trace for actual memory-controller bandwidth, cache behav
 From the repository root:
 
 ```bash
-python launcher.py transfer-queue
+python -m launcher transfer-queue
 ```
 
 The default workload uses 12 uploads of 16 MiB each and 16 Graphics copies of a 32 MiB buffer per iteration. It
@@ -38,13 +38,13 @@ GPU-copy bandwidth. Use `--no-gpu-validation` for a final-build target that cann
 Run the texture variant with:
 
 ```bash
-python launcher.py transfer-queue -- --resource texture
+python -m launcher transfer-queue -- --resource texture
 ```
 
 Capture each command from `capture-commands.txt` using the target GPU profiler, then attach its trace/report while rerunning the workflow:
 
 ```bash
-python launcher.py transfer-queue --external-profiler-report /path/to/capture.rgp
+python -m launcher transfer-queue --external-profiler-report /path/to/capture.rgp
 ```
 
 Without an external trace the runner returns `2` with `incomplete_external_capture_required`, after preserving the

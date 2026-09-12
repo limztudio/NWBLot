@@ -3,8 +3,8 @@
 
 Examples:
 
-    python launcher.py renderer-baseline transparent-avboit
-    python launcher.py renderer-baseline stress -- --reference-dir .cozter/out/ab-results/renderer-baseline/stress/<stamp>
+    python -m launcher renderer-baseline transparent-avboit
+    python -m launcher renderer-baseline stress -- --reference-dir .cozter/out/ab-results/renderer-baseline/stress/<stamp>
 """
 
 from __future__ import annotations

@@ -416,7 +416,7 @@ can receive an unconditional final sign-off.
 | `descriptor_buffer_tests` | 67 passed; 9 expected skips because this host has no dedicated Compute-only or Transfer-only family |
 | Project policy checks (`return_value_handling`, test `std::` use, interop containers) | passed |
 | Command-IR and Transfer A/B launcher/runner self-tests | passed |
-| Immutable renderer-baseline launcher/runner self-tests | passed; the test-owned `python launcher.py renderer-baseline <profile>` workflow captures a source-revisioned BMP, immutable checksum manifest, frozen scene settings, and validation log for opaque textured, AVBOIT, static/skinned CSG, soft-shadow, caustic, surfel-GI, and stress scenes. Transparent AVBOIT, animated skinned CSG, and the stress scene are frame-locked at 96 completed submissions, while temporal soft shadows, caustics, and Surfel GI use a 360-frame warm-up, all through smoke-only controls with a fixed `1/60` simulation delta; each capture waits for the renderer to suspend new submissions before taking the image. The stress control leaves its M4 async-lighting capture contract unchanged. A later candidate can compare only against a matching profile/environment/capture mode/fixed delta/settle-duration/validation-mode baseline and writes an amplified diff plus threshold report. No target-scene baseline artifact is claimed by this infrastructure-only check alone. |
+| Immutable renderer-baseline launcher/runner self-tests | passed; the test-owned `python -m launcher renderer-baseline <profile>` workflow captures a source-revisioned BMP, immutable checksum manifest, frozen scene settings, and validation log for opaque textured, AVBOIT, static/skinned CSG, soft-shadow, caustic, surfel-GI, and stress scenes. Transparent AVBOIT, animated skinned CSG, and the stress scene are frame-locked at 96 completed submissions, while temporal soft shadows, caustics, and Surfel GI use a 360-frame warm-up, all through smoke-only controls with a fixed `1/60` simulation delta; each capture waits for the renderer to suspend new submissions before taking the image. The stress control leaves its M4 async-lighting capture contract unchanged. A later candidate can compare only against a matching profile/environment/capture mode/fixed delta/settle-duration/validation-mode baseline and writes an amplified diff plus threshold report. No target-scene baseline artifact is claimed by this infrastructure-only check alone. |
 | Formal immutable current-renderer corpus `current-renderer-v1`: AMD BC-250 (RADV GFX1013), Vulkan validation | [`current_renderer_corpus.json`](../tests/ab/renderer_baseline/current_renderer_corpus.json) now cryptographically pins the ignored artifact tree under `.cozter/out/ab-results/renderer-baseline/`: opaque-texture `20260818_085522` → `085535` (mean abs 0.181, max 17); static-csg `085551` → `085604` (0.067, 192); transparent-avboit `082350` → `082401` (0.012, 4); skinned-csg `082312` → `082325` (0.207, 74); soft-shadows `084125` → `084153` (0.229, 81); caustics `082923` → `082944` (0.028, 2); surfel-gi `083523` → `083545` (0.071, 8); stress `085339` → `085413` (0.036, 4). The test-owned runner verifies every baseline BMP, manifest, and runtime log before capture, applies conservative recorded limits, and rejects any attempt to relax them. This is the formal forward pixel reference for current graph-renderer output on the qualified adapter; it is explicitly not a legacy-to-graph parity verdict. |
 | Async-render lifecycle evidence: frame-lagged and M4 harnesses | passed with topology-gated execution; their parser/launcher self-tests pass, and freshly rebuilt Vulkan runs on AMD BC-250 (RADV GFX1013) each return the intentional `77` skip because no dedicated Compute-only family exists. This confirms that neither workflow silently treats the Graphics fallback as asynchronous coverage; it does not replace the still-required target-GPU timing/pixel evidence or change the default-disabled rollout policy. |
 | Command-IR profile, 4,096 records, Vulkan validation | passed; capture remained allocation-free and direct `CopyBuffer` replay was 3.63% faster than `Core::CommandList` replay |
@@ -760,7 +760,7 @@ runtime IR templates or general direct-Vulkan IR replay.
 - **Crash policy:** a process crash, including a pre-topology `SIGSEGV`, is a test failure and must be diagnosed
   before the target-hardware run is retried. It is not a valid skip and does not expand this waiver. The current
   recorded run reaches the intentional topology skip rather than preserving such a crash as evidence.
-- **Removal condition:** run `python launcher.py frame-lagged-async-lighting` on a dedicated-Compute-only target
+- **Removal condition:** run `python -m launcher frame-lagged-async-lighting` on a dedicated-Compute-only target
   adapter; retain the lifecycle, validation, pixel-comparison, and profiler/timestamp artifacts under
   `.cozter/out/ab-results/`; then update this audit with the measurements and explicitly decide whether the feature
   remains default-disabled, is promoted behind availability gating, or is retired.
@@ -772,14 +772,14 @@ runtime IR templates or general direct-Vulkan IR replay.
   Transfer-only family, verify the exact producer/readiness topology, and include an external GPU-profiler trace
   covering copy-engine overlap and bandwidth.
 - **Reason:** the available AMD BC-250 (RADV GFX1013) adapter exposes no dedicated Transfer-only family. The live
-  `python launcher.py transfer-queue` run on 2026-08-18 returned its intentional `77`
+  `python -m launcher transfer-queue` run on 2026-08-18 returned its intentional `77`
   `dedicated_transfer_family_unavailable` skip after the Graphics control completed correctly. Its ignored result
   bundle is `.cozter/out/ab-results/transfer-queue/20260818_020109/`; host completion throughput is explicitly not
   GPU-copy bandwidth evidence.
 - **Affected behavior and safe fallback:** public setup uploads retain their existing automatic route and select a
   valid Graphics/Compute transport when a dedicated Transfer-only family is unavailable. The skip does not present
   that fallback as Transfer evidence and does not alter the default routing policy.
-- **Removal condition:** run `python launcher.py transfer-queue` (and the texture variant) on a dedicated-Transfer
+- **Removal condition:** run `python -m launcher transfer-queue` (and the texture variant) on a dedicated-Transfer
   target adapter, attach the paired external profiler report with `--external-profiler-report`, retain the route,
   validation, JSON, and trace artifacts under `.cozter/out/ab-results/`, then update this audit with the reviewed
   bandwidth/copy-engine findings and an explicit policy decision.

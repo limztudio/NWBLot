@@ -14,7 +14,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
 | 4 | Reuse accepted optical metadata uploads | Complete; redundant upload removal proven, GPU timing inconclusive |
-| 5 | Share common hardware/software ray-scene gathering within a frame | Pending |
+| 5 | Share common hardware/software ray-scene gathering within a frame | Evaluated and rejected for current workloads after scope profiling; original routes retained |
 | 6 | Share pass-independent transparent preparation | Pending |
 | 7 | Reuse mip-zero depth neighborhoods | Shader draft prepared; production-kernel readback tests in progress |
 | 8 | Reject primary refraction instances earlier in ordinary accumulation | Review found a derivative-safety blocker |
@@ -152,3 +152,28 @@ The acquisition contract requires 96 successful warm-up frames, 256 exact measur
 Optimized and debug fixture builds and private 846-asset cooks passed. All 27 gather analysis/generator tests and 28 common A/B analysis tests passed. Generic frame timing and native timing-source tests passed in both configurations during the measurement prerequisite. The compiler-fixed optimized fixture completed all six functional timing acquisitions at 384 successful frames each; the separate shared memory acquisition passed its owner/counter contract. Earlier wrong-root, long-cache-path, CRLF identity and incomplete unique attempts remain preserved. These are correctness and acquisition results, not a two-arm speed or memory-saving claim.
 
 See [RENDERER_GATHER_BENCHMARK.md](RENDERER_GATHER_BENCHMARK.md) for build, timing and memory commands and limitations. Evidence remains under `__artifacts/reflection_optimization_steps/cpu_gather_benchmark/`, with optimized/debug build and CTest logs also under `compiler_fragment_order/` and `step5/`.
+
+## Step 5: shared ray-scene gathering screened out after profiling
+
+The candidate built one scratch-owned, pass-neutral renderer stream for the hardware and optional software ray-scene consumers. It resolved shared visibility, coincident filtering, mesh/transform and material facts once, while each route retained its own eligibility, geometry preparation, acceleration snapshot lookup and output packing. Mutable override bytes were copied only when needed because later material-cache insertion can relocate them. The candidate added a neutral record per selected renderer and retained mesh handles until both gathers completed; a single-route frame also paid that cost.
+
+The implemented candidate passed its correctness qualification before profiling: 17 new CPU cases, one new native runtime-mesh replacement case, optimized/debug ECS graphics and raytrace suites, and the recorded reflection, optical, temporal/reset, refraction/duplicate, CSG, caustic and runtime-mesh captures. The accepted-upload and compiler changes are separate from this candidate. Exact reviewed candidate sources and tests remain under `step5/applied_candidate_source/manifest.json`; that manifest's SHA256 is `843d347f159c82431c9eff4e9c79ff05704fddf8d1890b06b93a478ae65a86f0`.
+
+The compiler-fixed baseline then completed six matched-control functional workload acquisitions. Normal ray-scene preflight, including the proposed shared work, lies within `graphics.prepare_resources`. The following descriptive values use the same 256 measured successful frames for each workload. They are not candidate timing results or confidence intervals.
+
+| Workload | Entire preparation mean ms | CPU render mean ms | Entire preparation / render |
+| --- | ---: | ---: | ---: |
+| Opaque | 0.073089 | 6.138091 | 1.190746% |
+| Hybrid | 0.157080 | 14.689948 | 1.069306% |
+| Shared | 0.205215 | 19.721707 | 1.040553% |
+| Unique | 0.401876 | 154.367491 | 0.260337% |
+| Overrides | 0.215496 | 19.901891 | 1.082790% |
+| Runtime | 0.365255 | 26.802471 | 1.362765% |
+
+Even hypothetically removing the whole preparation callback at zero cost falls below the unchanged primary practical gate, `max(0.02 ms, 3% of graphics.render)`, in every tested workload. Step5 changes only a subset and adds scratch bookkeeping/copies. Its neutral stream and retained handles die before preparation returns; route-owned output vectors, graph payloads, uploads and later release work remain. The compatibility fallback builds a fresh single-route stream and gains no shared gather. No concrete mechanism was found for a useful reduction outside the measured preparation scope.
+
+The candidate was therefore screened out before the planned 96-launch timing matrix. No paired A/B campaign or two-arm memory-saving result is claimed, and no performance criterion was relaxed. Scope subtraction cannot formally bound indirect cache/allocator effects, and other scenes might spend much more time in preparation. The decision is that this extra complexity is not justified by the measured opportunity in the current workloads, not proof of zero benefit or a measured regression.
+
+All 13 candidate paths were checked against their pre-candidate state, with the four new files physically absent. The restored optimized and debug ECS suites passed all 381 active cases, and both native raytrace cases ran and passed. These suites exposed one stale presentation source-contract assertion from the new generic timing helper; it now follows `renderWithPhaseTiming` while preserving acquisition/validation/render/present order and the public uninstrumented wrapper. The original failure is retained in `step5/restored_opt_junit.xml`; fixed optimized/debug results are `restored_opt_fixed_junit.xml` and `restored_dbg_junit.xml`, with complete logs alongside them. The compiler-fixed duplicate/CSG/combined-optics and GPU-validation captures also passed before closing this step.
+
+Evidence paths are relative to `__artifacts/reflection_optimization_steps/`. Candidate qualification is under `step5/{opt_junit.xml,dbg_junit.xml,initial_candidate_captures}`; scope observations are under `cpu_gather_benchmark/compiler_fixed_all_timing_pilot`. The unexecuted Step5 campaign helper and earlier failed/incomplete pilots remain as historical artifacts. Subsequent transparent-pass and shader optimizations receive independent correctness and performance decisions.

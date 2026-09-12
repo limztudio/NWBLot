@@ -49,6 +49,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/host_readback_sync.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/meshlets.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/queries.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/queries_lifecycle.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/queue.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/queue_submission.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/refcount.cpp"

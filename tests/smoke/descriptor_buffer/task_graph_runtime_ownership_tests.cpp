@@ -1387,11 +1387,33 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccu
 
     GpuRecordedGraph recordedGraph(graphicsScope.arena());
     const GpuNativePacketRecorder recorder(device, timing);
+    // The cold attempt declares demand for the entire compiled plan without allocating query pools while recording.
+    ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[0u], tasks[0u], recordedGraph));
+    const u64 coldAttemptGeneration = recordedGraph.recordingAttemptGeneration();
+    ASSERT_NE(coldAttemptGeneration, 0u);
+    const GpuTimingRecorderStatistics declaredStatistics = timing.statistics(device);
+    EXPECT_EQ(declaredStatistics.preparedScopeCount, 3u);
+    EXPECT_EQ(declaredStatistics.requestedQueryCount, 10u * s_MaxFramesInFlight);
+    EXPECT_EQ(declaredStatistics.materializedQueryCount, 0u);
+    EXPECT_EQ(declaredStatistics.scopeAttemptCount, 2u);
+    EXPECT_EQ(declaredStatistics.recordedScopeCount, 0u);
+    EXPECT_EQ(declaredStatistics.beginFailureCount, 0u);
+    EXPECT_EQ(declaredStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable], 2u);
+
+    GpuGraphSubmissionTransaction transaction(graphicsScope.arena());
+    ASSERT_TRUE(transaction.tryReset(compiledGraph));
+    ASSERT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, coldAttemptGeneration));
+    ASSERT_TRUE(transaction.tryReset(compiledGraph));
+    ASSERT_TRUE(recordedGraph.tryReset(compiledGraph));
+    EXPECT_EQ(timing.statistics(device).discardedScopeCount, 0u);
+
+    // The next frame preamble materializes that demand before either disjoint range of the measured attempt records.
+    ASSERT_TRUE(timing.materializeRequestedQueries(device));
+    const GpuTimingRecorderStatistics preambleStatistics = timing.statistics(device);
     ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[0u], tasks[0u], recordedGraph));
     const u64 recordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
     ASSERT_NE(recordingAttemptGeneration, 0u);
-    // Recording only declares demand; the frame preamble owns pool creation.
-    ASSERT_TRUE(timing.materializeRequestedQueries(device));
+    EXPECT_NE(recordingAttemptGeneration, coldAttemptGeneration);
     const GpuTimingRecorderStatistics prefixStatistics = timing.statistics(device);
     // Four task scopes and six packet scopes share three identities. Preparation must include the still-unrecorded
     // suffix, the packet-only policy, and the envelope-only packet, while excluding the final untimed packet.
@@ -1410,11 +1432,14 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccu
     EXPECT_EQ(recordedStatistics.requestedQueryCount, prefixStatistics.requestedQueryCount);
     EXPECT_EQ(recordedStatistics.materializedQueryCount, prefixStatistics.materializedQueryCount);
     EXPECT_EQ(recordedStatistics.queryMaterializationFailureCount, 0u);
-    EXPECT_EQ(recordedStatistics.scopeAttemptCount, 10u);
+    EXPECT_EQ(recordedStatistics.scopeAttemptCount - preambleStatistics.scopeAttemptCount, 10u);
     EXPECT_EQ(recordedStatistics.recordedScopeCount, 10u);
     EXPECT_EQ(recordedStatistics.beginFailureCount, 0u);
+    EXPECT_EQ(
+        recordedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable],
+        preambleStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable]
+    );
 
-    GpuGraphSubmissionTransaction transaction(graphicsScope.arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
     ASSERT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration));
     EXPECT_TRUE(transaction.tryReset(compiledGraph));

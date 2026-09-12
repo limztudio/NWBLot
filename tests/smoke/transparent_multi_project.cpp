@@ -92,6 +92,7 @@ static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/
 static constexpr TransparentMaterialRef s_TransparentSharedMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr TransparentMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+static constexpr TransparentMaterialRef s_TransparentCsgMaterial{"project/smoke/transparent_multi/materials/csg_center"};
 static constexpr Name s_TransparentCsgReceiverGroup("project/smoke/transparent_multi/center_receiver");
 #endif
 
@@ -237,6 +238,8 @@ static void ApplyTransparentCsgSceneTransform(
     auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(arena);
     cutter.receiverGroup = s_TransparentCsgReceiverGroup;
     cutter.shapeType = Name("engine/csg/plane");
+    cutter.active = !NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_TRANSPARENT_CSG_DISABLE_CUTTER");
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentCsgSmokeProject: cutter active {}"), cutter.active);
 
     NWB::Impl::CsgPlaneShapeParameters parameters;
     parameters.normalDistance = Float4(0.0f, -1.0f, 0.0f, 0.0f);
@@ -349,6 +352,16 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
             , refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
+        );
+#elif defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+        // This clipping/coverage oracle measures the authored AVBOIT surface appearance.
+        auto& rendererSystem = AddSmokeRenderSystems(*world, context);
+        rendererSystem.setRefractionEnabled(false);
+        NWB::Impl::ReflectionSettings reflectionSettings;
+        reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
+        NWB_FATAL_ASSERT_MSG(
+            rendererSystem.setReflectionSettings(reflectionSettings),
+            NWB_TEXT("TransparentCsgSmokeProject: invalid reflection settings")
         );
 #else
         AddSmokeRenderSystems(*world, context);
@@ -498,8 +511,14 @@ public:
             *m_world,
             m_context.objectArena,
             s_TransparentCenterMesh,
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+            // Unlit saturated color keeps clipping visible independently of facet lighting while retaining transparency.
+            s_TransparentCsgMaterial,
+            Float4(0.02f, 1.0f, 0.05f, 0.60f),
+#else
             s_TransparentSharedMaterial,
             Float4(0.10f, 1.0f, 0.45f, 0.42f),
+#endif
             TransparentCenterShapeBasePosition(),
             Float4(0.78f, 0.78f, 0.78f),
             TransparentCenterCsgReceiverGroup()

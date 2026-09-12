@@ -44,6 +44,18 @@ TEXTURE_SMOKE_RECEIVER_REGION = (0.480, 0.625, 0.505, 0.660)
 TEXTURE_SMOKE_RECEIVER_MIN_RED = 36
 TEXTURE_SMOKE_RECEIVER_RED_CHROMA = 6
 
+# CSG pose names match the fixture's frozen yaw values 0, 1, and 2 radians. Coordinates are offsets from image center,
+# measured in image heights so the vertical-FOV projection remains valid at different aspect ratios. These inset
+# rectangles come from the projected radius-.468 octahedron at camera distance2.2/FOV60 and its retained local-y<=0
+# pyramid, after Ry(yaw)*Ry(yaw)*Rx(.32*yaw)*Rz(.16*yaw). Each cut rectangle lies inside the uncut silhouette and outside
+# the retained pyramid; each retained rectangle lies inside that pyramid. Geometry-based synthetic tests protect those
+# margins. The late retained wedge is above/right of center because the cutter rotates with the receiver.
+TRANSPARENT_CSG_REGIONS = {
+    "early": ((-.030, -.125, .030, -.065), (-.030, .065, .030, .125)),
+    "mid": ((.025, -.125, .065, -.080), (-.065, .110, -.025, .140)),
+    "late": ((-.055, -.128, -.025, -.104), (.045, -.075, .080, -.050)),
+}
+
 
 class SmokeSkip(Exception):
     pass
@@ -67,7 +79,7 @@ class CaptureResult:
     has_pixel_variation: bool
     appears_empty_or_white: bool
     transparent_multi: "TransparentMultiAnalysis"
-    transparent_csg: "TransparentCsgAnalysis"
+    transparent_csg: "dict[str, TransparentCsgAnalysis]"
     texture_smoke: "TextureSmokeAnalysis"
 
 
@@ -517,7 +529,7 @@ def write_bmp_24(path, width, height, rows_rgb):
 def capture_result_from_rgb_rows(handle, width, height, rows_rgb):
     analysis = analyze_rgb_rows(rows_rgb)
     transparent_multi = analyze_transparent_multi_rows(rows_rgb)
-    transparent_csg = analyze_transparent_csg_rows(rows_rgb)
+    transparent_csg = {pose: analyze_transparent_csg_rows(rows_rgb, pose) for pose in TRANSPARENT_CSG_REGIONS}
     texture_smoke = analyze_texture_smoke_rows(rows_rgb)
     return CaptureResult(
         handle,
@@ -646,34 +658,35 @@ def analyze_transparent_multi_rows(rows_rgb):
     return TransparentMultiAnalysis(left_pixels, center_pixels, right_pixels)
 
 
-def analyze_transparent_csg_rows(rows_rgb):
+def transparent_csg_regions(width, height, pose):
+    def to_pixels(region):
+        x0, y0, x1, y1 = region
+        return normalized_region(
+            width, height,
+            .5 + x0 * height / width, .5 + y0,
+            .5 + x1 * height / width, .5 + y1,
+        )
+
+    return tuple(to_pixels(region) for region in TRANSPARENT_CSG_REGIONS[pose])
+
+
+def analyze_transparent_csg_rows(rows_rgb, pose):
     height = len(rows_rgb)
     width = len(rows_rgb[0]) if height else 0
     if width == 0 or height == 0:
         return TransparentCsgAnalysis(0, 0, 0, 0)
 
     background = estimate_background_rgb(rows_rgb, width, height)
-    # The transparent CSG smoke samples three deterministic animation poses; the clipped void moves across them.
-    cut_regions = (
-        normalized_region(width, height, 0.372, 0.311, 0.544, 0.489),
-        normalized_region(width, height, 0.200, 0.444, 0.372, 0.622),
-        normalized_region(width, height, 0.606, 0.467, 0.747, 0.644),
+    cut_region, remaining_region = transparent_csg_regions(width, height, pose)
+    # The center's unlit green material is distinct from the red cylinder, blue cone, and gray opaque occluders.
+    # Retain the ordinary foreground contrast threshold as well: color identity alone must not accept faint noise.
+    remaining_center_pixels = count_foreground_pixels_in_region(
+        rows_rgb, background, remaining_region,
+        pixel_predicate=lambda rgb: rgb[1] > rgb[0] and rgb[1] > rgb[2],
     )
-    remaining_region = normalized_region(width, height, 0.40, 0.52, 0.56, 0.68)
-
-    cut_void_pixels = 0
-    cut_region_pixels = 0
-    for cut_region in cut_regions:
-        candidate_pixels = region_pixel_count(cut_region)
-        candidate_void_pixels = count_background_like_pixels(rows_rgb, background, cut_region)
-        if cut_region_pixels == 0 or candidate_void_pixels * cut_region_pixels > cut_void_pixels * candidate_pixels:
-            cut_void_pixels = candidate_void_pixels
-            cut_region_pixels = candidate_pixels
-
-    remaining_center_pixels = count_foreground_pixels_in_region(rows_rgb, background, remaining_region)
     return TransparentCsgAnalysis(
-        cut_void_pixels,
-        cut_region_pixels,
+        count_background_like_pixels(rows_rgb, background, cut_region),
+        region_pixel_count(cut_region),
         remaining_center_pixels,
         region_pixel_count(remaining_region),
     )
@@ -752,7 +765,7 @@ def count_foreground_pixels(rows_rgb, width, height, background, x0, y0, x1, y1)
     return count_foreground_pixels_in_region(rows_rgb, background, region)
 
 
-def count_foreground_pixels_in_region(rows_rgb, background, region):
+def count_foreground_pixels_in_region(rows_rgb, background, region, pixel_predicate=None):
     start_x, start_y, end_x, end_y = region
     count = 0
 
@@ -765,7 +778,8 @@ def count_foreground_pixels_in_region(rows_rgb, background, region):
                 abs(blue - background[2]),
             )
             if sum(channel_delta) >= 34 and max(channel_delta) >= 14:
-                count += 1
+                if pixel_predicate is None or pixel_predicate((red, green, blue)):
+                    count += 1
 
     return count
 
@@ -1914,8 +1928,8 @@ def validate_transparent_multi_result(result):
         raise SmokeFailure(f"transparent multi-object scene did not show all expected color regions ({observed})")
 
 
-def validate_transparent_csg_result(result):
-    analysis = result.transparent_csg
+def validate_transparent_csg_result(result, pose):
+    analysis = result.transparent_csg[pose]
     min_void_pixels = max(160, analysis.cut_region_pixels // 3)
     min_remaining_pixels = max(160, analysis.remaining_region_pixels // 5)
     missing = []
@@ -1931,7 +1945,7 @@ def validate_transparent_csg_result(result):
             f"min_void={min_void_pixels}, "
             f"min_remaining={min_remaining_pixels}"
         )
-        raise SmokeFailure(f"transparent CSG scene did not show the expected clipped center region ({observed})")
+        raise SmokeFailure(f"transparent CSG {pose} pose did not show the expected clipped center region ({observed})")
 
 
 def validate_texture_smoke_result(result):
@@ -2031,7 +2045,7 @@ def validate_capture_for_args(args, result):
     if args.expect_transparent_multi:
         validate_transparent_multi_result(result)
     if args.expect_transparent_csg:
-        validate_transparent_csg_result(result)
+        validate_transparent_csg_result(result, args.transparent_csg_pose)
     if args.expect_texture_smoke:
         validate_texture_smoke_result(result)
 
@@ -2251,6 +2265,11 @@ def parse_args(argv):
         help="Assert that the captured transparent center mesh contains a clipped CSG void.",
     )
     parser.add_argument(
+        "--transparent-csg-pose",
+        choices=tuple(TRANSPARENT_CSG_REGIONS),
+        help="Required with --expect-transparent-csg: early/mid/late selects the fixture's frozen yaw 0/1/2 interior regions.",
+    )
+    parser.add_argument(
         "--expect-texture-smoke",
         action="store_true",
         help="Assert that the captured scene visibly samples the authored red, green, and blue texture pattern.",
@@ -2269,6 +2288,10 @@ def parse_args(argv):
     )
     args = parser.parse_args(argv)
 
+    if args.expect_transparent_csg and args.transparent_csg_pose is None:
+        parser.error("--expect-transparent-csg requires --transparent-csg-pose")
+    if args.transparent_csg_pose is not None and not args.expect_transparent_csg:
+        parser.error("--transparent-csg-pose requires --expect-transparent-csg")
     if args.application_capture and args.window_handle is not None:
         parser.error("--application-capture cannot be combined with --window-handle")
     if args.log_output and not args.application_capture:
@@ -2313,7 +2336,7 @@ def main(argv):
                 f"left={analysis.left_pixels}, center={analysis.center_pixels}, right={analysis.right_pixels}"
             )
         if args.expect_transparent_csg:
-            analysis = result.transparent_csg
+            analysis = result.transparent_csg[args.transparent_csg_pose]
             status = (
                 f"{status}; transparent CSG "
                 f"cut_void={analysis.cut_void_pixels}/{analysis.cut_region_pixels}, "

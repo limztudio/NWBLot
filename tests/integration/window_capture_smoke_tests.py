@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import ctypes
+import math
 import os
 import subprocess
 import struct
@@ -267,20 +268,157 @@ class TextureSmokeAnalysisTests(unittest.TestCase):
 
 
 class TransparentCsgAnalysisTests(unittest.TestCase):
-    def test_transparent_csg_analysis_finds_sky_void_and_retained_lower_half_in_client_pixels(self):
-        background = (75, 85, 101)
-        rows = [[background for _ in range(100)] for _ in range(100)]
-        for y in range(52, 68):
-            for x in range(40, 56):
-                rows[y][x] = (83, 115, 123)
-        for y in range(75, 100):
-            for x in range(100):
-                rows[y][x] = (140, 144, 150)
+    WIDTH = 1280
+    HEIGHT = 900
+    BACKGROUND = (75, 85, 101)
+    RECEIVER = (30, 220, 50)
 
-        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows)
+    @staticmethod
+    def cross(origin, left, right):
+        return (left[0] - origin[0]) * (right[1] - origin[1]) - (left[1] - origin[1]) * (right[0] - origin[0])
 
-        self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
-        self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
+    @classmethod
+    def receiver_hull(cls, pose, clipped):
+        # Independent fixture projection: authored six-axis octahedron (.6), receiver scale .78, camera distance2.2,
+        # vertical FOV60. Euler application is roll, pitch, then the combined local/parent yaw. Clipping local y>0
+        # removes only the upper axis vertex; the equator and lower vertex form the retained convex pyramid.
+        yaw = {"early": 0.0, "mid": 1.0, "late": 2.0}[pose]
+        pitch, roll = .32 * yaw, .16 * yaw
+        points = []
+        for axis in range(3):
+            for sign in (-1, 1):
+                if clipped and axis == 1 and sign == 1:
+                    continue
+                vertex = [0.0, 0.0, 0.0]
+                vertex[axis] = sign * .600000024 * .78
+                x, y, z = vertex
+                x, y = math.cos(roll) * x - math.sin(roll) * y, math.sin(roll) * x + math.cos(roll) * y
+                y, z = math.cos(pitch) * y - math.sin(pitch) * z, math.sin(pitch) * y + math.cos(pitch) * z
+                x, z = math.cos(2 * yaw) * x + math.sin(2 * yaw) * z, -math.sin(2 * yaw) * x + math.cos(2 * yaw) * z
+                points.append((x * math.sqrt(3) / (2 * (z + 2.2)), -y * math.sqrt(3) / (2 * (z + 2.2))))
+        points = sorted(set(points))
+        lower, upper = [], []
+        for point in points:
+            while len(lower) > 1 and cls.cross(lower[-2], lower[-1], point) <= 0:
+                lower.pop()
+            lower.append(point)
+        for point in reversed(points):
+            while len(upper) > 1 and cls.cross(upper[-2], upper[-1], point) <= 0:
+                upper.pop()
+            upper.append(point)
+        return lower[:-1] + upper[:-1]
+
+    @classmethod
+    def signed_margin(cls, hull, point):
+        return min(
+            cls.cross(left, right, point) / math.hypot(right[0] - left[0], right[1] - left[1])
+            for left, right in zip(hull, hull[1:] + hull[:1])
+        )
+
+    @classmethod
+    def synthetic_scene(cls, pose, clipped=True, receiver=True, receiver_color=None):
+        rows = [[cls.BACKGROUND] * cls.WIDTH for _ in range(cls.HEIGHT)]
+        hull = cls.receiver_hull(pose, clipped)
+        x0 = max(0, math.floor(cls.WIDTH / 2 + min(point[0] for point in hull) * cls.HEIGHT))
+        x1 = min(cls.WIDTH, math.ceil(cls.WIDTH / 2 + max(point[0] for point in hull) * cls.HEIGHT))
+        y0 = max(0, math.floor(cls.HEIGHT / 2 + min(point[1] for point in hull) * cls.HEIGHT))
+        y1 = min(cls.HEIGHT, math.ceil(cls.HEIGHT / 2 + max(point[1] for point in hull) * cls.HEIGHT))
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                point = ((x + .5 - cls.WIDTH / 2) / cls.HEIGHT, (y + .5 - cls.HEIGHT / 2) / cls.HEIGHT)
+                if cls.signed_margin(hull, point) >= 0:
+                    # A missing green receiver may expose dense red/blue neighboring meshes. Generic foreground
+                    # coverage is deliberately preserved, so only receiver identity can reject this negative control.
+                    rows[y][x] = (receiver_color or cls.RECEIVER) if receiver else (
+                        (180, 50, 30) if x % 2 == 0 else (40, 90, 180)
+                    )
+        return rows
+
+    @staticmethod
+    def capture_result(pose, analysis):
+        return SimpleNamespace(transparent_csg={pose: analysis})
+
+    def test_pose_regions_are_inset_within_projected_receiver_geometry(self):
+        for pose, (cut, retained) in window_capture_smoke.TRANSPARENT_CSG_REGIONS.items():
+            with self.subTest(pose=pose):
+                uncut_hull = self.receiver_hull(pose, False)
+                clipped_hull = self.receiver_hull(pose, True)
+                for x in (cut[0], cut[2]):
+                    for y in (cut[1], cut[3]):
+                        self.assertGreater(self.signed_margin(uncut_hull, (x, y)), .002)
+                        self.assertLess(self.signed_margin(clipped_hull, (x, y)), -.002)
+                for x in (retained[0], retained[2]):
+                    for y in (retained[1], retained[3]):
+                        self.assertGreater(self.signed_margin(clipped_hull, (x, y)), .002)
+
+    def test_all_three_clipped_poses_pass_their_explicit_oracle(self):
+        for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
+            with self.subTest(pose=pose):
+                rows = self.synthetic_scene(pose)
+                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
+                self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
+                self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
+                window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
+
+    def test_all_three_missing_cutter_poses_fail_even_with_background_outside_receiver(self):
+        for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
+            with self.subTest(pose=pose):
+                rows = self.synthetic_scene(pose, clipped=False)
+                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
+                self.assertEqual(analysis.cut_void_pixels, 0)
+                self.assertEqual(analysis.remaining_center_pixels, analysis.remaining_region_pixels)
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "cut_void=0"):
+                    window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
+
+    def test_all_three_missing_receiver_poses_reject_dense_non_green_neighbors(self):
+        for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
+            with self.subTest(pose=pose):
+                rows = self.synthetic_scene(pose, receiver=False)
+                _, retained = window_capture_smoke.transparent_csg_regions(self.WIDTH, self.HEIGHT, pose)
+                generic_foreground = window_capture_smoke.count_foreground_pixels_in_region(rows, self.BACKGROUND, retained)
+                analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, pose)
+                self.assertEqual(generic_foreground, analysis.remaining_region_pixels)
+                self.assertEqual(analysis.cut_void_pixels, analysis.cut_region_pixels)
+                self.assertEqual(analysis.remaining_center_pixels, 0)
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remaining_center=0"):
+                    window_capture_smoke.validate_transparent_csg_result(self.capture_result(pose, analysis), pose)
+
+    def test_green_dominance_does_not_relax_foreground_contrast(self):
+        rows = self.synthetic_scene("early", receiver_color=(82, 102, 101))
+        analysis = window_capture_smoke.analyze_transparent_csg_rows(rows, "early")
+        self.assertEqual(analysis.remaining_center_pixels, 0)
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "remaining_center=0"):
+            window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", analysis), "early")
+
+    def test_original_density_thresholds_remain_required(self):
+        accepted = window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000)
+        window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", accepted), "early")
+        for rejected in (
+            window_capture_smoke.TransparentCsgAnalysis(199, 600, 200, 1000),
+            window_capture_smoke.TransparentCsgAnalysis(200, 600, 199, 1000),
+            window_capture_smoke.TransparentCsgAnalysis(159, 300, 160, 500),
+            window_capture_smoke.TransparentCsgAnalysis(160, 300, 159, 500),
+        ):
+            with self.subTest(analysis=rejected), self.assertRaises(window_capture_smoke.SmokeFailure):
+                window_capture_smoke.validate_transparent_csg_result(self.capture_result("early", rejected), "early")
+
+    def test_validation_never_substitutes_a_different_pose(self):
+        result = SimpleNamespace(transparent_csg={
+            "early": window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000),
+            "mid": window_capture_smoke.TransparentCsgAnalysis(200, 600, 200, 1000),
+        })
+        window_capture_smoke.validate_transparent_csg_result(result, "mid")
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "early pose"):
+            window_capture_smoke.validate_transparent_csg_result(result, "early")
+
+    def test_csg_cli_requires_one_explicit_pose(self):
+        base = ["--window-handle", "1", "--output", "capture.bmp", "--expect-transparent-csg"]
+        with mock.patch("sys.stderr"), self.assertRaises(SystemExit):
+            window_capture_smoke.parse_args(base)
+        for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
+            with self.subTest(pose=pose):
+                args = window_capture_smoke.parse_args(base + ["--transparent-csg-pose", pose])
+                self.assertEqual(args.transparent_csg_pose, pose)
 
 
 class RuntimeLogValidationTests(unittest.TestCase):
@@ -635,6 +773,23 @@ class RenderReadyCaptureTests(unittest.TestCase):
 
             backend.capture_window.assert_called_once_with(0x4A, args.output)
             sleep.assert_called_once_with(window_capture_smoke.RENDER_READY_POLL_SECONDS)
+
+    def test_nonblank_csg_failure_is_not_retried_to_find_a_passing_frame(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            args = self.make_args(Path(temp_dir))
+            args.expect_transparent_csg = True
+            args.transparent_csg_pose = "early"
+            uncut = self.make_capture(False, True)
+            uncut.transparent_csg = {"early": window_capture_smoke.TransparentCsgAnalysis(0, 600, 200, 1000)}
+            backend = mock.Mock()
+            backend.capture_window.return_value = uncut
+            process = SimpleNamespace(poll=lambda: None)
+            with mock.patch.object(window_capture_smoke.time, "monotonic", return_value=10.0), \
+                 mock.patch.object(window_capture_smoke.time, "sleep") as sleep:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "cut_void=0"):
+                    window_capture_smoke.capture_render_ready_window(args, backend, 0x4A, process)
+            backend.capture_window.assert_called_once()
+            sleep.assert_not_called()
 
     def test_nonblank_invalid_frame_fails_without_retry(self):
         with tempfile.TemporaryDirectory() as temp_dir:

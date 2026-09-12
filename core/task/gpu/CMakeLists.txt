@@ -11,6 +11,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compiled_graph_attempt_binding.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiled_graph.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiler_ownership_transfer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_analysis_internal.h"

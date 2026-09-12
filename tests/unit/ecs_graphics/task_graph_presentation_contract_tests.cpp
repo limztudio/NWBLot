@@ -130,9 +130,12 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
         "resetFramePresentationSignal();"
     ));
 
-    const usize renderOffset = graphics.find("void GraphicsRuntime::render(){");
+    const usize publicRenderOffset = graphics.find("void GraphicsRuntime::render(){");
+    const usize renderOffset = graphics.find("void GraphicsRuntime::renderWithPhaseTiming(CpuTimingPhaseBatch* const phaseTiming){", publicRenderOffset);
     const usize averageOffset = graphics.find("void GraphicsRuntime::updateAverageFrameTime", renderOffset);
+    ASSERT_NE(publicRenderOffset, AStringView::npos);
     ASSERT_NE(renderOffset, AStringView::npos);
+    EXPECT_TRUE(ContainsText(graphics.substr(publicRenderOffset, renderOffset - publicRenderOffset), "renderWithPhaseTiming(nullptr);"));
     ASSERT_NE(averageOffset, AStringView::npos);
     const AStringView render = graphics.substr(renderOffset, averageOffset - renderOffset);
     EXPECT_TRUE(ContainsText(render, "Framebuffer* const framebuffer = m_acquiredPresentationFrame.framebuffer.get();"));
@@ -199,7 +202,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(attachmentWarningOffset, attachmentAbandonOffset);
     EXPECT_LT(attachmentAbandonOffset, attachmentRecreationOffset);
     EXPECT_LT(attachmentRecreationOffset, publishOffset);
-    const usize renderCallOffset = animate.find("render();", preambleOffset);
+    const usize renderCallOffset = animate.find("renderWithPhaseTiming(phaseTiming);", preambleOffset);
     const usize postRenderExitOffset = animate.find("if(m_deviceRecreationRequested || device.requiresRecreation()){", renderCallOffset);
     const usize postRenderAbandonOffset = animate.find("else if(!m_backend->abandonAcquiredFrame())", postRenderExitOffset);
     const usize presentCallOffset = animate.find("const bool presented = m_backend->present();", postRenderAbandonOffset);

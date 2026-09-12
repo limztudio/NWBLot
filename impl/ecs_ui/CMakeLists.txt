@@ -3,6 +3,7 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/components.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/system_task_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/system_legacy_presentation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system_frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input_events.cpp"

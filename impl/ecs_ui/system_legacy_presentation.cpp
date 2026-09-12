@@ -3,6 +3,7 @@
 
 
 #include "system.h"
+#include "system_task_tasks.h"
 #include "ui_internal.h"
 
 #include <core/ecs/world.h>
@@ -30,8 +31,6 @@ namespace __hidden_ui{
 
 
 static constexpr Name s_TaskGraphDeclarationArena("impl/ecs_ui/task_graph");
-
-static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
 
 static bool HasPendingTextureUploads(const ImDrawData& drawData){
 #if defined(IMGUI_HAS_TEXTURES)
@@ -102,193 +101,7 @@ static void AppendTextureReadUse(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UiSystem::TaskGraphRenderTask{
-    struct Payload{
-        UiSystem* ui = nullptr;
-        Core::AcquiredPresentationFrame frame;
-        Core::GpuGraphResourceId backbuffer;
-    };
 
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        return payload.ui && payload.ui->recordTaskGraphPresentation(
-            commandList,
-            payload.frame,
-            payload.backbuffer,
-            context
-        );
-    }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.ui && token.valid())
-            payload.ui->confirmTaskGraphPresentationSubmission();
-    }
-};
-
-
-struct UiSystem::TaskGraphUploadCompletionTask{
-    struct Payload{
-        UiSystem* ui = nullptr;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        static_cast<void>(commandList);
-        static_cast<void>(context);
-        return payload.ui && payload.ui->recordTaskGraphUploadCompletion();
-    }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.ui && token.valid())
-            payload.ui->confirmTaskGraphPresentationSubmission();
-    }
-};
-
-
-struct UiSystem::StandaloneTextureUploadCompletionTask{
-    struct Payload{
-        UiSystem* ui = nullptr;
-        bool uploadsPrepared = false;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        static_cast<void>(commandList);
-        static_cast<void>(context);
-        return payload.ui && payload.uploadsPrepared;
-    }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.ui && token.valid())
-            payload.ui->m_textureUploadBatch.complete(true);
-    }
-
-    static void discarded(Payload& payload){
-        if(payload.ui)
-            payload.ui->m_textureUploadBatch.complete(false);
-    }
-};
-
-
-// Opaque callbacks cannot enter the immutable packet; record them synchronously.
-struct UiSystem::StandaloneLegacyPresentationTask{
-    struct Payload{
-        UiSystem* ui = nullptr;
-        Core::AcquiredPresentationFrame frame;
-        Core::GpuGraphResourceId backbuffer;
-        ImDrawData* drawData = nullptr;
-        u64 frameGeneration = 0u;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    ){
-        return payload.ui && payload.ui->recordStandaloneLegacyTaskGraphPresentation(
-            commandList,
-            payload.frame,
-            payload.backbuffer,
-            payload.drawData,
-            payload.frameGeneration,
-            context
-        );
-    }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(payload.ui && token.valid())
-            payload.ui->confirmTaskGraphPresentationSubmission();
-    }
-
-    static void discarded(Payload& payload){
-        if(payload.ui)
-            payload.ui->discardStandaloneLegacyTaskGraphPresentation();
-    }
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UiSystem::UiSystem(
-    Core::Alloc::GlobalArena& arena,
-    Core::ECS::World& world,
-    Core::GraphicsRuntime& graphics,
-    Core::InputDispatcher& input,
-    Core::Assets::AssetManager& assetManager,
-    ShaderPathResolveCallback shaderPathResolver
-)
-    : Core::ECS::ISystem(arena)
-    , Core::IRenderPass(graphics)
-    , m_arena(arena)
-    , m_world(world)
-    , m_graphics(graphics)
-    , m_input(input)
-    , m_assetManager(assetManager)
-    , m_shaderPathResolver(Move(shaderPathResolver))
-    , m_textures(arena)
-    , m_textureUploadBatch(arena)
-    , m_textureUploadScratch(arena)
-    , m_taskGraphVertexUpload(arena)
-    , m_taskGraphIndexUpload(arena)
-    , m_taskGraphDrawCommands(arena)
-{
-    readAccess<UiComponent>();
-
-    IMGUI_CHECKVERSION();
-    m_imguiContext = ImGui::CreateContext();
-    setCurrentContext();
-
-    ImGuiIO& io = ImGui::GetIO();
-    io.BackendPlatformName = "NWB";
-    io.BackendRendererName = "NWB Graphics";
-    io.BackendRendererUserData = this;
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
-#if defined(IMGUI_HAS_TEXTURES)
-    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
-#endif
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-    ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
-    platformIO.DrawCallback_ResetRenderState = __hidden_ui::DrawCallbackResetRenderState;
-
-    ImGui::StyleColorsDark();
-
-    m_input.addHandlerToBack(*this);
-    m_inputRegistered = true;
-    m_graphics.setTaskGraphPresentationContributor(this);
-}
-
-UiSystem::~UiSystem(){
-    m_graphics.clearTaskGraphPresentationContributor(*this);
-
-    if(m_inputRegistered){
-        m_input.removeHandler(*this);
-        m_inputRegistered = false;
-    }
-
-    if(m_imguiContext){
-        setCurrentContext();
-        ImGuiIO& io = ImGui::GetIO();
-        if(io.BackendRendererUserData == this)
-            io.BackendRendererUserData = nullptr;
-        invalidateResources();
-        ImGui::DestroyContext(m_imguiContext);
-        m_imguiContext = nullptr;
-    }
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){

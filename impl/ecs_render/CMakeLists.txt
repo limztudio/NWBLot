@@ -70,6 +70,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/avboit/accumulation_record_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass_upload_helper.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/avboit_pass_upload_helper.h"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/material_upload_builder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/avboit/material_upload_builder.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/csg_graph_resource_snapshot.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_emulation_plan.h"
     "${CMAKE_CURRENT_LIST_DIR}/csg/task_graph_opaque_compute_tasks.cpp"

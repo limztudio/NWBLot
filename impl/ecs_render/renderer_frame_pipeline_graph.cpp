@@ -65,6 +65,7 @@
 #include <impl/ecs_render/avboit/extinction_record_builder.h>
 #include <impl/ecs_render/avboit/accumulation_record_builder.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
+#include <impl/ecs_render/avboit/material_upload_builder.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1427,168 +1428,32 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
 #endif
 
-            const Core::GpuUploadBlobId occupancyInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
-                occupancyInstanceData.data(),
-                occupancyInstanceData.size() * sizeof(InstanceGpuData),
-                alignof(InstanceGpuData)
+            AvboitMaterialUploadBuilder occupancyMaterialUploadBuilder(
+                m_deferredLightingTaskGraph,
+                m_csgSystem
             );
-            const Core::GpuUploadBlobId occupancyMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
-                occupancyMaterialTypedBytes.data(),
-                occupancyMaterialTypedBytes.size(),
-                alignof(u32)
-            );
-            if(!occupancyInstanceBlob.valid() || !occupancyMaterialTypedBlob.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT occupancy material upload data"));
+            if(!occupancyMaterialUploadBuilder.declare(
+                AvboitMaterialUploadInputs{
+                    .targets = &deferredTargets,
+                    .csgResources = &csgResources,
+                    .frameBindings = &frameBindings,
+                    .materialInstances = materialInstances,
+                    .materialTyped = materialTyped,
+                    .csgReceiverRanges = csgReceiverRanges,
+                    .csgCutters = csgCutters,
+                    .csgClipContextSlots = csgClipContextSlots,
+                    .uploadTask = occupancyUploadTask,
+                    .phase = AvboitMaterialUploadPhase::Occupancy,
+                },
+                occupancyInstanceData,
+                occupancyMaterialTypedBytes,
+                occupancyCsgFrameData,
+                occupancyHasCsgDrawItems,
+                occupancyUploadTask,
+                occupancyCsgStreamsUploaded
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material upload"));
                 return;
-            }
-
-            Core::GpuTaskSchedulingHint occupancyUploadScheduling;
-            occupancyUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-            occupancyUploadScheduling.forceSubmissionBoundary = false;
-            occupancyUploadScheduling.allowPacketMerge = true;
-            occupancyUploadScheduling.mergeWithPrevious = true;
-
-            Core::GpuTaskDesc occupancyInstanceUploadDesc;
-            occupancyInstanceUploadDesc
-                .setIdentity(Name("render.avboit.occupancy.material_instances_upload"))
-                .setMarkerLabel("AVBOIT Occupancy Material Instances Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(occupancyUploadScheduling)
-                .setDependencies(&occupancyUploadTask, 1u)
-            ;
-            occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                occupancyInstanceUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = occupancyInstanceBlob,
-                    .destination = materialInstances,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!occupancyUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material instance upload"));
-                return;
-            }
-
-            Core::GpuTaskDesc occupancyMaterialTypedUploadDesc;
-            occupancyMaterialTypedUploadDesc
-                .setIdentity(Name("render.avboit.occupancy.material_typed_upload"))
-                .setMarkerLabel("AVBOIT Occupancy Material Typed Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(occupancyUploadScheduling)
-                .setDependencies(&occupancyUploadTask, 1u)
-            ;
-            occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                occupancyMaterialTypedUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = occupancyMaterialTypedBlob,
-                    .destination = materialTyped,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!occupancyUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material typed upload"));
-                return;
-            }
-
-            if(occupancyHasCsgDrawItems){
-                CsgClipContextSlots occupancyCsgClipContextSlotData;
-                if(!m_csgSystem.prepareCsgClipContextSlotData(
-                    deferredTargets,
-                    occupancyCsgFrameData,
-                    csgResources,
-                    frameBindings,
-                    occupancyCsgClipContextSlotData
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT occupancy CSG context data"));
-                    return;
-                }
-                const Core::GpuUploadBlobId occupancyCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    occupancyCsgFrameData.receiverRanges.data(),
-                    occupancyCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
-                    alignof(CsgReceiverRangeGpuData)
-                );
-                const Core::GpuUploadBlobId occupancyCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    occupancyCsgFrameData.cutters.data(),
-                    occupancyCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
-                    alignof(CsgCutterGpuData)
-                );
-                const Core::GpuUploadBlobId occupancyCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    &occupancyCsgClipContextSlotData,
-                    sizeof(occupancyCsgClipContextSlotData),
-                    alignof(CsgClipContextSlots)
-                );
-                if(
-                    !occupancyCsgReceiverRangesBlob.valid()
-                    || !occupancyCsgCuttersBlob.valid()
-                    || !occupancyCsgClipContextSlotsBlob.valid()
-                ){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT occupancy CSG upload data"));
-                    return;
-                }
-
-                Core::GpuTaskDesc occupancyCsgReceiverRangesUploadDesc;
-                occupancyCsgReceiverRangesUploadDesc
-                    .setIdentity(Name("render.avboit.occupancy.csg_receiver_ranges_upload"))
-                    .setMarkerLabel("AVBOIT Occupancy CSG Receiver Ranges Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(occupancyUploadScheduling)
-                    .setDependencies(&occupancyUploadTask, 1u)
-                ;
-                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    occupancyCsgReceiverRangesUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = occupancyCsgReceiverRangesBlob,
-                        .destination = csgReceiverRanges,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!occupancyUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG receiver-range upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc occupancyCsgCuttersUploadDesc;
-                occupancyCsgCuttersUploadDesc
-                    .setIdentity(Name("render.avboit.occupancy.csg_cutters_upload"))
-                    .setMarkerLabel("AVBOIT Occupancy CSG Cutters Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(occupancyUploadScheduling)
-                    .setDependencies(&occupancyUploadTask, 1u)
-                ;
-                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    occupancyCsgCuttersUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = occupancyCsgCuttersBlob,
-                        .destination = csgCutters,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!occupancyUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG cutter upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc occupancyCsgClipContextSlotsUploadDesc;
-                occupancyCsgClipContextSlotsUploadDesc
-                    .setIdentity(Name("render.avboit.occupancy.csg_clip_context_slots_upload"))
-                    .setMarkerLabel("AVBOIT Occupancy CSG Clip Context Slots Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(occupancyUploadScheduling)
-                    .setDependencies(&occupancyUploadTask, 1u)
-                ;
-                occupancyUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    occupancyCsgClipContextSlotsUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = occupancyCsgClipContextSlotsBlob,
-                        .destination = csgClipContextSlots,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!occupancyUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy CSG clip-context upload"));
-                    return;
-                }
-                occupancyCsgStreamsUploaded = true;
             }
 
             avboitOccupancyPayload.occupancySnapshot.capture(
@@ -1888,168 +1753,32 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
 #endif
 
-            const Core::GpuUploadBlobId extinctionInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
-                extinctionInstanceData.data(),
-                extinctionInstanceData.size() * sizeof(InstanceGpuData),
-                alignof(InstanceGpuData)
+            AvboitMaterialUploadBuilder extinctionMaterialUploadBuilder(
+                m_deferredLightingTaskGraph,
+                m_csgSystem
             );
-            const Core::GpuUploadBlobId extinctionMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
-                extinctionMaterialTypedBytes.data(),
-                extinctionMaterialTypedBytes.size(),
-                alignof(u32)
-            );
-            if(!extinctionInstanceBlob.valid() || !extinctionMaterialTypedBlob.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT extinction material upload data"));
+            if(!extinctionMaterialUploadBuilder.declare(
+                AvboitMaterialUploadInputs{
+                    .targets = &deferredTargets,
+                    .csgResources = &csgResources,
+                    .frameBindings = &frameBindings,
+                    .materialInstances = materialInstances,
+                    .materialTyped = materialTyped,
+                    .csgReceiverRanges = csgReceiverRanges,
+                    .csgCutters = csgCutters,
+                    .csgClipContextSlots = csgClipContextSlots,
+                    .uploadTask = extinctionUploadTask,
+                    .phase = AvboitMaterialUploadPhase::Extinction,
+                },
+                extinctionInstanceData,
+                extinctionMaterialTypedBytes,
+                extinctionCsgFrameData,
+                extinctionHasCsgDrawItems,
+                extinctionUploadTask,
+                extinctionCsgStreamsUploaded
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material upload"));
                 return;
-            }
-
-            Core::GpuTaskSchedulingHint extinctionUploadScheduling;
-            extinctionUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-            extinctionUploadScheduling.forceSubmissionBoundary = false;
-            extinctionUploadScheduling.allowPacketMerge = true;
-            extinctionUploadScheduling.mergeWithPrevious = true;
-
-            Core::GpuTaskDesc extinctionInstanceUploadDesc;
-            extinctionInstanceUploadDesc
-                .setIdentity(Name("render.avboit.extinction.material_instances_upload"))
-                .setMarkerLabel("AVBOIT Extinction Material Instances Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(extinctionUploadScheduling)
-                .setDependencies(&extinctionUploadTask, 1u)
-            ;
-            extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                extinctionInstanceUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = extinctionInstanceBlob,
-                    .destination = materialInstances,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!extinctionUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material instance upload"));
-                return;
-            }
-
-            Core::GpuTaskDesc extinctionMaterialTypedUploadDesc;
-            extinctionMaterialTypedUploadDesc
-                .setIdentity(Name("render.avboit.extinction.material_typed_upload"))
-                .setMarkerLabel("AVBOIT Extinction Material Typed Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(extinctionUploadScheduling)
-                .setDependencies(&extinctionUploadTask, 1u)
-            ;
-            extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                extinctionMaterialTypedUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = extinctionMaterialTypedBlob,
-                    .destination = materialTyped,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!extinctionUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material typed upload"));
-                return;
-            }
-
-            if(extinctionHasCsgDrawItems){
-                CsgClipContextSlots extinctionCsgClipContextSlotData;
-                if(!m_csgSystem.prepareCsgClipContextSlotData(
-                    deferredTargets,
-                    extinctionCsgFrameData,
-                    csgResources,
-                    frameBindings,
-                    extinctionCsgClipContextSlotData
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT extinction CSG context data"));
-                    return;
-                }
-                const Core::GpuUploadBlobId extinctionCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    extinctionCsgFrameData.receiverRanges.data(),
-                    extinctionCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
-                    alignof(CsgReceiverRangeGpuData)
-                );
-                const Core::GpuUploadBlobId extinctionCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    extinctionCsgFrameData.cutters.data(),
-                    extinctionCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
-                    alignof(CsgCutterGpuData)
-                );
-                const Core::GpuUploadBlobId extinctionCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    &extinctionCsgClipContextSlotData,
-                    sizeof(extinctionCsgClipContextSlotData),
-                    alignof(CsgClipContextSlots)
-                );
-                if(
-                    !extinctionCsgReceiverRangesBlob.valid()
-                    || !extinctionCsgCuttersBlob.valid()
-                    || !extinctionCsgClipContextSlotsBlob.valid()
-                ){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT extinction CSG upload data"));
-                    return;
-                }
-
-                Core::GpuTaskDesc extinctionCsgReceiverRangesUploadDesc;
-                extinctionCsgReceiverRangesUploadDesc
-                    .setIdentity(Name("render.avboit.extinction.csg_receiver_ranges_upload"))
-                    .setMarkerLabel("AVBOIT Extinction CSG Receiver Ranges Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(extinctionUploadScheduling)
-                    .setDependencies(&extinctionUploadTask, 1u)
-                ;
-                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    extinctionCsgReceiverRangesUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = extinctionCsgReceiverRangesBlob,
-                        .destination = csgReceiverRanges,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!extinctionUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG receiver-range upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc extinctionCsgCuttersUploadDesc;
-                extinctionCsgCuttersUploadDesc
-                    .setIdentity(Name("render.avboit.extinction.csg_cutters_upload"))
-                    .setMarkerLabel("AVBOIT Extinction CSG Cutters Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(extinctionUploadScheduling)
-                    .setDependencies(&extinctionUploadTask, 1u)
-                ;
-                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    extinctionCsgCuttersUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = extinctionCsgCuttersBlob,
-                        .destination = csgCutters,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!extinctionUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG cutter upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc extinctionCsgClipContextSlotsUploadDesc;
-                extinctionCsgClipContextSlotsUploadDesc
-                    .setIdentity(Name("render.avboit.extinction.csg_clip_context_slots_upload"))
-                    .setMarkerLabel("AVBOIT Extinction CSG Clip Context Slots Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(extinctionUploadScheduling)
-                    .setDependencies(&extinctionUploadTask, 1u)
-                ;
-                extinctionUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    extinctionCsgClipContextSlotsUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = extinctionCsgClipContextSlotsBlob,
-                        .destination = csgClipContextSlots,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!extinctionUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction CSG clip-context upload"));
-                    return;
-                }
-                extinctionCsgStreamsUploaded = true;
             }
 
             avboitExtinctionPayload.extinctionSnapshot.capture(
@@ -2309,168 +2038,32 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             );
 #endif
 
-            const Core::GpuUploadBlobId accumulationInstanceBlob = m_deferredLightingTaskGraph.copyUploadData(
-                accumulationInstanceData.data(),
-                accumulationInstanceData.size() * sizeof(InstanceGpuData),
-                alignof(InstanceGpuData)
+            AvboitMaterialUploadBuilder accumulationMaterialUploadBuilder(
+                m_deferredLightingTaskGraph,
+                m_csgSystem
             );
-            const Core::GpuUploadBlobId accumulationMaterialTypedBlob = m_deferredLightingTaskGraph.copyUploadData(
-                accumulationMaterialTypedBytes.data(),
-                accumulationMaterialTypedBytes.size(),
-                alignof(u32)
-            );
-            if(!accumulationInstanceBlob.valid() || !accumulationMaterialTypedBlob.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT accumulation material upload data"));
+            if(!accumulationMaterialUploadBuilder.declare(
+                AvboitMaterialUploadInputs{
+                    .targets = &deferredTargets,
+                    .csgResources = &csgResources,
+                    .frameBindings = &frameBindings,
+                    .materialInstances = materialInstances,
+                    .materialTyped = materialTyped,
+                    .csgReceiverRanges = csgReceiverRanges,
+                    .csgCutters = csgCutters,
+                    .csgClipContextSlots = csgClipContextSlots,
+                    .uploadTask = accumulationUploadTask,
+                    .phase = AvboitMaterialUploadPhase::Accumulation,
+                },
+                accumulationInstanceData,
+                accumulationMaterialTypedBytes,
+                accumulationCsgFrameData,
+                accumulationHasCsgDrawItems,
+                accumulationUploadTask,
+                accumulationCsgStreamsUploaded
+            )){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material upload"));
                 return;
-            }
-
-            Core::GpuTaskSchedulingHint accumulationUploadScheduling;
-            accumulationUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
-            accumulationUploadScheduling.forceSubmissionBoundary = false;
-            accumulationUploadScheduling.allowPacketMerge = true;
-            accumulationUploadScheduling.mergeWithPrevious = true;
-
-            Core::GpuTaskDesc accumulationInstanceUploadDesc;
-            accumulationInstanceUploadDesc
-                .setIdentity(Name("render.avboit.accumulation.material_instances_upload"))
-                .setMarkerLabel("AVBOIT Accumulation Material Instances Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(accumulationUploadScheduling)
-                .setDependencies(&accumulationUploadTask, 1u)
-            ;
-            accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                accumulationInstanceUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = accumulationInstanceBlob,
-                    .destination = materialInstances,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!accumulationUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material instance upload"));
-                return;
-            }
-
-            Core::GpuTaskDesc accumulationMaterialTypedUploadDesc;
-            accumulationMaterialTypedUploadDesc
-                .setIdentity(Name("render.avboit.accumulation.material_typed_upload"))
-                .setMarkerLabel("AVBOIT Accumulation Material Typed Upload")
-                .setQueue(GraphicsUploadQueueRequest())
-                .setScheduling(accumulationUploadScheduling)
-                .setDependencies(&accumulationUploadTask, 1u)
-            ;
-            accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                accumulationMaterialTypedUploadDesc,
-                Core::GpuUploadBufferTaskDesc{
-                    .source = accumulationMaterialTypedBlob,
-                    .destination = materialTyped,
-                    .finalState = Core::ResourceStates::Common,
-                }
-            );
-            if(!accumulationUploadTask.valid()){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material typed upload"));
-                return;
-            }
-
-            if(accumulationHasCsgDrawItems){
-                CsgClipContextSlots accumulationCsgClipContextSlotData;
-                if(!m_csgSystem.prepareCsgClipContextSlotData(
-                    deferredTargets,
-                    accumulationCsgFrameData,
-                    csgResources,
-                    frameBindings,
-                    accumulationCsgClipContextSlotData
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT accumulation CSG context data"));
-                    return;
-                }
-                const Core::GpuUploadBlobId accumulationCsgReceiverRangesBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    accumulationCsgFrameData.receiverRanges.data(),
-                    accumulationCsgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData),
-                    alignof(CsgReceiverRangeGpuData)
-                );
-                const Core::GpuUploadBlobId accumulationCsgCuttersBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    accumulationCsgFrameData.cutters.data(),
-                    accumulationCsgFrameData.cutters.size() * sizeof(CsgCutterGpuData),
-                    alignof(CsgCutterGpuData)
-                );
-                const Core::GpuUploadBlobId accumulationCsgClipContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-                    &accumulationCsgClipContextSlotData,
-                    sizeof(accumulationCsgClipContextSlotData),
-                    alignof(CsgClipContextSlots)
-                );
-                if(
-                    !accumulationCsgReceiverRangesBlob.valid()
-                    || !accumulationCsgCuttersBlob.valid()
-                    || !accumulationCsgClipContextSlotsBlob.valid()
-                ){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT accumulation CSG upload data"));
-                    return;
-                }
-
-                Core::GpuTaskDesc accumulationCsgReceiverRangesUploadDesc;
-                accumulationCsgReceiverRangesUploadDesc
-                    .setIdentity(Name("render.avboit.accumulation.csg_receiver_ranges_upload"))
-                    .setMarkerLabel("AVBOIT Accumulation CSG Receiver Ranges Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(accumulationUploadScheduling)
-                    .setDependencies(&accumulationUploadTask, 1u)
-                ;
-                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    accumulationCsgReceiverRangesUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = accumulationCsgReceiverRangesBlob,
-                        .destination = csgReceiverRanges,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!accumulationUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG receiver-range upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc accumulationCsgCuttersUploadDesc;
-                accumulationCsgCuttersUploadDesc
-                    .setIdentity(Name("render.avboit.accumulation.csg_cutters_upload"))
-                    .setMarkerLabel("AVBOIT Accumulation CSG Cutters Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(accumulationUploadScheduling)
-                    .setDependencies(&accumulationUploadTask, 1u)
-                ;
-                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    accumulationCsgCuttersUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = accumulationCsgCuttersBlob,
-                        .destination = csgCutters,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!accumulationUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG cutter upload"));
-                    return;
-                }
-
-                Core::GpuTaskDesc accumulationCsgClipContextSlotsUploadDesc;
-                accumulationCsgClipContextSlotsUploadDesc
-                    .setIdentity(Name("render.avboit.accumulation.csg_clip_context_slots_upload"))
-                    .setMarkerLabel("AVBOIT Accumulation CSG Clip Context Slots Upload")
-                    .setQueue(GraphicsUploadQueueRequest())
-                    .setScheduling(accumulationUploadScheduling)
-                    .setDependencies(&accumulationUploadTask, 1u)
-                ;
-                accumulationUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
-                    accumulationCsgClipContextSlotsUploadDesc,
-                    Core::GpuUploadBufferTaskDesc{
-                        .source = accumulationCsgClipContextSlotsBlob,
-                        .destination = csgClipContextSlots,
-                        .finalState = Core::ResourceStates::Common,
-                    }
-                );
-                if(!accumulationUploadTask.valid()){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation CSG clip-context upload"));
-                    return;
-                }
-                accumulationCsgStreamsUploaded = true;
             }
 
             avboitAccumulationPayload.accumulationSnapshot.capture(

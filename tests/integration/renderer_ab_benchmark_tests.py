@@ -277,5 +277,183 @@ class PairedInferenceTests(unittest.TestCase):
         self.assertEqual(benchmark.compare_trials(trials, orders, workload)["status"], "control_drift")
 
 
+def reflection_log_text(workload):
+    policy = workload.reflection_policy
+    route = "screen-space" if policy.variant.mode == "screen" else "hardware"
+    lines = [f"ReflectionSmokeProject: case {policy.family} created",
+        f"ReflectionSmokeProject: reflection mode {policy.variant.mode}",
+        f"ReflectionSmokeProject: hardware ray budget {policy.ray_budget}",
+        "ReflectionSmokeProject: screen feedback 0",
+        f"ReflectionSmokeProject: screen steps {policy.screen_steps}",
+        "ReflectionSmokeProject: timing render unfocused 1",
+        "ReflectionSmokeProject: timing in-flight ranges 32",
+        "ReflectionSmokeProject: timing depth mip count 10",
+        "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: shutdown",
+        f"Reflection resolve: {route}", "Vulkan: created device 'Example GPU'",
+        "RendererSystem: material 'receiver' selected CS + PS through compute emulation",
+        "RendererSystem: deferred rendering targets ready (960x720, samples=1)"]
+    if policy.family.startswith("optical_"):
+        lines.append(f"ReflectionSmokeProject: optical query limit {policy.optical_queries}")
+    return "\n".join(lines)
+
+
+class ReflectionWorkloadTests(unittest.TestCase):
+    def test_fixed_six_workloads_pin_settings_target_and_active_ranges(self):
+        reflection = benchmark.reflection
+        expected = {
+            "reflection-rough-spatial": ("rough", "hardware", .4, False, True, reflection.SPATIAL),
+            "reflection-mirror-spatial": ("rough", "hardware", 0.0, False, True, reflection.SPATIAL),
+            "reflection-rough-filtered": ("rough", "hardware", .4, True, True, reflection.SPATIAL),
+            "reflection-screen-depth": ("floor", "screen", 0.0, False, False, reflection.DEPTH),
+            "reflection-optical-clear": ("optical_clear", "hardware", 0.0, False, False, reflection.HARDWARE),
+            "reflection-optical-inside": ("optical_inside", "hardware", 0.0, False, False, reflection.HARDWARE),
+        }
+        self.assertEqual(set(benchmark.workloads()), {"transparent-multi", *expected})
+        for name, values in expected.items():
+            with self.subTest(workload=name):
+                workload = benchmark.workloads()[name]
+                policy = workload.reflection_policy
+                self.assertEqual((policy.family, policy.variant.mode, policy.roughness,
+                    policy.variant.temporal, policy.variant.spatial, workload.secondary_scope), values)
+                self.assertEqual((workload.width, workload.height, policy.ray_budget, policy.optical_queries,
+                    policy.screen_steps, policy.history_samples, policy.sampling_seed), (960, 720, 1382400, 16, 96, 16, 0))
+                self.assertFalse(policy.variant.feedback)
+                self.assertEqual(set(workload.observed_scopes), set(reflection.KNOWN_SCOPES))
+                benchmark.validate_coverage(scopes(workload), workload, 6, 100)
+
+    def test_reflection_environment_reuses_fixed_production_controls_after_clearing_inheritance(self):
+        inherited = {"NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "NWB_REFLECTION_SMOKE_HISTORY_SAMPLES": "1",
+            "NWB_AVBOIT_SMOKE_TIMING": "1", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
+            "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "5", "PRESERVED": "yes"}
+        for workload in benchmark.workloads().values():
+            if workload.reflection_policy is None:
+                continue
+            with self.subTest(workload=workload.name):
+                env, overrides = benchmark.configure_environment(inherited, workload, Path("new_timing.txt"))
+                self.assertEqual(env, {"PRESERVED": "yes", **overrides})
+                self.assertEqual(overrides, {**dict(workload.environment_overrides), "NWB_GPU_TIMING_FILE": "new_timing.txt"})
+                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "0")
+                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_TIMING"], "1")
+                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_HISTORY_SAMPLES"], "16")
+                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_FEEDBACK"], "0")
+                self.assertEqual(overrides["NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS"], "0.016666667")
+                self.assertEqual(overrides["NWB_REFLECTION_SMOKE_ROUGHNESS"], str(workload.reflection_policy.roughness))
+        self.assertEqual(inherited["NWB_REFLECTION_SMOKE_DIAGNOSTICS"], "1")
+
+    def test_reflection_cannot_override_explicit_vulkan_validation(self):
+        workload = benchmark.workloads()["reflection-rough-spatial"]
+        for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
+            with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.configure_environment({key: "validation"}, workload, Path("timing"))
+
+    def test_screen_depth_requires_all_ten_mips_and_no_hardware_ranges(self):
+        workload = benchmark.workloads()["reflection-screen-depth"]
+        self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.DEPTH], 10)
+        self.assertIn(benchmark.reflection.HARDWARE, workload.inactive_scopes)
+        self.assertIn(benchmark.reflection.BUILD_ARGS, workload.inactive_scopes)
+        for multiplier in (1, 9, 11):
+            changed = scopes(workload)
+            changed[benchmark.reflection.DEPTH]["gpu_samples"] = 200 * multiplier
+            with self.subTest(multiplier=multiplier), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(changed, workload, 6, 100)
+
+    def test_mirror_still_requires_spatial_but_no_temporal_range(self):
+        workload = benchmark.workloads()["reflection-mirror-spatial"]
+        self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.SPATIAL], 1)
+        self.assertIn(benchmark.reflection.TEMPORAL, workload.inactive_scopes)
+        changed = scopes(workload)
+        del changed[benchmark.reflection.SPATIAL]
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.validate_coverage(changed, workload, 6, 100)
+
+    def test_filtered_retains_temporal_one_per_frame_and_both_controls(self):
+        workload = benchmark.workloads()["reflection-rough-filtered"]
+        self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.TEMPORAL], 1)
+        for missing in (benchmark.reflection.TEMPORAL, benchmark.reflection.SPATIAL, benchmark.CONTROLS[1]):
+            changed = scopes(workload)
+            del changed[missing]
+            with self.subTest(scope=missing), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(changed, workload, 6, 100)
+
+    def test_inactive_ranges_are_rejected_even_outside_the_retained_window(self):
+        for workload in benchmark.workloads().values():
+            for inactive in workload.inactive_scopes:
+                with self.subTest(workload=workload.name, scope=inactive), self.assertRaisesRegex(
+                    benchmark.SmokeFailure, "inactive reflection scopes"):
+                    benchmark.validate_inactive_scopes({inactive: {"gpu_samples": 1}}, workload)
+
+    def test_inactive_hashed_scope_is_decoded_and_rejected(self):
+        workload = benchmark.workloads()["reflection-screen-depth"]
+        symbols = benchmark.load_name_symbols(None, workload.observed_scopes)
+        token = next(token for token, name in symbols.items() if name == benchmark.reflection.HARDWARE)
+        text = f"=== interval: 1 frames / 0.5s ===\n  {token}: total_ms=1 gpu_samples=1\n"
+        parsed = benchmark.summarize_intervals(benchmark.parse_intervals(text, symbols, finalized=True))
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "inactive reflection scopes"):
+            benchmark.validate_inactive_scopes(parsed, workload)
+
+    def test_reflection_runtime_signature_uses_production_log_validation(self):
+        for workload in benchmark.workloads().values():
+            if workload.reflection_policy is None:
+                continue
+            with self.subTest(workload=workload.name):
+                text = reflection_log_text(workload)
+                signature = workload.validate_log(text, workload, True)
+                self.assertEqual(signature["reflection_route"], workload.reflection_policy.variant.mode)
+                self.assertEqual(signature["reflection_policy"]["roughness"], workload.reflection_policy.roughness)
+                self.assertEqual(signature, workload.validate_log(text.replace("\n", "\r\n"), workload, True))
+                for altered in (text.replace("960x720", "1280x900"),
+                    text.replace("timing in-flight ranges 32", "timing in-flight ranges 2"),
+                    text + "\nReflectionSmokeProject: screen steps 16", text + "\nVUID-rejected",
+                    text + "\nFramebufferCapture: capture ready", text.replace("hardware available", "hardware unavailable"),
+                    text.replace("ReflectionSmokeProject: shutdown", "")):
+                    with self.assertRaises(benchmark.SmokeFailure):
+                        workload.validate_log(altered, workload, True)
+
+    def test_inside_query_cap_is_strict_despite_shared_benchmark_only_checking_clear(self):
+        workload = benchmark.workloads()["reflection-optical-inside"]
+        text = reflection_log_text(workload)
+        for changed in (text.replace("optical query limit 16", "optical query limit 8"),
+            text + "\nReflectionSmokeProject: optical query limit 16"):
+            with self.assertRaisesRegex(benchmark.SmokeFailure, "optical query limit"):
+                workload.validate_log(changed, workload, True)
+
+    def test_declared_native_dispatch_count_never_changes_range_coverage(self):
+        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
+            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
+            "--logserver-executable", "logger", "--output-directory", "output"]
+        args = benchmark.parse_args(common + ["--workload", "reflection-optical-clear",
+            "--candidate-hardware-dispatches-per-range", "2"])
+        self.assertEqual((args.blocks, args.baseline_hardware_dispatches_per_range,
+            args.candidate_hardware_dispatches_per_range), (8, 1, 2))
+        self.assertTrue(args.require_hardware)
+        workload = benchmark.workloads()[args.workload]
+        self.assertEqual(dict(workload.scope_multipliers)[benchmark.reflection.HARDWARE], 1)
+        value = scopes(workload)
+        value[benchmark.reflection.HARDWARE]["gpu_samples"] *= 2
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.validate_coverage(value, workload, 6, 100)
+        for name in ("transparent-multi", "reflection-screen-depth", "reflection-rough-filtered"):
+            with self.subTest(workload=name), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                benchmark.parse_args(common + ["--workload", name, "--candidate-hardware-dispatches-per-range", "2"])
+
+    def test_depth_secondary_reports_per_mip_and_aggregate_work_without_frame_attribution(self):
+        workload = benchmark.workloads()["reflection-screen-depth"]
+        _, orders, trials = trial_matrix()
+        for trial in trials:
+            trial["scopes"] = scopes(workload, frame_ms=5 if trial["arm"] == "baseline" else 4.5)
+            if trial["arm"] == "candidate":
+                trial["scopes"][benchmark.reflection.DEPTH]["mean_ms"] = .4
+                trial["scopes"][benchmark.reflection.DEPTH]["total_ms"] = .4 * 200 * 10
+        result = benchmark.compare_trials(trials, orders, workload)
+        self.assertEqual(result["secondary_scope"], benchmark.reflection.DEPTH)
+        self.assertAlmostEqual(result["secondary"]["mean_ms"], -.1)
+        self.assertAlmostEqual(result["secondary_per_frame_work"]["delta"]["mean_ms"], -1.0)
+        self.assertEqual(result["completed_trials"], 16)
+        self.assertEqual(result["completed_blocks"], 8)
+        self.assertEqual(result["completed_gpu_frames"], 3200)
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
+            benchmark.compare_trials(trials[:-1], orders, workload)
+
+
 if __name__ == "__main__":
     unittest.main()

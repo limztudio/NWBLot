@@ -9,7 +9,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Complete |
-| 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Draft prepared |
+| 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
 | 4 | Reuse accepted optical metadata uploads | Implementation draft in progress |
 | 5 | Share common hardware/software ray-scene gathering within a frame | Pending |
 | 6 | Share pass-independent transparent preparation | Pending |
@@ -71,3 +71,23 @@ ctest --preset windows-clang-arm64-dbg --output-on-failure -R "^(nwb_reflection_
 ```
 
 JUnit evidence is under `__artifacts/reflection_optimization_steps/step2/`; complete omission reports and raw logs are under `__cmake/build/windows-clang-arm64/Testing/smoke/{opt,dbg}/reflection_temporal_omission/temporal_omission_*/`. The original coverage shader from Step 1 was also recooked in both configurations.
+
+## Step 3: avoid spatial neighborhood loads for ineligible tiles
+
+The spatial kernel first loads each in-bounds pixel's radiance, specular and depth eligibility inputs. A workgroup-wide flag decides whether any pixel can filter. Uniformly ineligible tiles copy their source values without loading halo, position or normal data. Active tiles reuse their eligibility inputs and populate disjoint center/halo cache entries before the existing bilateral filter. Every lane participates in the synchronization, including partial-image tails. Radius-zero, alpha, finite-value, roughness and F0 rules are unchanged. The extra shared flag costs four bytes and two additional group barriers; timing, rather than source operation counts, determines whether that tradeoff is useful.
+
+The new `tests/smoke/reflection_kernel` target compiles the actual authored kernels through the production shader cooker and runs validation-enabled native dispatch/readback. Its 160 spatial scenarios compare every RGBA16 output word against a frozen copy of the pre-change production shader, with separate copy/alpha/zero-value checks and distinct output sentinels to catch missing stores. Radius 0-3, tiny and non-power-of-two images, partial groups, dense/sparse eligibility and material/geometry discontinuities all passed. The same fixture has 39 full-chain depth cases for Step 7, using native R32/D32 inputs, the production RG32/RGBA32 storage fallback, literal tiny cases and a separate scalar footprint oracle. Both tests passed in optimized and debug configurations, with no skips or validation errors. The ECS graphics suite, 14 roughness captures, 12 temporal/reset captures, and benchmark analysis suites passed. The renderer A/B analysis suite now contains 28 tests and supports the fixed reflection workloads without changing the reflection runner's cap-aware contracts.
+
+Three predeclared campaigns ran 48 launches in 24 balanced blocks, with 288 retained reports and 35,630 completed GPU frames. All required scope counts and frozen identities passed. Both arms used executable SHA256 `e65b5afbe0376a9b0ac232ab643ca54ef8353d869021bc646179ae0ff2d444ea`. Authored-volume SHA256 changed from `9e72a8699fdfada987c8dfb18ff9748377cdaea72af909d122a9aa804f61c595` to `a5e7ff4ab129877b1397ed2e911e69fd0bf8c53f41f797dd06f3c735fa8f4d12`. The workload settings are 960x720, Hardware reflection, seed zero, budget 1,382,400, optical cap 16, feedback/diagnostics/capture off; the combined-filter case uses temporal cap 16. Each campaign has eight balanced AB/BA blocks, two warm-up reports and at least six retained reports per launch.
+
+| Workload | Spatial baseline / candidate ms | Frame baseline / candidate ms | Paired frame delta ms [95% interval] | Interpretation |
+| --- | ---: | ---: | --- | --- |
+| Mirror, spatial enabled | 0.231204 / 0.060395 | 3.524358 / 3.352278 | -0.172080 [-0.184340, -0.158982] | Resolved frame-time reduction; all controls equivalent |
+| Roughness 0.4, spatial only | 0.841381 / 0.807207 | 4.204476 / 4.188264 | -0.016212 [-0.035598, +0.010805] | Control uncertainty; no frame-time gain claimed |
+| Roughness 0.4, temporal + spatial | 0.843199 / 0.808444 | 4.276722 / 4.240940 | -0.035782 [-0.050841, -0.019152] | Below the predeclared practical frame threshold; all controls equivalent |
+
+Retained because the mirror/ineligible workload clears the practical full-frame improvement gate, all tested outputs are unchanged, and the rough/filtered checks show no material slowdown. This is a measured benefit on the Adreno X2-90 for the tested scenes, not a claim of a frame-time gain on every workload or GPU. The rough-only control uncertainty is preserved; no trials were removed or added to obtain a better result. The three intervals are per-comparison intervals, not a simultaneous family-wide confidence statement.
+
+Evidence is under `__artifacts/reflection_optimization_steps/step3/`, including frozen arms, raw logs, timing reports, JUnit results and power records. Balanced power and 79% battery were reported at both endpoints; frequency/thermal telemetry was unavailable. No build, cook, GPU test or other acquisition overlapped the campaigns. Report SHA256 values are `50715f876937c979484787455a960ff7aecdb4fd277dc02be9411ba986a21328` (mirror), `6adfbc00718a810fc8262946359aaf5f28271b38440a8f6cd3fe82172560f864` (rough), and `30606a489790060af7bc801a9833195bf658b8d86752ec5a2aaaac90d1a8de40` (filtered).
+
+Use the common frozen-arm command above with `--workload reflection-mirror-spatial`, `reflection-rough-spatial` or `reflection-rough-filtered`, and a new output directory for each complete campaign. Run the direct kernel proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_reflection_kernel_tests$" -j1` (or the debug preset).

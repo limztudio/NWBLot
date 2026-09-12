@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Balanced GPU A/B acquisition for two explicitly frozen renderer builds.
 
-The initial workload is transparent-multi. Source manifests contain a nonempty
+Workloads cover transparent-multi and fixed reflection routes. Source manifests contain a nonempty
 revision and a files object mapping paths (relative to the manifest, or absolute)
 to SHA256 values. Keep physical source snapshots available throughout acquisition.
 Correctness qualification is separate; this runner never captures framebuffers.
 """
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import json
 import math
 from pathlib import Path
@@ -22,6 +22,7 @@ from typing import Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import load_name_symbols
+import reflection_benchmark as reflection
 from reflection_benchmark import balanced_orders, paired_statistics, parse_intervals, summarize_intervals
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (
@@ -55,6 +56,18 @@ class Arm:
 
 
 @dataclass(frozen=True)
+class ReflectionPolicy:
+    family: str
+    variant: reflection.Variant
+    roughness: float
+    history_samples: int = 16
+    ray_budget: int = 1382400
+    optical_queries: int = 16
+    screen_steps: int = 96
+    sampling_seed: int = 0
+
+
+@dataclass(frozen=True)
 class Workload:
     name: str
     width: int
@@ -65,10 +78,63 @@ class Workload:
     secondary_scope: str
     environment_overrides: tuple
     validate_log: Callable[[str, "Workload", bool], dict]
+    reflection_policy: ReflectionPolicy = None
+    inactive_scopes: tuple = ()
+
+    @property
+    def observed_scopes(self):
+        # Decode inactive scope hashes too; otherwise an unexpected scope could evade a zero-coverage check.
+        return self.scopes + self.inactive_scopes
 
     @property
     def scopes(self):
         return tuple(scope for scope, _ in self.scope_multipliers)
+
+
+def device_material_signature(text):
+    devices = re.findall(r"^Vulkan: created device '(.+)'$", text, re.MULTILINE)
+    if len(devices) != 1:
+        raise SmokeFailure("one actual Vulkan device identity is required")
+    material_routes = {}
+    for material, route in re.findall(r"^RendererSystem: material '([^']+)' selected (.+)$", text, re.MULTILINE):
+        if material in material_routes and material_routes[material] != route:
+            raise SmokeFailure("a material changed its native/emulated route within a trial")
+        material_routes[material] = route
+    if not material_routes:
+        raise SmokeFailure("material execution-route evidence is missing")
+    return {"device": devices[0], "material_routes": material_routes}
+
+
+def reflection_arguments(workload, require_hardware=False):
+    policy = workload.reflection_policy
+    return SimpleNamespace(family=policy.family, width=workload.width, height=workload.height,
+        mip_count=max(workload.width, workload.height).bit_length(), ray_budget=policy.ray_budget,
+        optical_queries=policy.optical_queries, screen_steps=policy.screen_steps,
+        sampling_seed=policy.sampling_seed, roughness=policy.roughness, history_samples=policy.history_samples,
+        require_hardware=require_hardware or policy.variant.mode in ("hardware", "hybrid"))
+
+
+def reflection_log(text, workload, require_hardware):
+    policy = workload.reflection_policy
+    args = reflection_arguments(workload, require_hardware)
+    text = text.replace("\r\n", "\n")
+    reflection.validate_trial_log(text, args, policy.variant)
+    validate_expected_log_text(text, [], ["FramebufferCapture:", "render submission suspended"])
+    lines = text.splitlines()
+    availability = [line for line in lines if line in (
+        "ReflectionSmokeProject: hardware available", "ReflectionSmokeProject: hardware unavailable")]
+    if len(availability) != 1:
+        raise SmokeFailure("one unambiguous reflection hardware capability marker is required")
+    # The shared benchmark currently checks this field for optical_clear. The inside fixture exposes the same
+    # startup field and must pin its independent query cap too.
+    if policy.family == "optical_inside":
+        prefix = "ReflectionSmokeProject: optical query limit "
+        if [line[len(prefix):] for line in lines if line.startswith(prefix)] != [str(policy.optical_queries)]:
+            raise SmokeFailure("runtime optical query limit differs from the frozen inside workload")
+    return {**device_material_signature(text), "extent": [workload.width, workload.height],
+        "reflection_route": policy.variant.mode, "hardware_available": availability[0].endswith("hardware available"),
+        "timing_in_flight_ranges": reflection.TIMING_IN_FLIGHT_RANGES,
+        "timing_depth_mip_count": args.mip_count, "reflection_policy": asdict(policy)}
 
 
 def transparent_multi_log(text, workload, require_hardware):
@@ -96,26 +162,42 @@ def transparent_multi_log(text, workload, require_hardware):
     routes = [SHADOW_ROUTES[line] for line in lines if line in SHADOW_ROUTES]
     if len(routes) != 1 or (require_hardware and routes != ["hybrid"]):
         raise SmokeFailure(f"natural shadow route is missing, contradictory, or unsupported: {routes}")
-    devices = re.findall(r"^Vulkan: created device '(.+)'$", text, re.MULTILINE)
-    if len(devices) != 1:
-        raise SmokeFailure("one actual Vulkan device identity is required")
-    material_routes = {}
-    for material, route in re.findall(r"^RendererSystem: material '([^']+)' selected (.+)$", text, re.MULTILINE):
-        if material in material_routes and material_routes[material] != route:
-            raise SmokeFailure("a material changed its native/emulated route within a trial")
-        material_routes[material] = route
-    if not material_routes:
-        raise SmokeFailure("material execution-route evidence is missing")
-    return {"device": devices[0], "shadow_route": routes[0], "material_routes": material_routes,
+    return {**device_material_signature(text), "shadow_route": routes[0],
         "extent": list(extents.pop()), "timing_in_flight_ranges": 32}
+
+
+def reflection_workload(name, family, mode, roughness, temporal, spatial, target_scope):
+    variant = reflection.Variant(name, mode, temporal=temporal, spatial=spatial, feedback=False)
+    policy = ReflectionPolicy(family, variant, roughness)
+    required = tuple(reflection.required_scopes(variant, policy.history_samples))
+    inactive = tuple(scope for scope in reflection.KERNELS if scope not in required)
+    workload = Workload(name, 960, 720,
+        tuple((scope, 10 if scope == reflection.DEPTH else 1) for scope in required), target_scope,
+        (), reflection_log, policy, inactive)
+    _, overrides = reflection.timed_environment({}, reflection_arguments(workload), variant, Path("timing.txt"))
+    del overrides["NWB_GPU_TIMING_FILE"]
+    return Workload(name, workload.width, workload.height, workload.scope_multipliers, target_scope,
+        tuple(overrides.items()), reflection_log, policy, inactive)
 
 
 def workloads():
     scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT)
-    return {"transparent-multi": Workload("transparent-multi", 1280, 900,
+    result = {"transparent-multi": Workload("transparent-multi", 1280, 900,
         tuple((scope, 1) for scope in scopes), OCCUPANCY,
         (("NWB_AVBOIT_SMOKE_TIMING", "1"), ("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", "0"),
          ("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "0.016666667")), transparent_multi_log)}
+    definitions = (
+        ("reflection-rough-spatial", "rough", "hardware", .4, False, True, reflection.SPATIAL),
+        ("reflection-mirror-spatial", "rough", "hardware", 0.0, False, True, reflection.SPATIAL),
+        ("reflection-rough-filtered", "rough", "hardware", .4, True, True, reflection.SPATIAL),
+        ("reflection-screen-depth", "floor", "screen", 0.0, False, False, reflection.DEPTH),
+        ("reflection-optical-clear", "optical_clear", "hardware", 0.0, False, False, reflection.HARDWARE),
+        ("reflection-optical-inside", "optical_inside", "hardware", 0.0, False, False, reflection.HARDWARE),
+    )
+    for definition in definitions:
+        workload = reflection_workload(*definition)
+        result[workload.name] = workload
+    return result
 
 
 def configure_environment(base, workload, timing_file):
@@ -128,13 +210,27 @@ def configure_environment(base, workload, timing_file):
         if (key.startswith("NWB_") and ("SMOKE" in key or key.startswith("NWB_TRANSPARENT_"))) \
             or key.startswith("NWB_RENDERER_BASELINE_") or key == "NWB_GPU_TIMING_FILE":
             del env[key]
+    if workload.reflection_policy is not None:
+        return reflection.timed_environment(env, reflection_arguments(workload),
+            workload.reflection_policy.variant, timing_file)
     overrides = dict(workload.environment_overrides)
     overrides["NWB_GPU_TIMING_FILE"] = str(timing_file)
     env.update(overrides)
     return env, overrides
 
 
+def validate_inactive_scopes(scopes, workload):
+    unexpected = [scope for scope in workload.inactive_scopes if scope in scopes]
+    if unexpected:
+        raise SmokeFailure("inactive reflection scopes recorded GPU work: " + ", ".join(unexpected))
+
+
 def validate_coverage(scopes, workload, report_count, minimum_frames):
+    validate_inactive_scopes(scopes, workload)
+    if workload.reflection_policy is not None:
+        policy = workload.reflection_policy
+        reflection.validate_coverage(scopes, policy.variant, report_count, minimum_frames,
+            max(workload.width, workload.height).bit_length(), policy.history_samples)
     missing = [scope for scope in workload.scopes if scope not in scopes]
     if missing:
         raise SmokeFailure("missing completed GPU scopes: " + ", ".join(missing))
@@ -267,9 +363,20 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
         status = "resolved_gpu_time_reduction"
     elif low > threshold:
         status = "resolved_gpu_time_increase"
+    secondary_frame_means = {arm: statistics.fmean(
+        block[arm]["scopes"][workload.secondary_scope]["total_ms"] / block[arm]["scopes"][FRAME]["gpu_samples"]
+        for block in blocks.values()) for arm in ("baseline", "candidate")}
+    secondary_frame_delta = paired_statistics([
+        block["candidate"]["scopes"][workload.secondary_scope]["total_ms"] / block["candidate"]["scopes"][FRAME]["gpu_samples"]
+        - block["baseline"]["scopes"][workload.secondary_scope]["total_ms"] / block["baseline"]["scopes"][FRAME]["gpu_samples"]
+        for block in blocks.values()], seed)
     return {"status": status, "practical_threshold_ms": threshold, "means_ms": means,
         "frame": paired[FRAME], "secondary_scope": workload.secondary_scope,
         "secondary": paired[workload.secondary_scope], "controls": controls, "scope_deltas": paired,
+        "secondary_scope_units": "milliseconds per completed mip-reduction range" if workload.secondary_scope == reflection.DEPTH
+            else "milliseconds per completed scope range; a range may contain multiple native dispatches",
+        "secondary_per_frame_work": {"means_ms": secondary_frame_means, "delta": secondary_frame_delta,
+            "units": "sum of measured secondary-scope milliseconds per completed GPU frame; not a frame-time attribution"},
         "completed_trials": len(trials), "completed_blocks": len(blocks),
         "completed_gpu_frames": sum(t["scopes"][FRAME]["gpu_samples"] for t in trials),
         "units": "milliseconds per completed scope range; frame is the primary endpoint",
@@ -307,6 +414,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
             ensure_process_running(process, "during A/B benchmark")
             if timing_file.is_file():
                 intervals = parse_intervals(timing_file.read_text(encoding="utf-8"), symbols)
+                validate_inactive_scopes(summarize_intervals(intervals), workload)
                 if intervals:
                     problem = "waiting for warm-up/measured reports" if any(FRAME in value for value in intervals) \
                         else "timing reports contain no completed GPU frame samples"
@@ -331,6 +439,8 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         logs_collected = True
         (directory / "runtime.log").write_text(text, encoding="utf-8")
         signature = workload.validate_log(text, workload, args.require_hardware)
+        finalized = parse_intervals(timing_file.read_text(encoding="utf-8"), symbols, finalized=True)
+        validate_inactive_scopes(summarize_intervals(finalized), workload)
         return {"arm": arm.name, "block": block, "position": position, "reports": len(selected),
             "retained_report_range": [args.warmup_intervals, args.warmup_intervals + len(selected)],
             "scopes": summarize_intervals(selected), "runtime_signature": signature,
@@ -382,11 +492,19 @@ def parse_args(argv=None):
     parser.add_argument("--practical-ms", type=float, default=.02)
     parser.add_argument("--practical-fraction", type=float, default=.03)
     parser.add_argument("--control-floor-ms", type=float, default=.015)
+    parser.add_argument("--baseline-hardware-dispatches-per-range", type=int, choices=(1, 2), default=1)
+    parser.add_argument("--candidate-hardware-dispatches-per-range", type=int, choices=(1, 2), default=1)
     parser.add_argument("--namesym", type=Path)
     parser.add_argument("--require-hardware", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
     parser.add_argument("--application-arg", action="append", default=[])
     args = parser.parse_args(argv)
+    workload = workloads()[args.workload]
+    optical = workload.reflection_policy is not None and workload.reflection_policy.family.startswith("optical_")
+    if not optical and (args.baseline_hardware_dispatches_per_range != 1 or args.candidate_hardware_dispatches_per_range != 1):
+        parser.error("multiple native hardware dispatches per timing range are supported only for optical workloads")
+    if workload.reflection_policy is not None and workload.reflection_policy.variant.mode in ("hardware", "hybrid"):
+        args.require_hardware = True
     if args.blocks < 8 or args.blocks % 2:
         parser.error("blocks must be even and at least8, retaining complete AB/BA balance")
     if args.warmup_intervals < 2 or args.sample_intervals < 6 or args.minimum_frame_samples < 100:
@@ -425,13 +543,22 @@ def run(args):
         shared_paths.append(args.namesym)
     shared = {str(path.resolve()): file_identity(path) for path in shared_paths}
     orders = [[arm.name for arm in row] for row in balanced_orders(arms, args.blocks, args.order_seed)]
-    symbols = load_name_symbols(args.namesym, workload.scopes)
+    symbols = load_name_symbols(args.namesym, workload.observed_scopes)
     plan = {"workload": workload.name, "dimensions": [workload.width, workload.height], "orders": orders,
         "arms": identities, "shared_files": shared, "blocks": args.blocks, "planned_trials": args.blocks * 2,
         "settings": dict(workload.environment_overrides), "diagnostics": False, "capture": False,
         "warmup_intervals": args.warmup_intervals, "sample_intervals": args.sample_intervals,
         "minimum_frame_samples": args.minimum_frame_samples, "timeout_seconds": args.timeout,
         "timing_in_flight_ranges": 32, "scope_multipliers": dict(workload.scope_multipliers),
+        "inactive_scopes": list(workload.inactive_scopes),
+        "reflection_policy": asdict(workload.reflection_policy) if workload.reflection_policy is not None else None,
+        "native_hardware_dispatches_per_range": {
+            "baseline": args.baseline_hardware_dispatches_per_range,
+            "candidate": args.candidate_hardware_dispatches_per_range,
+        } if reflection.HARDWARE in workload.scopes else None,
+        "hardware_range_policy": "one completed range per frame; optical variants may record two complementary native dispatches over the same admitted queue; declared counts require separate build qualification and never divide measured time",
+        "depth_range_policy": "native mip count ranges per frame; per-range means describe one mip, with total measured mip work per frame reported separately",
+        "inactive_scope_policy": "no completed inactive scope in warm-up, retained acquisition, or final shutdown reports",
         "scope_coverage": "completed timing ranges; publication skew bounded by max(2 ranges, 2% of expected), scaled by multiplicity",
         "primary_scope": FRAME, "secondary_scope": workload.secondary_scope, "controls": list(CONTROLS),
         "order_seed": args.order_seed, "analysis_seed": args.analysis_seed, "bootstrap_draws": 10000,

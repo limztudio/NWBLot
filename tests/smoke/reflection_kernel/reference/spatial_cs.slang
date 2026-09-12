@@ -41,7 +41,6 @@ groupshared float4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TE
 groupshared float4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialNormal[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
-groupshared uint g_NwbReflectionSpatialTileEligible;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,65 +48,15 @@ groupshared uint g_NwbReflectionSpatialTileEligible;
 
 [numthreads(NWB_REFLECTION_SPATIAL_GROUP_SIZE, NWB_REFLECTION_SPATIAL_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
-    const uint2 pixel = dispatchThreadId.xy;
-    const bool insideImage = pixel.x < g_NwbReflectionSpatial.width && pixel.y < g_NwbReflectionSpatial.height;
     const uint radius = min(g_NwbReflectionSpatial.radius, NWB_REFLECTION_SPATIAL_MAX_RADIUS);
-    float4 center = float4(0.0);
-    float4 specular = float4(0.0);
-    float depth = 1.0;
-    if(insideImage){
-        const int3 sourceTexel = int3(pixel, 0);
-        center = NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel);
-        if(radius != 0u){
-            specular = NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel);
-            depth = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
-        }
-    }
-    const bool filterEligible = insideImage && !(
-        radius == 0u || center.a <= 0.0 || !isfinite(depth) || depth < 0.0 || depth >= 1.0
-        || !all(isfinite(specular)) || specular.a <= 0.0 || !any(specular.rgb > 0.0)
-    );
-    if(groupIndex == 0u)
-        g_NwbReflectionSpatialTileEligible = 0u;
-    GroupMemoryBarrierWithGroupSync();
-    if(filterEligible)
-        InterlockedOr(g_NwbReflectionSpatialTileEligible, 1u);
-    GroupMemoryBarrierWithGroupSync();
-    // The tile decision is uniform after both barriers. Ineligible tiles only copy their current samples;
-    // they cannot consume neighbors, so no halo, position or normal fetch is needed.
-    if(g_NwbReflectionSpatialTileEligible == 0u){
-        if(insideImage)
-            NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = center;
-        return;
-    }
-
     const uint tileWidth = NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * radius;
     const uint tileTexels = tileWidth * tileWidth;
-    const uint2 groupPixel = pixel - groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE;
-    const uint2 tilePixel = groupPixel + radius;
-    const uint centerIndex = tilePixel.y * tileWidth + tilePixel.x;
-    float4 centerPositionDepth = float4(0.0, 0.0, 0.0, depth);
-    float4 centerNormal = float4(0.0);
-    if(insideImage){
-        const int3 sourceTexel = int3(pixel, 0);
-        centerPositionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
-        centerNormal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
-    }
-    // Reuse each lane's eligibility inputs; every center entry has one writer, including partial-image tails.
-    g_NwbReflectionSpatialRadiance[centerIndex] = center;
-    g_NwbReflectionSpatialSpecular[centerIndex] = specular;
-    g_NwbReflectionSpatialPositionDepth[centerIndex] = centerPositionDepth;
-    g_NwbReflectionSpatialNormal[centerIndex] = centerNormal;
-
     const int2 tileOrigin = int2(groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE) - int2(radius);
     const uint groupThreads = NWB_REFLECTION_SPATIAL_GROUP_SIZE * NWB_REFLECTION_SPATIAL_GROUP_SIZE;
     for(uint tileIndex = groupIndex; tileIndex < tileTexels; tileIndex += groupThreads){
-        const uint2 haloPixel = uint2(tileIndex % tileWidth, tileIndex / tileWidth);
-        if(all(haloPixel >= radius) && all(haloPixel < radius + NWB_REFLECTION_SPATIAL_GROUP_SIZE))
-            continue;
-        const int2 sourcePixel = tileOrigin + int2(haloPixel);
+        const int2 sourcePixel = tileOrigin + int2(tileIndex % tileWidth, tileIndex / tileWidth);
         float4 radiance = float4(0.0);
-        float4 neighborSpecular = float4(0.0);
+        float4 specular = float4(0.0);
         float4 positionDepth = float4(0.0, 0.0, 0.0, 1.0);
         float4 normal = float4(0.0);
         if(
@@ -116,22 +65,32 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
         ){
             const int3 sourceTexel = int3(sourcePixel, 0);
             radiance = NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel);
-            neighborSpecular = NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel);
+            specular = NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel);
             positionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
             positionDepth.w = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
             normal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
         }
         g_NwbReflectionSpatialRadiance[tileIndex] = radiance;
-        g_NwbReflectionSpatialSpecular[tileIndex] = neighborSpecular;
+        g_NwbReflectionSpatialSpecular[tileIndex] = specular;
         g_NwbReflectionSpatialPositionDepth[tileIndex] = positionDepth;
         g_NwbReflectionSpatialNormal[tileIndex] = normal;
     }
-    // No lane in an active tile returns before the cache barrier. Center and halo writers are disjoint,
-    // and every cache entry a surviving lane can read has exactly one cooperative writer.
+    // Keep the barrier in main and before every return. Partial image tails, mirror pixels and radius zero all
+    // participate, and every cache entry a surviving lane can read has exactly one cooperative writer.
     GroupMemoryBarrierWithGroupSync();
-    if(!insideImage)
+
+    const uint2 pixel = dispatchThreadId.xy;
+    if(pixel.x >= g_NwbReflectionSpatial.width || pixel.y >= g_NwbReflectionSpatial.height)
         return;
-    if(!filterEligible){
+    const uint2 tilePixel = pixel - groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE + radius;
+    const uint centerIndex = tilePixel.y * tileWidth + tilePixel.x;
+    const float4 center = g_NwbReflectionSpatialRadiance[centerIndex];
+    const float4 specular = g_NwbReflectionSpatialSpecular[centerIndex];
+    const float depth = g_NwbReflectionSpatialPositionDepth[centerIndex].w;
+    if(
+        radius == 0u || center.a <= 0.0 || !isfinite(depth) || depth < 0.0 || depth >= 1.0
+        || !all(isfinite(specular)) || specular.a <= 0.0 || !any(specular.rgb > 0.0)
+    ){
         NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = center;
         return;
     }

@@ -6,6 +6,8 @@ target_sources(nwb_logtelemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/memory_report.h"
     "${CMAKE_CURRENT_LIST_DIR}/report.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/report.h"
+    "${CMAKE_CURRENT_LIST_DIR}/report_json.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/report_json.h"
     "${CMAKE_CURRENT_LIST_DIR}/report_dot.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/report_dot.h"
 )

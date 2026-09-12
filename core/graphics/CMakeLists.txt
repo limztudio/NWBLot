@@ -29,6 +29,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_buffer_resource_references.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_validation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/commandlist.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/commandlist_ownership.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/command_markers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/compute.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/constants.cpp"

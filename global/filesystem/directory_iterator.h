@@ -85,7 +85,7 @@ private:
             return;
         }
 
-        while(true){
+        for(;;){
             const TStringView fileName(data.cFileName);
             if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT(".."))
                 this->m_entries.emplace_back(path / fileName);
@@ -107,7 +107,7 @@ private:
             return;
         }
 
-        while(true){
+        for(;;){
             errno = 0;
             dirent* entry = readdir(directory);
             if(entry == nullptr){

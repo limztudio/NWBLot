@@ -67,11 +67,11 @@ cmake --build --preset windows-clang-arm64-dbg --target testbed
 The repository launcher configures when needed, builds the selected target, and starts it from the correct runtime directory. On Windows it selects the native host architecture unless `--arch` is supplied.
 
 ```powershell
-python launcher.py testbed --config dbg
-python launcher.py pipeline --help
-python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
-python launcher.py smoke --profiles
-python launcher.py profiles
+python -m launcher testbed --config dbg
+python -m launcher pipeline --help
+python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher smoke --profiles
+python -m launcher profiles
 ```
 
 The root launcher discovers the `pipeline` command from `pipeline/launch.py`, using the same `launch.py` entry-point convention as projects and utilities. The pipeline launcher accepts build and asset options together, builds the three tools, and runs `dependeny_computer`, `asset_builder`, and `asset_gatherer` in order. Use `--skip-build` with existing tools or `--dry-run` to preview the workflow; `--help` lists all options without building. The tools build with `NWB_BUILD_PIPELINE=ON` (the default). See [the pipeline guide](pipeline/readme.md) for direct stage commands and [the filesystem guide](docs/filesystem.md) for project filesystem customization.

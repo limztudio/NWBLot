@@ -14,7 +14,7 @@ compares GPU timestamp medians without manufacturing a renderer failure.
 From the repository root:
 
 ```bash
-python launcher.py hybrid-shadow-boundary
+python -m launcher hybrid-shadow-boundary
 ```
 
 Use `--config dbg` for correctness investigation or `--config opt` for timing evidence. The canonical launcher
@@ -29,13 +29,13 @@ default so `--gpudbg` layer work does not dominate the timing evidence. Run the 
 variant explicitly when needed:
 
 ```bash
-python launcher.py hybrid-shadow-boundary --config dbg --gpu-validation
+python -m launcher hybrid-shadow-boundary --config dbg --gpu-validation
 ```
 
 Forward runner options after `--`:
 
 ```bash
-python launcher.py hybrid-shadow-boundary -- --measure-seconds 30 --minimum-samples 12
+python -m launcher hybrid-shadow-boundary -- --measure-seconds 30 --minimum-samples 12
 ```
 
 After the requested warmup, the runner waits for the next complete timing-file flush and excludes every byte through
@@ -50,7 +50,7 @@ The report records healthy-hybrid overhead relative to the opaque baseline but d
 because the scene changes material classes. If a target has an agreed maximum hybrid overhead, make it explicit:
 
 ```powershell
-python launcher.py hybrid-shadow-boundary -- --maximum-hybrid-frame-regression-percent 3.0
+python -m launcher hybrid-shadow-boundary -- --maximum-hybrid-frame-regression-percent 3.0
 ```
 
 The report compares the mandatory route scopes plus any additional published shadow/tail scopes. A missing optional

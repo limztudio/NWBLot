@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher
-from utilities.python import repository_windows_process
+from launcher import repository_windows_process
 
 
 class FakeWindowsProcessApi:

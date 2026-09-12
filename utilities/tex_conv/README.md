@@ -4,14 +4,14 @@
 launcher is discovered automatically by the repository root, so it can be
 built and run with:
 
-    python launcher.py tex-conv -- --help
-    python launcher.py tex-conv -- assets/textures/foobar.png
+    python -m launcher tex-conv -- --help
+    python -m launcher tex-conv -- assets/textures/foobar.png
 
 A single positional image produces a 2D texture. Cubemaps and volume textures
 use explicit ordered image lists:
 
-    python launcher.py tex-conv -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
-    python launcher.py tex-conv -- --volume z0.png z1.png z2.png z3.png --output fog
+    python -m launcher tex-conv -- --cube posx.png negx.png posy.png negy.png posz.png negz.png --output sky
+    python -m launcher tex-conv -- --volume z0.png z1.png z2.png z3.png --output fog
 
 `--cube` always takes exactly six square faces in `+X, -X, +Y, -Y, +Z, -Z`
 order. `--volume` takes one or more same-sized slices in ascending Z order. This
@@ -21,9 +21,9 @@ linear data; HDR sources are always linear. `--force` is required to replace eit
 
 Use `--alpha` to choose an alpha source independently of the RGB image:
 
-    python launcher.py tex-conv -- rgb.png --alpha opacity.png
-    python launcher.py tex-conv -- rgb.exr --alpha black
-    python launcher.py tex-conv -- rgb.hdr --alpha white
+    python -m launcher tex-conv -- rgb.png --alpha opacity.png
+    python -m launcher tex-conv -- rgb.exr --alpha black
+    python -m launcher tex-conv -- rgb.hdr --alpha white
 
 `--alpha path` takes the mask image's red channel, normalized to `[0, 1]`.
 The mask must match the source width and height; for cubemaps and volumes the

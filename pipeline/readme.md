@@ -8,7 +8,7 @@ targets and the asset build libraries.
 Run the complete pipeline through the repository launcher:
 
 ```console
-python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 The root discovers `pipeline/launch.py` as a normal runnable directory. Build
@@ -77,14 +77,14 @@ builds `nwb_pipeline`, calls `dependeny_computer`, passes that result to
 errors and failed stages stop the pipeline and preserve the published volume.
 
 ```console
-python launcher.py pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
+python -m launcher pipeline --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 
 Build and asset options share one argument list. The pipeline launcher can also
 run independently, and either help command returns without building:
 
 ```console
-python launcher.py pipeline --help
+python -m launcher pipeline --help
 python pipeline/launch.py --config dbg --asset-root impl/assets CoolStuff/Testbed/assets --output-directory runtime/res
 ```
 

@@ -15,7 +15,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
-from utilities.python import repository_windows_process
+from launcher import repository_windows_process
 
 
 CONFIGURATIONS = ("dbg", "opt", "fin")
@@ -83,7 +83,7 @@ class ProfileSession:
 
 
 def repo_root() -> Path:
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parents[1]
 
 
 def launch_command_from_directory(script: Path) -> str:

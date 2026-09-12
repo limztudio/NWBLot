@@ -10,13 +10,13 @@ The runner rejects an async result if it silently uses the Graphics queue route.
 From the repository root, use the one-command launcher:
 
 ```powershell
-python launcher.py async-shadow-m4
+python -m launcher async-shadow-m4
 ```
 
 It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation, and writes a timestamped directory under `.cozter/out/ab-results/async-shadow-m4/`. The command returns `77` when the adapter has no distinct compute-only family. To adjust a `run.py` setting, pass it after `--`, for example:
 
 ```powershell
-python launcher.py async-shadow-m4 -- --measure-seconds 30
+python -m launcher async-shadow-m4 -- --measure-seconds 30
 ```
 
 Pixel capture and timing run in separate processes. After 96 rendered frames, the capture process suspends new render
@@ -26,7 +26,7 @@ marker before it settles and captures the window. The timing process then runs n
 capture point only when investigating a specific temporal phase:
 
 ```powershell
-python launcher.py async-shadow-m4 -- --pixel-capture-frames 128
+python -m launcher async-shadow-m4 -- --pixel-capture-frames 128
 ```
 
 On Windows, the M4 capture path restores, raises, and foregrounds the benchmark window before waiting for that

@@ -68,6 +68,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_commands.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_descriptor_buffer.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_descriptor_write.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/resource_bindings_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/shader.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/staging_texture.cpp"

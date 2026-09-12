@@ -31,6 +31,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/compute.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/constants.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_idle_lifecycle.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_factory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_diagnostics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_pipeline_cache.cpp"

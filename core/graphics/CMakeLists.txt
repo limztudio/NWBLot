@@ -70,6 +70,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_handoff_data.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_handoff.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_barriers.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/state_tracking_ownership.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_clear.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/texture_clear_color.cpp"

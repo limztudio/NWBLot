@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
+#include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
 
@@ -526,170 +528,22 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredCompiledPlan.queueInfoForTask(m_deferredShadowVisibilityTask);
     const Core::GpuPhysicalQueueInfo* const graphicsPrefixQueue =
         deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixTask);
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueComputeEmulationQueue =
-        m_graphicsPrefixOpaqueComputeEmulationTask.valid()
-            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixOpaqueComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueSharedComputeEmulationQueue =
-        m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount != 0u
-        && m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u].valid()
-            ? deferredCompiledPlan.queueInfoForTask(
-                m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
-            )
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue =
-        m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
-            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
-            : nullptr
-    ;
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue =
-        m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid()
-            ? deferredCompiledPlan.queueInfoForTask(
-                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
-            )
-            : nullptr
-    ;
-    bool graphicsPrefixPacketsAreGraphics = graphicsPrefixTimingBindingsValid;
-    for(usize prefixTaskIndex = 0u;
-        graphicsPrefixPacketsAreGraphics && prefixTaskIndex < graphicsPrefixTimingTicketCount;
-        ++prefixTaskIndex
-    ){
-        const Core::GpuPhysicalQueueInfo* const queue =
-            deferredCompiledPlan.queueInfoForTask(graphicsPrefixTimingTasks[prefixTaskIndex]);
-        graphicsPrefixPacketsAreGraphics = queue && queue->queueClass == Core::CommandQueue::Graphics;
-    }
-    // The producer shares G-buffer's packet; its boundary stays packet-local.
-    const bool graphicsPrefixOpaqueComputeEmulationMerged =
-        !m_graphicsPrefixOpaqueComputeEmulationTask.valid()
-        || (
-            taskIsCompiled(m_graphicsPrefixOpaqueComputeEmulationTask)
-            && deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixOpaqueComputeEmulationTask,
-                m_graphicsPrefixGbufferTask
-            )
-            && graphicsPrefixOpaqueComputeEmulationQueue
-            && graphicsPrefixOpaqueComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
-        )
-    ;
-    // Shared outputs need exact packet order; keep the G-buffer prelude first.
-    const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = [&](){
-        const usize phaseCount = m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount;
-        if(phaseCount == 0u){
-            for(const Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks){
-                if(task.valid())
-                    return false;
-            }
-            return true;
-        }
-        if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(phaseCount))
-            return false;
-        if(
-            !graphicsPrefixOpaqueSharedComputeEmulationQueue
-            || graphicsPrefixOpaqueSharedComputeEmulationQueue->queueClass != Core::CommandQueue::Graphics
-            || !deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixGbufferTask,
-                m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
-            )
-        )
-            return false;
-        for(usize phaseIndex = 0u; phaseIndex < phaseCount; ++phaseIndex){
-            const Core::GpuTaskId task = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
-            const Core::GpuPhysicalQueueInfo* const queue = deferredCompiledPlan.queueInfoForTask(task);
-            if(
-                !task.valid()
-                || !queue
-                || queue->queueClass != Core::CommandQueue::Graphics
-                || !deferredCompiledPlan.tasksSharePacket(
-                    m_graphicsPrefixGbufferTask,
-                    task
-                )
-            )
-                return false;
-        }
-        for(usize phaseIndex = phaseCount;
-            phaseIndex < LengthOf(m_graphicsPrefixOpaqueSharedComputeEmulationTasks);
-            ++phaseIndex
-        ){
-            if(m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid())
-                return false;
-        }
-        return deferredCompiledPlan.tasksFormContiguousPacketSequence(
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks,
-            phaseCount
-        ) && deferredCompiledPlan.taskPrecedesInSamePacket(
-            m_graphicsPrefixGbufferTask,
-            m_graphicsPrefixOpaqueSharedComputeEmulationTasks[0u]
-        );
-    }();
-    // Declared producers must share G-buffer's packet for the same handoff.
-    const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged =
-        !m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()
-        || (
-            taskIsCompiled(m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask)
-            && deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask,
-                m_graphicsPrefixGbufferTask
-            )
-            && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue
-            && graphicsPrefixOpaqueCsgReceiverComputeEmulationQueue->queueClass == Core::CommandQueue::Graphics
-        )
-    ;
-    // The producer/raster pair must stay contiguous in one packet.
-    const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = [&](){
-        if(!m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask.valid())
-            return true;
-        if(
-            !m_graphicsPrefixCsgIntervalCombineTask.valid()
-            || !m_graphicsPrefixCsgIntervalSampleTask.valid()
-            || !graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue
-            || graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationQueue->queueClass
-                != Core::CommandQueue::Graphics
-            || !deferredCompiledPlan.taskPrecedesOrSharesPacket(
-                m_graphicsPrefixCsgIntervalCombineTask,
-                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask
-            )
-            || !deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask,
-                m_graphicsPrefixCsgIntervalSampleTask
-            )
-        )
-            return false;
-        const Core::GpuTaskId sequence[] = {
-            m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask,
-            m_graphicsPrefixCsgIntervalSampleTask,
-        };
-        return deferredCompiledPlan.tasksFormContiguousPacketSequence(
-            sequence,
-            LengthOf(sequence)
-        );
-    }();
-    // Keep the clear with G-buffer's ticket; a split would rebind ownership.
-    const Core::GpuPhysicalQueueInfo* const graphicsPrefixCsgIntervalClearQueue =
-        m_graphicsPrefixCsgIntervalClearTask.valid()
-            ? deferredCompiledPlan.queueInfoForTask(m_graphicsPrefixCsgIntervalClearTask)
-            : nullptr
-    ;
-    const bool graphicsPrefixCsgIntervalClearBundleMerged = !hasOpaqueCsgFrameWork
-        ? (!m_graphicsPrefixCsgIntervalClearFirstTask.valid() && !m_graphicsPrefixCsgIntervalClearTask.valid())
-        : (
-            m_graphicsPrefixCsgIntervalClearFirstTask.valid()
-            && m_graphicsPrefixCsgIntervalClearTask.valid()
-            && taskIsCompiled(m_graphicsPrefixCsgIntervalClearFirstTask)
-            && taskIsCompiled(m_graphicsPrefixCsgIntervalClearTask)
-            && deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixCsgIntervalClearFirstTask,
-                m_graphicsPrefixCsgIntervalClearTask
-            )
-            && deferredCompiledPlan.tasksSharePacket(
-                m_graphicsPrefixCsgIntervalClearTask,
-                m_graphicsPrefixGbufferTask
-            )
-            && graphicsPrefixCsgIntervalClearQueue
-            && graphicsPrefixCsgIntervalClearQueue->queueClass == Core::CommandQueue::Graphics
-        )
-    ;
+    OpaqueEmulationMergeValidator opaqueEmulationMergeValidator(MakeNotNull(this));
+    OpaqueEmulationMergeValidationResult opaqueEmulationMerge;
+    opaqueEmulationMergeValidator.validate(
+        deferredCompiledPlan,
+        graphicsPrefixTimingTasks,
+        graphicsPrefixTimingTicketCount,
+        graphicsPrefixTimingBindingsValid,
+        hasOpaqueCsgFrameWork,
+        opaqueEmulationMerge
+    );
+    const bool graphicsPrefixPacketsAreGraphics = opaqueEmulationMerge.packetsAreGraphics;
+    const bool graphicsPrefixOpaqueComputeEmulationMerged = opaqueEmulationMerge.opaqueComputeEmulationMerged;
+    const bool graphicsPrefixOpaqueSharedComputeEmulationMerged = opaqueEmulationMerge.opaqueSharedComputeEmulationMerged;
+    const bool graphicsPrefixOpaqueCsgReceiverComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgReceiverComputeEmulationMerged;
+    const bool graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationMerged = opaqueEmulationMerge.opaqueCsgIntervalSampleComputeEmulationMerged;
+    const bool graphicsPrefixCsgIntervalClearBundleMerged = opaqueEmulationMerge.csgIntervalClearBundleMerged;
     const Core::GpuPhysicalQueueInfo* const shadowPrepareQueue =
         deferredCompiledPlan.queueInfoForTask(m_deferredShadowPrepareTask);
     const Core::GpuPhysicalQueueInfo* const softwareCausticsQueue =

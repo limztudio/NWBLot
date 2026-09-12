@@ -220,6 +220,22 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             SKIP_RETURN_CODE 77
             TIMEOUT 600
         )
+        if(TARGET nwb_logserver)
+            add_test(
+                NAME nwb_reflection_temporal_omission_smoke
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_temporal_omission_smoke.py"
+                    "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
+                    "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                    "--logserver-executable" "$<TARGET_FILE:nwb_logserver>"
+                    "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/reflection_temporal_omission"
+            )
+            set_tests_properties(nwb_reflection_temporal_omission_smoke PROPERTIES
+                RESOURCE_LOCK nwb_display
+                SKIP_RETURN_CODE 77
+                TIMEOUT 240
+            )
+        endif()
+
         foreach(_nwb_reflection_suite IN ITEMS rough temporal optical feedback feedback_diagnostics_off)
             string(REPLACE "_" "-" _nwb_reflection_suite_argument "${_nwb_reflection_suite}")
             add_test(

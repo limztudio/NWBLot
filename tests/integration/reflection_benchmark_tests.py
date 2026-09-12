@@ -109,6 +109,33 @@ class TimingNormalizationTests(unittest.TestCase):
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.validate_coverage(scopes, variant, 16, 100, 10)
 
+    def test_single_sample_temporal_requires_zero_dispatches_and_preserves_other_coverage(self):
+        variant = benchmark.Variant("hardware_temporal", "hardware", temporal=True)
+        scopes = synthetic_scopes(variant)
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "unexpected native dispatch"):
+            benchmark.validate_coverage(scopes, variant, 16, 100, 10, history_samples=1)
+        del scopes[benchmark.TEMPORAL]
+        benchmark.validate_coverage(scopes, variant, 16, 100, 10, history_samples=1)
+        self.assertAlmostEqual(benchmark.kernel_work_ms(scopes, variant, 10, history_samples=1), .3)
+        for scope in (benchmark.FRAME, benchmark.CLASSIFY, benchmark.HARDWARE, benchmark.CONTROLS[0]):
+            missing = copy.deepcopy(scopes)
+            del missing[scope]
+            with self.subTest(scope=scope), self.assertRaisesRegex(benchmark.SmokeFailure, "missing GPU scopes"):
+                benchmark.validate_coverage(missing, variant, 16, 100, 10, history_samples=1)
+
+    def test_accumulating_history_still_requires_full_temporal_dispatch_coverage(self):
+        variant = benchmark.Variant("hardware_temporal", "hardware", temporal=True)
+        for history_samples in (2, 16, 256):
+            with self.subTest(history_samples=history_samples):
+                scopes = synthetic_scopes(variant)
+                benchmark.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
+                scopes[benchmark.TEMPORAL]["gpu_samples"] = 1
+                with self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
+                del scopes[benchmark.TEMPORAL]
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "missing GPU scopes"):
+                    benchmark.validate_coverage(scopes, variant, 16, 100, 10, history_samples=history_samples)
+
     def test_feedback_warmup_uses_completed_gpu_samples_before_measurement(self):
         reports = [{benchmark.FRAME: benchmark.ScopeSample(1, 3)} for _ in range(15)]
         start, retained = benchmark.retain_after_warmup(reports, 6, 32)

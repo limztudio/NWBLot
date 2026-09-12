@@ -8,7 +8,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | --- | --- | --- |
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
-| 2 | Skip temporal dispatches that cannot update history | Draft prepared |
+| 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Draft prepared |
 | 4 | Reuse accepted optical metadata uploads | Implementation draft in progress |
 | 5 | Share common hardware/software ray-scene gathering within a frame | Pending |
@@ -55,3 +55,19 @@ The occupancy result does not establish a gain. Shadow visibility fails the cont
 Evidence: `__artifacts/reflection_optimization_steps/step1/benchmark/{plan,trials,report}.json`, all raw trial logs/timing reports, source/build/runtime snapshots, and operator records. Report SHA256 is `ec699d86c507fce12547b27845363c931bbad970dcf02f1291c4246441df6f67`. Acquisition ran September 12, 2026, 15:00:05-15:03:15 UTC on the Adreno X2-90, Windows ARM64 optimized, with Balanced power and 79% battery reported at both endpoints. Frequency and thermal telemetry were unavailable. No other build, asset cook, or GPU test ran concurrently. All unfavorable trials are retained.
 
 After restoration, the optimized build, full ECS graphics target, benchmark analysis target, and ordinary transparency capture passed. The recooked authored-volume hash exactly matches the baseline above. See __artifacts/reflection_optimization_steps/step1_restored_opt_junit.xml. The rejected candidate is absent from tracked production code.
+## Step 2: omit temporal recording when history cannot change
+
+`TemporalTask::record` resolves the existing late hardware-readiness/history outcome and returns before native render-pass termination, binding, push constants, timing or dispatch when history is not reusable or its sample cap is one. Classification and hardware resolve already populated the current bank. The graph task, resource declarations, reservation and accepted/discarded callbacks remain intact, so accepted frames still publish the correct bank and sample sequence. No shader or public setting changed.
+
+The cap-aware benchmark contract requires zero temporal ranges for cap one and normal temporal coverage for reusable history. A dedicated smoke test checks every finalized timing report, including warm-up and shutdown, and preserves unique output directories and failed runs. It freezes sources, executable dependencies and authored resources before/after both launches. Missing unrelated GPU scopes, publication skew, changed identities and cleanup failures cannot masquerade as successful omission or an unsupported-device skip.
+
+Validation passed in optimized and debug builds: the ECS graphics suite, existing reflection/renderer benchmark analysis suites, and the new 12-test omission analysis suite. Optimized rendering passed 14 roughness captures and 12 temporal/reset captures. Another 12 debug temporal captures ran with GPU validation enabled; camera, transform, material, light and deformation resets each matched the corresponding fresh-history image with zero byte difference. The native omission smoke passed in both configurations: optimized cap one had 883 retained completed frames and zero temporal ranges across all nine finalized reports, while cap sixteen had 860 retained frames and 860 temporal ranges; debug cap one had 115 retained frames and zero temporal ranges across ten reports, while cap sixteen had 102 retained frames and 102 temporal ranges. These tests demonstrate omitted native work and preserved active-history behavior. They are not a statistical timing comparison, and the active temporal kernel's previous timing is not claimed as a saving from omitting its much cheaper no-op path.
+
+Reproduce the registered proof and its analysis tests with either configuration:
+
+```text
+ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_reflection_temporal_omission_analysis_unit|nwb_reflection_temporal_omission_smoke)$" -j1
+ctest --preset windows-clang-arm64-dbg --output-on-failure -R "^(nwb_reflection_temporal_omission_analysis_unit|nwb_reflection_temporal_omission_smoke)$" -j1
+```
+
+JUnit evidence is under `__artifacts/reflection_optimization_steps/step2/`; complete omission reports and raw logs are under `__cmake/build/windows-clang-arm64/Testing/smoke/{opt,dbg}/reflection_temporal_omission/temporal_omission_*/`. The original coverage shader from Step 1 was also recooked in both configurations.

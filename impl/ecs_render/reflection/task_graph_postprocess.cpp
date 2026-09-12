@@ -95,11 +95,14 @@ struct TemporalTask{
     };
 
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        commandList.endRenderPass();
         if(!payload.snapshot.history.eligible)
             return true;
         const bool ready = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome outcome = ResolveReflectionHistoryOutcome(payload.snapshot.history, ready);
+        // Classification and tracing already produced this bank; the accepted task still publishes its history state.
+        if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)
+            return true;
+        commandList.endRenderPass();
         const TemporalParameters parameters{
             payload.width, payload.height, payload.snapshot.current.storageSlot, payload.snapshot.previous.sampledSlot,
             payload.snapshot.opaqueSpecularSlot, outcome.reused ? payload.snapshot.history.previousSampleCount : 0u,

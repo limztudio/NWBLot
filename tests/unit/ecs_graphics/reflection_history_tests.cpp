@@ -89,6 +89,79 @@ TEST(ReflectionHistory, AcceptedSampleCountCapsWhileSamplingIndexContinues){
     }
 }
 
+TEST(ReflectionHistory, SingleSampleLimitStillPublishesBanksAndAdvancesAcceptedSampling){
+    Core::Alloc::GlobalArena arena{Name("tests/reflection/single_sample_history")};
+    auto control = CreateReflectionHistoryControl(arena, 1u);
+    ASSERT_TRUE(control);
+    ReflectionSettings settings;
+    settings.temporalMaxSamples = 1u;
+    u64 epoch = 0u;
+    for(u32 index = 0u; index < 4u; ++index){
+        const auto plan = control->plan(Stamp(), settings, 100u + index);
+        const auto outcome = ResolveReflectionHistoryOutcome(plan, true);
+        EXPECT_TRUE(outcome.eligible);
+        EXPECT_EQ(outcome.reused, index != 0u);
+        EXPECT_EQ(outcome.sampleCount, 1u);
+        EXPECT_EQ(outcome.sampleIndex, index);
+        EXPECT_EQ(plan.currentBank, index & 1u);
+        EXPECT_EQ(outcome.historyStartGraphicsFrame, 100u);
+        if(index == 0u)
+            epoch = outcome.epoch;
+        EXPECT_EQ(outcome.epoch, epoch);
+        ReflectionHistoryReservation reservation(control, plan);
+        ASSERT_TRUE(reservation.valid());
+        reservation.accept(Token(plan.sequence), true);
+        const auto next = control->plan(Stamp(), settings, 101u + index);
+        EXPECT_EQ(next.acceptedSequence, plan.sequence);
+        EXPECT_EQ(next.previousBank, plan.currentBank);
+        EXPECT_EQ(next.previousSampleCount, 1u);
+        EXPECT_EQ(next.sampleIndex, index + 1u);
+    }
+}
+
+TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRetry){
+    Core::Alloc::GlobalArena arena{Name("tests/reflection/late_reset_history")};
+    auto control = CreateReflectionHistoryControl(arena, 1u);
+    ASSERT_TRUE(control);
+    const ReflectionSettings settings;
+    const auto first = control->plan(Stamp(), settings, 10u);
+    ReflectionHistoryReservation initial(control, first);
+    ASSERT_TRUE(initial.valid());
+    initial.accept(Token(first.sequence), true);
+
+    const auto rejected = control->plan(Stamp(), settings, 11u);
+    ASSERT_TRUE(rejected.reused);
+    const auto lateReset = ResolveReflectionHistoryOutcome(rejected, false);
+    EXPECT_FALSE(lateReset.reused);
+    EXPECT_EQ(lateReset.sampleIndex, 0u);
+    EXPECT_EQ(lateReset.sampleCount, 1u);
+    ReflectionHistoryReservation abandoned(control, rejected);
+    ASSERT_TRUE(abandoned.valid());
+    abandoned.discard();
+    const auto retry = control->plan(Stamp(), settings, 12u);
+    EXPECT_EQ(retry.acceptedSequence, first.sequence);
+    EXPECT_EQ(retry.currentBank, rejected.currentBank);
+    EXPECT_EQ(retry.previousBank, first.currentBank);
+    const auto restoredReady = ResolveReflectionHistoryOutcome(retry, true);
+    EXPECT_TRUE(restoredReady.reused);
+    EXPECT_FALSE(restoredReady.reset);
+    EXPECT_EQ(restoredReady.sampleIndex, 1u);
+
+    ReflectionHistoryReservation accepted(control, retry);
+    ASSERT_TRUE(accepted.valid());
+    accepted.accept(Token(retry.sequence), false);
+    const auto next = control->plan(Stamp(), settings, 13u);
+    const auto stable = ResolveReflectionHistoryOutcome(next, false);
+    EXPECT_EQ(next.acceptedSequence, retry.sequence);
+    EXPECT_EQ(next.previousBank, retry.currentBank);
+    EXPECT_EQ(stable.epoch, lateReset.epoch);
+    EXPECT_EQ(stable.sampleIndex, 1u);
+    EXPECT_EQ(stable.sampleCount, 2u);
+    EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
+    EXPECT_TRUE(stable.reused);
+    EXPECT_FALSE(stable.reset);
+}
+
 TEST(ReflectionHistory, DiscardDoesNotAdvanceSampleBankCountOrEpoch){
     ReflectionHistoryState state(1u);
     Accept(state, state.plan(Stamp(), ReflectionSettings{}, 100u));

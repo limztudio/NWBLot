@@ -233,6 +233,53 @@ TEST(EcsGraphics, ReflectionPostprocessSelectorsKeepAcceptedSamplingSeparateFrom
     EXPECT_LE(NWB_REFLECTION_SPATIAL_PUSH_CONSTANT_BYTES, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES);
 }
 
+TEST(EcsGraphics, ReflectionTemporalNoUpdatePreservesTheTaskAndSkipsNativeRecording){
+    TestArena testArena;
+    AString source;
+    ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "ecs_render" / "reflection" / "task_graph_postprocess.cpp", source));
+    const AStringView graph(source.data(), source.size());
+    const usize taskBegin = graph.find("struct TemporalTask{");
+    ASSERT_NE(taskBegin, AStringView::npos);
+    const usize taskEnd = graph.find("\nstruct SpatialTask{", taskBegin);
+    ASSERT_NE(taskEnd, AStringView::npos);
+    const AStringView task = graph.substr(taskBegin, taskEnd - taskBegin);
+    const usize recordBegin = task.find("static bool record(");
+    ASSERT_NE(recordBegin, AStringView::npos);
+    const usize recordEnd = task.find("\n    }", recordBegin);
+    ASSERT_NE(recordEnd, AStringView::npos);
+    const AStringView record = task.substr(recordBegin, recordEnd - recordBegin);
+    const usize resolve = record.find("ResolveReflectionHistoryOutcome(payload.snapshot.history, ready)");
+    const usize skip = record.find("if(!outcome.reused || payload.snapshot.history.settings.temporalMaxSamples <= 1u)");
+    ASSERT_NE(resolve, AStringView::npos);
+    ASSERT_NE(skip, AStringView::npos);
+    ASSERT_LT(resolve, skip);
+    const usize skipReturn = record.find("return true;", skip);
+    ASSERT_NE(skipReturn, AStringView::npos);
+    const AStringView commands[] = {
+        "commandList.endRenderPass();", "commandList.setComputeState(", ".bindCompute(",
+        "commandList.setPushConstants(", "Core::GpuTimingMeasure timing(", "commandList.dispatch(",
+    };
+    for(const AStringView command : commands){
+        const usize commandOffset = record.find(command);
+        ASSERT_NE(commandOffset, AStringView::npos);
+        EXPECT_LT(skipReturn, commandOffset);
+    }
+    EXPECT_TRUE(ContainsText(task, "payload.reservation.accept(token, payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady);"));
+    EXPECT_TRUE(ContainsText(task, "payload.reservation.discard();"));
+    EXPECT_FALSE(ContainsText(record, "payload.reservation.accept("));
+    EXPECT_FALSE(ContainsText(record, "payload.reservation.discard("));
+
+    const usize declarationBegin = graph.find("Core::GpuTaskId DeclareReflectionPostprocessTasks(");
+    ASSERT_NE(declarationBegin, AStringView::npos);
+    const usize declarationEnd = graph.find("\n}", declarationBegin);
+    ASSERT_NE(declarationEnd, AStringView::npos);
+    const AStringView declaration = graph.substr(declarationBegin, declarationEnd - declarationBegin);
+    EXPECT_TRUE(ContainsText(declaration, "ReflectionHistoryReservation reservation(snapshot.control, snapshot.history);"));
+    EXPECT_TRUE(ContainsText(declaration, "ReadWriteUse(result.opaqueRadiance, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(declaration, "dependency = graph.addTask<TemporalTask>("));
+    EXPECT_TRUE(ContainsText(declaration, "graphics, snapshot, Move(reservation),"));
+}
+
 TEST(EcsGraphics, ReflectionUnavailableHardwareDisablesQueueingAndSkipsTlasDispatch){
     TestArena testArena;
     AString source;

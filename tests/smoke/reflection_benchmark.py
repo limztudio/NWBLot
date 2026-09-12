@@ -167,27 +167,29 @@ def retain_after_warmup(reports, warmup_intervals, minimum_warmup_frames=0):
     return start, reports[start:]
 
 
-def required_scopes(variant):
+def required_scopes(variant, history_samples=16):
     required = [FRAME, *OBSERVED_CONTROLS, CLASSIFY]
     if variant.mode in ("screen", "hybrid"):
         required.append(DEPTH)
     if variant.mode in ("hardware", "hybrid"):
         required.extend((BUILD_ARGS, HARDWARE))
-    if variant.temporal:
+    if variant.temporal and history_samples > 1:
         required.append(TEMPORAL)
     if variant.spatial:
         required.append(SPATIAL)
     return required
 
 
-def validate_coverage(summaries, variant, report_count, minimum_frames, mip_count):
-    missing = [scope for scope in required_scopes(variant) if scope not in summaries]
+def validate_coverage(summaries, variant, report_count, minimum_frames, mip_count, history_samples=16):
+    if variant.temporal and history_samples <= 1 and TEMPORAL in summaries:
+        raise SmokeFailure("single-sample temporal history recorded an unexpected native dispatch")
+    missing = [scope for scope in required_scopes(variant, history_samples) if scope not in summaries]
     if missing:
         raise SmokeFailure("missing GPU scopes (including possible probe scope-capacity loss): " + ", ".join(missing))
     frame_count = summaries[FRAME]["gpu_samples"]
     if frame_count < minimum_frames:
         raise SmokeFailure(f"only {frame_count} completed GPU frames; {minimum_frames} required")
-    for scope in required_scopes(variant):
+    for scope in required_scopes(variant, history_samples):
         entry = summaries[scope]
         if entry["gpu_samples"] < minimum_frames // 2:
             raise SmokeFailure(f"scope {scope} has too few completed GPU samples")
@@ -202,9 +204,9 @@ def validate_coverage(summaries, variant, report_count, minimum_frames, mip_coun
         raise SmokeFailure("GPU frame timing is zero")
 
 
-def kernel_work_ms(summaries, variant, mip_count):
+def kernel_work_ms(summaries, variant, mip_count, history_samples=16):
     return sum(summaries[scope]["mean_ms"] * (mip_count if scope == DEPTH else 1)
-        for scope in required_scopes(variant) if scope in KERNELS)
+        for scope in required_scopes(variant, history_samples) if scope in KERNELS)
 
 
 def percentile(sorted_values, fraction):
@@ -397,7 +399,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
                 if len(retained) >= args.sample_intervals:
                     summaries = summarize_intervals(retained)
                     try:
-                        validate_coverage(summaries, variant, len(retained), args.minimum_frame_samples, args.mip_count)
+                        validate_coverage(summaries, variant, len(retained), args.minimum_frame_samples, args.mip_count, args.history_samples)
                         selected = retained
                         break
                     except SmokeFailure as error:
@@ -421,7 +423,7 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         scopes = summarize_intervals(selected)
         result = {"block": block, "position": position, "variant": asdict(variant), "reports": len(selected),
             "retained_report_range": [retained_start, retained_start + len(selected)],
-            "scopes": scopes, "kernel_work_ms": kernel_work_ms(scopes, variant, args.mip_count),
+            "scopes": scopes, "kernel_work_ms": kernel_work_ms(scopes, variant, args.mip_count, args.history_samples),
             "mip_count": args.mip_count, "runtime_asset_identity": runtime_identity, "artifacts": str(directory)}
         result["runtime_pipeline_cache_after"] = runtime_pipeline_cache_identity(args.working_directory)
         write_json(directory / "summary.json", result)
@@ -657,6 +659,7 @@ def run(args):
         "feature_cost": "increment above current Disabled route, which retains shared infrastructure/classification",
         "primary_scope": FRAME, "control_scopes": CONTROLS, "observed_control_scopes": OBSERVED_CONTROLS,
         "depth_scope": "per-mip dispatch; kernel estimate multiplies by native mip count",
+        "temporal_scope": "one dispatch per stable reused frame when history_samples > 1; zero at cap 1",
         "practical_ms": args.practical_ms, "practical_fraction": args.practical_fraction,
         "control_floor_ms": args.control_floor_ms}
     write_json(args.output_directory / "plan.json", plan)

@@ -7,7 +7,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | Step | Work | Status |
 | --- | --- | --- |
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
-| 1 | Coalesce AVBOIT coverage atomics | In progress |
+| 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Draft prepared |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Draft prepared |
 | 4 | Reuse accepted optical metadata uploads | Implementation draft in progress |
@@ -37,3 +37,21 @@ python tests/smoke/renderer_ab_benchmark.py --baseline-executable <baseline-exe>
 ```
 
 Each source manifest contains `revision` and a nonempty `files` object mapping physical snapshot paths (relative to the manifest, or absolute) to SHA256 strings. Freeze the changed sources as well as the base revision. `--plan-only` validates identities and writes a plan without launching; acquisition requires another empty output directory.
+
+## Step 1: coverage atomic experiment rejected
+
+The candidate combined two independently thresholded coverage marks into one atomic OR only when their bits occupied the same 32-bit word. It preserved terminal-slice and cross-word behavior. A temporary test compiled the actual production shader helper with only external-operation adapters and verified literal boundary/threshold bitsets plus 32 sequences of 257 repeated fragments. The candidate passed those optimized/debug unit checks and the rendering qualification above. Exact candidate source and tests remain in the ignored experiment artifacts.
+
+The complete matched campaign contained 16 trials in eight balanced blocks, 96 retained reports and 2,880 completed GPU frames. Every required scope passed the coverage contract. Both arms used executable SHA256 `9ad85422bb89d592e5d346c1a52193893a18454d066117dfad6b568f31908f43`. The baseline authored volume was `9e72a8699fdfada987c8dfb18ff9748377cdaea72af909d122a9aa804f61c595`; the candidate was `603f84fccb25748495b3434f4046ac3631dd0b1ce373d81993e386e120f49f1b`.
+
+| Scope | Baseline mean ms | Candidate mean ms | Paired delta ms | 95% interval for mean delta ms |
+| --- | ---: | ---: | ---: | --- |
+| AVBOIT occupancy | 0.110026 | 0.111615 | +0.001588 | [-0.005338, +0.008196] |
+| Shadow visibility control | 3.575547 | 5.907419 | +2.331872 | [+2.253980, +2.410297] |
+| Full frame | 29.092325 | 31.847433 | +2.755108 | [+0.716356, +4.744947] |
+
+The occupancy result does not establish a gain. Shadow visibility fails the control-equivalence check in every block; the runner classifies the comparison as `control_drift`. The full-frame difference therefore cannot be attributed confidently to coverage atomics. Fewer atomic calls at source level are insufficient evidence to retain this candidate. The original production shader is restored, and candidate-only tests are archived with the experiment rather than committed as a runtime requirement. No performance improvement is claimed.
+
+Evidence: `__artifacts/reflection_optimization_steps/step1/benchmark/{plan,trials,report}.json`, all raw trial logs/timing reports, source/build/runtime snapshots, and operator records. Report SHA256 is `ec699d86c507fce12547b27845363c931bbad970dcf02f1291c4246441df6f67`. Acquisition ran September 12, 2026, 15:00:05-15:03:15 UTC on the Adreno X2-90, Windows ARM64 optimized, with Balanced power and 79% battery reported at both endpoints. Frequency and thermal telemetry were unavailable. No other build, asset cook, or GPU test ran concurrently. All unfavorable trials are retained.
+
+After restoration, the optimized build, full ECS graphics target, benchmark analysis target, and ordinary transparency capture passed. The recooked authored-volume hash exactly matches the baseline above. See __artifacts/reflection_optimization_steps/step1_restored_opt_junit.xml. The rejected candidate is absent from tracked production code.

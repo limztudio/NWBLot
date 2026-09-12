@@ -561,9 +561,6 @@ bool TextureMipDecoder::decodeLdr(
     return true;
 }
 
-}
-
-
 bool TextureMipDecoder::decodeHdr(
     const Texture& textureAsset,
     const TextureMipLevel& mip,
@@ -612,8 +609,6 @@ bool TextureMipDecoder::decodeHdr(
     outUpload.rowPitch = rowPitch;
     outUpload.sliceByteCount = sliceUploadByteCount;
     return true;
-}
-
 }
 
 

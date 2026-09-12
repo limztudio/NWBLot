@@ -6,6 +6,8 @@ target_sources(nwb_fbx_to_nwb PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/skin.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/common.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/mesh_refresh_text.h"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset_writer.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"

@@ -51,6 +51,7 @@ target_sources(nwb_gpu_task_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_ownership_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_routing_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_queue_timing_feedback_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_fragment_order_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_import_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_memory_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/task_graph_resource_set_validation_tests.cpp"

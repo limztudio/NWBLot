@@ -315,23 +315,33 @@ static void AppendResourceRangeRemainder(
     return true;
 }
 
+// Both collectors discover contiguous state runs newest-to-oldest, followed only by uncovered initial-state fragments.
+// Reverse the runs, retaining forward discovery order within each run and the initial-state suffix.
 static void AppendResourceStateFragmentsInStateOrder(
     const Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& discovered,
-    const usize stateCount,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
-){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
     outFragments.clear();
     outFragments.reserve(discovered.size());
-    for(usize stateIndex = 0u; stateIndex < stateCount; ++stateIndex){
-        for(const TrackedResourceStateFragment& fragment : discovered){
-            if(fragment.stateIndex == stateIndex)
-                outFragments.push_back(fragment);
-        }
+
+    usize trackedEnd = discovered.size();
+    while(trackedEnd > 0u && !discovered[trackedEnd - 1u].state)
+        --trackedEnd;
+
+    usize runEnd = trackedEnd;
+    while(runEnd > 0u){
+        const usize stateIndex = discovered[runEnd - 1u].stateIndex;
+        usize runBegin = runEnd - 1u;
+        while(runBegin > 0u && discovered[runBegin - 1u].stateIndex == stateIndex)
+            --runBegin;
+
+        NWB_ASSERT(discovered[runBegin].state);
+        NWB_ASSERT(runBegin == 0u || discovered[runBegin - 1u].stateIndex > stateIndex);
+        for(usize fragmentIndex = runBegin; fragmentIndex < runEnd; ++fragmentIndex)
+            outFragments.push_back(discovered[fragmentIndex]);
+        runEnd = runBegin;
     }
-    for(const TrackedResourceStateFragment& fragment : discovered){
-        if(!fragment.state)
-            outFragments.push_back(fragment);
-    }
+    for(usize fragmentIndex = trackedEnd; fragmentIndex < discovered.size(); ++fragmentIndex)
+        outFragments.push_back(discovered[fragmentIndex]);
 }
 
 // Walk newest-to-oldest and consume only still-uncovered portions of the requested ranges. A selected state
@@ -396,7 +406,7 @@ static void AppendResourceStateFragmentsInStateOrder(
         });
     }
 
-    AppendResourceStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    AppendResourceStateFragmentsInStateOrder(discovered, outFragments);
     return true;
 }
 
@@ -450,7 +460,7 @@ static void AppendResourceStateFragmentsInStateOrder(
         covered.push_back(stateBounds);
     }
 
-    AppendResourceStateFragmentsInStateOrder(discovered, trackedStates.size(), outFragments);
+    AppendResourceStateFragmentsInStateOrder(discovered, outFragments);
     return true;
 }
 

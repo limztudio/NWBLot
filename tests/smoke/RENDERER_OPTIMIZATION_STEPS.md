@@ -8,6 +8,7 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 | --- | --- | --- |
 | Preparation | Matched AVBOIT timing fixture and reusable two-build benchmark | Complete |
 | Measurement correction | Preserve source-frame bounds for out-of-order timing samples | Complete; CPU and native regressions pass |
+| Compiler scaling | Order discovered resource fragments without rescanning unrelated states | Complete; exact ordering and native handoffs verified |
 | 1 | Coalesce AVBOIT coverage atomics | Evaluated and rejected; original shader retained |
 | 2 | Skip temporal dispatches that cannot update history | Complete |
 | 3 | Avoid spatial halo/geometry loads for uniformly ineligible tiles | Complete; retained after GPU parity and matched timing |
@@ -126,3 +127,17 @@ The performance owner now maintains the minimum and maximum source frames. Sampl
 A CPU regression drives the real overlap correlator with distinct durations and reversed frame completion. A native regression actually releases and reuses one of two timer-query slots, checks callback order 51 then 50, and verifies aggregate bounds 50..51 without duplicate publication. Both optimized and debug graphics-resource, telemetry and native descriptor-buffer suites passed; the existing main-thread frame timing lifecycle test also passed. The new native regression did not skip. Evidence is under `__artifacts/reflection_optimization_steps/step5/benchmark_support_fixed_opt_junit.xml`, `benchmark_support_dbg_junit.xml`, and `benchmark_support_dbg_full_ctest.log`; the reviewed proposal is under `timing_source_span/`.
 
 This is a measurement correctness fix, with no rendering speedup claim. Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset.
+
+## Compiler scaling prerequisite: linear resource-fragment ordering
+
+The distinct-mesh gathering fixture exposed a CPU bottleneck in `core/task/gpu/compiler_resource_ranges.cpp`. All 12 retained ARM64 hot-thread samples landed in `AppendResourceStateFragmentsInStateOrder`, reached through the actual resource-state planner and graph compiler. The old helper scanned every discovered fragment once for every tracked state, including unrelated resources.
+
+Both collectors already discover contiguous state groups newest to oldest. The replacement reverses the group order while copying each group forward, then preserves the uncovered initial-state suffix. The complete output sequence, pointers, indices and ranges are unchanged. Ordering work changes from O(S x D + D) to O(D), with no extra allocation, sort, resource index, persistent cache or renderer-specific branch. Resource discovery, subtraction and queue/final-state contracts remain intact.
+
+All 340 GPU-task tests passed in optimized and debug builds, including six new exact-order cases covering partial buffers, sparse indices, unsorted requests, initial-state holes, empty output reuse, symbolic tails, texture rectangles and 64-buffer compiled external exports. The native descriptor-buffer target passed in both configurations: optimized had 381 passing cases and 39 feature/configuration skips; debug had 382 passing cases and 38 skips. Both relevant multi-packet and cross-queue external handoff tests ran and passed. Optimized duplicate-refraction, mid-CSG and combined caustic/refraction/reflection captures passed. Debug refraction with GPU validation, mid-CSG and combined optics passed. The fresh combined optimized image was also inspected.
+
+The compiler-fixed, Step5-absent fixture completed all six functional workloads, each with 96 successful warm-up, 256 measured and 32 drain frames. Distinct meshes completed the 384-frame run in approximately 65 seconds. Before the fix, that workload timed out after 180 seconds before finishing warm-up; a separate 60-second diagnostic completed only 17 frames. This demonstrates completion within the acquisition envelope. It is not a paired speed ratio: the old arm has no complete matching measured window, and partial frame counts or GPU times are not interchangeable with a qualified trial.
+
+Evidence is under `__artifacts/reflection_optimization_steps/compiler_fragment_order/` (`opt_unit_native_junit.xml`, `opt_unit_native_full.log`, `dbg_junit.xml`, `dbg_full.log`, `opt_captures_junit.xml`) and `cpu_gather_benchmark/` (`baseline_unique_stack_diagnostic`, frozen `compiler_baseline_v3`/`compiler_candidate_v4`, and `compiler_fixed_all_timing_pilot`). Initial invalid target invocation is retained in `opt_build.log`; the corrected target build passed. The proposal patch SHA256 is `b8b5f0c71260565c31f0978848de25773d2f0a3e4c3789176e304e55e4489dc4`.
+
+Reproduce ordering and native handoff qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_gpu_task_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.

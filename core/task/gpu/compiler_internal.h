@@ -165,6 +165,8 @@ public:
     explicit GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena);
     GpuTaskSchedulingReachability(GpuTaskSchedulingReachability&&) = delete;
 
+
+public:
     [[nodiscard]] bool reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept;
     [[nodiscard]] bool transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept;
 

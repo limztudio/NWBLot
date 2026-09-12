@@ -60,6 +60,9 @@ struct ReflectionHistoryOutcome{
 class ReflectionHistoryState : NoCopy{
 public:
     explicit ReflectionHistoryState(u16 deviceGeneration);
+
+
+public:
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionHistoryPlan plan(
         const ReflectionSceneContentStamp& stamp,
@@ -103,6 +106,8 @@ public:
     ~ReflectionHistoryReservation()noexcept;
     ReflectionHistoryReservation& operator=(ReflectionHistoryReservation&& other)noexcept;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
     void discard()noexcept;

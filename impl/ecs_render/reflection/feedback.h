@@ -78,6 +78,9 @@ struct ReflectionFeedbackOutcome{
 class ReflectionFeedbackState : NoCopy{
 public:
     explicit ReflectionFeedbackState(u16 deviceGeneration);
+
+
+public:
     void reset(u16 deviceGeneration)noexcept;
     [[nodiscard]] ReflectionFeedbackPlan plan(
         const ReflectionSceneContentStamp& stamp,
@@ -124,6 +127,8 @@ public:
     ~ReflectionFeedbackReservation()noexcept;
     ReflectionFeedbackReservation& operator=(ReflectionFeedbackReservation&& other)noexcept;
 
+
+public:
     [[nodiscard]] bool valid()const noexcept{ return m_reserved; }
     void accept(const Core::QueueSubmissionToken& token, bool hardwareReady)noexcept;
     void discard()noexcept;

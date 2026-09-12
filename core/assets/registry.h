@@ -25,6 +25,8 @@ private:
 public:
     explicit AssetRegistry(AssetArena& arena);
 
+
+public:
     bool registerCodec(UniquePtr<IAssetCodec>&& codec, bool replaceExisting = false);
     bool unregisterCodec(const Name& assetType);
 

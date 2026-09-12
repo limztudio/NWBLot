@@ -64,6 +64,9 @@ struct ReflectionPostprocessSnapshot{
 class RendererReflectionPostprocess final : NoCopy{
 public:
     RendererReflectionPostprocess(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
+
+
+public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, const ReflectionSettings& settings);
     [[nodiscard]] ReflectionPostprocessSnapshot snapshot(

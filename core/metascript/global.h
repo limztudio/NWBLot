@@ -66,6 +66,8 @@ class IMetaReader{
 public:
     virtual ~IMetaReader() = default;
 
+
+public:
     [[nodiscard]] virtual isize read(MChar* buffer, usize maxBytes) = 0;
 };
 

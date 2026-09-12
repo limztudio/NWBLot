@@ -115,6 +115,8 @@ class RendererReflectionSystem final : NoCopy{
 public:
     RendererReflectionSystem(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, RendererShaderSystem& shaders);
 
+
+public:
     // Caller joins submitted work and discards snapshots before teardown.
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, const ReflectionSettings& settings);

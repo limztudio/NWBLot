@@ -44,6 +44,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/device_submission_lifecycle.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/dispatch.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/extensions.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/extensions_cluster_operation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/event_query.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/gpu_descriptor_heap_descriptor_buffer.cpp"

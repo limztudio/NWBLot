@@ -16,6 +16,7 @@
 
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/raytrace/software_caustics_resolve_chain.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -702,190 +703,43 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
         return false;
     }
 
-    Core::GpuTaskSchedulingHint resolvePrepareScheduling = geometryScheduling;
-    resolvePrepareScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolvePrepareDesc;
-    resolvePrepareDesc
-        .setIdentity(Name("render.software_caustics.resolve_prepare"))
-        .setMarkerLabel("Software Caustics Resolve Prepare")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolvePrepareScheduling)
-        .setDependencies(&m_deferredCausticGeometryTask, 1u)
-        .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
-        .setResourceUses(resolvePrepareResourceUses.data(), resolvePrepareResourceUses.size())
-    ;
-    m_deferredCausticResolvePrepareTask = m_raytracingSystem.declareCausticResolvePrepareTask(
-        m_deferredLightingTaskGraph,
-        resolvePrepareDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolvePrepareTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-prepare graph task"));
+    SoftwareCausticsResolveChainBuilder resolveChainBuilder(m_deferredLightingTaskGraph, m_raytracingSystem);
+    SoftwareCausticsResolveChainInputs resolveChainInputs;
+    resolveChainInputs.targets = &deferredTargets;
+    resolveChainInputs.geometryTask = m_deferredCausticGeometryTask;
+    resolveChainInputs.baseScheduling = geometryScheduling;
+    resolveChainInputs.prepareUses = resolvePrepareResourceUses.data();
+    resolveChainInputs.prepareUseCount = resolvePrepareResourceUses.size();
+    resolveChainInputs.waveletUses = resolveWaveletResourceUses.data();
+    resolveChainInputs.waveletUseCount = resolveWaveletResourceUses.size();
+    resolveChainInputs.secondWaveletUses = resolveSecondWaveletResourceUses.data();
+    resolveChainInputs.secondWaveletUseCount = resolveSecondWaveletResourceUses.size();
+    resolveChainInputs.thirdWaveletUses = resolveThirdWaveletResourceUses.data();
+    resolveChainInputs.thirdWaveletUseCount = resolveThirdWaveletResourceUses.size();
+    resolveChainInputs.fourthWaveletUses = resolveFourthWaveletResourceUses.data();
+    resolveChainInputs.fourthWaveletUseCount = resolveFourthWaveletResourceUses.size();
+    resolveChainInputs.fifthWaveletUses = resolveFifthWaveletResourceUses.data();
+    resolveChainInputs.fifthWaveletUseCount = resolveFifthWaveletResourceUses.size();
+    resolveChainInputs.upsampleUses = resolveUpsampleResourceUses.data();
+    resolveChainInputs.upsampleUseCount = resolveUpsampleResourceUses.size();
+    resolveChainInputs.stateSources = scratchStateSources;
+    resolveChainInputs.stateSourceCount = scratchStateSourceCount;
+    resolveChainInputs.producerDispatched = &m_deferredCausticProducerDispatched;
+    resolveChainInputs.timingTicket = &timingTicket;
+    resolveChainInputs.resolveTiming = &causticResolveTiming;
+    SoftwareCausticsResolveChainResult resolveChainResult;
+    if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));
         return false;
     }
-
-    Core::GpuTaskSchedulingHint resolveWaveletScheduling = resolvePrepareScheduling;
-    resolveWaveletScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveWaveletDesc;
-    resolveWaveletDesc
-        .setIdentity(Name("render.software_caustics.resolve_wavelet"))
-        .setMarkerLabel("Software Caustics Resolve Wavelet")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveWaveletScheduling)
-        .setDependencies(&m_deferredCausticResolvePrepareTask, 1u)
-        .setExternalStateSources(scratchStateSources, scratchStateSourceCount)
-        .setResourceUses(resolveWaveletResourceUses.data(), resolveWaveletResourceUses.size())
-    ;
-    m_deferredCausticResolveWaveletTask = m_raytracingSystem.declareCausticResolveWaveletTask(
-        m_deferredLightingTaskGraph,
-        resolveWaveletDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveWaveletTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics first-wavelet graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveSecondWaveletScheduling = resolveWaveletScheduling;
-    resolveSecondWaveletScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveSecondWaveletDesc;
-    resolveSecondWaveletDesc
-        .setIdentity(Name("render.software_caustics.resolve_second_wavelet"))
-        .setMarkerLabel("Software Caustics Resolve Second Wavelet")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveSecondWaveletScheduling)
-        .setDependencies(&m_deferredCausticResolveWaveletTask, 1u)
-        .setResourceUses(resolveSecondWaveletResourceUses.data(), resolveSecondWaveletResourceUses.size())
-    ;
-    m_deferredCausticResolveSecondWaveletTask = m_raytracingSystem.declareCausticResolveSecondWaveletTask(
-        m_deferredLightingTaskGraph,
-        resolveSecondWaveletDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveSecondWaveletTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics second-wavelet graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveThirdWaveletScheduling = resolveSecondWaveletScheduling;
-    resolveThirdWaveletScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveThirdWaveletDesc;
-    resolveThirdWaveletDesc
-        .setIdentity(Name("render.software_caustics.resolve_third_wavelet"))
-        .setMarkerLabel("Software Caustics Resolve Third Wavelet")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveThirdWaveletScheduling)
-        .setDependencies(&m_deferredCausticResolveSecondWaveletTask, 1u)
-        .setResourceUses(resolveThirdWaveletResourceUses.data(), resolveThirdWaveletResourceUses.size())
-    ;
-    m_deferredCausticResolveThirdWaveletTask = m_raytracingSystem.declareCausticResolveThirdWaveletTask(
-        m_deferredLightingTaskGraph,
-        resolveThirdWaveletDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveThirdWaveletTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics third-wavelet graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveFourthWaveletScheduling = resolveThirdWaveletScheduling;
-    resolveFourthWaveletScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveFourthWaveletDesc;
-    resolveFourthWaveletDesc
-        .setIdentity(Name("render.software_caustics.resolve_fourth_wavelet"))
-        .setMarkerLabel("Software Caustics Resolve Fourth Wavelet")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveFourthWaveletScheduling)
-        .setDependencies(&m_deferredCausticResolveThirdWaveletTask, 1u)
-        .setResourceUses(resolveFourthWaveletResourceUses.data(), resolveFourthWaveletResourceUses.size())
-    ;
-    m_deferredCausticResolveFourthWaveletTask = m_raytracingSystem.declareCausticResolveFourthWaveletTask(
-        m_deferredLightingTaskGraph,
-        resolveFourthWaveletDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveFourthWaveletTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics fourth-wavelet graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveFifthWaveletScheduling = resolveFourthWaveletScheduling;
-    resolveFifthWaveletScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveFifthWaveletDesc;
-    resolveFifthWaveletDesc
-        .setIdentity(Name("render.software_caustics.resolve_fifth_wavelet"))
-        .setMarkerLabel("Software Caustics Resolve Fifth Wavelet")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveFifthWaveletScheduling)
-        .setDependencies(&m_deferredCausticResolveFourthWaveletTask, 1u)
-        .setResourceUses(resolveFifthWaveletResourceUses.data(), resolveFifthWaveletResourceUses.size())
-    ;
-    m_deferredCausticResolveFifthWaveletTask = m_raytracingSystem.declareCausticResolveFifthWaveletTask(
-        m_deferredLightingTaskGraph,
-        resolveFifthWaveletDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveFifthWaveletTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics fifth-wavelet graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveUpsampleScheduling = resolveFifthWaveletScheduling;
-    resolveUpsampleScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveUpsampleDesc;
-    resolveUpsampleDesc
-        .setIdentity(Name("render.software_caustics.resolve_upsample"))
-        .setMarkerLabel("Software Caustics Resolve Upsample")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveUpsampleScheduling)
-        .setDependencies(&m_deferredCausticResolveFifthWaveletTask, 1u)
-        .setResourceUses(resolveUpsampleResourceUses.data(), resolveUpsampleResourceUses.size())
-    ;
-    m_deferredCausticResolveUpsampleTask = m_raytracingSystem.declareCausticResolveUpsampleTask(
-        m_deferredLightingTaskGraph,
-        resolveUpsampleDesc,
-        deferredTargets,
-        &m_deferredCausticProducerDispatched,
-        true
-    );
-    if(!m_deferredCausticResolveUpsampleTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve-upsample graph task"));
-        return false;
-    }
-
-    Core::GpuTaskSchedulingHint resolveScheduling = resolveUpsampleScheduling;
-    resolveScheduling.mergeWithPrevious = true;
-    Core::GpuTaskDesc resolveDesc;
-    resolveDesc
-        .setIdentity(Name("render.software_caustics.resolve_timing_close"))
-        .setMarkerLabel("Software Caustics Resolve Timing Close")
-        .setQueue(ComputeQueueRequest())
-        .setScheduling(resolveScheduling)
-        .setDependencies(&m_deferredCausticResolveUpsampleTask, 1u)
-    ;
-    m_deferredSoftwareCausticsTask = m_raytracingSystem.declareCausticResolveTask(
-        m_deferredLightingTaskGraph,
-        resolveDesc,
-        timingTicket,
-        &m_deferredCausticProducerDispatched,
-        &causticResolveTiming
-    );
-    if(!m_deferredSoftwareCausticsTask.valid()){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task"));
-        return false;
-    }
+    m_deferredCausticResolvePrepareTask = resolveChainResult.causticResolvePrepareTask;
+    m_deferredCausticResolveWaveletTask = resolveChainResult.causticResolveWaveletTask;
+    m_deferredCausticResolveSecondWaveletTask = resolveChainResult.causticResolveSecondWaveletTask;
+    m_deferredCausticResolveThirdWaveletTask = resolveChainResult.causticResolveThirdWaveletTask;
+    m_deferredCausticResolveFourthWaveletTask = resolveChainResult.causticResolveFourthWaveletTask;
+    m_deferredCausticResolveFifthWaveletTask = resolveChainResult.causticResolveFifthWaveletTask;
+    m_deferredCausticResolveUpsampleTask = resolveChainResult.causticResolveUpsampleTask;
+    m_deferredSoftwareCausticsTask = resolveChainResult.softwareCausticsTask;
     return true;
 }
 

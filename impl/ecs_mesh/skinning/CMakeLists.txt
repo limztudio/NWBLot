@@ -4,6 +4,7 @@ target_sources(nwb_ecs_mesh_skinning PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/system_live_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graph_resource_uses.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graph_resource_uses.h"
     "${CMAKE_CURRENT_LIST_DIR}/graph_dispatch_plan.h"

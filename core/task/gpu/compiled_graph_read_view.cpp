@@ -21,6 +21,9 @@ NWB_CORE_BEGIN
 thread_local GpuCompiledGraph::ReadView* GpuCompiledGraph::ReadView::s_activeView = nullptr;
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 GpuCompiledGraph::ReadView::ReadView(const GpuCompiledGraph& graph)noexcept{
     if(s_activeView){
         if(s_activeView->m_graph != &graph)

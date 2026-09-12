@@ -16,6 +16,7 @@ NWB_VULKAN_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 DescriptorBufferManager::DescriptorBufferManager(Device& device, const VulkanContext& context, VulkanAllocator& allocator)
     : m_device(device)
     , m_context(context)

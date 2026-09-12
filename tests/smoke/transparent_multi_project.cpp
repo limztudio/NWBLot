@@ -17,6 +17,7 @@
 #include <impl/ecs_render/material/material_instance.h>
 
 #include "arrow_yaw_input_handler.h"
+#include "avboit_timing_render_pass.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
 #include "smoke_project_helpers.h"
@@ -429,6 +430,7 @@ public:
     {}
 
     virtual ~TransparentMultiSmokeProject()override{
+        m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.input.removeHandler(m_frameLaggedAsyncLightingToggleInput);
@@ -443,6 +445,9 @@ public:
         // Opt into per-pass GPU timing: flips the GPU-timing double gate (perf-session sink + graphics query
         // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING") && !m_timingRenderPass.start())
+            return false;
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(!configureFramebufferCapture())
@@ -605,6 +610,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_timingRenderPass.stop();
         m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
@@ -722,6 +728,7 @@ private:
 
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ TransparentMultiFpsLabel() };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ TransparentMultiFpsLabel() };
     NWB::Core::ECS::EntityID m_leftShape = {};

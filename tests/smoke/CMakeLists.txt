@@ -133,6 +133,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_transparent_multi_smoke)
         target_sources(nwb_transparent_multi_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         nwb_configure_runtime_smoke_target(nwb_transparent_multi_smoke "${_nwb_transparent_multi_runtime_root}")
 
@@ -141,6 +143,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_frame_lagged_async_lighting_smoke)
         target_sources(nwb_frame_lagged_async_lighting_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         target_compile_definitions(nwb_frame_lagged_async_lighting_smoke PRIVATE
             NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE=1
@@ -309,6 +313,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_transparent_csg_smoke)
         target_sources(nwb_transparent_csg_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
         )
         target_compile_definitions(nwb_transparent_csg_smoke PRIVATE
             NWB_TRANSPARENT_MULTI_ENABLE_CSG=1
@@ -430,6 +436,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_caustic_sphere_smoke)
         target_sources(nwb_caustic_sphere_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/transparent_multi_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.h"
             "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
         target_compile_definitions(nwb_caustic_sphere_smoke PRIVATE

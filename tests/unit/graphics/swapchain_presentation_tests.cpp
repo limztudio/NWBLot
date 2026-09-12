@@ -24,6 +24,10 @@ namespace Tests{
 
 namespace __hidden_swapchain_presentation_tests{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace CompatibilityPresentTransitionPolicy = Core::GraphicsBackend::VulkanDetail::CompatibilityPresentTransitionPolicy;
 namespace Format = Core::Format;
 namespace QueuePresentWaitDisposition = Core::GraphicsBackend::VulkanDetail::QueuePresentWaitDisposition;
@@ -270,6 +274,9 @@ TEST(SwapChainPresentation, PresentationStateAdvancesOnlyForConsumedWaitsAndRese
     EXPECT_FALSE(state.hasPresented);
     EXPECT_EQ(state.nativeInitialState(), ResourceStates::Unknown);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

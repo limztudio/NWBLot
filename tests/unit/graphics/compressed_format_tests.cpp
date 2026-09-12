@@ -25,6 +25,10 @@ namespace Tests{
 
 namespace __hidden_compressed_format_tests{
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace Format = Core::Format;
 using Core::GraphicsBackend::ConvertFormat;
 namespace VulkanDetail = Core::GraphicsBackend::VulkanDetail;
@@ -95,6 +99,10 @@ TEST(CompressedTextureFormats, NegotiatesAstcHdrFromItsVersionSpecificOwner){
     negotiation.extensionEnabled = false;
     EXPECT_FALSE(VulkanDetail::ShouldEnableAstcHdrFeature(negotiation));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 };
 

@@ -23,6 +23,29 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_reflection_postprocess_resources{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr AStringView s_SpatialVariants[] = {
+    "NWB_REFLECTION_SPATIAL_RADIUS=1",
+    "NWB_REFLECTION_SPATIAL_RADIUS=2",
+    "NWB_REFLECTION_SPATIAL_RADIUS=3",
+};
+static_assert(LengthOf(s_SpatialVariants) == NWB_REFLECTION_SPATIAL_MAX_RADIUS);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 RendererReflectionPostprocess::RendererReflectionPostprocess(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
@@ -35,13 +58,17 @@ RendererReflectionPostprocess::RendererReflectionPostprocess(
 void RendererReflectionPostprocess::invalidateResources(){
     releaseTargets();
     m_temporalPipeline = nullptr;
-    m_spatialPipeline = nullptr;
+    for(Core::ComputePipelineHandle& pipeline : m_spatialPipelines)
+        pipeline = nullptr;
     m_temporalShader = nullptr;
-    m_spatialShader = nullptr;
+    for(Core::ShaderHandle& shader : m_spatialShaders)
+        shader = nullptr;
     m_layout = nullptr;
 }
 
 bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 height, const ReflectionSettings& settings){
+    if(settings.spatialRadius > NWB_REFLECTION_SPATIAL_MAX_RADIUS)
+        return false;
     auto& device = m_graphics.getDevice();
     if(width != m_width || height != m_height){
         releaseTargets();
@@ -59,15 +86,21 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     const bool active = settings.traceMode != ReflectionTraceMode::Disabled;
     if(settings.temporalEnabled && active){
         if(
-            !preparePipeline(m_temporalPipeline, m_temporalShader, Name("engine/graphics/reflection/temporal_cs"))
+            !preparePipeline(
+                m_temporalPipeline, m_temporalShader, Name("engine/graphics/reflection/temporal_cs"), Core::ShaderArchive::s_DefaultVariant
+            )
             || !prepareImage(m_history, 0u, Name("engine/reflection/opaque_history"))
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Temporal.identity, device, 2u)
         )
             return false;
     }
     if(settings.spatialFilterEnabled && settings.spatialRadius > 0u && active){
+        const u32 radiusIndex = settings.spatialRadius - 1u;
         if(
-            !preparePipeline(m_spatialPipeline, m_spatialShader, Name("engine/graphics/reflection/spatial_cs"))
+            !preparePipeline(
+                m_spatialPipelines[radiusIndex], m_spatialShaders[radiusIndex], Name("engine/graphics/reflection/spatial_cs"),
+                __hidden_reflection_postprocess_resources::s_SpatialVariants[radiusIndex]
+            )
             || !prepareImage(m_spatial, 2u, Name("engine/reflection/opaque_spatial"))
             || !m_graphics.gpuTiming().prepareScopeQueries(ReflectionGpuTimingScope::s_Spatial.identity, device, 2u)
         )
@@ -90,8 +123,10 @@ ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(
     result.previous = result.history.previousBank == 0u ? base : m_history;
     result.spatial = m_spatial;
     result.temporalPipeline = m_temporalPipeline;
-    result.spatialPipeline = m_spatialPipeline;
-    result.spatialEnabled = settings.spatialFilterEnabled && settings.spatialRadius > 0u && settings.traceMode != ReflectionTraceMode::Disabled;
+    result.spatialEnabled = settings.spatialFilterEnabled && settings.spatialRadius > 0u
+        && settings.spatialRadius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS && settings.traceMode != ReflectionTraceMode::Disabled;
+    if(result.spatialEnabled)
+        result.spatialPipeline = m_spatialPipelines[settings.spatialRadius - 1u];
     return result;
 }
 
@@ -110,7 +145,8 @@ void RendererReflectionPostprocess::releaseTargets(){
     m_height = 0u;
 }
 
-bool RendererReflectionPostprocess::preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Name name){
+bool RendererReflectionPostprocess::preparePipeline(
+    Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Name name, const AStringView variant){
     if(pipeline)
         return true;
     auto& device = m_graphics.getDevice();
@@ -123,7 +159,7 @@ bool RendererReflectionPostprocess::preparePipeline(Core::ComputePipelineHandle&
         if(!m_layout)
             return false;
     }
-    if(!m_shaders.loadShader(shader, name, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute, name))
+    if(!m_shaders.loadShader(shader, name, variant, Core::ShaderType::Compute, name))
         return false;
     Core::ComputePipelineDesc desc;
     desc

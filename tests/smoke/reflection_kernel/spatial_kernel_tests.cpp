@@ -517,6 +517,48 @@ TEST_F(ReflectionKernelTest, CookedSpatialKernelMatchesFrozenProductionAcrossEli
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TEST_F(ReflectionKernelTest, CookedSpatialRadiusVariantsMatchReferenceAcrossSwitches){
+    using namespace __hidden_spatial_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/reflection_kernel/spatial_radius_variants"));
+    ComputePipelineHandle pipelines[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
+    ComputePipelineHandle reference;
+    const Path sourceRoot(arena(), NWB_REFLECTION_KERNEL_SOURCE_ROOT);
+    const Path referenceSource = sourceRoot / "tests/smoke/reflection_kernel/reference/spatial_cs.slang";
+    ASSERT_TRUE(loadKernel("spatial_cs", sizeof(SpatialPushConstants), scratchArena, reference, &referenceSource));
+    for(u32 radius = 1u; radius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS; ++radius)
+        ASSERT_TRUE(loadKernel("spatial_cs", sizeof(SpatialPushConstants), scratchArena, pipelines[radius - 1u], nullptr, radius));
+    // Default/radius-zero dispatch remains covered by the existing dynamic-kernel test. Static variants bind matched radii.
+    const u32 dimensions[][2] = { { 1u, 1u }, { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 17u, 19u } };
+    for(u32 radius = 1u; radius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS; ++radius){
+        for(const auto& dimension : dimensions){
+            for(u32 pattern = 0u; pattern < Pattern::kCount; ++pattern){
+                RunSpatialCase(
+                    device(), *reference, *pipelines[radius - 1u], dimension[0], dimension[1], radius,
+                    static_cast<Pattern::Enum>(pattern), scratchArena
+                );
+            }
+        }
+        for(u32 pattern = Pattern::InvalidNeighborFallback; pattern < Pattern::kCount; ++pattern){
+            RunSpatialCase(
+                device(), *reference, *pipelines[radius - 1u], 3u, 1u, radius, static_cast<Pattern::Enum>(pattern), scratchArena
+            );
+        }
+    }
+    // Retain all native pipeline handles, switch away and back, and compare each newly bound radius against the dynamic reference.
+    const u32 radiusSequence[] = { 1u, 3u, 2u, 1u };
+    for(const u32 radius : radiusSequence){
+        for(u32 pattern = Pattern::InvalidNeighborFallback; pattern < Pattern::kCount; ++pattern){
+            RunSpatialCase(
+                device(), *reference, *pipelines[radius - 1u], 17u, 19u, radius, static_cast<Pattern::Enum>(pattern), scratchArena
+            );
+        }
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

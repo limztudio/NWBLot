@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_REFLECTION_SPATIAL_RADIUS
+#define NWB_REFLECTION_SPATIAL_RADIUS 0
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "spatial_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../common/math.slangi"
@@ -32,11 +40,19 @@ ConstantBuffer<NwbReflectionSpatialView, Std140DataLayout> g_NwbHeapReflectionSp
 #define g_NwbReflectionSpatialResources g_NwbHeapDeferredBindlessResources[g_NwbReflectionSpatial.deferredResourcesSlot]
 #define g_NwbReflectionSpatialView g_NwbHeapReflectionSpatialViews[g_NwbReflectionSpatial.viewSlot]
 
-#define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_MAX_RADIUS)
+#if NWB_REFLECTION_SPATIAL_RADIUS < 0 || NWB_REFLECTION_SPATIAL_RADIUS > NWB_REFLECTION_SPATIAL_MAX_RADIUS
+#error Unsupported reflection spatial radius specialization.
+#endif
+#if NWB_REFLECTION_SPATIAL_RADIUS == 0
+#define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_MAX_RADIUS
+#else
+#define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_RADIUS
+#endif
+#define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Four float4 arrays occupy 196 * 64 = 12,544 bytes at the maximum radius. Depth shares the unused position lane;
-// the runtime radius reduces cooperative loads to the actual tile plus halo while storage remains fixed.
+// Four float4 arrays occupy 6,400/9,216/12,544 bytes for static radii 1/2/3. The dynamic reference retains the maximum.
+// Depth shares the unused position lane; specialization changes storage extent without changing the tile's writers.
 groupshared float4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
@@ -51,7 +67,11 @@ groupshared uint g_NwbReflectionSpatialTileEligible;
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
     const uint2 pixel = dispatchThreadId.xy;
     const bool insideImage = pixel.x < g_NwbReflectionSpatial.width && pixel.y < g_NwbReflectionSpatial.height;
+#if NWB_REFLECTION_SPATIAL_RADIUS == 0
     const uint radius = min(g_NwbReflectionSpatial.radius, NWB_REFLECTION_SPATIAL_MAX_RADIUS);
+#else
+    const uint radius = NWB_REFLECTION_SPATIAL_RADIUS;
+#endif
     float4 center = float4(0.0);
     float4 specular = float4(0.0);
     float depth = 1.0;

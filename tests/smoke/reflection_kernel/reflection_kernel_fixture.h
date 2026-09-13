@@ -30,8 +30,8 @@ protected:
         u32 pushConstantBytes,
         Core::Alloc::ScratchArena& scratchArena,
         Core::ComputePipelineHandle& outPipeline,
-        const Path* referenceSource = nullptr
-    );
+        const Path* referenceSource = nullptr,
+        u32 spatialRadius = 0u);
 };
 
 

@@ -7,6 +7,8 @@
 
 #include "history.h"
 
+#include <impl/assets/graphics/reflection/spatial_constants.h>
+
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/rhi/pipeline.h>
 
@@ -78,7 +80,8 @@ public:
 
 private:
     void releaseTargets();
-    [[nodiscard]] bool preparePipeline(Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name);
+    [[nodiscard]] bool preparePipeline(
+        Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, Name name, AStringView variant);
     [[nodiscard]] bool prepareImage(ReflectionRadianceBinding& image, u32 descriptorIndex, Name name);
 
 private:
@@ -90,9 +93,9 @@ private:
     ReflectionRadianceBinding m_spatial;
     Core::BindingLayoutHandle m_layout;
     Core::ComputePipelineHandle m_temporalPipeline;
-    Core::ComputePipelineHandle m_spatialPipeline;
+    Core::ComputePipelineHandle m_spatialPipelines[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
     Core::ShaderHandle m_temporalShader;
-    Core::ShaderHandle m_spatialShader;
+    Core::ShaderHandle m_spatialShaders[NWB_REFLECTION_SPATIAL_MAX_RADIUS];
     Core::GpuDescriptorHandle m_descriptors[4];
     u32 m_width = 0u;
     u32 m_height = 0u;

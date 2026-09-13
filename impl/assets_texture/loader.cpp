@@ -34,10 +34,6 @@ namespace __hidden_texture_loader{
 using TextureFormat::s_UastcBlockHeight;
 using TextureFormat::s_UastcBlockWidth;
 using TextureFormat::s_UastcBytesPerBlock;
-static constexpr u32 s_RgbaBytesPerTexel = 4u;
-static constexpr u32 s_Rgba16FloatComponentCount = 4u;
-static constexpr u32 s_Rgba16FloatBytesPerTexel = static_cast<u32>(sizeof(basist::half_float) * s_Rgba16FloatComponentCount);
-static constexpr u32 s_Rgba16FloatAlphaByteOffset = static_cast<u32>(sizeof(basist::half_float) * (s_Rgba16FloatComponentCount - 1u));
 static_assert(sizeof(basist::half_float) == sizeof(u16), "Basis HDR output must use 16-bit half components");
 static constexpr Core::FormatSupport::Mask s_RequiredTextureFormatSupport =
     Core::FormatSupport::Texture

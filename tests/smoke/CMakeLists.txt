@@ -5,6 +5,14 @@ if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(raytrace)
     add_subdirectory(reflection_kernel)
     add_subdirectory(caustic_kernel)
+
+    nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
+    target_sources(nwb_presentation_fps_probe_tests PRIVATE
+        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe_tests.cpp"
+    )
+    target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common)
 endif()
 
 if(TARGET nwb_graphics AND TARGET nwb_assets_graphics)
@@ -1043,6 +1051,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         nwb_configure_runtime_smoke_target(
             nwb_stress_test_smoke
@@ -1070,6 +1081,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         target_compile_definitions(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
@@ -1191,6 +1205,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1
@@ -1207,6 +1224,9 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1

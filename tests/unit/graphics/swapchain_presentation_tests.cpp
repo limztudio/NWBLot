@@ -201,6 +201,27 @@ TEST(SwapChainPresentation, CompatibilityPresentTransitionsOnlyAcceptKnownWsiOri
 }
 
 
+TEST(SwapChainPresentation, CountsAcceptedPresentationSeparatelyFromConsumedWaits){
+    EXPECT_TRUE(Core::GraphicsBackend::VulkanDetail::IsQueuePresentationAccepted(VK_SUCCESS));
+    EXPECT_TRUE(Core::GraphicsBackend::VulkanDetail::IsQueuePresentationAccepted(VK_SUBOPTIMAL_KHR));
+    const VkResult rejectedResults[] = {
+        VK_ERROR_OUT_OF_DATE_KHR,
+        VK_ERROR_SURFACE_LOST_KHR,
+        VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT,
+        VK_ERROR_PRESENT_TIMING_QUEUE_FULL_EXT,
+        VK_ERROR_OUT_OF_HOST_MEMORY,
+        VK_ERROR_OUT_OF_DEVICE_MEMORY,
+        VK_ERROR_DEVICE_LOST,
+        VK_ERROR_UNKNOWN,
+        VK_NOT_READY,
+    };
+    for(const VkResult result : rejectedResults)
+        EXPECT_FALSE(Core::GraphicsBackend::VulkanDetail::IsQueuePresentationAccepted(result));
+
+    EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_ERROR_OUT_OF_DATE_KHR), QueuePresentWaitDisposition::Consumed);
+    EXPECT_FALSE(Core::GraphicsBackend::VulkanDetail::IsQueuePresentationAccepted(VK_ERROR_OUT_OF_DATE_KHR));
+}
+
 TEST(SwapChainPresentation, ClassifiesWhetherQueuePresentConsumedItsBinaryWait){
     EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUCCESS), QueuePresentWaitDisposition::Consumed);
     EXPECT_EQ(ClassifyQueuePresentWaitDisposition(VK_SUBOPTIMAL_KHR), QueuePresentWaitDisposition::Consumed);

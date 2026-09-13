@@ -719,7 +719,7 @@ TEST(SwapChainPresentation, PresentationSignalRetirementJoinsWithoutQueuePresent
     EXPECT_EQ(retirement.find("captureDeviceLoss("), AStringView::npos);
 
     const usize abandonBegin = presentation.find("bool BackendContext::abandonAcquiredFrame(){");
-    const usize abandonEnd = presentation.find("bool BackendContext::present(){", abandonBegin);
+    const usize abandonEnd = presentation.find("bool BackendContext::present(bool& outPresentationAccepted){", abandonBegin);
     ASSERT_NE(abandonBegin, AStringView::npos);
     ASSERT_NE(abandonEnd, AStringView::npos);
     const AStringView abandon = presentation.substr(abandonBegin, abandonEnd - abandonBegin);

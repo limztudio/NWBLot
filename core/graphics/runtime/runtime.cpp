@@ -729,7 +729,10 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                 Timer presentBegin;
                 if(phaseTiming)
                     presentBegin = TimerNow();
-                const bool presented = m_backend->present();
+                bool presentationAccepted = false;
+                const bool presented = m_backend->present(presentationAccepted);
+                if(presentationAccepted)
+                    ++m_successfulPresentationCount;
                 if(phaseTiming)
                     phaseTiming->stage(__hidden_graphics_lifecycle::s_GraphicsPresentCpuTimingScope, presentBegin);
                 if(!presented){

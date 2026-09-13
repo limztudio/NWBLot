@@ -55,7 +55,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_TRUE(ContainsText(backendContract, "{ backend.abandonAcquiredFrame() }->SameAs<bool>;"));
 
     const usize abandonmentOffset = backendPresentation.find("bool BackendContext::abandonAcquiredFrame(){");
-    const usize presentDefinitionOffset = backendPresentation.find("bool BackendContext::present(){", abandonmentOffset);
+    const usize presentDefinitionOffset = backendPresentation.find("bool BackendContext::present(bool& outPresentationAccepted){", abandonmentOffset);
     ASSERT_NE(abandonmentOffset, AStringView::npos);
     ASSERT_NE(presentDefinitionOffset, AStringView::npos);
     const AStringView abandonment = backendPresentation.substr(
@@ -205,7 +205,7 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     const usize renderCallOffset = animate.find("renderWithPhaseTiming(phaseTiming);", preambleOffset);
     const usize postRenderExitOffset = animate.find("if(m_deviceRecreationRequested || device.requiresRecreation()){", renderCallOffset);
     const usize postRenderAbandonOffset = animate.find("else if(!m_backend->abandonAcquiredFrame())", postRenderExitOffset);
-    const usize presentCallOffset = animate.find("const bool presented = m_backend->present();", postRenderAbandonOffset);
+    const usize presentCallOffset = animate.find("const bool presented = m_backend->present(presentationAccepted);", postRenderAbandonOffset);
     const usize presentFailureOffset = animate.find("if(!presented){", presentCallOffset);
     const usize presentAbandonOffset = animate.find("!device.requiresRecreation() && !m_backend->abandonAcquiredFrame()", presentFailureOffset);
     ASSERT_NE(renderCallOffset, AStringView::npos);
@@ -217,7 +217,15 @@ TEST(EcsGraphics, PresentationAcquisitionPublishesOneValidatedSnapshot){
     EXPECT_LT(renderCallOffset, postRenderExitOffset);
     EXPECT_LT(postRenderExitOffset, postRenderAbandonOffset);
     EXPECT_LT(postRenderAbandonOffset, presentCallOffset);
-    EXPECT_LT(presentCallOffset, presentFailureOffset);
+    const usize acceptedCountGuardOffset = animate.find("if(presentationAccepted)", presentCallOffset);
+    const usize acceptedCountOffset = animate.find("++m_successfulPresentationCount;", acceptedCountGuardOffset);
+    ASSERT_NE(acceptedCountGuardOffset, AStringView::npos);
+    ASSERT_NE(acceptedCountOffset, AStringView::npos);
+    EXPECT_LT(presentCallOffset, acceptedCountGuardOffset);
+    EXPECT_LT(acceptedCountGuardOffset, acceptedCountOffset);
+    EXPECT_LT(acceptedCountOffset, presentFailureOffset);
+    EXPECT_EQ(CountText(graphics, "++m_successfulPresentationCount;"), 1u);
+    EXPECT_EQ(CountText(graphics, "m_successfulPresentationCount ="), 0u);
     EXPECT_LT(presentFailureOffset, presentAbandonOffset);
     EXPECT_EQ(CountText(animate, "m_backend->abandonAcquiredFrame()"), 4u);
     EXPECT_TRUE(ContainsText(animate, "prepareFramePreamble() returns false only after the device requires recreation"));
@@ -313,7 +321,7 @@ TEST(EcsGraphics, CompatibilityPresentTransitionsExactAcquiredImageBeforeSignal)
     ));
     const AStringView backendPresentation(backendPresentationSource.data(), backendPresentationSource.size());
 
-    const usize presentOffset = backendPresentation.find("bool BackendContext::present(){");
+    const usize presentOffset = backendPresentation.find("bool BackendContext::present(bool& outPresentationAccepted){");
     ASSERT_NE(presentOffset, AStringView::npos);
     const AStringView present = backendPresentation.substr(presentOffset);
     const usize compatibilityBranchOffset = present.find("if(!frameSignalAccepted){");

@@ -2,14 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "arrow_yaw_input_handler.h"
+#include "avboit_timing_render_pass.h"
+#include "gpu_pass_timing_probe.h"
+#include "presentation_fps_probe.h"
+#include "smoke_project_helpers.h"
+#include "smoke_scene_helpers.h"
+#include "smoke_skinned_scene_helpers.h"
+
 #include <loader/project_entry.h>
 
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <core/graphics/runtime/runtime.h>
-#include <global/math/frame.h>
-#include <global/math/constant.h>
-#include <global/math/quaternion.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -18,12 +20,13 @@
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
-#include "arrow_yaw_input_handler.h"
-#include "fps_probe.h"
-#include "gpu_pass_timing_probe.h"
-#include "smoke_project_helpers.h"
-#include "smoke_scene_helpers.h"
-#include "smoke_skinned_scene_helpers.h"
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/math/frame.h>
+#include <global/math/constant.h>
+#include <global/math/quaternion.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -285,6 +288,39 @@ private:
     }
 
 
+    bool samplePresentationFps(){
+        const auto status = m_fpsProbe.observe(m_context.graphics.getSuccessfulPresentationCount(), TimerNow());
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
+            return false;
+        }
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
+            return true;
+
+        const auto& interval = m_fpsProbe.interval();
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
+            , interval.averageFps()
+            , interval.presentations()
+            , interval.wallSeconds
+            , interval.firstPresentationCount
+            , interval.lastPresentationCount
+        );
+        if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
+            const auto& total = m_fpsProbe.total();
+            m_timingComplete = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
+                , total.averageFps()
+                , total.presentations()
+                , total.wallSeconds
+                , total.firstPresentationCount
+                , total.lastPresentationCount
+            );
+            m_context.requestQuit();
+        }
+        return true;
+    }
+
+
 public:
     explicit StressTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
@@ -294,14 +330,24 @@ public:
 
     virtual ~StressTestSmokeProject()override{
         m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
+        m_timingRenderPass.stop();
         destroyWorld();
     }
 
 
 public:
     virtual bool onStartup()override{
-        // Per-pass GPU timing so the FPS / GPU-pass probes report the skinning + shadow costs each interval.
+        // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        if(m_timingEnabled){
+            if(m4PixelCaptureFreezeFrame() != 0u || rendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit){
+                NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
+                return false;
+            }
+            if(!m_timingRenderPass.start(true))
+                return false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
+        }
 
         // Arrow keys (Left/Right) scrub the crowd yaw by hand; the live angle shows in the title bar so the exact angle a
         // flicker appears at can be read off and reproduced via NWB_STRESS_TEST_SPIN_ANGLE. addHandlerToBack gives this
@@ -393,6 +439,9 @@ public:
     virtual void onShutdown()override{
         m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
+        m_timingRenderPass.stop();
+        if(m_timingEnabled && !m_timingComplete)
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement incomplete"));
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: shutdown"));
     }
@@ -430,7 +479,8 @@ public:
 
         const f32 fixedDelta = rendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
-        m_fpsProbe.recordFrame(safeDelta);
+        if(!samplePresentationFps())
+            return false;
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         // Yaw selection: 1) NWB_STRESS_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub (latches off
         // auto-spin the moment Left/Right is first pressed, so the crowd can be parked on a precise angle); 3) auto-spin.
@@ -453,7 +503,10 @@ private:
     NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
-    NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("StressTestSmokeProject") };
+    const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+    NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
+    NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
+    bool m_timingComplete = false;
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;

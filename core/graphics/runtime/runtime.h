@@ -256,6 +256,9 @@ public:
     [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
+    // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
+    // Preserved across resize, destroy/init and device recreation; this is not a monitor scan-out completion count.
+    [[nodiscard]] u64 getSuccessfulPresentationCount()const noexcept{ return m_successfulPresentationCount; }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
@@ -387,6 +390,7 @@ private:
     i32 m_numberOfAccumulatedFrames = 0;
 
     u32 m_frameIndex = 0;
+    u64 m_successfulPresentationCount = 0u;
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
     AcquiredPresentationFrame m_acquiredPresentationFrame;

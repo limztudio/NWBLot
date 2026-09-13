@@ -223,7 +223,8 @@ bool BackendContext::abandonAcquiredFrame(){
     return true;
 }
 
-bool BackendContext::present(){
+bool BackendContext::present(bool& outPresentationAccepted){
+    outPresentationAccepted = false;
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
     VkResult res = VK_SUCCESS;
     const auto captureDeviceLossAfterUnlock = [&](const AStringView context, UniqueLock<Futex>* const presentationLock = nullptr){
@@ -417,6 +418,7 @@ bool BackendContext::present(){
         captureDeviceLossAfterUnlock("native present admission", &presentationLock);
         return false;
     }
+    outPresentationAccepted = VulkanDetail::IsQueuePresentationAccepted(res);
     const VulkanDetail::QueuePresentWaitDisposition::Enum presentWaitDisposition =
         VulkanDetail::ClassifyQueuePresentWaitDisposition(res);
     m_swapChainImages[m_swapChainIndex].presentationState.observeQueuePresentWaitDisposition(presentWaitDisposition);

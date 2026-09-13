@@ -202,7 +202,9 @@ public:
     // Idempotently retires synchronization for a healthy aborted frame. The acquired WSI image stays quarantined
     // until swap-chain or device teardown; an already-resolved frame is a successful no-op.
     [[nodiscard]] bool abandonAcquiredFrame();
-    bool present();
+    // The return value retains continuation/retirement status. The output reports native presentation acceptance
+    // independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
+    bool present(bool& outPresentationAccepted);
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
     // compatibility transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;

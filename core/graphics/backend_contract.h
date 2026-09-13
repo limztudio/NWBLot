@@ -31,7 +31,8 @@ concept BackendApi = requires(
     const Common::FrameParam& frameParam,
     const QueueSubmissionToken& submissionToken,
     const QueueSubmissionPreSubmitHook& presentationClaim,
-    SwapChainTransitionTicket& transitionTicket
+    SwapChainTransitionTicket& transitionTicket,
+    bool& presentationAccepted
 ){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
     { constBackend.getRendererString() }->SameAs<const tchar*>;
@@ -54,7 +55,7 @@ concept BackendApi = requires(
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
     { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<bool>;
     { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<bool>;
-    { backend.present() }->SameAs<bool>;
+    { backend.present(presentationAccepted) }->SameAs<bool>;
     backend.reportLiveObjects();
 };
 

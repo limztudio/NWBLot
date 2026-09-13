@@ -61,10 +61,6 @@ public:
         usize materialTypedByteCount,
         AvboitComputeEmulationCaptureResult& outResult
     );
-
-
-private:
-    int m_reserved = 0;
 };
 
 

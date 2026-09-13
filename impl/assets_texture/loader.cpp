@@ -238,9 +238,7 @@ bool TextureAssetLoader::Create(
         .setDimension(textureDimension)
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
-        // Static decoded assets are immediately sampled by Graphics/Compute, while sizeable batches may use a
-        // dedicated Transfer producer.  Declare all three consumer/producer transports before creation so the
-        // graph-owned upload can choose the automatic Transfer -> Compute -> Graphics route safely.
+        // Static decoded assets are immediately sampled by Graphics/Compute, while sizeable batches may use a dedicated Transfer producer.  Declare all three consumer/producer transports before creation so the graph-owned upload can choose the automatic Transfer -> Compute -> Graphics route safely.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
         .setName(imageName)
     ;
@@ -356,8 +354,7 @@ bool TextureAssetLoader::Create(
         .regions = uploadRegions.data(),
         .regionCount = uploadRegions.size(),
         .finalState = Core::ResourceStates::ShaderResource,
-        // The loader has just created the image. Its descriptor state is the post-upload contract, not the native
-        // VkImage layout before this batch records its first write.
+        // The loader has just created the image. Its descriptor state is the post-upload contract, not the native VkImage layout before this batch records its first write.
         .physicalInitialState = Core::ResourceStates::Unknown,
         .acceptedToken = &uploadToken,
         .hasPhysicalInitialState = true,

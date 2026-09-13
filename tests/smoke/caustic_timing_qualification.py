@@ -230,6 +230,15 @@ def validate_report(path, identity):
     if report.get("qualification_tool") != file_identity(Path(__file__)) \
         or report.get("launcher") != file_identity(Path(__file__).with_name("window_capture_smoke.py")):
         raise SmokeFailure("qualification producer or framebuffer launcher changed")
+    # Commands belong to the qualified arm's physical source tree, even when the other arm replays them.
+    source = identity.get("source", {})
+    manifest = source.get("manifest")
+    if not isinstance(manifest, str):
+        raise SmokeFailure("qualification requires a pinned frozen source launcher")
+    launcher = (Path(manifest).resolve().parent / "source/tests/smoke/window_capture_smoke.py").resolve()
+    if not launcher.is_file() or source.get("files", {}).get(str(launcher)) != file_identity(launcher)["sha256"] \
+        or file_identity(launcher) != report.get("launcher"):
+        raise SmokeFailure("qualification frozen launcher is unpinned or its bytes changed")
     frames, metrics, paths = {}, {}, [path]
     logger = Path(report["logserver_path"])
     import renderer_ab_benchmark as benchmark
@@ -255,7 +264,7 @@ def validate_report(path, identity):
             raise SmokeFailure("qualification runtime metadata does not match its actual log")
         args = SimpleNamespace(executable=identity["executable"], runtime=identity["runtime"],
             logserver_executable=logger, timeout=report["timeout_seconds"], application_arg=report["application_args"])
-        if record.get("command") != capture_command(args, files["image"]):
+        if record.get("command") != capture_command(args, files["image"], launcher=launcher):
             raise SmokeFailure("qualification launch command changed its exact capture contract")
         frames[key] = read_bmp_24_rows(files["image"])
         if frames[key][:2] != (WIDTH, HEIGHT):
@@ -269,8 +278,10 @@ def validate_report(path, identity):
         "policy": POLICY, "captures": report["captures"]}, paths
 
 
-def capture_command(args, image):
-    command = [sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
+def capture_command(args, image, *, launcher=None):
+    if launcher is None:
+        launcher = Path(__file__).with_name("window_capture_smoke.py")
+    command = [sys.executable, str(launcher),
         "--executable", str(args.executable), "--working-directory", str(args.runtime),
         "--logserver-executable", str(args.logserver_executable), "--output", str(image),
         "--log-output", str(image.with_suffix(".log")), "--application-capture",

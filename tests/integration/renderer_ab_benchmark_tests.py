@@ -820,7 +820,7 @@ class CausticMeasurementTests(unittest.TestCase):
         for marker in utility.GPU_DEBUG_MARKERS:
             self.assertIn(marker, command)
 
-    def test_synthetic_raw_evidence_replay_and_tampering_checks(self):
+    def test_synthetic_distinct_frozen_roots_replay_and_tampering_checks(self):
         # Small synthetic parser evidence only; this does not qualify a real framebuffer or GPU arm.
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -828,7 +828,20 @@ class CausticMeasurementTests(unittest.TestCase):
             with patch.multiple(benchmark.caustic, WIDTH=160, HEIGHT=120, POLICY=policy):
                 utility = benchmark.caustic
                 width, height = 160, 120
-                identity = {"executable": str(directory / "fixture.exe"), "runtime": str(directory / "runtime")}
+                launchers, sources = {}, {}
+                launcher_bytes = Path(utility.__file__).with_name("window_capture_smoke.py").read_bytes()
+                for name in ("baseline", "candidate"):
+                    arm_root = directory / name
+                    launcher = arm_root / "source/tests/smoke/window_capture_smoke.py"
+                    launcher.parent.mkdir(parents=True)
+                    launcher.write_bytes(launcher_bytes)
+                    manifest = arm_root / "source.json"
+                    manifest.write_text(json.dumps({"revision": name, "files": {
+                        launcher.relative_to(arm_root).as_posix(): hashlib.sha256(launcher_bytes).hexdigest()}}), encoding="utf-8")
+                    launchers[name] = launcher
+                    sources[name] = benchmark.source_identity(manifest)
+                identity = {"executable": str(directory / "fixture.exe"), "runtime": str(directory / "runtime"),
+                    "source": sources["candidate"]}
                 logger = directory / "logger.exe"
                 logger.write_bytes(b"synthetic logger identity")
                 (directory / "crash_handler.exe").write_bytes(b"synthetic crash helper identity")
@@ -858,7 +871,7 @@ class CausticMeasurementTests(unittest.TestCase):
                         settings = utility.environment(preset, enabled)
                         document["captures"][key] = {"settings": settings,
                             "runtime": utility.validate_log(log.read_text(encoding="utf-8"), settings, capture=True),
-                            "command": utility.capture_command(args, image),
+                            "command": utility.capture_command(args, image, launcher=launchers["candidate"]),
                             "image": {"path": image.name, "identity": benchmark.file_identity(image)},
                             "log": {"path": log.name, "identity": benchmark.file_identity(log)}}
                         frames[enabled] = utility.read_bmp_24_rows(image)
@@ -868,6 +881,33 @@ class CausticMeasurementTests(unittest.TestCase):
                 result, paths = utility.validate_report(report, identity)
                 self.assertEqual(result["metrics"], document["metrics"])
                 self.assertEqual(len(paths), 12)
+                # Both physical frozen roots contain identical launchers; replay must bind the selected arm's path.
+                baseline_identity = {**identity, "source": sources["baseline"]}
+                baseline_document = copy.deepcopy(document)
+                baseline_document["arm"] = baseline_identity
+                for key, record in baseline_document["captures"].items():
+                    record["command"] = utility.capture_command(args, directory / (key + ".bmp"),
+                        launcher=launchers["baseline"])
+                report.write_text(json.dumps(baseline_document), encoding="utf-8")
+                baseline_result, _ = utility.validate_report(report, baseline_identity)
+                self.assertEqual(baseline_result["metrics"], document["metrics"])
+                wrong_root = copy.deepcopy(document)
+                wrong_root["captures"]["populated_on"]["command"] = baseline_document["captures"]["populated_on"]["command"]
+                report.write_text(json.dumps(wrong_root), encoding="utf-8")
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "launch command changed"):
+                    utility.validate_report(report, identity)
+                unpinned_identity = copy.deepcopy(identity)
+                unpinned_identity["source"]["files"].pop(str(launchers["candidate"].resolve()))
+                unpinned = copy.deepcopy(document)
+                unpinned["arm"] = unpinned_identity
+                report.write_text(json.dumps(unpinned), encoding="utf-8")
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "launcher is unpinned"):
+                    utility.validate_report(report, unpinned_identity)
+                report.write_text(json.dumps(document), encoding="utf-8")
+                launchers["candidate"].write_bytes(launcher_bytes + b"modified")
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "launcher is unpinned or its bytes changed"):
+                    utility.validate_report(report, identity)
+                launchers["candidate"].write_bytes(launcher_bytes)
                 saved_dependency = logger_dependency.read_bytes()
                 logger_dependency.write_bytes(saved_dependency + b"modified")
                 with self.assertRaisesRegex(benchmark.SmokeFailure, "dependency inventory changed"):

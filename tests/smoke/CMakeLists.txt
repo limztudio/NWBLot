@@ -4,6 +4,7 @@ if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(descriptor_buffer)
     add_subdirectory(raytrace)
     add_subdirectory(reflection_kernel)
+    add_subdirectory(caustic_kernel)
 endif()
 
 if(TARGET nwb_graphics AND TARGET nwb_assets_graphics)

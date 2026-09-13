@@ -23,6 +23,7 @@ from typing import Callable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "ab"))
 from gpu_timing_parse import load_name_symbols
 import reflection_benchmark as reflection
+import caustic_timing_qualification as caustic
 from reflection_benchmark import balanced_orders, paired_statistics, parse_intervals, summarize_intervals
 from smoke_volume_identity import authored_volume_hashes, file_identity, runtime_pipeline_cache_paths
 from window_capture_smoke import (
@@ -183,6 +184,11 @@ def transparent_multi_log(text, workload, require_hardware):
         "extent": list(extents.pop()), "timing_in_flight_ranges": 32}
 
 
+def caustic_log(text, workload, require_hardware):
+    policy = caustic.validate_log(text, dict(workload.environment_overrides), capture=False)
+    return {**device_material_signature(text), **policy}
+
+
 def soft_shadow_log(text, workload, require_hardware):
     lines = text.replace("\r\n", "\n").splitlines()
     text = "\n".join(lines)
@@ -257,6 +263,13 @@ def workloads():
     for definition in definitions:
         workload = reflection_workload(*definition)
         result[workload.name] = workload
+    caustic_scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT, caustic.PHOTONS, caustic.RESOLVE)
+    for preset in caustic.PRESETS:
+        name = "caustic-" + preset
+        result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in caustic_scopes),
+            caustic.RESOLVE, tuple(caustic.environment(preset).items()), caustic_log,
+            inactive_scopes=(reflection.DEPTH, reflection.BUILD_ARGS, reflection.HARDWARE,
+                reflection.TEMPORAL, reflection.SPATIAL), control_scopes=(*CONTROLS, *OBSERVATIONS, caustic.PHOTONS))
     shadow_scopes = (FRAME, *SHADOW_CONTROLS, *SHADOW_PHASES)
     for name, angle, radius in (("shadow-zero-extent", "0", "0"),
         ("shadow-finite-extent", "0.03", "0.15"), ("shadow-zero-directional", "0", "0.15"),
@@ -491,6 +504,8 @@ def acquire_trial(args, arm, workload, block, position, symbols):
                 retained = intervals[args.warmup_intervals:]
                 if len(retained) >= args.sample_intervals:
                     summaries = summarize_intervals(retained)
+                    if workload.validate_log is caustic_log:
+                        caustic.validate_warmup(summarize_intervals(intervals[:args.warmup_intervals]))
                     try:
                         validate_coverage(summaries, workload, len(retained), args.minimum_frame_samples)
                         selected = retained
@@ -513,6 +528,7 @@ def acquire_trial(args, arm, workload, block, position, symbols):
         validate_inactive_scopes(summarize_intervals(finalized), workload)
         return {"arm": arm.name, "block": block, "position": position, "reports": len(selected),
             "retained_report_range": [args.warmup_intervals, args.warmup_intervals + len(selected)],
+            "caustic_warmup_scopes": summarize_intervals(finalized[:args.warmup_intervals]) if workload.validate_log is caustic_log else None,
             "scopes": summarize_intervals(selected), "runtime_signature": signature,
             "artifacts": str(directory), "cache_after": cache_identity(arm.runtime)}
     finally:
@@ -567,6 +583,8 @@ def parse_args(argv=None):
     parser.add_argument("--namesym", type=Path)
     parser.add_argument("--require-hardware", action="store_true")
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--baseline-caustic-qualification", type=Path)
+    parser.add_argument("--candidate-caustic-qualification", type=Path)
     parser.add_argument("--application-arg", action="append", default=[])
     args = parser.parse_args(argv)
     workload = workloads()[args.workload]
@@ -575,8 +593,13 @@ def parse_args(argv=None):
         parser.error("multiple native hardware dispatches per timing range are supported only for optical workloads")
     if workload.reflection_policy is not None and workload.reflection_policy.variant.mode in ("hardware", "hybrid"):
         args.require_hardware = True
-    if workload.validate_log is soft_shadow_log:
+    if workload.validate_log in (soft_shadow_log, caustic_log):
         args.require_hardware = True
+    qualifications = (args.baseline_caustic_qualification, args.candidate_caustic_qualification)
+    if workload.validate_log is caustic_log and not all(qualifications):
+        parser.error("caustic workloads require separate baseline/candidate footprint qualification reports")
+    if workload.validate_log is not caustic_log and any(qualifications):
+        parser.error("caustic qualification applies only to caustic workloads")
     if args.blocks < 8 or args.blocks % 2:
         parser.error("blocks must be even and at least8, retaining complete AB/BA balance")
     if args.warmup_intervals < 2 or args.sample_intervals < 6 or args.minimum_frame_samples < 100:
@@ -608,8 +631,16 @@ def run(args):
         if not arm.executable.is_file() or not arm.runtime.is_dir() or not arm.source_manifest.is_file():
             raise SmokeFailure(f"missing executable, runtime, or source manifest for {arm.name}")
     identities = {arm.name: freeze_arm(arm) for arm in arms}
-    local_modules = ("reflection_benchmark", "window_capture_smoke", "gpu_timing_parse", "name_symbols", "smoke_volume_identity")
-    shared_paths = [Path(__file__), args.logserver_executable]
+    qualification = {}
+    qualification_paths = []
+    if workload.validate_log is caustic_log:
+        for arm in arms:
+            path = getattr(args, arm.name + "_caustic_qualification")
+            qualification[arm.name], paths = caustic.validate_report(path, identities[arm.name])
+            qualification_paths.extend(paths)
+    local_modules = ("reflection_benchmark", "window_capture_smoke", "gpu_timing_parse", "name_symbols",
+        "smoke_volume_identity", "caustic_timing_qualification")
+    shared_paths = [Path(__file__), args.logserver_executable, *qualification_paths]
     shared_paths.extend(Path(sys.modules[name].__file__) for name in local_modules)
     if args.namesym:
         shared_paths.append(args.namesym)
@@ -624,6 +655,7 @@ def run(args):
         "timing_in_flight_ranges": 32, "scope_multipliers": dict(workload.scope_multipliers),
         "inactive_scopes": list(workload.inactive_scopes),
         "reflection_policy": asdict(workload.reflection_policy) if workload.reflection_policy is not None else None,
+        "caustic_qualification": qualification,
         "native_hardware_dispatches_per_range": {
             "baseline": args.baseline_hardware_dispatches_per_range,
             "candidate": args.candidate_hardware_dispatches_per_range,

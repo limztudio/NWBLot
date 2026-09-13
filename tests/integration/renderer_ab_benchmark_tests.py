@@ -9,6 +9,9 @@ import io
 import json
 from pathlib import Path
 import sys
+import struct
+from types import SimpleNamespace
+from unittest.mock import patch
 import tempfile
 import unittest
 
@@ -184,6 +187,8 @@ class WorkloadControlSelectionTests(unittest.TestCase):
         for workload in benchmark.workloads().values():
             with self.subTest(workload=workload.name):
                 expected = benchmark.SHADOW_CONTROLS if workload.validate_log is benchmark.soft_shadow_log else benchmark.CONTROLS
+                if workload.validate_log is benchmark.caustic_log:
+                    expected = (*benchmark.CONTROLS, *benchmark.OBSERVATIONS, benchmark.caustic.PHOTONS)
                 self.assertEqual(workload.control_scopes, expected)
 
     def test_shadow_target_change_is_not_misclassified_as_control_drift(self):
@@ -475,7 +480,8 @@ class ReflectionWorkloadTests(unittest.TestCase):
             "reflection-optical-inside": ("optical_inside", "hardware", 0.0, False, False, reflection.HARDWARE),
         }
         self.assertEqual(set(benchmark.workloads()), {"transparent-multi", *expected,
-            "shadow-zero-extent", "shadow-finite-extent", "shadow-zero-directional", "shadow-zero-punctual"})
+            "shadow-zero-extent", "shadow-finite-extent", "shadow-zero-directional", "shadow-zero-punctual",
+            "caustic-populated", "caustic-sparse"})
         for name, values in expected.items():
             with self.subTest(workload=name):
                 workload = benchmark.workloads()[name]
@@ -620,6 +626,272 @@ class ReflectionWorkloadTests(unittest.TestCase):
         self.assertEqual(result["completed_gpu_frames"], 3200)
         with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
             benchmark.compare_trials(trials[:-1], orders, workload)
+
+
+def caustic_log_text(preset="populated", enabled=True, capture=False):
+    distance = benchmark.caustic.PRESETS[preset]
+    text = "\n".join((
+        "Vulkan: created device 'Example GPU'",
+        "RendererSystem: material 'glass' selected CS + PS through compute emulation",
+        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware",
+        "AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1",
+        "AvboitTimingProbe: caustic in-flight ranges 32",
+        "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
+        "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else "disabled"),
+        "CausticTimingProbe: reflection diagnostics false temporal false spatial false feedback false",
+        "CausticTimingProbe: scene single-static-sphere-ground-v1",
+        f"CausticTimingProbe: camera {preset} distance {distance} height 0.85",
+        "CausticTimingProbe: fixed delta 0.016666667 yaw 0 sphere scale 0.7",
+        "CausticTimingProbe: directional pitch 0.9 yaw 0.65 intensity 2",
+        "CausticTimingProbe: vertical FOV radians 1.0471976",
+        "CausticTimingProbe: photon phases bootstrap 2 converged 4 warmup 8",
+        "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
+        "TransparentMultiSmokeProject: shutdown"))
+    if enabled:
+        text += "\nRendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, 262144 full-grid budget, 1 caustic lights, 1 refractive instances)"
+    if capture:
+        text += "\nFramebufferCapture: capture ready\nFramebufferCapture: graphics source frame 359"
+    return text
+
+
+class CausticMeasurementTests(unittest.TestCase):
+    def test_camera_presets_keep_optical_quality_and_geometry_controls_identical(self):
+        populated, sparse = (benchmark.workloads()["caustic-" + preset] for preset in benchmark.caustic.PRESETS)
+        a, b = dict(populated.environment_overrides), dict(sparse.environment_overrides)
+        self.assertEqual({key for key in a if a[key] != b[key]}, {"NWB_CAUSTIC_SMOKE_CAMERA_PRESET"})
+        self.assertEqual(a["NWB_CAUSTIC_SMOKE_ENABLED"], "1")
+        self.assertEqual(a["NWB_REFRACTION_SMOKE_ENABLED"], "0")
+        self.assertEqual(a["NWB_REFLECTION_SMOKE_MODE"], "disabled")
+        self.assertEqual(populated.scope_multipliers, sparse.scope_multipliers)
+        self.assertEqual(populated.secondary_scope, benchmark.caustic.RESOLVE)
+        self.assertIn(benchmark.caustic.PHOTONS, populated.control_scopes)
+        self.assertNotIn(benchmark.caustic.RESOLVE, populated.control_scopes)
+        self.assertEqual(len(populated.scopes), 14)
+
+    def test_completed_resolve_and_photon_counts_cannot_be_divided_or_missing(self):
+        workload = benchmark.workloads()["caustic-populated"]
+        benchmark.validate_coverage(scopes(workload), workload, 6, 100)
+        for name in (benchmark.caustic.RESOLVE, benchmark.caustic.PHOTONS):
+            missing = scopes(workload)
+            del missing[name]
+            with self.subTest(scope=name), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(missing, workload, 6, 100)
+            wrong = scopes(workload)
+            wrong[name]["gpu_samples"] *= 2
+            with self.assertRaisesRegex(benchmark.SmokeFailure, "sample ratio"):
+                benchmark.validate_coverage(wrong, workload, 6, 100)
+
+    def test_warmup_is_actual_completed_gpu_work_not_publication_count(self):
+        values = {name: {"gpu_samples": 12, "total_ms": 1, "reports": 2}
+            for name in (benchmark.FRAME, benchmark.caustic.PHOTONS)}
+        benchmark.caustic.validate_warmup(values)
+        for name in values:
+            changed = copy.deepcopy(values)
+            changed[name]["gpu_samples"] = 11
+            changed[name]["reports"] = 1000
+            with self.assertRaises(benchmark.SmokeFailure):
+                benchmark.caustic.validate_warmup(changed)
+
+    def test_actual_native_route_geometry_and_photon_budget_are_load_bearing(self):
+        for preset in benchmark.caustic.PRESETS:
+            workload = benchmark.workloads()["caustic-" + preset]
+            text = caustic_log_text(preset)
+            actual = workload.validate_log(text, workload, True)
+            self.assertEqual(actual["camera_distance"], benchmark.caustic.PRESETS[preset])
+            self.assertEqual(actual["initial_producer"], [131072, 2, 262144, 1, 1])
+            for changed in (text.replace("131072 photons", "65536 photons"),
+                text.replace("262144 full-grid", "131072 full-grid"), text.replace("1 refractive", "2 refractive"),
+                text.replace("height 0.85", "height 0.7"), text.replace("sphere scale 0.7", "sphere scale 0.35"),
+                text.replace("intensity 2", "intensity 4"), text.replace("radians 1.0471976", "radians 0.7"),
+                text.replace("warmup 8", "warmup 16"), text.replace("yaw 0", "yaw 1"),
+                text.replace("hardware caustic producer", "software caustic producer"),
+                text + "\nCausticSphereSmokeProject: reflection mode 2",
+                text + "\nAvboitTimingProbe: caustic in-flight ranges 2"):
+                with self.subTest(preset=preset, changed=changed[-120:]), self.assertRaises(benchmark.SmokeFailure):
+                    workload.validate_log(changed, workload, True)
+
+    def test_capture_evidence_is_required_for_qualification_and_forbidden_for_timing(self):
+        workload = benchmark.workloads()["caustic-populated"]
+        text = caustic_log_text(capture=True)
+        settings = dict(workload.environment_overrides)
+        actual = benchmark.caustic.validate_log(text, settings, capture=True)
+        self.assertEqual(actual["graphics_source_frame"], 359)
+        for value in (text, caustic_log_text() + "\nVK_LAYER_KHRONOS_validation"):
+            with self.assertRaises(benchmark.SmokeFailure):
+                workload.validate_log(value, workload, True)
+        for changed in (caustic_log_text(), text.replace("source frame 359", "source frame 7")):
+            with self.assertRaises(benchmark.SmokeFailure):
+                benchmark.caustic.validate_log(changed, settings, capture=True)
+        off = benchmark.caustic.environment("populated", False)
+        benchmark.caustic.validate_log(caustic_log_text(enabled=False, capture=True), off, capture=True)
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.caustic.validate_log(text, off, capture=True)
+
+    def test_receiver_mask_excludes_sphere_and_image_background(self):
+        width, height = 160, 120
+        points = list(benchmark.caustic.receiver_pixels(width, height, 2.2))
+        self.assertGreater(len(points), 100)
+        self.assertNotIn((width // 2, height // 2), points)
+        self.assertTrue(all(y > height // 2 for _, y in points))
+        off = (width, height, [[(50, 50, 50) for _ in range(width)] for _ in range(height)])
+        rows = [list(row) for row in off[2]]
+        for x, y in points[:20]:
+            rows[y][x] = (70, 70, 70)
+        for x in range(width):
+            rows[0][x] = (255, 255, 255)
+        result = benchmark.caustic.footprint((width, height, rows), off, 2.2)
+        self.assertEqual(result["positive_pixels"], 20)
+        self.assertEqual(result["positive_channel_gain"], 1200)
+        self.assertEqual(benchmark.caustic.footprint(off, off, 2.2)["positive_pixels"], 0)
+
+    def test_visible_pixel_and_tile_reduction_are_independent_qualification_gates(self):
+        good = {"populated": {"positive_pixels": 1000, "positive_tiles": 100, "positive_channel_gain": 60000},
+            "sparse": {"positive_pixels": 250, "positive_tiles": 30, "positive_channel_gain": 15000}}
+        benchmark.caustic.validate_metrics(good)
+        for key, value in (("positive_pixels", 99), ("positive_channel_gain", 1499), ("positive_tiles", 81)):
+            changed = copy.deepcopy(good)
+            changed["sparse"][key] = value
+            with self.subTest(key=key), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.caustic.validate_metrics(changed)
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.caustic.validate_metrics({"populated": good["populated"], "sparse": good["populated"]})
+
+    def test_caustic_cli_requires_both_frozen_arm_qualification_reports(self):
+        common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
+            "--candidate-executable", "b", "--candidate-runtime", "br", "--candidate-source-manifest", "bs.json",
+            "--logserver-executable", "logger", "--output-directory", "output"]
+        proofs = ["--baseline-caustic-qualification", "aqual.json", "--candidate-caustic-qualification", "bqual.json"]
+        for partial in ([], proofs[:2], proofs[2:]):
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                benchmark.parse_args(common + ["--workload", "caustic-populated"] + partial)
+        args = benchmark.parse_args(common + ["--workload", "caustic-sparse"] + proofs)
+        self.assertTrue(args.require_hardware)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            benchmark.parse_args(common + proofs)
+
+    def test_qualification_replay_requires_exact_identity_policy_and_all_four_captures(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "qualification.json"
+            identity = {"frozen": "actual-arm"}
+            document = {"schema": benchmark.caustic.SCHEMA, "policy": benchmark.caustic.POLICY,
+                "arm": identity, "captures": {}}
+            for changed in ({**document, "arm": {"frozen": "other-arm"}},
+                {**document, "policy": {}}, document):
+                path.write_text(json.dumps(changed), encoding="utf-8")
+                with self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.caustic.validate_report(path, identity)
+
+    def test_caustic_rejected_output_preserves_existing_evidence_without_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            output = directory / "old_evidence"
+            output.mkdir()
+            saved = output / "failure.json"
+            saved.write_bytes(b"original failure evidence")
+            argv = ["--executable", str(directory / "bin" / "fixture.exe"),
+                "--runtime", str(directory / "runtime"), "--source-manifest", str(directory / "source" / "source.json"),
+                "--logserver-executable", str(directory / "logger" / "logger.exe"), "--output-directory", str(output)]
+            with patch.object(benchmark.caustic.subprocess, "run") as launch, contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(benchmark.caustic.main(argv), 1)
+            launch.assert_not_called()
+            self.assertEqual(saved.read_bytes(), b"original failure evidence")
+            self.assertEqual(sorted(path.name for path in output.iterdir()), ["failure.json"])
+
+    def test_caustic_output_overlap_rejected_in_both_directions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            protected = root / "inputs"
+            for output in (protected, protected / "output", root):
+                with self.subTest(output=output), self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.caustic.validate_output_path(output, (protected,))
+            benchmark.caustic.validate_output_path(root / "evidence", (protected,))
+
+    def test_caustic_requested_gpu_debug_needs_actual_all_markers(self):
+        utility = benchmark.caustic
+        text = "\n".join(utility.GPU_DEBUG_MARKERS)
+        utility.validate_gpu_debug(text, ["--gpudbg"])
+        utility.validate_gpu_debug("ordinary launch", [])
+        for marker in utility.GPU_DEBUG_MARKERS:
+            with self.subTest(marker=marker), self.assertRaises(benchmark.SmokeFailure):
+                utility.validate_gpu_debug(text.replace(marker, "requested only"), ["--gpudbg"])
+        args = SimpleNamespace(executable="fixture.exe", runtime="runtime", logserver_executable="logger.exe",
+            timeout=90, application_arg=["--gpudbg"])
+        command = utility.capture_command(args, Path("output.bmp"))
+        for marker in utility.GPU_DEBUG_MARKERS:
+            self.assertIn(marker, command)
+
+    def test_synthetic_raw_evidence_replay_and_tampering_checks(self):
+        # Small synthetic parser evidence only; this does not qualify a real framebuffer or GPU arm.
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            policy = {**benchmark.caustic.POLICY, "width": 160, "height": 120}
+            with patch.multiple(benchmark.caustic, WIDTH=160, HEIGHT=120, POLICY=policy):
+                utility = benchmark.caustic
+                width, height = 160, 120
+                identity = {"executable": str(directory / "fixture.exe"), "runtime": str(directory / "runtime")}
+                logger = directory / "logger.exe"
+                logger.write_bytes(b"synthetic logger identity")
+                (directory / "crash_handler.exe").write_bytes(b"synthetic crash helper identity")
+                logger_dependency = directory / "logger_dependency.dll"
+                logger_dependency.write_bytes(b"synthetic logger dependency identity")
+                args = SimpleNamespace(**identity, logserver_executable=logger, timeout=90.0, application_arg=[])
+                document = {"schema": utility.SCHEMA, "policy": policy, "arm": identity, "captures": {},
+                    "metrics": {}, "qualification_tool": benchmark.file_identity(Path(utility.__file__)),
+                    "launcher": benchmark.file_identity(Path(utility.__file__).with_name("window_capture_smoke.py")),
+                    "logserver": benchmark.file_identity(logger), "logserver_path": str(logger),
+                    "logserver_binaries": benchmark.binary_identity(logger),
+                    "timeout_seconds": 90.0, "application_args": []}
+                for preset, distance in utility.PRESETS.items():
+                    frames = {}
+                    for enabled in (True, False):
+                        key = preset + ("_on" if enabled else "_off")
+                        image, log = directory / (key + ".bmp"), directory / (key + ".log")
+                        selected = set(utility.receiver_pixels(width, height, distance)) if enabled else set()
+                        pixels = bytearray()
+                        for y in reversed(range(height)):
+                            for x in range(width):
+                                pixels.extend(bytes((70, 70, 70) if (x, y) in selected else (50, 50, 50)))
+                        header = struct.pack("<2sIHHI", b"BM", 54 + len(pixels), 0, 0, 54)
+                        header += struct.pack("<IiiHHIIiiII", 40, width, height, 1, 24, 0, len(pixels), 0, 0, 0, 0)
+                        image.write_bytes(header + pixels)
+                        log.write_text(caustic_log_text(preset, enabled, capture=True).replace("1280x900", "160x120"), encoding="utf-8")
+                        settings = utility.environment(preset, enabled)
+                        document["captures"][key] = {"settings": settings,
+                            "runtime": utility.validate_log(log.read_text(encoding="utf-8"), settings, capture=True),
+                            "command": utility.capture_command(args, image),
+                            "image": {"path": image.name, "identity": benchmark.file_identity(image)},
+                            "log": {"path": log.name, "identity": benchmark.file_identity(log)}}
+                        frames[enabled] = utility.read_bmp_24_rows(image)
+                    document["metrics"][preset] = utility.footprint(frames[True], frames[False], distance)
+                report = directory / "qualification.json"
+                report.write_text(json.dumps(document), encoding="utf-8")
+                result, paths = utility.validate_report(report, identity)
+                self.assertEqual(result["metrics"], document["metrics"])
+                self.assertEqual(len(paths), 12)
+                saved_dependency = logger_dependency.read_bytes()
+                logger_dependency.write_bytes(saved_dependency + b"modified")
+                with self.assertRaisesRegex(benchmark.SmokeFailure, "dependency inventory changed"):
+                    utility.validate_report(report, identity)
+                logger_dependency.write_bytes(saved_dependency)
+                for kind in ("image", "log"):
+                    raw = directory / document["captures"]["populated_on"][kind]["path"]
+                    saved = raw.read_bytes()
+                    raw.write_bytes(saved + b"modified")
+                    with self.subTest(kind=kind), self.assertRaisesRegex(benchmark.SmokeFailure, "raw .* changed"):
+                        utility.validate_report(report, identity)
+                    raw.write_bytes(saved)
+                for field in ("metrics", "qualification_tool", "command"):
+                    changed = copy.deepcopy(document)
+                    if field == "metrics":
+                        changed[field]["populated"]["positive_pixels"] += 1
+                    elif field == "qualification_tool":
+                        changed[field]["sha256"] = "0" * 64
+                    else:
+                        command = changed["captures"]["populated_on"]["command"]
+                        command[command.index("--application-capture-frame-count") + 1] = "16"
+                    report.write_text(json.dumps(changed), encoding="utf-8")
+                    with self.subTest(field=field), self.assertRaises(benchmark.SmokeFailure):
+                        utility.validate_report(report, identity)
 
 
 if __name__ == "__main__":

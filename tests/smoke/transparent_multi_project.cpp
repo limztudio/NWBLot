@@ -2,20 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <loader/project_entry.h>
-
-#include <core/common/log.h>
-#include <core/ecs/module.h>
-#include <global/math/frame.h>
-#include <core/graphics/runtime/runtime.h>
-#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
-#include <impl/ecs_csg/module.h>
-#endif
-#include <impl/ecs_scene/module.h>
-#include <impl/ecs_mesh/module.h>
-#include <impl/ecs_render/module.h>
-#include <impl/ecs_render/material/material_instance.h>
-
 #include "arrow_yaw_input_handler.h"
 #include "avboit_timing_render_pass.h"
 #include "fps_probe.h"
@@ -29,6 +15,24 @@
 #include "csg_smoke_helpers.h"
 #endif
 
+#include <loader/project_entry.h>
+
+#if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
+#include <impl/ecs_csg/module.h>
+#endif
+#include <impl/ecs_scene/module.h>
+#include <impl/ecs_mesh/module.h>
+#include <impl/ecs_render/module.h>
+#include <impl/ecs_render/material/material_instance.h>
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+#include <impl/assets/graphics/caustic/photon_push_constants.h>
+#endif
+
+#include <core/common/log.h>
+#include <core/ecs/module.h>
+#include <core/graphics/runtime/runtime.h>
+
+#include <global/math/frame.h>
 #include <global/math/constant.h>
 #include <global/simplemath.h>
 
@@ -73,6 +77,7 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 30.0f;
 static constexpr f32 s_ManualYawSpeed = 0.6f;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
 static constexpr TransparentMeshRef s_TransparentShapeMesh{"project/meshes/caustic_sphere"};
+static constexpr f32 s_CausticSphereScale = 0.70f;
 #else
 // Three DISTINCT spinning glass refractors (left/center/right): a cylinder, an octahedron, and a cone. The cylinder
 // + cone have smooth curved silhouettes while the octahedron is faceted, giving the transparent-shadow test a mix of
@@ -349,6 +354,18 @@ private:
             reflectionSettings.temporalEnabled = false;
             reflectionSettings.spatialFilterEnabled = false;
         }
+        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_TIMING")){
+            reflectionSettings.diagnosticsEnabled = false;
+            reflectionSettings.temporalEnabled = false;
+            reflectionSettings.spatialFilterEnabled = false;
+            reflectionSettings.screenFeedbackEnabled = false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: reflection diagnostics {} temporal {} spatial {} feedback {}")
+                , reflectionSettings.diagnosticsEnabled
+                , reflectionSettings.temporalEnabled
+                , reflectionSettings.spatialFilterEnabled
+                , reflectionSettings.screenFeedbackEnabled
+            );
+        }
         NWB_FATAL_ASSERT_MSG(rendererSystem.setReflectionSettings(reflectionSettings), NWB_TEXT("CausticSphereSmokeProject: invalid reflection settings"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: reflection mode {}"), static_cast<u32>(reflectionSettings.traceMode));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: camera refraction {}")
@@ -446,7 +463,14 @@ public:
         // recorder) so m_gpuPassTimingProbe can read each pass's GPU time from the timing view every frame.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING") && !m_timingRenderPass.start())
+        bool causticTiming = false;
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        causticTiming = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_TIMING");
+#endif
+        if(
+            (causticTiming || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_AVBOIT_SMOKE_TIMING"))
+            && !m_timingRenderPass.start(causticTiming)
+        )
             return false;
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -467,7 +491,44 @@ public:
         m_context.input.addHandlerToBack(m_frameLaggedAsyncLightingToggleInput);
 #endif
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, s_CameraStartDepth, 0.0f);
+        f32 cameraDistance = s_CameraStartDepth;
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(causticTiming){
+            // Camera distance varies visible footprint while the optical geometry, light and photon quality stay fixed.
+            NWB::Tests::Smoke::SmokeEnvironmentString presetText(m_context.objectArena);
+            if(!NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_CAUSTIC_SMOKE_CAMERA_PRESET", presetText)){
+                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset is required"));
+                return false;
+            }
+            const AStringView preset(presetText.data(), presetText.size());
+            if(preset != "populated" && preset != "sparse"){
+                NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
+                return false;
+            }
+            cameraDistance *= preset == "sparse" ? 2.0f : 1.0f;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: camera {} distance {} height {}")
+                , preset == "sparse" ? NWB_TEXT("sparse") : NWB_TEXT("populated")
+                , cameraDistance
+                , s_CameraTargetY
+            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}")
+                , rendererBaselineFixedDelta()
+                , effectiveFrozenAngle()
+                , s_CausticSphereScale
+            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}")
+                , NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT
+                , NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT
+                , NWB_CAUSTIC_TEMPORAL_WARMUP_FRAME_COUNT
+            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: directional pitch {} yaw {} intensity {}")
+                , s_DefaultDirectionalLightPitch
+                , s_DefaultDirectionalLightYaw
+                , s_DefaultDirectionalLightIntensity
+            );
+        }
+#endif
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraTargetY, cameraDistance, 0.0f);
         const auto lightEntity = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DefaultDirectionalLightPitch,
@@ -496,7 +557,7 @@ public:
             s_TransparentSharedMaterial,
             Float4(0.55f, 0.78f, 1.0f, 0.30f),
             TransparentCenterShapeBasePosition(),
-            Float4(0.70f, 0.70f, 0.70f)
+            Float4(s_CausticSphereScale, s_CausticSphereScale, s_CausticSphereScale)
         );
         m_centerShape = centerShapeEntity;
         const bool shapesValid = centerShapeEntity.valid();
@@ -605,6 +666,13 @@ public:
             NWB_TEXT("TransparentMultiSmokeProject failed to create all scene entities")
         );
 
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(causticTiming){
+            const auto& camera = m_world->entity(activeCamera).getComponent<NWB::Impl::Scene::CameraComponent>();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: vertical FOV radians {}"), camera.verticalFovRadians());
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticTimingProbe: scene single-static-sphere-ground-v1"));
+        }
+#endif
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created"));
         return true;
     }

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include <core/graphics/runtime/render_pass.h>
+#include "../descriptor_buffer/round_trip/round_trip_fixture.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -14,27 +14,22 @@
 NWB_BEGIN
 
 
-namespace Tests::Smoke{
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class AvboitTimingRenderPass final : public Core::IRenderPass{
-public:
-    explicit AvboitTimingRenderPass(Core::GraphicsRuntime& graphics);
-    virtual ~AvboitTimingRenderPass()override;
-
-
-public:
-    [[nodiscard]] bool start(bool includeCaustics = false);
-    void stop();
-    virtual bool shouldRenderUnfocused()override{ return true; }
-
-
-private:
-    bool m_registered = false;
-    bool m_includeCaustics = false;
+class CausticKernelTest : public DescriptorBufferRoundTripTest{
+protected:
+    [[nodiscard]] bool loadResolveKernel(
+        bool reference,
+        Core::Alloc::ScratchArena& scratchArena,
+        Core::ComputePipelineHandle& outPipeline
+    );
 };
 
 
@@ -42,6 +37,9 @@ private:
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_END

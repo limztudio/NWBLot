@@ -8,7 +8,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Isolated shadow captures and timings preserve direct light/visibility equations while excluding stochastic GI response.
+// This project material changes only its response to indirect irradiance; it does not disable surfel production.
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+    surface.indirectIrradiance = nwbGiHemiAmbient(surface.normal);
     return nwbSmokeLambertShadeSurface(surface, pixel);
 }
 

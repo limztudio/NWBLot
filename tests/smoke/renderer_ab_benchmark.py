@@ -187,11 +187,12 @@ def soft_shadow_log(text, workload, require_hardware):
     lines = text.replace("\r\n", "\n").splitlines()
     text = "\n".join(lines)
     for marker in ("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
-        "ShadowTimingProbe: caustic emission 0", "SoftShadowTestSmokeProject: shutdown"):
+        "ShadowTimingProbe: caustic emission 0", "ShadowTimingProbe: indirect response hemi-ambient",
+        "SoftShadowTestSmokeProject: shutdown"):
         if lines.count(marker) != 1:
             raise SmokeFailure("missing or repeated shadow timing policy: " + marker)
     for prefix in ("ShadowTimingProbe: in-flight ranges ", "ShadowTimingProbe: render unfocused ",
-        "ShadowTimingProbe: caustic emission "):
+        "ShadowTimingProbe: caustic emission ", "ShadowTimingProbe: indirect response "):
         if sum(line.startswith(prefix) for line in lines) != 1:
             raise SmokeFailure("contradictory shadow timing policy: " + prefix)
     startup = "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius="
@@ -221,7 +222,8 @@ def soft_shadow_log(text, workload, require_hardware):
     if dimensions != {(workload.width, workload.height)}:
         raise SmokeFailure("shadow render extent differs from the frozen workload")
     return {**device_material_signature(text), "shadow_route": routes[0], "extent": [workload.width, workload.height],
-        "source_extents": actual_extents, "caustic_emission": False, "timing_in_flight_ranges": 32}
+        "source_extents": actual_extents, "caustic_emission": False, "indirect_response": "hemi-ambient",
+        "timing_in_flight_ranges": 32}
 
 
 def reflection_workload(name, family, mode, roughness, temporal, spatial, target_scope):

@@ -248,7 +248,8 @@ class WorkloadControlSelectionTests(unittest.TestCase):
 def soft_shadow_log_text(workload, route="hybrid"):
     values = dict(workload.environment_overrides)
     return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
-        "ShadowTimingProbe: caustic emission 0", f"ShadowTimingProbe: natural shadow route {route}",
+        "ShadowTimingProbe: caustic emission 0", "ShadowTimingProbe: indirect response hemi-ambient",
+        f"ShadowTimingProbe: natural shadow route {route}",
         f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
         "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
         "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
@@ -291,6 +292,16 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
                 text.replace("natural shadow route hybrid", "natural shadow route software")):
                 with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.soft_shadow_log(altered, workload, True)
+
+    def test_shadow_logs_require_exact_material_indirect_response(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        text = soft_shadow_log_text(workload)
+        marker = "ShadowTimingProbe: indirect response hemi-ambient"
+        self.assertEqual(benchmark.soft_shadow_log(text, workload, True)["indirect_response"], "hemi-ambient")
+        for altered in (text.replace(marker, ""), text.replace(marker, "ShadowTimingProbe: indirect response surfel"),
+            text + "\n" + marker, text + "\nShadowTimingProbe: indirect response surfel"):
+            with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.soft_shadow_log(altered, workload, True)
 
     def test_shadow_zero_policy_does_not_accept_tiny_nonzero_or_nonfinite(self):
         workload = benchmark.workloads()["shadow-zero-extent"]

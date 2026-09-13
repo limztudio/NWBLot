@@ -75,10 +75,12 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 //     at full resolution without the denoise (per-frame shimmer expected until the temporal stage).
 //   - Arrow keys (Left/Right) scrub the character yaw so the sweeping soft edge can be checked for crawl (it should NOT
 //     crawl -- a soft edge has nothing to alias); NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins a fixed yaw for a deterministic A/B.
-// Reuses the benchmark's cooked body model + ground material (no new assets).
+// Ordinary viewing retains the shared materials; timing opt-in uses the same surface hooks with fixed ambient response.
 static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
 static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
+static constexpr SoftShadowMaterialRef s_TimingOpaqueMaterial{"project/smoke/soft_shadow/materials/timing_opaque"};
+static constexpr SoftShadowMaterialRef s_TimingTransparentMaterial{"project/smoke/soft_shadow/materials/timing_transparent"};
 static constexpr SoftShadowMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
@@ -259,11 +261,15 @@ public:
                 light->enableCaustics = false;
         }
 
+        // These project-owned BXDFs preserve direct shadow response and ignore only the stochastic surfel contribution.
+        // Surfel resource preparation/production remains an unchanged renderer responsibility in this fixture.
+        const auto& opaqueMaterial = m_timingEnabled ? s_TimingOpaqueMaterial : s_OpaqueMaterial;
+        const auto& transparentMaterial = m_timingEnabled ? s_TimingTransparentMaterial : s_TransparentMaterial;
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
             s_GroundMesh,
-            s_OpaqueMaterial,
+            opaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.82f, 0.82f, 0.85f, 1.0f),
             Float4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -277,7 +283,7 @@ public:
             *m_world,
             m_context.objectArena,
             s_Model,
-            s_OpaqueMaterial,
+            opaqueMaterial,
             s_SmokeSurfaceMaterialInterface,
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(0.7f, 0.0f, -1.1f, 0.0f),
@@ -295,7 +301,7 @@ public:
             *m_world,
             m_context.objectArena,
             s_Model,
-            s_TransparentMaterial,
+            transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
             // Glass tint is (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
             // DENSITY (how solid). nwbMakeGlassSurface (smoke_transparent.surface) seeds BOTH consumers together --
@@ -335,6 +341,7 @@ public:
                 , hardwareAvailable ? NWB_TEXT("hybrid") : NWB_TEXT("software")
             );
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
                 , static_cast<f64>(configuredAngularRadius())
                 , static_cast<f64>(configuredSourceRadius())
@@ -359,12 +366,12 @@ public:
         const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
-                // Soft-shadow history must stop on a known accepted frame. This test-only control freezes the
-                // smoke loop after the requested history phase without adding a runtime renderer override.
+                // Freeze the requested update-callback phase; this is not an accepted GPU submission counter.
+                // The capture runner waits for this marker before its settle delay and client capture.
                 m_context.graphics.setFrameSubmissionSuspended(true);
                 m_rendererBaselineCapturePaused = true;
                 NWB_LOGGER_ESSENTIAL_INFO(
-                    NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                    NWB_TEXT("SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"),
                     m_rendererBaselineRenderedFrameCount
                 );
             }

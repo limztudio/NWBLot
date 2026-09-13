@@ -161,3 +161,35 @@ The baseline runner now reuses the existing Windows raw-client capture policy al
 Both existing baseline and M4 self-test entry points passed. All 59 window-capture integration tests and 44 renderer A/B parser tests passed. The new Windows orchestration case requires prepare, ready, settle, raw capture and close in that order, and rejects the previous Windows capture path. Existing M4 tests retain their DWM argument, error, skip, flush and full-client-rectangle checks. This three-Python-file correction requires no renderer rebuild; fresh frozen-arm actual captures and exact self-parity remain the next qualification gate.
 
 Manifest SHA256 is `bb5f22e01333dc34e562ef89efa5c9bc55dadacf06debfd6c22354e9bcb9f05b`; source snapshots, patch and CPU test logs are under `__artifacts/reflection_optimization_followup/raw_client_capture/`. Callback-phase readiness is still not a GPU source-frame completion proof.
+
+
+## Step13: repeated zero-extent shadow traces — rejected
+
+Both tested implementations preserve the visual result but slow ordinary finite-size lights on Adreno X2-90. Neither optimization is retained. The original three shader sources were restored and both configurations recooked. The restored optimized binary dependencies and entire authored resource volume match the qualified original baseline.
+
+The shared predicate accepted only the two authored floating-point zero encodings, selecting angular extent for directional lights and physical radius for punctual lights. Nonzero subnormals, nonfinite extents and nonfinite light types retained the original path. Reuse remained local to one light and pixel, preserving ordered half additions and reciprocal normalization. Version 1 cached visibility across the traversal loop and guarded each traversal. Version 2 selected the traversal count before the unchanged loop and performed the remaining ordered half additions afterward. Neither introduced an approximate radius, persistent cache, new resource or quality setting.
+
+### Correctness and compiled integration
+
+The full-client fixture's original baseline passed exact zero-extent and finite-extent self-replays. Each candidate then completed five GPU-debug captures. All four isolated cases (zero, finite, directional-zero only, punctual-zero only) were exactly RGB-identical to the baseline across all 1,152,000 pixels. Actual logs confirm all three GPU-validation startup markers, hybrid shadows, hemispherical ambient response and disabled caustic emission for the isolated cases. Readiness remains 360 update callbacks followed by settle/client capture, not an accepted GPU source-frame count. Ordinary finite captures retain stochastic indirect/caustic response and are report-only: v1 changed 135,751 pixels, mean absolute channel difference 0.191709, maximum 65; v2 changed 125,193, mean 0.187251, maximum 65. These ordinary images were visually inspected without relabeling their differences as exact parity.
+
+Both candidates built/cooked all 218 assets in Opt and Dbg without compiler warning/error markers. Ordinary Dbg shadow smoke passed for each (4.07 and 4.08 seconds total). Actual packed hardware-soft, software-opaque-soft and software-transparent-soft modules passed Vulkan 1.2 validation and control/dataflow review. Version 2 retains the original traversal bodies, an FP16 accumulation before every post-loop cache read, a separate ordered FP16 repeat loop and the original denominator. Capability, descriptor and floating-point mode policies are unchanged; this does not establish portable denormal behavior or driver ISA/register allocation. Software-opaque emitted validation is not a claim that this hardware host dynamically executed the fallback kernel.
+
+Whole-volume comparison for each candidate accounts for 218 payloads and 164 shader records: three intended bytecodes plus the shader index change, while six additional logical records change only their source checksum. All other 214 payload bytes and archive key order/table indices are unchanged; physical offsets relocate with shader growth. Executable dependencies and generated material/shadow inputs are identical. The frozen source delta is exactly the three proposed shader paths.
+
+### Complete timing experiments
+
+Each implementation ran two eight-block comparisons with 16 launches per workload, two warm-up and six measured publications per launch. Every workload retained 2,880 completed GPU frame samples. Across both source experiments, all 64 planned launches and 11,520 measured GPU frames were retained with no failed acquisition, exclusion or retry. Builds, captures and other GPU work did not overlap acquisition. The original 3%/0.02 ms whole-frame practical threshold and unaffected control-equivalence gates remain unchanged.
+
+| Implementation / workload | Baseline GPU frame ms | Candidate | Paired change, 95% interval (ms) | Original status |
+| --- | ---: | ---: | --- | --- |
+| v1 / zero extent | 32.947471 | 25.425988 | -7.521483 [-7.650592, -7.392892] | `control_uncertain` |
+| v1 / finite extent | 33.458579 | 36.674120 | +3.215541 [+3.040937, +3.338169] | `control_uncertain` |
+| v2 / zero extent | 32.571835 | 26.032989 | -6.538846 [-6.695480, -6.368615] | `control_uncertain` |
+| v2 / finite extent | 33.608229 | 38.929694 | +5.321464 [+5.256210, +5.383702] | `resolved_gpu_time_increase` |
+
+Version 1's finite observed increase is 9.61%, beyond its 1.003757 ms non-regression bound. Its deferred-lighting control interval [-0.025711, -0.001483] ms exceeds the +/-0.015 ms equivalence band; the original uncertain status remains. Version 2's finite increase is 15.83%, beyond its 1.008247 ms bound, with every unaffected control equivalent. Its software-transparent trace grows from 13.001196 to 18.383453 ms and aggregate shadow visibility from 17.780498 to 23.271976 ms. This disqualifies the revised implementation.
+
+The zero-extent observed reductions are 22.83% and 20.08%, respectively. Deferred-lighting control intervals leave both original zero-extent gates uncertain; these observations are not validated isolated renderer speedup claims. Version 2's zero control interval is [-0.017277, +0.004552] ms against +/-0.015 ms. Reduced repeated trace work does not offset the finite-light regression. Moving the branch/cache did not fix that regression, and no compiler-register or thermal cause is inferred from SPIR-V or scope timings alone.
+
+Evidence remains under `__artifacts/reflection_optimization_followup/step13/`: original/revised proposals and predeclared plans, earlier fixture failures in `execution_v1/v2`, the qualified original baseline/selfchecks and first candidate in `execution_v3`, the revised candidate and independent emitted/volume/capture reviews in `execution_v4`, all 64 raw timing trials and original reports, and restoration identity/build records. Proposal manifests are `5dc89a984d1ae40f28f114fc8af28af8747ac960b125364555429304f0450a0b` and `12d701f31e47645c8952d913285d80d10cdd7a47b6b7fb1da700b08f2c692461`. The source optimization is closed as rejected; the improved common smoke/measurement support remains for subsequent steps.

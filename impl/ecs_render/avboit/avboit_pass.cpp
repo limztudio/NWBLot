@@ -43,20 +43,19 @@ static Core::BlendState::RenderTarget BuildAdditiveBlendTarget(const Core::Color
 
 static void DispatchAvboitCompute(
     Core::CommandList& commandList,
-    Core::ComputePipeline* pipeline,
+    Core::ComputePipeline& pipeline,
     Core::GpuDescriptorHeap& heap,
     const AvboitFrameTargets& targets,
     const u32 groupCountX,
     const bool hdr10OutputActive
 ){
-    NWB_ASSERT(pipeline);
     NWB_ASSERT(heap.isInitialized());
 
     Core::ComputeState computeState;
-    computeState.setPipeline(pipeline);
+    computeState.setPipeline(&pipeline);
     // Low set is push-only; work resources use heap slots.
     commandList.setComputeState(computeState);
-    heap.bindCompute(commandList, *pipeline);
+    heap.bindCompute(commandList, pipeline);
 
     const RendererAvboitPushConstants pushConstants = BuildRendererAvboitPushConstants(targets, hdr10OutputActive);
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
@@ -684,7 +683,7 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
 
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitState.m_depthWarpPipeline.get(),
+        *m_avboitState.m_depthWarpPipeline.get(),
         heap,
         targets,
         NWB_AVBOIT_DEPTH_WARP_DISPATCH_GROUP_COUNT_X,
@@ -714,7 +713,7 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
 
     __hidden_avboit::DispatchAvboitCompute(
         commandList,
-        m_avboitState.m_integratePipeline.get(),
+        *m_avboitState.m_integratePipeline.get(),
         heap,
         targets,
         DivideUp(pixelCount, static_cast<u32>(NWB_AVBOIT_INTEGRATE_GROUP_SIZE_X)),

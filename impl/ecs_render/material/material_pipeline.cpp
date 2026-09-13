@@ -145,12 +145,10 @@ struct MaterialPipelineAvboitPixelShaderSelection{
 bool RendererMaterialSystem::createRendererPipeline(
     const MaterialSurfaceInfo& materialInfo,
     const MaterialPipelineKey& pipelineKey,
-    Core::Framebuffer* framebuffer,
+    Core::Framebuffer& framebuffer,
     MaterialPipelineResources*& outResources
 ){
     outResources = nullptr;
-
-    NWB_ASSERT(framebuffer);
 
     const Name& materialKey = materialInfo.materialName;
     const MaterialPipelinePass::Enum pass = pipelineKey.pass;
@@ -381,7 +379,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             .addBindingLayout(heap.getSamplerLayout())
         ;
 
-        resources.meshletPipeline = device.createMeshletPipeline(pipelineDesc, framebuffer->getFramebufferInfo());
+        resources.meshletPipeline = device.createMeshletPipeline(pipelineDesc, framebuffer.getFramebufferInfo());
         if(!resources.meshletPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create meshlet pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             return false;
@@ -432,7 +430,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             .addBindingLayout(heap.getResourceLayout())
             .addBindingLayout(heap.getSamplerLayout())
         ;
-        resources.emulationPipeline = device.createGraphicsPipeline(emulationDesc, framebuffer->getFramebufferInfo());
+        resources.emulationPipeline = device.createGraphicsPipeline(emulationDesc, framebuffer.getFramebufferInfo());
         if(!resources.emulationPipeline){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create emulation graphics pipeline for material '{}'"), StringConvert(materialKey.c_str()));
             resources.computePipeline.reset();

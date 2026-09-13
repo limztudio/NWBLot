@@ -548,7 +548,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         MaterialPipelineResources* pipelineResources = nullptr;
         const bool pipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? createRendererPipeline(*materialInfo, pipelineKey, framebuffer, pipelineResources)
+            ? createRendererPipeline(*materialInfo, pipelineKey, *framebuffer, pipelineResources)
             : findRendererPipeline(pipelineKey, pipelineResources)
         ;
         if(!pipelineReady)
@@ -574,7 +574,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             }
             else{
                 const bool csgReceiverSurfacePipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                    ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, framebuffer, csgReceiverSurfacePipelineResources)
+                    ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer, csgReceiverSurfacePipelineResources)
                     : findRendererPipeline(csgReceiverSurfacePipelineKey, csgReceiverSurfacePipelineResources)
                 ;
                 if(!csgReceiverSurfacePipelineReady)

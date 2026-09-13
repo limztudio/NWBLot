@@ -60,9 +60,7 @@ bool LessRecord(const ShaderArchive::Record& lhs, const ShaderArchive::Record& r
     return LessNameHash(lhs.virtualPathHash, rhs.virtualPathHash);
 }
 
-bool LessRecordPointer(const ShaderArchive::Record* lhs, const ShaderArchive::Record* rhs){
-    NWB_ASSERT(lhs != nullptr);
-    NWB_ASSERT(rhs != nullptr);
+bool LessRecordPointer(NotNull<const ShaderArchive::Record*> lhs, NotNull<const ShaderArchive::Record*> rhs){
     return LessRecord(*lhs, *rhs);
 }
 
@@ -183,7 +181,7 @@ bool ShaderArchive::serializeIndex(const GraphicsVector<Record>& records, Graphi
     sortedRecords.reserve(records.size());
     for(const Record& record : records)
         sortedRecords.push_back(&record);
-    Sort(sortedRecords.begin(), sortedRecords.end(), __hidden_shader_archive::LessRecordPointer);
+    Sort(sortedRecords.begin(), sortedRecords.end(), [](const Record* lhs, const Record* rhs){ return __hidden_shader_archive::LessRecordPointer(MakeNotNull(lhs), MakeNotNull(rhs)); });
 
     usize variantTextBinaryBytes = 0;
     for(usize i = 0; i < sortedRecords.size(); ++i){

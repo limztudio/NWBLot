@@ -332,9 +332,7 @@ bool CsgShapeRegistry::registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeT
             return false;
         }
 
-        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()));
-        NWB_ASSERT(found.value() == canonicalId);
-        NWB_ASSERT(m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
+        NWB_ASSERT(__hidden_shape_registry::ValidShapeTypeId(found.value()) && found.value() == canonicalId && m_shapeTypeIndices.find(found.value()) != m_shapeTypeIndices.end());
     }
 
     if(found != m_shapeTypeIds.end()){

@@ -86,10 +86,6 @@ bool CsgDeformCutterField::ShapeDistances(
     CsgDeformViabilityReason::Enum& outReason
 ){
     outReason = CsgDeformViabilityReason::Ok;
-    if(!shape.shapeType){
-        outReason = CsgDeformViabilityReason::InvalidCutter;
-        return false;
-    }
     const CsgDeformShapeKind::Enum shapeKind = CsgDeformCutterField::ClassifyDeformShape(shape.shapeType);
     if(shapeKind == CsgDeformShapeKind::Invalid){
         outReason = CsgDeformViabilityReason::InvalidCutter;
@@ -119,10 +115,7 @@ bool CsgDeformCutterField::ShapeDistances(
     default:
         break;
     }
-    if(distanceFunc == nullptr){
-        outReason = CsgDeformViabilityReason::InvalidCutter;
-        return false;
-    }
+    NWB_ASSERT(distanceFunc != nullptr);
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);

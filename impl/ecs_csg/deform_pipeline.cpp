@@ -83,38 +83,37 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
 
     u32 appliedCuts = 0u;
     u32 capTriangles = 0u;
-    if(cuts){
-        for(usize cutIndex = 0u; cutIndex < cutCount; ++cutIndex){
-            const CsgDeformCutDesc& cut = cuts[cutIndex];
-            if(!cut.active)
-                continue;
-            CsgDeformViabilityReason::Enum cutReason = CsgDeformViabilityReason::Ok;
-            if(!CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances, cutReason)){
+    NWB_ASSERT(cuts != nullptr || cutCount == 0u);
+    for(usize cutIndex = 0u; cutIndex < cutCount; ++cutIndex){
+        const CsgDeformCutDesc& cut = cuts[cutIndex];
+        if(!cut.active)
+            continue;
+        CsgDeformViabilityReason::Enum cutReason = CsgDeformViabilityReason::Ok;
+        if(!CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances, cutReason)){
+            outResult.viability.viable = false;
+            outResult.viability.reason = cutReason == CsgDeformViabilityReason::Ok
+                ? CsgDeformViabilityReason::NoKeptGeometry
+                : cutReason
+            ;
+            return false;
+        }
+        ++appliedCuts;
+        if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
+            outResult.viability.viable = false;
+            outResult.viability.reason = outTriangles.empty()
+                ? CsgDeformViabilityReason::NoKeptGeometry
+                : CsgDeformViabilityReason::TooLarge
+            ;
+            return false;
+        }
+        if(options.fillCaps){
+            u32 cutCaps = 0u;
+            if(!CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
                 outResult.viability.viable = false;
-                outResult.viability.reason = cutReason == CsgDeformViabilityReason::Ok
-                    ? CsgDeformViabilityReason::NoKeptGeometry
-                    : cutReason
-                ;
+                outResult.viability.reason = CsgDeformViabilityReason::CapLoopFailed;
                 return false;
             }
-            ++appliedCuts;
-            if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
-                outResult.viability.viable = false;
-                outResult.viability.reason = outTriangles.empty()
-                    ? CsgDeformViabilityReason::NoKeptGeometry
-                    : CsgDeformViabilityReason::TooLarge
-                ;
-                return false;
-            }
-            if(options.fillCaps){
-                u32 cutCaps = 0u;
-                if(!CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
-                    outResult.viability.viable = false;
-                    outResult.viability.reason = CsgDeformViabilityReason::CapLoopFailed;
-                    return false;
-                }
-                capTriangles += cutCaps;
-            }
+            capTriangles += cutCaps;
         }
     }
 

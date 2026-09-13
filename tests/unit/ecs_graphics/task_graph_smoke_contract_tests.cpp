@@ -156,8 +156,8 @@ TEST(EcsGraphics, SurfelGiBaselineUsesFixedTemporalWarmup){
 }
 
 
-// Soft shadows retain temporal history even when the camera/yaw are frozen. Capture the same accepted history phase
-// through the smoke-only fixed clock before using this scene as a parity reference.
+// Soft shadows retain temporal history even with a frozen camera. The fixed smoke clock stops at an update-callback count;
+// an accepted GPU history phase requires separate completed-submission evidence.
 TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -182,7 +182,10 @@ TEST(EcsGraphics, SoftShadowBaselineUsesFixedTemporalWarmup){
     ExpectRendererBaselineEnvOwnedBySmokeHelper(repoRoot);
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineCaptureFreezeFrame"));
     EXPECT_TRUE(ContainsText(smoke, "rendererBaselineFixedDelta"));
-    EXPECT_TRUE(ContainsText(smoke, "SoftShadowTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"));
+    EXPECT_TRUE(ContainsText(
+        smoke,
+        "SoftShadowTestSmokeProject: renderer baseline capture ready after {} update callbacks; render submission suspended"
+    ));
 }
 
 

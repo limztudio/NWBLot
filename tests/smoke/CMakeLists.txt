@@ -1063,6 +1063,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
         add_dependencies(nwb_stress_test_smoke nwb_skinning_culling_benchmark_assets)
 
+        if(TARGET nwb_logserver)
+            add_test(NAME nwb_stress_presentation_timing_smoke
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_timing_smoke.py"
+                    --executable "$<TARGET_FILE:nwb_stress_test_smoke>"
+                    --working-directory "${_nwb_skinning_culling_runtime_root}"
+                    --logserver-executable "$<TARGET_FILE:nwb_logserver>"
+                CONFIGURATIONS dbg opt
+            )
+            set_tests_properties(nwb_stress_presentation_timing_smoke PROPERTIES
+                RESOURCE_LOCK nwb_display TIMEOUT 120 SKIP_RETURN_CODE 77
+            )
+        endif()
+
         nwb_add_window_capture_smoke(
             nwb_stress_test_capture_smoke
             stress_test_capture.bmp

@@ -1,0 +1,185 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_SHADER_ENTRYPOINTS_SLANGI
+#define NWB_GRAPHICS_MESH_SHADER_ENTRYPOINTS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
+void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
+    const uint meshletIndex = groupID.x;
+    if(meshletIndex >= nwbMeshletCount())
+        return;
+
+    nwbMeshLoadGeometryHeapSlots(groupThreadID.x);
+    const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC)
+    )[meshletIndex];
+    const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbMeshletCullContext cullContext = nwbMeshBuildMeshletCullContext(meshletIndex, instance);
+    const bool meshletCulled = nwbMeshletCulled(cullContext, instance);
+    const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    if(meshletCulled){
+        for(
+            uint localPrimitiveIndex = groupThreadID.x;
+            localPrimitiveIndex < primitiveCount;
+            localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+        )
+            nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
+        return;
+    }
+
+#if NWB_CSG_ENABLED
+    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
+    if(nwbMeshCsgFullyRemovedCullEnabled() && csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
+        for(
+            uint localPrimitiveIndex = groupThreadID.x;
+            localPrimitiveIndex < primitiveCount;
+            localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+        )
+            nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
+        return;
+    }
+    nwbMeshSetMeshletRasterFlags(nwbMeshCsgRasterFlags(csgMeshletClass), groupThreadID.x);
+#else
+    nwbMeshSetMeshletRasterFlags(0u, groupThreadID.x);
+#endif
+
+    nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
+
+    for(
+        uint localPrimitiveIndex = groupThreadID.x;
+        localPrimitiveIndex < primitiveCount;
+        localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+    ){
+        const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
+        const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
+        NwbMeshGeneratedVertex generatedVertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT];
+        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
+            generatedVertices[corner] = nwbMeshBuildMeshletVertex(
+                meshletIndex,
+                meshlet,
+                decodeInfo,
+                localVertexIndices[corner],
+                instance
+            );
+        }
+
+        if(nwbMeshTriangleCulled(generatedVertices)){
+            nwbMeshStoreCulledPrimitive(primitiveBase);
+            continue;
+        }
+
+        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
+            nwbMeshGeneratedVertices()[primitiveBase + corner] = generatedVertices[corner];
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#else
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[shader("mesh")]
+[numthreads(NWB_MESH_SHADER_GROUP_SIZE_X, 1, 1)]
+[outputtopology("triangle")]
+void main(
+    uint3 groupThreadID : SV_GroupThreadID,
+    uint3 groupID : SV_GroupID,
+    OutputVertices<NwbMeshRasterVertex, NWB_MESH_SHADER_MAX_VERTICES> vertices,
+    OutputIndices<uint3, NWB_MESH_SHADER_MAX_TRIANGLES> triangles
+){
+    const uint meshletIndex = groupID.x;
+    if(meshletIndex >= nwbMeshletCount()){
+        SetMeshOutputCounts(0u, 0u);
+        return;
+    }
+
+    const uint groupThreadIndex = groupThreadID.x;
+    nwbMeshLoadGeometryHeapSlots(groupThreadIndex);
+    const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(
+        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC)
+    )[meshletIndex];
+    const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const NwbMeshletCullContext cullContext = nwbMeshBuildMeshletCullContext(meshletIndex, instance);
+    if(nwbMeshletCulled(cullContext, instance)){
+        SetMeshOutputCounts(0u, 0u);
+        return;
+    }
+
+#if NWB_CSG_ENABLED
+    const uint csgMeshletClass = nwbMeshCsgClassifyMeshlet(cullContext);
+    if(nwbMeshCsgFullyRemovedCullEnabled() && csgMeshletClass == NWB_CSG_MESHLET_CLASS_FULLY_REMOVED){
+        SetMeshOutputCounts(0u, 0u);
+        return;
+    }
+    nwbMeshSetMeshletRasterFlags(nwbMeshCsgRasterFlags(csgMeshletClass), groupThreadIndex);
+#else
+    nwbMeshSetMeshletRasterFlags(0u, groupThreadIndex);
+#endif
+
+    const uint vertexCount = nwbMeshletVertexCount(meshlet);
+    const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadIndex);
+
+    SetMeshOutputCounts(vertexCount, primitiveCount);
+
+    for(
+        uint localVertexIndex = groupThreadIndex;
+        localVertexIndex < vertexCount;
+        localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+    ){
+        vertices[localVertexIndex] = nwbMeshBuildRasterVertex(
+            nwbMeshBuildMeshletVertex(
+                meshletIndex,
+                meshlet,
+                decodeInfo,
+                localVertexIndex,
+                instance
+            )
+        );
+    }
+
+    for(
+        uint localPrimitiveIndex = groupThreadIndex;
+        localPrimitiveIndex < primitiveCount;
+        localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+    ){
+        triangles[localPrimitiveIndex] = nwbMeshLoadMeshletPrimitive(
+            nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex)
+        );
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

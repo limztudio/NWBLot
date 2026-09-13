@@ -74,6 +74,10 @@ namespace Pattern{
         Mirror,
         InvalidPosition,
         UnderflowGaussian,
+        InvalidNeighborFallback,
+        InvalidCenterFallback,
+        FiniteNormalThresholds,
+        ValidNormalLengths,
         kCount,
     };
 };
@@ -188,6 +192,76 @@ static void RunSpatialCase(
             case Pattern::UnderflowGaussian:
                 specular.a = 0.0009765625f;
                 break;
+            case Pattern::InvalidNeighborFallback:
+                // The invalid middle sample must use +X for its left receiver and +Z for its right receiver.
+                position = Pixel{ 0.0f, 0.0f, 2.0f, 0.0f };
+                radiance.r = x % 3u == 0u ? 0.0f : (x % 3u == 1u ? 1.0f : 3.0f);
+                normal = x % 3u == 0u ? Pixel{ 1.0f, 0.5f, 0.5f, 1.0f }
+                    : (x % 3u == 1u ? Pixel{ 0.5f, 0.5f, 0.5f, 1.0f } : Pixel{ 0.5f, 0.5f, 1.0f, 1.0f });
+                break;
+            case Pattern::InvalidCenterFallback:
+                // A +Y neighbor exposes the invalid center's fixed +Y fallback; a +Z neighbor must be rejected there.
+                position = Pixel{ 0.0f, 0.0f, 2.0f, 0.0f };
+                radiance.r = x % 3u == 0u ? 0.0f : (x % 3u == 1u ? 1.0f : 3.0f);
+                normal = x % 3u == 0u ? Pixel{ 0.5f, 1.0f, 0.5f, 0.0f }
+                    : (x % 3u == 1u ? Pixel{ 0.5f, 0.5f, 0.5f, 0.0f } : Pixel{ 0.5f, 0.5f, 1.0f, 0.0f });
+                if(x % 3u == 1u){
+                    switch(y % 7u){
+                    case 1u:
+                        normal.r = BitCast<f32>(0x7fc00000u);
+                        break;
+                    case 2u:
+                        normal.g = BitCast<f32>(0x7f800000u);
+                        break;
+                    case 3u:
+                        normal.b = BitCast<f32>(0xff800000u);
+                        break;
+                    case 4u:
+                        normal.r = 1e30f; // Finite decoded components, but a nonfinite squared length.
+                        break;
+                    case 5u:
+                        normal.r = BitCast<f32>(0x7f7fffffu); // Decoding itself overflows.
+                        break;
+                    case 6u:
+                        normal.r = 0.500244140625f; // Finite but below the strict squared-length threshold.
+                        break;
+                    default:
+                        break;
+                    }
+                }
+                normal.a = BitCast<f32>(0x7fc00000u); // Authored normal alpha must not supply cached validity.
+                break;
+            case Pattern::FiniteNormalThresholds:
+                position = Pixel{ 0.0f, 0.0f, 2.0f, 0.0f };
+                normal = Pixel{ 0.5f, 0.5f, 0.5f, -1.0f };
+                switch(x % 6u){
+                case 0u:
+                    normal.r = 0.50048828125f;
+                    break;
+                case 1u:
+                    normal.r = BitCast<f32>(0x3f0020c4u); // Adjacent packed floats straddle decoded squared length 1e-6.
+                    break;
+                case 2u:
+                    normal.r = BitCast<f32>(0x3f0020c5u);
+                    break;
+                case 3u:
+                    normal = Pixel{ 0.5f, 1.0f, 0.5f, -1.0f };
+                    break;
+                case 4u:
+                    normal = Pixel{ 1.0f, 0.5f, 0.5f, -1.0f };
+                    break;
+                default:
+                    normal.g = BitCast<f32>(0x3f0020c5u);
+                    break;
+                }
+                break;
+            case Pattern::ValidNormalLengths:{
+                constexpr f32 scales[] = { 0.0011f, 0.125f, 0.5f, 3.0f, 1024.0f, 1e10f, 1e19f };
+                const f32 scale = scales[index % LengthOf(scales)];
+                position = Pixel{ 0.0f, 0.0f, 2.0f, 0.0f };
+                normal = Pixel{ 0.5f + 0.3f * scale, 0.5f + 0.4f * scale, 0.5f, 17.0f };
+                break;
+            }
             default:
                 break;
             }
@@ -339,7 +413,10 @@ static void RunSpatialCase(
     }
     usize changedPixels = 0u;
     usize brightenedZeroSamples = 0u;
-    const bool exactCopy = radius == 0u || (pattern != Pattern::Dense && pattern != Pattern::Discontinuities);
+    // Preserve all eight original patterns' copy contracts; the four normal patterns deliberately filter.
+    const bool exactCopy = radius == 0u || pattern == Pattern::Ineligible || pattern == Pattern::SingleEligible
+        || pattern == Pattern::ZeroRadiance || pattern == Pattern::Mirror || pattern == Pattern::InvalidPosition
+        || pattern == Pattern::UnderflowGaussian;
     for(u32 y = 0u; y < height; ++y){
         for(u32 x = 0u; x < width; ++x){
             u16 reference[4];
@@ -358,6 +435,29 @@ static void RunSpatialCase(
                     EXPECT_EQ(candidate[channel], expectedCopy[channel]) << "copy pixel " << x << "," << y;
             }
             EXPECT_EQ(candidate[3], expectedCopy[3]) << "source diagnostic alpha at " << x << "," << y;
+            if(pattern >= Pattern::InvalidNeighborFallback){
+                for(u32 channel = 0u; channel < 3u; ++channel)
+                    EXPECT_NE(candidate[channel] & 0x7c00u, 0x7c00u) << "nonfinite filtered normal case at " << x << "," << y;
+            }
+            // All positions coincide and RGB is 0,1,3. A positive offset-one weight must mix each endpoint with 1.
+            // The invalid center must copy 1 between +X/+Z, but mix toward 0 when the left receiver is +Y.
+            if(width == 3u && height == 1u && radius != 0u
+                && (pattern == Pattern::InvalidNeighborFallback || pattern == Pattern::InvalidCenterFallback)){
+                if(x == 0u){
+                    EXPECT_GT(candidate[0], ConvertFloatToHalf(0.0f));
+                    EXPECT_LT(candidate[0], ConvertFloatToHalf(1.0f));
+                }
+                else if(x == 2u){
+                    EXPECT_GT(candidate[0], ConvertFloatToHalf(1.0f));
+                    EXPECT_LT(candidate[0], ConvertFloatToHalf(3.0f));
+                }
+                else if(pattern == Pattern::InvalidNeighborFallback)
+                    EXPECT_EQ(candidate[0], ConvertFloatToHalf(1.0f));
+                else{
+                    EXPECT_GT(candidate[0], ConvertFloatToHalf(0.0f));
+                    EXPECT_LT(candidate[0], ConvertFloatToHalf(1.0f));
+                }
+            }
             if(NWB_MEMCMP(candidate, expectedCopy, sizeof(candidate)) != 0)
                 ++changedPixels;
             if(center.r == 0.0f && candidate[0] != 0u)
@@ -369,6 +469,8 @@ static void RunSpatialCase(
         EXPECT_GT(changedPixels, 0u);
         EXPECT_GT(brightenedZeroSamples, 0u);
     }
+    if(pattern >= Pattern::InvalidNeighborFallback && radius != 0u && pixelCount > 1u)
+        EXPECT_GT(changedPixels, 0u);
 }
 
 
@@ -399,6 +501,14 @@ TEST_F(ReflectionKernelTest, CookedSpatialKernelMatchesFrozenProductionAcrossEli
                     static_cast<Pattern::Enum>(pattern), scratchArena
                 );
             }
+        }
+    }
+    // Keep the original 160 scenarios; the expanded matrix adds 80 normal cases plus these 16 literal-width cases.
+    for(u32 radius = 0u; radius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS; ++radius){
+        for(u32 pattern = Pattern::InvalidNeighborFallback; pattern < Pattern::kCount; ++pattern){
+            RunSpatialCase(
+                device(), *reference, *candidate, 3u, 1u, radius, static_cast<Pattern::Enum>(pattern), scratchArena
+            );
         }
     }
 }

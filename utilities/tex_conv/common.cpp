@@ -15,7 +15,7 @@ NWB_TEX_CONV_BEGIN
 
 
 bool IsSupportedInputPath(const Path& path){
-    const AString extension = ToAsciiLowerCopy(PathToGenericString<AString>(path.extension()));
+    const AString extension = LowerPathExtension<AString>(path);
     return extension == ".png"
         || extension == ".jpg"
         || extension == ".jpeg"
@@ -28,7 +28,7 @@ bool IsSupportedInputPath(const Path& path){
 }
 
 bool IsHdrInputPath(const Path& path){
-    const AString extension = ToAsciiLowerCopy(PathToGenericString<AString>(path.extension()));
+    const AString extension = LowerPathExtension<AString>(path);
     return extension == ".exr" || extension == ".hdr";
 }
 

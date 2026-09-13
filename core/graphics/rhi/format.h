@@ -163,6 +163,22 @@ namespace Format{
     [[nodiscard]] constexpr bool IsBlockCompressedFormat(const Enum format)noexcept{
         return IsBCCompressedFormat(format) || IsASTCCompressedFormat(format);
     }
+
+    [[nodiscard]] constexpr bool IsAstc4x4LdrFormat(const Enum format)noexcept{
+        return format == ASTC_4x4_UNORM || format == ASTC_4x4_UNORM_SRGB;
+    }
+
+    [[nodiscard]] constexpr bool IsBc7LdrFormat(const Enum format)noexcept{
+        return format == BC7_UNORM || format == BC7_UNORM_SRGB;
+    }
+
+    [[nodiscard]] constexpr bool IsLdrCompressedFormat(const Enum format)noexcept{
+        return IsAstc4x4LdrFormat(format) || IsBc7LdrFormat(format);
+    }
+
+    [[nodiscard]] constexpr bool IsHdrCompressedFormat(const Enum format)noexcept{
+        return format == ASTC_4x4_FLOAT || format == BC6H_UFLOAT;
+    }
 };
 
 namespace FormatKind{

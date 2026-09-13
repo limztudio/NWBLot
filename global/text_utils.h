@@ -173,6 +173,11 @@ template<typename StringT>
 }
 
 template<typename StringT>
+[[nodiscard]] inline StringT NormalizeOptionText(StringT text){
+    return ToAsciiLowerCopy(TrimCopy(text));
+}
+
+template<typename StringT>
 [[nodiscard]] inline StringT UnquoteMatchingAsciiQuotes(StringT text){
     TrimInPlace(text);
     if(text.size() >= 2u){

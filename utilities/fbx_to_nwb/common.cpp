@@ -15,7 +15,7 @@ NWB_FBX_TO_NWB_BEGIN
 
 
 static AString NormalizeAssetTypeText(AString value){
-    return ToAsciiLowerCopy(TrimCopy(Move(value)));
+    return NormalizeOptionText(Move(value));
 }
 
 static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
@@ -99,7 +99,7 @@ bool ValidateAssetTypeText(AString& inOutValue){
 }
 
 static AString NormalizeNormalModeText(AString value){
-    return ToAsciiLowerCopy(TrimCopy(Move(value)));
+    return NormalizeOptionText(Move(value));
 }
 
 static AStringView NormalModeText(const NormalMode::Enum normalMode){

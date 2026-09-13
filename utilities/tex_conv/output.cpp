@@ -252,7 +252,7 @@ bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, Ou
     }
     else{
         const Path outputBase(UtilityDetail::Arena(), outputArgument);
-        const AString extension = ToAsciiLowerCopy(PathToGenericString<AString>(outputBase.extension()));
+        const AString extension = LowerPathExtension<AString>(outputBase);
         if(extension.empty())
             outOutputPaths.metadata = outputBase;
         else if(extension == ".nwb")

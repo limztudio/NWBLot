@@ -119,18 +119,6 @@ static void InitializeBasisTranscoder(){
     return Core::Format::UNKNOWN;
 }
 
-[[nodiscard]] static bool IsAstc4x4LdrFormat(const Core::Format::Enum format){
-    return format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::ASTC_4x4_UNORM_SRGB;
-}
-
-[[nodiscard]] static bool IsBc7LdrFormat(const Core::Format::Enum format){
-    return format == Core::Format::BC7_UNORM || format == Core::Format::BC7_UNORM_SRGB;
-}
-
-[[nodiscard]] static bool IsLdrCompressedFormat(const Core::Format::Enum format){
-    return IsAstc4x4LdrFormat(format) || IsBc7LdrFormat(format);
-}
-
 [[nodiscard]] static Core::Format::Enum SelectLdrUploadFallback(
     Core::Device& device,
     const Core::Format::Enum failedFormat,
@@ -140,7 +128,7 @@ static void InitializeBasisTranscoder(){
         ? Core::Format::BC7_UNORM_SRGB
         : Core::Format::BC7_UNORM
     ;
-    if(IsAstc4x4LdrFormat(failedFormat) && SupportsTextureFormat(device, bcFormat))
+    if(Core::Format::IsAstc4x4LdrFormat(failedFormat) && SupportsTextureFormat(device, bcFormat))
         return bcFormat;
 
     const Core::Format::Enum rgbaFormat = SelectRgbaUploadFormat(device, colorSpace);
@@ -251,7 +239,7 @@ bool TextureAssetLoader::Create(
     if(
         !texture
         && textureAsset.payloadFormat() == TexturePayloadFormat::UastcLdr4x4
-        && __hidden_texture_loader::IsLdrCompressedFormat(format)
+        && Core::Format::IsLdrCompressedFormat(format)
     ){
         Core::Format::Enum fallbackFormat = __hidden_texture_loader::SelectLdrUploadFallback(
             device,

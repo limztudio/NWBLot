@@ -73,7 +73,7 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
             return true;
         }
 
-        line = ToAsciiLowerCopy(TrimCopy(Move(line)));
+        line = NormalizeOptionText(Move(line));
         if(line.empty()){
             outValue = defaultValue;
             return true;
@@ -267,13 +267,8 @@ bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
     ;
 }
 
-AString LowerPathExtension(const AString& pathText){
-    const Path path(UtilityDetail::Arena(), pathText);
-    return ToAsciiLowerCopy(PathToGenericString<AString>(path.extension()));
-}
-
 bool IsNwbRefreshMode(const ImportOptions& options){
-    return options.refreshNwb || LowerPathExtension(options.inputPath) == ".nwb";
+    return options.refreshNwb || LowerPathExtension<AString>(Path(UtilityDetail::Arena(), options.inputPath)) == ".nwb";
 }
 
 void WriteRefreshCount(AStringStream& report, const char* name, const usize before, const usize after){

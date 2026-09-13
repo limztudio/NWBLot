@@ -37,22 +37,6 @@ static_assert(sizeof(basist::half_float) == sizeof(u16), "Basis HDR output must 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsAstc4x4LdrFormat(const Core::Format::Enum format){
-    return format == Core::Format::ASTC_4x4_UNORM || format == Core::Format::ASTC_4x4_UNORM_SRGB;
-}
-
-[[nodiscard]] static bool IsBc7LdrFormat(const Core::Format::Enum format){
-    return format == Core::Format::BC7_UNORM || format == Core::Format::BC7_UNORM_SRGB;
-}
-
-[[nodiscard]] static bool IsLdrCompressedFormat(const Core::Format::Enum format){
-    return IsAstc4x4LdrFormat(format) || IsBc7LdrFormat(format);
-}
-
-[[nodiscard]] static bool IsHdrCompressedFormat(const Core::Format::Enum format){
-    return format == Core::Format::ASTC_4x4_FLOAT || format == Core::Format::BC6H_UFLOAT;
-}
-
 [[nodiscard]] static bool GetUastcSliceLayout(
     const TextureMipLevel& mip,
     const u32 sliceIndex,
@@ -521,7 +505,7 @@ bool TextureMipDecoder::decodeLdr(
 ){
     usize rowPitch = 0u;
     usize sliceUploadByteCount = 0u;
-    if(__hidden_texture_mip_decoder::IsLdrCompressedFormat(format)){
+    if(Core::Format::IsLdrCompressedFormat(format)){
         const u64 rowPitch64 = static_cast<u64>(mip.blockCountX) * TextureFormat::s_UastcBytesPerBlock;
         if(rowPitch64 > Limit<usize>::s_Max || rowPitch64 > Limit<u64>::s_Max / mip.blockCountY){
             NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: compressed LDR mip row pitch exceeds addressable memory"));
@@ -548,9 +532,9 @@ bool TextureMipDecoder::decodeLdr(
     for(u32 sliceIndex = 0u; sliceIndex < mip.sliceCount; ++sliceIndex){
         u8* const destination = outUpload.bytes.data() + static_cast<usize>(sliceIndex) * sliceUploadByteCount;
         bool decoded = false;
-        if(__hidden_texture_mip_decoder::IsAstc4x4LdrFormat(format))
+        if(Core::Format::IsAstc4x4LdrFormat(format))
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsAstc(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
-        else if(__hidden_texture_mip_decoder::IsBc7LdrFormat(format))
+        else if(Core::Format::IsBc7LdrFormat(format))
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsBc7(textureAsset, mip, mipLevel, sliceIndex, destination, sliceUploadByteCount);
         else
             decoded = __hidden_texture_mip_decoder::DecodeTextureSliceAsRgba(textureAsset, mip, sliceIndex, destination, sliceUploadByteCount);
@@ -569,7 +553,7 @@ bool TextureMipDecoder::decodeHdr(
     const Core::Format::Enum format,
     TextureDecodedMipUpload& outUpload
 ){
-    const bool compressedOutput = __hidden_texture_mip_decoder::IsHdrCompressedFormat(format);
+    const bool compressedOutput = Core::Format::IsHdrCompressedFormat(format);
     if(!compressedOutput && format != Core::Format::RGBA16_FLOAT){
         NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetLoader: unsupported HDR texture upload format"));
         return false;

@@ -6,6 +6,7 @@
 
 
 #include "operations.h"
+#include "../text_utils.h"
 #include "../thread.h"
 
 
@@ -55,6 +56,11 @@ template<typename ArenaT>
         SleepMS(stepMilliseconds);
     }
     return false;
+}
+
+template<typename StringT, typename PathT>
+[[nodiscard]] inline StringT LowerPathExtension(const PathT& path){
+    return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension()));
 }
 
 

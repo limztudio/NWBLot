@@ -169,7 +169,7 @@ bool SelectMeshInstances(
 ){
     outSelection.clear();
 
-    const AString normalized = ToAsciiLowerCopy(TrimCopy(selector));
+    const AString normalized = NormalizeOptionText(selector);
     if(normalized.empty() || normalized == "all"){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)

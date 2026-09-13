@@ -71,6 +71,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     frameData.height() = height;
     setupPlatform(inst);
     m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
+    m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
 }
 Frame::~Frame()noexcept(false){
     // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
@@ -118,6 +119,9 @@ void Frame::setPerfCapture(const Perf::CaptureOptions& options){
     m_perfSession.setCaptureOptions(options);
     m_cpuTasks.setProfiling(options.cpuTimingActive(), m_perfSession.frameIndex());
     m_graphics.gpuTiming().setQueryCollectionEnabled(options.gpuTimingActive());
+    // Keep the cached update scope aligned with the sink without touching the per-frame update path.
+    if(options.cpuTimingActive())
+        m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
 }
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
@@ -162,7 +166,6 @@ bool Frame::updateFrame(f32 delta){
 
     m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
-    Perf::TimingScopeId projectUpdateTimingScope;
     f64 projectUpdateSeconds = 0.0;
     bool recordProjectUpdateTiming = false;
     const u64 sampleFrameIndex = m_perfSession.frameIndex();
@@ -170,7 +173,8 @@ bool Frame::updateFrame(f32 delta){
     if(m_projectUpdateCallback){
         Timer projectUpdateBegin;
         if(cpuTiming.enabled()){
-            projectUpdateTimingScope = cpuTiming.registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+            if(!m_projectUpdateTimingScope.valid())
+                m_projectUpdateTimingScope = cpuTiming.registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
             projectUpdateBegin = TimerNow();
             recordProjectUpdateTiming = true;
         }
@@ -193,7 +197,7 @@ bool Frame::updateFrame(f32 delta){
 
     // Callback interval ended before graphics; delay recording until the frame will publish.
     if(recordProjectUpdateTiming)
-        cpuTiming.recordSample(projectUpdateTimingScope, projectUpdateSeconds, sampleFrameIndex);
+        cpuTiming.recordSample(m_projectUpdateTimingScope, projectUpdateSeconds, sampleFrameIndex);
 
     if(m_telemetrySession.captureOptions().frameGraphEnabled()){
         if(!m_frameGraphRegistry.record(m_telemetrySession))

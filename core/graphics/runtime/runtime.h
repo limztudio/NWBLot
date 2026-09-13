@@ -362,6 +362,8 @@ private:
     // Optional and non-owning: Frame's perf Session owns this sink and outlives Graphics. It is used only by the
     // main-thread runFrame boundary; packet recording and setup workers intentionally remain outside this sink.
     Perf::TimingSink* m_cpuTiming = nullptr;
+    // Frame scope registered once when the sink is attached, not per frame in runFrame().
+    Perf::TimingScopeId m_frameTimingScope;
 
 private:
     NotNullUniquePtr<Backend, BackendOwner::deleter_type> m_backend;

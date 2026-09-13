@@ -129,6 +129,8 @@ private:
     TelemetryUploadCallback m_telemetryUploadCallback = nullptr;
     void* m_telemetryUploadUserData = nullptr;
     bool m_quitRequested = false;
+    // Timing scope registered once in the constructor/capture setup, not per frame in updateFrame().
+    Perf::TimingScopeId m_projectUpdateTimingScope;
 };
 
 

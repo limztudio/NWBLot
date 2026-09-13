@@ -114,11 +114,11 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     }
     if(cursor != start || !remaining.empty())
         return false;
-    for(usize vertexIndex = 1u; vertexIndex < outLoop.size(); ++vertexIndex){
-        for(usize other = 0u; other < vertexIndex; ++other){
-            if(outLoop[vertexIndex] == outLoop[other])
-                return false;
-        }
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, ScratchArena> seenLoopVertices(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
+    seenLoopVertices.reserve(outLoop.size() + s_ReserveSlack);
+    for(const u32 loopVertex : outLoop){
+        if(!seenLoopVertices.insert(loopVertex).second)
+            return false;
     }
     return true;
 }
@@ -215,23 +215,26 @@ bool CsgDeformCapBuilder::FillCutCaps(
     remaining = scratchEdges;
     Vector<CsgDeformCutLoopEdge, ScratchArena> loopEdges(scratchArena);
     Vector<u32, ScratchArena> loop(scratchArena);
+    HashSet<u32, Hasher<u32>, EqualTo<u32>, ScratchArena> loopMembers(0u, Hasher<u32>(), EqualTo<u32>(), scratchArena);
+    loopEdges.reserve(scratchEdges.size());
+    loop.reserve(scratchEdges.size());
+    loopMembers.reserve(scratchEdges.size() + s_ReserveSlack);
     while(!remaining.empty()){
         loopEdges.clear();
+        loopMembers.clear();
         loopEdges.push_back(remaining.back());
+        loopMembers.insert(remaining.back().first);
+        loopMembers.insert(remaining.back().second);
         remaining.pop_back();
         for(bool grown = true; grown;){
             grown = false;
             for(usize edgeIndex = 0u; edgeIndex < remaining.size();){
                 const CsgDeformCutLoopEdge& candidate = remaining[edgeIndex];
-                bool adjacent = false;
-                for(const CsgDeformCutLoopEdge& owned : loopEdges){
-                    if(candidate.first == owned.first || candidate.first == owned.second || candidate.second == owned.first || candidate.second == owned.second){
-                        adjacent = true;
-                        break;
-                    }
-                }
+                const bool adjacent = loopMembers.find(candidate.first) != loopMembers.end() || loopMembers.find(candidate.second) != loopMembers.end();
                 if(adjacent){
                     loopEdges.push_back(candidate);
+                    loopMembers.insert(candidate.first);
+                    loopMembers.insert(candidate.second);
                     remaining.erase(remaining.begin() + static_cast<typename decltype(remaining)::difference_type>(edgeIndex));
                     grown = true;
                 }

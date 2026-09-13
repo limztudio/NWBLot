@@ -1,0 +1,93 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include <loader/project_entry.h>
+
+#include <impl/ecs_render/reflection/settings.h>
+#include <impl/ecs_render/reflection/statistics.h>
+
+#include <core/perf/timing.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Impl{
+class RendererSystem;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Default-off fixture controller; it observes existing completed history/timing and owns no renderer resources.
+class ReflectionSpatialOwnerProbe final{
+public:
+    ReflectionSpatialOwnerProbe(ProjectRuntimeContext& context, Impl::RendererSystem& renderer);
+
+
+public:
+    [[nodiscard]] bool configure(AStringView selection, Impl::ReflectionSettings& settings);
+    [[nodiscard]] bool update(
+        const Impl::ReflectionStatistics& statistics,
+        const Core::Perf::TimingView& timing,
+        Impl::ReflectionSettings& settings);
+    [[nodiscard]] bool shouldCapture(u64 graphicsFrame)const{ return m_finalReset && graphicsFrame == m_finalSource; }
+    [[nodiscard]] bool canFinish(const Impl::ReflectionStatistics& statistics, u64 capturedSource)const;
+
+
+private:
+    [[nodiscard]] bool observeTiming(const Core::Perf::TimingView& timing);
+    [[nodiscard]] bool beginPhase(Impl::ReflectionSettings& settings);
+
+
+private:
+    ProjectRuntimeContext& m_context;
+    Impl::RendererSystem& m_renderer;
+    Core::Perf::TimingStats m_phaseWork;
+    Core::Perf::TimingStats m_captureWork;
+    u64 m_phaseSource = Limit<u64>::s_Max;
+    u64 m_finalSource = Limit<u64>::s_Max;
+    u64 m_lastPublish = 0u;
+    u32 m_radii[4] = { 1u, 3u, 2u, 1u };
+    u32 m_phase = 0u;
+    u32 m_lastPhase = 0u;
+    bool m_started = false;
+    bool m_finalReset = false;
+    bool m_hasPublication = false;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -23,6 +23,7 @@
 #include "reflection_feedback_scene.h"
 #include "reflection_optical_scene.h"
 #include "reflection_roughness_scene.h"
+#include "reflection_spatial_owner_probe.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
@@ -148,6 +149,22 @@ public:
         m_glassRoughnessCase = caseName == "rough_glass";
         if(!configureRenderer())
             return false;
+        SmokeEnvironmentString spatialOwnerSelection(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_SPATIAL_OWNER", spatialOwnerSelection)){
+            if(caseName != "rough" || m_authoredRoughness != 0.4f){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
+                return false;
+            }
+            m_spatialOwnerProbe = MakeUnique<ReflectionSpatialOwnerProbe>(m_context, m_renderer);
+            if(
+                !m_spatialOwnerProbe
+                || !m_spatialOwnerProbe->configure(
+                    AStringView(spatialOwnerSelection.data(), spatialOwnerSelection.size()), m_reflectionSettings
+                )
+                || !m_renderer.setReflectionSettings(m_reflectionSettings)
+            )
+                return false;
+        }
         const bool screenCase = caseName == "onscreen" || caseName == "onscreen_moved" || caseName == "boundary" || caseName == "floor";
         if(caseName != "offscreen" && caseName != "moved" && caseName != "opaque_glass" && !screenCase && !m_extendedCase){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown case '{}'"), StringConvert(caseName));
@@ -196,7 +213,11 @@ public:
             createMirrorScene(caseName == "moved");
         if(!configureFramebufferCapture())
             return false;
-        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING")){
+        if(m_spatialOwnerProbe && !m_framebufferCapture){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
+            return false;
+        }
+        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe){
             m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
             if(!m_timingRenderPass.prepareQueries(extent.width, extent.height))
                 return false;
@@ -216,6 +237,11 @@ public:
     virtual bool onUpdate(const f32 delta)override{
         if(m_framebufferCapture)
             m_framebufferCapture->update();
+        if(
+            m_spatialOwnerProbe
+            && !m_spatialOwnerProbe->update(m_latestStatistics, m_context.gpuTimingView(), m_reflectionSettings)
+        )
+            return false;
         updateRoughnessScene();
         updateFeedbackScene();
         m_fpsProbe.recordFrame(delta);
@@ -295,6 +321,8 @@ private:
     }
 
     bool shouldCapture(const u64 graphicsFrame)const{
+        if(m_spatialOwnerProbe)
+            return m_spatialOwnerProbe->shouldCapture(graphicsFrame);
         if(m_feedbackScene && m_feedbackScene->mutationCase())
             return m_mutationApplied && graphicsFrame == m_mutationGraphicsFrame;
         if(m_feedbackCapture)
@@ -467,6 +495,7 @@ private:
         if(
             (m_extendedCase || m_feedbackCapture) && m_framebufferCapture && m_framebufferCapture->captureReady()
             && statistics.graphicsFrameIndex >= m_framebufferCapture->capturedGraphicsFrameIndex()
+            && (!m_spatialOwnerProbe || m_spatialOwnerProbe->canFinish(statistics, m_framebufferCapture->capturedGraphicsFrameIndex()))
         )
             m_framebufferCapture->finish();
     }
@@ -517,6 +546,7 @@ private:
             m_framebufferCapture->stop();
             m_framebufferCapture.reset();
         }
+        m_spatialOwnerProbe.reset();
     }
 
     NWB::Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material,
@@ -625,6 +655,7 @@ private:
     NWB::Impl::ReflectionStatistics m_latestStatistics;
     UniquePtr<ReflectionRoughnessScene> m_roughnessScene;
     UniquePtr<ReflectionFeedbackScene> m_feedbackScene;
+    UniquePtr<ReflectionSpatialOwnerProbe> m_spatialOwnerProbe;
     u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
     u32 m_targetSamples = 16u;
     u32 m_postResetSamples = 1u;

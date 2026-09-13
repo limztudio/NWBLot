@@ -192,6 +192,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_reflection_smoke)
         target_sources(nwb_reflection_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_feedback_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_roughness_scene.cpp"

@@ -7,6 +7,7 @@
 
 #include "compiler.h"
 #include "compiler_resource_history.h"
+#include "compiler_task_use_index.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -341,6 +342,7 @@ struct GpuTaskQueueScoringData{
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
+    const TaskResourceUseIndex& useHistory,
     usize useIndex,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,

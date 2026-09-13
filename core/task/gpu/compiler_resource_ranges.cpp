@@ -266,26 +266,44 @@ static void AppendResourceRangeRemainder(
 [[nodiscard]] bool CollectResourceFirstUseRangesWithinTask(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphTaskView& task,
+    const TaskResourceUseIndex& useHistory,
     const usize useIndex,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     Alloc::ScratchArena& scratchArena,
-    Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges
-){
+    Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges){
     outRanges.clear();
+    if(
+        !useHistory.validFor(task)
+        || useIndex >= task.resourceUseCount
+        || !useHistory.validResource(resource.id)
+        || task.resourceUses[useIndex].resource != resource.id
+    )
+        return false;
 
     ResourceRangeBounds requestedBounds;
     if(!ResourceRangeBoundsFrom(resource.type, range, requestedBounds))
         return false;
 
+    const usize firstUse = useHistory.first(resource.id);
+    if(firstUse >= useIndex){
+        GpuTaskResourceRange firstUseRange;
+        if(!ResourceRangeBoundsTo(resource.type, requestedBounds, firstUseRange))
+            return false;
+        outRanges.push_back(firstUseRange);
+        return true;
+    }
+
     Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     uncovered.push_back(requestedBounds);
 
-    for(usize previousUseIndex = 0u; previousUseIndex < useIndex && !uncovered.empty(); ++previousUseIndex){
+    for(
+        usize previousUseIndex = firstUse;
+        previousUseIndex < useIndex && !uncovered.empty();
+        previousUseIndex = useHistory.next(previousUseIndex)
+    ){
         const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
-        if(previousUse.resource != resource.id)
-            continue;
 
         GpuTaskResourceRange previousRange;
         if(!ResolveResourceRangeForPlanning(graph, resource, previousUse.range, previousRange))

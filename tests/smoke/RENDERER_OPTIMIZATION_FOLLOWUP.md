@@ -5,7 +5,7 @@ This pass starts at `296e8f485` after the completed ten-step evaluation in `REND
 | Step | Candidate | Owner | Status |
 | --- | --- | --- | --- |
 | 11 | Index tracked resource-state history by resource | `core/task/gpu` | Retained for memory/scanning improvements; isolated timing gate did not pass |
-| 12 | Index previous uses of each resource within a task | `core/task/gpu` | Pending; separate from Step 11 |
+| 12 | Index previous uses of each resource within a task | `core/task/gpu` | Retained for planning/allocation improvements; isolated timing gate inconclusive |
 | 13 | Reuse identical zero-extent shadow visibility samples | Shadow shaders | Proposal preparation |
 | 14 | Cull non-opaque candidates in opaque hardware-shadow queries | Shadow shaders | Pending |
 | 15 | Cache valid normalized normals for dense reflection filtering | Reflection filtering | Pending |
@@ -79,3 +79,50 @@ A test-owned, opt-in tail render pass copies the renderer's existing immutable c
 The offline validator preserves raw records, generation identities, durations and counts, and uses the existing gather validator to join exactly the 256 measured successful source frames. Invalid early snapshots remain explicit unmeasured evidence; missing/invalid measured rows, duplicate plans, order violations or overflow fail qualification. Structural counts are not a compiled-plan fingerprint, and nested phase times cannot be summed.
 
 Opt and Dbg benchmark builds passed without compiler warnings. All 22 new diagnostic tests, 27 existing gather-analysis tests and 28 existing renderer A/B-analysis tests passed; the three registered CTest suites also passed. One actual optimized shared-material diagnostic completed all 384 successful frames and joined all 256 measured frames, source IDs 96 through 351, with no invalid snapshots. A separate default-off 384-frame shared-material functional launch passed, with no diagnostic environment key or output file. These are qualification launches, not an A/B performance comparison. Exact source/build/runtime identities, commands, logs, JSONL and the joined report are retained under `__artifacts/reflection_optimization_followup/compiler_statistics_diagnostic/`.
+
+
+## Step 12: indexed uses within each task
+
+A compilation-local `TaskResourceUseIndex` builds an ascending declaration-order chain for each resource in the current task. Rebuild clears only previously touched resources. Capacity is reserved once from the graph resource count and the largest actual expanded task-use array; no graph-wide table is cleared per task and no state survives compilation. Unknown-state uses remain indexed because the original prefix scan included their coverage. Resource IDs/generations and immutable task identity, array and count are validated.
+
+The first-use collector now visits only earlier uses of the same resource. Bounds normalization, range resolution/subtraction order, early coverage termination, whole-resource acceleration-structure behavior and Step11's separate state history remain intact. A resource's first occurrence still passes both bounds conversions but avoids temporary interval vectors. Two test helper sites fully value-initialize task views before assigning their inputs, addressing omitted-member warning risks without changing assertions.
+
+### Correctness and exact-arm evidence
+
+Opt and Dbg builds passed without compiler warnings. Both configurations passed all 354 GPU-task and 381 ECS graphics tests. Native descriptor/graph tests passed 381 cases with 39 feature skips in Opt, and 382 with 38 in Dbg. Ten new cases cover ascending/Unknown-state chains, reset/rebuild/invalid views, normalized first uses, partial/disjoint/symbolic-tail range ordering, original early-stop behavior, expanded resource-set initial barriers and repeated acceleration-structure state/export behavior.
+
+The frozen baseline is `338e504c0`, with the optional compiler diagnostic present in both arms and off in ordinary acquisition. The exact eight-path candidate uses `effective_manifest_v1.json` SHA256 `aa737f3dc8d6205fe0478563da84700a73b36117f32ace1a2a4c489d1aa1e11a`: original proposal plus the two test-only initialization cleanups. Source comparison verifies all eight deltas, three genuine baseline absences, unchanged dependencies, identical generated inputs/authored resource volumes and only the benchmark executable changing among its binary dependencies.
+
+Both exact frozen arms passed all six ordinary gather workloads, each completing 384 successful frames with full required CPU/GPU coverage. Separate memory-mode unique/shared launches also passed. The qualification verifier replays original raw-sample and runtime-log validation, checks actual route/extent/vsync/count signatures, and rejects a diagnostic-enabled ordinary launch. Freshly relinked Opt reflection (22 images), duplicate refraction (33 images) and combined caustics/refraction/reflection (four images including feature-disabled controls) capture suites all passed, 59 captures in 220.39 seconds. Executable/dependency, authored-runtime and frozen-source identities match before/after. These normal captures did not enable GPU debug validation; the native suites provide their separately recorded validation scope.
+
+### Timing result and its limit
+
+Each workload retained all eight balanced blocks and 16 launches, original 96/256/32 successful-frame windows, thresholds, whole-frame checks and GPU controls. No acquisition failed or trial was excluded; diagnostic observation, builds, native tests and captures did not overlap these acquisitions.
+
+| Workload | Baseline CPU render ms/frame | Candidate | Paired change, 95% interval (ms) | Original overall status |
+| --- | ---: | ---: | --- | --- |
+| Unique materials | 97.919814 | 82.386397 | -15.533417 [-16.640214, -14.566326] | `gpu_control_uncertain` |
+| Shared material | 19.299177 | 19.336646 | +0.037469 [-0.129235, +0.209908] | `cpu_change_unresolved` |
+
+The observed unique-material CPU render reduction is 15.86%. Its whole CPU frame decreases from 98.727708 to 83.184360 ms, with interval [-16.661914, -14.573123] ms. However, the deferred-composite GPU control has interval [-0.018858, -0.000947] ms, extending beyond its +/-0.015 ms equivalence tolerance. It is uncertain, not classified as material drift. All other unique controls, including GPU frame (26.973124 -> 26.926183 ms), satisfy equivalence. The original overall gate therefore remains inconclusive; this is not a validated isolated 15.86% renderer speedup.
+
+Shared-material controls all satisfy equivalence. Whole CPU frame is 20.632676 -> 20.612080 ms, interval [-0.191420, +0.167660] ms, within the original non-regression bound. No shared-material speed improvement is resolved. Balanced power, AC and 78% battery were reported at both endpoints; no clock/thermal attribution is inferred.
+
+### Separate diagnostic and allocation evidence
+
+One diagnostic-enabled launch per arm/workload joined all 256 measured successful frames with zero invalid snapshots. These are descriptive phase observations, not paired statistical inference. The unique scene expands to 97,736 declared resource uses per frame. Existing synchronous resource-state-planning wall time is 21.093380 -> 4.721684 ms; existing core compile total is 26.860288 -> 10.451135 ms. Shared planning is 0.200100 -> 0.163856 ms and compile total 0.815123 -> 0.749672 ms. The timing region contains no native GPU calls/waits but remains wall time, including possible scheduling/memory effects. Nested phase buckets must not be summed. Aggregate compile counts match all 256 frames in each workload; this is not a native-command or plan fingerprint.
+
+Separate memory launches show the tradeoff:
+
+| Workload | Task-graph arena lifetime peak, baseline -> candidate bytes | Mean recorded allocations/frame, baseline -> candidate |
+| --- | --- | --- |
+| Unique materials | 29,788,512 -> 29,810,752 (+22,240) | 293,991.054688 -> 196,358.039063 |
+| Shared material | 1,006,384 -> 1,007,944 (+1,560) | 9,494.054688 -> 6,601.000000 |
+
+All 256 task-graph arena samples are available; retained used/reserved bytes at sampled frame boundaries remain zero. Index storage modestly raises the historical individual-arena peak while the first-occurrence path avoids repeated temporary allocations. These are not concurrent whole-process peaks or per-frame peak distributions. Other arena availability and observations remain in the raw reports; unavailable owners are not zero.
+
+### Retention decision
+
+Retain the bounded task-use index for its substantial reduction in recorded temporary allocations and synchronous planning work, supported by the observed unique CPU-render reduction and shared whole-frame non-regression. This is an engineering retention with a small explicit scratch-memory cost, not a relabeling of the uncertain original timing gate. The final 59-capture visual regression passed before committing the step.
+
+Exact freezes, manifest/proposal/test-cleanup versions, build/full test/JUnit logs, all six functional results per arm, source/log replay qualification, all 32 timing trials and both original reports/concise summaries, four memory observations, four compiler diagnostic joins, `descriptive_summary_v1.json`, and power evidence are retained under `__artifacts/reflection_optimization_followup/step12/`.

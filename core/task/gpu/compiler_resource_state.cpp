@@ -148,6 +148,14 @@ namespace GpuTaskGraphCompilerDetail{
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges = plan.taskFirstUseRanges;
 
+    usize taskUseCapacity = 0u;
+    for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
+        const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
+        if(useCount > taskUseCapacity)
+            taskUseCapacity = useCount;
+    }
+    TaskResourceUseIndex taskUseHistory(graph.resourceCount(), graph.generation(), taskUseCapacity, scratchArena);
+
     // The construction pass appended one compiled task for each entry in this stable order, and no later phase
     // mutates that vector. Preserve the prior fail-closed contract while avoiding a re-scan for every task.
     for(usize taskIndex = 0u; taskIndex < topologicalOrder.size(); ++taskIndex){
@@ -161,7 +169,7 @@ namespace GpuTaskGraphCompilerDetail{
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const GpuPhysicalQueueInfo* const taskQueue = FindCompiledQueueInfo(compiledPlan, compiledTask->queue);
-        if(!taskQueue)
+        if(!taskQueue || !taskUseHistory.build(task))
             return false;
         compiledTask->prologueStateSeedOffset = static_cast<u32>(compiledPlan.prologueStateSeeds.size());
         compiledTask->prologueBarrierOffset = static_cast<u32>(compiledPlan.prologueBarriers.size());
@@ -191,17 +199,9 @@ namespace GpuTaskGraphCompilerDetail{
             // A task owns its internal resource ordering. Previously declared portions remain local CommandList
             // work, while newly introduced texture subresources or buffer bytes still receive graph seeds and
             // transitions. Acceleration structures retain their whole-resource path.
-            bool alreadyPlannedByTask = false;
-            if(resource.type == GpuGraphResourceType::AccelStruct){
-                for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
-                    const GpuTaskResourceUse& previousUse = task.resourceUses[previousUseIndex];
-                    if(previousUse.resource != use.resource)
-                        continue;
-
-                    alreadyPlannedByTask = true;
-                    break;
-                }
-            }
+            const bool alreadyPlannedByTask = resource.type == GpuGraphResourceType::AccelStruct
+                && taskUseHistory.first(use.resource) < useIndex
+            ;
             if(alreadyPlannedByTask){
                 // The task thunk owns this local transition, but the declared final state/access must still become
                 // the source for later tasks, packet seeds, ownership handoffs, and terminal exports. Do not emit
@@ -222,6 +222,7 @@ namespace GpuTaskGraphCompilerDetail{
                 if(!CollectResourceFirstUseRangesWithinTask(
                     graph,
                     task,
+                    taskUseHistory,
                     useIndex,
                     resource,
                     plannedRange,

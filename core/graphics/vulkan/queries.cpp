@@ -4,6 +4,8 @@
 
 #include "backend.h"
 
+#include "timer_query_detail.h"
+
 #include <core/common/log.h>
 
 
@@ -11,61 +13,6 @@
 
 
 NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_vulkan_queries{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr f64 s_TimestampNanosecondsToSeconds = 1e-9;
-
-inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQueryPool queryPool, u64 (&timestamps)[s_TimerQueryTimestampCount]){
-    return context.deviceDispatch.vkGetQueryPoolResults(
-        context.device,
-        queryPool,
-        s_TimerQueryBeginIndex,
-        s_TimerQueryTimestampCount,
-        sizeof(timestamps),
-        timestamps,
-        sizeof(u64),
-        VK_QUERY_RESULT_64_BIT
-    );
-}
-
-[[nodiscard]] inline bool MatchesSubmissionToken(
-    const QueueSubmissionToken& lhs,
-    const QueueSubmissionToken& rhs
-)noexcept{
-    return
-        lhs.queue == rhs.queue
-        && lhs.value == rhs.value
-        && lhs.physicalQueueIndex == rhs.physicalQueueIndex
-        && lhs.deviceGeneration == rhs.deviceGeneration
-    ;
-}
-
-[[nodiscard]] inline bool IsSubmissionComplete(Device& device, const QueueSubmissionToken& token){
-    if(!token.valid())
-        return true;
-    if(!token.hasPhysicalQueueIdentity())
-        return false;
-
-    return device.queueGetCompletedInstance(GpuPhysicalQueueId{
-        token.physicalQueueIndex,
-        token.deviceGeneration,
-    }) >= token.value;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +77,7 @@ bool Device::pollTimerQuery(TimerQuery& query){
             || query.m_cycleGeneration != 0u
             || query.m_recordingActive
             || query.m_completedCycleGeneration != completedGeneration
-            || !__hidden_vulkan_queries::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
+            || !VulkanTimerQueryDetail::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
             || !queueInfo
             || query.m_timestampValidBits == 0u
             || queueInfo->timestampValidBits != query.m_timestampValidBits
@@ -138,7 +85,7 @@ bool Device::pollTimerQuery(TimerQuery& query){
             return false;
 
         u64 timestamps[s_TimerQueryTimestampCount] = {};
-        res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
+        res = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
         if(res == VK_ERROR_DEVICE_LOST)
             markDeviceLost();
     }
@@ -186,19 +133,19 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
             || query.m_cycleGeneration != 0u
             || query.m_recordingActive
             || query.m_completedCycleGeneration != completedGeneration
-            || !__hidden_vulkan_queries::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
+            || !VulkanTimerQueryDetail::MatchesSubmissionToken(query.m_completedCycleSubmission, completedSubmission)
             || !queueInfo
             || query.m_timestampValidBits == 0u
             || queueInfo->timestampValidBits != query.m_timestampValidBits
         )
             return false;
 
-        res = __hidden_vulkan_queries::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
+        res = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
         if(res == VK_ERROR_DEVICE_LOST)
             markDeviceLost();
         if(res == VK_SUCCESS){
             const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
-                * __hidden_vulkan_queries::s_TimestampNanosecondsToSeconds
+                * VulkanTimerQueryDetail::s_TimestampNanosecondsToSeconds
             ;
             outResult.beginTicks = timestamps[s_TimerQueryBeginIndex];
             outResult.endTicks = timestamps[s_TimerQueryEndIndex];
@@ -251,7 +198,7 @@ bool Device::resetTimerQuery(TimerQuery& query){
             : query.m_resetAuthorizationSubmission
         ;
     }
-    if(!__hidden_vulkan_queries::IsSubmissionComplete(*this, priorSubmission))
+    if(!VulkanTimerQueryDetail::IsSubmissionComplete(*this, priorSubmission))
         return false;
 
     ScopedLock queryLock(query.m_mutex);
@@ -265,7 +212,7 @@ bool Device::resetTimerQuery(TimerQuery& query){
         || query.m_recordingActive
         || query.m_nextResetAuthorizationGeneration == Limit<u64>::s_Max
         || requiresRecreation()
-        || !__hidden_vulkan_queries::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+        || !VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
     )
         return false;
     m_context.deviceDispatch.vkResetQueryPool(m_context.device, query.m_queryPool, s_TimerQueryBeginIndex, s_TimerQueryTimestampCount);
@@ -326,7 +273,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
         ;
     }
     const bool priorSubmissionObservedComplete =
-        __hidden_vulkan_queries::IsSubmissionComplete(m_device, priorSubmission)
+        VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission)
     ;
 
     bool resetRecorded = false;
@@ -339,7 +286,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
         if(
             !query.m_recordingActive
             && query.m_cycleGeneration == 0u
-            && __hidden_vulkan_queries::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+            && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
             && (
                 query.m_resetRecordingOwner.commandBuffer
                 || query.m_nextResetAuthorizationGeneration != Limit<u64>::s_Max
@@ -516,7 +463,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
         }
     }
     const bool priorSubmissionObservedComplete =
-        __hidden_vulkan_queries::IsSubmissionComplete(m_device, priorSubmission)
+        VulkanTimerQueryDetail::IsSubmissionComplete(m_device, priorSubmission)
     ;
 
     bool beginRecorded = false;
@@ -540,7 +487,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
             && query.m_cycleGeneration == 0u
             && (!query.m_resetRecordingOwner.commandBuffer || resetOwnedByCurrentCommandBuffer)
             && (recordsInlineReset || resetOwnedByCurrentCommandBuffer || query.m_resetAuthorizationAvailable)
-            && __hidden_vulkan_queries::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
+            && VulkanTimerQueryDetail::MatchesSubmissionToken(currentPriorSubmission, priorSubmission)
             && query.m_nextRecordingGeneration != Limit<u64>::s_Max
         ){
             TrackedCommandBuffer::TimerQueryRecordingClaim& claim =

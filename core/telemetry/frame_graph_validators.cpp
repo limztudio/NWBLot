@@ -45,26 +45,6 @@ namespace __hidden_frame_graph_validators{
     ;
 }
 
-[[nodiscard]] static bool FrameGraphCompileBarrierCount(
-    const FrameGraphCompileRuntimeStatistics& statistics,
-    u64& outBarrierCount
-)noexcept{
-    outBarrierCount = statistics.transitionBarrierCount;
-    const u64 remainingBarrierCounts[] = {
-        statistics.uavBarrierCount,
-        statistics.ownershipReleaseBarrierCount,
-        statistics.ownershipAcquireBarrierCount,
-        statistics.stateExportBarrierCount,
-    };
-    for(const u64 barrierCount : remainingBarrierCounts){
-        if(barrierCount > Limit<u64>::s_Max - outBarrierCount)
-            return false;
-        outBarrierCount += barrierCount;
-    }
-    return true;
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -501,7 +481,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
         return false;
 
     u64 ownerBarrierCount = 0u;
-    if(!__hidden_frame_graph_validators::FrameGraphCompileBarrierCount(ownerCompile, ownerBarrierCount))
+    if(!FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile, ownerBarrierCount))
         return false;
     if(
         compile.prologueBarrierCount > ownerBarrierCount

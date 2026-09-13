@@ -27,10 +27,13 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
 
     AString uiHeaderSource;
     AString uiSource;
+    AString uiPresentationHelpersSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.h", uiHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system.cpp", uiSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "ui_presentation_helpers.h", uiPresentationHelpersSource));
     const AStringView uiHeader(uiHeaderSource.data(), uiHeaderSource.size());
     const AStringView ui(uiSource.data(), uiSource.size());
+    const AStringView uiPresentationHelpers(uiPresentationHelpersSource.data(), uiPresentationHelpersSource.size());
     AString uiLegacySource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_ui" / "system_legacy_presentation.cpp", uiLegacySource));
     const AStringView uiLegacy(uiLegacySource.data(), uiLegacySource.size());
@@ -49,13 +52,17 @@ TEST(EcsGraphics, UiPresentationGraphsBindExactAcquiredTexture){
     ));
     EXPECT_TRUE(ContainsText(uiHeader, "Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;"));
     EXPECT_TRUE(ContainsText(
-        ui,
+        uiPresentationHelpers,
         "framebufferDesc.colorAttachments[0].texture == frame.backBuffer.texture.get()"
     ));
     EXPECT_TRUE(ContainsText(
-        ui,
+        uiPresentationHelpers,
         "graph.textureForResource(backbuffer) == frame.backBuffer.texture.get()"
     ));
+    EXPECT_TRUE(ContainsText(ui, "UiDetail::ValidAcquiredPresentationFrame("));
+    EXPECT_TRUE(ContainsText(ui, "UiDetail::GraphBindsAcquiredPresentationTexture("));
+    EXPECT_TRUE(ContainsText(uiLegacy, "UiDetail::ValidAcquiredPresentationFrame("));
+    EXPECT_TRUE(ContainsText(uiLegacy, "UiDetail::GraphBindsAcquiredPresentationTexture("));
     EXPECT_TRUE(ContainsText(ui, "ImportPresentationBackBuffer("));
     EXPECT_TRUE(ContainsText(ui, ".setType(Core::GpuGraphResourceType::Texture)"));
     EXPECT_TRUE(ContainsText(ui, ".setInitialState(frame.backBuffer.nativeInitialState)"));

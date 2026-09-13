@@ -79,15 +79,6 @@ static void SetCsgIntervalCombineStorageStates(
     }
 }
 
-static void SetCsgIntervalSampleStorageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
-    // Sampled via Load through StorageImage aliases.
-    commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-    commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
-}
-
-
 [[nodiscard]] static CsgIntervalSampleStateGpuData BuildCsgIntervalSampleState(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
@@ -321,7 +312,7 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_CsgCapFill, m_graphics.getDevice(), commandList);
 
     if(!intervalSampleImageStatesGraphOwned)
-        CsgIntervalDetail::SetCsgIntervalSampleStorageStates(commandList, targets);
+        CsgIntervalDetail::SetCsgIntervalSampleImageStates(commandList, targets);
     // Compatibility callers keep this bridge.
     if(!materialFrameStatesGraphOwned){
         commandList.setBufferState(frameBindings.materialTypedBuffer.get(), Core::ResourceStates::ShaderResource);

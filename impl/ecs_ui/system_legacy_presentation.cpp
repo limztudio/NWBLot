@@ -5,6 +5,7 @@
 #include "system.h"
 #include "system_task_tasks.h"
 #include "ui_internal.h"
+#include "ui_presentation_helpers.h"
 
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
@@ -13,6 +14,7 @@
 #include <core/task/gpu/task_graph.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -24,89 +26,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_ui{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr Name s_TaskGraphDeclarationArena("impl/ecs_ui/task_graph");
-
-static bool HasPendingTextureUploads(const ImDrawData& drawData){
-#if defined(IMGUI_HAS_TEXTURES)
-    if(!drawData.Textures)
-        return false;
-
-    for(i32 i = 0; i < drawData.Textures->Size; ++i){
-        const ImTextureData* const textureData = drawData.Textures->Data[i];
-        if(
-            textureData
-            && (
-                textureData->Status == ImTextureStatus_WantCreate
-                || textureData->Status == ImTextureStatus_WantUpdates
-            )
-        )
-            return true;
-    }
-#else
-    static_cast<void>(drawData);
-#endif
-
-    return false;
-}
-[[nodiscard]] static Core::GpuTaskResourceUse ReadTextureUse(const Core::GpuGraphResourceId resource){
-    return Core::GpuTaskResourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
-}
-
-
-static void AppendTextureReadUse(
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-    const Core::GpuGraphResourceId texture){
-    for(const Core::GpuTaskResourceUse& use : resourceUses){
-        if(use.resource == texture)
-            return;
-    }
-    resourceUses.push_back(ReadTextureUse(texture));
-}
-
-[[nodiscard]] static bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
-    if(!frame.valid())
-        return false;
-
-    const Core::FramebufferDesc& framebufferDesc = frame.framebuffer->getDescription();
-    return framebufferDesc.colorAttachments.size() == 1u
-        && framebufferDesc.colorAttachments[0].texture == frame.backBuffer.texture.get()
-        && !framebufferDesc.depthAttachment.valid()
-        && !framebufferDesc.shadingRateAttachment.valid()
-    ;
-}
-
-[[nodiscard]] static bool GraphBindsAcquiredPresentationTexture(
-    const Core::GpuTaskGraph::DeclarationReadView& graph,
-    const Core::AcquiredPresentationFrame& frame,
-    const Core::GpuGraphResourceId backbuffer
-){
-    return backbuffer.valid() && graph.textureForResource(backbuffer) == frame.backBuffer.texture.get();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool UiSystem::submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
         || !m_frameFinished
         || m_taskGraphLegacyPresentationClaimed
     )
@@ -181,7 +103,7 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
     if(!drawData)
         return {};
 
-    Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
+    Core::Alloc::ScratchArena scratchArena(UiDetail::s_TaskGraphDeclarationArena);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> uploadedTextures(scratchArena);
     uploadTasks.reserve(2u);
@@ -203,7 +125,7 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
     resourceUses.reserve(uploadedTextures.size());
     for(const Core::GpuGraphResourceId texture : uploadedTextures)
-        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
+        UiDetail::AppendTextureReadUse(resourceUses, texture);
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -245,8 +167,8 @@ bool UiSystem::recordTaskGraphDrawSnapshot(
 ){
     const TaskGraphDrawSnapshot& snapshot = m_taskGraphDrawSnapshot;
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
-        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
+        || !UiDetail::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
         || !snapshot.valid
         || !snapshot.vertexBuffer
         || !snapshot.indexBuffer
@@ -366,8 +288,8 @@ bool UiSystem::recordStandaloneLegacyTaskGraphPresentation(
     const Core::GpuTaskRecordContext& context
 ){
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
-        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
+        || !UiDetail::GraphBindsAcquiredPresentationTexture(context.declarations, frame, backbuffer)
         || !drawData
         || !m_taskGraphLegacyPresentationClaimed
         || !m_frameFinished
@@ -432,7 +354,7 @@ void UiSystem::discardStandaloneLegacyTaskGraphPresentation()noexcept{
 
 bool UiSystem::submitPreparedLegacyTextureUploads(ImDrawData& drawData){
     // Textures already created; texture-only graph runs only without raster work.
-    if(!__hidden_ui::HasPendingTextureUploads(drawData))
+    if(!UiDetail::HasPendingTextureUploads(drawData))
         return true;
 
     const Core::GpuPhysicalQueueId graphicsQueue =

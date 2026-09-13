@@ -4,6 +4,8 @@
 
 #include "csg_system.h"
 
+#include <impl/ecs_render/csg/csg_interval_private.h>
+
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
@@ -333,11 +335,16 @@ void RendererCsgSystem::setCsgReceiverSurfaceImageStates(Core::CommandList& comm
     commandList.setTextureState(targets.csgReceiverEventCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
 }
 
-void RendererCsgSystem::setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+void CsgIntervalDetail::SetCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
     commandList.setTextureState(targets.csgRemovedIntervalDepth.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalCapNormal.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalData.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
     commandList.setTextureState(targets.csgRemovedIntervalCount.get(), Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess);
+}
+
+
+void RendererCsgSystem::setCsgIntervalSampleImageStates(Core::CommandList& commandList, const DeferredFrameTargets& targets){
+    CsgIntervalDetail::SetCsgIntervalSampleImageStates(commandList, targets);
 }
 
 void RendererCsgSystem::setCsgClipBufferStates(

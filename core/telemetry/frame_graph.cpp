@@ -446,33 +446,13 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     return true;
 }
 
-[[nodiscard]] static bool FrameGraphCompileBarrierCount(
-    const FrameGraphCompileRuntimeStatistics& statistics,
-    u64& outBarrierCount
-)noexcept{
-    outBarrierCount = statistics.transitionBarrierCount;
-    const u64 remainingBarrierCounts[] = {
-        statistics.uavBarrierCount,
-        statistics.ownershipReleaseBarrierCount,
-        statistics.ownershipAcquireBarrierCount,
-        statistics.stateExportBarrierCount,
-    };
-    for(const u64 barrierCount : remainingBarrierCounts){
-        if(barrierCount > Limit<u64>::s_Max - outBarrierCount)
-            return false;
-        outBarrierCount += barrierCount;
-    }
-    return true;
-}
-
-
 [[nodiscard]] static bool AccumulatePhysicalQueueRuntimeStatistics(
     const FrameGraphPhysicalQueueRuntimeStatistics& statistics,
     const FrameGraphRuntimeStatistics& ownerStatistics,
     FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total
 )noexcept{
     u64 ownerBarrierCount = 0u;
-    if(!FrameGraphCompileBarrierCount(ownerStatistics.compile, ownerBarrierCount))
+    if(!FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile, ownerBarrierCount))
         return false;
 
     const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;

@@ -5,6 +5,7 @@
 #include "system.h"
 #include "system_task_tasks.h"
 #include "ui_internal.h"
+#include "ui_presentation_helpers.h"
 
 #include <core/ecs/world.h>
 #include <core/graphics/backend_selection.h>
@@ -13,6 +14,7 @@
 #include <core/task/gpu/task_graph.h>
 #include <impl/assets/graphics/imgui/binding_slots.h>
 #include <core/common/log.h>
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +33,6 @@ namespace __hidden_ui{
 
 
 static constexpr usize s_UploadAlignmentBytes = sizeof(u32);
-static constexpr Name s_TaskGraphDeclarationArena("impl/ecs_ui/task_graph");
 
 static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
 
@@ -89,28 +90,6 @@ static bool HasTextureRequests(const ImDrawData& drawData){
     return false;
 }
 
-static bool HasPendingTextureUploads(const ImDrawData& drawData){
-#if defined(IMGUI_HAS_TEXTURES)
-    if(!drawData.Textures)
-        return false;
-
-    for(i32 i = 0; i < drawData.Textures->Size; ++i){
-        const ImTextureData* const textureData = drawData.Textures->Data[i];
-        if(
-            textureData
-            && (
-                textureData->Status == ImTextureStatus_WantCreate
-                || textureData->Status == ImTextureStatus_WantUpdates
-            )
-        )
-            return true;
-    }
-#else
-    static_cast<void>(drawData);
-#endif
-
-    return false;
-}
 
 [[nodiscard]] static bool AlignUploadBytes(const usize byteCount, usize& outAlignedBytes){
     outAlignedBytes = 0u;
@@ -162,36 +141,6 @@ static bool HasPendingTextureUploads(const ImDrawData& drawData){
     };
 }
 
-[[nodiscard]] static Core::GpuTaskResourceUse ReadTextureUse(const Core::GpuGraphResourceId resource){
-    return Core::GpuTaskResourceUse{
-        .resource = resource,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
-}
-
-static void AppendTextureReadUse(
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
-    const Core::GpuGraphResourceId texture){
-    for(const Core::GpuTaskResourceUse& use : resourceUses){
-        if(use.resource == texture)
-            return;
-    }
-    resourceUses.push_back(ReadTextureUse(texture));
-}
-
-[[nodiscard]] static bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
-    if(!frame.valid())
-        return false;
-
-    const Core::FramebufferDesc& framebufferDesc = frame.framebuffer->getDescription();
-    return framebufferDesc.colorAttachments.size() == 1u
-        && framebufferDesc.colorAttachments[0].texture == frame.backBuffer.texture.get()
-        && !framebufferDesc.depthAttachment.valid()
-        && !framebufferDesc.shadingRateAttachment.valid()
-    ;
-}
 
 [[nodiscard]] static bool SameAcquiredPresentationFrame(
     const Core::AcquiredPresentationFrame& lhs,
@@ -212,16 +161,9 @@ static void AppendTextureReadUse(
     const Core::AcquiredPresentationFrame& frame,
     const Core::Framebuffer* const framebuffer
 ){
-    return ValidAcquiredPresentationFrame(frame) && frame.framebuffer.get() == framebuffer;
+    return UiDetail::ValidAcquiredPresentationFrame(frame) && frame.framebuffer.get() == framebuffer;
 }
 
-[[nodiscard]] static bool GraphBindsAcquiredPresentationTexture(
-    const Core::GpuTaskGraph::DeclarationReadView& graph,
-    const Core::AcquiredPresentationFrame& frame,
-    const Core::GpuGraphResourceId backbuffer
-){
-    return backbuffer.valid() && graph.textureForResource(backbuffer) == frame.backBuffer.texture.get();
-}
 
 [[nodiscard]] static Core::GpuGraphResourceId ImportPresentationBackBuffer(
     Core::GpuTaskGraph& graph,
@@ -413,7 +355,7 @@ bool UiSystem::prepareResources(Core::Framebuffer* framebuffer){
 }
 
 bool UiSystem::prepareFrameResources(const Core::AcquiredPresentationFrame& frame, const bool graphOwnsUploads){
-    if(!__hidden_ui::ValidAcquiredPresentationFrame(frame))
+    if(!UiDetail::ValidAcquiredPresentationFrame(frame))
         return false;
 
     Core::Framebuffer* const framebuffer = frame.framebuffer.get();
@@ -805,7 +747,7 @@ bool UiSystem::declareTaskGraphDrawUploads(
 }
 
 bool UiSystem::prepareTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
-    if(!__hidden_ui::ValidAcquiredPresentationFrame(frame)){
+    if(!UiDetail::ValidAcquiredPresentationFrame(frame)){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation preparation received an invalid acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
@@ -834,7 +776,7 @@ bool UiSystem::prepareTaskGraphPresentation(const Core::AcquiredPresentationFram
     ;
     // Font/texture updates may precede visible commands; keep them in the shared graph.
     m_taskGraphPresentationHasWork = m_frameFinished && drawData && (
-        hasDrawWork || __hidden_ui::HasPendingTextureUploads(*drawData)
+        hasDrawWork || UiDetail::HasPendingTextureUploads(*drawData)
     );
     m_taskGraphPresentationFrame = frame;
     m_taskGraphPresentationPrepared = true;
@@ -869,7 +811,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     )
         return {};
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
         || !__hidden_ui::SameAcquiredPresentationFrame(frame, m_taskGraphPresentationFrame)
     ){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation declaration no longer matches its prepared acquired frame; requesting recreation"));
@@ -881,7 +823,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     if(!drawData)
         return {};
 
-    Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
+    Core::Alloc::ScratchArena scratchArena(UiDetail::s_TaskGraphDeclarationArena);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
     uploadTasks.reserve(2u);
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> uploadedTextures(scratchArena);
@@ -918,7 +860,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
         resourceUses.reserve(uploadedTextures.size());
         for(const Core::GpuGraphResourceId texture : uploadedTextures)
-            __hidden_ui::AppendTextureReadUse(resourceUses, texture);
+            UiDetail::AppendTextureReadUse(resourceUses, texture);
 
         Core::GpuTaskSchedulingHint scheduling;
         scheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -957,7 +899,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-        if(!declarations.valid() || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)){
+        if(!declarations.valid() || !UiDetail::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("UiSystem: presentation graph does not bind the acquired back-buffer texture; requesting recreation"));
             m_graphics.requestDeviceRecreation();
             return {};
@@ -1026,7 +968,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
     // Requested textures may skip this frame's draws; still declare them for next-frame ownership.
     for(const Core::GpuGraphResourceId texture : uploadedTextures)
-        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
+        UiDetail::AppendTextureReadUse(resourceUses, texture);
 
     const auto appendDrawTextureUse = [&](const TaskGraphDrawCommand& drawCommand){
         if(!drawCommand.texture)
@@ -1049,7 +991,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         }
         if(!textureResource.valid())
             return false;
-        __hidden_ui::AppendTextureReadUse(resourceUses, textureResource);
+        UiDetail::AppendTextureReadUse(resourceUses, textureResource);
         return true;
     };
     for(const TaskGraphDrawCommand& drawCommand : m_taskGraphDrawCommands){
@@ -1098,7 +1040,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
 
 bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame){
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
         || !__hidden_ui::SameAcquiredPresentationFrame(frame, m_taskGraphPresentationFrame)
         || !m_frameFinished
         || !m_taskGraphPresentationPrepared
@@ -1136,7 +1078,7 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
             if(
                 !context
                 || !context->ui
-                || !__hidden_ui::ValidAcquiredPresentationFrame(context->frame)
+                || !UiDetail::ValidAcquiredPresentationFrame(context->frame)
             )
                 return Core::GpuTaskId{};
 
@@ -1158,7 +1100,7 @@ bool UiSystem::submitStandaloneTaskGraphPresentation(const Core::AcquiredPresent
                     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
                     if(
                         !declarations.valid()
-                        || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, context->frame, backbuffer)
+                        || !UiDetail::GraphBindsAcquiredPresentationTexture(declarations, context->frame, backbuffer)
                     )
                         return Core::GpuTaskId{};
                 }
@@ -1195,7 +1137,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     const u64 frameGeneration
 ){
     if(
-        !__hidden_ui::ValidAcquiredPresentationFrame(frame)
+        !UiDetail::ValidAcquiredPresentationFrame(frame)
         || !drawData
         || !m_frameFinished
         || m_taskGraphLegacyPresentationClaimed
@@ -1248,7 +1190,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(
             !declarations.valid()
-            || !__hidden_ui::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)
+            || !UiDetail::GraphBindsAcquiredPresentationTexture(declarations, frame, backbuffer)
             || !opaqueCallbackDomain.valid()
             || !vertexBuffer.valid()
             || !indexBuffer.valid()
@@ -1256,7 +1198,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
             return {};
     }
 
-    Core::Alloc::ScratchArena scratchArena(__hidden_ui::s_TaskGraphDeclarationArena);
+    Core::Alloc::ScratchArena scratchArena(UiDetail::s_TaskGraphDeclarationArena);
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> uploadTasks(scratchArena);
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> uploadedTextures(scratchArena);
     uploadTasks.reserve(2u);
@@ -1298,7 +1240,7 @@ Core::GpuTaskId UiSystem::declareStandaloneLegacyTaskGraphPresentation(
     const auto appendTextureUse = [&](const Core::GpuGraphResourceId texture){
         if(!texture.valid())
             return false;
-        __hidden_ui::AppendTextureReadUse(resourceUses, texture);
+        UiDetail::AppendTextureReadUse(resourceUses, texture);
         return true;
     };
     for(const Core::GpuGraphResourceId texture : uploadedTextures){

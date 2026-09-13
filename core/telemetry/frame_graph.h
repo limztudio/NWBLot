@@ -220,6 +220,41 @@ struct FrameGraphCompileRuntimeStatistics{
     f64 totalSeconds = 0.0;
 };
 
+namespace FrameGraphStatisticsDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool FrameGraphCompileBarrierCount(
+    const FrameGraphCompileRuntimeStatistics& statistics,
+    u64& outBarrierCount
+)noexcept{
+    outBarrierCount = statistics.transitionBarrierCount;
+    const u64 remainingBarrierCounts[] = {
+        statistics.uavBarrierCount,
+        statistics.ownershipReleaseBarrierCount,
+        statistics.ownershipAcquireBarrierCount,
+        statistics.stateExportBarrierCount,
+    };
+    for(const u64 barrierCount : remainingBarrierCounts){
+        if(barrierCount > Limit<u64>::s_Max - outBarrierCount)
+            return false;
+        outBarrierCount += barrierCount;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct FrameGraphRecordingRuntimeStatistics{
     u64 packetCount = 0u;
     u64 taskCount = 0u;

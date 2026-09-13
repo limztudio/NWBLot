@@ -1249,6 +1249,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_soft_shadow_test_smoke)
         target_sources(nwb_soft_shadow_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/soft_shadow_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/shadow_timing_render_pass.h"
+            "${CMAKE_CURRENT_LIST_DIR}/shadow_timing_render_pass.cpp"
         )
         nwb_configure_runtime_smoke_target(
             nwb_soft_shadow_test_smoke

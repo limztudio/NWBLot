@@ -19,6 +19,8 @@
 
 #include "arrow_yaw_input_handler.h"
 #include "fps_probe.h"
+#include "gpu_pass_timing_probe.h"
+#include "shadow_timing_render_pass.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -187,6 +189,7 @@ public:
     {}
 
     virtual ~SoftShadowTestSmokeProject()override{
+        m_timingRenderPass.stop();
         m_context.input.removeHandler(m_arrowYawInput); // idempotent backstop if onShutdown was skipped (dispatcher outlives us)
         destroyWorld();
     }
@@ -194,6 +197,12 @@ public:
 
 public:
     virtual bool onStartup()override{
+        m_timingEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
+        if(m_timingEnabled){
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+            if(!m_timingRenderPass.start())
+                return false;
+        }
         // addHandlerToBack gives this scrubber first crack at the arrow keys; it consumes only Left/Right.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
@@ -213,8 +222,11 @@ public:
             Float4(1.00f, 0.96f, 0.88f),
             s_DirectionalLightIntensity
         );
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight))
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
             light->angularRadius = configuredAngularRadius();
+            if(m_timingEnabled)
+                light->enableCaustics = false;
+        }
 
         const NWB::Core::ECS::EntityID pointLight = NWB::Impl::Scene::CreatePointLightEntity(
             *m_world,
@@ -223,8 +235,11 @@ public:
             s_PointLightIntensity,
             s_PointLightRange
         );
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight))
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight)){
             light->sourceRadius = configuredSourceRadius();
+            if(m_timingEnabled)
+                light->enableCaustics = false;
+        }
 
         const NWB::Core::ECS::EntityID spotLight = NWB::Impl::Scene::CreateSpotLightEntity(
             *m_world,
@@ -238,8 +253,11 @@ public:
             s_SpotInnerConeCos,
             s_SpotOuterConeCos
         );
-        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight))
+        if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight)){
             light->sourceRadius = configuredSourceRadius();
+            if(m_timingEnabled)
+                light->enableCaustics = false;
+        }
 
         m_groundEntity = CreateTintedStaticMeshEntity(
             *m_world,
@@ -302,6 +320,26 @@ public:
             NWB_TEXT("SoftShadowTestSmokeProject failed to create all scene entities")
         );
 
+        if(m_timingEnabled){
+            const NWB::Core::ECS::EntityID lights[] = { directionalLight, pointLight, spotLight };
+            for(const auto lightEntity : lights){
+                const auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(lightEntity);
+                if(!light || light->enableCaustics){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShadowTimingProbe: timing light policy unavailable"));
+                    return false;
+                }
+            }
+            const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
+                && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}")
+                , hardwareAvailable ? NWB_TEXT("hybrid") : NWB_TEXT("software")
+            );
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
+                , static_cast<f64>(configuredAngularRadius())
+                , static_cast<f64>(configuredSourceRadius())
+            );
+        }
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
             , static_cast<f64>(configuredAngularRadius())
@@ -310,6 +348,7 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_timingRenderPass.stop();
         m_context.graphics.setFrameSubmissionSuspended(false);
         m_context.input.removeHandler(m_arrowYawInput);
         destroyWorld();
@@ -335,6 +374,8 @@ public:
         const f32 fixedDelta = rendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
+        if(m_timingEnabled)
+            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         // Yaw selection: 1) NWB_SOFT_SHADOW_TEST_SPIN_ANGLE env freeze (pins one orientation); 2) manual arrow scrub
         // (latches off auto-spin the moment Left/Right is first pressed); 3) auto-spin.
         const f32 frozen = frozenYaw();
@@ -371,7 +412,10 @@ private:
     NWB::Core::ECS::EntityID m_characterOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_glassOwner = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
+    NWB::Tests::Smoke::ShadowTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::FpsProbe m_fpsProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SoftShadowTestSmokeProject") };
+    bool m_timingEnabled = false;
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;
     u32 m_rendererBaselineRenderedFrameCount = 0u;

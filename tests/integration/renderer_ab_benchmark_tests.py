@@ -169,6 +169,159 @@ class WorkloadPolicyTests(unittest.TestCase):
                 benchmark.parse_args(common + list(extra))
 
 
+class WorkloadControlSelectionTests(unittest.TestCase):
+    SHADOW_CONTROLS = ("render.opaque_regular", "render.deferred_lighting",
+        "render.deferred_composite", "render.deferred_present")
+
+    def shadow_workload(self, **changes):
+        from dataclasses import replace
+        values = {"name": "test-shadow-controls", "secondary_scope": "render.shadow_visibility",
+            "control_scopes": self.SHADOW_CONTROLS}
+        values.update(changes)
+        return replace(benchmark.workloads()["transparent-multi"], **values)
+
+    def test_existing_workloads_keep_original_control_policy(self):
+        for workload in benchmark.workloads().values():
+            with self.subTest(workload=workload.name):
+                expected = benchmark.SHADOW_CONTROLS if workload.validate_log is benchmark.soft_shadow_log else benchmark.CONTROLS
+                self.assertEqual(workload.control_scopes, expected)
+
+    def test_shadow_target_change_is_not_misclassified_as_control_drift(self):
+        _, orders, trials = trial_matrix()
+        workload = self.shadow_workload()
+        for trial in trials:
+            if trial["arm"] == "candidate":
+                trial["scopes"]["render.shadow_visibility"]["mean_ms"] = .2
+                trial["scopes"]["render.shadow_visibility"]["total_ms"] = .2 * trial["scopes"]["render.shadow_visibility"]["gpu_samples"]
+        result = benchmark.compare_trials(trials, orders, workload)
+        self.assertEqual(result["status"], "resolved_gpu_time_reduction")
+        self.assertEqual(tuple(result["controls"]), self.SHADOW_CONTROLS)
+        self.assertAlmostEqual(result["scope_deltas"]["render.shadow_visibility"]["mean_ms"], -.3)
+
+    def test_composite_and_present_drift_remain_controls(self):
+        for changed_scope in ("render.deferred_composite", "render.deferred_present"):
+            _, orders, trials = trial_matrix()
+            for trial in trials:
+                if trial["arm"] == "candidate":
+                    trial["scopes"][changed_scope]["mean_ms"] = .8
+            with self.subTest(scope=changed_scope):
+                result = benchmark.compare_trials(trials, orders, self.shadow_workload())
+                self.assertEqual(result["status"], "control_drift")
+                self.assertTrue(result["controls"][changed_scope]["material_drift"])
+
+    def test_uncertain_present_control_cannot_claim_reduction(self):
+        _, orders, trials = trial_matrix()
+        for trial in trials:
+            if trial["arm"] == "candidate":
+                trial["scopes"]["render.deferred_present"]["mean_ms"] += .2 if trial["block"] % 2 else -.2
+        result = benchmark.compare_trials(trials, orders, self.shadow_workload())
+        self.assertEqual(result["status"], "control_uncertain")
+
+    def test_empty_duplicate_or_mutable_controls_are_rejected(self):
+        for controls in ((), ("render.opaque_regular", "render.opaque_regular"), ["render.opaque_regular"]):
+            with self.subTest(controls=controls), self.assertRaisesRegex(benchmark.SmokeFailure, "nonempty unique tuple"):
+                self.shadow_workload(control_scopes=controls)
+
+    def test_unobserved_control_is_rejected(self):
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "not an observed scope"):
+            self.shadow_workload(control_scopes=("render.not_measured",))
+
+    def test_primary_and_secondary_targets_cannot_be_controls(self):
+        for control in (benchmark.FRAME, "render.shadow_visibility"):
+            with self.subTest(control=control), self.assertRaisesRegex(benchmark.SmokeFailure, "target cannot also be a control"):
+                self.shadow_workload(control_scopes=(control,))
+
+    def test_shadow_controls_still_require_complete_scope_coverage(self):
+        workload = self.shadow_workload()
+        for control in self.SHADOW_CONTROLS:
+            values = scopes(workload)
+            del values[control]
+            with self.subTest(control=control), self.assertRaisesRegex(benchmark.SmokeFailure, "missing completed GPU scopes"):
+                benchmark.validate_coverage(values, workload, 6, 100)
+
+    def test_per_workload_controls_do_not_relax_complete_trial_requirement(self):
+        _, orders, trials = trial_matrix()
+        with self.assertRaisesRegex(benchmark.SmokeFailure, "every planned trial"):
+            benchmark.compare_trials(trials[:-1], orders, self.shadow_workload())
+
+
+def soft_shadow_log_text(workload, route="hybrid"):
+    values = dict(workload.environment_overrides)
+    return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
+        "ShadowTimingProbe: caustic emission 0", f"ShadowTimingProbe: natural shadow route {route}",
+        f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
+        "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
+        "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
+        "Vulkan: created device 'Example GPU'", "RendererSystem: material 'glass' selected CS + PS through compute emulation",
+        "SoftShadowTestSmokeProject: shutdown"))
+
+
+class ShadowWorkloadPolicyTests(unittest.TestCase):
+    def test_four_extent_workloads_have_exact_scope_and_control_policy(self):
+        expected = {"shadow-zero-extent": ("0", "0"), "shadow-finite-extent": ("0.03", "0.15"),
+            "shadow-zero-directional": ("0", "0.15"), "shadow-zero-punctual": ("0.03", "0")}
+        for name, extents in expected.items():
+            workload = benchmark.workloads()[name]
+            values = dict(workload.environment_overrides)
+            self.assertEqual((values["NWB_SOFT_SHADOW_TEST_ANGLE"], values["NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"]), extents)
+            self.assertEqual(workload.control_scopes, benchmark.SHADOW_CONTROLS)
+            self.assertEqual(workload.inactive_scopes, benchmark.SHADOW_INACTIVE)
+            self.assertEqual(len(workload.scopes), 13)
+            self.assertEqual(set(dict(workload.scope_multipliers).values()), {1})
+            self.assertEqual(workload.secondary_scope, "render.shadow_visibility")
+
+    def test_shadow_environment_clears_inherited_capture_and_extent_policy(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        env, overrides = benchmark.configure_environment({"NWB_SOFT_SHADOW_TEST_ANGLE": "0.2",
+            "NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS": "1", "NWB_SOFT_SHADOW_TEST_TIMING": "0",
+            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "360", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH": "old.bmp",
+            "NWB_REFLECTION_SMOKE_DIAGNOSTICS": "1", "PRESERVED": "yes"}, workload, Path("timing.txt"))
+        self.assertEqual(env, {"PRESERVED": "yes", **dict(workload.environment_overrides), "NWB_GPU_TIMING_FILE": "timing.txt"})
+        self.assertEqual(overrides["NWB_SOFT_SHADOW_TEST_TIMING"], "1")
+
+    def test_shadow_logs_require_actual_policy_route_extent_and_lifecycle(self):
+        for name in ("shadow-zero-extent", "shadow-finite-extent"):
+            workload = benchmark.workloads()[name]
+            text = soft_shadow_log_text(workload)
+            expected = benchmark.soft_shadow_log(text, workload, True)
+            self.assertEqual(expected, benchmark.soft_shadow_log(text.replace("\n", "\r\n"), workload, True))
+            for altered in (text.replace("in-flight ranges 32", "in-flight ranges 2"),
+                text.replace("caustic emission 0", "caustic emission 1"), text.replace("1280x900", "960x720"),
+                text.replace("SoftShadowTestSmokeProject: shutdown", ""), text + "\nShadowTimingProbe: render unfocused 0",
+                text.replace("natural shadow route hybrid", "natural shadow route software")):
+                with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
+                    benchmark.soft_shadow_log(altered, workload, True)
+
+    def test_shadow_zero_policy_does_not_accept_tiny_nonzero_or_nonfinite(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        text = soft_shadow_log_text(workload)
+        for value in ("0.000000001", "nan", "inf", "-inf"):
+            with self.subTest(value=value), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.soft_shadow_log(text.replace("angular=0 radius=0", f"angular={value} radius=0"), workload, True)
+
+    def test_shadow_logs_reject_validation_capture_and_fallback_emission(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        for marker in ("FramebufferCapture: ready", "Vulkan: enabled validation layer", "VK_LAYER_KHRONOS_validation",
+            "render submission suspended", "retaining all-lit visibility", "preserving opaque visibility"):
+            with self.subTest(marker=marker), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.soft_shadow_log(soft_shadow_log_text(workload) + "\n" + marker, workload, True)
+
+    def test_shadow_coverage_requires_each_phase_and_rejects_caustic_work(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        values = scopes(workload)
+        benchmark.validate_coverage(values, workload, 6, 100)
+        for name in benchmark.SHADOW_PHASES:
+            missing = copy.deepcopy(values)
+            del missing[name]
+            with self.subTest(scope=name), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(missing, workload, 6, 100)
+        for name in benchmark.SHADOW_INACTIVE:
+            unexpected = copy.deepcopy(values)
+            unexpected[name] = dict(values[benchmark.FRAME])
+            with self.subTest(scope=name), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_inactive_scopes(unexpected, workload)
+
+
 class FrozenIdentityTests(unittest.TestCase):
     def test_source_content_and_manifest_are_both_frozen(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -310,7 +463,8 @@ class ReflectionWorkloadTests(unittest.TestCase):
             "reflection-optical-clear": ("optical_clear", "hardware", 0.0, False, False, reflection.HARDWARE),
             "reflection-optical-inside": ("optical_inside", "hardware", 0.0, False, False, reflection.HARDWARE),
         }
-        self.assertEqual(set(benchmark.workloads()), {"transparent-multi", *expected})
+        self.assertEqual(set(benchmark.workloads()), {"transparent-multi", *expected,
+            "shadow-zero-extent", "shadow-finite-extent", "shadow-zero-directional", "shadow-zero-punctual"})
         for name, values in expected.items():
             with self.subTest(workload=name):
                 workload = benchmark.workloads()[name]

@@ -43,6 +43,12 @@ SHADOW_ROUTES = {
     "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": "hybrid",
     "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable": "software",
 }
+SHADOW_CONTROLS = ("render.opaque_regular", "render.deferred_lighting",
+    "render.deferred_composite", "render.deferred_present")
+SHADOW_PHASES = ("render.shadow_visibility", "render.shadow_opaque_trace",
+    "render.shadow_geometry_downsample", "render.shadow_opaque_temporal", "render.shadow_opaque_resolve",
+    "render.shadow_transparent_trace", "render.shadow_transparent_temporal", "render.shadow_transparent_resolve")
+SHADOW_INACTIVE = ("render.caustic_photons", "render.caustic_resolve")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 DIMENSIONS = re.compile(r"deferred rendering targets ready \((\d+)x(\d+),")
 
@@ -80,6 +86,16 @@ class Workload:
     validate_log: Callable[[str, "Workload", bool], dict]
     reflection_policy: ReflectionPolicy = None
     inactive_scopes: tuple = ()
+    control_scopes: tuple = CONTROLS
+
+    def __post_init__(self):
+        controls = self.control_scopes
+        if not isinstance(controls, tuple) or not controls or len(set(controls)) != len(controls):
+            raise SmokeFailure("workload controls must be a nonempty unique tuple")
+        if any(scope not in self.scopes for scope in controls):
+            raise SmokeFailure("workload control is not an observed scope")
+        if FRAME in controls or self.secondary_scope in controls:
+            raise SmokeFailure("workload target cannot also be a control")
 
     @property
     def observed_scopes(self):
@@ -167,6 +183,47 @@ def transparent_multi_log(text, workload, require_hardware):
         "extent": list(extents.pop()), "timing_in_flight_ranges": 32}
 
 
+def soft_shadow_log(text, workload, require_hardware):
+    lines = text.replace("\r\n", "\n").splitlines()
+    text = "\n".join(lines)
+    for marker in ("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
+        "ShadowTimingProbe: caustic emission 0", "SoftShadowTestSmokeProject: shutdown"):
+        if lines.count(marker) != 1:
+            raise SmokeFailure("missing or repeated shadow timing policy: " + marker)
+    for prefix in ("ShadowTimingProbe: in-flight ranges ", "ShadowTimingProbe: render unfocused ",
+        "ShadowTimingProbe: caustic emission "):
+        if sum(line.startswith(prefix) for line in lines) != 1:
+            raise SmokeFailure("contradictory shadow timing policy: " + prefix)
+    startup = "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius="
+    if sum(line.startswith(startup) for line in lines) != 1:
+        raise SmokeFailure("one actual soft-shadow scene startup is required")
+    route_prefix = "ShadowTimingProbe: natural shadow route "
+    routes = [line[len(route_prefix):] for line in lines if line.startswith(route_prefix)]
+    if len(routes) != 1 or routes[0] not in ("hybrid", "software") or (require_hardware and routes != ["hybrid"]):
+        raise SmokeFailure("natural shadow route is missing, contradictory, or unsupported")
+    extents = re.findall(r"^ShadowTimingProbe: source extents angular=(\S+) radius=(\S+)$", text, re.MULTILINE)
+    if len(extents) != 1:
+        raise SmokeFailure("one actual shadow source-extent policy is required")
+    expected = dict(workload.environment_overrides)
+    try:
+        actual_extents = tuple(float(value) for value in extents[0])
+        wanted = (float(expected["NWB_SOFT_SHADOW_TEST_ANGLE"]), float(expected["NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS"]))
+    except ValueError as error:
+        raise SmokeFailure("invalid shadow source extents") from error
+    for actual, value in zip(actual_extents, wanted):
+        if not math.isfinite(actual) or (actual != 0.0 if value == 0.0 else not math.isclose(actual, value, rel_tol=1e-6, abs_tol=1e-8)):
+            raise SmokeFailure("actual shadow source extents differ from the frozen workload")
+    forbidden = (*STRICT_LOG_FAILURE_MESSAGES, "FramebufferCapture:", "render submission suspended",
+        "VK_LAYER_KHRONOS_validation", "Vulkan: enabled validation layer", "ReflectionSmokeStatistics:",
+        "ReflectionSmokeHistory:", "ReflectionSmokeFeedback:", "retaining all-lit visibility", "preserving opaque visibility")
+    validate_expected_log_text(text, [], forbidden)
+    dimensions = {(int(width), int(height)) for width, height in DIMENSIONS.findall(text)}
+    if dimensions != {(workload.width, workload.height)}:
+        raise SmokeFailure("shadow render extent differs from the frozen workload")
+    return {**device_material_signature(text), "shadow_route": routes[0], "extent": [workload.width, workload.height],
+        "source_extents": actual_extents, "caustic_emission": False, "timing_in_flight_ranges": 32}
+
+
 def reflection_workload(name, family, mode, roughness, temporal, spatial, target_scope):
     variant = reflection.Variant(name, mode, temporal=temporal, spatial=spatial, feedback=False)
     policy = ReflectionPolicy(family, variant, roughness)
@@ -198,6 +255,16 @@ def workloads():
     for definition in definitions:
         workload = reflection_workload(*definition)
         result[workload.name] = workload
+    shadow_scopes = (FRAME, *SHADOW_CONTROLS, *SHADOW_PHASES)
+    for name, angle, radius in (("shadow-zero-extent", "0", "0"),
+        ("shadow-finite-extent", "0.03", "0.15"), ("shadow-zero-directional", "0", "0.15"),
+        ("shadow-zero-punctual", "0.03", "0")):
+        result[name] = Workload(name, 1280, 900, tuple((scope, 1) for scope in shadow_scopes),
+            "render.shadow_visibility", (("NWB_SOFT_SHADOW_TEST_TIMING", "1"),
+                ("NWB_SOFT_SHADOW_TEST_ANGLE", angle), ("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", radius),
+                ("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE", "0.6"),
+                ("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "0.016666667")), soft_shadow_log,
+            inactive_scopes=SHADOW_INACTIVE, control_scopes=SHADOW_CONTROLS)
     return result
 
 
@@ -209,7 +276,7 @@ def configure_environment(base, workload, timing_file):
             raise SmokeFailure(f"explicit validation layer override is incompatible with timing: {key}")
     for key in tuple(env):
         if (key.startswith("NWB_") and ("SMOKE" in key or key.startswith("NWB_TRANSPARENT_"))) \
-            or key.startswith("NWB_RENDERER_BASELINE_") or key == "NWB_GPU_TIMING_FILE":
+            or key.startswith("NWB_RENDERER_BASELINE_") or key.startswith("NWB_SOFT_SHADOW_TEST_") or key == "NWB_GPU_TIMING_FILE":
             del env[key]
     if workload.reflection_policy is not None:
         return reflection.timed_environment(env, reflection_arguments(workload),
@@ -346,7 +413,7 @@ def compare_trials(trials, orders, workload, seed=0, practical_ms=.02, practical
         - block["baseline"]["scopes"][scope]["mean_ms"] for block in blocks.values()], seed)
         for scope in workload.scopes}
     controls = {}
-    for scope in CONTROLS:
+    for scope in workload.control_scopes:
         metric = dict(paired[scope])
         tolerance = max(control_floor_ms, practical_fraction * means["baseline"][scope])
         low, high = metric["ci95_mean_ms"]
@@ -506,6 +573,8 @@ def parse_args(argv=None):
         parser.error("multiple native hardware dispatches per timing range are supported only for optical workloads")
     if workload.reflection_policy is not None and workload.reflection_policy.variant.mode in ("hardware", "hybrid"):
         args.require_hardware = True
+    if workload.validate_log is soft_shadow_log:
+        args.require_hardware = True
     if args.blocks < 8 or args.blocks % 2:
         parser.error("blocks must be even and at least8, retaining complete AB/BA balance")
     if args.warmup_intervals < 2 or args.sample_intervals < 6 or args.minimum_frame_samples < 100:
@@ -561,7 +630,7 @@ def run(args):
         "depth_range_policy": "native mip count ranges per frame; per-range means describe one mip, with total measured mip work per frame reported separately",
         "inactive_scope_policy": "no completed inactive scope in warm-up, retained acquisition, or final shutdown reports",
         "scope_coverage": "completed timing ranges; publication skew bounded by max(2 ranges, 2% of expected), scaled by multiplicity",
-        "primary_scope": FRAME, "secondary_scope": workload.secondary_scope, "controls": list(CONTROLS),
+        "primary_scope": FRAME, "secondary_scope": workload.secondary_scope, "controls": list(workload.control_scopes),
         "order_seed": args.order_seed, "analysis_seed": args.analysis_seed, "bootstrap_draws": 10000,
         "practical_ms": args.practical_ms, "practical_fraction": args.practical_fraction,
         "control_floor_ms": args.control_floor_ms, "require_hardware": args.require_hardware,

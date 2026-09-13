@@ -247,7 +247,7 @@ def compare(trials, orders, mode, seed=0, practical_ms=.02, practical_fraction=.
         "multiplicity": "per-workload 95% intervals, no simultaneous six-workload claim"}
 
 
-def environment(base, workload, mode, output):
+def environment(base, workload, mode, output, compiler_statistics_output=None):
     for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
         if base.get(key, "").strip():
             raise SmokeFailure(f"explicit Vulkan layer override invalidates acquisition: {key}")
@@ -255,6 +255,8 @@ def environment(base, workload, mode, output):
     env.update(NWB_GATHER_BENCHMARK_WORKLOAD=workload, NWB_GATHER_BENCHMARK_MODE=mode,
         NWB_GATHER_BENCHMARK_OUTPUT=str(output), NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS="0.016666667",
         NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME="0")
+    if compiler_statistics_output is not None:
+        env["NWB_GATHER_COMPILER_STATISTICS_FILE"] = str(compiler_statistics_output)
     return env
 
 
@@ -263,7 +265,8 @@ def acquire(args, arm, block, position):
     directory.mkdir(parents=True, exist_ok=False)
     result_path = directory / "samples.jsonl"
     launch = SimpleNamespace(**vars(args), working_directory=arm.runtime, executable=arm.executable)
-    env = environment(args.frozen_environment, args.workload, args.mode, result_path)
+    compiler_output = directory / "compiler_statistics.jsonl" if getattr(args, "compiler_statistics", False) else None
+    env = environment(args.frozen_environment, args.workload, args.mode, result_path, compiler_output)
     ab.write_json(directory / "launch.json", {"arm": asdict(arm) | {"executable": str(arm.executable),
         "runtime": str(arm.runtime), "source_manifest": str(arm.source_manifest)},
         "environment": {key: value for key, value in env.items() if key.startswith(("NWB_", "VK_"))},
@@ -357,6 +360,8 @@ def parse_args(argv=None):
     parser.add_argument("--order-seed", type=int, default=0)
     parser.add_argument("--analysis-seed", type=int, default=0)
     parser.add_argument("--plan-only", action="store_true")
+    parser.add_argument("--compiler-statistics", action="store_true",
+        help="opt-in test-domain compiler snapshots; changes observer workload and requires separate diagnostic analysis")
     args = parser.parse_args(argv)
     if args.blocks < 8 or args.blocks % 2 or not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("use at least eight even balanced blocks and a positive finite timeout")
@@ -397,6 +402,12 @@ def run(args):
         "gpu_normalization": "sum milliseconds / completed range count inside CPU source window, independently per scope",
         "correctness": "qualify both frozen builds separately; benchmark does not replace visual/native tests",
         "source_policy": "instrumentation and fixture must be present in both builds before freezing them"}
+    if getattr(args, "compiler_statistics", False):
+        plan["compiler_statistics_diagnostic"] = {
+            "enabled": True, "file": "<per-trial-directory>/compiler_statistics.jsonl",
+            "scope": "existing compiler wall durations; observer cost is included in graphics.render",
+            "validation": "separate compiler_statistics_diagnostic.py required; no change to timing/control gates",
+        }
     args.output_directory.mkdir(parents=True, exist_ok=True)
     ab.write_json(args.output_directory / "plan.json", plan)
     if args.plan_only:

@@ -11,6 +11,7 @@
 #include <core/graphics/runtime/runtime.h>
 
 #include "renderer_gather_benchmark_probe.h"
+#include "renderer_compiler_statistics_probe.h"
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
@@ -73,6 +74,7 @@ public:
         , m_world(CreateSmokeWorldOrDie(context, NWB_TEXT("RendererGatherBenchmark")))
         , m_timingPass(context.graphics)
         , m_probe(context.objectArena)
+        , m_compilerProbe(context.graphics, context.objectArena)
         , m_workload(context.objectArena)
         , m_output(context.objectArena)
     {}
@@ -173,6 +175,11 @@ public:
             return false;
         m_context.graphics.addRenderPassToBack(m_timingPass);
         m_timingRegistered = true;
+        SmokeEnvironmentString compilerOutput(m_context.objectArena);
+        if(ReadSmokeEnvironmentText("NWB_GATHER_COMPILER_STATISTICS_FILE", compilerOutput)){
+            if(!m_compilerProbe.start(*renderer, MakeNotNull(compilerOutput.c_str())))
+                return false;
+        }
         Core::Perf::CaptureOptions capture;
         capture.enabled = true;
         capture.cpuTiming = true;
@@ -189,6 +196,9 @@ public:
     }
 
     virtual void onShutdown()override{
+        m_compilerProbe.stop();
+        if(!m_compilerProbe.write())
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: compiler statistics diagnostic is incomplete or could not be written"));
         if(!m_probe.write(MakeNotNull(m_output.c_str()), MakeNotNull(m_workload.c_str()), m_memoryEnabled, m_renderers, m_runtimeRenderers, m_transparentRenderers, m_runtimeOwners))
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: complete result could not be written; successful frames {}"), m_probe.successfulFrames());
         destroyWorld();
@@ -281,6 +291,7 @@ private:
     }
 
     void destroyWorld(){
+        m_compilerProbe.stop();
         if(m_timingRegistered){
             m_context.graphics.removeRenderPass(m_timingPass);
             m_timingRegistered = false;
@@ -300,6 +311,7 @@ private:
     NotNullUniquePtr<Core::ECS::World> m_world;
     TimingPass m_timingPass;
     RendererGatherBenchmarkProbe m_probe;
+    RendererCompilerStatisticsProbe m_compilerProbe;
     SmokeEnvironmentString m_workload;
     SmokeEnvironmentString m_output;
     u32 m_renderers = 0u;

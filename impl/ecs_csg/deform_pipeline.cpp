@@ -63,15 +63,15 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         outResult.viability.reason = inputReason;
         return false;
     }
-    if(!CsgDeformValidator::ValidTopology(inputVertices, inputVertexCount, inputTriangles, inputTriangleCount)){
+    if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
         outResult.viability.viable = false;
         outResult.viability.reason = CsgDeformViabilityReason::InvalidTopology;
         return false;
     }
 
     const f32 epsilon = CsgDeformValidator::ShapeEpsilon(options);
-    outVertices.reserve(inputVertexCount + cutCount * 16u);
-    outTriangles.reserve(inputTriangleCount * 2u + cutCount * 16u);
+    outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
+    outTriangles.reserve(inputTriangleCount * s_KeptReserveMultiplier + cutCount * s_RebuildReservePerCut);
     for(usize vertexIndex = 0u; vertexIndex < inputVertexCount; ++vertexIndex)
         outVertices.push_back(inputVertices.get()[vertexIndex]);
     for(usize triangleIndex = 0u; triangleIndex < inputTriangleCount; ++triangleIndex)

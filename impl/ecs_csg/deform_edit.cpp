@@ -93,8 +93,9 @@ bool CommitCsgDeformCuts(
     CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles,
     CsgDeformStats& outStats
 ){
-    static_cast<void>(commitArena);
     outStats = CsgDeformStats{};
+    if(outVertices.get_allocator().arenaPtr() != &commitArena || outTriangles.get_allocator().arenaPtr() != &commitArena)
+        return false;
     outVertices.clear();
     outTriangles.clear();
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.

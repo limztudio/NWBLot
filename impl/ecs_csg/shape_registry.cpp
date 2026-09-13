@@ -514,7 +514,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
 
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/box"),
+            s_CsgBoxShapeName,
             CsgBoxShapeParameters{},
             &__hidden_shape_registry::BoxBounds
         ),
@@ -523,7 +523,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     ) && result;
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/capsule"),
+            s_CsgCapsuleShapeName,
             CsgCapsuleShapeParameters{},
             &__hidden_shape_registry::CapsuleBounds
         ),
@@ -532,7 +532,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     ) && result;
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/plane"),
+            s_CsgPlaneShapeName,
             CsgPlaneShapeParameters{},
             &__hidden_shape_registry::PlaneBounds
         ),
@@ -541,7 +541,7 @@ bool RegisterBuiltInCsgShapeTypes(CsgShapeRegistry& registry){
     ) && result;
     result = registry.registerShapeType(
         __hidden_shape_registry::BuiltInShapeDesc(
-            Name("engine/csg/sphere"),
+            s_CsgSphereShapeName,
             CsgSphereShapeParameters{},
             &__hidden_shape_registry::SphereBounds
         ),

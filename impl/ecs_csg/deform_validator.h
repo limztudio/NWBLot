@@ -27,10 +27,9 @@ public:
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options);
     [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options);
     [[nodiscard]] static bool ValidTopology(
-        NotNull<const CsgDeformVertex*> vertices,
-        const usize vertexCount,
         NotNull<const CsgDeformTriangle*> triangles,
-        const usize triangleCount
+        const usize triangleCount,
+        const usize vertexCount
     );
     [[nodiscard]] static bool FiniteInput(
         NotNull<const CsgDeformVertex*> vertices,

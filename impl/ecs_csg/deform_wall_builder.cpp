@@ -45,7 +45,7 @@ CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, 
 }
 
 bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
-    // SIMD normalize keeps xyz length/normalize on vector lanes. The degeneratefallback and w/handedness stay scalar so both preview and commit pick the identical deterministic branch.
+    // SIMD normalize keeps xyz length/normalize on vector lanes. The degenerate fallback and w/handedness stay scalar so both preview and commit pick the identical deterministic branch.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){

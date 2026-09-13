@@ -210,7 +210,7 @@ bool CsgDeformCapBuilder::FillCutCaps(
     CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return true;
-    // Peel one closed loop at a time from the boundary set; leftover edges fail viability.
+    // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
     Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
     remaining = scratchEdges;
     Vector<CsgDeformCutLoopEdge, ScratchArena> loopEdges(scratchArena);

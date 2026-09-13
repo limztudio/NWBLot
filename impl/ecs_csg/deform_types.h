@@ -141,6 +141,7 @@ inline constexpr u32 s_MinLoopVertices = 3u;
 inline constexpr u32 s_EdgesPerTriangle = 3u;
 inline constexpr u32 s_KeptReserveMultiplier = 2u;
 inline constexpr u32 s_ReserveSlack = 1u;
+inline constexpr usize s_RebuildReservePerCut = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

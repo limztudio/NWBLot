@@ -59,12 +59,10 @@ bool CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options){
 }
 
 bool CsgDeformValidator::ValidTopology(
-    NotNull<const CsgDeformVertex*> vertices,
-    const usize vertexCount,
     NotNull<const CsgDeformTriangle*> triangles,
-    const usize triangleCount
+    const usize triangleCount,
+    const usize vertexCount
 ){
-    static_cast<void>(vertices);
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle& triangle = triangles.get()[triangleIndex];
         for(usize corner = 0u; corner < s_TriangleCornerCount; ++corner){

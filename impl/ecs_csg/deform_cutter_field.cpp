@@ -5,6 +5,7 @@
 #include "deform_cutter_field.h"
 
 #include "deform_validator.h"
+#include <impl/assets/csg/shape_id.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,23 +18,20 @@ NWB_IMPL_BEGIN
 
 
 using ScratchArena = Core::Alloc::ScratchArena;
+using CsgDeformDistanceFunc = f32(*)(SIMDVector, SIMDVector);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 CsgDeformShapeKind::Enum CsgDeformCutterField::ClassifyDeformShape(const Name& shapeType){
-    static const Name s_PlaneShape("engine/csg/plane");
-    static const Name s_BoxShape("engine/csg/box");
-    static const Name s_SphereShape("engine/csg/sphere");
-    static const Name s_CapsuleShape("engine/csg/capsule");
-    if(shapeType == s_PlaneShape)
+    if(shapeType == s_CsgPlaneShapeName)
         return CsgDeformShapeKind::Plane;
-    if(shapeType == s_BoxShape)
+    if(shapeType == s_CsgBoxShapeName)
         return CsgDeformShapeKind::Box;
-    if(shapeType == s_SphereShape)
+    if(shapeType == s_CsgSphereShapeName)
         return CsgDeformShapeKind::Sphere;
-    if(shapeType == s_CapsuleShape)
+    if(shapeType == s_CsgCapsuleShapeName)
         return CsgDeformShapeKind::Capsule;
     return CsgDeformShapeKind::Invalid;
 }
@@ -89,72 +87,40 @@ bool CsgDeformCutterField::ShapeDistances(
     // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on SIMD lanes; only the snapped distance crosses back to scalar, so preview/commit observe identical distances with no second pass.
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
     const SIMDVector parameter0 = LoadFloat(shape.parameter0);
+    CsgDeformDistanceFunc distanceFunc = nullptr;
     switch(shapeKind){
-    case CsgDeformShapeKind::Plane:{
-        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-            const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-            f32 distance = CsgDeformCutterField::PlaneSignedDistance(shapePosition, parameter0);
-            if(!CsgDeformValidator::FiniteFloat(distance)){
-                outReason = CsgDeformViabilityReason::NonFiniteInput;
-                return false;
-            }
-            if(Abs(distance) <= epsilon)
-                distance = s_KeepDistanceZero;
-            outDistances[vertexIndex] = distance;
-        }
-        return true;
-    }
-    case CsgDeformShapeKind::Box:{
-        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-            const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-            f32 distance = CsgDeformCutterField::BoxSignedDistance(shapePosition, parameter0);
-            if(!CsgDeformValidator::FiniteFloat(distance)){
-                outReason = CsgDeformViabilityReason::NonFiniteInput;
-                return false;
-            }
-            if(Abs(distance) <= epsilon)
-                distance = s_KeepDistanceZero;
-            outDistances[vertexIndex] = distance;
-        }
-        return true;
-    }
-    case CsgDeformShapeKind::Sphere:{
-        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-            const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-            f32 distance = CsgDeformCutterField::SphereSignedDistance(shapePosition, parameter0);
-            if(!CsgDeformValidator::FiniteFloat(distance)){
-                outReason = CsgDeformViabilityReason::NonFiniteInput;
-                return false;
-            }
-            if(Abs(distance) <= epsilon)
-                distance = s_KeepDistanceZero;
-            outDistances[vertexIndex] = distance;
-        }
-        return true;
-    }
-    case CsgDeformShapeKind::Capsule:{
-        for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-            const CsgDeformVertex& vertex = vertices[vertexIndex];
-            const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-            f32 distance = CsgDeformCutterField::CapsuleSignedDistance(shapePosition, parameter0);
-            if(!CsgDeformValidator::FiniteFloat(distance)){
-                outReason = CsgDeformViabilityReason::NonFiniteInput;
-                return false;
-            }
-            if(Abs(distance) <= epsilon)
-                distance = s_KeepDistanceZero;
-            outDistances[vertexIndex] = distance;
-        }
-        return true;
-    }
+    case CsgDeformShapeKind::Plane:
+        distanceFunc = &CsgDeformCutterField::PlaneSignedDistance;
+        break;
+    case CsgDeformShapeKind::Box:
+        distanceFunc = &CsgDeformCutterField::BoxSignedDistance;
+        break;
+    case CsgDeformShapeKind::Sphere:
+        distanceFunc = &CsgDeformCutterField::SphereSignedDistance;
+        break;
+    case CsgDeformShapeKind::Capsule:
+        distanceFunc = &CsgDeformCutterField::CapsuleSignedDistance;
+        break;
     default:
         break;
     }
-    outReason = CsgDeformViabilityReason::InvalidCutter;
-    return false;
+    if(distanceFunc == nullptr){
+        outReason = CsgDeformViabilityReason::InvalidCutter;
+        return false;
+    }
+    for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
+        const CsgDeformVertex& vertex = vertices[vertexIndex];
+        const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
+        f32 distance = distanceFunc(shapePosition, parameter0);
+        if(!CsgDeformValidator::FiniteFloat(distance)){
+            outReason = CsgDeformViabilityReason::NonFiniteInput;
+            return false;
+        }
+        if(Abs(distance) <= epsilon)
+            distance = s_KeepDistanceZero;
+        outDistances[vertexIndex] = distance;
+    }
+    return true;
 }
 
 

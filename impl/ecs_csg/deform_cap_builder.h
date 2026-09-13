@@ -33,6 +33,10 @@ static_assert(IsTriviallyCopyable_V<CsgDeformCutLoopEdge>, "CsgDeformCutLoopEdge
 
 class CsgDeformCapBuilder final : NoCopy{
 public:
+    // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
+    [[nodiscard]] static SIMDVector AccumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec);
+    [[nodiscard]] static SIMDVector ScaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec);
+    [[nodiscard]] static SIMDVector CapCenterNormalVec(SIMDVector loopNormalVec);
     static void CollectBoundaryEdges(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles,

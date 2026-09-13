@@ -23,38 +23,57 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+SIMDVector CsgDeformWallBuilder::MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec){
+    return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
+}
+
+SIMDVector CsgDeformWallBuilder::NormalizeDirectionVec(SIMDVector direction){
+    return Vector3Normalize(direction);
+}
+
+SIMDVector CsgDeformWallBuilder::KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec){
+    return VectorSelect(normalizedVec, sourceVec, s_SIMDMaskW);
+}
+
+SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec){
+    const SIMDVector wNegative = VectorLess(VectorSplatW(tangentVec), VectorZero());
+    const SIMDVector sign = VectorSelect(VectorReplicate(s_OneWeight), VectorReplicate(s_NegativeOne), wNegative);
+    return VectorSelect(normalizedTangent, sign, s_SIMDMaskW);
+}
+
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
-    // SIMD blend keeps positions/normals/tangents/uvs/colors on vector lanes.
+    // Beginner boundary: load each Float# lane once, blend on SIMD cores, store once.
     // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise.
     const f32 blend = CsgDeformValidator::SaturateFloat(firstWeight);
     const f32 other = s_OneWeight - blend;
     const SIMDVector blendVec = VectorReplicate(blend);
     const SIMDVector otherVec = VectorReplicate(other);
+    const SIMDVector firstPosition = LoadFloat(first.position);
+    const SIMDVector secondPosition = LoadFloat(second.position);
+    const SIMDVector firstNormal = LoadFloat(first.normal);
+    const SIMDVector secondNormal = LoadFloat(second.normal);
+    const SIMDVector firstTangent = LoadFloat(first.tangent);
+    const SIMDVector secondTangent = LoadFloat(second.tangent);
+    const SIMDVector firstUv = LoadFloat(first.uv0);
+    const SIMDVector secondUv = LoadFloat(second.uv0);
+    const SIMDVector firstColor = LoadFloat(first.color);
+    const SIMDVector secondColor = LoadFloat(second.color);
     CsgDeformVertex mixed;
-    const SIMDVector mixedPosition = VectorAdd(VectorMultiply(LoadFloat(first.position), blendVec), VectorMultiply(LoadFloat(second.position), otherVec));
-    StoreFloat(mixedPosition, mixed.position);
-    const SIMDVector mixedNormal = VectorAdd(VectorMultiply(LoadFloat(first.normal), blendVec), VectorMultiply(LoadFloat(second.normal), otherVec));
-    StoreFloat(mixedNormal, mixed.normal);
-    const SIMDVector mixedTangent = VectorAdd(VectorMultiply(LoadFloat(first.tangent), blendVec), VectorMultiply(LoadFloat(second.tangent), otherVec));
-    StoreFloat(mixedTangent, mixed.tangent);
-    const SIMDVector mixedUv = VectorAdd(VectorMultiply(LoadFloat(first.uv0), blendVec), VectorMultiply(LoadFloat(second.uv0), otherVec));
-    StoreFloat(mixedUv, mixed.uv0);
-    const SIMDVector mixedColor = VectorAdd(VectorMultiply(LoadFloat(first.color), blendVec), VectorMultiply(LoadFloat(second.color), otherVec));
-    StoreFloat(mixedColor, mixed.color);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstPosition, secondPosition, blendVec, otherVec), mixed.position);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstNormal, secondNormal, blendVec, otherVec), mixed.normal);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstTangent, secondTangent, blendVec, otherVec), mixed.tangent);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstUv, secondUv, blendVec, otherVec), mixed.uv0);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstColor, secondColor, blendVec, otherVec), mixed.color);
     return mixed;
 }
 
 bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
-    // SIMD normalize keeps xyz length/normalize on vector lanes. The degenerate fallback and w/handedness stay scalar so both preview and commit pick the identical deterministic branch.
+    // Beginner boundary: one load per Float# lane, normalize on SIMD cores, one store per lane. The degenerate fallback and w/handedness pick the identical deterministic branch in preview and commit.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVector normalized = Vector3Normalize(normalVec);
-        const f32 fallbackW = VectorGetW(normalVec);
-        vertex.normal.x = VectorGetX(normalized);
-        vertex.normal.y = VectorGetY(normalized);
-        vertex.normal.z = VectorGetZ(normalized);
-        vertex.normal.w = fallbackW;
+        const SIMDVector normalized = CsgDeformWallBuilder::KeepWVec(CsgDeformWallBuilder::NormalizeDirectionVec(normalVec), normalVec);
+        StoreFloat(normalized, vertex.normal);
     }
     else{
         vertex.normal.x = s_UpAxis.x;
@@ -64,12 +83,8 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
     if(tangentLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVector normalized = Vector3Normalize(tangentVec);
-        const f32 handedness = VectorGetW(tangentVec) < s_KeepDistanceZero ? s_NegativeOne : s_OneWeight;
-        vertex.tangent.x = VectorGetX(normalized);
-        vertex.tangent.y = VectorGetY(normalized);
-        vertex.tangent.z = VectorGetZ(normalized);
-        vertex.tangent.w = handedness;
+        const SIMDVector normalized = CsgDeformWallBuilder::TangentHandednessVec(CsgDeformWallBuilder::NormalizeDirectionVec(tangentVec), tangentVec);
+        StoreFloat(normalized, vertex.tangent);
     }
     else{
         vertex.tangent = s_FallbackTangent;

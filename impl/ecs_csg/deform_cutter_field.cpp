@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 
 
 using ScratchArena = Core::Alloc::ScratchArena;
-using CsgDeformDistanceFunc = f32(*)(SIMDVector, SIMDVector);
+using CsgDeformDistanceFunc = SIMDVector(*)(SIMDVector, SIMDVector);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,31 +36,46 @@ CsgDeformShapeKind::Enum CsgDeformCutterField::ClassifyDeformShape(const Name& s
     return CsgDeformShapeKind::Invalid;
 }
 
+SIMDVector CsgDeformCutterField::PlaneSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0){
+    return VectorAdd(Vector3Dot(shapePosition, parameter0), VectorSplatW(parameter0));
+}
+
+SIMDVector CsgDeformCutterField::BoxSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0){
+    // 3-lane helpers ignore w, so the affine w=1 lane needs no masking. Inside/outside combine stays replicated on lanes.
+    const SIMDVector halfExtents = VectorSetW(parameter0, s_ShapeWMask);
+    const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), halfExtents);
+    const SIMDVector outsideVec = Vector3Length(VectorMax(q, VectorZero()));
+    const SIMDVector insideVec = VectorMin(Vector3MinComponent(q), VectorZero());
+    return VectorAdd(outsideVec, insideVec);
+}
+
+SIMDVector CsgDeformCutterField::SphereSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0){
+    return VectorSubtract(Vector3Length(shapePosition), VectorSplatX(parameter0));
+}
+
+SIMDVector CsgDeformCutterField::CapsuleSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0){
+    const SIMDVector halfHeight = VectorSplatY(parameter0);
+    const SIMDVector shapeY = VectorSplatY(shapePosition);
+    const SIMDVector clampedY = VectorClamp(shapeY, VectorNegate(halfHeight), halfHeight);
+    const SIMDVector spine = VectorSelect(VectorZero(), clampedY, s_SIMDMaskY);
+    const SIMDVector delta = VectorSubtract(shapePosition, spine);
+    return VectorSubtract(Vector3Length(delta), VectorSplatX(parameter0));
+}
+
 f32 CsgDeformCutterField::PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
-    return VectorGetX(Vector3Dot(shapePosition, parameter0)) + VectorGetW(parameter0);
+    return VectorGetX(CsgDeformCutterField::PlaneSignedDistanceVec(shapePosition, parameter0));
 }
 
 f32 CsgDeformCutterField::BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
-    // 3-lane helpers ignore w, so the affine w=1 lane needs no masking.
-    const SIMDVector halfExtents = VectorSetW(parameter0, s_ShapeWMask);
-    const SIMDVector q = VectorSubtract(VectorAbs(shapePosition), halfExtents);
-    const SIMDVector outsideVec = VectorMax(q, VectorZero());
-    const f32 outside = VectorGetX(Vector3Length(outsideVec));
-    const f32 insideComp = VectorGetX(Vector3MinComponent(q));
-    const f32 inside = insideComp < s_KeepDistanceZero ? insideComp : s_KeepDistanceZero;
-    return outside + inside;
+    return VectorGetX(CsgDeformCutterField::BoxSignedDistanceVec(shapePosition, parameter0));
 }
 
 f32 CsgDeformCutterField::SphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
-    return VectorGetX(Vector3Length(shapePosition)) - VectorGetX(parameter0);
+    return VectorGetX(CsgDeformCutterField::SphereSignedDistanceVec(shapePosition, parameter0));
 }
 
 f32 CsgDeformCutterField::CapsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0){
-    const f32 halfHeight = VectorGetY(parameter0);
-    const f32 shapeY = VectorGetY(shapePosition);
-    const f32 clampedY = shapeY < -halfHeight ? -halfHeight : (shapeY > halfHeight ? halfHeight : shapeY);
-    const SIMDVector delta = VectorSubtract(shapePosition, VectorSet(s_ShapeWMask, clampedY, s_ShapeWMask, s_ShapeWMask));
-    return VectorGetX(Vector3Length(delta)) - VectorGetX(parameter0);
+    return VectorGetX(CsgDeformCutterField::CapsuleSignedDistanceVec(shapePosition, parameter0));
 }
 
 bool CsgDeformCutterField::ShapeDistances(
@@ -90,16 +105,16 @@ bool CsgDeformCutterField::ShapeDistances(
     CsgDeformDistanceFunc distanceFunc = nullptr;
     switch(shapeKind){
     case CsgDeformShapeKind::Plane:
-        distanceFunc = &CsgDeformCutterField::PlaneSignedDistance;
+        distanceFunc = &CsgDeformCutterField::PlaneSignedDistanceVec;
         break;
     case CsgDeformShapeKind::Box:
-        distanceFunc = &CsgDeformCutterField::BoxSignedDistance;
+        distanceFunc = &CsgDeformCutterField::BoxSignedDistanceVec;
         break;
     case CsgDeformShapeKind::Sphere:
-        distanceFunc = &CsgDeformCutterField::SphereSignedDistance;
+        distanceFunc = &CsgDeformCutterField::SphereSignedDistanceVec;
         break;
     case CsgDeformShapeKind::Capsule:
-        distanceFunc = &CsgDeformCutterField::CapsuleSignedDistance;
+        distanceFunc = &CsgDeformCutterField::CapsuleSignedDistanceVec;
         break;
     default:
         break;
@@ -111,7 +126,7 @@ bool CsgDeformCutterField::ShapeDistances(
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
-        f32 distance = distanceFunc(shapePosition, parameter0);
+        f32 distance = VectorGetX(distanceFunc(shapePosition, parameter0));
         if(!CsgDeformValidator::FiniteFloat(distance)){
             outReason = CsgDeformViabilityReason::NonFiniteInput;
             return false;

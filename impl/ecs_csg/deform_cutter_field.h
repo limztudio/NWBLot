@@ -35,6 +35,11 @@ namespace CsgDeformShapeKind{
 
 class CsgDeformCutterField final : NoCopy{
 public:
+    // SIMD-domain cores: inputs and outputs stay on vector lanes (replicated distance), never touch storage.
+    [[nodiscard]] static SIMDVector PlaneSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector BoxSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector SphereSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector CapsuleSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
     [[nodiscard]] static CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType);
     [[nodiscard]] static f32 PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
     [[nodiscard]] static f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);

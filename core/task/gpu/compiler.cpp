@@ -393,7 +393,16 @@ bool GpuTaskGraphCompiler::compile(
     Vector<GpuPacketDependency, Alloc::ScratchArena> terminalFinalizationDependencies(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
-    trackedResourceStates.reserve(graph.taskCount());
+    // taskAt() exposes the expanded resource-use set. Each use appends at most one tracked state.
+    usize trackedStateCapacity = 0u;
+    for(const GpuCompiledTask& compiledTask : compiledPlan.tasks){
+        const usize useCount = graph.taskAt(compiledTask.task.index).resourceUseCount;
+        if(useCount > Limit<usize>::s_Max - trackedStateCapacity)
+            return false;
+        trackedStateCapacity += useCount;
+    }
+    trackedResourceStates.reserve(trackedStateCapacity);
+    TrackedResourceStateHistory resourceHistory(trackedResourceStates, graph.resourceCount(), graph.generation(), scratchArena);
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
     initialAvailabilityDependencies.reserve(graph.taskCount());
@@ -407,6 +416,7 @@ bool GpuTaskGraphCompiler::compile(
         .compiledPlan = compiledPlan,
         .scratchArena = scratchArena,
         .trackedResourceStates = trackedResourceStates,
+        .resourceHistory = resourceHistory,
         .pendingEpilogueBarriers = pendingEpilogueBarriers,
         .initialOwnershipDependencies = initialOwnershipDependencies,
         .initialAvailabilityDependencies = initialAvailabilityDependencies,

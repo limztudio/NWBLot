@@ -25,6 +25,7 @@ namespace GpuTaskGraphCompilerDetail{
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
+    const TrackedResourceStateHistory& resourceHistory = plan.resourceHistory;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies =
         plan.terminalFinalizationDependencies
@@ -84,12 +85,13 @@ namespace GpuTaskGraphCompilerDetail{
                 // The selected terminal task owns the external transition/release for this exact fragment. Any
                 // earlier overlapping terminal user that was shadowed by it must finish before that operation; a
                 // matching state alone does not otherwise order concurrent read-only packets.
-                for(usize earlierStateIndex = 0u; earlierStateIndex < terminalStateIndex; ++earlierStateIndex){
+                for(
+                    usize earlierStateIndex = resourceHistory.first(resource.id);
+                    earlierStateIndex != Limit<usize>::s_Max && earlierStateIndex < terminalStateIndex;
+                    earlierStateIndex = resourceHistory.next(earlierStateIndex)
+                ){
                     const TrackedCompiledResourceState& earlierState = trackedResourceStates[earlierStateIndex];
-                    if(
-                        earlierState.resource != resource.id
-                        || !RangesOverlap(resource, earlierState.range, terminalRange)
-                    )
+                    if(!RangesOverlap(resource, earlierState.range, terminalRange))
                         continue;
 
                     const GpuSubmissionPacketId earlierPacket = FindCompiledPacketForTask(
@@ -209,6 +211,7 @@ namespace GpuTaskGraphCompilerDetail{
             stateFragments.clear();
             if(!CollectTerminalResourceStateFragments(
                 trackedResourceStates,
+                resourceHistory,
                 resource,
                 scratchArena,
                 stateFragments
@@ -223,21 +226,20 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
         else{
-            for(usize stateIndex = 0u; stateIndex < trackedResourceStates.size(); ++stateIndex){
+            for(
+                usize stateIndex = resourceHistory.first(resource.id);
+                stateIndex != Limit<usize>::s_Max;
+                stateIndex = resourceHistory.next(stateIndex)
+            ){
                 const TrackedCompiledResourceState& state = trackedResourceStates[stateIndex];
-                if(state.resource != resource.id)
-                    continue;
-
                 bool hasLaterOverlappingUse = false;
-                for(usize laterStateIndex = stateIndex + 1u;
-                    laterStateIndex < trackedResourceStates.size();
-                    ++laterStateIndex
+                for(
+                    usize laterStateIndex = resourceHistory.next(stateIndex);
+                    laterStateIndex != Limit<usize>::s_Max;
+                    laterStateIndex = resourceHistory.next(laterStateIndex)
                 ){
                     const TrackedCompiledResourceState& later = trackedResourceStates[laterStateIndex];
-                    if(
-                        later.resource == resource.id
-                        && RangesOverlap(resource, state.range, later.range)
-                    ){
+                    if(RangesOverlap(resource, state.range, later.range)){
                         hasLaterOverlappingUse = true;
                         break;
                     }

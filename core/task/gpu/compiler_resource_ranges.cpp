@@ -349,11 +349,14 @@ static void AppendResourceStateFragmentsInStateOrder(
 // graph initial state rather than inheriting an unrelated adjacent producer.
 [[nodiscard]] bool CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
-){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+    if(!history.validFor(trackedStates) || !history.validResource(resource.id))
+        return false;
+
     Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
@@ -364,10 +367,12 @@ static void AppendResourceStateFragmentsInStateOrder(
         uncovered.push_back(requestedBounds);
     }
 
-    for(usize stateIndex = trackedStates.size(); stateIndex > 0u && !uncovered.empty(); --stateIndex){
-        const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
-        if(state.resource != resource.id)
-            continue;
+    for(
+        usize stateIndex = history.last(resource.id);
+        stateIndex != Limit<usize>::s_Max && !uncovered.empty();
+        stateIndex = history.previous(stateIndex)
+    ){
+        const TrackedCompiledResourceState& state = trackedStates[stateIndex];
 
         ResourceRangeBounds stateBounds;
         if(!ResourceRangeBoundsFrom(resource.type, state.range, stateBounds))
@@ -387,7 +392,7 @@ static void AppendResourceStateFragmentsInStateOrder(
             discovered.push_back(TrackedResourceStateFragment{
                 .range = fragmentRange,
                 .state = &state,
-                .stateIndex = stateIndex - 1u,
+                .stateIndex = stateIndex,
             });
             AppendResourceRangeRemainder(uncoveredRange, intersection, remainders);
         }
@@ -415,19 +420,24 @@ static void AppendResourceStateFragmentsInStateOrder(
 // earlier task. This uses the same symbolic interval/rectangle partition as inter-task consumer fan-in.
 [[nodiscard]] bool CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
-){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+    if(!history.validFor(trackedStates) || !history.validResource(resource.id))
+        return false;
+
     Vector<ResourceRangeBounds, Alloc::ScratchArena> covered(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remaining(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);
 
-    for(usize stateIndex = trackedStates.size(); stateIndex > 0u; --stateIndex){
-        const TrackedCompiledResourceState& state = trackedStates[stateIndex - 1u];
-        if(state.resource != resource.id)
-            continue;
+    for(
+        usize stateIndex = history.last(resource.id);
+        stateIndex != Limit<usize>::s_Max;
+        stateIndex = history.previous(stateIndex)
+    ){
+        const TrackedCompiledResourceState& state = trackedStates[stateIndex];
 
         ResourceRangeBounds stateBounds;
         if(!ResourceRangeBoundsFrom(resource.type, state.range, stateBounds))
@@ -454,7 +464,7 @@ static void AppendResourceStateFragmentsInStateOrder(
             discovered.push_back(TrackedResourceStateFragment{
                 .range = fragmentRange,
                 .state = &state,
-                .stateIndex = stateIndex - 1u,
+                .stateIndex = stateIndex,
             });
         }
         covered.push_back(stateBounds);

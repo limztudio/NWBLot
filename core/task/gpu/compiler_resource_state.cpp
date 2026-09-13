@@ -141,6 +141,7 @@ namespace GpuTaskGraphCompilerDetail{
     GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
     Alloc::ScratchArena& scratchArena = plan.scratchArena;
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
+    TrackedResourceStateHistory& resourceHistory = plan.resourceHistory;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies = plan.initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies = plan.initialAvailabilityDependencies;
@@ -205,14 +206,15 @@ namespace GpuTaskGraphCompilerDetail{
                 // The task thunk owns this local transition, but the declared final state/access must still become
                 // the source for later tasks, packet seeds, ownership handoffs, and terminal exports. Do not emit
                 // another packet-boundary barrier for it here.
-                trackedResourceStates.push_back(TrackedCompiledResourceState{
+                if(!resourceHistory.append(TrackedCompiledResourceState{
                     .resource = use.resource,
                     .range = plannedRange,
                     .state = use.requiredState,
                     .access = use.access,
                     .task = taskID,
                     .queue = compiledTask->queue,
-                });
+                }))
+                    return false;
                 continue;
             }
 
@@ -230,6 +232,7 @@ namespace GpuTaskGraphCompilerDetail{
                 stateFragments.clear();
                 if(!CollectLatestResourceStateFragments(
                     trackedResourceStates,
+                    resourceHistory,
                     resource,
                     taskFirstUseRanges,
                     scratchArena,
@@ -497,27 +500,23 @@ namespace GpuTaskGraphCompilerDetail{
                     }
                 }
 
-                trackedResourceStates.push_back(TrackedCompiledResourceState{
+                if(!resourceHistory.append(TrackedCompiledResourceState{
                     .resource = use.resource,
                     .range = plannedRange,
                     .state = use.requiredState,
                     .access = use.access,
                     .task = taskID,
                     .queue = compiledTask->queue,
-                });
+                }))
+                    return false;
                 continue;
             }
 
             NWB_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
             NWB_ASSERT(resource.initialOwnerHandoffSourceCount == 0u);
-            const TrackedCompiledResourceState* previousState = nullptr;
-            for(usize stateIndex = trackedResourceStates.size(); stateIndex > 0u; --stateIndex){
-                const TrackedCompiledResourceState& candidate = trackedResourceStates[stateIndex - 1u];
-                if(candidate.resource == use.resource){
-                    previousState = &candidate;
-                    break;
-                }
-            }
+            const usize previousStateIndex = resourceHistory.last(use.resource);
+            const TrackedCompiledResourceState* previousState = previousStateIndex != Limit<usize>::s_Max
+                ? &trackedResourceStates[previousStateIndex] : nullptr;
 
             const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
             if(!previousState && resource.initialAvailabilityCompletion.valid()){
@@ -720,14 +719,15 @@ namespace GpuTaskGraphCompilerDetail{
                 });
             }
 
-            trackedResourceStates.push_back(TrackedCompiledResourceState{
+            if(!resourceHistory.append(TrackedCompiledResourceState{
                 .resource = use.resource,
                 .range = use.range,
                 .state = use.requiredState,
                 .access = use.access,
                 .task = taskID,
                 .queue = compiledTask->queue,
-            });
+            }))
+                return false;
         }
         compiledTask->prologueStateSeedCount = static_cast<u32>(compiledPlan.prologueStateSeeds.size())
             - compiledTask->prologueStateSeedOffset

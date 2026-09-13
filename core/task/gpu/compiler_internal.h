@@ -6,6 +6,7 @@
 
 
 #include "compiler.h"
+#include "compiler_resource_history.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,15 +45,6 @@ struct GpuTaskGraphCompiledPlanStorage{
     u64 planGeneration = 0u;
 };
 
-struct TrackedCompiledResourceState{
-    GpuGraphResourceId resource;
-    GpuTaskResourceRange range;
-    ResourceStates::Mask state = ResourceStates::Unknown;
-    GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
-    GpuTaskId task;
-    GpuPhysicalQueueId queue;
-};
-
 struct TrackedResourceStateFragment{
     GpuTaskResourceRange range;
     const TrackedCompiledResourceState* state = nullptr;
@@ -71,6 +63,7 @@ struct GpuTaskGraphResourceStatePlan{
     GpuTaskGraphCompiledPlanStorage& compiledPlan;
     Alloc::ScratchArena& scratchArena;
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates;
+    TrackedResourceStateHistory& resourceHistory;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies;
@@ -357,6 +350,7 @@ struct GpuTaskQueueScoringData{
 
 [[nodiscard]] bool CollectLatestResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
@@ -365,6 +359,7 @@ struct GpuTaskQueueScoringData{
 
 [[nodiscard]] bool CollectTerminalResourceStateFragments(
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedStates,
+    const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments

@@ -23,6 +23,8 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compiler_queue_finders.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_queue_policy.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_queue_scoring.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_history.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_ranges.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_versions.cpp"

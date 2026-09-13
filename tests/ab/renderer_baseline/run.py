@@ -35,6 +35,7 @@ from window_capture_smoke import (  # noqa: E402
     STRICT_LOG_FAILURE_MESSAGES,
     SmokeFailure,
     SmokeSkip,
+    WindowsCapture,
     build_launch_environment,
     make_runtime_launch_args,
     create_capture_backend,
@@ -311,6 +312,10 @@ def capture_scene(
         if not window:
             ensure_process_running(app_process, f"while waiting for '{profile.window_title}'")
             raise SmokeFailure(f"renderer baseline did not expose expected window '{profile.window_title}'")
+        if isinstance(backend, WindowsCapture):
+            backend.prepare_raw_client_window(window)
+        else:
+            backend.prepare_window(window)
         if profile.capture_freeze_frame != 0:
             if not profile.capture_ready_log:
                 raise SmokeFailure(f"frame-locked profile '{args.profile}' has no capture-ready log marker")
@@ -323,13 +328,17 @@ def capture_scene(
                 profile.capture_ready_log,
                 args.startup_timeout,
             )
-            # Submission is already suspended, so this wait allows the final accepted present to become visible
-            # without advancing the frame-locked temporal state.
+            # The marker identifies the fixture's held update phase. This delay precedes client capture;
+            # it does not identify or wait on an accepted GPU source-frame fence.
             time.sleep(args.settle_seconds)
         else:
             time.sleep(args.settle_seconds)
         ensure_process_running(app_process, "before baseline capture")
-        validate_capture_result(backend.capture_window(window, capture_path))
+        if isinstance(backend, WindowsCapture):
+            capture = backend.capture_prepared_raw_client_window(window, capture_path)
+        else:
+            capture = backend.capture_window(window, capture_path)
+        validate_capture_result(capture)
         app_exit_code, app_exit_tail = terminate_process(app_process, "renderer baseline capture", window)
         app_process = None
         log_text = shutdown_logserver_and_collect(
@@ -918,6 +927,38 @@ def run_self_test() -> int:
             logserver, root, baseline, "logserver_*.log", "renderer baseline logserver"
         )
         backend.close.assert_called_once_with()
+        backend.prepare_window.assert_called_once_with(17)
+
+        raw_backend = object.__new__(WindowsCapture)
+        raw_events = []
+        raw_backend.wait_for_window = mock.Mock(return_value=17)
+        raw_backend.prepare_raw_client_window = lambda window: raw_events.append(("prepare", window))
+        raw_backend.prepare_window = mock.Mock(side_effect=AssertionError("raw preparation required"))
+        raw_backend.capture_window = mock.Mock(side_effect=AssertionError("prepared raw capture required"))
+        raw_backend.close = lambda: raw_events.append(("close",))
+
+        def raw_capture(window, path):
+            raw_events.append(("capture", window))
+            return capture(window, path)
+
+        raw_backend.capture_prepared_raw_client_window = raw_capture
+        raw_args = SimpleNamespace(**vars(orchestration_args))
+        raw_args.profile = "soft-shadows"
+        with mock.patch.object(module, "build_launch_environment", return_value={}), \
+             mock.patch.object(module, "create_capture_backend", return_value=raw_backend), \
+             mock.patch.object(module, "launch_logserver", return_value=(logserver, 49152, root, baseline, "logserver_*.log")), \
+             mock.patch.object(module, "launch_testbed", return_value=app), \
+             mock.patch.object(module, "wait_for_log_message", side_effect=lambda *args: raw_events.append(("ready",))), \
+             mock.patch.object(time, "sleep", side_effect=lambda delay: raw_events.append(("settle", delay))), \
+             mock.patch.object(module, "terminate_process", return_value=(0, "")), \
+             mock.patch.object(module, "shutdown_logserver_and_collect", return_value="captured runtime evidence"), \
+             mock.patch.object(module, "validate_runtime_log", return_value=()), \
+             mock.patch.object(module, "source_revision", return_value="test-source"), \
+             mock.patch.object(module, "source_worktree_clean", return_value=True):
+            capture_scene(raw_args, get_profile("soft-shadows"), capture_path, runtime_log_path, {})
+        assert raw_events == [("prepare", 17), ("ready",), ("settle", 0.0), ("capture", 17), ("close",)]
+        raw_backend.prepare_window.assert_not_called()
+        raw_backend.capture_window.assert_not_called()
 
         reference_directory = root / "opaque-texture" / "reference"
         reference_directory.mkdir(parents=True)

@@ -202,17 +202,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float tempGrad = edgeSignal / max(max(lumaCur, lumaHist), 1e-3);
         const float nEff = n * saturate(1.0 - NWB_SHADOW_TEMPORAL_ANTILAG * tempGrad);
 
-        // Bound the current-sample blend weight.
-        const float alpha = max(1.0 / (nEff + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN);
-        const float3 outVis = lerp(histClamped, cur, alpha);
+        // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded
+        // factors, so half arithmetic is sufficient here.
+        const half alpha = half(max(1.0 / (nEff + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN));
+        const half3 outVis = half3(lerp(histClamped, cur, float(alpha)));
         const float nNext = min(nEff + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
 
         // Integrate current-sample luminance moments with the same alpha.
-        const float m1 = lerp(m1Prev, lumaCur, alpha);
-        const float m2 = lerp(m2Prev, lumaCur * lumaCur, alpha);
+        const half m1 = half(lerp(m1Prev, lumaCur, float(alpha)));
+        const half m2 = half(lerp(m2Prev, lumaCur * lumaCur, float(alpha)));
 
-        g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(outVis, 1.0);
-        g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(m1, m2, nNext, 0.0);
+        g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(float3(outVis), 1.0);
+        g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(float(m1), float(m2), nNext, 0.0);
     }
 }
 

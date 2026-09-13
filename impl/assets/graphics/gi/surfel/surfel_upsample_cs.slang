@@ -91,7 +91,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float2 lerpFrac = src - float2(baseTexel);
 
     float3 sum = float3(0.0, 0.0, 0.0);
-    float weightSum = 0.0;
+    // Bilinear and edge-stop weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    half weightSum = half(0.0h);
     [unroll] for(int j = 0; j < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++j){
         [unroll] for(int i = 0; i < NWB_SURFEL_UPSAMPLE_TAP_SIDE; ++i){
             const int2 tap = int2(clamp(baseTexel.x + i, 0, int(halfWidth) - 1), clamp(baseTexel.y + j, 0, int(halfHeight) - 1));
@@ -112,16 +113,16 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const half3 tapWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz);
             const float3 tapWorld = float3(tapWorldSample);
             const float3 d = tapWorld - centerWorld;
-            const float bilinearWeight = (i == 0 ? (1.0 - lerpFrac.x) : lerpFrac.x) * (j == 0 ? (1.0 - lerpFrac.y) : lerpFrac.y);
-            const float weight = bilinearWeight * exp(-dot(d, d) * invTwoSigmaWorldSq);
-            sum += weight * float3(tapValue.rgb);
+            const half bilinearWeight = (i == 0 ? half(1.0 - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? half(1.0 - lerpFrac.y) : half(lerpFrac.y));
+            const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
+            sum += float(weight) * float3(tapValue.rgb);
             weightSum += weight;
         }
     }
 
     // Every tap rejected (a full-res surface sliver whose 2x2 half neighbours are all uncovered/other-surface): no GI here
     // -> a = 0 -> lighting uses hemiAmbient, exactly as an uncovered full-res gather would have.
-    g_NwbSurfelUpsampleOutput[pixel] = (weightSum > 0.0) ? float4(sum / weightSum, 1.0) : float4(0.0, 0.0, 0.0, 0.0);
+    g_NwbSurfelUpsampleOutput[pixel] = (weightSum > half(0.0h)) ? float4(sum / float(weightSum), 1.0) : float4(0.0, 0.0, 0.0, 0.0);
 }
 
 

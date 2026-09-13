@@ -149,13 +149,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const NwbSurfel neighbour = g_NwbSurfelPool[seedId];
             if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT){
                 const float dist = length(worldPosition - neighbour.position);
-                const float normalWeight = saturate(dot(worldNormal, neighbour.normal));
-                const float distanceWeight = saturate(1.0 - dist / max(neighbour.radius, NWB_SURFEL_RADIUS_MIN));
-                const float weight = normalWeight * distanceWeight;
-                seedShR += neighbour.shR * weight;
-                seedShG += neighbour.shG * weight;
-                seedShB += neighbour.shB * weight;
-                seedWeight += weight;
+                // Seed weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
+                const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
+                const half distanceWeight = half(saturate(1.0 - dist / max(neighbour.radius, NWB_SURFEL_RADIUS_MIN)));
+                const half weight = normalWeight * distanceWeight;
+                seedShR += neighbour.shR * float(weight);
+                seedShG += neighbour.shG * float(weight);
+                seedShB += neighbour.shB * float(weight);
+                seedWeight += float(weight);
             }
             seedId = neighbour.nextInCell;
             ++seedWalk;

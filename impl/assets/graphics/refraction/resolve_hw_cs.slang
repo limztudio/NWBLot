@@ -123,7 +123,8 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
 
     float3 origin = exitHit.position + outgoingDirection * entry.bias;
     float3 accumulated = float3(0.0);
-    float transmittance = 1.0;
+    // Layer transmittance and backdrop coverage are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    half transmittance = half(1.0h);
     // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query.
     // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
     for(uint layer = 0u; layer < 3u; ++layer){
@@ -134,15 +135,15 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
             break;
         if(float(background.surface.refractionIor) > 1.001)
             break;
-        const float coverage = saturate(float(background.surface.renderCoverage));
-        if(coverage >= 0.999){
+        const half coverage = half(saturate(float(background.surface.renderCoverage)));
+        if(coverage >= half(0.999h)){
             float3 radiance;
             if(!nwbRefractionCachedHit(background, entry, layer == 0u, radiance))
                 radiance = nwbRefractionShadeHit(background, outgoingDirection);
-            return float4((accumulated + transmittance * radiance) * attenuation, 1.0);
+            return float4((accumulated + float(transmittance) * radiance) * attenuation, 1.0);
         }
-        accumulated += transmittance * coverage * nwbRefractionShadeHit(background, outgoingDirection);
-        transmittance *= 1.0 - coverage;
+        accumulated += float(transmittance * coverage) * nwbRefractionShadeHit(background, outgoingDirection);
+        transmittance *= half(1.0h) - coverage;
         origin = background.position + outgoingDirection * entry.bias;
     }
     // Keep the completed primary volume's exit direction, measured thickness, and Fresnel transmission. The bounded

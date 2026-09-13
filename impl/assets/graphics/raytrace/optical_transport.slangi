@@ -168,10 +168,11 @@ NwbOpticalTraceResult nwbOpticalTrace(
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return result;
             }
-            const float alpha = saturate(coverage);
-            if(alpha > 0.0)
-                result.radiance += throughput * alpha * nwbOpticalSurfaceRadiance(hit, -direction);
-            throughput *= 1.0 - alpha;
+            // The backdrop alpha is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+            const half alpha = half(saturate(coverage));
+            if(alpha > half(0.0h))
+                result.radiance += throughput * float(alpha) * nwbOpticalSurfaceRadiance(hit, -direction);
+            throughput *= 1.0 - float(alpha);
             if(alpha == 1.0){
                 result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
                 return result;

@@ -403,7 +403,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)s_NwbShadowResolveTileVis[centerIdx];
                     const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
                     NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
-                    float weightSum = 0.0;
+                    // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
+                    half weightSum = half(0.0h);
                     [unroll] for(int ky = -2; ky <= 2; ++ky){
                         [unroll] for(int kx = -2; kx <= 2; ++kx){
                             const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
@@ -420,7 +421,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                             weightSum += weight;
                         }
                     }
-                    const NwbShadowResolveVisFVec vis = (weightSum > 0.0) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
+                    const NwbShadowResolveVisFVec vis = (weightSum > half(0.0h)) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
                     g_NwbShadowResolveOutput[uint3(pixel, slot)] = nwbShadowResolveStore(vis);
                 }
             }
@@ -440,7 +441,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const NwbShadowResolveVisFVec centerVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(texel, slot);
         const float sigmaLum = nwbShadowResolveCenterSigmaLum(texel, slot, hw, hh, momentsValid);
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
-        float weightSum = 0.0;
+        // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
+        half weightSum = half(0.0h);
         [unroll] for(int ky = -2; ky <= 2; ++ky){
             [unroll] for(int kx = -2; kx <= 2; ++kx){
                 const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
@@ -460,7 +462,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 weightSum += weight;
             }
         }
-        const NwbShadowResolveVisFVec vis = (weightSum > 0.0) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
+        const NwbShadowResolveVisFVec vis = (weightSum > half(0.0h)) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
         g_NwbShadowResolveOutput[uint3(pixel, slot)] = nwbShadowResolveStore(vis);
     }
 }

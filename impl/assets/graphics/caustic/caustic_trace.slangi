@@ -122,9 +122,10 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
 
         ++refractiveCrossings;
 
-        // Schlick requires the air-side cosine on both entry and exit.
-        const float fresnelCosI = inside ? abs(dot(nwbSafeNormalize(refracted, direction), normal)) : cosI;
-        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, fresnelCosI);
+        // Schlick requires the air-side cosine on both entry and exit. The Fresnel cosine is a (0, 1)
+        // bounded factor input, so half arithmetic is sufficient here.
+        const half fresnelCosI = inside ? half(abs(dot(nwbSafeNormalize(refracted, direction), normal))) : half(cosI);
+        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, float(fresnelCosI));
 
         if(inside)
             flux *= exp(-nwbShadowAbsorptionCoefficient(hit.transmission) * hit.t);

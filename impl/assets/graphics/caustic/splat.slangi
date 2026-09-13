@@ -88,11 +88,12 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
     if(length(worldPos - sceneWorldPos) > rejectTolerance)
         return;
 
+    // Bilinear splat weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const float2 frac = screen - float2(baseTexel);
-    const float w00 = (1.0 - frac.x) * (1.0 - frac.y);
-    const float w10 = frac.x * (1.0 - frac.y);
-    const float w01 = (1.0 - frac.x) * frac.y;
-    const float w11 = frac.x * frac.y;
+    const half w00 = half((1.0 - frac.x) * (1.0 - frac.y));
+    const half w10 = half(frac.x * (1.0 - frac.y));
+    const half w01 = half((1.0 - frac.x) * frac.y);
+    const half w11 = half(frac.x * frac.y);
     const int2 t00 = baseTexel;
     const int2 t10 = baseTexel + int2(1, 0);
     const int2 t01 = baseTexel + int2(0, 1);
@@ -100,10 +101,10 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
 
     for(uint channel = 0u; channel < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++channel){
         const float fluxChannel = flux[channel];
-        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * w00));
-        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * w10));
-        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * w01));
-        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * w11));
+        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w00)));
+        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w10)));
+        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w01)));
+        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w11)));
     }
 }
 

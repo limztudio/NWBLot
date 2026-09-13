@@ -124,7 +124,8 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
         return;
 
     const float shadingCosI = nwbShadowCosineToRay(shadingNormal, rayDirection);
-    const float fresnelCosI = lerp(cosI, shadingCosI, saturate(smoothNormalWeight));
+    // The Fresnel blend cosine is a (0, 1) bounded factor input, so half arithmetic is sufficient here.
+    const half fresnelCosI = half(lerp(cosI, shadingCosI, saturate(smoothNormalWeight)));
     acc.bins[slot].interfaceTransmittance *= nwbShadowFresnelTransmittedFraction(ior, fresnelCosI);
 
     acc.bins[slot].tMin = min(acc.bins[slot].tMin, t);
@@ -144,7 +145,8 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
 // therefore contributes neither absorption nor Fresnel loss.
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
-    float interfaceTransmittance = 1.0;
+    // The interface weight and Fresnel product are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    half interfaceTransmittance = half(1.0h);
     for(uint i = 0u; i < acc.binCount; ++i){
         float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
         const uint crossingCount = min(acc.bins[i].crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
@@ -174,11 +176,11 @@ half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
                 chordLength = max(chordLength, max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0));
         }
 
-        const float interfaceWeight = smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength);
-        interfaceTransmittance *= lerp(1.0, acc.bins[i].interfaceTransmittance, interfaceWeight);
+        const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
+        interfaceTransmittance *= half(lerp(1.0, acc.bins[i].interfaceTransmittance, float(interfaceWeight)));
         opticalDepth += acc.bins[i].absorptionCoeff * chordLength;
     }
-    return half3(saturate(float3(acc.transmittance) * interfaceTransmittance * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0)))));
+    return half3(saturate(float3(acc.transmittance) * float(interfaceTransmittance) * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0)))));
 }
 
 

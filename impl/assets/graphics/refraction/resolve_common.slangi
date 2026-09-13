@@ -85,11 +85,12 @@ float3 nwbRefractionBackground(const uint2 pixel){
     const float3 behind = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb;
     const float behindExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r;
     const float frontExtinction = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r;
-    const float frontTransmittance = exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
-    const float backTransmittance = exp(-min(behindExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION)));
+    // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    const half frontTransmittance = half(exp(-min(frontExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION))));
+    const half backTransmittance = half(exp(-min(behindExtinction, float(NWB_AVBOIT_EXTINCTION_SATURATION))));
     // AVBOIT weights contain transmittance from fragments in front of the retained primary. Undo that prefix
     // here; the final compositor applies it once. Clamp only the ill-conditioned, visually occluded tail.
-    return behind / max(frontTransmittance, 1e-4) + opaque * backTransmittance;
+    return behind / max(float(frontTransmittance), 1e-4) + opaque * float(backTransmittance);
 }
 
 half nwbRefractionFresnelTransmission(const float ior, const float cosine){

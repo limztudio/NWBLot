@@ -175,12 +175,13 @@ bool nwbReflectionValidateScreenHit(
     const float residual = max(length(intersection - position) - footprint - length(positionError), 0.0);
     if(residual >= g_NwbReflectionParameters.screenThickness)
         return false;
-    const float geometryConfidence = 1.0 - smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual);
+    // Confidence gates are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    const half geometryConfidence = half(1.0 - smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual));
     const float2 edgeDistance = min(uv, 1.0 - uv);
-    const float2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0
-        ? smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance)
-        : float2(1.0);
-    confidence = geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y;
+    const half2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0
+        ? half2(smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance))
+        : half2(half(1.0h));
+    confidence = float(geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y);
     confidence *= smoothstep(0.02, 0.2, abs(incidence));
 
     // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the
@@ -188,10 +189,10 @@ bool nwbReflectionValidateScreenHit(
     const float4 specular = NwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
     if(!all(isfinite(specular)))
         return false;
-    const float strength = saturate(max(specular.x, max(specular.y, specular.z)) * 8.0);
+    const half strength = half(saturate(max(specular.x, max(specular.y, specular.z)) * 8.0));
     const float alignment = dot(cameraObserver, -surface.direction);
-    const float requiredAlignment = lerp(0.995, 0.5, saturate(specular.w) * saturate(specular.w));
-    confidence *= lerp(1.0, smoothstep(requiredAlignment - 0.1, requiredAlignment, alignment), strength);
+    const half requiredAlignment = half(lerp(0.995, 0.5, saturate(specular.w) * saturate(specular.w)));
+    confidence *= lerp(1.0, smoothstep(float(requiredAlignment) - 0.1, float(requiredAlignment), alignment), float(strength));
     // The G-buffer does not identify a thin, two-sided surface versus a solid volume's visible front boundary.
     // Keep a back-facing crossing provisional; Hybrid's default threshold sends this ambiguity to the real scene.
     if(incidence > 0.0)

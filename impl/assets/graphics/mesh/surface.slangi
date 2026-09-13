@@ -77,7 +77,8 @@ void nwbSetMeshSurfaceReflection(inout NwbMeshSurface surface, half3 specularF0,
 NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refractionIor, half3 tint, half density){
     NwbMeshSurface surface = nwbMakeMeshSurface(baseColor, normal);
     const float validIor = isfinite(float(refractionIor)) ? max(float(refractionIor), 1.0) : 1.0;
-    const float dielectricRatio = (validIor - 1.0) / (validIor + 1.0);
+    // The dielectric ratio feeds the stored half F0, so half arithmetic is sufficient here.
+    const half dielectricRatio = half((validIor - 1.0) / (validIor + 1.0));
     surface.refractionIor = half(validIor);
     nwbSetMeshSurfaceReflection(surface, half3(dielectricRatio * dielectricRatio), half(0.0));
     surface.renderCoverage = clamp(density, half(0.0), half(1.0));

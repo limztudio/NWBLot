@@ -169,10 +169,11 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
         const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
         const uint n = min(surfel.sampleCount, accumCap);
-        const float historyWeight = float(n) / float(n + 1u);
-        surfel.shR = lerp(frameShR, surfel.shR, historyWeight);
-        surfel.shG = lerp(frameShG, surfel.shG, historyWeight);
-        surfel.shB = lerp(frameShB, surfel.shB, historyWeight);
+        // The running-mean history blend is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+        const half historyWeight = half(float(n) / float(n + 1u));
+        surfel.shR = lerp(frameShR, surfel.shR, float(historyWeight));
+        surfel.shG = lerp(frameShG, surfel.shG, float(historyWeight));
+        surfel.shB = lerp(frameShB, surfel.shB, float(historyWeight));
         surfel.sampleCount = min(surfel.sampleCount + 1u, 0xFFFFu);
         g_NwbSurfelPool[surfelIndex] = surfel;
     }

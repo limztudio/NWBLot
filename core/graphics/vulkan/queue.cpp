@@ -20,6 +20,9 @@ NWB_VULKAN_BEGIN
 namespace __hidden_vulkan_queue{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
     u64 previous = value.load(MemoryOrder::relaxed);
     do{
@@ -28,6 +31,9 @@ u64 DecrementOrAbort(Atomic<u64>& value)noexcept{
     }while(!value.compare_exchange_weak(previous, previous - 1u, MemoryOrder::relaxed));
     return previous;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

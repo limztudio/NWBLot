@@ -205,7 +205,6 @@ TEST(GpuTaskGraphResourceVersion, RejectsMissingAndDuplicateTaskProducedVersionP
         EXPECT_EQ(analysis.diagnostic().resource, resource);
         EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
     }
-
 }
 
 TEST(GpuTaskGraphResourceVersion, RejectsInvalidVersionDeclarations){

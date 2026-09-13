@@ -23,8 +23,6 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
 [[nodiscard]] bool AppendCompiledOwnershipTransfer(
     GpuTaskGraphResourceStatePlan& plan,
     const GpuTaskGraphResourceView& resource,

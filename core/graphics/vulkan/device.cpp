@@ -26,8 +26,7 @@ namespace __hidden_vulkan_device{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Timeline values live within one logical-device lifetime. Indices come from the Device registry
-// (not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
+// Timeline values live within one logical-device lifetime. Indices come from the Device registry(not CommandQueue ordinals); the generation makes a recreated Device reject old tokens.
 static VulkanDetail::DeviceGenerationAllocator s_DeviceGenerationAllocator;
 
 [[nodiscard]] static u16 AllocateDeviceGeneration()noexcept{
@@ -633,7 +632,6 @@ Device::Device(const DeviceDesc& desc)
         m_context.pipelineCache = VK_NULL_HANDLE;
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache. {}"), ResultToString(res));
     }
-
 }
 Device::~Device()noexcept{
     const bool lifecycleDestructionPrepared = m_lifecycleDestructionPrepared.load(MemoryOrder::acquire);
@@ -672,11 +670,6 @@ Device::~Device()noexcept{
         m_context.pipelineCache = VK_NULL_HANDLE;
     }
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

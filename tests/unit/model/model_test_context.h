@@ -72,7 +72,6 @@ struct RuntimeContext{
             ++runtime->objectCount;
         return entity.id();
     }
-
 };
 
 

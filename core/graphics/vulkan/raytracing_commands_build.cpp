@@ -775,8 +775,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         );
     }
 
-    // OMM update invariants also cover the micromap handle and its index/usage metadata. Those details are not
-    // persisted in the AS signature, so this path remains fail-closed.
+    // OMM update invariants also cover the micromap handle and its index/usage metadata. Those details are not persisted in the AS signature, so this path remains fail-closed.
     if(performUpdate && hasOpacityMicromap){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to update BLAS: opacity-micromap geometry updates are unsupported"));
         return;
@@ -1029,7 +1028,6 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
                 retainResource(lss.indexBuffer);
         }
     }
-
 }
 
 void CommandList::buildTopLevelAccelStructFromBuffer(

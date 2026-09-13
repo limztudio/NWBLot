@@ -20,14 +20,19 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace DescriptorBufferRoundTripDetail{};
 namespace __hidden_descriptor_buffer_round_trip_tests = DescriptorBufferRoundTripDetail;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace DescriptorBufferRoundTripDetail{
 
-// Holds executeCommandLists inside the resolved callback after native acceptance. The caller can then observe state
-// that must be published before any externally owned acceptance callback runs.
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Holds executeCommandLists inside the resolved callback after native acceptance. The caller can then observe state that must be published before any externally owned acceptance callback runs.
 class BlockingResolvedSubmissionSignal final : NoCopy{
 private:
     [[nodiscard]] static bool prepare(
@@ -108,30 +113,16 @@ private:
     u32 m_invocationCount = 0u;
 };
 
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
 
 struct NativeBufferAddressQuery{
     VkBuffer buffer = VK_NULL_HANDLE;
     VkDeviceAddress address = 0u;
 };
 
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
-
 struct NativeUploadCopyCommand{
     VkBuffer source = VK_NULL_HANDLE;
     VkDeviceSize sourceOffset = 0u;
 };
-
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
 
 struct NativeUploadReuseCapture{
     NativeBufferAddressQuery addressQueries[2u] = {};
@@ -140,10 +131,6 @@ struct NativeUploadReuseCapture{
     u32 copyCommandCount = 0u;
 };
 
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
 
 class ScopedNativeUploadReuseTrace final : NoCopy{
 private:
@@ -230,32 +217,26 @@ private:
     bool m_armed = false;
 };
 
-};
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace DescriptorBufferRoundTripDetail{
 
 thread_local NativeUploadReuseCapture* ScopedNativeUploadReuseTrace::s_activeCapture = nullptr;
 
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
-
 PFN_vkGetBufferDeviceAddress ScopedNativeUploadReuseTrace::s_forwardGetBufferDeviceAddress = nullptr;
-
-};
-
-
-namespace DescriptorBufferRoundTripDetail{
-
 PFN_vkCmdCopyBuffer ScopedNativeUploadReuseTrace::s_forwardCmdCopyBuffer = nullptr;
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
-// Native rejection must leave destination bytes untouched and return the exact upload suballocation for retry. The
-// test observes only Vulkan calls at its own boundary; production exposes no allocator identity, counter, or friend.
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Native rejection must leave destination bytes untouched and return the exact upload suballocation for retry. The test observes only Vulkan calls at its own boundary; production exposes no allocator identity, counter, or friend.
 TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuballocationAtNativeBoundary){
     HeadlessGraphicsScope uploadScope;
     ASSERT_TRUE(uploadScope.initialize());
@@ -418,8 +399,7 @@ TEST_F(DescriptorBufferRoundTripTest, RejectedNativeSubmissionReusesUploadSuball
 }
 
 
-// Accepted publication for a large owner batch must retain its upload chunk before resolving an external hook. Empty
-// peers put the uploading owner after the lookup threshold without creating a staging chunk per command list.
+// Accepted publication for a large owner batch must retain its upload chunk before resolving an external hook. Empty peers put the uploading owner after the lookup threshold without creating a staging chunk per command list.
 TEST_F(DescriptorBufferRoundTripTest, LargeOwnerSubmissionRecyclesUploadChunkAfterAcceptedBatch){
     HeadlessGraphicsScope uploadScope;
     ASSERT_TRUE(uploadScope.initialize());

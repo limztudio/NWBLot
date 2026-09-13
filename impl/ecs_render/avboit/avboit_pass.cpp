@@ -63,6 +63,10 @@ static void DispatchAvboitCompute(
     commandList.dispatch(groupCountX, 1, 1);
 }
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 
@@ -536,7 +540,6 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     NWB_ASSERT(avboitTargets.valid());
 
     // Packet states are graph-owned; this thunk holds only the raster pass.
-
     if(
         preparedExtinctionDrawItems
         || preparedExtinctionCsgFrameData
@@ -600,7 +603,6 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     NWB_ASSERT(avboitTargets.valid());
 
     // This thunk owns only the raster pass and its final transition.
-
     if(
         preparedAccumulationDrawItems
         || preparedAccumulationCsgFrameData
@@ -678,7 +680,6 @@ void RendererAvboitSystem::dispatchAvboitDepthWarp(
         *timingRecorded = timing.valid();
 
     // This thunk holds only the native dispatch.
-
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(
@@ -709,7 +710,6 @@ void RendererAvboitSystem::dispatchAvboitIntegration(
         *timingRecorded = timing.valid();
 
     // This thunk holds only the native dispatch.
-
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
 
     __hidden_avboit::DispatchAvboitCompute(

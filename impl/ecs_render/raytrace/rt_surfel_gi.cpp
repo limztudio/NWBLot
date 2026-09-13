@@ -124,8 +124,7 @@ struct SurfelGiAgeFreeGraphTask{
             }
             return false;
         }
-        // The timestamp endpoint follows in the remaining-GI callback, but this callback's nested marker must
-        // close before the packet recorder advances to the graph-owned cell-head clear task.
+        // The timestamp endpoint follows in the remaining-GI callback, but this callback's nested marker must close before the packet recorder advances to the graph-owned cell-head clear task.
         if(payload.asyncTiming->has_value() && !Core::FinishSplitGpuTimingMarker(payload.asyncTiming))
             return false;
         return true;
@@ -491,7 +490,6 @@ struct SurfelGiGraphTask{
     static void discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
-
 };
 
 
@@ -504,9 +502,7 @@ struct SurfelGiGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task so the renderer's
-// CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared
-// packet accepts.
+// The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task so the renderer's CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared packet accepts.
 struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -817,8 +813,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
             .setByteSize(static_cast<u64>(sizeof(u32)) * NWB_SURFEL_COUNTER_SIZE)
             .setStructStride(sizeof(u32))
             .setCanHaveUAVs(true)
-            // The persistent counter is written by GI on Compute and may be copied by the late diagnostic
-            // readback on Transfer before the next Compute frame imports its accepted tail state.
+            // The persistent counter is written by GI on Compute and may be copied by the late diagnostic readback on Transfer before the next Compute frame imports its accepted tail state.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setDebugName(Name("surfel_counter"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
@@ -1902,8 +1897,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     if(!dispatchTrace && !dispatchResolve && !dispatchRemaining)
         return true;
 
-    // Direct callers stage heap-selected trace inputs locally; prepared graph callers inherit the compiler-lowered
-    // trace-argument state after the graph-owned build-arguments task.
+    // Direct callers stage heap-selected trace inputs locally; prepared graph callers inherit the compiler-lowered trace-argument state after the graph-owned build-arguments task.
     if(dispatchTrace){
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelTrace, m_graphics.getDevice(), commandList);
         if(!graphEntryStatesOwned && useHwTrace){
@@ -2018,16 +2012,13 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         commandList.dispatch(DivideUp(targets.width, groupSize), DivideUp(targets.height, groupSize), 1u);
     }
 
-    // The prepared graph declares the actual downstream consumer: live Lighting samples the output, while the
-    // lagged route copies it. Keep the compatibility return layout for direct callers, but let graph lowering own
-    // the precise UAV-to-SRV or UAV-to-CopySource handoff.
+    // The prepared graph declares the actual downstream consumer: live Lighting samples the output, while the lagged route copies it. Keep the compatibility return layout for direct callers, but let graph lowering own the precise UAV-to-SRV or UAV-to-CopySource handoff.
     if(!graphOwnsResolve){
         commandList.setTextureState(targets.surfelIrradiance.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
     }
 
-    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only
-    // consumes completed diagnostics; resource-state transitions and native copy recording live in that graph task.
+    // The graph-owned late copy publishes its token only after Transfer/Compute/Graphics accepts. This pass only consumes completed diagnostics; resource-state transitions and native copy recording live in that graph task.
     {
         const u32 frameIndex = m_rayTracingState.m_surfelFrameIndex;
         Core::Buffer* readback = m_rayTracingState.m_surfelCounterReadback.get();

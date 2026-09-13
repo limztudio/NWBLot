@@ -63,6 +63,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_accel_geometry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_accel_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_build.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_tlas.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_commands_dispatch.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_micromap.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/raytracing_pipeline.cpp"

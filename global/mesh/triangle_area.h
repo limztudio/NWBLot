@@ -157,7 +157,8 @@ template<typename Vector3Like>
     const __m128d xy = _mm_set_pd(areaNormal.y, areaNormal.x);
     const __m128d xySquared = _mm_mul_pd(xy, xy);
     const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
-    return _mm_cvtsd_f64(xySum) + areaNormal.z * areaNormal.z;
+    const __m128d zSquared = _mm_mul_sd(_mm_set_sd(areaNormal.z), _mm_set_sd(areaNormal.z));
+    return _mm_cvtsd_f64(_mm_add_sd(xySum, zSquared));
 #else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
 #endif

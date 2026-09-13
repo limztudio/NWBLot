@@ -19,7 +19,17 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_CsgShapeInlineParameterMaxBytes = sizeof(Float4) * 2u;
+inline constexpr usize s_CsgShapeInlineParameterFloat4Count = 2u;
+inline constexpr usize s_CsgShapeInlineParameterMaxBytes = sizeof(Float4) * s_CsgShapeInlineParameterFloat4Count;
+inline constexpr f32 s_CsgShapeBoundsW = 0.0f;
+inline constexpr u32 s_CsgCapsuleAxisSelectX = 0u;
+inline constexpr u32 s_CsgCapsuleAxisSelectY = 1u;
+inline constexpr u32 s_CsgCapsuleAxisSelectZ = 0u;
+inline constexpr u32 s_CsgCapsuleAxisSelectW = 0u;
+inline constexpr Float4 s_CsgPlaneDefaultNormalDistance = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+inline constexpr Float4 s_CsgBoxDefaultHalfExtents = Float4(1.0f, 1.0f, 1.0f, 0.0f);
+inline constexpr Float4 s_CsgSphereDefaultRadius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+inline constexpr Float4 s_CsgCapsuleDefaultRadiusHalfHeight = Float4(1.0f, 1.0f, 0.0f, 0.0f);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,19 +66,19 @@ struct CsgShapeTypeInfo{
 
 
 struct CsgPlaneShapeParameters{
-    Float4 normalDistance = Float4(0.0f, 1.0f, 0.0f, 0.0f);
+    Float4 normalDistance = s_CsgPlaneDefaultNormalDistance;
 };
 
 struct CsgBoxShapeParameters{
-    Float4 halfExtents = Float4(1.0f, 1.0f, 1.0f, 0.0f);
+    Float4 halfExtents = s_CsgBoxDefaultHalfExtents;
 };
 
 struct CsgSphereShapeParameters{
-    Float4 radius = Float4(1.0f, 0.0f, 0.0f, 0.0f);
+    Float4 radius = s_CsgSphereDefaultRadius;
 };
 
 struct CsgCapsuleShapeParameters{
-    Float4 radiusHalfHeight = Float4(1.0f, 1.0f, 0.0f, 0.0f);
+    Float4 radiusHalfHeight = s_CsgCapsuleDefaultRadiusHalfHeight;
 };
 
 static_assert(IsStandardLayout_V<CsgPlaneShapeParameters>, "CsgPlaneShapeParameters must stay binary-stable");

@@ -105,7 +105,7 @@ template<typename ParameterT>
 
     return AabbTests::Transform(
         shapeToWorld,
-        VectorSetW(VectorNegate(halfExtents), 0.0f),
+        VectorSetW(VectorNegate(halfExtents), s_CsgShapeBoundsW),
         halfExtents,
         outMinBounds,
         outMaxBounds
@@ -121,10 +121,10 @@ template<typename ParameterT>
     if(Vector3IsNaN(radius) || Vector3IsInfinite(radius) || !Vector3Greater(radius, VectorZero()))
         return false;
 
-    const SIMDVector localMax = VectorSetW(radius, 0.0f);
+    const SIMDVector localMax = VectorSetW(radius, s_CsgShapeBoundsW);
     return AabbTests::Transform(
         shapeToWorld,
-        VectorSetW(VectorNegate(localMax), 0.0f),
+        VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW),
         localMax,
         outMinBounds,
         outMaxBounds
@@ -150,10 +150,16 @@ template<typename ParameterT>
         return false;
 
     const SIMDVector yExtent = VectorAdd(halfHeight, radius);
-    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, VectorSelectControl(0u, 1u, 0u, 0u)), 0.0f);
+    const SIMDVector capsuleSelect = VectorSelectControl(
+        s_CsgCapsuleAxisSelectX,
+        s_CsgCapsuleAxisSelectY,
+        s_CsgCapsuleAxisSelectZ,
+        s_CsgCapsuleAxisSelectW
+    );
+    const SIMDVector localMax = VectorSetW(VectorSelect(radius, yExtent, capsuleSelect), s_CsgShapeBoundsW);
     return AabbTests::Transform(
         shapeToWorld,
-        VectorSetW(VectorNegate(localMax), 0.0f),
+        VectorSetW(VectorNegate(localMax), s_CsgShapeBoundsW),
         localMax,
         outMinBounds,
         outMaxBounds
@@ -226,7 +232,7 @@ template<typename ParameterT>
     CsgBoxShapeParameters parameters;
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
-    const SIMDVector halfExtents = VectorSetW(LoadFloat(parameters.halfExtents), 0.0f);
+    const SIMDVector halfExtents = VectorSetW(LoadFloat(parameters.halfExtents), s_CsgShapeBoundsW);
     if(!BuildBoxBounds(shapeToWorld, halfExtents, outMinBounds, outMaxBounds))
         return false;
 

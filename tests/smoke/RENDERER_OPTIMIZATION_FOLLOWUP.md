@@ -6,11 +6,11 @@ This pass starts at `296e8f485` after the completed ten-step evaluation in `REND
 | --- | --- | --- | --- |
 | 11 | Index tracked resource-state history by resource | `core/task/gpu` | Retained for memory/scanning improvements; isolated timing gate did not pass |
 | 12 | Index previous uses of each resource within a task | `core/task/gpu` | Retained for planning/allocation improvements; isolated timing gate inconclusive |
-| 13 | Reuse identical zero-extent shadow visibility samples | Shadow shaders | Proposal preparation |
-| 14 | Cull non-opaque candidates in opaque hardware-shadow queries | Shadow shaders | Pending |
-| 15 | Cache valid normalized normals for dense reflection filtering | Reflection filtering | Pending |
-| 16 | Compile reflection spatial variants for supported radii | Reflection filtering/resources | Pending; separate from Step 15 |
-| 17 | Reuse existing caustic tile geometry for center/spacing reads | Caustic resolve | Pending |
+| 13 | Reuse identical zero-extent shadow visibility samples | Shadow shaders | Not retained; finite-light regression |
+| 14 | Cull non-opaque candidates in opaque hardware-shadow queries | Shadow shaders | Not retained; inconclusive timing below the practical gate |
+| 15 | Cache valid normalized normals for dense reflection filtering | Reflection filtering | Not retained; below the practical frame-time gate |
+| 16 | Compile reflection spatial variants for supported radii | Reflection filtering/resources | Retained for bounded shared storage and pipeline reuse |
+| 17 | Reuse existing caustic tile geometry for center/spacing reads | Caustic resolve | Not retained; no demonstrated useful timing benefit |
 
 ## Evaluation contract
 
@@ -331,3 +331,28 @@ Evidence: `__artifacts/reflection_optimization_followup/step17/{native_baseline_
 The initial timing preflight stopped before any GPU trial because candidate capture commands were reconstructed using the baseline module's physical launcher path. All four baseline commands matched; each candidate command differed only in its launcher path, and the two launchers were byte-identical. The checker now derives the launcher from the qualified arm's frozen source manifest, requires source-inventory membership and matching bytes, and retains exact full-command validation. The synthetic replay test now uses separate physical baseline/candidate roots and rejects wrong-root, unpinned and tampered launchers. All 57 parser tests pass. No renderer, shader arithmetic, capture settings, image thresholds or performance gates changed.
 
 The original 16 Opt captures (eight footprint and eight combined optical captures) passed their original GPU-debug and visual gates; the first timing preflight and all raw evidence remain under `step17/timing_execution_v1`. New source freezes and fresh footprint qualification precede the next timing attempt. Native99 Opt/Dbg, combined optical and emitted evidence remain applicable only through explicit equality checks on the unchanged renderer binaries, runtimes, native modules and relevant sources. Correction evidence: `step17/{qualification_launcher_fix_v1,qualification_launcher_fix_tests_v1,evaluation_plan_v6.json}`.
+
+## Step 17: cached caustic geometry evaluated and not retained
+
+The candidate reused the wavelet tile's existing validity and half3 world-coordinate arrays for the center and valid right neighbor at steps 1, 2 and 4. It preserved the raw geometry fetch for invalid right neighbors, whose nonzero coordinates still determine receiver spacing. Actual packed SPIR-V confirms that branch, the same half3-to-float3 conversion, unchanged filter arithmetic, two barriers, descriptor/push layout and shared allocation. The larger-step and other-stage instruction regions remain identical under consistent SPIR-V ID renaming. The candidate module is 24,204 bytes versus 23,996; removing image reads does not imply a smaller program or fewer physical memory transactions. The complete Opt packed comparison changes only the caustic resolve payload and shader index, one of 167 logical records among 221 payloads. Dbg native modules match the corresponding inspected packed bytes; no complete Dbg payload comparison is claimed.
+
+Both baseline and candidate passed two native GTests covering 99 internal wavelet scenarios in each of Opt and Dbg, with exact output RGBA16 equality. All original 16 Opt GPU-debug captures passed: four footprint and four combined reflection/refraction/caustic variants for each arm. After the common launcher correction, all eight new footprint captures passed using the corrected frozen producer. Their populated/sparse positive receiver pixels were 32,348/6,832 for baseline and 32,428/6,823 for candidate; occupied 16x16 image tiles were 168/42 and 170/42. These are visible footprint measurements, not internal shader occupancy. All capture logs prove actual GPU debug activation and framebuffer source frame 359 at presentation 360. The original paired full-scene images differ, including caustics-disabled controls; no exact stochastic full-scene parity or causal image-difference claim is made. The 99-scenario native comparison supplies the exact kernel evidence.
+
+The final source freezes use common commit `111329582` with precisely one baseline/candidate source delta: the proposed caustic shader. Corrected freezes reuse the original renderer binaries and authored runtime files byte-for-byte. Their only changes relative to the original same-arm source freezes are the common qualification checker, its integration test and this report. The explicit lineage preserves the applicability of the native, original combined-scene and actual emitted-module evidence. The timing runner independently replays the new raw footprint reports, including each arm's own pinned capture launcher. The earlier timing attempt stopped in preflight and produced no GPU trial; it remains preserved separately.
+
+### Complete original timing gate
+
+The final campaign completed every one of 32 launches: eight balanced blocks for each of the populated and sparse views, two excluded warm-up publications and six retained publications per trial, with at least 100 completed frames required. Each workload contains 2,880 measured GPU frames, 5,760 total. No completed trial was discarded or retried. Hardware routing, fixed scene inputs, photon budget/schedule, disabled auxiliary reflection/refraction, original 3%/0.02 ms practical threshold, control tolerances and confidence calculations were unchanged. The secondary range is the whole caustic resolve scope, not an invented per-wavelet timing.
+
+| Workload | Baseline frame ms | Candidate frame ms | Paired frame change, 95% interval (ms) | Practical threshold ms | Original status |
+| --- | ---: | ---: | --- | ---: | --- |
+| Populated | 10.356085 | 10.297871 | -0.058214 [-0.126434, +0.003690] | 0.310683 | `control_uncertain` |
+| Sparse | 7.716060 | 7.721401 | +0.005341 [-0.039274, +0.054528] | 0.231482 | `control_uncertain` |
+
+The populated resolve scope changed from 1.062217 to 1.076839 ms, paired change +0.014622 with interval [-0.003738, +0.032881]. Sparse resolve changed from 0.751392 to 0.741335 ms, change -0.010058 with interval [-0.043128, +0.017894]. Neither demonstrates a resolved improvement. Photon, deferred-composite and deferred-lighting controls fail the original equivalence test in both workloads; shadow visibility is additionally uncertain in the sparse view. No control meets the original material-drift classification. Uncertain controls remain uncertain, and neither frame result reaches the practical improvement gate even independently of that uncertainty.
+
+### Decision and restoration
+
+Do not retain the shader candidate: correctness passed, but the experiment did not establish useful measured benefit. Unlike Step 16, it reduces no shared allocation and has no separate predeclared memory-retention basis. The original shader was restored, both Opt and Dbg asset cooks/builds passed, and the full renderer dependency and authored-runtime inventories match the final frozen baselines exactly. The common native99 fixture, measurement support and launcher regression fix remain. There is no claim of a demonstrated performance regression or improvement from this candidate.
+
+Evidence remains under `__artifacts/reflection_optimization_followup/step17/`: `baseline_*_v2`/`candidate_*_v2`, `corrected_freeze_lineage_v2.json`, `baseline_footprint_v2`/`candidate_footprint_v2`, original `*_combined_v1`, `candidate_correctness_v1`, `emitted_native_review_v1`, `whole_volume_compare_v1`, `capture_independent_review_v1`, `corrected_qualification_review_v2`, all raw `timing_execution_v2` trials, `timing_summary_v2.json`, the independent `timing_review_v2` reconstruction, and `restoration_v1/complete.json`. The source proposal, failed auxiliary baseline test, failed preflight and all earlier captures/freezes remain intact.

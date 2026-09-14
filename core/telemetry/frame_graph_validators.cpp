@@ -45,6 +45,7 @@ namespace __hidden_frame_graph_validators{
     ;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -104,9 +105,7 @@ bool IsValidFrameGraphQueueAssignmentReason(const FrameGraphQueueAssignmentReaso
     }
 }
 
-bool IsValidFrameGraphQueueAssignmentAcceptance(
-    const FrameGraphQueueAssignmentAcceptance::Enum acceptance
-)noexcept{
+bool IsValidFrameGraphQueueAssignmentAcceptance(const FrameGraphQueueAssignmentAcceptance::Enum acceptance)noexcept{
     switch(acceptance){
     case FrameGraphQueueAssignmentAcceptance::NotAccepted:
     case FrameGraphQueueAssignmentAcceptance::First:
@@ -118,9 +117,7 @@ bool IsValidFrameGraphQueueAssignmentAcceptance(
     }
 }
 
-bool IsValidFrameGraphTaskPacketizationDecision(
-    const FrameGraphTaskPacketizationDecision::Enum decision
-)noexcept{
+bool IsValidFrameGraphTaskPacketizationDecision(const FrameGraphTaskPacketizationDecision::Enum decision)noexcept{
     switch(decision){
     case FrameGraphTaskPacketizationDecision::FirstTask:
     case FrameGraphTaskPacketizationDecision::MergeNotRequested:
@@ -297,9 +294,7 @@ bool IsValidFrameGraphRuntimeStatistics(const FrameGraphRuntimeStatistics& stati
     return true;
 }
 
-bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics
-)noexcept{
+bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
     if(
         statistics.graphGeneration == 0u
         || statistics.planGeneration == 0u
@@ -444,10 +439,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(
     return true;
 }
 
-bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
-    const FrameGraphPhysicalQueueRuntimeStatistics& statistics,
-    const FrameGraphRuntimeStatistics& ownerStatistics
-)noexcept{
+bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhysicalQueueRuntimeStatistics& statistics, const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
     if(
         !IsValidFrameGraphRuntimeStatistics(ownerStatistics)
         || !IsValidFrameGraphPhysicalQueueRuntimeStatistics(statistics)
@@ -514,8 +506,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Submission acceptance and per-queue snapshots visit packets in different orders, so their positive floating
-    // duration sums can differ by one rounding bit. Counts remain the exact owner-conservation contract.
+    // Submission acceptance and per-queue snapshots visit packets in different orders, so their positive floating duration sums can differ by one rounding bit. Counts remain the exact owner-conservation contract.
     return submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
         && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount
@@ -538,9 +529,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
     ;
 }
 
-bool IsValidFrameGraphPacketSubmissionStatistics(
-    const FrameGraphPacketSubmissionStatisticsRecord& statistics
-)noexcept{
+bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
     if(
         statistics.ownerNodeIndex == Limit<u32>::s_Max
         || statistics.packetIndex == Limit<u32>::s_Max

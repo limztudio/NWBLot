@@ -16,7 +16,6 @@
 #include <core/common/log.h>
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -694,10 +693,12 @@ bool UiSystem::declareTaskGraphDrawUploads(
     )
         return false;
 
-    const auto declareUpload = [&](const Name& identity,
-                                   const AStringView label,
-                                   const UiTextureUploadVector& bytes,
-                                   const Core::GpuGraphResourceId destination){
+    const auto declareUpload = [&](
+        const Name& identity,
+        const AStringView label,
+        const UiTextureUploadVector& bytes,
+        const Core::GpuGraphResourceId destination
+    ){
         const Core::GpuUploadBlobId blob = graph.copyUploadData(
             bytes.data(),
             bytes.size(),
@@ -958,8 +959,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
     resourceUses.push_back(Core::GpuTaskResourceUse{
             .resource = backbuffer,
             .range = {},
-            // Rasterization writes the exact renderer-owned presentation texture. Its typed import owns the
-            // terminal Present transition after this final overlay use.
+            // Rasterization writes the exact renderer-owned presentation texture. Its typed import owns the terminal Present transition after this final overlay use.
             .requiredState = Core::ResourceStates::RenderTarget,
             .access = Core::GpuTaskResourceAccess::Write,
     });

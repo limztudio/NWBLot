@@ -38,7 +38,6 @@ namespace __hidden_runtime_cache_resources{
 static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
 
 
-
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
     if(instance.sourceName)

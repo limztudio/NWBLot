@@ -15,12 +15,13 @@
 #include <global/math/frame.h>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Mesh cook meshlet partition and build.
 
 
@@ -36,8 +37,7 @@ struct MeshletTriangleData{
 };
 
 
-// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, so the meshlet scoring helpers
-// can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
+// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, so the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
 struct MeshletTriangleCalculation{
     MeshletTriangleVectors vectors;
 };
@@ -394,7 +394,6 @@ public:
     CookEntryT& entry,
     Core::CpuTaskScheduler& cpuScheduler
     );
-
 
 
 public:
@@ -1418,7 +1417,11 @@ bool MeshCookMeshlets::BuildMeshlets(
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 // Deterministic CPU-side deformable CSG editing facade.
 
 
-// Preview and commit share one rebuild path (CsgDeformPipeline) so viability always agrees. This header preserves the existing include path; domain logic lives in 
+// Preview and commit share one rebuild path (CsgDeformPipeline) so viability always agrees. This header preserves the existing include path; domain logic lives in
 // deform_types / deform_validator / deform_cutter_field / deform_wall_builder / deform_cap_builder / deform_pipeline.
 // - Sequential cuts apply in order, one rebuild per active cut.
 // - Rebuild splits triangles at the zero crossing, never welds source verts.

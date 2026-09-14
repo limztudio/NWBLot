@@ -110,9 +110,13 @@ struct MaterialPassDrawContext{
     Core::CommandList& commandList;
     const DeferredFrameTargets& deferredTargets;
     Core::Framebuffer* framebuffer = nullptr;
-    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     const AvboitFrameTargets* avboitTargets = nullptr;
     const Core::ViewportState& viewportState;
+    // Prepared CSG draws consume the root tuple; regular paths leave it null.
+    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
+    // Every material path consumes one immutable Mesh-published binding generation.
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
+    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     // Graph tasks declare receiver-event images first; compat callers keep direct setup.
     bool csgReceiverSurfaceImageStatesGraphOwned = false;
     // Sample task lowers the UAV handoff first; compat callers keep their bridge.
@@ -125,10 +129,6 @@ struct MaterialPassDrawContext{
     bool materialGeometryStatesGraphOwned = false;
     // Split pairs receive generated-vertex entry states from the graph; compat keeps native handoff.
     bool emulationOutputEntryStateGraphOwned = false;
-    // Prepared CSG draws consume the root tuple; regular paths leave it null.
-    const ECSRenderDetail::CsgGraphResourceSnapshot* csgResources = nullptr;
-    // Every material path consumes one immutable Mesh-published binding generation.
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings;
 };
 
 

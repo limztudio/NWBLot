@@ -117,17 +117,17 @@ struct CaptureDrawTask{
             commandList,
             *payload.deferredTargets,
             payload.generate ? nullptr : payload.avboitTargets.refractionFramebuffer.get(),
-            MaterialPipelinePass::AvboitRefractionCapture,
             &payload.avboitTargets,
             viewport,
+            payload.csg ? &payload.csgResources : nullptr,
+            payload.frameBindings,
+            MaterialPipelinePass::AvboitRefractionCapture,
             false,
             true,
             true,
             true,
             true,
-            true,
-            payload.csg ? &payload.csgResources : nullptr,
-            payload.frameBindings
+            true
         };
         if(payload.generate)
             payload.materialSystem->generateComputeMaterialPassDrawItems(drawContext, drawItems);

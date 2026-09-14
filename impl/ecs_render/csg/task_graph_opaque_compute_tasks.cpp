@@ -96,18 +96,18 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
         commandList,
         *payload.targets,
         payload.targets->framebuffer.get(),
-        MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
         csgViewportState,
+        &payload.csgResources,
+        payload.frameBindings,
+        MaterialPipelinePass::CsgReceiverSurface,
         // Receiver-event images are raster-owned; do not claim them here.
         true,
         false,
         true,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        &payload.csgResources,
-        payload.frameBindings
+        true
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -194,17 +194,17 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
         commandList,
         *payload.targets,
         nullptr,
-        MaterialPipelinePass::Opaque,
         nullptr,
         deferredViewportState,
+        &payload.csgResources,
+        payload.frameBindings,
+        MaterialPipelinePass::Opaque,
         false,
         payload.intervalSampleImageStatesGraphOwned,
         payload.csgClipBufferStatesGraphOwned,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        &payload.csgResources,
-        payload.frameBindings
+        true
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;

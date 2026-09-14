@@ -29,8 +29,8 @@ class RendererFramePipeline;
 
 // Graphics-prefix timing resolution owns packet-merge checks plus ticket rebinding.
 struct GraphicsPrefixTimingResolutionResult{
-    bool bindingsValid = true;
     usize uniquePacketCount = 0u;
+    bool bindingsValid = true;
     bool asyncSpansOnePacket = true;
 };
 

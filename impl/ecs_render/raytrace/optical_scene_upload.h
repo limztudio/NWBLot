@@ -71,13 +71,13 @@ private:
 
 private:
     Core::BufferHandle m_buffer;
-    Core::GpuPhysicalQueueId m_primaryQueue;
     RayTracingOpticalSceneUploadHandle m_acceptedUpload;
     RayTracingOpticalSceneUploadHandle m_reservedUpload;
     Core::QueueSubmissionToken m_acceptedToken;
     u64 m_nextSequence = 1u;
     u64 m_acceptedSequence = 0u;
     u64 m_reservedSequence = 0u;
+    Core::GpuPhysicalQueueId m_primaryQueue;
     mutable Futex m_mutex;
     bool m_retired = false;
     bool m_quarantined = false;

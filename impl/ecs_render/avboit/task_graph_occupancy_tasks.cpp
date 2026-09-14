@@ -162,17 +162,17 @@ namespace RendererTaskGraphDetail{
         commandList,
         *payload.targets,
         nullptr,
-        MaterialPipelinePass::AvboitOccupancy,
         &payload.targets->avboit,
         viewportState,
+        csgComputeEmulation ? &payload.csgResources : nullptr,
+        payload.frameBindings,
+        MaterialPipelinePass::AvboitOccupancy,
         false,
         csgComputeEmulation && payload.csgIntervalSampleImageStatesGraphOwned,
         csgComputeEmulation && payload.csgClipBufferStatesGraphOwned,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        csgComputeEmulation ? &payload.csgResources : nullptr,
-        payload.frameBindings
+        true
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -245,17 +245,17 @@ namespace RendererTaskGraphDetail{
         commandList,
         *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->avboit.lowFramebuffer.get() : nullptr,
-        MaterialPipelinePass::AvboitOccupancy,
         &payload.targets->avboit,
         viewportState,
+        nullptr,
+        payload.frameBindings,
+        MaterialPipelinePass::AvboitOccupancy,
         false,
         false,
         false,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        nullptr,
-        payload.frameBindings
+        true
     };
     if(payload.phase == Phase::Generate){
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);

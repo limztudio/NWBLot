@@ -723,9 +723,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     serializationContext.submitter = &submitter;
 
     NativeTaskAcceptanceObserver secondTaskAcceptance{
-        .acceptedCount = 0u,
         .lastToken = {},
         .order = &acceptanceOrder,
+        .acceptedCount = 0u,
         .orderMarker = 4u,
     };
     const GpuTaskGraphTaskAcceptedCallback taskAcceptedCallbacks[] = {

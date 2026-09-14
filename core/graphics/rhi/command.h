@@ -135,9 +135,7 @@ struct GpuCommandArenaStatistics{
 // GpuRecordedPacket domain/index. Counters sample independently and may advance during the query; the storage
 // estimate covers handle objects only, not opaque driver memory.
 struct GpuCommandArenaWorkerStatistics{
-    GpuPhysicalQueueId queue;
     u64 recordingWorkerDomain = 0u;
-    u32 recordingWorkerIndex = 0u;
     u64 commandPoolEpochCount = 0u;
     u64 pendingCommandPoolEpochCount = 0u;
     u64 currentCommandBufferCount = 0u;
@@ -148,6 +146,8 @@ struct GpuCommandArenaWorkerStatistics{
     u64 growthEventCount = 0u;
     u64 resetEventCount = 0u;
     u64 nativeHandleStorageLowerBoundBytes = 0u;
+    GpuPhysicalQueueId queue;
+    u32 recordingWorkerIndex = 0u;
 
 
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }

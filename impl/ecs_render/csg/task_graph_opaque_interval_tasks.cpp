@@ -281,17 +281,17 @@ bool CsgIntervalSampleGraphTask::record(
             commandList,
             deferredTargets,
             deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::Opaque,
             nullptr,
             deferredViewportState,
+            &payload.csgResources,
+            payload.frameBindings,
+            MaterialPipelinePass::Opaque,
             false,
             payload.intervalSampleImageStatesGraphOwned,
             payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.csgComputeEmulationOutputStatesGraphOwned,
-            &payload.csgResources,
-            payload.frameBindings
+            payload.csgComputeEmulationOutputStatesGraphOwned
         };
         if(!opaqueDrawItems.csg.empty()){
             if(payload.csgComputeEmulationOutputStatesGraphOwned){

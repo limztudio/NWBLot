@@ -339,17 +339,17 @@ void RendererAvboitSystem::renderPreparedTransparentCsgIntervals(
         commandList,
         targets,
         targets.framebuffer.get(),
-        MaterialPipelinePass::CsgReceiverSurface,
         nullptr,
         viewportState,
+        &csgResources,
+        frameBindings,
+        MaterialPipelinePass::CsgReceiverSurface,
         receiverSurfaceImageStatesGraphOwned,
         false,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        false,
-        &csgResources,
-        frameBindings
+        false
     };
     m_materialSystem.renderMaterialPassDrawItems(
         csgReceiverSurfaceDrawContext,

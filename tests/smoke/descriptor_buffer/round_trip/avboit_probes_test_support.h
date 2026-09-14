@@ -39,23 +39,23 @@ struct NativePacketAsyncAvboitExtinctionLifecycleTask{
 
     struct Payload{
         BufferExpectation expectations[7u] = {};
-        usize expectationCount = 0u;
         TextureExpectation textureExpectations[8u] = {};
+        usize expectationCount = 0u;
         usize textureExpectationCount = 0u;
         u32* recordOrdinal = nullptr;
-        u32 expectedOrdinal = 0u;
         Device* device = nullptr;
         GpuTimingRecorder* timing = nullptr;
         GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<GpuTimingMeasure>* sharedTiming = nullptr;
         const GpuTimingScopeDefinition* timingScope = &s_AsyncAvboitExtinctionLifecycleScope;
-        bool startTiming = false;
-        bool finishTiming = false;
-        bool recordTiming = false;
         bool* timingStarted = nullptr;
         bool* timingFinished = nullptr;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
+        u32 expectedOrdinal = 0u;
+        bool startTiming = false;
+        bool finishTiming = false;
+        bool recordTiming = false;
     };
 
     [[nodiscard]] static bool record(

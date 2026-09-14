@@ -138,9 +138,7 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
         const u64 currentCommandBufferCount = m_directCommandBufferCount.load(MemoryOrder::relaxed);
         const u64 pendingCommandBufferCount = m_pendingDirectCommandBufferCount.load(MemoryOrder::relaxed);
         return GpuCommandArenaWorkerStatistics{
-            .queue = m_physicalQueue,
             .recordingWorkerDomain = 0u,
-            .recordingWorkerIndex = 0u,
             .commandPoolEpochCount = currentCommandBufferCount,
             .pendingCommandPoolEpochCount = pendingCommandBufferCount,
             .currentCommandBufferCount = currentCommandBufferCount,
@@ -152,6 +150,8 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
             .resetEventCount = m_directCommandBufferResetEventCount.load(MemoryOrder::relaxed),
             .nativeHandleStorageLowerBoundBytes =
                 currentCommandBufferCount * (sizeof(VkCommandPool) + sizeof(VkCommandBuffer)),
+            .queue = m_physicalQueue,
+            .recordingWorkerIndex = 0u,
         };
     }
 
@@ -161,9 +161,7 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
     const u64 currentCommandBufferCount = arena->currentCommandBufferCount.load(MemoryOrder::relaxed);
     const u64 pendingCommandBufferCount = arena->pendingCommandBufferCount.load(MemoryOrder::relaxed);
     return GpuCommandArenaWorkerStatistics{
-        .queue = m_physicalQueue,
         .recordingWorkerDomain = recordingWorkerDomain,
-        .recordingWorkerIndex = recordingWorkerIndex,
         .commandPoolEpochCount = 1u,
         .pendingCommandPoolEpochCount = pendingCommandBufferCount > 0u ? 1u : 0u,
         .currentCommandBufferCount = currentCommandBufferCount,
@@ -175,6 +173,8 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
         .resetEventCount = arena->resetEventCount.load(MemoryOrder::relaxed),
         .nativeHandleStorageLowerBoundBytes =
             sizeof(VkCommandPool) + currentCommandBufferCount * sizeof(VkCommandBuffer),
+        .queue = m_physicalQueue,
+        .recordingWorkerIndex = recordingWorkerIndex,
     };
 }
 

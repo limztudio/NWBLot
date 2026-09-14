@@ -258,34 +258,34 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         commandList,
         deferredTargets,
         framebuffer,
-        pass,
         avboitTargets,
         viewportState,
+        nullptr,
+        frameBindings,
+        pass,
         false,
         csgIntervalSampleImageStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        emulationOutputEntryStateGraphOwned,
-        nullptr,
-        frameBindings
+        emulationOutputEntryStateGraphOwned
     };
     // CSG opts in only via its own frozen producer; keep it separate from the regular flag.
     const MaterialPassDrawContext csgDrawContext{
         commandList,
         deferredTargets,
         framebuffer,
-        pass,
         avboitTargets,
         viewportState,
+        &csgResources,
+        frameBindings,
+        pass,
         false,
         csgIntervalSampleImageStatesGraphOwned,
         csgClipBufferStatesGraphOwned,
         materialFrameStatesGraphOwned,
         materialGeometryStatesGraphOwned,
-        csgEmulationOutputEntryStateGraphOwned,
-        &csgResources,
-        frameBindings
+        csgEmulationOutputEntryStateGraphOwned
     };
     const auto recordPreparedDraws = [&](){
         if(regularDrawResourcesReady)

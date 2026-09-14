@@ -1247,10 +1247,10 @@ private:
 private:
     const VulkanContext& m_context;
     VulkanAllocatorHandle m_allocator = nullptr;
-    mutable Futex m_bufferNativeIdentityMutex;
     HashMap<u64, Buffer*, Hasher<u64>, EqualTo<u64>, Alloc::GlobalArena> m_bufferNativeIdentities;
-    mutable Futex m_textureNativeIdentityMutex;
     HashMap<VkImage, Texture*, Hasher<VkImage>, EqualTo<VkImage>, Alloc::GlobalArena> m_textureNativeIdentities;
+    mutable Futex m_bufferNativeIdentityMutex;
+    mutable Futex m_textureNativeIdentityMutex;
 };
 
 

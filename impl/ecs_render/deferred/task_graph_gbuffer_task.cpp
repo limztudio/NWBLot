@@ -151,17 +151,17 @@ namespace ECSRenderDetail{
             commandList,
             deferredTargets,
             deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::Opaque,
             nullptr,
             deferredViewportState,
+            nullptr,
+            payload.frameBindings,
+            MaterialPipelinePass::Opaque,
             false,
             false,
             false,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.regularComputeEmulationOutputStatesGraphOwned,
-            nullptr,
-            payload.frameBindings
+            payload.regularComputeEmulationOutputStatesGraphOwned
         };
         if(
             regularDrawResourcesReady
@@ -210,17 +210,17 @@ namespace ECSRenderDetail{
             commandList,
             deferredTargets,
             deferredTargets.framebuffer.get(),
-            MaterialPipelinePass::CsgReceiverSurface,
             nullptr,
             csgIntervalViewportState,
+            &payload.csgResources,
+            payload.frameBindings,
+            MaterialPipelinePass::CsgReceiverSurface,
             payload.csgReceiverSurfaceImageStatesGraphOwned,
             false,
             payload.csgClipBufferStatesGraphOwned,
             payload.materialFrameStatesGraphOwned,
             payload.materialGeometryStatesGraphOwned,
-            payload.csgReceiverComputeEmulationOutputStatesGraphOwned,
-            &payload.csgResources,
-            payload.frameBindings
+            payload.csgReceiverComputeEmulationOutputStatesGraphOwned
         };
         if(csgSampleStateReady && csgReceiverSurfaceDrawResourcesReady && !opaqueDrawItems.csgReceiverSurface.empty()){
             Core::GpuTimingMeasure timing(

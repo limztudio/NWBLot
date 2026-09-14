@@ -83,17 +83,17 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
         commandList,
         *payload.targets,
         nullptr,
-        MaterialPipelinePass::Opaque,
         nullptr,
         deferredViewportState,
+        nullptr,
+        payload.frameBindings,
+        MaterialPipelinePass::Opaque,
         false,
         false,
         false,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        nullptr,
-        payload.frameBindings
+        true
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -159,17 +159,17 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
         commandList,
         *payload.targets,
         payload.phase == Phase::Raster ? payload.targets->framebuffer.get() : nullptr,
-        MaterialPipelinePass::Opaque,
         nullptr,
         deferredViewportState,
+        nullptr,
+        payload.frameBindings,
+        MaterialPipelinePass::Opaque,
         false,
         false,
         false,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true,
-        nullptr,
-        payload.frameBindings
+        true
     };
     if(payload.phase == Phase::Generate)
         materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);

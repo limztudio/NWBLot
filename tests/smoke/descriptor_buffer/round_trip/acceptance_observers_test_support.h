@@ -25,11 +25,11 @@ namespace Tests{
 
 
 struct NativeTaskAcceptanceObserver{
-    u32 acceptedCount = 0u;
     QueueSubmissionToken lastToken;
-    bool continueSubmission = true;
     NativeTaskAcceptanceOrder* order = nullptr;
+    u32 acceptedCount = 0u;
     u32 orderMarker = 0u;
+    bool continueSubmission = true;
 };
 
 

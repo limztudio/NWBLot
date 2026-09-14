@@ -440,9 +440,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     NativeTaskAcceptanceOrder taskAcceptanceOrder;
     NativeTaskAcceptanceObserver meshViewSetupAcceptance{
         .lastToken = {},
-        .continueSubmission = false,
         .order = &taskAcceptanceOrder,
         .orderMarker = 1u,
+        .continueSubmission = false,
     };
     NativeTaskAcceptanceObserver normalizeAcceptance{
         .lastToken = {},

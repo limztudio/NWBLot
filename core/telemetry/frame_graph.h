@@ -169,9 +169,7 @@ struct FrameGraphCompiledTask{
     bool present = false;
 };
 
-// Aggregate, graph-generation-scoped CPU runtime telemetry. Counts use fixed-width values so decoded telemetry does
-// not inherit the host width of usize. The separately frozen runtime-statistics wire records below are packed and
-// fixed-size, but use the telemetry codec's native byte order rather than defining a cross-endian interchange format.
+// Aggregate, graph-generation-scoped CPU runtime telemetry. Counts use fixed-width values so decoded telemetry does not inherit the host width of usize. The separately frozen runtime-statistics wire records below are packed and fixed-size, but use the telemetry codec's native byte order rather than defining a cross-endian interchange format.
 // Durations are seconds.
 struct FrameGraphCompileRuntimeStatistics{
     u64 taskCount = 0u;
@@ -219,6 +217,10 @@ struct FrameGraphCompileRuntimeStatistics{
     f64 packetDependencyPlanningSeconds = 0.0;
     f64 totalSeconds = 0.0;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 namespace FrameGraphStatisticsDetail{
 
@@ -367,11 +369,8 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
     FrameGraphPhysicalQueueRuntimeStatistics statistics;
 };
 
-// Exact native-submission telemetry for one compiler-generated packet. V7 payloads and V8 payloads whose table is
-// marked present contain every native submission for every runtime-statistics owner, including an exact empty table
-// when no owner submitted native work. Packet generation is the immutable plan generation. Wait counts exclude
-// backend-internal waits outside the graph.
-// 8-byte members first, then 4-byte, then small tail to avoid padding.
+// Exact native-submission telemetry for one compiler-generated packet. V7 payloads and V8 payloads whose table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
+// Packet generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph. 8-byte members first, then 4-byte, then small tail to avoid padding.
 struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
     u64 taskCount = 0u;
@@ -665,8 +664,7 @@ struct EncodedFrameGraphRuntimeStatisticsV6{
     EncodedFrameGraphSubmissionRuntimeStatisticsV6 submission;
 };
 
-// V8 appends resource-version counters after the frozen V4-V7 compile-statistics prefix. Keeping the prefix intact
-// lets older payload records retain their exact layout while the decoder defaults counters absent before V8 to zero.
+// V8 appends resource-version counters after the frozen V4-V7 compile-statistics prefix. Keeping the prefix intact lets older payload records retain their exact layout while the decoder defaults counters absent before V8 to zero.
 struct EncodedFrameGraphCompileRuntimeStatisticsV8{
     u64 taskCount = 0u;
     u64 resourceCount = 0u;

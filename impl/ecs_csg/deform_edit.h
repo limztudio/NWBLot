@@ -20,8 +20,7 @@ NWB_IMPL_BEGIN
 // Deterministic CPU-side deformable CSG editing facade.
 
 
-// Preview and commit share one rebuild path (CsgDeformPipeline) so viability always agrees. This header preserves the existing include path; domain logic lives in
-// deform_types / deform_validator / deform_cutter_field / deform_wall_builder / deform_cap_builder / deform_pipeline.
+// Preview and commit share one rebuild path (CsgDeformPipeline) so viability always agrees. This header preserves the existing include path; domain logic lives in deform_types / deform_validator / deform_cutter_field / deform_wall_builder / deform_cap_builder / deform_pipeline.
 // - Sequential cuts apply in order, one rebuild per active cut.
 // - Rebuild splits triangles at the zero crossing, never welds source verts.
 // - Walls are the kept split triangles with interpolated attributes.
@@ -55,8 +54,7 @@ NWB_IMPL_BEGIN
     CsgDeformStats& outStats
 );
 
-// Commit rebuild. Runs the same rebuild as preview into scratch, then copies
-// into the commit arena, so preview viability always matches commit viability.
+// Commit rebuild. Runs the same rebuild as preview into scratch, then copies into the commit arena, so preview viability always matches commit viability.
 [[nodiscard]] bool CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,

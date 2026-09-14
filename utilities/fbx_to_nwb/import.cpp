@@ -4,34 +4,18 @@
 
 #include "module.h"
 
+#include "mesh_build.h"
+#include "source_mesh_streams.h"
+
 #include "skin.h"
 
-#include <core/alloc/scratch.h>
 #include <core/common/log.h>
-#include <global/math/frame.h>
-#include <global/mesh/tangent_frame_rebuild.h>
-#include <global/mesh/triangle_area.h>
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_FBX_TO_NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-namespace __hidden_import{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include "source_stream.inl"
-#include "mesh_build.inl"
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +45,7 @@ bool BuildMesh(
     outTangentReport = SourceTangentReport{};
 
     usize estimatedTriangleCorners = 0u;
-    if(!__hidden_import::EstimateSelectedTriangleCorners(
+    if(!FbxMeshBuild::EstimateSelectedTriangleCorners(
         instances,
         selection,
         estimatedTriangleCorners
@@ -75,16 +59,16 @@ bool BuildMesh(
     }
 
     bool usedDefaultUvs = false;
-    __hidden_import::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
-    __hidden_import::SourceMeshBuildContext meshContext{ outMesh };
-    __hidden_import::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
+    SourceMeshBuildContext meshContext{ outMesh };
+    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
 
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
         NWB_ASSERT(instanceIndex < instances.size());
         if(
-            !__hidden_import::AppendInstanceMesh(
+            !FbxMeshBuild::AppendInstanceMesh(
                 instances[instanceIndex],
                 options,
                 wantsSkinning,
@@ -106,9 +90,9 @@ bool BuildMesh(
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return false;
     }
-    if(normalMode != NormalMode::Imported || !__hidden_import::SourceMeshHasCompleteTangents(outMesh)){
-        __hidden_import::DropSourceMeshTangents(outMesh);
-        if(!__hidden_import::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
+    if(normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(outMesh)){
+        FbxSourceMeshStreams::DropSourceMeshTangents(outMesh);
+        if(!FbxSourceMeshStreams::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
             return false;
     }
     if(wantsSkinning){
@@ -132,4 +116,3 @@ NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

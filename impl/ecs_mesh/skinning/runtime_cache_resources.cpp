@@ -16,6 +16,7 @@
 #include <impl/assets_mesh/payload_validation.h>
 #include <impl/assets_mesh/skin_validation.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
+#include <impl/assets_mesh/meshlet_ref_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,7 +38,6 @@ namespace __hidden_runtime_cache_resources{
 static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
 
 
-#include <impl/assets_mesh/meshlet_ref_range_validation.inl>
 
 [[nodiscard]] bool ValidateRuntimeMeshUploadPayload(Core::Alloc::GlobalArena& arena, const MeshSkinningRuntimeInstance& instance){
     TString<Core::Alloc::GlobalArena> sourceText{arena};
@@ -151,7 +151,7 @@ static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
                     true,
                     ref
                 )
-                && MeshletPositionRefInRange(ref, instance.restPositions.size(), instance.skin.size(), true)
+                && MeshMeshletRefValidation::MeshletPositionRefInRange(ref, instance.restPositions.size(), instance.skin.size(), true)
             )
                 continue;
 
@@ -172,7 +172,7 @@ static constexpr usize s_RuntimeBlasScratchArenaOverheadBytes = 4096u;
                     localAttributeIndex,
                     ref
                 )
-                && MeshletAttributeRefInRange(
+                && MeshMeshletRefValidation::MeshletAttributeRefInRange(
                     ref,
                     instance.restNormals.size(),
                     instance.restTangents.size(),

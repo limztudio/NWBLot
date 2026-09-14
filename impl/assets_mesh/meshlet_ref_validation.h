@@ -2,7 +2,79 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "meshlet_ref_range_validation.inl"
+#pragma once
+
+
+#include "asset.h"
+#include "meshlet_payload_packing.h"
+
+#include <core/common/log.h>
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Mesh meshlet reference range and skin resolution.
+
+
+class MeshMeshletRefValidation final : NoCopy{
+public:
+    [[nodiscard]] static bool MeshletPositionRefInRange(
+    const MeshletPositionStreamRef& ref,
+    const usize positionCount,
+    const usize skinCount,
+    const bool skinRequired
+    );
+    [[nodiscard]] static bool MeshletAttributeRefInRange(
+    const MeshletAttributeStreamRef& ref,
+    const usize normalCount,
+    const usize tangentCount,
+    const usize uv0Count,
+    const usize colorCount
+    );
+    template<
+    typename MeshletContainer,
+    typename LocalVertexRefContainer,
+    typename AttributeSkinContainer,
+    typename SkinResolver,
+    typename ConflictHandler,
+    typename UnreferencedHandler
+    >
+    [[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
+    const MeshletContainer& meshlets,
+    const LocalVertexRefContainer& localVertexRefs,
+    const usize attributeCount,
+    AttributeSkinContainer& outAttributeSkins,
+    SkinResolver resolveSkin,
+    ConflictHandler onConflict,
+    UnreferencedHandler onUnreferenced
+    );
+    template<
+    typename MeshletContainer,
+    typename PositionRefContainer,
+    typename LocalVertexRefContainer,
+    typename AttributeSkinContainer,
+    typename ConflictHandler,
+    typename UnreferencedHandler
+    >
+    [[nodiscard]] static bool ResolveMeshletAttributeSkins(
+    const MeshletContainer& meshlets,
+    const PositionRefContainer& positionRefs,
+    const LocalVertexRefContainer& localVertexRefs,
+    const usize attributeCount,
+    AttributeSkinContainer& outAttributeSkins,
+    ConflictHandler onConflict,
+    UnreferencedHandler onUnreferenced
+    );
+
+
+
+public:
+    MeshMeshletRefValidation() = delete;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,7 +88,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
+[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
     const usize attributeCount,
@@ -63,6 +135,7 @@ template<
     return true;
 }
 
+
 template<
     typename MeshletContainer,
     typename PositionRefContainer,
@@ -71,7 +144,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] static bool ResolveMeshletAttributeSkins(
+[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
     const MeshletContainer& meshlets,
     const PositionRefContainer& positionRefs,
     const LocalVertexRefContainer& localVertexRefs,
@@ -95,5 +168,7 @@ template<
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

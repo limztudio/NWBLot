@@ -2,7 +2,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool FailMeshPayloadValidation(
+#include "runtime_validation_diagnostics.h"
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
     const NotNull<const tchar*> contextText,
     const TStringView meshPathText,
     const TStringView detailText
@@ -15,7 +24,8 @@
     return false;
 }
 
-[[nodiscard]] static bool FailMeshPayloadIndexedValidation(
+
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
     const NotNull<const tchar*> contextText,
     const TStringView meshPathText,
     const TStringView itemText,
@@ -32,7 +42,8 @@
     return false;
 }
 
-[[nodiscard]] static bool FailMeshletPayloadValidation(
+
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
     const NotNull<const tchar*> contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
@@ -47,7 +58,8 @@
     return false;
 }
 
-[[nodiscard]] static bool FailMeshletAttributePayloadValidation(
+
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletAttributePayloadValidation(
     const NotNull<const tchar*> contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
@@ -64,7 +76,8 @@
     return false;
 }
 
-[[nodiscard]] static bool FailMeshletPrimitivePayloadValidation(
+
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPrimitivePayloadValidation(
     const NotNull<const tchar*> contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
@@ -82,5 +95,7 @@
 }
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+NWB_IMPL_END
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -2,111 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f){
-    return VectorSet(
-        static_cast<f32>(value.x),
-        static_cast<f32>(value.y),
-        static_cast<f32>(value.z),
-        w
-    );
-}
+#include "source_mesh_streams.h"
 
-struct SourceTriangleCorner{
-    Vec3 position;
-    Vec3 normal;
-    Vec4 tangent;
-    Vec2 uv0;
-    Vec4 color{ 1.0f, 1.0f, 1.0f, 1.0f };
-    MeshSkinInfluence skin;
-    bool hasTangent = false;
-};
-static_assert(IsTriviallyCopyable_V<SourceTriangleCorner>);
+#include <core/alloc/scratch.h>
 
-struct PositionKey{
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 z = 0u;
-};
 
-struct PositionKeyHasher{
-    usize operator()(const PositionKey& key)const{
-        usize seed = Hasher<u32>{}(key.x);
-        HashCombine(seed, key.y);
-        HashCombine(seed, key.z);
-        return seed;
-    }
-};
+NWB_FBX_TO_NWB_BEGIN
 
-struct PositionKeyEqual{
-    bool operator()(const PositionKey& lhs, const PositionKey& rhs)const{
-        return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
-    }
-};
 
-// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams; this map keeps
-// the accumulated values SIMD-resident until AppendInstanceMesh writes a completed corner.
-struct alignas(Float4) PositionNormalCalculation{
-    SIMDVector value = {};
-};
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-using PositionNormalMap = HashMap<PositionKey, PositionNormalCalculation, PositionKeyHasher, PositionKeyEqual>;
 
-struct MeshSkinInfluenceHasher{
-    usize operator()(const MeshSkinInfluence& value)const{
-        usize seed = Hasher<u16>{}(value.joint[0u]);
-        for(usize i = 1u; i < s_MeshSkinInfluenceCount; ++i)
-            HashCombine(seed, value.joint[i]);
-        for(const f32 weight : value.weight.raw)
-            HashCombine(seed, FloatHashBits(weight));
-        return seed;
-    }
-};
-
-struct SourceVertexRefHasher{
-    usize operator()(const SourceVertexRef& value)const{
-        usize seed = Hasher<u32>{}(value.position);
-        HashCombine(seed, value.normal);
-        HashCombine(seed, value.tangent);
-        HashCombine(seed, value.uv0);
-        HashCombine(seed, value.color);
-        HashCombine(seed, value.skin);
-        return seed;
-    }
-};
-
-struct SourceVertexRefEqual{
-    bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const{
-        return lhs.position == rhs.position
-            && lhs.normal == rhs.normal
-            && lhs.tangent == rhs.tangent
-            && lhs.uv0 == rhs.uv0
-            && lhs.color == rhs.color
-            && lhs.skin == rhs.skin;
-    }
-};
-
-using Vec2IndexMap = HashMap<Vec2, u32>;
-using Vec3IndexMap = HashMap<Vec3, u32>;
-using Vec4IndexMap = HashMap<Vec4, u32>;
-using MeshSkinInfluenceIndexMap = HashMap<MeshSkinInfluence, u32, MeshSkinInfluenceHasher, MeshSkinInfluenceEqual>;
-using SourceVertexRefIndexMap = HashMap<SourceVertexRef, u32, SourceVertexRefHasher, SourceVertexRefEqual>;
-
-struct SourceMeshBuildContext{
-    SourceMeshStreams& mesh;
-    Vec3IndexMap positions;
-    Vec3IndexMap normals;
-    Vec4IndexMap tangents;
-    Vec2IndexMap uv0;
-    Vec4IndexMap colors;
-    MeshSkinInfluenceIndexMap skin;
-    SourceVertexRefIndexMap vertexRefs;
-
-    explicit SourceMeshBuildContext(SourceMeshStreams& sourceMesh)
-        : mesh(sourceMesh)
-    {}
-};
-
-void ReserveSourceMeshStreams(
+void FbxSourceMeshStreams::ReserveSourceMeshStreams(
     SourceMeshStreams& mesh,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
@@ -122,7 +29,8 @@ void ReserveSourceMeshStreams(
         mesh.skin.reserve(estimatedTriangleCorners);
 }
 
-void ReserveSourceMeshBuildContext(
+
+void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(
     SourceMeshBuildContext& context,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
@@ -137,7 +45,8 @@ void ReserveSourceMeshBuildContext(
         context.skin.reserve(estimatedTriangleCorners);
 }
 
-[[nodiscard]] bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh){
+
+bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh){
     if(mesh.vertexRefs.empty() || mesh.tangents.empty())
         return false;
 
@@ -148,7 +57,9 @@ void ReserveSourceMeshBuildContext(
     return true;
 }
 
-void DropSourceMeshTangents(SourceMeshStreams& mesh){
+
+
+void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
     mesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup;
@@ -180,7 +91,8 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     mesh.vertexRefs = Move(compactVertexRefs);
 }
 
-[[nodiscard]] bool EnsureTriangleIndexScratchCapacity(
+
+bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
     const ufbx_mesh& mesh,
     UtilityVector<u32>& inOutTriangleIndices
 ){
@@ -195,164 +107,8 @@ void DropSourceMeshTangents(SourceMeshStreams& mesh){
     return true;
 }
 
-[[nodiscard]] PositionKey MakePositionKey(const Vec3& position){
-    return PositionKey{
-        FloatHashBits(position.x),
-        FloatHashBits(position.y),
-        FloatHashBits(position.z),
-    };
-}
 
-[[nodiscard]] PositionKey MakePositionKey(const SIMDVector position){
-    return PositionKey{
-        FloatHashBits(VectorGetX(position)),
-        FloatHashBits(VectorGetY(position)),
-        FloatHashBits(VectorGetZ(position)),
-    };
-}
-
-[[nodiscard]] SIMDVector BuildCornerOutputPositionVector(
-    const ufbx_mesh& mesh,
-    const ufbx_node& node,
-    const ImportOptions& options,
-    const bool wantsSkinning,
-    const u32 cornerIndex
-){
-    ufbx_vec3 position = {};
-    if(options.bakeTransforms){
-        position = ufbx_get_vertex_vec3(
-            wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position,
-            cornerIndex
-        );
-        if(wantsSkinning || mesh.skinned_is_local)
-            position = ufbx_transform_position(&node.geometry_to_world, position);
-    }
-    else{
-        position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
-    }
-
-    return VectorScale(ToVector(position), static_cast<f32>(options.scale));
-}
-
-[[nodiscard]] SIMDVector BuildCornerOutputNormalVector(
-    const ufbx_mesh& mesh,
-    const ufbx_matrix& normalToWorld,
-    const ImportOptions& options,
-    const bool wantsSkinning,
-    const u32 cornerIndex
-){
-    ufbx_vec3 normal = {};
-    if(options.bakeTransforms){
-        normal = ufbx_get_vertex_vec3(
-            wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal,
-            cornerIndex
-        );
-        if(wantsSkinning || mesh.skinned_is_local)
-            normal = ufbx_transform_direction(&normalToWorld, normal);
-    }
-    else{
-        normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
-    }
-
-    SIMDVector outputNormal;
-    if(!Vector3TryNormalize(ToVector(normal), outputNormal))
-        outputNormal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
-    return outputNormal;
-}
-
-[[nodiscard]] bool BuildCornerOutputTangentVector(
-    const ufbx_mesh& mesh,
-    const ufbx_matrix& normalToWorld,
-    const ImportOptions& options,
-    const bool wantsSkinning,
-    const u32 cornerIndex,
-    const SIMDVector normal,
-    SIMDVector& outTangent
-){
-    if(!mesh.vertex_tangent.exists)
-        return false;
-
-    ufbx_vec3 tangent = ufbx_get_vertex_vec3(&mesh.vertex_tangent, cornerIndex);
-    if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
-        tangent = ufbx_transform_direction(&normalToWorld, tangent);
-
-    SIMDVector outputTangent;
-    if(!Vector3TryNormalize(ToVector(tangent), outputTangent))
-        return false;
-
-    SIMDVector sign = s_SIMDOne;
-    if(mesh.vertex_bitangent.exists){
-        ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
-        if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
-            bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
-
-        SIMDVector outputBitangent;
-        if(Vector3TryNormalize(ToVector(bitangent), outputBitangent)){
-            const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
-            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
-            sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentDot, VectorZero()));
-        }
-    }
-
-    outTangent = VectorSelect(outputTangent, sign, s_SIMDMaskW);
-    return true;
-}
-
-[[nodiscard]] bool IsFiniteSkinInfluence(const SIMDVector weights){
-    return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
-}
-
-[[nodiscard]] bool IsFiniteSourceTriangleCorner(
-    const SIMDVector position,
-    const SIMDVector normal,
-    const SIMDVector tangent,
-    const SIMDVector uv0,
-    const SIMDVector color,
-    const bool hasTangent,
-    const bool wantsSkinning,
-    const SIMDVector skinWeights
-){
-    if(
-        !VectorIsFinite(position, VectorComponentMask::s_XYZ)
-        || !VectorIsFinite(normal, VectorComponentMask::s_XYZ)
-        || !VectorIsFinite(uv0, VectorComponentMask::s_XY)
-        || !VectorIsFinite(color, VectorComponentMask::s_XYZW)
-    )
-        return false;
-    if(
-        hasTangent
-        && !VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
-    )
-        return false;
-    return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);
-}
-
-template<typename Value, typename Lookup>
-[[nodiscard]] bool InternSourceValue(
-    UtilityVector<Value>& stream,
-    Lookup& lookup,
-    const Value& value,
-    const char* streamName,
-    u32& outIndex
-){
-    auto found = lookup.find(value);
-    if(found != lookup.end()){
-        outIndex = found.value();
-        return true;
-    }
-
-    if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), StringConvert(streamName));
-        return false;
-    }
-
-    outIndex = static_cast<u32>(stream.size());
-    stream.push_back(value);
-    lookup.emplace(value, outIndex);
-    return true;
-}
-
-[[nodiscard]] bool GenerateSourceMeshTangents(
+bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
     SourceMeshStreams& mesh,
     const bool usedDefaultUvs,
     SourceTangentReport& outTangentReport
@@ -454,7 +210,8 @@ template<typename Value, typename Lookup>
     return true;
 }
 
-[[nodiscard]] bool InternSourceCorner(
+
+bool FbxSourceMeshStreams::InternSourceCorner(
     SourceMeshBuildContext& context,
     const SourceTriangleCorner& corner,
     const bool wantsSkinning,
@@ -484,3 +241,9 @@ template<typename Value, typename Lookup>
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -13,6 +13,7 @@
 #include <impl/assets_mesh/meshlet_ref_codec.h>
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/assets_mesh/skin_asset.h>
+#include <impl/assets_mesh/meshlet_ref_validation.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,6 @@ static constexpr RuntimeMeshDirtyFlags s_GpuUploadHandledDirtyFlags =
     | RuntimeMeshDirtyFlag::MeshletBoundsDirty
 ;
 
-#include <impl/assets_mesh/meshlet_ref_validation.inl>
 
 template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVertexRefVectorT>
 [[nodiscard]] bool ResolveAttributeSkins(
@@ -48,7 +48,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     const usize attributeRefCount,
     MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins
 ){
-    return ResolveMeshletAttributeSkins(
+    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
         meshlets,
         positionRefs,
         localVertexRefs,
@@ -152,7 +152,7 @@ template<typename MeshT, typename SkinStreamT>
                     sourceHasSkinRefs,
                     sourceRef
                 )
-                || !MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), sourceHasSkinRefs)
+                || !MeshMeshletRefValidation::MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), sourceHasSkinRefs)
                 || (!sourceHasSkinRefs && sourceRef.position >= skinStream.size())
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
@@ -180,7 +180,7 @@ template<typename MeshT, typename SkinStreamT>
                     localAttributeIndex,
                     sourceRef
                 )
-                || !MeshletAttributeRefInRange(
+                || !MeshMeshletRefValidation::MeshletAttributeRefInRange(
                     sourceRef,
                     mesh.normalStream().size(),
                     mesh.tangentStream().size(),

@@ -10,6 +10,12 @@
 
 #include "cook.h"
 
+#include "cook_metadata.h"
+#include "cook_source_streams.h"
+#include "cook_stream_reorder.h"
+#include "cook_ref_encoding.h"
+#include "cook_meshlets.h"
+
 #include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"
@@ -35,15 +41,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+
+
 namespace __hidden_assets_mesh_cook{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#include "cook_metadata.inl"
-#include "cook_stream_reorder.inl"
-#include "cook_ref_encoding.inl"
 
 static bool ParseSourceMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
@@ -51,7 +55,29 @@ static bool ParseSourceMeshMeta(
     MeshCookEntry& outEntry,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
-);
+){
+    SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);
+    if(!MeshCookSourceStreams::ParseCommonSourceMeshStreams(
+        discoveredFile,
+        asset,
+        s_MeshMetaKind,
+        false,
+        streams,
+        0u,
+        scratchArena
+    ))
+        return false;
+
+    MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
+    return MeshCookMeshlets::BuildMeshlets(
+        discoveredFile.filePath,
+        s_MeshMetaKind,
+        streams.indices,
+        outEntry,
+        cpuScheduler
+    );
+}
+
 static bool ValidateMeshAssetFields(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset
@@ -81,7 +107,10 @@ static bool ParseMeshMeta(
 
     outEntry.virtualPath = virtualPath;
     if(!outEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': virtual path must not be empty"), PathToString<tchar>(discoveredFile.filePath));
+        NWB_LOGGER_ERROR(
+            NWB_TEXT("Mesh meta '{}': virtual path must not be empty"),
+            PathToString<tchar>(discoveredFile.filePath)
+        );
         return false;
     }
     if(!ValidateMeshAssetFields(discoveredFile, asset))
@@ -110,9 +139,9 @@ static bool ParseMeshMeta(
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_BuildMeshAssetArena);
-    if(!ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+    if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
         return false;
-    if(!EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
+    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
         return false;
 
     outMesh = Mesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
@@ -131,8 +160,6 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
     );
     return outMesh.validatePayload();
 }
-
-#include "cook_source.inl"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -153,8 +180,8 @@ bool ParseMeshCookMetadata(
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
-    if(!__hidden_assets_mesh_cook::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
+    DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
+    if(!MeshCookMetadata::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
     return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, cpuScheduler, scratchArena);
 }
@@ -167,7 +194,7 @@ bool ParseMeshCookMetadata(
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    __hidden_assets_mesh_cook::DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
+    DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     discoveredFile.filePath = nwbFilePath;
     return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, cpuScheduler, scratchArena);
 }
@@ -224,4 +251,3 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

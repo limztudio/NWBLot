@@ -11,6 +11,10 @@
 #include "meshlet_payload_packing.h"
 #include "payload_validation.h"
 
+#include "meshlet_ref_validation.h"
+#include "runtime_validation.h"
+#include "runtime_validation_diagnostics.h"
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/assets/auto_registration.h>
@@ -25,21 +29,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_runtime{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 Core::Assets::AssetCodecAutoRegistrar s_MeshAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MeshAssetCodec>);
-
-#include "runtime_validation.inl"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -56,7 +46,7 @@ bool Mesh::validatePayload()const{
         return false;
     }
 
-    if(!__hidden_runtime::ValidateSharedMeshPayload(
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(
         *this,
         0u,
         false,

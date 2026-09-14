@@ -2,6 +2,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#pragma once
+
+
+#include "cook.h"
+#include "cook_metadata.h"
+#include "meshlet_payload_packing.h"
+
+#include <core/common/log.h>
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Mesh cook meshlet-traversal stream reordering.
+
+
 struct MeshCookCommonStreamReorder{
     Core::Assets::AssetVector<Float3U> positions;
     Core::Assets::AssetVector<Half4U> normals;
@@ -28,8 +47,65 @@ struct MeshCookCommonStreamReorder{
     {}
 };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class MeshCookStreamReorder final : NoCopy{
+public:
+    template<typename StreamVectorT>
+    static void PrepareMeshStreamReorder(
+    const StreamVectorT& source,
+    StreamVectorT& outStream,
+    ScratchVector<u32>& outRemap
+    );
+    template<typename StreamVectorT>
+    [[nodiscard]] static bool RemapMeshStreamRef(
+    const Name& virtualPath,
+    const NotNull<const tchar*> metaKind,
+    const NotNull<const tchar*> streamName,
+    const StreamVectorT& source,
+    ScratchVector<u32>& remap,
+    StreamVectorT& reordered,
+    u32& index
+    );
+    template<typename CookEntryT>
+    static void PrepareCommonMeshStreamReorder(
+    const CookEntryT& entry,
+    MeshCookCommonStreamReorder& reorder
+    );
+    template<typename CookEntryT>
+    [[nodiscard]] static bool RemapMeshletAttributeRefs(
+    CookEntryT& entry,
+    const NotNull<const tchar*> metaKind,
+    MeshCookCommonStreamReorder& reorder
+    );
+    template<typename CookEntryT, typename SkinRemapperT>
+    [[nodiscard]] static bool RemapMeshletPositionRefs(
+    CookEntryT& entry,
+    const NotNull<const tchar*> metaKind,
+    MeshCookCommonStreamReorder& reorder,
+    SkinRemapperT remapSkin
+    );
+    template<typename CookEntryT>
+    static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
+    [[nodiscard]] static bool ReorderMeshStreamsByMeshletTraversal(
+    MeshCookEntry& entry,
+    Core::Alloc::ScratchArena& scratchArena
+    );
+
+
+
+public:
+    MeshCookStreamReorder() = delete;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename StreamVectorT>
-static void PrepareMeshStreamReorder(
+void MeshCookStreamReorder::PrepareMeshStreamReorder(
     const StreamVectorT& source,
     StreamVectorT& outStream,
     ScratchVector<u32>& outRemap
@@ -40,8 +116,9 @@ static void PrepareMeshStreamReorder(
     outRemap.resize(source.size(), s_MeshMissingStreamIndex);
 }
 
+
 template<typename StreamVectorT>
-[[nodiscard]] static bool RemapMeshStreamRef(
+bool MeshCookStreamReorder::RemapMeshStreamRef(
     const Name& virtualPath,
     const NotNull<const tchar*> metaKind,
     const NotNull<const tchar*> streamName,
@@ -88,8 +165,9 @@ template<typename StreamVectorT>
     return true;
 }
 
+
 template<typename CookEntryT>
-static void PrepareCommonMeshStreamReorder(
+void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(
     const CookEntryT& entry,
     MeshCookCommonStreamReorder& reorder
 ){
@@ -100,8 +178,9 @@ static void PrepareCommonMeshStreamReorder(
     PrepareMeshStreamReorder(entry.colors, reorder.colors, reorder.colorRemap);
 }
 
+
 template<typename CookEntryT>
-[[nodiscard]] static bool RemapMeshletAttributeRefs(
+bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
     CookEntryT& entry,
     const NotNull<const tchar*> metaKind,
     MeshCookCommonStreamReorder& reorder
@@ -155,8 +234,9 @@ template<typename CookEntryT>
     return true;
 }
 
+
 template<typename CookEntryT, typename SkinRemapperT>
-[[nodiscard]] static bool RemapMeshletPositionRefs(
+bool MeshCookStreamReorder::RemapMeshletPositionRefs(
     CookEntryT& entry,
     const NotNull<const tchar*> metaKind,
     MeshCookCommonStreamReorder& reorder,
@@ -183,8 +263,9 @@ template<typename CookEntryT, typename SkinRemapperT>
     return true;
 }
 
+
 template<typename CookEntryT>
-static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
+void MeshCookStreamReorder::CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     entry.positions = Move(reorder.positions);
     entry.normals = Move(reorder.normals);
     entry.tangents = Move(reorder.tangents);
@@ -192,37 +273,8 @@ static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStrea
     entry.colors = Move(reorder.colors);
 }
 
-[[nodiscard]] static bool ReorderMeshStreamsByMeshletTraversal(
-    MeshCookEntry& entry,
-    Core::Alloc::ScratchArena& scratchArena
-){
-    MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);
-    PrepareCommonMeshStreamReorder(entry, reorder);
 
-    if(!RemapMeshletPositionRefs(
-        entry,
-        s_MeshMetaKind,
-        reorder,
-        [&](const MeshletPositionStreamRef& ref){
-            if(ref.skin == s_MeshMissingStreamIndex)
-                return true;
-
-            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': static meshlet position reference cannot contain skin")
-                , s_MeshMetaKind.get()
-                , StringConvert(entry.virtualPath.c_str())
-            );
-            return false;
-        }
-    ))
-        return false;
-
-    if(!RemapMeshletAttributeRefs(entry, s_MeshMetaKind, reorder))
-        return false;
-
-    CommitCommonMeshStreamReorder(entry, reorder);
-    return true;
-}
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

@@ -2,48 +2,167 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename VisitTriangle>
-[[nodiscard]] bool VisitTriangulatedMeshTriangles(
+#include "mesh_build.h"
+
+#include <core/alloc/scratch.h>
+
+
+NWB_FBX_TO_NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SIMDVector FbxMeshBuild::ToVector(const ufbx_vec3 value, const f32 w){
+    return VectorSet(
+        static_cast<f32>(value.x),
+        static_cast<f32>(value.y),
+        static_cast<f32>(value.z),
+        w
+    );
+}
+
+
+PositionKey FbxMeshBuild::MakePositionKey(const Vec3& position){
+    return PositionKey{
+        FloatHashBits(position.x),
+        FloatHashBits(position.y),
+        FloatHashBits(position.z),
+    };
+}
+
+
+PositionKey FbxMeshBuild::MakePositionKey(const SIMDVector position){
+    return PositionKey{
+        FloatHashBits(VectorGetX(position)),
+        FloatHashBits(VectorGetY(position)),
+        FloatHashBits(VectorGetZ(position)),
+    };
+}
+
+
+SIMDVector FbxMeshBuild::BuildCornerOutputPositionVector(
     const ufbx_mesh& mesh,
-    const bool flipWinding,
-    UtilityVector<u32>& inOutTriangleIndices,
-    VisitTriangle&& visitTriangle
+    const ufbx_node& node,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex
 ){
-    if(!EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
-        return false;
-    for(usize faceIndex = 0; faceIndex < mesh.num_faces; ++faceIndex){
-        const ufbx_face face = mesh.faces.data[faceIndex];
-        if(face.num_indices < s_TriangleIndexCount)
-            continue;
-
-        const u32 triangleCount = ufbx_triangulate_face(
-            inOutTriangleIndices.data(),
-            inOutTriangleIndices.size(),
-            &mesh,
-            face
+    ufbx_vec3 position = {};
+    if(options.bakeTransforms){
+        position = ufbx_get_vertex_vec3(
+            wantsSkinning ? &mesh.vertex_position : &mesh.skinned_position,
+            cornerIndex
         );
+        if(wantsSkinning || mesh.skinned_is_local)
+            position = ufbx_transform_position(&node.geometry_to_world, position);
+    }
+    else{
+        position = ufbx_get_vertex_vec3(&mesh.vertex_position, cornerIndex);
+    }
 
-        for(u32 triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
-            u32 cornerIndices[s_TriangleIndexCount] = {
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 0u],
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 1u],
-                inOutTriangleIndices[triangleIndex * s_TriangleIndexCount + 2u],
-            };
-            if(flipWinding)
-                Swap(cornerIndices[1], cornerIndices[2]);
+    return VectorScale(ToVector(position), static_cast<f32>(options.scale));
+}
 
-            for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
-                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
-            }
 
-            if(!visitTriangle(cornerIndices))
-                return false;
+SIMDVector FbxMeshBuild::BuildCornerOutputNormalVector(
+    const ufbx_mesh& mesh,
+    const ufbx_matrix& normalToWorld,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex
+){
+    ufbx_vec3 normal = {};
+    if(options.bakeTransforms){
+        normal = ufbx_get_vertex_vec3(
+            wantsSkinning ? &mesh.vertex_normal : &mesh.skinned_normal,
+            cornerIndex
+        );
+        if(wantsSkinning || mesh.skinned_is_local)
+            normal = ufbx_transform_direction(&normalToWorld, normal);
+    }
+    else{
+        normal = ufbx_get_vertex_vec3(&mesh.vertex_normal, cornerIndex);
+    }
+
+    SIMDVector outputNormal;
+    if(!Vector3TryNormalize(ToVector(normal), outputNormal))
+        outputNormal = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    return outputNormal;
+}
+
+
+bool FbxMeshBuild::BuildCornerOutputTangentVector(
+    const ufbx_mesh& mesh,
+    const ufbx_matrix& normalToWorld,
+    const ImportOptions& options,
+    const bool wantsSkinning,
+    const u32 cornerIndex,
+    const SIMDVector normal,
+    SIMDVector& outTangent
+){
+    if(!mesh.vertex_tangent.exists)
+        return false;
+
+    ufbx_vec3 tangent = ufbx_get_vertex_vec3(&mesh.vertex_tangent, cornerIndex);
+    if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
+        tangent = ufbx_transform_direction(&normalToWorld, tangent);
+
+    SIMDVector outputTangent;
+    if(!Vector3TryNormalize(ToVector(tangent), outputTangent))
+        return false;
+
+    SIMDVector sign = s_SIMDOne;
+    if(mesh.vertex_bitangent.exists){
+        ufbx_vec3 bitangent = ufbx_get_vertex_vec3(&mesh.vertex_bitangent, cornerIndex);
+        if(options.bakeTransforms && (wantsSkinning || mesh.skinned_is_local))
+            bitangent = ufbx_transform_direction(&normalToWorld, bitangent);
+
+        SIMDVector outputBitangent;
+        if(Vector3TryNormalize(ToVector(bitangent), outputBitangent)){
+            const SIMDVector tangentSpaceBitangent = Vector3Cross(normal, outputTangent);
+            const SIMDVector bitangentDot = Vector3Dot(tangentSpaceBitangent, outputBitangent);
+            sign = VectorSelect(s_SIMDOne, s_SIMDNegativeOne, VectorLess(bitangentDot, VectorZero()));
         }
     }
+
+    outTangent = VectorSelect(outputTangent, sign, s_SIMDMaskW);
     return true;
 }
 
-[[nodiscard]] bool BuildSmoothPositionNormals(
+
+bool FbxMeshBuild::IsFiniteSkinInfluence(const SIMDVector weights){
+    return VectorIsFinite(weights, VectorComponentMask::s_XYZW);
+}
+
+
+bool FbxMeshBuild::IsFiniteSourceTriangleCorner(
+    const SIMDVector position,
+    const SIMDVector normal,
+    const SIMDVector tangent,
+    const SIMDVector uv0,
+    const SIMDVector color,
+    const bool hasTangent,
+    const bool wantsSkinning,
+    const SIMDVector skinWeights
+){
+    if(
+        !VectorIsFinite(position, VectorComponentMask::s_XYZ)
+        || !VectorIsFinite(normal, VectorComponentMask::s_XYZ)
+        || !VectorIsFinite(uv0, VectorComponentMask::s_XY)
+        || !VectorIsFinite(color, VectorComponentMask::s_XYZW)
+    )
+        return false;
+    if(
+        hasTangent
+        && !VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
+    )
+        return false;
+    return !wantsSkinning || IsFiniteSkinInfluence(skinWeights);
+}
+
+
+bool FbxMeshBuild::BuildSmoothPositionNormals(
     const ufbx_mesh& mesh,
     const ufbx_node& node,
     const ImportOptions& options,
@@ -54,7 +173,11 @@ template<typename VisitTriangle>
     outNormals.clear();
     outNormals.reserve(mesh.num_vertices);
 
-    if(!VisitTriangulatedMeshTriangles(mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
+    if(!VisitTriangulatedMeshTriangles(
+        mesh,
+        options.flipWinding,
+        inOutTriangleIndices,
+        [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         SIMDVector positions[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
             positions[triangleCornerIndex] = BuildCornerOutputPositionVector(
@@ -100,7 +223,8 @@ template<typename VisitTriangle>
     return true;
 }
 
-bool AppendInstanceMesh(
+
+bool FbxMeshBuild::AppendInstanceMesh(
     const MeshInstance& instance,
     const ImportOptions& options,
     const bool wantsSkinning,
@@ -135,7 +259,9 @@ bool AppendInstanceMesh(
     UtilityVector<u16> clusterJoints;
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh"));
+            NWB_LOGGER_ERROR(
+                NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh")
+            );
             return false;
         }
         skin = mesh->skin_deformers.data[0u];
@@ -144,10 +270,24 @@ bool AppendInstanceMesh(
     }
 
     PositionNormalMap smoothNormals;
-    if(normalMode == NormalMode::Smooth && !BuildSmoothPositionNormals(*mesh, *node, options, wantsSkinning, inOutTriangleIndices, smoothNormals))
+    if(
+        normalMode == NormalMode::Smooth
+        && !BuildSmoothPositionNormals(
+            *mesh,
+            *node,
+            options,
+            wantsSkinning,
+            inOutTriangleIndices,
+            smoothNormals
+        )
+    )
         return false;
 
-    return VisitTriangulatedMeshTriangles(*mesh, options.flipWinding, inOutTriangleIndices, [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
+    return VisitTriangulatedMeshTriangles(
+        *mesh,
+        options.flipWinding,
+        inOutTriangleIndices,
+        [&](const u32 (&cornerIndices)[s_TriangleIndexCount]){
         SourceTriangleCorner triangleCorners[s_TriangleIndexCount] = {};
         for(usize triangleCornerIndex = 0u; triangleCornerIndex < s_TriangleIndexCount; ++triangleCornerIndex){
             const u32 cornerIndex = cornerIndices[triangleCornerIndex];
@@ -273,7 +413,7 @@ bool AppendInstanceMesh(
 
         for(const SourceTriangleCorner& corner : triangleCorners){
             u32 vertexRefIndex = 0u;
-            if(!InternSourceCorner(inOutMesh, corner, wantsSkinning, vertexRefIndex))
+            if(!FbxSourceMeshStreams::InternSourceCorner(inOutMesh, corner, wantsSkinning, vertexRefIndex))
                 return false;
             inOutMesh.mesh.indices.push_back(vertexRefIndex);
         }
@@ -281,7 +421,8 @@ bool AppendInstanceMesh(
     });
 }
 
-bool EstimateSelectedTriangleCorners(
+
+bool FbxMeshBuild::EstimateSelectedTriangleCorners(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     usize& outTriangleCorners
@@ -308,3 +449,8 @@ bool EstimateSelectedTriangleCorners(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+NWB_FBX_TO_NWB_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

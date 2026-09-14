@@ -12,12 +12,13 @@
 #include <global/mesh/triangle_area.h>
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_FBX_TO_NWB_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // Source stream state and interning for FBX mesh import.
 
 
@@ -54,8 +55,7 @@ struct PositionKeyEqual{
     }
 };
 
-// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams; this map keeps
-// the accumulated values SIMD-resident until AppendInstanceMesh writes a completed corner.
+// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams; this map keeps the accumulated values SIMD-resident until AppendInstanceMesh writes a completed corner.
 struct alignas(Float4) PositionNormalCalculation{
     SIMDVector value = {};
 };
@@ -86,7 +86,6 @@ struct SourceVertexRefHasher{
         return seed;
     }
 };
-
 
 
 struct SourceVertexRefEqual{
@@ -169,6 +168,7 @@ public:
     FbxSourceMeshStreams() = delete;
 };
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -198,7 +198,11 @@ template<typename Value, typename Lookup>
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_FBX_TO_NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -48,36 +48,32 @@ struct CopyTextureTask{
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
-        if(payload.copies.empty())
-            return false;
-
-        for(const Copy& copy : payload.copies){
-            if(!copy.source || !copy.destination)
-                return false;
-            if(
-                context.commandIrCapture
-                && !context.commandIrCapture->captureCopyTexture(
-                    context.task,
-                    context.packet,
-                    context.queue,
+        return GpuTaskGraphBuiltinDetail::RecordCopies(
+            payload,
+            commandList,
+            context,
+            [](const Copy& copy){ return copy.source && copy.destination; },
+            [](const GpuTaskRecordContext& captureContext, const Copy& copy){
+                return captureContext.commandIrCapture->captureCopyTexture(
+                    captureContext.task,
+                    captureContext.packet,
+                    captureContext.queue,
                     copy.sourceResource,
                     copy.sourceSlice,
                     copy.destinationResource,
                     copy.destinationSlice
-                )
-            )
-                return false;
-            commandList.copyTexture(
-                *copy.destination,
-                copy.destinationSlice,
-                *copy.source,
-                copy.sourceSlice
-            );
-            if(commandList.commandRecordingFailed())
-                return false;
-        }
-        return true;
+                );
+            },
+            [](CommandList& emitCommandList, const Copy& copy){
+                emitCommandList.copyTexture(
+                    *copy.destination,
+                    copy.destinationSlice,
+                    *copy.source,
+                    copy.sourceSlice
+                );
+                return !emitCommandList.commandRecordingFailed();
+            }
+        );
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){

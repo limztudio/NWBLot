@@ -82,6 +82,30 @@ template<typename Payload>
     return !payload.copies.empty();
 }
 
+// Shared record loop for builtin copy tasks. CopyBuffer plus CopyTexture share the empty-payload guard plus
+// per-item validate, command-IR capture, and native emit sequence and differ only in those per-item steps.
+template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, typename EmitCopyFn>
+[[nodiscard]] inline bool RecordCopies(
+    const Payload& payload,
+    CommandList& commandList,
+    const GpuTaskRecordContext& context,
+    ValidateCopyFn&& isCopyValid,
+    CaptureCopyFn&& captureCopy,
+    EmitCopyFn&& emitCopy
+){
+    if(!CopiesPayloadHasWork(payload))
+        return false;
+    for(const auto& copy : payload.copies){
+        if(!isCopyValid(copy))
+            return false;
+        if(context.commandIrCapture && !captureCopy(context, copy))
+            return false;
+        if(!emitCopy(commandList, copy))
+            return false;
+    }
+    return true;
+}
+
 [[nodiscard]] inline bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
     const TextureDesc& resourceDesc,
     const ResourceStates::Mask graphInitialState,

@@ -48,37 +48,35 @@ struct CopyBufferTask{
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
-        static_cast<void>(context);
-        if(payload.copies.empty())
-            return false;
-
-        for(const Copy& copy : payload.copies){
-            if(!copy.source || !copy.destination || copy.dataSizeBytes == 0u)
-                return false;
-            if(
-                context.commandIrCapture
-                && !context.commandIrCapture->captureCopyBuffer(
-                    context.task,
-                    context.packet,
-                    context.queue,
+        return GpuTaskGraphBuiltinDetail::RecordCopies(
+            payload,
+            commandList,
+            context,
+            [](const Copy& copy){ return copy.source && copy.destination && copy.dataSizeBytes != 0u; },
+            [](const GpuTaskRecordContext& captureContext, const Copy& copy){
+                return captureContext.commandIrCapture->captureCopyBuffer(
+                    captureContext.task,
+                    captureContext.packet,
+                    captureContext.queue,
                     copy.sourceResource,
                     copy.sourceOffsetBytes,
                     copy.destinationResource,
                     copy.destinationOffsetBytes,
                     copy.dataSizeBytes
-                )
-            )
-                return false;
-            commandList.endRenderPass();
-            commandList.copyBuffer(
-                *copy.destination,
-                copy.destinationOffsetBytes,
-                *copy.source,
-                copy.sourceOffsetBytes,
-                copy.dataSizeBytes
-            );
-        }
-        return true;
+                );
+            },
+            [](CommandList& emitCommandList, const Copy& copy){
+                emitCommandList.endRenderPass();
+                emitCommandList.copyBuffer(
+                    *copy.destination,
+                    copy.destinationOffsetBytes,
+                    *copy.source,
+                    copy.sourceOffsetBytes,
+                    copy.dataSizeBytes
+                );
+                return true;
+            }
+        );
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){

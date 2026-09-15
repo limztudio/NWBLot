@@ -29,11 +29,8 @@ template<typename ResourceDesc>
     const ResourceStates::Mask graphInitialState,
     const ResourceStates::Mask externalFinalState
 )noexcept{
-    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a
-    // different built-in state when it explicitly starts from that descriptor state: compiler-owned barriers then
-    // establish the primitive state and the recorded packet exports the restored state for the next packet. A
-    // mismatched graph declaration has no native source that this helper can prove, and a terminal external state
-    // must agree with the close-time restoration before the graph publishes its handoff.
+    // Retained resources restore to their descriptor state when a native packet closes. The graph may still use a different built-in state when it explicitly starts from that descriptor state:
+    // compiler-owned barriers then establish the primitive state and the recorded packet exports the restored state for the next packet. A mismatched graph declaration has no native source that this helper can prove, and a terminal external state must agree with the close-time restoration before the graph publishes its handoff.
     if(!resourceDesc.keepInitialState)
         return true;
     return resourceDesc.initialState != ResourceStates::Unknown
@@ -55,8 +52,7 @@ inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken){
         *acceptedToken = {};
 }
 
-// Shared copies-payload core for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned
-// copies vector plus accepted-token lifecycle and differ only in their per-item Copy shape.
+// Shared copies-payload core for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned copies vector plus accepted-token lifecycle and differ only in their per-item Copy shape.
 template<typename Copy>
 struct CopiesPayloadBase{
     explicit CopiesPayloadBase(GraphicsArena& arena)
@@ -72,8 +68,7 @@ template<typename Payload>
     return !payload.copies.empty();
 }
 
-// Shared task skeleton for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned payload
-// plus accepted-token lifecycle and differ only in their per-item Copy shape plus record steps.
+// Shared task skeleton for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned payload plus accepted-token lifecycle and differ only in their per-item Copy shape plus record steps.
 template<typename Copy>
 struct CopiesTaskBase{
     struct Payload : public CopiesPayloadBase<Copy>{
@@ -91,8 +86,7 @@ struct CopiesTaskBase{
     }
 };
 
-// Shared record loop for builtin copy tasks. CopyBuffer plus CopyTexture share the empty-payload guard plus
-// per-item validate, command-IR capture, and native emit sequence and differ only in those per-item steps.
+// Shared record loop for builtin copy tasks. CopyBuffer plus CopyTexture share the empty-payload guard plus per-item validate, command-IR capture, and native emit sequence and differ only in those per-item steps.
 template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, typename EmitCopyFn>
 [[nodiscard]] inline bool RecordCopies(
     const Payload& payload,
@@ -130,9 +124,7 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
         )
     )
         return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from
-    // Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by
-    // StateTracker on later packets.
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by StateTracker on later packets.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

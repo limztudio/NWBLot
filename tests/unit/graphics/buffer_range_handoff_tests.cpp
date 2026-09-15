@@ -26,8 +26,8 @@ using Access = Core::GraphicsBackend::VulkanTestDispatchAccess;
 using Handoff = Core::CommandListResourceStateHandoff;
 
 inline constexpr u16 s_DeviceGeneration = 17u;
-inline constexpr Core::GpuPhysicalQueueId s_Owner{ 3u, s_DeviceGeneration };
-inline constexpr Core::GpuPhysicalQueueId s_Destination{ 7u, s_DeviceGeneration };
+inline constexpr Core::GpuPhysicalQueueId s_Owner{ .index = 3u, .deviceGeneration = s_DeviceGeneration };
+inline constexpr Core::GpuPhysicalQueueId s_Destination{ .index = 7u, .deviceGeneration = s_DeviceGeneration };
 
 struct RangeContext{
     Core::Alloc::GlobalArena arena{ Name("tests/buffer_range_handoff/inputs") };

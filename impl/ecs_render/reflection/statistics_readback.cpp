@@ -306,7 +306,7 @@ void ReflectionStatisticsReadback::pollCompleted(){
         Core::QueueSubmissionToken token;
         if(!m_buffers[index] || !m_control->pending(index, key, token) || token.deviceGeneration != device.getDeviceGeneration())
             continue;
-        const Core::GpuPhysicalQueueId physicalQueue{token.physicalQueueIndex, token.deviceGeneration};
+        const Core::GpuPhysicalQueueId physicalQueue{.index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration};
         if(device.queueGetCompletedInstance(physicalQueue) < token.value)
             continue;
         const auto* const counters = static_cast<const u32*>(device.mapBuffer(*m_buffers[index], Core::CpuAccessMode::Read));

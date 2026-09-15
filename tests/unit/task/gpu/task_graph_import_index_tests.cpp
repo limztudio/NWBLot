@@ -310,13 +310,13 @@ TEST(TaskGraphImportIndex, RejectedAppendDoesNotReserveIdentityOrAcquireOwnershi
     context.prepare(2u);
     const GraphStamp empty = ReadStamp(context.graph);
     auto invalidBuffer = context.typedDescriptions[0u];
-    invalidBuffer.initialAvailabilityCompletion = { 0u, empty.generation };
+    invalidBuffer.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
     auto invalidTexture = context.typedDescriptions[1u];
-    invalidTexture.initialAvailabilityCompletion = { 0u, empty.generation };
+    invalidTexture.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
     EXPECT_FALSE(context.graph.importBuffer(context.buffers[0u], invalidBuffer).valid());
     EXPECT_FALSE(context.graph.importTexture(context.textures[1u], invalidTexture).valid());
     auto invalidGeneric = context.genericDescriptions[0u];
-    invalidGeneric.initialAvailabilityCompletion = { 0u, empty.generation };
+    invalidGeneric.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
     EXPECT_FALSE(context.graph.importResource(invalidGeneric).valid());
     ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, empty));
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
@@ -327,7 +327,7 @@ TEST(TaskGraphImportIndex, RejectedAppendDoesNotReserveIdentityOrAcquireOwnershi
     ASSERT_TRUE(context.resources[1u].valid());
     ASSERT_TRUE(context.graph.importResource(context.genericDescriptions[0u]).valid());
     const GraphStamp populated = ReadStamp(context.graph);
-    const Core::GpuGraphResourceId invalidMember{ 999u, populated.generation };
+    const Core::GpuGraphResourceId invalidMember{ .generation = populated.generation, .index = 999u };
     auto invalidSet = context.setDescriptions[0u];
     invalidSet.setMembers(&invalidMember, 1u);
     EXPECT_FALSE(context.graph.importResourceSet(invalidSet).valid());
@@ -356,11 +356,11 @@ TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSides
         const auto bufferDescription = ResourceDescription(bufferIdentity, Core::GpuGraphResourceType::Buffer);
         const auto textureDescription = ResourceDescription(textureIdentity, Core::GpuGraphResourceType::Texture);
         auto invalidBuffer = bufferDescription;
-        invalidBuffer.initialAvailabilityCompletion = { 0u, before.generation };
+        invalidBuffer.initialAvailabilityCompletion = { .generation = before.generation, .index = 0u };
         auto invalidTexture = textureDescription;
-        invalidTexture.initialAvailabilityCompletion = { 0u, before.generation };
+        invalidTexture.initialAvailabilityCompletion = { .generation = before.generation, .index = 0u };
         auto invalidGeneric = context.genericDescriptions[0u];
-        invalidGeneric.initialAvailabilityCompletion = { 0u, before.generation };
+        invalidGeneric.initialAvailabilityCompletion = { .generation = before.generation, .index = 0u };
         EXPECT_FALSE(context.graph.importBuffer(buffer, invalidBuffer).valid());
         EXPECT_FALSE(context.graph.importTexture(texture, invalidTexture).valid());
         EXPECT_FALSE(context.graph.importResource(invalidGeneric).valid());
@@ -372,7 +372,7 @@ TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSides
         auto conflictingSet = context.setDescriptions[0u];
         conflictingSet.setMembers(&context.resources[1u], 1u);
         EXPECT_FALSE(context.graph.importResourceSet(conflictingSet).valid());
-        const Core::GpuGraphResourceId invalidMember{ 999u, before.generation };
+        const Core::GpuGraphResourceId invalidMember{ .generation = before.generation, .index = 999u };
         auto newSet = Core::GpuGraphResourceSetDesc{}
             .setIdentity(Name("tests/graph_import_index/boundary_new_set"))
             .setMarkerLabel("Boundary New Set")

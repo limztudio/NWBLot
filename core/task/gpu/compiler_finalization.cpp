@@ -440,8 +440,8 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
-            static_cast<u32>(consumerPacketIndex),
-            compiledPlan.planGeneration,
+            .generation = compiledPlan.planGeneration,
+            .index = static_cast<u32>(consumerPacketIndex),
         };
         consumerPacket.dependencyOffset = static_cast<u32>(compiledPlan.packetDependencies.size());
         const auto appendPacketDependency = [&](const GpuSubmissionPacketId producerPacket){
@@ -490,7 +490,7 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
 
             const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(consumerTask);
             for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
-                const GpuTaskId producerTask{ producerIndices[producerIndex], consumerTask.generation };
+                const GpuTaskId producerTask{ .generation = consumerTask.generation, .index = static_cast<u32>(producerIndices[producerIndex]) };
                 const GpuSubmissionPacketId producerPacket = FindCompiledPacketForTask(compiledPlan, producerTask);
                 if(!appendPacketDependency(producerPacket))
                     return false;
@@ -582,8 +582,8 @@ void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     for(usize packetIndex = 0u; packetIndex < compiledPlan.packets.size(); ++packetIndex){
         GpuSubmissionPacket& packet = compiledPlan.packets[packetIndex];
         const GpuSubmissionPacketId packetID{
-            static_cast<u32>(packetIndex),
-            compiledPlan.planGeneration,
+            .generation = compiledPlan.planGeneration,
+            .index = static_cast<u32>(packetIndex),
         };
         for(u32 dependencyIndex = 0u; dependencyIndex < packet.dependencyCount; ++dependencyIndex){
             const GpuPacketDependency& dependency = compiledPlan.packetDependencies[

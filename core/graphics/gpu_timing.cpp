@@ -615,7 +615,7 @@ bool GpuTimingRecorder::collectLocked(
 }
 
 bool GpuTimingRecorder::submissionCompleted(Device& device, const QueueSubmissionToken& token){
-    const GpuPhysicalQueueId physicalQueue{ token.physicalQueueIndex, token.deviceGeneration };
+    const GpuPhysicalQueueId physicalQueue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
     NWB_ASSERT(static_cast<usize>(physicalQueue.index) < m_queueCompletions.size());
     if(static_cast<usize>(physicalQueue.index) >= m_queueCompletions.size())
         return false;

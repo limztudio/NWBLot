@@ -2028,8 +2028,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             && submissionToken.hasPhysicalQueueIdentity()
             && m_graphics.getDevice().queueGetCompletedInstance(
                 Core::GpuPhysicalQueueId{
-                    submissionToken.physicalQueueIndex,
-                    submissionToken.deviceGeneration,
+                    .index = submissionToken.physicalQueueIndex,
+                    .deviceGeneration = submissionToken.deviceGeneration,
                 }
             ) >= submissionToken.value
         ;

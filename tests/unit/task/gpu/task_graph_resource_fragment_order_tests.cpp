@@ -44,8 +44,8 @@ struct ExpectedBufferFragment{
     u64 size;
 };
 
-constexpr Graphics::GpuGraphResourceId s_Buffer{ 0u, 1u };
-constexpr Graphics::GpuGraphResourceId s_OtherBuffer{ 1u, 1u };
+constexpr Graphics::GpuGraphResourceId s_Buffer{ .generation = 1u, .index = 0u };
+constexpr Graphics::GpuGraphResourceId s_OtherBuffer{ .generation = 1u, .index = 1u };
 constexpr usize s_InitialState = Limit<usize>::s_Max;
 
 
@@ -76,8 +76,8 @@ void AppendBufferState(
         .range = BufferRange(offset, size),
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ static_cast<u32>(states.size()), 1u },
-        .queue = Graphics::GpuPhysicalQueueId{ 0u, 1u },
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = static_cast<u32>(states.size()) },
+        .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
 }
 
@@ -236,16 +236,16 @@ TEST(GpuTaskGraphResourceFragments, TextureInteriorOverwritePreservesFourRemaind
         .range = whole,
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ 0u, 1u },
-        .queue = Graphics::GpuPhysicalQueueId{ 0u, 1u },
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
+        .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = s_Buffer,
         .range = center,
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ 1u, 1u },
-        .queue = Graphics::GpuPhysicalQueueId{ 0u, 1u },
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 1u },
+        .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     }));
     RequestedRanges requested(scratchArena);
     requested.push_back(whole);
@@ -329,14 +329,14 @@ TEST(GpuTaskGraphResourceFragments, IndexedHistoryRejectsForeignGenerationAndInv
         .range = BufferRange(0u, 16u),
         .state = Graphics::ResourceStates::CopyDest,
         .access = Graphics::GpuTaskResourceAccess::Write,
-        .task = Graphics::GpuTaskId{ 0u, 1u },
-        .queue = Graphics::GpuPhysicalQueueId{ 0u, 1u },
+        .task = Graphics::GpuTaskId{ .generation = 1u, .index = 0u },
+        .queue = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
     };
     ASSERT_TRUE(history.append(state));
     for(
         const Graphics::GpuGraphResourceId invalid : {
-            Graphics::GpuGraphResourceId{ 0u, 2u },
-            Graphics::GpuGraphResourceId{ 2u, 1u },
+            Graphics::GpuGraphResourceId{ .generation = 2u, .index = 0u },
+            Graphics::GpuGraphResourceId{ .generation = 1u, .index = 2u },
             Graphics::GpuGraphResourceId{},
         }
     ){

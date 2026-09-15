@@ -618,11 +618,11 @@ TEST(GpuTaskGraph, PublishesFiniteDeclarationTimingOnlyForAcceptedPlans){
         EXPECT_EQ(idleQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
         EXPECT_EQ(idleQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
         const Graphics::GpuPhysicalQueueId staleQueue{
-            queue.id.index,
-            static_cast<u16>(queue.id.deviceGeneration + 1u),
+            .index = queue.id.index,
+            .deviceGeneration = static_cast<u16>(queue.id.deviceGeneration + 1u),
         };
         EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(staleQueue).valid());
-        const Graphics::GpuPhysicalQueueId nonPlanQueue{ 2u, compiledPlan.deviceGeneration() };
+        const Graphics::GpuPhysicalQueueId nonPlanQueue{ .index = 2u, .deviceGeneration = compiledPlan.deviceGeneration() };
         ASSERT_TRUE(nonPlanQueue.valid());
         EXPECT_FALSE(compiledPlan.physicalQueueCompileStatistics(nonPlanQueue).valid());
         firstPlanGeneration = firstQueueCompileStatistics.planGeneration;

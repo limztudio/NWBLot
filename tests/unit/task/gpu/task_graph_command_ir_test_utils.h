@@ -28,11 +28,11 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr Graphics::GpuTaskId s_CommandIrTask{ 4u, 17u };
-inline constexpr Graphics::GpuSubmissionPacketId s_CommandIrPacket{ 2u, 19u };
-inline constexpr Graphics::GpuPhysicalQueueId s_CommandIrQueue{ 1u, 3u };
-inline constexpr Graphics::GpuGraphResourceId s_CommandIrSource{ 5u, 17u };
-inline constexpr Graphics::GpuGraphResourceId s_CommandIrDestination{ 6u, 17u };
+inline constexpr Graphics::GpuTaskId s_CommandIrTask{ .generation = 17u, .index = 4u };
+inline constexpr Graphics::GpuSubmissionPacketId s_CommandIrPacket{ .generation = 19u, .index = 2u };
+inline constexpr Graphics::GpuPhysicalQueueId s_CommandIrQueue{ .index = 1u, .deviceGeneration = 3u };
+inline constexpr Graphics::GpuGraphResourceId s_CommandIrSource{ .generation = 17u, .index = 5u };
+inline constexpr Graphics::GpuGraphResourceId s_CommandIrDestination{ .generation = 17u, .index = 6u };
 
 inline constexpr usize s_CommandIrCopyBufferOffset = sizeof(Graphics::GpuCommandIrStreamHeader);
 inline constexpr usize s_CommandIrCopyTextureOffset = s_CommandIrCopyBufferOffset

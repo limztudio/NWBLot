@@ -746,10 +746,10 @@ TEST(GpuTaskGraph, SchedulingAdjacencyRejectsStaleIdsAndClearsOnReset){
         graphGeneration = declarations.generation();
     }
     const Graphics::GpuTaskId outOfRangeTask{
-        declaredTaskCount,
-        graphGeneration,
-    };
-    const Graphics::GpuTaskId staleTask{ first.index, graphGeneration + 1u };
+        .generation = graphGeneration,
+        .index = static_cast<u32>(declaredTaskCount),
+        };
+    const Graphics::GpuTaskId staleTask{ .generation = graphGeneration + 1u, .index = static_cast<u32>(first.index) };
     Graphics::GpuTaskGraph foreignGraph(testArena.arena);
     const Graphics::GpuTaskId foreignTask = AddTask(
         foreignGraph,
@@ -839,8 +839,8 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
             EXPECT_TRUE(reachability.transitivelyIndependent(tasks[secondWordProducer - 1u], tasks[boundaryConsumer]));
         }
 
-        const Graphics::GpuTaskId staleTask{ tasks[0u].index, graphGeneration + 1u };
-        const Graphics::GpuTaskId outOfRangeTask{ static_cast<u32>(taskCount), graphGeneration };
+        const Graphics::GpuTaskId staleTask{ .generation = graphGeneration + 1u, .index = static_cast<u32>(tasks[0u].index) };
+        const Graphics::GpuTaskId outOfRangeTask{ .generation = graphGeneration, .index = static_cast<u32>(taskCount) };
         EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[0u]));
         EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[0u]));
         EXPECT_FALSE(reachability.reaches(staleTask, tasks[lastEvenTask]));
@@ -988,7 +988,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
 
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId futureThird{ 2u, graphGeneration };
+    const Graphics::GpuTaskId futureThird{ .generation = graphGeneration, .index = 2u };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         Name("tests/task_graph/explicit_first"),
@@ -1074,7 +1074,7 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
         ASSERT_TRUE(declarations.valid());
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId futureSecond{ 1u, graphGeneration };
+    const Graphics::GpuTaskId futureSecond{ .generation = graphGeneration, .index = 1u };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         Name("tests/task_graph/cycle_first"),
@@ -1164,9 +1164,9 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     const Name taskBaseName("tests/task_graph/deep_cycle_task_");
     char taskIndexBuffer[32u] = {};
     const Graphics::GpuTaskId futureLast{
-        static_cast<u32>(s_TaskCount - 1u),
-        graphGeneration,
-    };
+        .generation = graphGeneration,
+        .index = static_cast<u32>(s_TaskCount - 1u),
+        };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         DeriveName(taskBaseName, FormatDecimal(0u, taskIndexBuffer)),
@@ -1196,7 +1196,7 @@ TEST(GpuTaskGraph, RejectsDeepExplicitCyclesWithoutCallStackGrowth){
     ASSERT_EQ(analysis.cyclePath().size(), s_TaskCount + 1u);
     ASSERT_EQ(analysis.cycleEdges().size(), s_TaskCount);
     for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
-        const Graphics::GpuTaskId expectedTask{ static_cast<u32>(taskIndex), graphGeneration };
+        const Graphics::GpuTaskId expectedTask{ .generation = graphGeneration, .index = static_cast<u32>(taskIndex) };
         EXPECT_EQ(analysis.cyclePath()[taskIndex], expectedTask);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].producer, analysis.cyclePath()[taskIndex]);
         EXPECT_EQ(analysis.cycleEdges()[taskIndex].consumer, analysis.cyclePath()[taskIndex + 1u]);

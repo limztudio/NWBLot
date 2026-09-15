@@ -97,8 +97,8 @@ void RendererTaskTimingFeedbackState::acceptSubmission(
         return;
 
     const Core::GpuPhysicalQueueId acceptedQueue{
-        token.physicalQueueIndex,
-        token.deviceGeneration,
+        .index = token.physicalQueueIndex,
+        .deviceGeneration = token.deviceGeneration,
     };
     pending.submissionResolved = true;
     pending.accepted = feedbackActive

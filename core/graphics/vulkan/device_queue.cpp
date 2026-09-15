@@ -121,8 +121,8 @@ bool Device::registerPhysicalQueue(
         .queueIndex = nativeQueue.queueIndex,
         .timestampValidBits = desc.timestampValidBits,
         .id = GpuPhysicalQueueId{
-            static_cast<u16>(m_physicalQueueInfos.size()),
-            m_deviceGeneration,
+            .index = static_cast<u16>(m_physicalQueueInfos.size()),
+            .deviceGeneration = m_deviceGeneration,
         },
         .queueClass = desc.queueClass,
         .capabilities = desc.capabilities,

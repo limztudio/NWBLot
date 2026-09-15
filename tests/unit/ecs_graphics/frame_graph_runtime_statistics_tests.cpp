@@ -135,7 +135,7 @@ MakeValidPacketSubmissionStatistics()noexcept{
         .graphGeneration = 11u,
         .planGeneration = 12u,
         .recordingAttemptGeneration = 13u,
-        .packet = { .index = 0u, .generation = 12u },
+        .packet = { .generation = 12u, .index = 0u },
         .queue = { .index = 2u, .deviceGeneration = 7u },
         .deviceGeneration = 7u,
         .queueClass = NWB::Core::CommandQueue::Compute,
@@ -542,7 +542,7 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
     const NWB::Core::GpuPhysicalQueueInfo queue{
         .familyIndex = 0u,
         .queueIndex = 0u,
-        .id = NWB::Core::GpuPhysicalQueueId{ 0u, 1u },
+        .id = NWB::Core::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
         .queueClass = NWB::Core::CommandQueue::Graphics,
         .capabilities = static_cast<NWB::Core::GpuQueueCapability::Mask>(
             static_cast<u8>(NWB::Core::GpuQueueCapability::Graphics)

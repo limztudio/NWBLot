@@ -35,8 +35,8 @@ using Graphics::GpuTaskGraphCompilerDetail::CollectResourceFirstUseRangesWithinT
 using Ranges = Vector<Graphics::GpuTaskResourceRange, Core::Alloc::ScratchArena>;
 
 constexpr usize s_NoUse = Limit<usize>::s_Max;
-constexpr Graphics::GpuGraphResourceId s_A{ 0u, 1u };
-constexpr Graphics::GpuGraphResourceId s_B{ 1u, 1u };
+constexpr Graphics::GpuGraphResourceId s_A{ .generation = 1u, .index = 0u };
+constexpr Graphics::GpuGraphResourceId s_B{ .generation = 1u, .index = 1u };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -61,7 +61,7 @@ template<usize Count>
     const u64 generation = 1u,
     const u32 taskIndex = 0u){
     Graphics::GpuTaskGraphTaskView view{};
-    view.id = { taskIndex, generation };
+    view.id = { .generation = generation, .index = taskIndex };
     view.resourceUses = uses;
     view.resourceUseCount = Count;
     return view;
@@ -98,7 +98,7 @@ TEST(GpuTaskUseIndex, ChainsKeepAscendingDeclarationIndicesIncludingUnknownState
     EXPECT_EQ(index.first(s_B), 1u);
     EXPECT_EQ(index.next(1u), 3u);
     EXPECT_EQ(index.next(3u), s_NoUse);
-    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ 2u, 1u }), s_NoUse);
+    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ .generation = 1u, .index = 2u }), s_NoUse);
     EXPECT_EQ(index.next(LengthOf(uses)), s_NoUse);
 }
 
@@ -125,7 +125,7 @@ TEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews){
     detached.resourceUseCount = 0u;
     EXPECT_FALSE(index.validFor(detached));
     Graphics::GpuTaskGraphTaskView empty{};
-    empty.id = { 2u, 1u };
+    empty.id = { .generation = 1u, .index = 2u };
     ASSERT_TRUE(index.build(empty));
     EXPECT_TRUE(index.validFor(empty));
     EXPECT_EQ(index.first(s_B), s_NoUse);
@@ -140,7 +140,7 @@ TEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableInd
     TaskResourceUseIndex index(2u, 1u, LengthOf(uses), scratchArena);
     for(
         const Graphics::GpuGraphResourceId invalid : {
-            Graphics::GpuGraphResourceId{}, Graphics::GpuGraphResourceId{ 0u, 2u }, Graphics::GpuGraphResourceId{ 2u, 1u },
+            Graphics::GpuGraphResourceId{}, Graphics::GpuGraphResourceId{ .generation = 2u, .index = 0u }, Graphics::GpuGraphResourceId{ .generation = 1u, .index = 2u },
         }
     ){
         uses[0u].resource = invalid;

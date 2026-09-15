@@ -89,7 +89,7 @@ struct TextureClearTestContext{
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 0u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ 0u, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Graphics,
         .capabilities = QueueCapabilities(
             Graphics::GpuQueueCapability::Graphics,
@@ -104,7 +104,7 @@ struct TextureClearTestContext{
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 1u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ 1u, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = 1u, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Compute,
         .capabilities = QueueCapabilities(
             Graphics::GpuQueueCapability::Compute,
@@ -118,7 +118,7 @@ struct TextureClearTestContext{
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 2u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ 2u, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = 2u, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Transfer,
         .capabilities = Graphics::GpuQueueCapability::Transfer,
         .dedicated = true,

@@ -271,7 +271,7 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
     m_declarationRevision = allocateGeneration();
-    return GpuUploadBlobId{ index, m_generation };
+    return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 
 GpuTaskId GpuTaskGraph::addUploadBufferTask(

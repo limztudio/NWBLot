@@ -357,8 +357,8 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         if(!token)
             return false;
         const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{
-            token->physicalQueueIndex,
-            token->deviceGeneration,
+            .index = token->physicalQueueIndex,
+            .deviceGeneration = token->deviceGeneration,
         });
         if(
             !externalQueue

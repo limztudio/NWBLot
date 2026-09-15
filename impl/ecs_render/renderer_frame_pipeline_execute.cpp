@@ -152,8 +152,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         )
         && device.queueGetCompletedInstance(
             Core::GpuPhysicalQueueId{
-                token.physicalQueueIndex,
-                token.deviceGeneration,
+                .index = token.physicalQueueIndex,
+                .deviceGeneration = token.deviceGeneration,
             }
         ) < token.value
     ;

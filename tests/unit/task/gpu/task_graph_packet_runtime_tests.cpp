@@ -106,8 +106,8 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
         EXPECT_EQ(firstQueueStatistics.taskRecordSeconds, 0.0);
         EXPECT_EQ(firstQueueStatistics.recordingSeconds, 0.0);
         const Graphics::GpuPhysicalQueueId staleFirstQueue{
-            firstQueue.index,
-            static_cast<u16>(
+            .index = firstQueue.index,
+            .deviceGeneration = static_cast<u16>(
                 firstQueue.deviceGeneration == Limit<u16>::s_Max
                     ? 1u
                     : firstQueue.deviceGeneration + 1u
@@ -117,7 +117,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
             recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, staleFirstQueue).valid()
         );
         // A current-generation ID is still invalid when the compiled plan has no matching physical topology entry.
-        const Graphics::GpuPhysicalQueueId nonPlanQueue{ 3u, compiledPlan.deviceGeneration() };
+        const Graphics::GpuPhysicalQueueId nonPlanQueue{ .index = 3u, .deviceGeneration = compiledPlan.deviceGeneration() };
         EXPECT_TRUE(nonPlanQueue.valid());
         EXPECT_FALSE(recordedGraph.physicalQueueRecordingStatistics(compiledGraph, compiledPlan, nonPlanQueue).valid());
     }
@@ -243,7 +243,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
         task,
         firstPacket,
         firstQueue,
-        Graphics::GpuGraphResourceId{ 0u, graphGeneration },
+        Graphics::GpuGraphResourceId{ .generation = graphGeneration, .index = 0u },
         0xdecafbadU
     ));
     ASSERT_EQ(capture.planGeneration(), firstPlanGeneration);
@@ -315,13 +315,13 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
         );
     };
     const Graphics::GpuTaskId onePastCompiledTasks{
-        static_cast<u32>(graphTaskCount),
-        graphGeneration,
-    };
+        .generation = graphGeneration,
+        .index = static_cast<u32>(graphTaskCount),
+        };
     const Graphics::GpuTaskId largeSameGenerationTask{
-        Limit<u32>::s_Max - 1u,
-        graphGeneration,
-    };
+        .generation = graphGeneration,
+        .index = static_cast<u32>(Limit<u32>::s_Max - 1u),
+        };
     ASSERT_TRUE(onePastCompiledTasks.valid());
     ASSERT_TRUE(largeSameGenerationTask.valid());
     {

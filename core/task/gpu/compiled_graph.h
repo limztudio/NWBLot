@@ -660,21 +660,22 @@ private:
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
     GpuCompiledPresentEndpoint m_presentEndpoint;
     GpuSubmissionPacketRange m_packetTimingEnvelopeRange;
+    GpuTaskGraphCompileStatistics m_compileStatistics;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     u64 m_planGeneration = 0u;
-    u16 m_deviceGeneration = 0u;
     usize m_graphTaskCount = 0u;
-    GpuTaskGraphCompileStatistics m_compileStatistics;
-    mutable Atomic<u32> m_planAccessState = 0u;
-    mutable Futex m_attemptBindingMutex;
+    const u64 m_objectIdentity;
     mutable const GpuTaskGraph* m_attemptGraph = nullptr;
     mutable u64 m_attemptPlanGeneration = 0u;
     mutable u64 m_attemptRecordingGeneration = 0u;
     mutable u64 m_attemptTransactionIdentity = 0u;
     mutable u64 m_attemptTransactionResetGeneration = 0u;
+    // Keep 4-byte and smaller members together to avoid padding.
+    mutable Atomic<u32> m_planAccessState = 0u;
+    mutable Futex m_attemptBindingMutex;
     mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
-    const u64 m_objectIdentity;
+    u16 m_deviceGeneration = 0u;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };

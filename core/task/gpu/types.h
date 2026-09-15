@@ -130,10 +130,10 @@ namespace GpuTaskGraphTelemetryNodeFlag{
 
 
 struct GpuTaskId{
-    u32 index = Limit<u32>::s_Max;
     // This is globally unique for every live graph generation, rather than only graph-local. It rejects a handle
     // accidentally carried between two concurrently live graph instances as well as one carried past reset().
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -143,8 +143,8 @@ inline constexpr bool operator==(const GpuTaskId& lhs, const GpuTaskId& rhs)noex
 inline constexpr bool operator!=(const GpuTaskId& lhs, const GpuTaskId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -154,8 +154,8 @@ inline constexpr bool operator==(const GpuGraphResourceId& lhs, const GpuGraphRe
 inline constexpr bool operator!=(const GpuGraphResourceId& lhs, const GpuGraphResourceId& rhs)noexcept{ return !(lhs == rhs); }
 
 struct GpuGraphResourceVersionId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -170,8 +170,8 @@ inline constexpr bool operator!=(const GpuGraphResourceVersionId& lhs, const Gpu
 // uniform access contract to every member; the graph freezes that declaration into ordinary per-resource uses before
 // compiler analysis, so sets never become an opaque runtime synchronization domain.
 struct GpuGraphResourceSetId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -184,8 +184,8 @@ inline constexpr bool operator!=(const GpuGraphResourceSetId& lhs, const GpuGrap
 // only: native recording copies it through the existing per-command-buffer staging allocator, after which normal
 // upload-chunk retirement remains responsible for GPU lifetime.
 struct GpuUploadBlobId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -210,8 +210,8 @@ namespace GpuGraphPipelineType{
 };
 
 struct GpuGraphPipelineId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -223,8 +223,8 @@ inline constexpr bool operator!=(const GpuGraphPipelineId& lhs, const GpuGraphPi
 }
 
 struct GpuExternalCompletionId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
@@ -239,8 +239,8 @@ inline constexpr bool operator!=(const GpuExternalCompletionId& lhs, const GpuEx
 // immutable compiled plan rather than the declared graph, so recompiling one unchanged graph still invalidates
 // packet-local recording, submission, timing, hook, and capture handles.
 struct GpuSubmissionPacketId{
-    u32 index = Limit<u32>::s_Max;
     u64 generation = 0u;
+    u32 index = Limit<u32>::s_Max;
 
     [[nodiscard]] constexpr bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
 };

@@ -369,7 +369,7 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
         ASSERT_TRUE(declarations.valid());
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId futureEarly{ 2u, graphGeneration };
+    const Graphics::GpuTaskId futureEarly{ .generation = graphGeneration, .index = 2u };
     const Graphics::GpuTaskId late = AddTask(
         graph,
         Name("tests/task_graph_timing/topological_late"),

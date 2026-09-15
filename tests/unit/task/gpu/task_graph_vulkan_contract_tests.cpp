@@ -752,9 +752,9 @@ TEST(VulkanDevice, DeviceGenerationAllocationFailsClosedAtExhaustion){
 TEST(VulkanDevice, MatchesExactCommandListSubmissionQueueIdentity){
     using Graphics::GraphicsBackend::VulkanDetail::SubmissionCommandListMatchesExecutionQueue;
 
-    constexpr Graphics::GpuPhysicalQueueId s_ExactQueue{ 3u, 7u };
-    constexpr Graphics::GpuPhysicalQueueId s_OtherIndex{ 4u, 7u };
-    constexpr Graphics::GpuPhysicalQueueId s_OtherGeneration{ 3u, 8u };
+    constexpr Graphics::GpuPhysicalQueueId s_ExactQueue{ .index = 3u, .deviceGeneration = 7u };
+    constexpr Graphics::GpuPhysicalQueueId s_OtherIndex{ .index = 4u, .deviceGeneration = 7u };
+    constexpr Graphics::GpuPhysicalQueueId s_OtherGeneration{ .index = 3u, .deviceGeneration = 8u };
     constexpr Graphics::CommandListParameters s_CommandList{
         .queueType = Graphics::CommandQueue::Graphics,
         .physicalQueue = s_ExactQueue,

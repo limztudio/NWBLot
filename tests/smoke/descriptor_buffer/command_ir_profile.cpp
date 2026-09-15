@@ -634,8 +634,8 @@ struct Result{
         .familyIndex = graphicsFamily,
         .queueIndex = 0u,
         .id = GpuPhysicalQueueId{
-            device.getPhysicalQueueIndex(CommandQueue::Graphics),
-            device.getDeviceGeneration(),
+            .index = device.getPhysicalQueueIndex(CommandQueue::Graphics),
+            .deviceGeneration = device.getDeviceGeneration(),
         },
         .queueClass = CommandQueue::Graphics,
         .capabilities = static_cast<GpuQueueCapability::Mask>(

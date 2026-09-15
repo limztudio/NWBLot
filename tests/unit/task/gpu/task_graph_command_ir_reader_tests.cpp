@@ -35,7 +35,7 @@ TEST(GpuCommandIrStreamReader, DecodesTheCompleteBuiltinPodStream){
     Graphics::GpuCommandIrCapture emptyCapture(testArena.arena);
     Graphics::GpuCommandIrStreamReader emptyReader(emptyCapture.commandBytes());
     Graphics::GpuCommandIrBuiltinTaskRecord emptyOutput;
-    emptyOutput.task = Graphics::GpuTaskId{ 99u, 98u };
+    emptyOutput.task = Graphics::GpuTaskId{ .generation = 98u, .index = 99u };
     EXPECT_EQ(emptyReader.next(emptyOutput), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(emptyReader.validation().valid());
     EXPECT_EQ(emptyReader.graphGeneration(), 0u);
@@ -258,11 +258,11 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
             ASSERT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Record);
 
         output.opcode = Graphics::GpuCommandIrOpcode::ClearTexture;
-        output.task = Graphics::GpuTaskId{ 91u, 92u };
-        output.packet = Graphics::GpuSubmissionPacketId{ 93u, 92u };
-        output.queue = Graphics::GpuPhysicalQueueId{ 94u, 95u };
-        output.source = Graphics::GpuGraphResourceId{ 96u, 92u };
-        output.destination = Graphics::GpuGraphResourceId{ 97u, 92u };
+        output.task = Graphics::GpuTaskId{ .generation = 92u, .index = 91u };
+        output.packet = Graphics::GpuSubmissionPacketId{ .generation = 92u, .index = 93u };
+        output.queue = Graphics::GpuPhysicalQueueId{ .index = 94u, .deviceGeneration = 95u };
+        output.source = Graphics::GpuGraphResourceId{ .generation = 92u, .index = 96u };
+        output.destination = Graphics::GpuGraphResourceId{ .generation = 92u, .index = 97u };
         output.dataSizeBytes = 98u;
         output.clearDepth = true;
         output.clearStencil = true;

@@ -670,7 +670,7 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
         capture.commandBytes(),
         declarations,
         compiledPlan,
-        Graphics::GpuSubmissionPacketId{ Limit<u32>::s_Max - 1u, packet.generation }
+        Graphics::GpuSubmissionPacketId{ .generation = packet.generation, .index = Limit<u32>::s_Max - 1u }
     );
     EXPECT_EQ(invalidPacket.error, Graphics::GpuCommandIrReplayError::InvalidPacket);
     EXPECT_TRUE(invalidPacket.streamValidation.valid());
@@ -679,7 +679,7 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     ASSERT_TRUE(wrongQueueCapture.captureCopyBuffer(
         task,
         packet,
-        Graphics::GpuPhysicalQueueId{ static_cast<u16>(queue.index + 1u), queue.deviceGeneration },
+        Graphics::GpuPhysicalQueueId{ .index = static_cast<u16>(queue.index + 1u), .deviceGeneration = queue.deviceGeneration },
         source,
         0u,
         destination,

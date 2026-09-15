@@ -53,7 +53,7 @@ GpuTaskGraphTaskView GpuTaskGraph::taskAt(const usize index)const{
     NWB_ASSERT(index < m_tasks.size());
     const GpuTaskNode& task = m_tasks[index];
     return GpuTaskGraphTaskView{
-        .id = GpuTaskId{ static_cast<u32>(index), m_generation },
+        .id = GpuTaskId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = task.identity,
         .markerLabel = markerLabel(task.markerLabelOffset, task.markerLabelSize),
         .queue = task.queue,
@@ -89,7 +89,7 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
     NWB_ASSERT(index < m_resources.size());
     const GpuGraphResourceNode& resource = m_resources[index];
     return GpuTaskGraphResourceView{
-        .id = GpuGraphResourceId{ static_cast<u32>(index), m_generation },
+        .id = GpuGraphResourceId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = resource.identity,
         .markerLabel = markerLabel(resource.markerLabelOffset, resource.markerLabelSize),
         .initialState = resource.initialState,
@@ -124,7 +124,7 @@ GpuTaskGraphResourceVersionView GpuTaskGraph::resourceVersionAt(const usize inde
     NWB_ASSERT(index < m_resourceVersions.size());
     const GpuGraphResourceVersionNode& version = m_resourceVersions[index];
     return GpuTaskGraphResourceVersionView{
-        .id = GpuGraphResourceVersionId{ static_cast<u32>(index), m_generation },
+        .id = GpuGraphResourceVersionId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .resource = version.resource,
         .range = version.range,
         .origin = version.origin,
@@ -135,7 +135,7 @@ GpuTaskGraphResourceSetView GpuTaskGraph::resourceSetAt(const usize index)const{
     NWB_ASSERT(index < m_resourceSets.size());
     const GpuGraphResourceSetNode& resourceSet = m_resourceSets[index];
     return GpuTaskGraphResourceSetView{
-        .id = GpuGraphResourceSetId{ static_cast<u32>(index), m_generation },
+        .id = GpuGraphResourceSetId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = resourceSet.identity,
         .markerLabel = markerLabel(resourceSet.markerLabelOffset, resourceSet.markerLabelSize),
         .members = resourceSet.memberCount > 0u ? m_resourceSetMembers.data() + resourceSet.memberOffset : nullptr,
@@ -147,7 +147,7 @@ GpuTaskGraphPipelineView GpuTaskGraph::pipelineAt(const usize index)const{
     NWB_ASSERT(index < m_pipelines.size());
     const GpuGraphPipelineNode& pipeline = m_pipelines[index];
     return GpuTaskGraphPipelineView{
-        .id = GpuGraphPipelineId{ static_cast<u32>(index), m_generation },
+        .id = GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = pipeline.identity,
         .markerLabel = markerLabel(pipeline.markerLabelOffset, pipeline.markerLabelSize),
         .type = pipeline.type,
@@ -162,7 +162,7 @@ GpuTaskGraphExternalCompletionView GpuTaskGraph::externalCompletionAt(const usiz
     NWB_ASSERT(index < m_externalCompletions.size());
     const GpuExternalCompletionNode& completion = m_externalCompletions[index];
     return GpuTaskGraphExternalCompletionView{
-        .id = GpuExternalCompletionId{ static_cast<u32>(index), m_generation },
+        .id = GpuExternalCompletionId{ .generation = m_generation, .index = static_cast<u32>(index) },
         .identity = completion.identity,
         .markerLabel = markerLabel(completion.markerLabelOffset, completion.markerLabelSize),
         .token = completion.token,

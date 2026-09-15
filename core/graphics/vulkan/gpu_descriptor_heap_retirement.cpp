@@ -116,7 +116,7 @@ bool GpuDescriptorHeap::validateCommandBufferUseSubmissionLocked(
         !submissionToken.valid()
         || !submissionToken.hasPhysicalQueueIdentity()
         || !m_device.matchesPhysicalQueueIdentity(
-            GpuPhysicalQueueId{ submissionToken.physicalQueueIndex, submissionToken.deviceGeneration }
+            GpuPhysicalQueueId{ .index = submissionToken.physicalQueueIndex, .deviceGeneration = submissionToken.deviceGeneration }
         )
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap received an invalid physical command-buffer submission token."));
@@ -241,7 +241,7 @@ void GpuDescriptorHeap::collectRetired(){
             if(!token.valid() || !token.hasPhysicalQueueIdentity())
                 continue;
 
-            const GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+            const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
             bool alreadyTracked = false;
             for(const QueueCompletion& completion : completions){
                 if(completion.queue == queue){
@@ -269,7 +269,7 @@ void GpuDescriptorHeap::collectRetired(){
         if(!token.hasPhysicalQueueIdentity())
             return false;
 
-        const GpuPhysicalQueueId queue{ token.physicalQueueIndex, token.deviceGeneration };
+        const GpuPhysicalQueueId queue{ .index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration };
         for(const QueueCompletion& completion : completions){
             if(completion.queue == queue)
                 return completion.value >= token.value;

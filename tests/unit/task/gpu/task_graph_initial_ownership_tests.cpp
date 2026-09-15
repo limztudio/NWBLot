@@ -158,7 +158,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             graph,
             Name("tests/task_graph/initial_owner_stale"),
             "Initial Owner Stale",
-            Graphics::GpuPhysicalQueueId{ queues[0u].id.index, static_cast<u16>(queues[0u].id.deviceGeneration + 1u) }
+            Graphics::GpuPhysicalQueueId{ .index = queues[0u].id.index, .deviceGeneration = static_cast<u16>(queues[0u].id.deviceGeneration + 1u) }
         );
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(addFirstUse(

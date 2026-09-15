@@ -57,8 +57,8 @@ inline VkResult GetTimerQueryResults(const VulkanContext& context, const VkQuery
         return false;
 
     return device.queueGetCompletedInstance(GpuPhysicalQueueId{
-        token.physicalQueueIndex,
-        token.deviceGeneration,
+        .index = token.physicalQueueIndex,
+        .deviceGeneration = token.deviceGeneration,
     }) >= token.value;
 }
 

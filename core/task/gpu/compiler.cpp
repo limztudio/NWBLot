@@ -165,8 +165,8 @@ bool GpuTaskGraphCompiler::compile(
             continue;
 
         const GpuPhysicalQueueId producerQueue{
-            completion.token.physicalQueueIndex,
-            completion.token.deviceGeneration,
+            .index = completion.token.physicalQueueIndex,
+            .deviceGeneration = completion.token.deviceGeneration,
         };
         bool validProducerQueue = false;
         for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
@@ -453,11 +453,11 @@ bool GpuTaskGraphCompiler::compile(
         const GpuGraphResourceId resource = {}
     ){
         outAnalysis.m_diagnostic = GpuTaskGraphAnalysisDiagnostic{
-            .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
             .task = task,
             .relatedTask = relatedTask,
             .resource = resource,
             .resourceVersion = {},
+            .status = GpuTaskGraphAnalysisStatus::InvalidAcceptedQueueFrontierTask,
         };
         outAnalysis.m_valid = false;
         return false;
@@ -549,7 +549,7 @@ bool GpuTaskGraphCompiler::compile(
     for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
         usize byteSize = 0u;
         if(!graph.uploadBlobData(
-            GpuUploadBlobId{ static_cast<u32>(uploadBlobIndex), graph.generation() },
+            GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) },
             byteSize
         ))
             return false;

@@ -44,11 +44,12 @@ namespace GpuTaskGraphAnalysisStatus{
 };
 
 struct GpuTaskGraphAnalysisDiagnostic{
-    GpuTaskGraphAnalysisStatus::Enum status = GpuTaskGraphAnalysisStatus::NotAnalyzed;
     GpuTaskId task;
     GpuTaskId relatedTask;
     GpuGraphResourceId resource;
     GpuGraphResourceVersionId resourceVersion;
+    // Keep 1-byte status last to avoid padding before 8-aligned members.
+    GpuTaskGraphAnalysisStatus::Enum status = GpuTaskGraphAnalysisStatus::NotAnalyzed;
 };
 
 namespace GpuTaskQueueAssignmentReason{
@@ -241,11 +242,11 @@ private:
     GraphicsVector<GpuTaskId> m_topologicalOrder;
     GraphicsVector<GpuTaskId> m_cyclePath;
     GraphicsVector<GpuTaskDependencyEdge> m_cycleEdges;
-    GpuTaskGraphAnalysisDiagnostic m_diagnostic;
     f64 m_validationSeconds = 0.0;
     f64 m_dependencyAnalysisSeconds = 0.0;
     f64 m_hazardAnalysisSeconds = 0.0;
     f64 m_topologicalOrderSeconds = 0.0;
+    GpuTaskGraphAnalysisDiagnostic m_diagnostic;
     u64 m_generation = 0u;
     u64 m_declarationRevision = 0u;
     usize m_taskCount = 0u;

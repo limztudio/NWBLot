@@ -40,8 +40,8 @@ void RecordUnsignedProperty(const char* key, const u64 value){
 
 [[nodiscard]] bool AppendMixedRecords(Graphics::GpuCommandIrCapture& capture, const usize begin, const usize end){
     for(usize index = begin; index < end; ++index){
-        const Graphics::GpuTaskId task{ static_cast<u32>(index), s_CommandIrTask.generation };
-        const Graphics::GpuSubmissionPacketId packet{ static_cast<u32>(index / 64u), s_CommandIrPacket.generation };
+        const Graphics::GpuTaskId task{ .generation = s_CommandIrTask.generation, .index = static_cast<u32>(index) };
+        const Graphics::GpuSubmissionPacketId packet{ .generation = s_CommandIrPacket.generation, .index = static_cast<u32>(index / 64u) };
         if(index % 2u == 0u){
             if(!capture.captureCopyBuffer(
                 task, packet, s_CommandIrQueue, s_CommandIrSource, index * 16u, s_CommandIrDestination, index * 32u, 64u
@@ -208,7 +208,7 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     CopyCommandIrBytes(original, capture.commandBytes());
     const ArenaMemoryStats before = testArena.arena.memoryStats();
     EXPECT_FALSE(capture.beginRecordingAttempt(32u));
-    const Graphics::GpuSubmissionPacketId otherPlan{ 0u, s_CommandIrPacket.generation + 1u };
+    const Graphics::GpuSubmissionPacketId otherPlan{ .generation = s_CommandIrPacket.generation + 1u, .index = 0u };
     EXPECT_FALSE(capture.captureClearBuffer(s_CommandIrTask, otherPlan, s_CommandIrQueue, s_CommandIrDestination, 5u));
     EXPECT_FALSE(capture.captureCopyBuffer(
         s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, s_CommandIrSource, 0u, s_CommandIrDestination, 0u, 0u
@@ -219,8 +219,8 @@ TEST(GpuCommandIrCapture, RejectedAppendsPreserveBytesAndGenerationUntilRollback
     VerifyMixedRecords(capture, 129u);
     capture.rollback(0u);
     ASSERT_TRUE(capture.beginRecordingAttempt(32u));
-    const Graphics::GpuTaskId otherTask{ 0u, s_CommandIrTask.generation + 1u };
-    const Graphics::GpuGraphResourceId otherResource{ 0u, otherTask.generation };
+    const Graphics::GpuTaskId otherTask{ .generation = s_CommandIrTask.generation + 1u, .index = 0u };
+    const Graphics::GpuGraphResourceId otherResource{ .generation = otherTask.generation, .index = 0u };
     ASSERT_TRUE(capture.captureClearBuffer(otherTask, otherPlan, s_CommandIrQueue, otherResource, 7u));
     EXPECT_EQ(capture.graphGeneration(), otherTask.generation);
     EXPECT_EQ(capture.planGeneration(), otherPlan.generation);

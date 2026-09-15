@@ -88,7 +88,7 @@ bool Device::matchesPhysicalQueueIdentity(
     const u16 deviceGeneration
 )const noexcept{
     const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(
-        GpuPhysicalQueueId{ physicalQueueIndex, deviceGeneration }
+        GpuPhysicalQueueId{ .index = physicalQueueIndex, .deviceGeneration = deviceGeneration }
     );
     return info && info->queueClass == queue;
 }

@@ -301,7 +301,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 0u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ index, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Graphics,
         .capabilities = capabilities,
         .dedicated = false,
@@ -312,7 +312,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 1u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ index, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Compute,
         .capabilities = QueueCapabilities(
             Graphics::GpuQueueCapability::Compute,
@@ -326,7 +326,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 2u,
         .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ index, 1u },
+        .id = Graphics::GpuPhysicalQueueId{ .index = index, .deviceGeneration = 1u },
         .queueClass = Graphics::CommandQueue::Transfer,
         .capabilities = Graphics::GpuQueueCapability::Transfer,
         .dedicated = true,

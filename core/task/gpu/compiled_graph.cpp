@@ -244,7 +244,7 @@ bool GpuCompiledGraph::validPacketRange(const GpuSubmissionPacketRange& range)co
 
 GpuSubmissionPacketId GpuCompiledGraph::packetIdAt(const usize index)const noexcept{
     return index < m_packets.size()
-        ? GpuSubmissionPacketId{ static_cast<u32>(index), m_planGeneration }
+        ? GpuSubmissionPacketId{ .generation = m_planGeneration, .index = static_cast<u32>(index) }
         : GpuSubmissionPacketId{}
     ;
 }

@@ -365,7 +365,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     u64 outgoingCrossings = 0u;
     const GpuTaskGraphSchedulingTaskIndexView producerIndices = analysis.schedulingProducers(task.id);
     for(usize producerIndex = 0u; producerIndex < producerIndices.taskCount; ++producerIndex){
-        const GpuTaskId producerTask{ producerIndices[producerIndex], task.id.generation };
+        const GpuTaskId producerTask{ .generation = task.id.generation, .index = static_cast<u32>(producerIndices[producerIndex]) };
         const GpuTaskQueueAssignment* const producer = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,
@@ -376,7 +376,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     }
     const GpuTaskGraphSchedulingTaskIndexView consumerIndices = analysis.schedulingConsumers(task.id);
     for(usize consumerIndex = 0u; consumerIndex < consumerIndices.taskCount; ++consumerIndex){
-        const GpuTaskId consumerTask{ consumerIndices[consumerIndex], task.id.generation };
+        const GpuTaskId consumerTask{ .generation = task.id.generation, .index = static_cast<u32>(consumerIndices[consumerIndex]) };
         const GpuTaskQueueAssignment* const consumer = FindQueueAssignment(
             assignments,
             assignmentIndicesByTask,

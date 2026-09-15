@@ -326,7 +326,7 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     EXPECT_EQ(resource.initialState, Core::ResourceStates::Common);
     EXPECT_EQ(resource.externalFinalState, Core::ResourceStates::Common);
     usize byteSize = 0u;
-    const void* const bytes = view.uploadBlobData({0u, view.generation()}, byteSize);
+    const void* const bytes = view.uploadBlobData({ .generation = view.generation(), .index = 0u }, byteSize);
     ASSERT_NE(bytes, nullptr);
     ASSERT_EQ(byteSize, upload->bytes.size());
     EXPECT_EQ(NWB_MEMCMP(bytes, upload->bytes.data(), byteSize), 0);

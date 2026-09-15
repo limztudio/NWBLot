@@ -277,8 +277,8 @@ void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowSubmission(
     m_rayTracingState.m_swShadowEdgeStatsPendingTick = plan.statsTick;
     m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
     m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = Core::GpuPhysicalQueueId{
-        submissionToken.physicalQueueIndex,
-        submissionToken.deviceGeneration,
+        .index = submissionToken.physicalQueueIndex,
+        .deviceGeneration = submissionToken.deviceGeneration,
     };
 }
 

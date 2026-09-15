@@ -33,11 +33,11 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
-    const Graphics::GpuTaskId task{ 4u, 17u };
-    const Graphics::GpuSubmissionPacketId packet{ 2u, 23u };
-    const Graphics::GpuPhysicalQueueId queue{ 1u, 3u };
-    const Graphics::GpuGraphResourceId source{ 5u, 17u };
-    const Graphics::GpuGraphResourceId destination{ 6u, 17u };
+    const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = 2u };
+    const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
+    const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
+    const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
 
     ASSERT_TRUE(capture.captureCopyBuffer(
         task,
@@ -105,9 +105,9 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
         bytesBeforeRejectedRecord.data(),
         streamBeforeRejectedRecord.size()
     );
-    const Graphics::GpuTaskId anotherGraphTask{ task.index, task.generation + 1u };
-    const Graphics::GpuSubmissionPacketId anotherGraphPacket{ packet.index, packet.generation + 1u };
-    const Graphics::GpuGraphResourceId anotherGraphResource{ destination.index, destination.generation + 1u };
+    const Graphics::GpuTaskId anotherGraphTask{ .generation = task.generation + 1u, .index = static_cast<u32>(task.index) };
+    const Graphics::GpuSubmissionPacketId anotherGraphPacket{ .generation = packet.generation + 1u, .index = static_cast<u32>(packet.index) };
+    const Graphics::GpuGraphResourceId anotherGraphResource{ .generation = destination.generation + 1u, .index = static_cast<u32>(destination.index) };
     EXPECT_FALSE(capture.captureClearBuffer(
         anotherGraphTask,
         anotherGraphPacket,
@@ -117,7 +117,7 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     ));
     EXPECT_FALSE(capture.captureClearBuffer(
         task,
-        Graphics::GpuSubmissionPacketId{ packet.index, packet.generation + 2u },
+        Graphics::GpuSubmissionPacketId{ .generation = packet.generation + 2u, .index = packet.index },
         queue,
         destination,
         0xdecafbadU
@@ -154,11 +154,11 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
 TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
-    const Graphics::GpuTaskId task{ 4u, 17u };
-    const Graphics::GpuSubmissionPacketId packet{ 2u, 23u };
-    const Graphics::GpuPhysicalQueueId queue{ 1u, 3u };
-    const Graphics::GpuGraphResourceId source{ 5u, 17u };
-    const Graphics::GpuGraphResourceId destination{ 6u, 17u };
+    const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = 2u };
+    const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
+    const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
+    const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
 
     ASSERT_TRUE(capture.beginRecordingAttempt(41u));
     EXPECT_EQ(capture.recordingAttemptGeneration(), 41u);
@@ -259,11 +259,11 @@ TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanI
 TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordBoundaries){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
-    const Graphics::GpuTaskId task{ 4u, 17u };
-    const Graphics::GpuSubmissionPacketId packet{ 2u, 17u };
-    const Graphics::GpuPhysicalQueueId queue{ 1u, 3u };
-    const Graphics::GpuGraphResourceId source{ 5u, 17u };
-    const Graphics::GpuGraphResourceId destination{ 6u, 17u };
+    const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 17u, .index = 2u };
+    const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
+    const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
+    const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
 
     const BinaryByteView emptyBytes = capture.commandBytes();
     ASSERT_EQ(emptyBytes.size(), sizeof(Graphics::GpuCommandIrStreamHeader));

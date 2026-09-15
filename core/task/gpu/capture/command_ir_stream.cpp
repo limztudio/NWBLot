@@ -26,9 +26,9 @@ namespace __hidden_gpu_command_ir_stream{
     const u64 planGeneration,
     GpuCommandIrBuiltinTaskRecord& outRecord
 )noexcept{
-    outRecord.task = GpuTaskId{ context.taskIndex, graphGeneration };
-    outRecord.packet = GpuSubmissionPacketId{ context.packetIndex, planGeneration };
-    outRecord.queue = GpuPhysicalQueueId{ context.queueIndex, context.queueDeviceGeneration };
+    outRecord.task = GpuTaskId{ .generation = graphGeneration, .index = context.taskIndex };
+    outRecord.packet = GpuSubmissionPacketId{ .generation = planGeneration, .index = context.packetIndex };
+    outRecord.queue = GpuPhysicalQueueId{ .index = context.queueIndex, .deviceGeneration = context.queueDeviceGeneration };
     return outRecord.task.valid() && outRecord.packet.valid() && outRecord.queue.valid();
 }
 
@@ -37,7 +37,7 @@ namespace __hidden_gpu_command_ir_stream{
     const u64 graphGeneration,
     GpuGraphResourceId& outResource
 )noexcept{
-    outResource = GpuGraphResourceId{ resourceIndex, graphGeneration };
+    outResource = GpuGraphResourceId{ .generation = graphGeneration, .index = resourceIndex };
     return outResource.valid();
 }
 

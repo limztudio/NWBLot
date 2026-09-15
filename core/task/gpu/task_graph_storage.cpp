@@ -296,7 +296,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     resourceVersionUseRollback.commit();
     taskRollback.commit();
     m_declarationRevision = allocateGeneration();
-    return GpuTaskId{ index, m_generation };
+    return GpuTaskId{ .generation = m_generation, .index = index };
 }
 
 void GpuTaskGraph::discardAndDestroyUnappendedPayload(
@@ -597,7 +597,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     resourceRollback.commit();
     indexRollback.release();
     m_declarationRevision = allocateGeneration();
-    return GpuGraphResourceId{ index, m_generation };
+    return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }
 
 GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphResourceVersionDesc& desc){
@@ -616,7 +616,7 @@ GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphReso
     const u32 index = static_cast<u32>(m_resourceVersions.size());
     m_resourceVersions.push_back(version);
     m_declarationRevision = allocateGeneration();
-    return GpuGraphResourceVersionId{ index, m_generation };
+    return GpuGraphResourceVersionId{ .generation = m_generation, .index = index };
 }
 
 GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetDesc& desc){
@@ -705,7 +705,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     setRollback.commit();
     indexRollback.release();
     m_declarationRevision = allocateGeneration();
-    return GpuGraphResourceSetId{ index, m_generation };
+    return GpuGraphResourceSetId{ .generation = m_generation, .index = index };
 }
 
 GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc){
@@ -740,7 +740,7 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
     const u32 index = static_cast<u32>(m_pipelines.size());
     m_pipelines.push_back(Move(pipeline));
     m_declarationRevision = allocateGeneration();
-    return GpuGraphPipelineId{ index, m_generation };
+    return GpuGraphPipelineId{ .generation = m_generation, .index = index };
 }
 
 GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternalCompletionDesc& desc){
@@ -775,7 +775,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     const u32 index = static_cast<u32>(m_externalCompletions.size());
     m_externalCompletions.push_back(Move(completion));
     m_declarationRevision = allocateGeneration();
-    return GpuExternalCompletionId{ index, m_generation };
+    return GpuExternalCompletionId{ .generation = m_generation, .index = index };
 }
 
 const GpuTaskGraph::GpuUploadBlobNode* GpuTaskGraph::findUploadBlob(

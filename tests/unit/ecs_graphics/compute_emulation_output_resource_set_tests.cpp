@@ -76,7 +76,7 @@ static void ExpectResourceSet(
 TEST(ComputeEmulationOutputResourceSet, EmptyAndUncapturedPlansClearTheOutputWithoutImporting){
     OutputContext context;
     Core::Alloc::ScratchArena scratch(Name("tests/compute_output_set/empty"));
-    Core::GpuGraphResourceSetId result{ 17u, 1u };
+    Core::GpuGraphResourceSetId result{ .generation = 1u, .index = 17u };
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(
         context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel, result
     ));
@@ -133,7 +133,7 @@ TEST(ComputeEmulationOutputResourceSet, DuplicateMembersRejectTheSetAfterEveryBu
     context.plan.outputBuffers = { first, second, first, later };
     context.plan.captured = true;
     Core::Alloc::ScratchArena scratch(Name("tests/compute_output_set/duplicates"));
-    Core::GpuGraphResourceSetId result{ 17u, 1u };
+    Core::GpuGraphResourceSetId result{ .generation = 1u, .index = 17u };
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(
         context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel, result
     ));
@@ -177,7 +177,7 @@ TEST(ComputeEmulationOutputResourceSet, LateInvalidInputsKeepOnlyTheImportedPref
         }
         context.plan.captured = true;
         Core::Alloc::ScratchArena scratch(Name("tests/compute_output_set/late_failure_scratch"));
-        Core::GpuGraphResourceSetId result{ 17u, 1u };
+        Core::GpuGraphResourceSetId result{ .generation = 1u, .index = 17u };
         EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(
             context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel, result
         ));

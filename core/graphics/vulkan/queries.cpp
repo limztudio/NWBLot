@@ -62,8 +62,8 @@ bool Device::pollTimerQuery(TimerQuery& query){
     }
 
     const GpuPhysicalQueueId completionQueue{
-        completedSubmission.physicalQueueIndex,
-        completedSubmission.deviceGeneration,
+        .index = completedSubmission.physicalQueueIndex,
+        .deviceGeneration = completedSubmission.deviceGeneration,
     };
     if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
         return false;
@@ -117,8 +117,8 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
     }
 
     const GpuPhysicalQueueId completionQueue{
-        completedSubmission.physicalQueueIndex,
-        completedSubmission.deviceGeneration,
+        .index = completedSubmission.physicalQueueIndex,
+        .deviceGeneration = completedSubmission.deviceGeneration,
     };
     if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
         return false;

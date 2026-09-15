@@ -54,7 +54,7 @@ struct PacketMergeSummary{
 )noexcept{
     const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(task);
     for(usize consumerIndex = 0u; consumerIndex < consumers.taskCount; ++consumerIndex){
-        const GpuTaskId consumer{ consumers[consumerIndex], task.generation };
+        const GpuTaskId consumer{ .generation = task.generation, .index = static_cast<u32>(consumers[consumerIndex]) };
         const GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
         if(
             !consumerAssignment
@@ -372,8 +372,8 @@ namespace GpuTaskGraphCompilerDetail{
             }
             if(precedingPacketAllowsMerge){
                 packetID = GpuSubmissionPacketId{
-                    static_cast<u32>(compiledPlan.packets.size() - 1u),
-                    compiledPlan.planGeneration,
+                    .generation = compiledPlan.planGeneration,
+                    .index = static_cast<u32>(compiledPlan.packets.size() - 1u),
                 };
                 ++precedingPacket.taskCount;
                 precedingPacket.recordsTiming = precedingPacket.recordsTiming || taskRecordsTiming;
@@ -386,9 +386,9 @@ namespace GpuTaskGraphCompilerDetail{
 
         if(!packetID.valid()){
             packetID = GpuSubmissionPacketId{
-                static_cast<u32>(compiledPlan.packets.size()),
-                compiledPlan.planGeneration,
-            };
+                .generation = compiledPlan.planGeneration,
+                .index = static_cast<u32>(compiledPlan.packets.size()),
+                };
             compiledPlan.packets.push_back(GpuSubmissionPacket{
                 .queue = assignment->queue,
                 .taskOffset = static_cast<u32>(compiledPlan.packetTasks.size()),

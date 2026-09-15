@@ -205,8 +205,8 @@ void FramebufferCapture::update(){
         return;
     }
     const Core::GpuPhysicalQueueId physicalQueue{
-        acceptedToken.physicalQueueIndex,
-        acceptedToken.deviceGeneration,
+        .index = acceptedToken.physicalQueueIndex,
+        .deviceGeneration = acceptedToken.deviceGeneration,
     };
     if(device.queueGetCompletedInstance(physicalQueue) < acceptedToken.value)
         return;

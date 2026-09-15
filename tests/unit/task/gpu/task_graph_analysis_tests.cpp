@@ -201,12 +201,12 @@ TEST(GpuTaskGraphAnalysis, MatchesIndependentReferenceForPermutedDagsAndDuplicat
                     randomState = randomState * 1664525u + 1013904223u;
                     if(ranks[producerIndex] >= ranks[consumerIndex] || (randomState >> 24u) % 5u != 0u)
                         continue;
-                    const Graphics::GpuTaskId producer{ static_cast<u32>(producerIndex), generation };
+                    const Graphics::GpuTaskId producer{ .generation = generation, .index = static_cast<u32>(producerIndex) };
                     dependencies.push_back(producer);
                     dependencies.push_back(producer);
                     expectedEdges.push_back(Graphics::GpuTaskDependencyEdge{
                         .producer = producer,
-                        .consumer = { static_cast<u32>(consumerIndex), generation },
+                        .consumer = { .generation = generation, .index = static_cast<u32>(consumerIndex) },
                         .resource = {},
                         .resourceVersion = {},
                         .hazard = Graphics::GpuTaskHazardType::Explicit,

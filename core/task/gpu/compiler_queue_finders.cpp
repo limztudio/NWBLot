@@ -92,7 +92,7 @@ namespace GpuTaskGraphCompilerDetail{
         const u32 producerAssignmentIndex = assignmentIndicesByTask[producerTaskIndex];
         if(producerAssignmentIndex >= assignedPrefixCount || producerAssignmentIndex >= assignments.size())
             continue;
-        const GpuTaskId producerTask{ producerTaskIndex, task.id.generation };
+        const GpuTaskId producerTask{ .generation = task.id.generation, .index = static_cast<u32>(producerTaskIndex) };
         const GpuTaskQueueAssignment& assignment = assignments[producerAssignmentIndex];
         if(assignment.task != producerTask)
             continue;

@@ -158,7 +158,7 @@ GpuGraphResourceId GpuTaskGraph::importResource(const GpuGraphResourceDesc& desc
     if(resourceIndex != s_InvalidImportIndex){
         if(!__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(resourceIndex), desc))
             return {};
-        return GpuGraphResourceId{ resourceIndex, m_generation };
+        return GpuGraphResourceId{ .generation = m_generation, .index = resourceIndex };
     }
 
     return appendResourceWithinMutation(desc, nullptr, {}, mutation);
@@ -208,7 +208,7 @@ GpuGraphResourceId GpuTaskGraph::importTexture(const TextureHandle& texture, con
             || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
         )
             return {};
-        return GpuGraphResourceId{ match.index, m_generation };
+        return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
     return appendResourceWithinMutation(
@@ -264,7 +264,7 @@ GpuGraphResourceId GpuTaskGraph::importBuffer(const BufferHandle& buffer, const 
             || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
         )
             return {};
-        return GpuGraphResourceId{ match.index, m_generation };
+        return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
     return appendResourceWithinMutation(
@@ -281,7 +281,7 @@ GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedTexture(const Te
     const auto match = m_graph->findResourceImportMatch(nullptr, { texture.get(), GpuGraphResourceType::Texture });
     return match.index == GpuTaskGraph::s_InvalidImportIndex
         ? GpuGraphResourceId{}
-        : GpuGraphResourceId{ match.index, m_graph->m_generation };
+        : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
 GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedBuffer(const BufferHandle& buffer)const noexcept{
@@ -290,7 +290,7 @@ GpuGraphResourceId GpuTaskGraphDeclarationReadView::findImportedBuffer(const Buf
     const auto match = m_graph->findResourceImportMatch(nullptr, { buffer.get(), GpuGraphResourceType::Buffer });
     return match.index == GpuTaskGraph::s_InvalidImportIndex
         ? GpuGraphResourceId{}
-        : GpuGraphResourceId{ match.index, m_graph->m_generation };
+        : GpuGraphResourceId{ .generation = m_graph->m_generation, .index = match.index };
 }
 
 const GpuPresentEndpoint* GpuTaskGraphDeclarationReadView::presentEndpoint()const & noexcept{
@@ -356,7 +356,7 @@ GpuGraphResourceId GpuTaskGraph::importAccelStruct(
             || !__hidden_gpu_task_graph_imports::CompatibleResourceMetadata(resourceAt(match.index), resolvedDesc)
         )
             return {};
-        return GpuGraphResourceId{ match.index, m_generation };
+        return GpuGraphResourceId{ .generation = m_generation, .index = match.index };
     }
 
     return appendResourceWithinMutation(
@@ -418,7 +418,7 @@ GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc
             continue;
         if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(existing, desc))
             return {};
-        return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+        return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
     }
 
     return appendPipeline(desc);
@@ -440,7 +440,7 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
         if(existing.type == GpuGraphPipelineType::Graphics && existing.graphicsPipeline.get() == pipeline.get()){
             if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
                 return {};
-            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
         }
         if(existing.identity == desc.identity)
             return {};
@@ -471,7 +471,7 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
         if(existing.type == GpuGraphPipelineType::Compute && existing.computePipeline.get() == pipeline.get()){
             if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
                 return {};
-            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
         }
         if(existing.identity == desc.identity)
             return {};
@@ -502,7 +502,7 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
         if(existing.type == GpuGraphPipelineType::Meshlet && existing.meshletPipeline.get() == pipeline.get()){
             if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
                 return {};
-            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
         }
         if(existing.identity == desc.identity)
             return {};
@@ -533,7 +533,7 @@ GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
         if(existing.type == GpuGraphPipelineType::RayTracing && existing.rayTracingPipeline.get() == pipeline.get()){
             if(!__hidden_gpu_task_graph_imports::CompatiblePipelineMetadata(pipelineAt(pipelineIndex), desc))
                 return {};
-            return GpuGraphPipelineId{ static_cast<u32>(pipelineIndex), m_generation };
+            return GpuGraphPipelineId{ .generation = m_generation, .index = static_cast<u32>(pipelineIndex) };
         }
         if(existing.identity == desc.identity)
             return {};
@@ -580,7 +580,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
                 m_declarationRevision = allocateGeneration();
             }
         }
-        return GpuExternalCompletionId{ static_cast<u32>(completionIndex), m_generation };
+        return GpuExternalCompletionId{ .generation = m_generation, .index = static_cast<u32>(completionIndex) };
     }
 
     return appendExternalCompletion(desc);

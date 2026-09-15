@@ -116,8 +116,7 @@ struct AvboitSharedComputeEmulationRecordTrait{
     const AvboitSharedComputeEmulationRecordTrait& trait
 );
 
-// Shared compute-emulation record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share
-// the inputs fill and differ only in their payload timing member plus record trait.
+// Shared compute-emulation record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the inputs fill and differ only in their payload timing member plus record trait.
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitComputeEmulationFromPayload(
     const PayloadT& payload,
@@ -149,8 +148,7 @@ template<typename PayloadT>
     return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
 
-// Shared shared-phase record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the
-// inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
+// Shared shared-phase record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
     const PayloadT& payload,

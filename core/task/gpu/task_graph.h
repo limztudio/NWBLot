@@ -891,6 +891,37 @@ public:
         return task;
     }
 
+    // Shared append plus publish-or-discard epilogue for builtin add paths that validate regions before
+    // appending. CopyBuffer plus CopyTexture plus ResolveTexture plus clear plus upload tasks share this tail
+    // and differ only in their region validation plus payload fill plus resolved queue requirements.
+    template<typename TaskT>
+    [[nodiscard]] GpuTaskId appendBuiltinTaskWithinMutation(
+        const GpuTaskDesc& resolvedDesc,
+        ProvisionalPayloadOwner<typename TaskT::Payload>& payload,
+        const DeclarationMutationScope& mutation
+    ){
+        using Payload = typename TaskT::Payload;
+        const GpuTaskId task = appendTaskWithinMutation(
+            resolvedDesc,
+            payload.get(),
+            &RecordPayload<TaskT>,
+            &AcceptPayload<TaskT>,
+            &DiscardPayload<TaskT>,
+            &DestroyPayload<Payload>,
+            sizeof(Payload),
+            mutation
+        );
+        if(task.valid())
+            payload.publish();
+        else
+            discardAndDestroyUnappendedPayload(
+                payload.release(),
+                &DiscardPayload<TaskT>,
+                &DestroyPayload<Payload>
+            );
+        return task;
+    }
+
     // This form is useful for abstract resources and conservative bindless hazard domains during the metadata-only
     // phase. Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
     [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);

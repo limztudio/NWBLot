@@ -347,25 +347,7 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<CopyTask>,
-        &AcceptPayload<CopyTask>,
-        &DiscardPayload<CopyTask>,
-        &DestroyPayload<CopyTask::Payload>,
-        sizeof(CopyTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<CopyTask>,
-            &DestroyPayload<CopyTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation);
 }
 
 GpuTaskId GpuTaskGraph::addResolveTextureTask(
@@ -494,26 +476,7 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<ResolveTask>,
-        &AcceptPayload<ResolveTask>,
-        &DiscardPayload<ResolveTask>,
-        &DestroyPayload<ResolveTask::Payload>,
-        sizeof(ResolveTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else{
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<ResolveTask>,
-            &DestroyPayload<ResolveTask::Payload>
-        );
-    }
-    return task;
+    return appendBuiltinTaskWithinMutation<ResolveTask>(resolvedDesc, payload, mutation);
 }
 
 

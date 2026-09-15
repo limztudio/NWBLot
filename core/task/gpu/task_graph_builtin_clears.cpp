@@ -295,25 +295,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
     };
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<ClearTask>,
-        &AcceptPayload<ClearTask>,
-        &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<ClearTask>,
-            &DestroyPayload<ClearTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
 }
 
 GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuClearTextureTaskDesc& clearDesc){
@@ -400,25 +382,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<ClearTask>,
-        &AcceptPayload<ClearTask>,
-        &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<ClearTask>,
-            &DestroyPayload<ClearTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
 }
 
 GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
@@ -506,25 +470,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
     )
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Compute;
     resolvedDesc.setResourceUses(&resourceUse, 1u);
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<ClearTask>,
-        &AcceptPayload<ClearTask>,
-        &DiscardPayload<ClearTask>,
-        &DestroyPayload<ClearTask::Payload>,
-        sizeof(ClearTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<ClearTask>,
-            &DestroyPayload<ClearTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<ClearTask>(resolvedDesc, payload, mutation);
 }
 
 

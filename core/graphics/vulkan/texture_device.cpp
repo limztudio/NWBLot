@@ -4,6 +4,7 @@
 
 #include "backend.h"
 #include "texture_resource_detail.h"
+#include "native_sharing_validation.h"
 
 #include <core/graphics/rhi/queue_sharing.h>
 
@@ -30,94 +31,14 @@ namespace __hidden_texture_device{
     const TextureDesc& desc,
     const NativeTextureProvenance& provenance
 ){
-    if(provenance.sharingMode == VK_SHARING_MODE_EXCLUSIVE){
-        if(provenance.queueFamilyIndexCount != 0u || provenance.queueFamilyIndices != nullptr){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: exclusive sharing must not carry queue-family indices")
-            );
-            return false;
-        }
-        if(device.usesConcurrentQueueSharing(desc.queueSharing)){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: exclusive native sharing contradicts concurrent logical sharing")
-            );
-            return false;
-        }
-        return true;
-    }
-    if(provenance.sharingMode != VK_SHARING_MODE_CONCURRENT){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native sharing mode is invalid")
-        );
-        return false;
-    }
-    if(provenance.queueFamilyIndexCount < 2u || !provenance.queueFamilyIndices){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: concurrent sharing requires at least two queue-family indices")
-        );
-        return false;
-    }
-    if(desc.queueSharing == ResourceQueueSharing::Exclusive){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: concurrent native sharing requires explicit logical queue classes")
-        );
-        return false;
-    }
-
-    u32 physicalQueueFamilyCount = 0u;
-    instanceDispatch.vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &physicalQueueFamilyCount, nullptr);
-    if(
-        physicalQueueFamilyCount == 0u
-        || provenance.queueFamilyIndexCount > physicalQueueFamilyCount
-    ){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family count is invalid")
-        );
-        return false;
-    }
-    for(u32 familyIndex = 0u; familyIndex < provenance.queueFamilyIndexCount; ++familyIndex){
-        const u32 nativeFamilyIndex = provenance.queueFamilyIndices[familyIndex];
-        if(nativeFamilyIndex >= physicalQueueFamilyCount){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family index is out of range")
-            );
-            return false;
-        }
-        for(u32 earlierIndex = 0u; earlierIndex < familyIndex; ++earlierIndex){
-            if(provenance.queueFamilyIndices[earlierIndex] == nativeFamilyIndex){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native queue-family indices are not unique")
-                );
-                return false;
-            }
-        }
-    }
-
-    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    bool hasLogicalQueue = false;
-    for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
-        const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
-        if(!ResourceQueueSharing::IncludesQueueClass(desc.queueSharing, queue.queueClass))
-            continue;
-        hasLogicalQueue = true;
-        if(!ResourceQueueSharing::QueueFamilyIndexListContains(
-            provenance.queueFamilyIndices,
-            provenance.queueFamilyIndexCount,
-            queue.familyIndex
-        )){
-            NWB_LOGGER_ERROR(
-                NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native sharing omits a logically admitted queue family")
-            );
-            return false;
-        }
-    }
-    if(!hasLogicalQueue){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Vulkan: Failed to create texture handle for native texture: logical sharing admits no device queue")
-        );
-        return false;
-    }
-    return true;
+    return VulkanNativeSharingDetail::ValidateNativeResourceSharing(
+        device,
+        instanceDispatch,
+        physicalDevice,
+        desc.queueSharing,
+        provenance,
+        "texture handle for native texture"
+    );
 }
 
 

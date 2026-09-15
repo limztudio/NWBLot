@@ -27,21 +27,17 @@ namespace __hidden_gpu_task_graph_builtin_texture_transfers{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CopyTextureTask{
-    struct Copy{
-        GpuGraphResourceId sourceResource;
-        TextureHandle source;
-        TextureSlice sourceSlice;
-        GpuGraphResourceId destinationResource;
-        TextureHandle destination;
-        TextureSlice destinationSlice;
-    };
+struct CopyTextureCopy{
+    GpuGraphResourceId sourceResource;
+    TextureHandle source;
+    TextureSlice sourceSlice;
+    GpuGraphResourceId destinationResource;
+    TextureHandle destination;
+    TextureSlice destinationSlice;
+};
 
-    struct Payload : public GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>{
-        explicit Payload(GraphicsArena& arena)
-            : GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>(arena)
-        {}
-    };
+struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTextureCopy>{
+    using Copy = CopyTextureCopy;
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -74,14 +70,6 @@ struct CopyTextureTask{
                 return !emitCommandList.commandRecordingFailed();
             }
         );
-    }
-
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishCopiesAcceptedToken(payload, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearCopiesAcceptedToken(payload);
     }
 };
 

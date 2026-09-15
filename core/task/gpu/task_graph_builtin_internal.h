@@ -68,19 +68,28 @@ struct CopiesPayloadBase{
 };
 
 template<typename Payload>
-inline void PublishCopiesAcceptedToken(Payload& payload, const QueueSubmissionToken& token){
-    PublishAcceptedToken(payload.acceptedToken, token);
-}
-
-template<typename Payload>
-inline void ClearCopiesAcceptedToken(Payload& payload){
-    ClearAcceptedToken(payload.acceptedToken);
-}
-
-template<typename Payload>
 [[nodiscard]] inline bool CopiesPayloadHasWork(const Payload& payload){
     return !payload.copies.empty();
 }
+
+// Shared task skeleton for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned payload
+// plus accepted-token lifecycle and differ only in their per-item Copy shape plus record steps.
+template<typename Copy>
+struct CopiesTaskBase{
+    struct Payload : public CopiesPayloadBase<Copy>{
+        explicit Payload(GraphicsArena& arena)
+            : CopiesPayloadBase<Copy>(arena)
+        {}
+    };
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        PublishAcceptedToken(payload.acceptedToken, token);
+    }
+
+    static void discarded(Payload& payload){
+        ClearAcceptedToken(payload.acceptedToken);
+    }
+};
 
 // Shared record loop for builtin copy tasks. CopyBuffer plus CopyTexture share the empty-payload guard plus
 // per-item validate, command-IR capture, and native emit sequence and differ only in those per-item steps.

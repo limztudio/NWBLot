@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -389,35 +390,12 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
             "Mesh View",
             Core::ResourceStates::ConstantBuffer
         )
-        && appendOptionalReadBuffer(
-            rayTracingResources.sceneBvhNodeBuffer,
-            Name("render.shadow_visibility.scene_bvh_nodes"),
-            "Scene BVH Nodes",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
-            rayTracingResources.sceneInstanceBuffer,
-            Name("render.shadow_visibility.scene_instances"),
-            "Scene Instances",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
-            rayTracingResources.shadowInstanceMaterialBuffer,
-            Name("render.deferred_effects.instance_material"),
-            "Shadow Instance Materials",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
-            rayTracingResources.shadowMaterialTypedBuffer,
-            Name("render.deferred_effects.material_typed"),
-            "Shadow Typed Materials",
-            Core::ResourceStates::ShaderResource
-        )
-        && appendOptionalReadBuffer(
-            rayTracingResources.shadowInstanceBuffer,
-            Name("render.deferred_effects.shadow_instances"),
-            "Shadow Instances",
-            Core::ResourceStates::ShaderResource
+        && RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
+            rayTracingResources,
+            importBuffer,
+            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
+                photonResourceUses.push_back(ReadUse(resource, state));
+            }
         )
     ;
     if(!optionalResourcesImported){

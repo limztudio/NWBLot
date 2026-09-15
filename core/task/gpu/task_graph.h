@@ -891,6 +891,21 @@ public:
         return task;
     }
 
+    // Shared invalid-payload rejection for builtin add paths. CopyBuffer plus CopyTexture plus ResolveTexture
+    // share this discard band and differ only in their region validation plus payload fill.
+    template<typename TaskT>
+    GpuTaskId rejectInvalidBuiltinPayload(
+        ProvisionalPayloadOwner<typename TaskT::Payload>& payload
+    ){
+        using Payload = typename TaskT::Payload;
+        discardAndDestroyUnappendedPayload(
+            payload.release(),
+            &DiscardPayload<TaskT>,
+            &DestroyPayload<Payload>
+        );
+        return {};
+    }
+
     // Shared append plus publish-or-discard epilogue for builtin add paths that validate regions before
     // appending. CopyBuffer plus CopyTexture plus ResolveTexture plus clear plus upload tasks share this tail
     // and differ only in their region validation plus payload fill plus resolved queue requirements.

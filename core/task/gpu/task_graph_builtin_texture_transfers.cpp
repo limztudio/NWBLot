@@ -326,14 +326,8 @@ GpuTaskId GpuTaskGraph::addCopyTextureTask(const GpuTaskDesc& desc, const GpuCop
             });
         }
     }
-    if(!valid){
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<CopyTask>,
-            &DestroyPayload<CopyTask::Payload>
-        );
-        return {};
-    }
+    if(!valid)
+        return rejectInvalidBuiltinPayload<CopyTask>(payload);
 
     GpuTaskDesc resolvedDesc = desc;
     if(requiresGraphicsQueue)
@@ -465,14 +459,8 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
             });
         }
     }
-    if(!valid){
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<ResolveTask>,
-            &DestroyPayload<ResolveTask::Payload>
-        );
-        return {};
-    }
+    if(!valid)
+        return rejectInvalidBuiltinPayload<ResolveTask>(payload);
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());

@@ -37,13 +37,10 @@ struct CopyBufferTask{
         u64 dataSizeBytes = 0u;
     };
 
-    struct Payload{
+    struct Payload : public GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>{
         explicit Payload(GraphicsArena& arena)
-            : copies(arena)
+            : GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>(arena)
         {}
-
-        GraphicsVector<Copy> copies;
-        QueueSubmissionToken* acceptedToken = nullptr;
     };
 
     [[nodiscard]] static bool record(
@@ -85,11 +82,11 @@ struct CopyBufferTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
+        GpuTaskGraphBuiltinDetail::PublishCopiesAcceptedToken(payload, token);
     }
 
     static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
+        GpuTaskGraphBuiltinDetail::ClearCopiesAcceptedToken(payload);
     }
 };
 

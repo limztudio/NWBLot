@@ -55,6 +55,33 @@ inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken){
         *acceptedToken = {};
 }
 
+// Shared copies-payload core for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned
+// copies vector plus accepted-token lifecycle and differ only in their per-item Copy shape.
+template<typename Copy>
+struct CopiesPayloadBase{
+    explicit CopiesPayloadBase(GraphicsArena& arena)
+        : copies(arena)
+    {}
+
+    GraphicsVector<Copy> copies;
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+template<typename Payload>
+inline void PublishCopiesAcceptedToken(Payload& payload, const QueueSubmissionToken& token){
+    PublishAcceptedToken(payload.acceptedToken, token);
+}
+
+template<typename Payload>
+inline void ClearCopiesAcceptedToken(Payload& payload){
+    ClearAcceptedToken(payload.acceptedToken);
+}
+
+template<typename Payload>
+[[nodiscard]] inline bool CopiesPayloadHasWork(const Payload& payload){
+    return !payload.copies.empty();
+}
+
 [[nodiscard]] inline bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
     const TextureDesc& resourceDesc,
     const ResourceStates::Mask graphInitialState,

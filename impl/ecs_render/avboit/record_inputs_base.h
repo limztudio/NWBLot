@@ -28,8 +28,7 @@ struct DeferredFrameTargets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared AVBOIT record inputs core. Occupancy, extinction, and accumulation share these fields and differ only in
-// their effect-specific targets, tasks, timing slots, and upload flags.
+// Shared AVBOIT record inputs core. Occupancy, extinction, and accumulation share these fields and differ only in their effect-specific targets, tasks, timing slots, and upload flags.
 struct AvboitRecordInputsBase{
     DeferredFrameTargets* targets = nullptr;
     Core::GpuGraphResourceId albedo;
@@ -82,3 +81,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

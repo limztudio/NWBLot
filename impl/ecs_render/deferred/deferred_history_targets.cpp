@@ -6,6 +6,8 @@
 
 #include "csg_interval_target_clear.h"
 
+#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
+
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
@@ -112,14 +114,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         const Core::TextureSubresourceSet& subresources,
         const Core::TextureDimension::Enum dimension
     ) -> bool{
-        handle = heap.allocate(descriptorClass);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::Texture_SRV(0u, texture, format, subresources, dimension)))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterSampledTexture(heap, handle, descriptorClass, texture, format, subresources, dimension);
     };
 
     const bool descriptorsRegistered =

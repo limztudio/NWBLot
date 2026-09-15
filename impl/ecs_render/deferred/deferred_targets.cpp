@@ -6,6 +6,8 @@
 
 #include "csg_interval_target_clear.h"
 
+#include <impl/ecs_render/deferred/deferred_descriptor_register.h>
+
 #include <impl/ecs_render/kernel/renderer_format_private.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
@@ -134,14 +136,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         const Core::TextureSubresourceSet& subresources,
         const Core::TextureDimension::Enum dimension
     ) -> bool{
-        handle = heap.allocate(descriptorClass);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::Texture_SRV(0u, texture, format, subresources, dimension)))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterSampledTexture(heap, handle, descriptorClass, texture, format, subresources, dimension);
     };
 
     // Keep a persistent StorageImage descriptor per writable target; aliases select views.
@@ -151,54 +146,20 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         const Core::Format::Enum format,
         const Core::TextureDimension::Enum dimension
     ) -> bool{
-        handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::Texture_UAV(
-            0u,
-            texture,
-            format,
-            Core::s_AllSubresources,
-            dimension
-        )))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterStorageTexture(heap, handle, texture, format, dimension);
     };
 
     auto registerSampler = [&heap](Core::GpuDescriptorHandle& handle, Core::Sampler* sampler) -> bool{
-        handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, sampler)))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterSampler(heap, handle, sampler);
     };
 
     // Shared scene buffers are read-only per-frame singletons selected by slot.
     auto registerStructuredBuffer = [&heap](Core::GpuDescriptorHandle& handle, Core::Buffer* buffer) -> bool{
-        handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer)))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterStructuredBuffer(heap, handle, buffer);
     };
 
     auto registerConstantBuffer = [&heap](Core::GpuDescriptorHandle& handle, Core::Buffer* buffer) -> bool{
-        handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
-        if(!handle.valid())
-            return false;
-        if(heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer)))
-            return true;
-        heap.free(handle);
-        handle = Core::GpuDescriptorHandle::invalid();
-        return false;
+        return DeferredDescriptorRegisterDetail::RegisterConstantBuffer(heap, handle, buffer);
     };
 
     DeferredBindlessFrameResources& bindless = targets.bindless;

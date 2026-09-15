@@ -35,32 +35,14 @@ namespace RendererTaskGraphDetail{
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
+
     static_cast<void>(context);
-    const AvboitComputeEmulationRecordInputs inputs{
-        payload.graphics,
-        payload.materialSystem,
-        payload.targets,
-        payload.timingTicket,
-        payload.accumulationTiming,
-        &payload.frameBindings,
-        &payload.csgResources,
-        &payload.plan,
-        &payload.csgPlan,
-        payload.instanceCount,
-        payload.materialTypedByteCount,
-        payload.materialDrawBuffersUploaded,
-        payload.csgFrameBuffersUploaded,
-        payload.csgIntervalSampleImageStatesGraphOwned,
-        payload.csgClipBufferStatesGraphOwned,
-        payload.materialFrameStatesGraphOwned,
-        payload.materialGeometryStatesGraphOwned,
-    };
     const AvboitComputeEmulationRecordTrait trait{
         &RendererGpuTimingScope::s_AvboitAccumulate,
         MaterialPipelinePass::AvboitAccumulate,
         &AvboitFrameTargets::accumulationFramebuffer,
     };
-    return RecordAvboitComputeEmulation(inputs, commandList, trait);
+    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::accumulationTiming, trait);
 }
 
 [[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::record(

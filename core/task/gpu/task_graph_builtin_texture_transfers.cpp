@@ -73,24 +73,26 @@ struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTe
     }
 };
 
-struct ResolveTextureTask{
-    struct Resolve{
-        GpuGraphResourceId sourceResource;
-        TextureHandle source;
-        TextureSubresourceSet sourceSubresources;
-        GpuGraphResourceId destinationResource;
-        TextureHandle destination;
-        TextureSubresourceSet destinationSubresources;
-    };
+struct ResolveTextureResolve{
+    GpuGraphResourceId sourceResource;
+    TextureHandle source;
+    TextureSubresourceSet sourceSubresources;
+    GpuGraphResourceId destinationResource;
+    TextureHandle destination;
+    TextureSubresourceSet destinationSubresources;
+};
 
-    struct Payload{
-        explicit Payload(GraphicsArena& arena)
-            : resolves(arena)
-        {}
+struct ResolveTexturePayload{
+    explicit ResolveTexturePayload(GraphicsArena& arena)
+        : resolves(arena)
+    {}
 
-        GraphicsVector<Resolve> resolves;
-        QueueSubmissionToken* acceptedToken = nullptr;
-    };
+    GraphicsVector<ResolveTextureResolve> resolves;
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ResolveTexturePayload>{
+    using Resolve = ResolveTextureResolve;
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -115,13 +117,6 @@ struct ResolveTextureTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
-    }
 };
 
 [[nodiscard]] static bool ResolveTextureContractValid(

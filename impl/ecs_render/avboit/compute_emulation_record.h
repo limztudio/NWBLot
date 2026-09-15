@@ -116,6 +116,41 @@ struct AvboitSharedComputeEmulationRecordTrait{
     const AvboitSharedComputeEmulationRecordTrait& trait
 );
 
+// Shared shared-phase record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the
+// inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
+template<typename PayloadT>
+[[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
+    const PayloadT& payload,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context,
+    Optional<Core::GpuTimingMeasure>* PayloadT::* timingMember,
+    const bool isRasterPhase,
+    const AvboitSharedComputeEmulationRecordTrait& trait
+){
+    static_cast<void>(context);
+    const AvboitSharedComputeEmulationRecordInputs inputs{
+        payload.graphics,
+        payload.materialSystem,
+        payload.targets,
+        payload.timingTicket,
+        payload.*timingMember,
+        &payload.frameBindings,
+        &payload.plan,
+        payload.drawIndex,
+        payload.instanceCount,
+        payload.materialTypedByteCount,
+        payload.materialDrawBuffersUploaded,
+        payload.materialFrameStatesGraphOwned,
+        payload.materialGeometryStatesGraphOwned,
+        payload.beginTiming,
+        payload.finishTiming,
+        isRasterPhase
+            ? AvboitSharedComputeEmulationPhase::Raster
+            : AvboitSharedComputeEmulationPhase::Generate,
+    };
+    return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

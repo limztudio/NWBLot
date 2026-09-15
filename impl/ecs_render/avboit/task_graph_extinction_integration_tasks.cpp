@@ -70,33 +70,14 @@ namespace RendererTaskGraphDetail{
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
+
     static_cast<void>(context);
-    const AvboitSharedComputeEmulationRecordInputs inputs{
-        payload.graphics,
-        payload.materialSystem,
-        payload.targets,
-        payload.timingTicket,
-        payload.extinctionTiming,
-        &payload.frameBindings,
-        &payload.plan,
-        payload.drawIndex,
-        payload.instanceCount,
-        payload.materialTypedByteCount,
-        payload.materialDrawBuffersUploaded,
-        payload.materialFrameStatesGraphOwned,
-        payload.materialGeometryStatesGraphOwned,
-        payload.beginTiming,
-        payload.finishTiming,
-        payload.phase == Phase::Raster
-            ? AvboitSharedComputeEmulationPhase::Raster
-            : AvboitSharedComputeEmulationPhase::Generate,
-    };
     const AvboitSharedComputeEmulationRecordTrait trait{
         &RendererGpuTimingScope::s_AvboitExtinction,
         MaterialPipelinePass::AvboitExtinction,
         &AvboitFrameTargets::lowFramebuffer,
     };
-    return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
 [[nodiscard]] bool AvboitExtinctionGraphTask::record(

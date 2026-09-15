@@ -40,6 +40,15 @@ static constexpr f32 s_BasisColorChannelRoundingBias = 0.5f;
 static constexpr f32 s_UastcHdrMaximum = 65216.0f;
 static constexpr u32 s_HdrChannelCount = 4u;
 
+struct VolumeMipDims{
+    u32 sourceWidth = 0u;
+    u32 sourceHeight = 0u;
+    u32 sourceDepth = 0u;
+    u32 targetWidth = 0u;
+    u32 targetHeight = 0u;
+    u32 targetDepth = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,6 +59,8 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 [[nodiscard]] bool LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight, basisu::imagef& outMask);
 [[nodiscard]] bool EncodeHdr2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource, TexturePayload& outPayload);
 [[nodiscard]] bool EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource, TexturePayload& outPayload);
+[[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims);
+[[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

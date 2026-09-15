@@ -202,6 +202,30 @@ void ResetPayload(
     return true;
 }
 
+[[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims){
+    if(sourceWidth == 0u || sourceHeight == 0u || sourceDepth == 0u)
+        return false;
+    outDims.sourceWidth = sourceWidth;
+    outDims.sourceHeight = sourceHeight;
+    outDims.sourceDepth = sourceDepth;
+    outDims.targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
+    outDims.targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
+    outDims.targetDepth = sourceDepth > 1u ? sourceDepth >> 1u : 1u;
+    return true;
+}
+
+[[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd){
+    if(sourceDepth == 0u || targetDepth == 0u || targetZ >= targetDepth)
+        return false;
+    const u32 sourceFirst = static_cast<u32>((static_cast<u64>(targetZ) * sourceDepth) / targetDepth);
+    u32 sourceEnd = static_cast<u32>((static_cast<u64>(targetZ + 1u) * sourceDepth) / targetDepth);
+    if(sourceEnd <= sourceFirst)
+        sourceEnd = sourceFirst + 1u;
+    outFirst = sourceFirst;
+    outEnd = Min(sourceEnd, sourceDepth);
+    return outFirst < outEnd;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

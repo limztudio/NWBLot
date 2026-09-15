@@ -300,21 +300,26 @@ private:
     if(sourcePlanes.empty())
         return false;
 
-    const u32 sourceWidth = sourcePlanes.front().get_width();
-    const u32 sourceHeight = sourcePlanes.front().get_height();
-    const u32 sourceDepth = static_cast<u32>(sourcePlanes.size());
-    const u32 targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
-    const u32 targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
-    const u32 targetDepth = sourceDepth > 1u ? sourceDepth >> 1u : 1u;
+    EncodeBackendDetail::VolumeMipDims mipDims;
+    if(!EncodeBackendDetail::ComputeVolumeMipDims(
+        sourcePlanes.front().get_width(),
+        sourcePlanes.front().get_height(),
+        static_cast<u32>(sourcePlanes.size()),
+        mipDims
+    ))
+        return false;
+    const u32 sourceDepth = mipDims.sourceDepth;
+    const u32 targetWidth = mipDims.targetWidth;
+    const u32 targetHeight = mipDims.targetHeight;
+    const u32 targetDepth = mipDims.targetDepth;
     outPlanes.clear();
     outPlanes.resize(targetDepth);
 
     for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
-        const u32 sourceFirst = static_cast<u32>((static_cast<u64>(targetZ) * sourceDepth) / targetDepth);
-        u32 sourceEnd = static_cast<u32>((static_cast<u64>(targetZ + 1u) * sourceDepth) / targetDepth);
-        if(sourceEnd <= sourceFirst)
-            sourceEnd = sourceFirst + 1u;
-        sourceEnd = Min(sourceEnd, sourceDepth);
+        u32 sourceFirst = 0u;
+        u32 sourceEnd = 0u;
+        if(!EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ, sourceFirst, sourceEnd))
+            return false;
 
         basisu::vector<basisu::image> filteredPlanes;
         filteredPlanes.resize(sourceEnd - sourceFirst);

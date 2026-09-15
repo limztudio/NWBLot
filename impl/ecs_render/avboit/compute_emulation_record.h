@@ -150,9 +150,7 @@ template<typename PayloadT>
     return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
 
-// Shared raster-pass record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the
-// guard plus snapshot materialize plus effect dispatch sequence and differ only in their payload members plus
-// effect dispatch callable.
+// Shared raster-pass record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the guard plus snapshot materialize plus effect dispatch sequence and differ only in their payload members plus effect dispatch callable.
 template<typename PayloadT, typename DispatchFn>
 [[nodiscard]] inline bool RecordAvboitRasterPassFromPayload(
     const PayloadT& payload,

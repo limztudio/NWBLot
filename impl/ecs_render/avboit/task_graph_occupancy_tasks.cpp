@@ -126,57 +126,44 @@ namespace RendererTaskGraphDetail{
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    static_cast<void>(context);
-    if(
-        !payload.avboitSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || ((payload.occupancyComputeEmulationOutputStatesGraphOwned
-                || payload.occupancyCsgComputeEmulationOutputStatesGraphOwned)
-            && !payload.occupancyComputeEmulationTiming)
-    )
-        return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItemPartitions occupancyDrawItems{ scratchArena };
-    CsgFrameGpuData occupancyCsgFrameData{ scratchArena };
-    const MaterialPassDrawItemPartitions* preparedOccupancyDrawItems = nullptr;
-    const CsgFrameGpuData* preparedOccupancyCsgFrameData = nullptr;
-    usize preparedOccupancyInstanceCount = 0u;
-    usize preparedOccupancyMaterialTypedByteCount = 0u;
-    if(payload.hasTransparentRenderers && (!payload.occupancyPhasePrepared || !payload.occupancySnapshot.captured))
-        return false;
-    if(payload.occupancyPhasePrepared && payload.occupancySnapshot.captured){
-        payload.occupancySnapshot.materialize(occupancyDrawItems, occupancyCsgFrameData);
-        preparedOccupancyDrawItems = &occupancyDrawItems;
-        preparedOccupancyCsgFrameData = &occupancyCsgFrameData;
-        preparedOccupancyInstanceCount = payload.occupancySnapshot.instanceCount;
-        preparedOccupancyMaterialTypedByteCount = payload.occupancySnapshot.materialTypedByteCount;
-    }
-    if(payload.hasTransparentRenderers){
-        payload.avboitSystem->renderAvboitOccupancyPass(
-            commandList,
-            *payload.targets,
-            preparedOccupancyDrawItems,
-            preparedOccupancyCsgFrameData,
-            &payload.csgResources,
-            &payload.frameBindings,
-            preparedOccupancyInstanceCount,
-            preparedOccupancyMaterialTypedByteCount,
-            // Declared uses already lowered their barrier.
-            true,
-            payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
-            payload.occupancyCsgClipBufferStatesGraphOwned,
-            payload.occupancyMaterialFrameStatesGraphOwned,
-            payload.occupancyMaterialGeometryStatesGraphOwned,
-            payload.occupancyComputeEmulationOutputStatesGraphOwned,
-            payload.occupancyComputeEmulationTiming,
-            payload.occupancyCsgComputeEmulationOutputStatesGraphOwned
-        );
-    }
-    // Graph-established states remain valid for either continuation.
-    return true;
+    return RecordAvboitRasterPassFromPayload(
+        payload,
+        commandList,
+        context,
+        &Payload::occupancyPhasePrepared,
+        &Payload::occupancySnapshot,
+        &Payload::occupancyComputeEmulationOutputStatesGraphOwned,
+        &Payload::occupancyCsgComputeEmulationOutputStatesGraphOwned,
+        &Payload::occupancyComputeEmulationTiming,
+        [&](
+            Core::CommandList& dispatchCommandList,
+            const MaterialPassDrawItemPartitions* dispatchDrawItems,
+            const CsgFrameGpuData* dispatchCsgFrameData,
+            const usize dispatchInstanceCount,
+            const usize dispatchMaterialTypedByteCount
+        ){
+            payload.avboitSystem->renderAvboitOccupancyPass(
+                dispatchCommandList,
+                *payload.targets,
+                dispatchDrawItems,
+                dispatchCsgFrameData,
+                &payload.csgResources,
+                &payload.frameBindings,
+                dispatchInstanceCount,
+                dispatchMaterialTypedByteCount,
+                // Declared uses already lowered their barrier.
+                true,
+                payload.occupancyCsgIntervalSampleImageStatesGraphOwned,
+                payload.occupancyCsgClipBufferStatesGraphOwned,
+                payload.occupancyMaterialFrameStatesGraphOwned,
+                payload.occupancyMaterialGeometryStatesGraphOwned,
+                payload.occupancyComputeEmulationOutputStatesGraphOwned,
+                payload.occupancyComputeEmulationTiming,
+                payload.occupancyCsgComputeEmulationOutputStatesGraphOwned
+            );
+        }
+    );
 }
 
 [[nodiscard]] bool AvboitDepthWarpGraphTask::record(

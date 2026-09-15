@@ -67,54 +67,42 @@ namespace RendererTaskGraphDetail{
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    static_cast<void>(context);
-    if(
-        !payload.avboitSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || ((payload.extinctionComputeEmulationOutputStatesGraphOwned
-                || payload.extinctionCsgComputeEmulationOutputStatesGraphOwned)
-            && !payload.extinctionComputeEmulationTiming)
-    )
-        return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItemPartitions extinctionDrawItems{ scratchArena };
-    CsgFrameGpuData extinctionCsgFrameData{ scratchArena };
-    const MaterialPassDrawItemPartitions* preparedExtinctionDrawItems = nullptr;
-    const CsgFrameGpuData* preparedExtinctionCsgFrameData = nullptr;
-    usize preparedExtinctionInstanceCount = 0u;
-    usize preparedExtinctionMaterialTypedByteCount = 0u;
-    if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))
-        return false;
-    if(payload.extinctionPhasePrepared && payload.extinctionSnapshot.captured){
-        payload.extinctionSnapshot.materialize(extinctionDrawItems, extinctionCsgFrameData);
-        preparedExtinctionDrawItems = &extinctionDrawItems;
-        preparedExtinctionCsgFrameData = &extinctionCsgFrameData;
-        preparedExtinctionInstanceCount = payload.extinctionSnapshot.instanceCount;
-        preparedExtinctionMaterialTypedByteCount = payload.extinctionSnapshot.materialTypedByteCount;
-    }
-    if(payload.hasTransparentRenderers){
-        payload.avboitSystem->renderAvboitExtinctionPass(
-            commandList,
-            *payload.targets,
-            preparedExtinctionDrawItems,
-            preparedExtinctionCsgFrameData,
-            &payload.csgResources,
-            &payload.frameBindings,
-            preparedExtinctionInstanceCount,
-            preparedExtinctionMaterialTypedByteCount,
-            payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
-            payload.extinctionCsgClipBufferStatesGraphOwned,
-            payload.extinctionMaterialFrameStatesGraphOwned,
-            payload.extinctionMaterialGeometryStatesGraphOwned,
-            payload.extinctionComputeEmulationOutputStatesGraphOwned,
-            payload.extinctionComputeEmulationTiming,
-            payload.extinctionCsgComputeEmulationOutputStatesGraphOwned
-        );
-    }
-    return true;
+    return RecordAvboitRasterPassFromPayload(
+        payload,
+        commandList,
+        context,
+        &Payload::extinctionPhasePrepared,
+        &Payload::extinctionSnapshot,
+        &Payload::extinctionComputeEmulationOutputStatesGraphOwned,
+        &Payload::extinctionCsgComputeEmulationOutputStatesGraphOwned,
+        &Payload::extinctionComputeEmulationTiming,
+        [&](
+            Core::CommandList& dispatchCommandList,
+            const MaterialPassDrawItemPartitions* dispatchDrawItems,
+            const CsgFrameGpuData* dispatchCsgFrameData,
+            const usize dispatchInstanceCount,
+            const usize dispatchMaterialTypedByteCount
+        ){
+            payload.avboitSystem->renderAvboitExtinctionPass(
+                dispatchCommandList,
+                *payload.targets,
+                dispatchDrawItems,
+                dispatchCsgFrameData,
+                &payload.csgResources,
+                &payload.frameBindings,
+                dispatchInstanceCount,
+                dispatchMaterialTypedByteCount,
+                payload.extinctionCsgIntervalSampleImageStatesGraphOwned,
+                payload.extinctionCsgClipBufferStatesGraphOwned,
+                payload.extinctionMaterialFrameStatesGraphOwned,
+                payload.extinctionMaterialGeometryStatesGraphOwned,
+                payload.extinctionComputeEmulationOutputStatesGraphOwned,
+                payload.extinctionComputeEmulationTiming,
+                payload.extinctionCsgComputeEmulationOutputStatesGraphOwned
+            );
+        }
+    );
 }
 
 [[nodiscard]] bool AvboitIntegrationGraphTask::record(

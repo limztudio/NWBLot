@@ -4,6 +4,8 @@
 
 #include "task_graph_extinction_integration_tasks.h"
 
+#include <impl/ecs_render/avboit/compute_emulation_record.h>
+
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
@@ -36,87 +38,31 @@ namespace RendererTaskGraphDetail{
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.graphics
-        || !payload.materialSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !payload.extinctionTiming
-        || (!payload.plan.captured && !payload.csgPlan.captured)
-        || payload.plan.captured == payload.csgPlan.captured
-    )
-        return false;
-
-    Core::GraphicsRuntime& graphics = *payload.graphics;
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    const bool csgComputeEmulation = payload.csgPlan.captured;
-    if(
-        !(csgComputeEmulation
-            ? payload.csgPlan.matches()
-            : payload.plan.matches())
-        || !payload.materialDrawBuffersUploaded
-        || !payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-    )
-        return false;
-
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    if(csgComputeEmulation)
-        payload.csgPlan.materialize(drawItems, csgFrameData);
-    else
-        payload.plan.materialize(drawItems);
-    // Reject late losses so the packet is discarded and the next frame re-preflights.
-    if(
-        !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
-        || (csgComputeEmulation && (
-            !payload.csgFrameBuffersUploaded
-            || !payload.csgIntervalSampleImageStatesGraphOwned
-            || !payload.csgClipBufferStatesGraphOwned
-            || !csgFrameData.hasWork()
-            || !payload.csgResources.frameReady(csgFrameData)
-        ))
-    )
-        return false;
-    if(payload.extinctionTiming->has_value())
-        return false;
-
-    commandList.endRenderPass();
-    payload.extinctionTiming->emplace(
-        graphics.gpuTiming(),
-        RendererGpuTimingScope::s_AvboitExtinction,
-        graphics.getDevice(),
-        commandList
-    );
-    // Close the marker now; the raster consumer owns finishTiming/discard.
-    if(!Core::FinishSplitGpuTimingMarker(payload.extinctionTiming))
-        return false;
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(
-        payload.targets->avboit.lowFramebuffer->getFramebufferInfo().getViewport()
-    );
-    const MaterialPassDrawContext drawContext{
-        commandList,
-        *payload.targets,
-        nullptr,
-        &payload.targets->avboit,
-        viewportState,
-        csgComputeEmulation ? &payload.csgResources : nullptr,
-        payload.frameBindings,
-        MaterialPipelinePass::AvboitExtinction,
-        false,
-        csgComputeEmulation && payload.csgIntervalSampleImageStatesGraphOwned,
-        csgComputeEmulation && payload.csgClipBufferStatesGraphOwned,
+    const AvboitComputeEmulationRecordInputs inputs{
+        payload.graphics,
+        payload.materialSystem,
+        payload.targets,
+        payload.timingTicket,
+        payload.extinctionTiming,
+        &payload.frameBindings,
+        &payload.csgResources,
+        &payload.plan,
+        &payload.csgPlan,
+        payload.instanceCount,
+        payload.materialTypedByteCount,
+        payload.materialDrawBuffersUploaded,
+        payload.csgFrameBuffersUploaded,
+        payload.csgIntervalSampleImageStatesGraphOwned,
+        payload.csgClipBufferStatesGraphOwned,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true
     };
-    materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
-    return true;
+    const AvboitComputeEmulationRecordTrait trait{
+        &RendererGpuTimingScope::s_AvboitExtinction,
+        MaterialPipelinePass::AvboitExtinction,
+        &AvboitFrameTargets::lowFramebuffer,
+    };
+    return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
 
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::record(
@@ -125,94 +71,32 @@ namespace RendererTaskGraphDetail{
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.graphics
-        || !payload.materialSystem
-        || !payload.targets
-        || !payload.targets->avboit.lowFramebuffer
-        || !payload.timingTicket
-        || !payload.extinctionTiming
-        || !payload.plan.captured
-        || payload.drawIndex >= payload.plan.drawCount
-    )
-        return false;
-
-    Core::GraphicsRuntime& graphics = *payload.graphics;
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    if(
-        !payload.plan.matches(payload.drawIndex)
-        || !payload.materialDrawBuffersUploaded
-        || !payload.frameBindings.frameReady(
-            payload.instanceCount,
-            payload.materialTypedByteCount
-        )
-    )
-        return false;
-
-    Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-    MaterialPassDrawItems drawItems{ scratchArena };
-    payload.plan.materialize(payload.drawIndex, drawItems);
-    if(!materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings))
-        return false;
-
-    if(payload.phase == Phase::Generate){
-        // End the prior raster phase before the next compute generator.
-        commandList.endRenderPass();
-        if(payload.beginTiming){
-            if(payload.extinctionTiming->has_value())
-                return false;
-            payload.extinctionTiming->emplace(
-                graphics.gpuTiming(),
-                RendererGpuTimingScope::s_AvboitExtinction,
-                graphics.getDevice(),
-                commandList
-            );
-            if(!Core::FinishSplitGpuTimingMarker(payload.extinctionTiming))
-                return false;
-        }
-        else if(!payload.extinctionTiming->has_value())
-            return false;
-    }
-    else if(!payload.extinctionTiming->has_value())
-        return false;
-
-    Core::ViewportState viewportState;
-    viewportState.addViewportAndScissorRect(
-        payload.targets->avboit.lowFramebuffer->getFramebufferInfo().getViewport()
-    );
-    const MaterialPassDrawContext drawContext{
-        commandList,
-        *payload.targets,
-        payload.phase == Phase::Raster ? payload.targets->avboit.lowFramebuffer.get() : nullptr,
-        &payload.targets->avboit,
-        viewportState,
-        nullptr,
-        payload.frameBindings,
-        MaterialPipelinePass::AvboitExtinction,
-        false,
-        false,
-        false,
+    const AvboitSharedComputeEmulationRecordInputs inputs{
+        payload.graphics,
+        payload.materialSystem,
+        payload.targets,
+        payload.timingTicket,
+        payload.extinctionTiming,
+        &payload.frameBindings,
+        &payload.plan,
+        payload.drawIndex,
+        payload.instanceCount,
+        payload.materialTypedByteCount,
+        payload.materialDrawBuffersUploaded,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
-        true
+        payload.beginTiming,
+        payload.finishTiming,
+        payload.phase == Phase::Raster
+            ? AvboitSharedComputeEmulationPhase::Raster
+            : AvboitSharedComputeEmulationPhase::Generate,
     };
-    if(payload.phase == Phase::Generate){
-        materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
-    }
-    else{
-        materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(
-            drawContext,
-            drawItems.computeDrawItems
-        );
-        if(payload.finishTiming){
-            payload.extinctionTiming->value().finishTiming(commandList);
-            payload.extinctionTiming->reset();
-        }
-        // Next callback binds compute; end rendering first.
-        commandList.endRenderPass();
-    }
-    return true;
+    const AvboitSharedComputeEmulationRecordTrait trait{
+        &RendererGpuTimingScope::s_AvboitExtinction,
+        MaterialPipelinePass::AvboitExtinction,
+        &AvboitFrameTargets::lowFramebuffer,
+    };
+    return RecordAvboitSharedComputeEmulation(inputs, commandList, trait);
 }
 
 [[nodiscard]] bool AvboitExtinctionGraphTask::record(

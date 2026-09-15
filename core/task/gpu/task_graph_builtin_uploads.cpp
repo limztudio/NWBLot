@@ -354,25 +354,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<UploadTask>,
-        &AcceptPayload<UploadTask>,
-        &DiscardPayload<UploadTask>,
-        &DestroyPayload<UploadTask::Payload>,
-        sizeof(UploadTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<UploadTask>,
-            &DestroyPayload<UploadTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
 }
 
 GpuTaskId GpuTaskGraph::addUploadTextureTask(
@@ -472,25 +454,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     if(resolvedAspect != TextureUploadAspect::Color)
         resolvedDesc.queue.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<UploadTask>,
-        &AcceptPayload<UploadTask>,
-        &DiscardPayload<UploadTask>,
-        &DestroyPayload<UploadTask::Payload>,
-        sizeof(UploadTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<UploadTask>,
-            &DestroyPayload<UploadTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation);
 }
 
 

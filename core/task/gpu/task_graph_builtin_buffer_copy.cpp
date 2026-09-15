@@ -209,25 +209,7 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
 
     GpuTaskDesc resolvedDesc = desc;
     resolvedDesc.setResourceUses(resourceUses.data(), resourceUses.size());
-    const GpuTaskId task = appendTaskWithinMutation(
-        resolvedDesc,
-        payload.get(),
-        &RecordPayload<CopyTask>,
-        &AcceptPayload<CopyTask>,
-        &DiscardPayload<CopyTask>,
-        &DestroyPayload<CopyTask::Payload>,
-        sizeof(CopyTask::Payload),
-        mutation
-    );
-    if(task.valid())
-        payload.publish();
-    else
-        discardAndDestroyUnappendedPayload(
-            payload.release(),
-            &DiscardPayload<CopyTask>,
-            &DestroyPayload<CopyTask::Payload>
-        );
-    return task;
+    return appendBuiltinTaskWithinMutation<CopyTask>(resolvedDesc, payload, mutation);
 }
 
 

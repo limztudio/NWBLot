@@ -26,22 +26,18 @@ namespace __hidden_gpu_task_graph_builtin_buffer_copy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct CopyBufferTask{
-    struct Copy{
-        GpuGraphResourceId sourceResource;
-        BufferHandle source;
-        u64 sourceOffsetBytes = 0u;
-        GpuGraphResourceId destinationResource;
-        BufferHandle destination;
-        u64 destinationOffsetBytes = 0u;
-        u64 dataSizeBytes = 0u;
-    };
+struct CopyBufferCopy{
+    GpuGraphResourceId sourceResource;
+    BufferHandle source;
+    u64 sourceOffsetBytes = 0u;
+    GpuGraphResourceId destinationResource;
+    BufferHandle destination;
+    u64 destinationOffsetBytes = 0u;
+    u64 dataSizeBytes = 0u;
+};
 
-    struct Payload : public GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>{
-        explicit Payload(GraphicsArena& arena)
-            : GpuTaskGraphBuiltinDetail::CopiesPayloadBase<Copy>(arena)
-        {}
-    };
+struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBufferCopy>{
+    using Copy = CopyBufferCopy;
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -77,14 +73,6 @@ struct CopyBufferTask{
                 return true;
             }
         );
-    }
-
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishCopiesAcceptedToken(payload, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearCopiesAcceptedToken(payload);
     }
 };
 

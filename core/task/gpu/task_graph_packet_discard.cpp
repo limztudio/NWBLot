@@ -31,8 +31,8 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
         || lease.m_planGeneration != planAccess.planGeneration()
     )
         return false;
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;

@@ -93,8 +93,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
         return scratch.externalMergedStateSeed.copyFrom(scratch.initialStateSeed);
     };
 
-    const GpuCompiledPacketView packetView = planAccess.packet(packetID);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packetID);
+    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;

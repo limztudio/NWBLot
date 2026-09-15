@@ -273,6 +273,12 @@ GpuCompiledPacketView GpuCompiledGraph::ReadView::packet(const GpuSubmissionPack
             : nullptr,
     };
 }
+GpuCompiledPacketView GpuCompiledGraph::ReadView::packetWithTasks(const GpuSubmissionPacketId& packetId)const & noexcept{
+    const GpuCompiledPacketView packetView = packet(packetId);
+    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+        return {};
+    return packetView;
+}
 usize GpuCompiledGraph::ReadView::logicalOwnershipTransferCount()const noexcept{
     return m_graph ? m_graph->m_ownershipTransfers.size() : 0u;
 }

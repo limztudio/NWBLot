@@ -491,6 +491,8 @@ public:
         const GpuPhysicalQueueInfo* queueInfoForTask(const GpuTaskId& task)const && = delete;
         [[nodiscard]] GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const & noexcept;
         GpuCompiledPacketView packet(const GpuSubmissionPacketId& packet)const && = delete;
+        [[nodiscard]] GpuCompiledPacketView packetWithTasks(const GpuSubmissionPacketId& packet)const & noexcept;
+        GpuCompiledPacketView packetWithTasks(const GpuSubmissionPacketId& packet)const && = delete;
         [[nodiscard]] usize logicalOwnershipTransferCount()const noexcept;
         [[nodiscard]] const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const & noexcept;
         const GpuCompiledOwnershipTransfer* logicalOwnershipTransfers()const && = delete;

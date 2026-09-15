@@ -29,8 +29,8 @@ bool GpuTaskGraph::packetReadyForSubmission(
         || recordingAttemptGeneration == 0u
     )
         return false;
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -76,8 +76,8 @@ bool GpuTaskGraph::beginPacketSubmission(
         || outLease.valid()
     )
         return false;
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -280,8 +280,8 @@ void GpuTaskGraph::abortPacketSubmission(
         || lease.m_planGeneration != planAccess.planGeneration()
     )
         return;
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
         return;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -348,8 +348,8 @@ bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(
         || lease.m_planGeneration != planAccess.planGeneration()
     )
         return false;
-    const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    if(!packetView.valid() || packetView.plan->taskCount == 0u)
+    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;

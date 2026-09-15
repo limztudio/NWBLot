@@ -35,9 +35,7 @@ struct DeferredFrameTargets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared AVBOIT alias-free plus CSG compute-emulation record core. Occupancy, extinction, and
-// accumulation run the same guard plus materialize plus split-timing plus draw ladder and differ
-// only in which timing slot, timing scope, pipeline pass, and AVBOIT framebuffer they target.
+// Shared AVBOIT alias-free plus CSG compute-emulation record core. Occupancy, extinction, and accumulation run the same guard plus materialize plus split-timing plus draw ladder and differ only in which timing slot, timing scope, pipeline pass, and AVBOIT framebuffer they target.
 struct AvboitComputeEmulationRecordTrait{
     const Core::GpuTimingScopeDefinition* timingScope = nullptr;
     MaterialPipelinePass::Enum pipelinePass = MaterialPipelinePass::AvboitOccupancy;
@@ -126,3 +124,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

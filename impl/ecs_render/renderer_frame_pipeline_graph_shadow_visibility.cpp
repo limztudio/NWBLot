@@ -251,15 +251,6 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
         return true;
     };
-    const auto appendOptionalReadBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
-        if(!buffer)
-            return true;
-        const Core::GpuGraphResourceId resource = importBuffer(buffer, identity, label);
-        if(!resource.valid())
-            return false;
-        resourceUses.push_back(ReadUse(resource, state));
-        return true;
-    };
     const auto appendOptionalReadWriteBuffer = [&](const Core::BufferHandle& buffer, const Name& identity, const AStringView label, const Core::ResourceStates::Mask state){
         if(!buffer)
             return true;

@@ -28,13 +28,14 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct ClearBufferTask{
-    struct Payload{
-        GpuGraphResourceId destinationResource;
-        BufferHandle destination;
-        u32 clearValue = 0u;
-        QueueSubmissionToken* acceptedToken = nullptr;
-    };
+struct ClearBufferPayload{
+    GpuGraphResourceId destinationResource;
+    BufferHandle destination;
+    u32 clearValue = 0u;
+    QueueSubmissionToken* acceptedToken = nullptr;
+};
+
+struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -59,13 +60,6 @@ struct ClearBufferTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
-    }
 };
 
 struct ClearTextureTask{

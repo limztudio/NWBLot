@@ -68,7 +68,24 @@ template<typename Payload>
     return !payload.copies.empty();
 }
 
-// Shared task skeleton for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned payload plus accepted-token lifecycle and differ only in their per-item Copy shape plus record steps.
+// Shared accepted/discarded lifecycle for builtin singleton tasks whose payload carries a direct acceptedToken.
+// ClearBuffer plus UploadBuffer plus UploadTexture plus ResolveTexture share these identical wrappers; each task
+// hoists its Payload above the task struct so the base instantiates against a complete type.
+template<typename PayloadT>
+struct SingletonTokenTaskBase{
+    using Payload = PayloadT;
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        PublishAcceptedToken(payload.acceptedToken, token);
+    }
+
+    static void discarded(Payload& payload){
+        ClearAcceptedToken(payload.acceptedToken);
+    }
+};
+
+// Shared task skeleton for builtin copy tasks. CopyBuffer plus CopyTexture share the arena-owned payload
+// plus accepted-token lifecycle and differ only in their per-item Copy shape plus record steps.
 template<typename Copy>
 struct CopiesTaskBase{
     struct Payload : public CopiesPayloadBase<Copy>{

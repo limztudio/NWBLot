@@ -25,14 +25,15 @@ namespace __hidden_gpu_task_graph_builtin_uploads{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct UploadBufferTask{
-    struct Payload{
+struct UploadBufferPayload{
         GpuUploadBlobId source;
         BufferHandle destination;
         u64 destinationOffsetBytes = 0u;
         ResourceStates::Mask finalState = ResourceStates::CopyDest;
         QueueSubmissionToken* acceptedToken = nullptr;
-    };
+};
+
+struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -67,17 +68,9 @@ struct UploadBufferTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
-    }
 };
 
-struct UploadTextureTask{
-    struct Payload{
+struct UploadTexturePayload{
         GpuUploadBlobId source;
         TextureHandle destination;
         u32 arraySlice = 0u;
@@ -87,7 +80,9 @@ struct UploadTextureTask{
         ResourceStates::Mask finalState = ResourceStates::CopyDest;
         QueueSubmissionToken* acceptedToken = nullptr;
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
-    };
+};
+
+struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
 
     [[nodiscard]] static bool record(
         const Payload& payload,
@@ -131,13 +126,6 @@ struct UploadTextureTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
-    }
-
-    static void discarded(Payload& payload){
-        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
-    }
 };
 
 [[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(

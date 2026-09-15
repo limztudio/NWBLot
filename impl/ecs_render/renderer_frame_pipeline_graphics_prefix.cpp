@@ -105,17 +105,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     m_graphicsPrefixDeferredClearTask = {};
     m_graphicsPrefixCsgIntervalClearFirstTask = {};
     m_graphicsPrefixCsgIntervalClearTask = {};
-    m_graphicsPrefixOpaqueComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
-        task = {};
-    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
-    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
-    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
-    m_graphicsPrefixGbufferTask = {};
-    m_graphicsPrefixCsgReceiverSpanTask = {};
-    m_graphicsPrefixCsgIntervalCombineTask = {};
-    m_graphicsPrefixCsgIntervalSampleTask = {};
-    m_graphicsPrefixTask = {};
+    resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
 

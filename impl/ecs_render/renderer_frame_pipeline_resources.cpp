@@ -144,17 +144,7 @@ void RendererFramePipeline::invalidateResources(){
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
-    m_graphicsPrefixOpaqueComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
-        task = {};
-    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
-    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
-    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
-    m_graphicsPrefixGbufferTask = {};
-    m_graphicsPrefixCsgReceiverSpanTask = {};
-    m_graphicsPrefixCsgIntervalCombineTask = {};
-    m_graphicsPrefixCsgIntervalSampleTask = {};
-    m_graphicsPrefixTask = {};
+    resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;
@@ -328,6 +318,20 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingCompiledGraph.reset();
 }
 
+void RendererFramePipeline::resetGraphicsPrefixTaskState(){
+    m_graphicsPrefixOpaqueComputeEmulationTask = {};
+    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
+        task = {};
+    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
+    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
+    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
+    m_graphicsPrefixGbufferTask = {};
+    m_graphicsPrefixCsgReceiverSpanTask = {};
+    m_graphicsPrefixCsgIntervalCombineTask = {};
+    m_graphicsPrefixCsgIntervalSampleTask = {};
+    m_graphicsPrefixTask = {};
+}
+
 void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -397,17 +401,7 @@ void RendererFramePipeline::resetFrameTaskState(){
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
     m_graphicsPrefixDeferredClearTask = {};
-    m_graphicsPrefixOpaqueComputeEmulationTask = {};
-    for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
-        task = {};
-    m_graphicsPrefixOpaqueSharedComputeEmulationTaskCount = 0u;
-    m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask = {};
-    m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask = {};
-    m_graphicsPrefixGbufferTask = {};
-    m_graphicsPrefixCsgReceiverSpanTask = {};
-    m_graphicsPrefixCsgIntervalCombineTask = {};
-    m_graphicsPrefixCsgIntervalSampleTask = {};
-    m_graphicsPrefixTask = {};
+    resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
     m_deferredLightingTaskGraphValid = false;

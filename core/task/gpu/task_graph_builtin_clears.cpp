@@ -60,13 +60,11 @@ struct ClearBufferTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = token;
+        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
     }
 
     static void discarded(Payload& payload){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = {};
+        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
     }
 };
 
@@ -165,13 +163,11 @@ struct ClearTextureTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.clearDesc.acceptedToken)
-            *payload.clearDesc.acceptedToken = token;
+        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 
     static void discarded(Payload& payload){
-        if(payload.clearDesc.acceptedToken)
-            *payload.clearDesc.acceptedToken = {};
+        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.clearDesc.acceptedToken);
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }
@@ -235,13 +231,11 @@ struct ClearTextureRectUIntTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.clearDesc.acceptedToken)
-            *payload.clearDesc.acceptedToken = token;
+        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 
     static void discarded(Payload& payload){
-        if(payload.clearDesc.acceptedToken)
-            *payload.clearDesc.acceptedToken = {};
+        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.clearDesc.acceptedToken);
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
     }

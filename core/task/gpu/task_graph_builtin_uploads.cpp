@@ -68,13 +68,11 @@ struct UploadBufferTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = token;
+        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
     }
 
     static void discarded(Payload& payload){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = {};
+        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
     }
 };
 
@@ -134,13 +132,11 @@ struct UploadTextureTask{
     }
 
     static void accepted(Payload& payload, const QueueSubmissionToken& token){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = token;
+        GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.acceptedToken, token);
     }
 
     static void discarded(Payload& payload){
-        if(payload.acceptedToken)
-            *payload.acceptedToken = {};
+        GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.acceptedToken);
     }
 };
 

@@ -45,6 +45,16 @@ template<typename ResourceDesc>
     ;
 }
 
+inline void PublishAcceptedToken(QueueSubmissionToken* acceptedToken, const QueueSubmissionToken& token){
+    if(acceptedToken)
+        *acceptedToken = token;
+}
+
+inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken){
+    if(acceptedToken)
+        *acceptedToken = {};
+}
+
 [[nodiscard]] inline bool CopyOrClearTextureDestinationCanMaterializeRetainedState(
     const TextureDesc& resourceDesc,
     const ResourceStates::Mask graphInitialState,

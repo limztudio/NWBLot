@@ -216,8 +216,8 @@ bool GpuTaskGraphCompiler::compile(
         .presentEndpoint = outCompiledGraph.m_presentEndpoint,
         .hasPresentEndpoint = outCompiledGraph.m_hasPresentEndpoint,
         .graphGeneration = outCompiledGraph.m_generation,
-        .deviceGeneration = outCompiledGraph.m_deviceGeneration,
         .planGeneration = outCompiledGraph.m_planGeneration,
+        .deviceGeneration = outCompiledGraph.m_deviceGeneration,
     };
 
     Vector<InitialOwnershipCompletionRequirement, Alloc::ScratchArena> initialOwnershipCompletionRequirements(

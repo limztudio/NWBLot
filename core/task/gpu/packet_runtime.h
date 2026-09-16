@@ -44,12 +44,13 @@ struct GpuRecordedPacket{
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
     // These fields are written before commandListCount publishes the slot. They intentionally describe the packet
     // after graph lowering, so compile tooling can distinguish declared work from the native work that was recorded.
+    // commandListCount sits after the f64 timings so the u8 does not open a 7-byte hole.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
-    u8 commandListCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
+    u8 commandListCount = 0u;
     // Monotonic steady-clock endpoints make actual CPU recording overlap observable without exposing Timer in the
     // public packet snapshot. Both endpoints are published before commandListCount makes the slot visible.
     u64 recordingBeginNanoseconds = 0u;
@@ -661,7 +662,6 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     u64 recordingAttemptGeneration = 0u;
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
-    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize taskCount = 0u;
     usize nativeCommandListCount = 0u;
@@ -670,6 +670,7 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
     f64 submissionSeconds = 0.0;
+    u16 deviceGeneration = 0u;
     bool joinsAcceptedQueueFrontier = false;
     bool isRecoverySubmission = false;
 
@@ -700,7 +701,6 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
-    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;
@@ -716,6 +716,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
+    u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u

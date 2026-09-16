@@ -459,8 +459,8 @@ GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompil
         .graphGeneration = m_generation,
         .planGeneration = m_planGeneration,
         .queue = queue,
-        .deviceGeneration = m_deviceGeneration,
         .queueClass = queueInfo->queueClass,
+        .deviceGeneration = m_deviceGeneration,
     };
     const auto countOwnershipBarriers = [&statistics](
         const GraphicsVector<GpuCompiledBarrier>& barriers,

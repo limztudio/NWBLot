@@ -68,7 +68,6 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .recordingAttemptGeneration = m_recordingAttemptGeneration,
         .packet = packetID,
         .queue = packet.queue,
-        .deviceGeneration = m_deviceGeneration,
         .queueClass = queueInfo->queueClass,
         .taskCount = packet.taskCount,
         .nativeCommandListCount = runtime.nativeCommandListCount,
@@ -77,6 +76,7 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .timelineWaitCount = runtime.timelineWaitCount,
         .mergedTimelineWaitCount = runtime.mergedTimelineWaitCount,
         .submissionSeconds = runtime.submissionSeconds,
+        .deviceGeneration = m_deviceGeneration,
         .joinsAcceptedQueueFrontier = packet.joinsAcceptedQueueFrontier,
         .isRecoverySubmission = packet.isRecoverySubmission,
     };
@@ -99,8 +99,8 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
         .planGeneration = m_planGeneration,
         .recordingAttemptGeneration = m_recordingAttemptGeneration,
         .queue = queue,
-        .deviceGeneration = m_deviceGeneration,
         .queueClass = queueInfo->queueClass,
+        .deviceGeneration = m_deviceGeneration,
     };
     for(usize packetIndex = 0u; packetIndex < m_packets.size(); ++packetIndex){
         const GpuSubmissionPacketId packetID = planAccess.packetIdAt(packetIndex);

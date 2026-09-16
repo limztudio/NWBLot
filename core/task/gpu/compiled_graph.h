@@ -279,7 +279,6 @@ struct GpuTaskGraphCompileStatistics{
 
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
-    u16 deviceGeneration = 0u;
     usize taskCount = 0u;
     usize resourceCount = 0u;
     usize resourceUseCount = 0u;
@@ -356,6 +355,8 @@ struct GpuTaskGraphCompileStatistics{
     f64 packetizationSeconds = 0.0;
     f64 resourceStatePlanningSeconds = 0.0;
     f64 packetDependencyPlanningSeconds = 0.0;
+    // u16 tail kept last so the 8-aligned counters above never open an interior hole.
+    u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
 };
@@ -369,7 +370,6 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     GpuPhysicalQueueId queue;
-    u16 deviceGeneration = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     usize taskCount = 0u;
     usize packetCount = 0u;
@@ -385,6 +385,7 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize incomingRepeatedOwnershipTransferSignatureCount = 0u;
     usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;
     usize concurrentSharingAdviceResourceCount = 0u;
+    u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u
@@ -674,8 +675,8 @@ private:
     // Keep 4-byte and smaller members together to avoid padding.
     mutable Atomic<u32> m_planAccessState = 0u;
     mutable Futex m_attemptBindingMutex;
-    mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
     u16 m_deviceGeneration = 0u;
+    mutable AttemptBindingState m_attemptBindingState = AttemptBindingState::None;
     bool m_hasPresentEndpoint = false;
     bool m_valid = false;
 };

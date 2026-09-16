@@ -42,8 +42,8 @@ struct GpuTaskGraphCompiledPlanStorage{
     GpuCompiledPresentEndpoint& presentEndpoint;
     bool& hasPresentEndpoint;
     u64 graphGeneration = 0u;
-    u16 deviceGeneration = 0u;
     u64 planGeneration = 0u;
+    u16 deviceGeneration = 0u;
 };
 
 struct TrackedResourceStateFragment{

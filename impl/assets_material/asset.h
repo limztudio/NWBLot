@@ -159,28 +159,61 @@ namespace MaterialResourceSource{
     return IsValidMaterialResourceKind(resourceKind)
         && resourceSource == MaterialResourceSource::Asset
     ;
+}
+
+
 // The first material-authored resource slice deliberately exposes a tiny fixed fixture catalog instead of a general
-// image-asset pipeline.  These names are cooked into MaterialResourceReference records and resolved by the renderer
-// to stable global-heap descriptors.  Keep the contract here so cook, runtime loading, and renderer resolution agree.
+// image-asset pipeline. These names are cooked into MaterialResourceReference records and resolved by the renderer
+// to stable global-heap descriptors. Keep the contract here so cook, runtime loading, and renderer resolution agree.
 namespace MaterialResourceFixture{
     inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
     inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
+};
+
+
 [[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+    const MaterialResourceKind::Enum resourceKind,
     const AStringView fixtureName
+){
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         return fixtureName == MaterialResourceFixture::s_CheckerRgba8;
     case MaterialResourceKind::Sampler:
         return fixtureName == MaterialResourceFixture::s_LinearClamp;
     default:
+        return false;
+    }
+}
+
+
 [[nodiscard]] inline bool IsKnownMaterialResourceFixture(
+    const MaterialResourceKind::Enum resourceKind,
     const Name& fixtureName
+){
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         return fixtureName == Name(MaterialResourceFixture::s_CheckerRgba8);
     case MaterialResourceKind::Sampler:
         return fixtureName == Name(MaterialResourceFixture::s_LinearClamp);
     default:
+        return false;
+    }
+}
+
+
+[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
+    const MaterialResourceKind::Enum resourceKind,
+    const MaterialResourceSource::Enum resourceSource,
+    const Name& resourceName,
+    const Name& fixtureName
+){
+    if(!IsValidMaterialResourceKind(resourceKind) || resourceSource != MaterialResourceSource::Asset)
+        return false;
+
+    if(fixtureName)
+        return IsKnownMaterialResourceFixture(resourceKind, fixtureName);
+
+    return static_cast<bool>(resourceName);
 }
 
 
@@ -386,8 +419,9 @@ struct MaterialResourceReference{
     Core::Assets::AssetRef<Sampler> samplerAsset;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
     MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
-// A cooked material keeps resource identity separate from its numeric/default typed payload. `constantByteOffset`
-// points at the four-byte slot word the renderer patches after it has resolved the device-lifetime descriptor handle.
+    // A cooked material keeps resource identity separate from its numeric/default typed payload.
+    // `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves
+    // the device-lifetime descriptor handle.
     Name fixtureName = NAME_NONE;
     u32 constantByteOffset = 0u;
 };

@@ -5,6 +5,8 @@
 #include "material_system.h"
 #include "sampled_texture_collection.h"
 
+#include <impl/assets_material/asset.h>
+
 #include <impl/ecs_render/material/renderer_material_state.h>
 
 #include <core/assets/manager.h>
@@ -159,21 +161,29 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
 static constexpr u32 s_FixtureCheckerWidth = 2u;
 static constexpr u32 s_FixtureCheckerHeight = 2u;
 static constexpr u8 s_CheckerRgba8Pixels[] = {
     255u, 255u, 255u, 255u,  32u,  32u,  32u, 255u,
      32u,  32u,  32u, 255u, 255u, 255u, 255u, 255u,
+};
 static_assert(sizeof(s_CheckerRgba8Pixels) == s_FixtureCheckerWidth * s_FixtureCheckerHeight * sizeof(u32));
-static void ReleaseFixtureHeapHandles(Core::Graphics& graphics, RendererMaterialResourceFixtureState& fixtures){
+static void ReleaseFixtureHeapHandles(Core::GraphicsRuntime& graphics, RendererMaterialResourceFixtureState& fixtures){
     Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
     if(heap.isInitialized()){
         if(fixtures.checkerRgba8HeapHandle.valid())
             heap.free(fixtures.checkerRgba8HeapHandle);
         if(fixtures.linearClampHeapHandle.valid())
             heap.free(fixtures.linearClampHeapHandle);
+    }
     fixtures = RendererMaterialResourceFixtureState{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -181,8 +191,6 @@ static void ReleaseFixtureHeapHandles(Core::Graphics& graphics, RendererMaterial
 
 bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo){
     if(materialInfo.resourceReferencesResolved)
-bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo){
-    if(materialInfo.resourceFixturesResolved)
         return true;
 
     materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
@@ -200,6 +208,10 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
     }
 
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
+        // The static first slice carries no per-material asset path; the fixture pass below patches its slot.
+        if(resourceReference.fixtureName)
+            continue;
+
         u32 heapSlot = 0u;
         if(resourceReference.resourceSource != MaterialResourceSource::Asset){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid asset resource source")
@@ -238,10 +250,56 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
                 );
                 return false;
             }
+            break;
+        default:
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+
+        if(
+            resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
+            || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes")
+                , StringConvert(materialInfo.materialName.c_str())
+            );
+            return false;
+        }
+        NWB_MEMCPY(
+            materialInfo.constantTypedBytes.data() + resourceReference.constantByteOffset,
+            materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset,
+            &heapSlot,
+            sizeof(heapSlot)
+        );
+    }
+
+    materialInfo.resourceReferencesResolved = true;
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo){
+    if(materialInfo.resourceFixturesResolved)
+        return true;
+
+    // The asset pass above already patched per-material slots into constantTypedBytes; only patch static fixture slots here.
+    if(materialInfo.resourceReferences.empty()){
         materialInfo.resourceFixturesResolved = true;
-    RendererMaterialResourceFixtureState& fixtures = materialState().m_resourceFixtures;
-    Core::Graphics& graphicsModule = graphics();
+        return true;
+    }
+
+    RendererMaterialResourceFixtureState& fixtures = m_materialState.m_resourceFixtures;
+    Core::GraphicsRuntime& graphicsModule = m_graphics;
+    Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
+    if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cannot resolve material resource fixtures without an initialized descriptor heap"));
+        return false;
+    }
     const bool fixtureCacheReady =
         fixtures.checkerRgba8Texture
         && fixtures.linearClampSampler
@@ -263,7 +321,7 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setName(Name(MaterialResourceFixture::s_CheckerRgba8))
         ;
-        Core::Graphics::TextureSetupDesc textureSetup;
+        Core::GraphicsRuntime::TextureSetupDesc textureSetup;
         textureSetup.textureDesc = textureDesc;
         textureSetup.data = __hidden_material_surface::s_CheckerRgba8Pixels;
         textureSetup.uploadDataSize = sizeof(__hidden_material_surface::s_CheckerRgba8Pixels);
@@ -273,12 +331,17 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         fixtures.checkerRgba8Texture = graphicsModule.setupTexture(textureSetup);
         if(!fixtures.checkerRgba8Texture){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material checker texture fixture"));
+            __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+            return false;
+        }
         Core::SamplerDesc samplerDesc;
         samplerDesc.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
         fixtures.linearClampSampler = graphicsModule.getDevice().createSampler(samplerDesc);
         if(!fixtures.linearClampSampler){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material clamp sampler fixture"));
             __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+            return false;
+        }
         fixtures.checkerRgba8HeapHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
         if(
             !fixtures.checkerRgba8HeapHandle.valid()
@@ -292,6 +355,8 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material checker texture fixture in the descriptor heap"));
             __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+            return false;
+        }
         fixtures.linearClampHeapHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
         if(
             !fixtures.linearClampHeapHandle.valid()
@@ -299,12 +364,35 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
             __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+            return false;
+        }
+    }
+
+    for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
+        // Per-material asset paths are patched by the asset pass above; only the static slice lands here.
+        if(!resourceReference.fixtureName)
+            continue;
+
+        u32 heapSlot = 0u;
+        switch(resourceReference.resourceKind){
+        case MaterialResourceKind::SampledImage2D:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_CheckerRgba8)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampled-image fixture")
+                    , StringConvert(materialInfo.materialName.c_str())
+                );
+                return false;
+            }
             heapSlot = fixtures.checkerRgba8HeapHandle.slot();
+            break;
+        case MaterialResourceKind::Sampler:
             if(resourceReference.fixtureName != Name(MaterialResourceFixture::s_LinearClamp)){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' requests unsupported sampler fixture")
+                    , StringConvert(materialInfo.materialName.c_str())
+                );
+                return false;
+            }
             heapSlot = fixtures.linearClampHeapHandle.slot();
+            break;
             break;
         default:
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind")
@@ -317,7 +405,6 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
             resourceReference.constantByteOffset > materialInfo.constantTypedBytes.size()
             || sizeof(heapSlot) > materialInfo.constantTypedBytes.size() - resourceReference.constantByteOffset
         ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource slot exceeds constant typed bytes")
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' resource fixture slot exceeds constant typed bytes")
                 , StringConvert(materialInfo.materialName.c_str())
             );
@@ -331,18 +418,20 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         );
     }
 
-    materialInfo.resourceReferencesResolved = true;
+    materialInfo.resourceFixturesResolved = true;
     return true;
 }
 
-    materialInfo.resourceFixturesResolved = true;
 void RendererMaterialSystem::releaseMaterialResourceFixtures(){
-    __hidden_material_surface::ReleaseFixtureHeapHandles(graphics(), materialState().m_resourceFixtures);
-    for(auto it = materialState().m_surfaceInfos.begin(); it != materialState().m_surfaceInfos.end(); ++it){
+    __hidden_material_surface::ReleaseFixtureHeapHandles(m_graphics, m_materialState.m_resourceFixtures);
+    for(auto it = m_materialState.m_surfaceInfos.begin(); it != m_materialState.m_surfaceInfos.end(); ++it){
         MaterialSurfaceInfo& materialInfo = it.value();
         materialInfo.constantTypedBytes = materialInfo.unpatchedConstantTypedBytes;
         materialInfo.resourceFixturesResolved = false;
     }
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     const Material& material,
@@ -408,7 +497,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const auto foundInfo = m_materialState.m_surfaceInfos.find(materialPath);
     if(foundInfo != m_materialState.m_surfaceInfos.end()){
         outInfo = &foundInfo.value();
-        return resolveMaterialResourceReferences(*outInfo);
+        if(!resolveMaterialResourceReferences(*outInfo))
+            return false;
         return resolveMaterialResourceFixtures(*outInfo);
     }
 
@@ -498,6 +588,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     createdInfo.unpatchedConstantTypedBytes = createdInfo.constantTypedBytes;
     if(!resolveMaterialResourceReferences(createdInfo))
+        return false;
     if(!resolveMaterialResourceFixtures(createdInfo))
         return false;
     createdInfo.shadingModelId = material.shadingModelId();
@@ -531,8 +622,6 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
         return false;
 
     outInfo = &materialInfo;
-    return true;
-    outInfo = &foundInfo.value();
     // A device reset keeps the CPU material cache but deliberately clears its descriptor-backed fixture slots.
     // Find-only paths (notably the shadow/trace material context) must not observe those zeroed words before a
     // visible-material creation pass happens to revisit the cache.
@@ -542,7 +631,7 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
 bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
-    return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, collector);
+    return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, m_materialState.m_resourceFixtures, collector);
 }
 
 bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
@@ -551,7 +640,7 @@ bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
     Core::Alloc::ScratchArena& scratchArena){
     return GatherPreparedMaterialPassSampledTextures(
-        m_materialState.m_surfaceInfos, m_materialState.m_resourceState, drawItemSets, drawItemSetCount, outTextures, scratchArena
+        m_materialState.m_surfaceInfos, m_materialState.m_resourceState, m_materialState.m_resourceFixtures, drawItemSets, drawItemSetCount, outTextures, scratchArena
     );
 }
 

@@ -361,7 +361,7 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     EXPECT_TRUE(ContainsText(softwareCaustics, "causticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(softwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
     EXPECT_TRUE(ContainsText(softwareCaustics, "resolveChainInputs.baseScheduling = geometryScheduling;"));
-    EXPECT_TRUE(ContainsText(softwareResolve, "Core::GpuTaskSchedulingHint resolvePrepareScheduling = inputs.baseScheduling;"));
+    EXPECT_TRUE(ContainsText(softwareResolve, "sharedInputs.baseScheduling = inputs.baseScheduling;"));
     EXPECT_TRUE(ContainsText(softwareResolve, "render.software_caustics.resolve_timing_close"));
 
     EXPECT_TRUE(ContainsText(surfelGi, "surfelGiScheduling.allowMergeAcrossConsumerFrontier = true;"));
@@ -374,7 +374,7 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     EXPECT_TRUE(ContainsText(hardwareCaustics, "hardwareCausticsScheduling.allowMergeAcrossConsumerFrontier = true;"));
     EXPECT_TRUE(ContainsText(hardwareCaustics, ".setDependencies(&causticsDependency, 1u)"));
     EXPECT_TRUE(ContainsText(hardwareCaustics, "resolveChainInputs.baseScheduling = hardwareGeometryScheduling;"));
-    EXPECT_TRUE(ContainsText(hardwareResolve, "Core::GpuTaskSchedulingHint hardwareResolvePrepareScheduling = inputs.baseScheduling;"));
+    EXPECT_TRUE(ContainsText(hardwareResolve, "sharedInputs.baseScheduling = inputs.baseScheduling;"));
     EXPECT_TRUE(ContainsText(hardwareResolve, "render.hardware_caustics.resolve_timing_close"));
 
     EXPECT_TRUE(ContainsText(avboitClear, "avboitClearScheduling.allowMergeAcrossConsumerFrontier = true;"));

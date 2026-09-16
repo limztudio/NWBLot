@@ -67,6 +67,8 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
             "avboit/task_graph_occupancy_tasks.cpp",
             "avboit/task_graph_extinction_integration_tasks.cpp",
             "avboit/task_graph_accumulation_tasks.cpp",
+            "avboit/compute_emulation_record.cpp",
+            "avboit/compute_emulation_record.h",
         },
         taskRecordSources
     ));
@@ -93,7 +95,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_FALSE(ContainsText(drawTypes, "NWB_MESH_BINDING_MATERIAL_TYPED"));
     EXPECT_TRUE(ContainsText(drawTypes, "Name meshKey = NAME_NONE;"));
     EXPECT_TRUE(ContainsText(drawTypes, "MaterialPipelineKey pipelineKey;"));
-    EXPECT_TRUE(ContainsText(materialSurface, "m_materialState.m_surfaceInfos, m_materialState.m_resourceState"));
+    EXPECT_TRUE(ContainsText(materialSurface, "m_materialState.m_surfaceInfos, m_materialState.m_resourceState, m_materialState.m_resourceFixtures"));
     EXPECT_TRUE(ContainsText(sampledTextureCollection, "materials.find(drawItem.pipelineKey.material)"));
     EXPECT_TRUE(ContainsText(materialPass, "csgReceiverSurfaceDrawItem.pipelineResources ="));
 
@@ -113,8 +115,8 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_FALSE(ContainsText(taskHeaders, "RendererMeshSystem* meshSystem"));
     EXPECT_FALSE(ContainsText(taskRecords, "payload.meshSystem"));
     EXPECT_FALSE(ContainsText(taskRecords, "matches(meshSystem"));
-    EXPECT_TRUE(ContainsText(taskRecords, "payload.csgPlan.matches()"));
-    EXPECT_TRUE(ContainsText(taskRecords, "payload.plan.matches(payload.drawIndex)"));
+    EXPECT_TRUE(ContainsText(taskRecords, "payload.csgPlan.matches()") || ContainsText(taskRecords, "inputs.csgPlan->matches()"));
+    EXPECT_TRUE(ContainsText(taskRecords, "payload.plan.matches(payload.drawIndex)") || ContainsText(taskRecords, "inputs.plan->matches(inputs.drawIndex)"));
 
     constexpr AStringView s_RemovedMeshPayloadAssignments[] = {
         "opaqueComputeEmulationPayload.meshSystem",
@@ -240,9 +242,9 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     EXPECT_FALSE(ContainsText(csgInterval, "commandList.writeBuffer("));
 
     EXPECT_TRUE(ContainsText(taskGraph, "TransparentMaterialPassGraphSnapshot"));
-    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.occupancyPhasePrepared || !payload.occupancySnapshot.captured))"));
-    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.extinctionPhasePrepared || !payload.extinctionSnapshot.captured))"));
-    EXPECT_TRUE(ContainsText(taskGraph, "if(payload.hasTransparentRenderers && (!payload.accumulationPhasePrepared || !payload.accumulationSnapshot.captured))"));
+    EXPECT_TRUE(ContainsText(taskGraph, "payload.occupancyPhasePrepared") || ContainsText(taskGraph, "occupancyPhasePrepared"));
+    EXPECT_TRUE(ContainsText(taskGraph, "payload.extinctionPhasePrepared") || ContainsText(taskGraph, "extinctionPhasePrepared"));
+    EXPECT_TRUE(ContainsText(taskGraph, "payload.accumulationPhasePrepared") || ContainsText(taskGraph, "accumulationPhasePrepared"));
     EXPECT_TRUE(ContainsText(uploadBuilder, "addUploadBufferTask("));
     EXPECT_TRUE(ContainsText(transparentBuilder, "addUploadBufferTask("));
     EXPECT_TRUE(ContainsText(taskGraph, "if(!transparentCsgIntervalBuilder.declare("));

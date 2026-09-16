@@ -25,8 +25,7 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C38u; // MTL8 (per-material asset paths)
-inline constexpr u32 s_MaterialMagic = 0x4D544C36u; // MTL6 (added static material resource fixture references)
+inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9 (added static material resource fixture references)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the
 // caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported
@@ -88,17 +87,14 @@ struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};
     NameHash resourceNameHash = {};
+    NameHash fixtureNameHash = {};
     u32 resourceKind = MaterialResourceKind::None;
     u32 resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
     u32 reserved = 0u;
 };
 static_assert(
-    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 4u,
-// Static material resource identity. The renderer resolves fixtureName to a device-lifetime global-heap handle and
-// writes that handle's slot into constantByteOffset; no device-specific descriptor value is serialized here.
-    NameHash fixtureNameHash = {};
-    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u,
+    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 4u + sizeof(u32) * 4u,
     "MaterialResourceReferenceBinary layout drifted"
 );
 static_assert(
@@ -146,7 +142,6 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                 continue;
 
             // Opaque handles are intentionally static constants. A resource in mutable storage would make the
-            // cooked resource contract ambiguous and permit instance data to become a descriptor slot.
             // cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
             if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
@@ -164,25 +159,36 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                     return false;
                 if(
                     resourceReference.resourceKind != expectedKind
-                    || resourceReference.resourceSource != MaterialResourceSource::Asset
-                    !resourceReference.fixtureName
-                    || resourceReference.resourceKind != expectedKind
-                    || !IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName)
                     || resourceReference.constantByteOffset != expectedByteOffset
                 )
                     return false;
 
-                switch(expectedKind){
-                case MaterialResourceKind::SampledImage2D:
-                    if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
+                // The static first slice resolves its fixture at runtime and carries no per-material asset
+                // path; asset-sourced fields carry a typed asset reference instead.
+                if(resourceReference.fixtureName){
+                    if(
+                        resourceReference.resourceSource != MaterialResourceSource::Asset
+                        || !IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName)
+                        || resourceReference.textureAsset.valid()
+                        || resourceReference.samplerAsset.valid()
+                    )
                         return false;
-                    break;
-                case MaterialResourceKind::Sampler:
-                    if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
+                }
+                else{
+                    if(resourceReference.resourceSource != MaterialResourceSource::Asset)
                         return false;
-                    break;
-                default:
-                    return false;
+                    switch(expectedKind){
+                    case MaterialResourceKind::SampledImage2D:
+                        if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
+                            return false;
+                        break;
+                    case MaterialResourceKind::Sampler:
+                        if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
+                            return false;
+                        break;
+                    default:
+                        return false;
+                    }
                 }
 
                 foundReference = true;

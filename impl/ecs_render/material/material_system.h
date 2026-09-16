@@ -118,7 +118,6 @@ public:
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
     [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
-    [[nodiscard]] bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     [[nodiscard]] bool resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo);
     void releaseMaterialResourceFixtures();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();

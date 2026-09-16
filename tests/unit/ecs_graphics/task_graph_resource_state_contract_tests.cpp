@@ -210,10 +210,10 @@ TEST(EcsGraphics, LaggedLightingHistoryConsumersOwnSemanticPriorTokens){
     EXPECT_TRUE(ContainsText(lighting, ".historyReadReadyCompletion = m_deferredLightingHistoryReadReadyCompletion,"));
     EXPECT_TRUE(ContainsText(lighting, ".historyWriterDrainCompletion = &m_deferredLightingHistoryWriterDrainCompletion,"));
     EXPECT_FALSE(ContainsText(lighting, "m_deferredLightingHistoryCompletion"));
-    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryReadReadyCompletion = {};"), 2u);
-    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 2u);
-    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryReadReadyCompletion = {};"), 1u);
-    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 1u);
+    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryReadReadyCompletion = {};"), 1u);
+    EXPECT_EQ(CountText(system, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 1u);
+    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryReadReadyCompletion = {};"), 0u);
+    EXPECT_EQ(CountText(lighting, "m_deferredLightingHistoryWriterDrainCompletion = {};"), 0u);
 
     EXPECT_TRUE(ContainsText(shadowVisibility, "laggedLightingHistoryWriterDrainDependencies"));
     EXPECT_TRUE(ContainsText(

@@ -48,6 +48,19 @@ struct RendererMaterialResourceState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Device-lifetime backing resources for the first material-authored-resource slice. The fixture payloads are shared
+// by all materials, while each MaterialSurfaceInfo receives the matching global-heap slot word in its typed constants.
+struct RendererMaterialResourceFixtureState{
+    Core::TextureHandle checkerRgba8Texture;
+    Core::SamplerHandle linearClampSampler;
+    Core::GpuDescriptorHandle checkerRgba8HeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle linearClampHeapHandle = Core::GpuDescriptorHandle::invalid();
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class RendererMaterialState final : NoCopy{
     friend class RendererMaterialSystem;
 
@@ -68,6 +81,7 @@ private:
     Core::InputLayoutHandle m_emulationInputLayout;
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
+    RendererMaterialResourceFixtureState m_resourceFixtures;
     HashMap<MaterialPipelineKey, MaterialPipelineResources, MaterialPipelineKeyHasher, MaterialPipelineKeyEqualTo, Core::Alloc::GlobalArena> m_pipelines;
     HashMap<Core::ECS::EntityID, MaterialInstanceMutableCacheEntry, Hasher<Core::ECS::EntityID>, EqualTo<Core::ECS::EntityID>, Core::Alloc::GlobalArena> m_instanceMutableCache;
     HashMap<Name, RenderPath::Enum, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_loggedMaterialPaths;

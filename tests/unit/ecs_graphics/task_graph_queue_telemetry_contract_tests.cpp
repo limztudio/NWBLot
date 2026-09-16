@@ -197,7 +197,7 @@ TEST(EcsGraphics, DeferredGraphFrameTelemetryUsesCompiledPhysicalQueueSnapshots)
         "    usize incomingRepeatedOwnershipTransferSignatureCount = 0u;\n"
         "    usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;\n"
         "    usize concurrentSharingAdviceResourceCount = 0u;\n"
-        "    u16 deviceGeneration = 0u;\n\n"
+        "\n"
         "    [[nodiscard]] bool valid()const noexcept{"
     ));
     EXPECT_TRUE(ContainsText(compiledGraph, "if(!valid())\n        return {};"));

@@ -37,6 +37,7 @@ struct CollectionContext{
     TextureVector textures{ testArena.arena };
     Vector<Core::Assets::AssetRef<Texture>, Core::Alloc::GlobalArena> textureAssets{ testArena.arena };
     RendererMaterialResourceState resources{ testArena.arena };
+    RendererMaterialResourceFixtureState fixtures;
     MaterialSurfaceInfoMap materials{ 0u, Hasher<Name>{}, EqualTo<Name>{}, testArena.arena };
 
     [[nodiscard]] Core::TextureHandle makeTexture(const Name& identity){
@@ -101,7 +102,7 @@ struct CollectionContext{
         return collector.collect(
             materials.at(materialName),
             [&](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
-                return AppendPreparedMaterialSurfaceSampledTextures(material, resources, pending);
+                return AppendPreparedMaterialSurfaceSampledTextures(material, resources, fixtures, pending);
             }
         );
     }
@@ -135,7 +136,7 @@ TEST(MaterialSampledTextureCollection, PassKeepsFirstHandleOrderAcrossMeshComput
     const MaterialPassDrawItems* sets[] = { &firstSet, &secondSet };
     ScratchTextureVector output(scratch);
     output.push_back(context.textures[4u]);
-    ASSERT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, LengthOf(sets), output, scratch));
+    ASSERT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, LengthOf(sets), output, scratch));
     ASSERT_EQ(output.size(), 4u);
     EXPECT_EQ(output[0u], context.textures[2u]);
     EXPECT_EQ(output[1u], context.textures[0u]);
@@ -157,17 +158,17 @@ TEST(MaterialSampledTextureCollection, PassFailureKeepsOnlyTheSequentialPrefixAn
     AppendDraw(secondSet.computeDrawItems, second);
     ScratchTextureVector output(scratch);
     const MaterialPassDrawItems* sets[] = { &firstSet, &secondSet };
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, 2u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 2u, output, scratch));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
     sets[1u] = nullptr;
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, 2u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 2u, output, scratch));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, nullptr, 1u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, nullptr, 1u, output, scratch));
     EXPECT_TRUE(output.empty());
     output.push_back(context.textures[1u]);
-    EXPECT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, nullptr, 0u, output, scratch));
+    EXPECT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, nullptr, 0u, output, scratch));
     EXPECT_TRUE(output.empty());
 }
 
@@ -195,7 +196,7 @@ TEST(MaterialSampledTextureCollection, SurfaceRechecksEveryCurrentResourceAndPre
         Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/resource_failure"));
         ScratchTextureVector output(scratch);
         MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(output, scratch);
-        EXPECT_FALSE(AppendPreparedMaterialSurfaceSampledTextures(material, context.resources, collector));
+        EXPECT_FALSE(AppendPreparedMaterialSurfaceSampledTextures(material, context.resources, context.fixtures, collector));
         ASSERT_EQ(output.size(), failure == 0u ? 0u : 1u);
         if(!output.empty())
             EXPECT_EQ(output[0u], context.textures[0u]);
@@ -213,7 +214,7 @@ TEST(MaterialSampledTextureCollection, SamplersKeepTheirExistingSkipContractAndP
     Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/sampler"));
     ScratchTextureVector output(scratch);
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(output, scratch);
-    ASSERT_TRUE(AppendPreparedMaterialSurfaceSampledTextures(material, context.resources, collector));
+    ASSERT_TRUE(AppendPreparedMaterialSurfaceSampledTextures(material, context.resources, context.fixtures, collector));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
     EXPECT_EQ(output[0u]->getCreationDescription().name, NAME_NONE);
@@ -337,14 +338,14 @@ TEST(MaterialSampledTextureCollection, PromotedPassPreservesFirstPointersAndReva
     AppendDraw(draws.computeDrawItems, alias);
     const MaterialPassDrawItems* sets[] = { &draws };
     ScratchTextureVector output(scratch);
-    ASSERT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, 1u, output, scratch));
+    ASSERT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 1u, output, scratch));
     ASSERT_EQ(output.size(), 80u);
     for(usize index = 0u; index < output.size(); ++index)
         EXPECT_EQ(output[index], context.textures[79u - index]);
 
     context.resources.textureAssetCache.at(context.textureAssets[80u].name())->sampledImageHeapHandle =
         Core::GpuDescriptorHandle::invalid();
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, 1u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 1u, output, scratch));
     ASSERT_EQ(output.size(), 80u);
     for(usize index = 0u; index < output.size(); ++index)
         EXPECT_EQ(output[index], context.textures[79u - index]);
@@ -435,7 +436,7 @@ TEST(MaterialSampledTextureCollection, UnexpectedResolverUnwindReleasesPendingHa
         unexpectedSuccess = collector.collect(
             context.materials.at(material),
             [&](const MaterialSurfaceInfo& info, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){
-                if(!AppendPreparedMaterialSurfaceSampledTextures(info, context.resources, pending))
+                if(!AppendPreparedMaterialSurfaceSampledTextures(info, context.resources, context.fixtures, pending))
                     return false;
                 throw RuntimeException("terminal sampled texture resolver failure");
             }
@@ -506,7 +507,7 @@ static void BenchmarkCollection(
             }
             else{
                 ScratchTextureVector output(scratch);
-                if(!GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, sets, 1u, output, scratch))
+                if(!GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 1u, output, scratch))
                     success = false;
                 observedCount += output.size();
             }

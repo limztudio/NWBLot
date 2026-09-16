@@ -749,6 +749,7 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     AString queueSource;
     AString submissionSource;
     AString descriptorHeapSource;
+    AString descriptorHeapRetirementSource;
     AString trackedCommandBufferSource;
     AString stateTrackingSource;
     AString commandMarkersSource;
@@ -765,6 +766,10 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
         descriptorHeapSource
     ));
     ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_retirement.cpp",
+        descriptorHeapRetirementSource
+    ));
+    ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "tracked_command_buffer.cpp",
         trackedCommandBufferSource
     ));
@@ -779,6 +784,7 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     const AStringView queue(queueSource.data(), queueSource.size());
     const AStringView submission(submissionSource.data(), submissionSource.size());
     const AStringView descriptorHeap(descriptorHeapSource.data(), descriptorHeapSource.size());
+    const AStringView descriptorHeapRetirement(descriptorHeapRetirementSource.data(), descriptorHeapRetirementSource.size());
     const AStringView trackedCommandBuffer(trackedCommandBufferSource.data(), trackedCommandBufferSource.size());
     const AStringView stateTracking(stateTrackingSource.data(), stateTrackingSource.size());
     const AStringView commandMarkers(commandMarkersSource.data(), commandMarkersSource.size());
@@ -894,12 +900,12 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     EXPECT_EQ(queue.substr(queueCommitBegin, unregisterBegin - queueCommitBegin).find("fetch_sub("), AStringView::npos);
     EXPECT_NE(backendHeader.find("void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;"), AStringView::npos);
 
-    const usize heapCommitBegin = descriptorHeap.find("void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(");
-    const usize heapDiscardBegin = descriptorHeap.find("void GpuDescriptorHeap::discardCommandBufferUse(", heapCommitBegin);
+    const usize heapCommitBegin = descriptorHeapRetirement.find("void GpuDescriptorHeap::commitCommandBufferUseSubmissionLocked(");
+    const usize heapDiscardBegin = descriptorHeapRetirement.find("void GpuDescriptorHeap::discardCommandBufferUse(", heapCommitBegin);
     ASSERT_NE(heapCommitBegin, AStringView::npos);
     ASSERT_NE(heapDiscardBegin, AStringView::npos);
     EXPECT_EQ(
-        descriptorHeap.substr(heapCommitBegin, heapDiscardBegin - heapCommitBegin).find("NWB_LOGGER_"),
+        descriptorHeapRetirement.substr(heapCommitBegin, heapDiscardBegin - heapCommitBegin).find("NWB_LOGGER_"),
         AStringView::npos
     );
 

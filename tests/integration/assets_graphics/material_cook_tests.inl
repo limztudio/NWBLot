@@ -154,20 +154,6 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     EXPECT_TRUE(ReadTextFile(resourceGeneratedIncludePath, resourceGeneratedSource));
     const AStringView resourceGeneratedSourceView(resourceGeneratedSource.data(), resourceGeneratedSource.size());
     const AStringView resourceGeneratedSnippets[] = {
-    Path fixtureRoot(testArena.arena);
-    Path fixtureOutputDirectory(testArena.arena);
-        s_StaticResourceFixtureMaterialBindSource,
-        s_StaticResourceFixtureMaterialMeta,
-        s_StaticResourceFixtureShaderProbeSource,
-        "material_bind_static_resource_fixture_integration",
-        fixtureRoot,
-        fixtureOutputDirectory
-    const Path fixtureGeneratedIncludePath =
-        fixtureRoot / "cache" / "tests" / "material_bind_includes"
-    NWB::Impl::ShaderCook::CookString fixtureGeneratedSource(testArena.arena);
-    EXPECT_TRUE(ReadTextFile(fixtureGeneratedIncludePath, fixtureGeneratedSource));
-    const AStringView fixtureGeneratedSourceView(fixtureGeneratedSource.data(), fixtureGeneratedSource.size());
-    const AStringView fixtureGeneratedSnippets[] = {
         "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
         "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
         "NwbHeapSampledImage2DNonUniform",
@@ -203,16 +189,52 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[1u].resourceSource,
             NWB::Impl::MaterialResourceSource::Asset
+        );
+    }
+
+    Path fixtureRoot(testArena.arena);
+    Path fixtureOutputDirectory(testArena.arena);
+    EXPECT_TRUE(CookMaterialBindMaterialIntegrationWithPixelSource(
+        s_StaticResourceFixtureMaterialBindSource,
+        s_StaticResourceFixtureMaterialMeta,
+        s_StaticResourceFixtureShaderProbeSource,
+        "material_bind_static_resource_fixture_integration",
+        testArena,
+        fixtureRoot,
+        fixtureOutputDirectory
+    ));
+
+    const Path fixtureGeneratedIncludePath =
+        fixtureRoot / "cache" / "tests" / "material_bind_includes"
+        / "project" / "material_interfaces" / "test_surface.bind"
+    ;
+    NWB::Impl::ShaderCook::CookString fixtureGeneratedSource(testArena.arena);
+    EXPECT_TRUE(ReadTextFile(fixtureGeneratedIncludePath, fixtureGeneratedSource));
+    const AStringView fixtureGeneratedSourceView(fixtureGeneratedSource.data(), fixtureGeneratedSource.size());
+    const AStringView fixtureGeneratedSnippets[] = {
+        "Texture2D<float4> nwbMaterialBindLoadSurfaceBaseColorMap",
+        "SamplerState nwbMaterialBindLoadSurfaceBaseColorSampler",
+        "NwbHeapSampledImage2DNonUniform",
+        "NwbHeapSamplerNonUniform",
+    };
     CheckGeneratedSourceContainsAll(fixtureGeneratedSourceView, fixtureGeneratedSnippets);
+
     UniquePtr<NWB::Core::Assets::IAsset> loadedFixtureAsset;
+    EXPECT_TRUE(LoadCookedMaterial(
+        testArena,
         fixtureOutputDirectory,
+        Name("project/materials/test_material"),
         loadedFixtureAsset
+    ));
     if(loadedFixtureAsset){
         EXPECT_EQ(loadedFixtureAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& fixtureMaterial = static_cast<const NWB::Impl::Material&>(*loadedFixtureAsset);
         ASSERT_EQ(fixtureMaterial.resourceReferences().size(), 2u);
+        EXPECT_EQ(
             fixtureMaterial.resourceReferences()[0u].fixtureName,
             Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8)
+        );
+        EXPECT_EQ(
             fixtureMaterial.resourceReferences()[1u].fixtureName,
             Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp)
         );

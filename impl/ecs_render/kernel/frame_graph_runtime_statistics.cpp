@@ -195,13 +195,13 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
             .deviceGeneration = statistics.queue.deviceGeneration,
         },
         .queueClass = queueClass,
+        .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
+        .recoverySubmission = statistics.isRecoverySubmission,
         .plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),
         .sameQueueWaitElisionCount = static_cast<u64>(statistics.sameQueueWaitElisionCount),
         .timelineWaitCount = static_cast<u64>(statistics.timelineWaitCount),
         .mergedTimelineWaitCount = static_cast<u64>(statistics.mergedTimelineWaitCount),
         .submissionSeconds = statistics.submissionSeconds,
-        .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
-        .recoverySubmission = statistics.isRecoverySubmission,
     };
     if(!Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(result))
         return {};

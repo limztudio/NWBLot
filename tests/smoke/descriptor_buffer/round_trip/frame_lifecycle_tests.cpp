@@ -116,15 +116,14 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
     ASSERT_TRUE(frame.update(0.f));
     EXPECT_EQ(callbackState.invocationCount, 1u);
     const Perf::TimingView disabledTiming = frame.perfSession().cpuTimingView();
-    EXPECT_EQ(disabledTiming.scopeCount(), 0u);
-    EXPECT_FALSE(disabledTiming.stats(Name("frame.project_update")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.frame")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.animate")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.begin_frame")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.frame_preamble")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.render")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.present")).valid());
-    EXPECT_FALSE(disabledTiming.stats(Name("graphics.garbage_collect")).valid());
+    EXPECT_EQ(disabledTiming.stats(Name("frame.project_update")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.frame")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.animate")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.begin_frame")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.frame_preamble")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.render")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.present")).sampleCount, 0u);
+    EXPECT_EQ(disabledTiming.stats(Name("graphics.garbage_collect")).sampleCount, 0u);
 
     Perf::CaptureOptions cpuCapture;
     cpuCapture.enabled = true;

@@ -185,7 +185,7 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_caustics.cpp",
         causticsSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "software_caustics_resolve_chain.cpp", resolveSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "caustics_resolve_chain.cpp", resolveSource));
     const AStringView resolve(resolveSource.data(), resolveSource.size());
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView caustics(causticsSource.data(), causticsSource.size());
@@ -210,7 +210,7 @@ TEST(EcsGraphics, SoftwareShadowEffectsTopologyUsesSemanticTaskAnchors){
     );
     EXPECT_TRUE(ContainsText(caustics, "resolveChainInputs.stateSources = scratchStateSources;"));
     EXPECT_TRUE(ContainsText(caustics, "resolveChainInputs.stateSourceCount = scratchStateSourceCount;"));
-    EXPECT_EQ(CountText(resolve, ".setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)"), 2u);
+    EXPECT_EQ(CountText(resolve, ".setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)"), 1u);
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_TRUE(ContainsText(
         system,

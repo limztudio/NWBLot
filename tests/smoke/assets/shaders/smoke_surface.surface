@@ -12,13 +12,6 @@ NwbMeshSurface nwbMaterialSurface(){
     NwbMeshSurface result = nwbMakeMeshSurface(baseColor, inNormal);
     nwbSetMeshSurfaceReflection(result, runtime.specular_f0, runtime.perceptual_roughness);
     return result;
-    const half4 fixtureColor = half4(nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
-        nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
-        inUv0,
-        0.0
-    ));
-    const half3 baseColor = clamp((surface.base_color * runtime.color_tint * fixtureColor).rgb, half3(0.0h), half3(1.0h));
-    return nwbMakeMeshSurface(baseColor, inNormal);
 }
 
 

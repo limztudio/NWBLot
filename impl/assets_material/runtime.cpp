@@ -282,7 +282,8 @@ static bool ReadMaterialTypedLayout(
         const MaterialResourceSource::Enum resourceSource =
             static_cast<MaterialResourceSource::Enum>(resourceReferenceBinary.resourceSource);
         const Name resourceName(resourceReferenceBinary.resourceNameHash);
-        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceSource, resourceName)){
+        const Name fixtureName(resourceReferenceBinary.fixtureNameHash);
+        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceSource, resourceName, fixtureName)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity"), i);
             return false;
         }
@@ -292,6 +293,7 @@ static bool ReadMaterialTypedLayout(
         resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
         resourceReference.resourceKind = resourceKind;
         resourceReference.resourceSource = resourceSource;
+        resourceReference.fixtureName = fixtureName;
         resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
         switch(resourceKind){
         case MaterialResourceKind::SampledImage2D:
@@ -308,9 +310,6 @@ static bool ReadMaterialTypedLayout(
     }
 
     if(!ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, MakeNotNull(NWB_TEXT("Material::loadBinary"))))
-        resourceReference.fixtureName = Name(resourceReferenceBinary.fixtureNameHash);
-        resourceReference.resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
-    if(!ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, NWB_TEXT("Material::loadBinary")))
         return false;
     if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));

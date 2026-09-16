@@ -57,7 +57,7 @@ AStringView MaterialBindField::defaultArgument()const{
 
 
 AStringView MaterialBindField::fixtureArgument()const{
-    const MaterialBindAttribute* attribute = findAttribute(__hidden_bind::s_FixtureAttribute);
+    const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_FixtureAttribute);
     return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
 }
 
@@ -224,7 +224,8 @@ bool ApplyMaterialBindTypedLayoutParameters(
     Material::TypedBlockByteVector& inOutBlockBytes,
     Material::ResourceReferenceVector& outResourceReferences
 ){
-    outResourceReferences.clear();
+    // Seed with the layout's static fixture references; per-material asset-path parameters append below.
+    outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
     for(const auto& [parameterName, parameterValue] : parameters){
         if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(
             layout,

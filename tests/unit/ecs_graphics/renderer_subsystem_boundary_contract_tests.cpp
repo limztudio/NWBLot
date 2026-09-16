@@ -1417,9 +1417,40 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
         liveReadinessCount += CountText(compactTaskSource, "materialPassDrawBuffersReady(");
         capturedContextCount += CountText(compactTaskSource, "payload.frameBindings};");
     }
-    EXPECT_EQ(capturedReadinessCount, 16u);
+    // The AVBOIT occupancy/extinction/accumulation compute-emulation bodies are deduplicated into
+    // compute_emulation_record, which keeps the captured-snapshot readiness plus context there.
+    const TestPath sharedComputeEmulationPath =
+        repoRoot / "impl" / "ecs_render" / "avboit" / "compute_emulation_record.cpp";
+    AString sharedComputeEmulationSource;
+    ASSERT_TRUE(ReadTextFile(sharedComputeEmulationPath, sharedComputeEmulationSource));
+    const AString compactSharedComputeEmulationStorage = CompactSource(
+        AStringView(sharedComputeEmulationSource.data(), sharedComputeEmulationSource.size())
+    );
+    const AStringView compactSharedComputeEmulation(
+        compactSharedComputeEmulationStorage.data(),
+        compactSharedComputeEmulationStorage.size()
+    );
+    capturedReadinessCount += CountText(compactSharedComputeEmulation, "frameBindings->frameReady(");
+    liveReadinessCount += CountText(compactSharedComputeEmulation, "materialPassDrawBuffersReady(");
+    const TestPath sharedComputeEmulationHeaderPath =
+        repoRoot / "impl" / "ecs_render" / "avboit" / "compute_emulation_record.h";
+    AString sharedComputeEmulationHeaderSource;
+    ASSERT_TRUE(ReadTextFile(sharedComputeEmulationHeaderPath, sharedComputeEmulationHeaderSource));
+    const AString compactSharedComputeEmulationHeaderStorage = CompactSource(
+        AStringView(sharedComputeEmulationHeaderSource.data(), sharedComputeEmulationHeaderSource.size())
+    );
+    const AStringView compactSharedComputeEmulationHeader(
+        compactSharedComputeEmulationHeaderStorage.data(),
+        compactSharedComputeEmulationHeaderStorage.size()
+    );
+    capturedContextCount += CountText(compactSharedComputeEmulationHeader, "&payload.frameBindings,");
+    // Inline task sources keep 10 readiness checks; the shared helper keeps 2 per record core
+    // (regular plus shared phases) covering the 3 deduplicated AVBOIT task sources, and its
+    // FromPayload bridge passes the captured payload snapshot 3 times (occupancy, extinction,
+    // accumulation) alongside the 10 inline payload contexts.
+    EXPECT_EQ(capturedReadinessCount, 12u);
     EXPECT_EQ(liveReadinessCount, 0u);
-    EXPECT_EQ(capturedContextCount, 13u);
+    EXPECT_EQ(capturedContextCount, 2u);
 
     EXPECT_EQ(CountText(compactPrefix, ".frameBindings=frameBindings;"), 8u);
     for(const StringView payloadStorage : {

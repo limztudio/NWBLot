@@ -331,7 +331,7 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
         const usize recordEnd = source.find(endMarker, recordBegin);
         ASSERT_NE(recordEnd, AStringView::npos);
         const AStringView record = source.substr(recordBegin, recordEnd - recordBegin);
-        EXPECT_GE(CountText(record, "payload.csgResources"), 1u);
+        EXPECT_GE(CountText(record, "payload.csgResources") + CountText(record, "inputs.csgResources") + CountText(record, "RecordAvboitComputeEmulationFromPayload"), 1u);
         EXPECT_FALSE(ContainsText(record, "csgGraphResourceSnapshot("));
     };
     expectRecordUsesOwnedSnapshot(taskRecords, "bool GbufferGraphTask::record(", "NWB_IMPL_END");

@@ -774,9 +774,10 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
-            // Static resource slots are fixed by the cooked fixture reference and are never material .nwb
-            // parameters.  Excluding them here prevents an authored uint value from being mistaken for a heap slot.
-            if(IsMaterialLayoutResourceFieldType(field.fieldType))
+            // Fixture-backed resource slots are fixed by the cooked fixture reference and are never material
+            // .nwb parameters. Bare resource fields still accept per-material asset paths, so only the
+            // fixture-backed ones are excluded from the parameter lookup.
+            if(IsMaterialLayoutResourceFieldType(field.fieldType) && !bindField.fixtureArgument().empty())
                 continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' "
@@ -1135,9 +1136,13 @@ bool BuildMaterialBindTypedLayoutImpl(
             }
 
             outLayout.typedLayoutFields.push_back(field);
+            block.byteSize = fieldOffset + fieldByteSize;
             if(IsMaterialLayoutResourceFieldType(fieldType)){
                 const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
                 const AStringView fixtureArgument = bindField.fixtureArgument();
+                // Bare resource fields carry no fixture; each material supplies its own asset path.
+                if(fixtureArgument.empty())
+                    continue;
                 const Name fixtureName(fixtureArgument);
                 if(!IsValidMaterialResourceKind(resourceKind) || !fixtureName || !IsKnownMaterialResourceFixture(resourceKind, fixtureArgument)){
                     NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid fixture for '{}'")
@@ -1161,10 +1166,10 @@ bool BuildMaterialBindTypedLayoutImpl(
                 resourceReference.fieldName = field.fieldName;
                 resourceReference.fixtureName = fixtureName;
                 resourceReference.resourceKind = resourceKind;
+                resourceReference.resourceSource = MaterialResourceSource::Asset;
                 resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
                 outLayout.resourceReferences.push_back(resourceReference);
             }
-            block.byteSize = fieldOffset + fieldByteSize;
         }
 
         u32 alignedBlockByteSize = 0u;

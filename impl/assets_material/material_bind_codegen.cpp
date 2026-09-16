@@ -25,7 +25,6 @@ namespace MaterialBindDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace __hidden_bind{
 
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
@@ -37,7 +36,6 @@ bool ParseMaterialBindResourceFieldTypeText(
 
 
 };
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -47,8 +45,6 @@ namespace MaterialCookDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-namespace __hidden_cook{
 
 static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
 static constexpr u32 s_MaterialBindByteBitCount = 8u;
@@ -205,23 +201,6 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
 
     return s_TypeNames[static_cast<u32>(fieldType) - static_cast<u32>(MaterialLayoutFieldType::Bool)];
 }
-
-static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType){
-    switch(fieldType){
-    case MaterialLayoutFieldType::SampledImage2D: return "Texture2D<float4>";
-    case MaterialLayoutFieldType::Sampler: return "SamplerState";
-    default: return AStringView();
-    }
-}
-
-static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFieldType::Enum fieldType){
-    switch(fieldType){
-    case MaterialLayoutFieldType::SampledImage2D: return "NwbHeapSampledImage2DNonUniform";
-    case MaterialLayoutFieldType::Sampler: return "NwbHeapSamplerNonUniform";
-    default: return AStringView();
-    }
-}
-
 
 static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType){
     switch(fieldType){
@@ -683,27 +662,6 @@ static bool AppendMaterialBindResourceFieldAccessor(
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    const AStringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
-    const AStringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
-    if(slangTypeName.empty() || heapAccessorName.empty())
-        return false;
-
-    inOutSource += slangTypeName;
-    inOutSource += ' ';
-    inOutSource += functionName;
-    inOutSource += "(const NwbMeshInstanceData instance){\n";
-    inOutSource += "    return ";
-    inOutSource += heapAccessorName;
-    inOutSource += "(nwbMaterialLoadConstantUInt(instance, ";
-    inOutSource += byteOffsetSymbol;
-    inOutSource += "));\n";
-    inOutSource += "}\n\n";
-    return true;
-}
-
 static bool AppendMaterialBindGeneratedInstance(
     CookArena& arena,
     const AStringView includePath,
@@ -872,7 +830,6 @@ static bool AppendMaterialBindGeneratedInstance(
     for(const MaterialBindField& field : bindStruct.fields){
         MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
         if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
-        if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
             continue;
 
         const CookString functionName =
@@ -981,7 +938,6 @@ bool BuildMaterialBindIncludeSourceImpl(
         for(const MaterialBindField& field : bindStruct.fields){
             MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
             if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
-            if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
                 continue;
 
             outSource += "    ";

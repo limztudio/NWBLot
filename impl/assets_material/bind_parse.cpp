@@ -356,21 +356,10 @@ static bool ValidateMaterialBindStructAttributes(
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
-
-    // Resource fields declare only their type; materials supply the asset path.
-    if(isResourceField){
-        if(field.attributes.empty())
-            return true;
-
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must not declare attributes; set its engine or project asset path in material parameters")
-            , PathToString<tchar>(bindFilePath)
-            , StringConvert(bindStruct.name)
-            , StringConvert(field.name)
-        );
-        return false;
-    }
-
-    u32 attributeCount = 0u;
+    // Resource fields accept two shapes: a fixture attribute for the static first-slice catalog, or no
+    // attributes when each material supplies its own engine/project asset path for the field.
+    if(isResourceField && field.attributes.empty())
+        return true;
     const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);
     const AStringView requiredAttribute = isResourceField ? s_FixtureAttribute : s_DefaultAttribute;
     bool foundRequiredAttribute = false;
@@ -385,9 +374,6 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             );
             return false;
         }
-        ++attributeCount;
-        if(attributeCount > 1u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare exactly one default attribute")
         if(foundRequiredAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' declares {} more than once")
                 , PathToString<tchar>(bindFilePath)
@@ -406,24 +392,19 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             );
             return false;
         }
+        foundRequiredAttribute = true;
     }
 
-    if(attributeCount == 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a default attribute")
+    if(!foundRequiredAttribute){
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)
+            , StringConvert(requiredAttribute)
         );
         return false;
     }
 
-    return true;
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' {} attribute requires one non-empty string argument")
-                , StringConvert(requiredAttribute)
-        foundRequiredAttribute = true;
-    if(!foundRequiredAttribute){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' must declare a {} attribute")
-            , StringConvert(requiredAttribute)
     if(!isResourceField)
         return true;
     const AStringView fixtureName = field.fixtureArgument();

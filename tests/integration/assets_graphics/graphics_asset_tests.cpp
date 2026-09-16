@@ -338,22 +338,36 @@ struct NwbAssetResourceSurfaceMaterial{
 
     texture2d base_color_map;
 
-static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
-struct NwbFixtureSurfaceMaterial{
-    [fixture("builtin/material_fixture/checker_rgba8")]
-    [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
 };
 
 [material_mutable]
 struct NwbAssetResourceRuntimeMaterial{
-struct NwbFixtureRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
 
 NwbAssetResourceSurfaceMaterial surface;
 NwbAssetResourceRuntimeMaterial runtime;
+
+)NWB_BIND";
+
+static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbFixtureSurfaceMaterial{
+    [fixture("builtin/material_fixture/checker_rgba8")]
+    texture2d base_color_map;
+    [fixture("builtin/material_fixture/linear_clamp")]
+    sampler base_color_sampler;
+};
+
+[material_mutable]
+struct NwbFixtureRuntimeMaterial{
+    [default("float(1.0)")]
+    float fade_alpha;
+};
+
+NwbFixtureSurfaceMaterial surface;
+NwbFixtureRuntimeMaterial runtime;
 
 )NWB_BIND";
 
@@ -379,9 +393,6 @@ NwbSecondAssetResourceRuntimeMaterial runtime;
 )NWB_BIND";
 
 static constexpr AStringView s_AssetResourceMaterialMeta = R"NWB_META(material asset;
-NwbFixtureSurfaceMaterial surface;
-NwbFixtureRuntimeMaterial runtime;
-static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
@@ -401,6 +412,28 @@ asset.parameters = {
         "base_color_map": "project/textures/test_checker",
         "base_color_sampler": "engine/samplers/linear_clamp",
     },
+    "runtime": {
+        "fade_alpha": "float(0.75)",
+    },
+};
+
+)NWB_META";
+
+static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
+
+asset.interface = "project/material_interfaces/test_surface.bind";
+asset.bxdf = "project/shaders/material_bxdf.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+
+asset.shaders = {
+    "mesh": "project/shaders/material_mesh",
+    "ps": "project/shaders/material_ps",
+};
+asset.shader_variant = "default";
+
+asset.parameters = {
     "runtime": {
         "fade_alpha": "float(0.75)",
     },
@@ -556,21 +589,32 @@ asset.parameters = {
 )NWB_META";
 
 static constexpr AStringView s_AssetResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
-static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbAssetResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const float4 sampledColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
-    const NwbFixtureSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
         nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
         inUv0,
         0.0
     );
     return nwbMakeMeshSurface(half3(surface.base_color.rgb * sampledColor.rgb), inNormal);
-    return nwbMakeMeshSurface(surface.base_color.rgb * fixtureColor.rgb, inNormal);
+}
+
+)NWB_SLANG";
+
+static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+#include "project/material_interfaces/test_surface.bind"
+
+NwbMeshSurface nwbMaterialSurface(){
+    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
+    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
+        nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
+        inUv0,
+        0.0
+    );
+    return nwbMakeMeshSurface(half3(fixtureColor.rgb), inNormal);
 }
 
 )NWB_SLANG";

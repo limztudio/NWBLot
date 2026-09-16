@@ -182,6 +182,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
 
     AString heapHeaderSource;
     AString heapSource;
+    AString heapRetirementSource;
     AString descriptorWriteSource;
     AString slotAllocatorSource;
     AString nativeBindingSource;
@@ -190,6 +191,10 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     AString rayTracingSmokeSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", heapHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_retirement.cpp",
+        heapRetirementSource
+    ));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_descriptor_buffer.cpp",
         descriptorWriteSource
@@ -212,6 +217,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     ));
     const AStringView heapHeader(heapHeaderSource.data(), heapHeaderSource.size());
     const AStringView heap(heapSource.data(), heapSource.size());
+    const AStringView heapRetirement(heapRetirementSource.data(), heapRetirementSource.size());
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_slot_allocator.cpp",
         slotAllocatorSource
@@ -251,13 +257,14 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(slotAllocator, "!freeList.initialize(arena, newCapacity)"));
     EXPECT_TRUE(ContainsText(slotAllocator, "|| !slotStates.initialize(arena, newCapacity)"));
     EXPECT_TRUE(ContainsText(slotAllocator, "|| !allocatedClasses.initialize(arena, newCapacity)"));
-    EXPECT_TRUE(ContainsText(heap, "allocator.freeList[allocator.freeCount] = retired.handle.slot();"));
+    EXPECT_TRUE(ContainsText(heapRetirement, "allocator.freeList[allocator.freeCount] = retired.handle.slot();")
+        || ContainsText(heap, "allocator.freeList[allocator.freeCount] = retired.handle.slot();"));
 
-    const usize releasePendingBegin = heap.find("void GpuDescriptorHeap::releasePendingRecordingLease(");
-    const usize collectRetiredBegin = heap.find("void GpuDescriptorHeap::collectRetired(){", releasePendingBegin);
+    const usize releasePendingBegin = heapRetirement.find("void GpuDescriptorHeap::releasePendingRecordingLease(");
+    const usize collectRetiredBegin = heapRetirement.find("void GpuDescriptorHeap::collectRetired(){", releasePendingBegin);
     ASSERT_NE(releasePendingBegin, AStringView::npos);
     ASSERT_NE(collectRetiredBegin, AStringView::npos);
-    const AStringView releasePending = heap.substr(releasePendingBegin, collectRetiredBegin - releasePendingBegin);
+    const AStringView releasePending = heapRetirement.substr(releasePendingBegin, collectRetiredBegin - releasePendingBegin);
     EXPECT_TRUE(ContainsText(releasePending, "NothrowScopedLock lock(m_mutex);"));
     EXPECT_TRUE(ContainsText(releasePending, "TerminateInvariant();"));
     EXPECT_FALSE(ContainsText(releasePending, "AbortInvariant"));

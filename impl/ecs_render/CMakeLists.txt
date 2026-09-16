@@ -135,6 +135,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_resource_sets.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/task_graph_prefix_tasks.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/task_graph_prefix_tasks.h"
+    "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_shared.h"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_graph_caustics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_post_gbuffer_normalize_task.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_post_gbuffer_normalize_task.h"

@@ -33,9 +33,9 @@ private:
     struct BufferRequest{
         const Core::BufferHandle* source = nullptr;
         Core::GpuGraphResourceId resource;
+        bool listedForTrace = false;
         u8 requestedRoles = 0u;
         u8 selectedRoles = 0u;
-        bool listedForTrace = false;
     };
     struct InlineRequest{
         Core::Buffer* buffer = nullptr;

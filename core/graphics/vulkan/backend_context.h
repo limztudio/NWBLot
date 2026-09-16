@@ -347,10 +347,10 @@ private:
     u64 m_nextFramePresentationClaimIdentity = 0u;
     u64 m_framePresentationClaimIdentity = 0u;
     u32 m_framePresentationSwapChainIndex = Limit<u32>::s_Max;
-    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
     bool m_framePresentationClaimIdentityExhausted = false;
     bool m_frameAcquired = false;
     bool m_frameAbandonmentComplete = false;
+    FramePresentationSignalState m_framePresentationSignalState = FramePresentationSignalState::Idle;
 
     ::Queue<EventQueryHandle, Alloc::GlobalArena> m_framesInFlight;
     Vector<EventQueryHandle, Alloc::GlobalArena> m_queryPool;
@@ -361,11 +361,11 @@ private:
     u32 m_maxFramesInFlight = s_MaxFramesInFlight;
 
     Futex m_swapChainLifecycleMutex;
+    u64 m_swapChainLifecycleEpoch = 0u;
     SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
     bool m_lifecycleDrainActive = false;
     bool m_swapChainMutableFormatSupported = false;
     bool m_hdr10ColorSpaceExtensionEnabled = false;
-    u64 m_swapChainLifecycleEpoch = 0u;
     // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
     // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
     Futex m_framePresentationMutex;

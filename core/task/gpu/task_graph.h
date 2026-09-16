@@ -625,9 +625,9 @@ private:
 private:
     struct GpuTaskNode{
         Name identity = NAME_NONE;
+        GpuTaskTimingMetadata timing;
         GpuQueueRequest queue;
         GpuTaskSchedulingHint scheduling;
-        GpuTaskTimingMetadata timing;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 dependencyOffset = 0u;
@@ -678,14 +678,14 @@ private:
         u32 initialOwnerHandoffSourceCount = 0u;
         u32 queueFamilyIndexOffset = 0u;
         u32 queueFamilyIndexCount = 0u;
+        GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
+        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+        u16 deviceGeneration = 0u;
+        bool usesConcurrentSharing = false;
+        bool hasQueueAdmission = false;
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
         GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
-        u16 deviceGeneration = 0u;
-        GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
-        ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-        bool usesConcurrentSharing = false;
-        bool hasQueueAdmission = false;
     };
 
     struct ResourcePointerKey{

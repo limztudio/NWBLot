@@ -524,8 +524,8 @@ private:
     bool m_deferredFrameRecoveryArmed = false;
     bool m_deferredFrameRecoveryRetiresTiming = false;
     bool m_deferredLightingTaskGraphValid = false;
-    Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
     bool m_deferredPresentationOverlayRequired = false;
+    Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
 
 private:
     RendererMeshState m_meshState;
@@ -556,16 +556,16 @@ private:
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
     ReflectionSettings m_reflectionSettings;
+    u32 m_reflectionFrameIndex = 0u;
     bool m_preparedReflectionSceneAvailable = false;
     bool m_reflectionHardwareLogged = false;
     bool m_reflectionFallbackLogged = false;
-    u32 m_reflectionFrameIndex = 0u;
     bool m_refractionEnabled = true;
     bool m_refractionHardwareLogged = false;
     bool m_refractionScreenLogged = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
-    u64 m_laggedLightingReportGeneration = 0u;
     bool m_laggedLightingCurrentFrameAcceptancePending = false;
+    u64 m_laggedLightingReportGeneration = 0u;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // The newest incomplete accepted same-generation Transfer tail protects live producer writes while graph declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not keep adding redundant waits. Target recreation clears it with the normal history tracking state.
     Core::QueueSubmissionToken m_laggedLightingHistoryWriterDrainToken;

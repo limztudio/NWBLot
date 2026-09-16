@@ -122,9 +122,9 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     };
     Graphics::QueueSubmissionToken acceptedToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     const Graphics::GpuCopyTextureTaskDesc copyDesc{
         .regions = &region,
@@ -134,10 +134,10 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
     const auto expectRejected = [&]{
         acceptedToken = Graphics::QueueSubmissionToken{
             .value = 1u,
-            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
-        };
+            .queue = Graphics::CommandQueue::Graphics,
+            };
         EXPECT_FALSE(graph.addCopyTextureTask(desc, copyDesc).valid());
         EXPECT_FALSE(acceptedToken.valid());
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -168,10 +168,10 @@ TEST(GpuTaskGraph, CopyTextureTaskPreflightsTypedTextureContract){
         };
         Graphics::QueueSubmissionToken rejectedToken{
             .value = 1u,
-            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
-        };
+            .queue = Graphics::CommandQueue::Graphics,
+            };
         EXPECT_FALSE(rejectedGraph.addCopyTextureTask(
             desc,
             Graphics::GpuCopyTextureTaskDesc{
@@ -552,9 +552,9 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
     };
     Graphics::QueueSubmissionToken acceptedToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     const Graphics::GpuResolveTextureTaskDesc resolveDesc{
         .regions = &region,
@@ -601,10 +601,10 @@ TEST(GpuTaskGraph, ResolveTextureTaskPreflightsTypedTextureContract){
         };
         Graphics::QueueSubmissionToken rejectedToken{
             .value = 1u,
-            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
-        };
+            .queue = Graphics::CommandQueue::Graphics,
+            };
         EXPECT_FALSE(rejectedGraph.addResolveTextureTask(
             desc,
             Graphics::GpuResolveTextureTaskDesc{

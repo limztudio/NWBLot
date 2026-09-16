@@ -58,9 +58,9 @@ inline constexpr bool operator!=(const GpuPhysicalQueueId& lhs, const GpuPhysica
 // sync-only submission may still produce a token for dependency forwarding.
 struct QueueSubmissionToken{
     u64 value = 0;
-    CommandQueue::Enum queue = CommandQueue::kCount;
     u16 physicalQueueIndex = Limit<u16>::s_Max;
     u16 deviceGeneration = 0u;
+    CommandQueue::Enum queue = CommandQueue::kCount;
 
     [[nodiscard]] constexpr bool valid()const{
         return static_cast<u32>(queue) < static_cast<u32>(CommandQueue::kCount) && value != 0u;

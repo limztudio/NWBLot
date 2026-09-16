@@ -294,9 +294,9 @@ u64 Queue::submit(
     const u64 submissionID = m_lastSubmittedID + 1u;
     const QueueSubmissionToken submissionToken{
         .value = submissionID,
-        .queue = m_queueID,
         .physicalQueueIndex = m_physicalQueue.index,
         .deviceGeneration = m_physicalQueue.deviceGeneration,
+        .queue = m_queueID,
     };
 
     auto timelineSignal = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);

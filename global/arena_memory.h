@@ -138,7 +138,6 @@ private:
 
 
 private:
-    ArenaMemoryReservation::Enum m_reservation = ArenaMemoryReservation::Separate;
     ArenaMemoryOwnerRecord* m_owner = nullptr;
     ArenaMemoryTracker* m_previous = nullptr;
     ArenaMemoryTracker* m_next = nullptr;
@@ -148,6 +147,7 @@ private:
     Atomic<u64> m_allocationCount{ 0u };
     Atomic<u64> m_reallocationCount{ 0u };
     Atomic<u64> m_deallocationCount{ 0u };
+    ArenaMemoryReservation::Enum m_reservation = ArenaMemoryReservation::Separate;
 };
 
 
@@ -156,8 +156,8 @@ private:
 
 struct ArenaMemoryOwnerSnapshot{
     Name ownerName = NAME_NONE;
-    ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
     ArenaMemoryStats stats;
+    ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 };
 
 // Records live for process lifetime; traversal captures head to stay bounded.

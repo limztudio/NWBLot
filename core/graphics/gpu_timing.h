@@ -207,8 +207,8 @@ private:
         Vector<Name, Alloc::GlobalArena> feedbackScopes;
         GpuTimingSampleSubscription subscription;
         GpuTimingSampleListener listener;
-        u32 activeCallbackCount = 0u;
         bool removing = false;
+        u32 activeCallbackCount = 0u;
 
 
         explicit SampleListenerRecordData(Alloc::GlobalArena& arena)

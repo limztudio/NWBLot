@@ -218,9 +218,9 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffAtDeclaration){
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{
         .value = 7u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
     ASSERT_FALSE(stateSource.valid());
@@ -282,9 +282,9 @@ TEST(GpuTaskGraph, RejectsInvalidSingleSourceInitialOwnerHandoffsForBufferAndAcc
     ASSERT_TRUE(completion.valid());
     const Graphics::QueueSubmissionToken minimumCompletionToken{
         .value = 7u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
     ASSERT_FALSE(stateSource.valid());
@@ -331,9 +331,9 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .completion = sharedCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
                 .value = 7u,
-                .queue = Graphics::CommandQueue::Graphics,
                 .physicalQueueIndex = graphicsQueue.id.index,
                 .deviceGeneration = graphicsQueue.id.deviceGeneration,
+                .queue = Graphics::CommandQueue::Graphics,
             },
             .stateSource = &graphicsState,
         },
@@ -346,10 +346,10 @@ TEST(GpuTaskGraph, RejectsMultiSourceInitialOwnerCompletionAcrossQueues){
             .completion = sharedCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
                 .value = 11u,
-                .queue = Graphics::CommandQueue::Compute,
                 .physicalQueueIndex = computeQueue.id.index,
                 .deviceGeneration = computeQueue.id.deviceGeneration,
-            },
+                .queue = Graphics::CommandQueue::Compute,
+                },
             .stateSource = &computeState,
         },
     };
@@ -379,9 +379,9 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
     const Graphics::GpuPhysicalQueueInfo destinationQueue = DedicatedComputeQueue();
     const Graphics::QueueSubmissionToken completionToken{
         .value = 7u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = sourceQueue.id.index,
         .deviceGeneration = sourceQueue.id.deviceGeneration,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -444,10 +444,10 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
             .completion = graphicsCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
                 .value = 7u,
-                .queue = Graphics::CommandQueue::Graphics,
                 .physicalQueueIndex = graphicsQueue.id.index,
                 .deviceGeneration = graphicsQueue.id.deviceGeneration,
-            },
+                .queue = Graphics::CommandQueue::Graphics,
+                },
             .stateSource = &graphicsState,
         },
         Graphics::GpuGraphInitialOwnerHandoffSourceDesc{
@@ -459,10 +459,10 @@ TEST(GpuTaskGraph, RejectsInvalidMultiSourceInitialTextureOwnershipHandoffAtDecl
             .completion = computeCompletion,
             .minimumCompletionToken = Graphics::QueueSubmissionToken{
                 .value = 11u,
-                .queue = Graphics::CommandQueue::Compute,
                 .physicalQueueIndex = computeQueue.id.index,
                 .deviceGeneration = computeQueue.id.deviceGeneration,
-            },
+                .queue = Graphics::CommandQueue::Compute,
+                },
             .stateSource = &computeState,
         },
     };

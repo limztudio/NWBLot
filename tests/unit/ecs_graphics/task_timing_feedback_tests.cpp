@@ -40,9 +40,9 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
 ){
     return Core::QueueSubmissionToken{
         .value = 1u,
-        .queue = key.queue,
         .physicalQueueIndex = queue.index,
         .deviceGeneration = queue.deviceGeneration,
+        .queue = key.queue,
     };
 }
 

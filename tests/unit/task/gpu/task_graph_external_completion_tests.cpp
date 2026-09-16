@@ -34,9 +34,9 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::QueueSubmissionToken token{
         .value = 31u,
-        .queue = Graphics::CommandQueue::Transfer,
         .physicalQueueIndex = 2u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Transfer,
     };
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}

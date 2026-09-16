@@ -77,9 +77,9 @@ struct UploadContext{
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value, const u16 generation = 1u){
     return Core::QueueSubmissionToken{
         .value = value,
-        .queue = Core::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = generation,
+        .queue = Core::CommandQueue::Graphics,
     };
 }
 

@@ -464,9 +464,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
     Graphics::GpuTaskDesc desc;
     Graphics::QueueSubmissionToken token{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
 
     Graphics::GpuCopyBufferTaskDesc copyBuffer;
@@ -476,9 +476,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
 
     token = Graphics::QueueSubmissionToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuCopyTextureTaskDesc copyTexture;
     copyTexture.acceptedToken = &token;
@@ -487,9 +487,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
 
     token = Graphics::QueueSubmissionToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuResolveTextureTaskDesc resolveTexture;
     resolveTexture.acceptedToken = &token;
@@ -498,9 +498,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
 
     token = Graphics::QueueSubmissionToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuClearBufferTaskDesc clearBuffer;
     clearBuffer.acceptedToken = &token;
@@ -509,9 +509,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
 
     token = Graphics::QueueSubmissionToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.acceptedToken = &token;
@@ -520,9 +520,9 @@ TEST(GpuTaskGraph, ClearsPrimitiveAcceptedTokensWhenDeclarationFails){
 
     token = Graphics::QueueSubmissionToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuClearTextureRectUIntTaskDesc clearTextureRect;
     clearTextureRect.acceptedToken = &token;

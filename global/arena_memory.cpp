@@ -15,11 +15,11 @@
 
 struct ArenaMemoryOwnerRecord{
     Name ownerName = NAME_NONE;
-    ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
     ArenaMemoryStats retiredStats = {};
     ArenaMemoryTracker* liveTrackers = nullptr;
     const ArenaMemoryOwnerRecord* next = nullptr;
     ArenaMemoryOwnerRecord* bucketNext = nullptr;
+    ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 
     void attach(ArenaMemoryTracker& tracker)noexcept;
     void retire(ArenaMemoryTracker& tracker)noexcept;

@@ -311,9 +311,9 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     ASSERT_TRUE(multisampleCompressedResource.valid());
     Graphics::QueueSubmissionToken compressedRejectedToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuClearTextureTaskDesc multisampleCompressedClear;
     multisampleCompressedClear.acceptedToken = &compressedRejectedToken;
@@ -342,9 +342,9 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
     ASSERT_TRUE(multisampleRectResource.valid());
     Graphics::QueueSubmissionToken rectRejectedToken{
         .value = 1u,
-        .queue = Graphics::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Graphics::CommandQueue::Graphics,
     };
     Graphics::GpuClearTextureRectUIntTaskDesc multisampleRectClear;
     multisampleRectClear.destination = multisampleRectResource;
@@ -366,7 +366,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraphQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
-        };
+            };
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -382,7 +382,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesQueueCapabilities){
         const Graphics::GpuTaskGraphQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
-        };
+            };
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -575,7 +575,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const Graphics::GpuTaskGraphQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
-        };
+            };
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);

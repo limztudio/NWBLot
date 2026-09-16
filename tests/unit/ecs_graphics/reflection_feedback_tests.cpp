@@ -30,9 +30,9 @@ using namespace NWB::Impl;
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value){
     return Core::QueueSubmissionToken{
         .value = value,
-        .queue = Core::CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = Core::CommandQueue::Graphics,
     };
 }
 

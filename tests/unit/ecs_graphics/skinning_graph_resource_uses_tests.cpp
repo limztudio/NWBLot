@@ -76,18 +76,18 @@ TEST(SkinningGraphResourceUses, PreservesOrderedRolesAndIndependentPhaseStates){
         const bool writes = index >= 4u && index <= 6u;
         const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
             : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
-        VerifyUse(uses.deformation[index], { deformation[index], 1u }, state,
+        VerifyUse(uses.deformation[index], { .generation = 1u, .index = deformation[index] }, state,
             writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
     }
     for(usize index = 0u; index < LengthOf(postDispatch); ++index){
         const bool writes = index == 6u || index == 9u;
         const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
             : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
-        VerifyUse(uses.postDispatch[index], { postDispatch[index], 1u }, state,
+        VerifyUse(uses.postDispatch[index], { .generation = 1u, .index = postDispatch[index] }, state,
             writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
     }
     for(usize index = 0u; index < LengthOf(finalizer); ++index)
-        VerifyUse(uses.finalizer[index], { finalizer[index], 1u }, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
+        VerifyUse(uses.finalizer[index], { .generation = 1u, .index = finalizer[index] }, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read);
 }
 
 TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence){

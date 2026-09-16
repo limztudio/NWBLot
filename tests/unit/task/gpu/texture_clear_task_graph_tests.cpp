@@ -645,10 +645,10 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
         ASSERT_TRUE(rejectedResource.valid());
         Graphics::QueueSubmissionToken acceptedToken{
             .value = 1u,
-            .queue = Graphics::CommandQueue::Graphics,
             .physicalQueueIndex = 0u,
             .deviceGeneration = 1u,
-        };
+            .queue = Graphics::CommandQueue::Graphics,
+            };
         Graphics::GpuClearTextureTaskDesc rejectedClear = supportedClear;
         rejectedClear.destination = rejectedResource;
         rejectedClear.acceptedToken = &acceptedToken;

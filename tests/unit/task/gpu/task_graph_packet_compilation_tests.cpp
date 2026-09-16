@@ -390,10 +390,10 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         const Graphics::GpuPhysicalQueueId firstQueue = compiledPlan.packet(firstPacket).plan->queue;
         const Graphics::QueueSubmissionToken firstToken{
             .value = 41u,
-            .queue = Graphics::CommandQueue::Compute,
             .physicalQueueIndex = firstQueue.index,
             .deviceGeneration = firstQueue.deviceGeneration,
-        };
+            .queue = Graphics::CommandQueue::Compute,
+            };
         const Graphics::GpuTaskGraphExternalCompletionToken externalCompletionToken{
             .completion = completion,
             .token = firstToken,
@@ -403,9 +403,9 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
             .completion = completion,
             .token = Graphics::QueueSubmissionToken{
                 .value = 40u,
-                .queue = Graphics::CommandQueue::Transfer,
                 .physicalQueueIndex = 3u,
                 .deviceGeneration = compiledPlan.deviceGeneration(),
+                .queue = Graphics::CommandQueue::Transfer,
             },
         };
         EXPECT_TRUE(otherQueueCompletionToken.validFor(compiledGraph, compiledPlan));

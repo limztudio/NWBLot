@@ -637,9 +637,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
     ;
     QueueSubmissionToken colorAcceptedToken{
         .value = 1u,
-        .queue = CommandQueue::Graphics,
         .physicalQueueIndex = 0u,
         .deviceGeneration = 1u,
+        .queue = CommandQueue::Graphics,
     };
     GpuClearTextureTaskDesc colorClear;
     colorClear.acceptedToken = &colorAcceptedToken;

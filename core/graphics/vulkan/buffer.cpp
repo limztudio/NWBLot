@@ -111,9 +111,9 @@ Buffer::Buffer(
     , m_retainedStateKnown(creationDesc.keepInitialState && initialStateKnown)
     , m_versionTracking(context.objectArena)
     , m_bufferViews(context.objectArena)
+    , m_creationInitialStateKnown(initialStateKnown)
     , m_context(context)
     , m_allocator(allocator)
-    , m_creationInitialStateKnown(initialStateKnown)
 {}
 Buffer::~Buffer(){
     const VkBuffer registeredNativeBuffer = m_buffer;

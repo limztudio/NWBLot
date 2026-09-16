@@ -338,11 +338,16 @@ struct NwbAssetResourceSurfaceMaterial{
 
     texture2d base_color_map;
 
+static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
+struct NwbFixtureSurfaceMaterial{
+    [fixture("builtin/material_fixture/checker_rgba8")]
+    [fixture("builtin/material_fixture/linear_clamp")]
     sampler base_color_sampler;
 };
 
 [material_mutable]
 struct NwbAssetResourceRuntimeMaterial{
+struct NwbFixtureRuntimeMaterial{
     [default("float(1.0)")]
     float fade_alpha;
 };
@@ -374,6 +379,9 @@ NwbSecondAssetResourceRuntimeMaterial runtime;
 )NWB_BIND";
 
 static constexpr AStringView s_AssetResourceMaterialMeta = R"NWB_META(material asset;
+NwbFixtureSurfaceMaterial surface;
+NwbFixtureRuntimeMaterial runtime;
+static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
 
 asset.interface = "project/material_interfaces/test_surface.bind";
 asset.bxdf = "project/shaders/material_bxdf.bxdf";
@@ -548,17 +556,21 @@ asset.parameters = {
 )NWB_META";
 
 static constexpr AStringView s_AssetResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
+static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
 #include "project/material_interfaces/test_surface.bind"
 
 NwbMeshSurface nwbMaterialSurface(){
     const NwbMeshInstanceData instance = nwbMeshLoadInstance();
     const NwbAssetResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
     const float4 sampledColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
+    const NwbFixtureSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
+    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
         nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
         inUv0,
         0.0
     );
     return nwbMakeMeshSurface(half3(surface.base_color.rgb * sampledColor.rgb), inNormal);
+    return nwbMakeMeshSurface(surface.base_color.rgb * fixtureColor.rgb, inNormal);
 }
 
 )NWB_SLANG";

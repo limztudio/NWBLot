@@ -87,7 +87,6 @@ private:
         Name name;
     };
 
-    // 8-byte members first, then small tail to avoid padding.
     struct ProfileSample{
         Timer begin;
         CpuTaskHandle task;

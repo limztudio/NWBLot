@@ -70,7 +70,6 @@ struct GpuTaskGraphInitialOwnerHandoffSourceView{
     const CommandListResourceStateHandoff* stateSource = nullptr;
 };
 
-// 8-byte members first, then 4-byte, then 1-byte tail to avoid padding.
 struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
     Name identity = NAME_NONE;
@@ -661,7 +660,6 @@ private:
         mutable bool recordThunkCompleted = false;
     };
 
-    // 8-byte members first, then 4-byte, then 2/1-byte tail to avoid padding.
     struct GpuGraphResourceNode{
         Name identity = NAME_NONE;
         TextureHandle texture;
@@ -732,7 +730,6 @@ private:
         u32 memberCount = 0u;
     };
 
-    // Small members packed before 4-byte offsets to avoid padding.
     struct GpuGraphPipelineNode{
         Name identity = NAME_NONE;
         GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
@@ -1270,10 +1267,10 @@ private:
     mutable u64 m_activeRecordingPlanGeneration = 0u;
     mutable u64 m_activeRecordingPreparationSerial = 0u;
     mutable const GpuCompiledGraph* m_activeCompiledGraph = nullptr;
-    mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
     mutable SubmissionBindingState m_submissionBindingState = SubmissionBindingState::None;
     bool m_hasPresentEndpoint = false;
     mutable bool m_teardownInProgress = false;
+    mutable GpuGraphSubmissionBinding m_activeSubmissionBinding;
 };
 
 

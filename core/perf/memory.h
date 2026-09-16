@@ -128,7 +128,6 @@ private:
         }
     };
 
-    // 8-byte snapshots first, then 4-byte, then small tail to avoid padding.
     struct ScopeRecord : NoCopy{
         Name name = NAME_NONE;
         MemorySnapshot previousSnapshot;

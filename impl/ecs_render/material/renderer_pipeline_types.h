@@ -188,6 +188,7 @@ struct MaterialSurfaceInfo{
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
     bool resourceReferencesResolved = false;
+    bool resourceFixturesResolved = false;
     // The dedicated refractive-caster classification flag, copied from the cooked Material. The RT instance
     // occluder record reads it. The refraction VALUES (refractionIor / shadowAbsorptionTint) are shader-side
     // (NwbMeshSurface), not here. Default false (not a refractive caster) -- a material declaring none is unchanged.

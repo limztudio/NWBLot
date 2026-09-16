@@ -80,9 +80,9 @@ RayTracingPipeline::RayTracingPipeline(
     , m_desc(context.objectArena)
     , m_shaderGroupHandles(context.objectArena)
     , m_shaderGroups(context.objectArena)
+    , m_allowClusterAccelerationStructuresAtCreation(allowClusterAccelerationStructures)
     , m_context(context)
     , m_device(device)
-    , m_allowClusterAccelerationStructuresAtCreation(allowClusterAccelerationStructures)
 {}
 RayTracingPipeline::~RayTracingPipeline(){
     VulkanDetail::DestroyPipelineResource(m_context, *this, m_pipeline);

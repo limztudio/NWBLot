@@ -308,6 +308,9 @@ static bool ReadMaterialTypedLayout(
     }
 
     if(!ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, MakeNotNull(NWB_TEXT("Material::loadBinary"))))
+        resourceReference.fixtureName = Name(resourceReferenceBinary.fixtureNameHash);
+        resourceReference.resourceKind = static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
+    if(!ValidateMaterialTypedLayout(outLayoutHash, outBlocks, outFields, outBlockBytes, NWB_TEXT("Material::loadBinary")))
         return false;
     if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(outBlocks, outFields, outResourceReferences)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource references do not match typed layout"));

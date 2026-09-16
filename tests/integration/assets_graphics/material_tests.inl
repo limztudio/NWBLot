@@ -1685,6 +1685,7 @@ TEST(AssetsGraphics, MaterialBindGeneratedSlangText){
 
 
 TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
+TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -1695,6 +1696,9 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         s_AssetResourceMaterialBindSource,
         s_AssetResourceMaterialMeta,
         "material_bind_asset_resource",
+        s_StaticResourceFixtureMaterialBindSource,
+        s_StaticResourceFixtureMaterialMeta,
+        "material_bind_static_resource_fixture",
         testArena,
         material,
         scratchArena
@@ -1736,6 +1740,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         EXPECT_EQ(samplerReference.samplerAsset.name(), Name("engine/samplers/linear_clamp"));
         EXPECT_EQ(samplerReference.resourceKind, NWB::Impl::MaterialResourceKind::Sampler);
         EXPECT_EQ(samplerReference.resourceSource, NWB::Impl::MaterialResourceSource::Asset);
+        EXPECT_EQ(imageReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8));
+        EXPECT_EQ(samplerReference.fixtureName, Name(NWB::Impl::MaterialResourceFixture::s_LinearClamp));
         EXPECT_EQ(samplerReference.constantByteOffset, 20u);
 
         NWB::Impl::MaterialAssetCodec codec;
@@ -1750,6 +1756,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
             EXPECT_FALSE(loadedMaterial.resourceReferences()[1u].textureAsset.valid());
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].samplerAsset, samplerReference.samplerAsset);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].resourceSource, samplerReference.resourceSource);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[0u].fixtureName, imageReference.fixtureName);
+            EXPECT_EQ(loadedMaterial.resourceReferences()[1u].fixtureName, samplerReference.fixtureName);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].constantByteOffset, samplerReference.constantByteOffset);
         }
     }
@@ -1760,6 +1768,8 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         testArena,
         s_AssetResourceMaterialBindSource,
         "material_bind_asset_resource_generated",
+        s_StaticResourceFixtureMaterialBindSource,
+        "material_bind_static_resource_fixture_generated",
         bindEntry,
         bindRoot,
         scratchArena

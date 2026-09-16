@@ -362,16 +362,16 @@ private:
 
     Futex m_swapChainLifecycleMutex;
     SwapChainLifecycleState m_swapChainLifecycleState = SwapChainLifecycleState::Ready;
-    u64 m_swapChainLifecycleEpoch = 0u;
     bool m_lifecycleDrainActive = false;
+    bool m_swapChainMutableFormatSupported = false;
+    bool m_hdr10ColorSpaceExtensionEnabled = false;
+    u64 m_swapChainLifecycleEpoch = 0u;
     // Presentation hooks run inside queue submission and therefore cannot take the lifecycle mutex recursively.
     // This narrower lock protects their state, while the claims-enabled gate closes before lifecycle joins begin.
     Futex m_framePresentationMutex;
     ConditionVariableAny m_framePresentationCondition;
     bool m_framePresentationClaimsEnabled = true;
 
-    bool m_swapChainMutableFormatSupported = false;
-    bool m_hdr10ColorSpaceExtensionEnabled = false;
     bool m_bufferDeviceAddressSupported = false;
     bool m_hostQueryResetFeatureEnabled = false;
     bool m_textureCompressionBcFeatureEnabled = false;

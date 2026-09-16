@@ -26,13 +26,13 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
         .packetIndex = 1u,
         .queue = { .index = 3u, .deviceGeneration = 17u },
         .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+        .joinsAcceptedQueueFrontier = true,
+        .recoverySubmission = true,
         .plannedWaitTokenCount = 3u,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 1u,
         .submissionSeconds = 0.125,
-        .joinsAcceptedQueueFrontier = true,
-        .recoverySubmission = true,
     };
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
 

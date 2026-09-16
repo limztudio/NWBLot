@@ -156,7 +156,6 @@ struct ComputePipelineDesc{
 typedef GraphicsBackend::Handle<ComputePipeline> ComputePipelineHandle;
 
 struct MeshletPipelineDesc{
-    // The fixed vector is first so the remaining byte-sized primitive type does not force padding before it.
     BindingLayoutVector bindingLayouts;
 
     ShaderHandle AS;

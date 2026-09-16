@@ -228,7 +228,6 @@ static_assert(IsStandardLayout_V<GpuCommandIrClearTextureRectUIntRecord>, "Comma
 static_assert(IsTriviallyCopyable_V<GpuCommandIrClearTextureRectUIntRecord>, "Command IR records must be binary-serializable");
 
 
-// 8-byte members first, then 4-byte, then small tail to avoid padding.
 struct GpuCommandIrBuiltinTaskRecord{
     GpuTaskId task;
     GpuSubmissionPacketId packet;
@@ -283,7 +282,6 @@ namespace GpuCommandIrStreamValidationError{
     };
 };
 
-// 8-byte members first, then 1-byte tail to avoid padding.
 struct GpuCommandIrStreamValidationResult{
     usize byteOffset = 0u;
     u64 recordIndex = Limit<u64>::s_Max;

@@ -542,6 +542,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         resourceReferenceBinary.resourceNameHash = resourceName.hash();
         resourceReferenceBinary.resourceKind = static_cast<u32>(resourceReference.resourceKind);
         resourceReferenceBinary.resourceSource = static_cast<u32>(resourceReference.resourceSource);
+        resourceReferenceBinary.fixtureNameHash = resourceReference.fixtureName.hash();
         resourceReferenceBinary.constantByteOffset = resourceReference.constantByteOffset;
         AppendPOD(outBinary, resourceReferenceBinary);
     }

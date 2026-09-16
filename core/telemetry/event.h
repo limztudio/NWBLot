@@ -110,7 +110,6 @@ struct CaptureOptions{
 
 [[nodiscard]] constexpr bool IsValidEventKind(EventKind::Enum kind)noexcept;
 
-// 8-byte members first, then 4-byte, then 2/1-byte tail to avoid padding.
 struct EventHeader{
     u64 frameIndex = 0u;
     u64 timestampNanoseconds = 0u;

@@ -19,7 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Members kept size-sorted (8-byte, then 1-byte tail) to avoid padding.
 struct ShadowPrepareGeometryInputs{
     const PreparedMeshBlasBuildVector& blasBuilds;
     const PreparedMeshSwBvhBuildVector& softwareBuilds;
@@ -113,14 +112,14 @@ private:
     usize m_blasRequestCount = 0u;
     usize m_softwareRequestCount = 0u;
     u64 m_graphGeneration = 0u;
-    bool m_preparedBlasPolicy = false;
-    bool m_preparedSoftwarePolicy = false;
-    bool m_storagePrepared = false;
-    bool m_inputsGathered = false;
     // Prepared build names stay frozen and outlive this operation; membership borrows them.
     mutable const NameHash* m_inlineNames[s_InlineCount];
     mutable usize m_inlineNameCount = 0u;
     mutable Optional<NameIndex> m_names;
+    bool m_preparedBlasPolicy = false;
+    bool m_preparedSoftwarePolicy = false;
+    bool m_storagePrepared = false;
+    bool m_inputsGathered = false;
     mutable bool m_namesPrepared = false;
 };
 

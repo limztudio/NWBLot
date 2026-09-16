@@ -19,7 +19,6 @@ NWB_VULKAN_BEGIN
 
 // Immutable facts from the owner of an imported buffer or image; values must match creation. A concurrent
 // queue-family list is borrowed for the call and copied by Buffer or Texture.
-// Pointer first, then 4-byte, then small tail to avoid padding for any flag width.
 template<typename UsageFlags, typename CreateFlags>
 struct NativeResourceProvenance{
     const u32* queueFamilyIndices = nullptr;

@@ -450,6 +450,8 @@ static bool BuildMaterialTypedLayoutDefaultValue(
     outDefaultValue = {};
 
     // Resource slots start zero; asset paths patch in once the heap is live.
+    // Resource fields store an initially-zero global-heap slot word.  Their static fixture identity is carried by
+    // MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
 
@@ -612,6 +614,7 @@ static bool ReserveMaterialBindTypedLayoutVectors(
     outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
     outLayout.typedLayoutFields.reserve(fieldReserveCount);
     outLayout.typedBlockBytes.reserve(byteReserveCount);
+    outLayout.resourceReferences.reserve(fieldReserveCount);
     return true;
 }
 
@@ -771,6 +774,10 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
+            // Static resource slots are fixed by the cooked fixture reference and are never material .nwb
+            // parameters.  Excluding them here prevents an authored uint value from being mistaken for a heap slot.
+            if(IsMaterialLayoutResourceFieldType(field.fieldType))
+                continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' "
                     "byte offset exceeds u32 for '{}'")
@@ -1032,6 +1039,7 @@ bool BuildMaterialBindTypedLayoutImpl(
         }
 
         const usize blockByteBegin = outLayout.typedBlockBytes.size();
+        const u32 blockConstantByteBegin = constantTypedByteSize;
 
         MaterialTypedLayoutBlock block;
         block.blockName = Name(AStringView(instance->name));
@@ -1127,6 +1135,35 @@ bool BuildMaterialBindTypedLayoutImpl(
             }
 
             outLayout.typedLayoutFields.push_back(field);
+            if(IsMaterialLayoutResourceFieldType(fieldType)){
+                const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
+                const AStringView fixtureArgument = bindField.fixtureArgument();
+                const Name fixtureName(fixtureArgument);
+                if(!IsValidMaterialResourceKind(resourceKind) || !fixtureName || !IsKnownMaterialResourceFixture(resourceKind, fixtureArgument)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid fixture for '{}'")
+                        , StringConvert(instance->name)
+                        , StringConvert(bindField.name)
+                        , StringConvert(contextName.c_str())
+                    );
+                    return false;
+                }
+                if(field.offset > Limit<u32>::s_Max - blockConstantByteBegin){
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' byte offset exceeds u32 for '{}'")
+                        , StringConvert(instance->name)
+                        , StringConvert(bindField.name)
+                        , StringConvert(contextName.c_str())
+                    );
+                    return false;
+                }
+
+                MaterialResourceReference resourceReference;
+                resourceReference.blockName = block.blockName;
+                resourceReference.fieldName = field.fieldName;
+                resourceReference.fixtureName = fixtureName;
+                resourceReference.resourceKind = resourceKind;
+                resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
+                outLayout.resourceReferences.push_back(resourceReference);
+            }
             block.byteSize = fieldOffset + fieldByteSize;
         }
 

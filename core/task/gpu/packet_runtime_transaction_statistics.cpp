@@ -69,6 +69,9 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .packet = packetID,
         .queue = packet.queue,
         .queueClass = queueInfo->queueClass,
+        .deviceGeneration = m_deviceGeneration,
+        .joinsAcceptedQueueFrontier = packet.joinsAcceptedQueueFrontier,
+        .isRecoverySubmission = packet.isRecoverySubmission,
         .taskCount = packet.taskCount,
         .nativeCommandListCount = runtime.nativeCommandListCount,
         .plannedWaitTokenCount = runtime.plannedWaitTokenCount,
@@ -76,9 +79,6 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .timelineWaitCount = runtime.timelineWaitCount,
         .mergedTimelineWaitCount = runtime.mergedTimelineWaitCount,
         .submissionSeconds = runtime.submissionSeconds,
-        .deviceGeneration = m_deviceGeneration,
-        .joinsAcceptedQueueFrontier = packet.joinsAcceptedQueueFrontier,
-        .isRecoverySubmission = packet.isRecoverySubmission,
     };
 }
 

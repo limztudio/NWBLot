@@ -26,6 +26,7 @@ namespace MaterialBinaryPayload{
 
 
 inline constexpr u32 s_MaterialMagic = 0x4D544C38u; // MTL8 (per-material asset paths)
+inline constexpr u32 s_MaterialMagic = 0x4D544C36u; // MTL6 (added static material resource fixture references)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the
 // caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported
@@ -94,6 +95,10 @@ struct MaterialResourceReferenceBinary{
 };
 static_assert(
     sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 4u,
+// Static material resource identity. The renderer resolves fixtureName to a device-lifetime global-heap handle and
+// writes that handle's slot into constantByteOffset; no device-specific descriptor value is serialized here.
+    NameHash fixtureNameHash = {};
+    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u,
     "MaterialResourceReferenceBinary layout drifted"
 );
 static_assert(
@@ -142,6 +147,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
 
             // Opaque handles are intentionally static constants. A resource in mutable storage would make the
             // cooked resource contract ambiguous and permit instance data to become a descriptor slot.
+            // cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
             if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
             if(field.offset > Limit<u32>::s_Max - constantByteBegin)
@@ -159,6 +165,9 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                 if(
                     resourceReference.resourceKind != expectedKind
                     || resourceReference.resourceSource != MaterialResourceSource::Asset
+                    !resourceReference.fixtureName
+                    || resourceReference.resourceKind != expectedKind
+                    || !IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName)
                     || resourceReference.constantByteOffset != expectedByteOffset
                 )
                     return false;

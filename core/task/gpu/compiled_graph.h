@@ -355,7 +355,6 @@ struct GpuTaskGraphCompileStatistics{
     f64 packetizationSeconds = 0.0;
     f64 resourceStatePlanningSeconds = 0.0;
     f64 packetDependencyPlanningSeconds = 0.0;
-    // u16 tail kept last so the 8-aligned counters above never open an interior hole.
     u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{ return graphGeneration != 0u && planGeneration != 0u; }
@@ -365,12 +364,12 @@ struct GpuTaskGraphCompileStatistics{
 // Immutable-by-value accepted-plan telemetry for one exact physical queue. Barrier counts belong to the compiled
 // task that lowers them: a cross-queue ownership release therefore belongs to its producer queue, while the
 // matching acquire belongs to its consumer queue.
-// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueCompileStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     GpuPhysicalQueueId queue;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
+    u16 deviceGeneration = 0u;
     usize taskCount = 0u;
     usize packetCount = 0u;
     usize mergedTaskCount = 0u;
@@ -385,7 +384,6 @@ struct GpuTaskGraphPhysicalQueueCompileStatistics{
     usize incomingRepeatedOwnershipTransferSignatureCount = 0u;
     usize outgoingRepeatedOwnershipTransferSignatureCount = 0u;
     usize concurrentSharingAdviceResourceCount = 0u;
-    u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u
@@ -672,7 +670,6 @@ private:
     mutable u64 m_attemptRecordingGeneration = 0u;
     mutable u64 m_attemptTransactionIdentity = 0u;
     mutable u64 m_attemptTransactionResetGeneration = 0u;
-    // Keep 4-byte and smaller members together to avoid padding.
     mutable Atomic<u32> m_planAccessState = 0u;
     mutable Futex m_attemptBindingMutex;
     u16 m_deviceGeneration = 0u;

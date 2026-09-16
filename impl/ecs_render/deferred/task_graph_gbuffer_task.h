@@ -60,8 +60,8 @@ struct GbufferGraphTask{
         bool regularComputeEmulationOutputStatesGraphOwned = false;
         // G-buffer keeps regular rasterization; terminal shared task finishes the timing range.
         bool regularSharedComputeEmulationDrawsGraphOwned = false;
-        Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
         bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;
+        Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : opaqueDrawSnapshot(arena)

@@ -59,7 +59,6 @@ public:
         AStringView value;
     };
 
-    // 8-byte members first, then small tail to avoid padding.
     struct ShaderCompilerRequest{
         AStringView shaderName;
         AStringView stage;
@@ -127,7 +126,6 @@ public:
         {}
     };
 
-    // Small tail kept packed; append new scalar fields here.
     struct ShaderEntry{
         CookString name;
         ACompactString stage;

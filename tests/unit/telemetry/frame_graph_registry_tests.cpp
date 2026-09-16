@@ -56,9 +56,9 @@ public:
             .packetIndex = packetIndex,
             .queue = { .index = 1u, .deviceGeneration = 17u },
             .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
-            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
             .joinsAcceptedQueueFrontier = packetIndex != 18u,
             .recoverySubmission = packetIndex < 5u,
+            .submissionSeconds = packetIndex == 0u ? 0.011 : 0.0,
         };
         if(packetIndex < 5u){
             statistics.plannedWaitTokenCount = 1u;
@@ -85,9 +85,9 @@ public:
             .packetIndex = 19u + queuePacketIndex,
             .queue = { .index = 3u, .deviceGeneration = 17u },
             .queueClass = Telemetry::FrameGraphQueueClass::Compute,
-            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
             .joinsAcceptedQueueFrontier = queuePacketIndex != 10u,
             .recoverySubmission = queuePacketIndex < 3u,
+            .submissionSeconds = queuePacketIndex == 0u ? 0.010 : 0.0,
         };
         if(queuePacketIndex == 0u){
             statistics.plannedWaitTokenCount = 7u;

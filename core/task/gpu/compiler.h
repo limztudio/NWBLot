@@ -48,7 +48,6 @@ struct GpuTaskGraphAnalysisDiagnostic{
     GpuTaskId relatedTask;
     GpuGraphResourceId resource;
     GpuGraphResourceVersionId resourceVersion;
-    // Keep 1-byte status last to avoid padding before 8-aligned members.
     GpuTaskGraphAnalysisStatus::Enum status = GpuTaskGraphAnalysisStatus::NotAnalyzed;
 };
 
@@ -150,7 +149,6 @@ struct GpuTaskGraphPacketTimingEnvelopeOptions{
     [[nodiscard]] bool enabled()const noexcept{ return firstTask.valid() && lastTask.valid(); }
 };
 
-// 8-byte members first, then small head enum packed with the bool tail.
 struct GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;

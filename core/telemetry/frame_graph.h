@@ -291,7 +291,6 @@ struct FrameGraphSubmissionRuntimeStatistics{
     f64 submissionSeconds = 0.0;
 };
 
-// Small tail packed together to avoid padding.
 struct FrameGraphRuntimeStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -351,7 +350,6 @@ struct FrameGraphPhysicalQueueSubmissionRuntimeStatistics{
     f64 submissionSeconds = 0.0;
 };
 
-// Small members packed with queueClass to avoid padding.
 struct FrameGraphPhysicalQueueRuntimeStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -370,7 +368,7 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
 };
 
 // Exact native-submission telemetry for one compiler-generated packet. V7 payloads and V8 payloads whose table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
-// Packet generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph. 8-byte members first, then 4-byte, then small tail to avoid padding.
+// Packet generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph.
 struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
     u64 taskCount = 0u;
@@ -379,13 +377,13 @@ struct FrameGraphPacketSubmissionStatisticsRecord{
     u32 packetIndex = Limit<u32>::s_Max;
     FrameGraphPhysicalQueueId queue;
     FrameGraphQueueClass::Enum queueClass = FrameGraphQueueClass::Unknown;
+    bool joinsAcceptedQueueFrontier = false;
+    bool recoverySubmission = false;
     u64 plannedWaitTokenCount = 0u;
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
     f64 submissionSeconds = 0.0;
-    bool joinsAcceptedQueueFrontier = false;
-    bool recoverySubmission = false;
 };
 
 #pragma pack(push, 1)
@@ -1287,7 +1285,6 @@ struct FrameGraphEdgePayload{
     u8 flags = 0u;
 };
 
-// 8-byte members first, then 2/1-byte tail to avoid padding.
 struct FrameGraphPayload{
     Vector<FrameGraphNodePayload, TelemetryArena> nodes;
     Vector<FrameGraphEdgePayload, TelemetryArena> edges;

@@ -437,9 +437,9 @@ Texture::Texture(
     , m_imageInfo(__hidden_texture::RetainImageCreateInfo(imageInfo, m_imageQueueFamilyIndices))
     , m_views(0, TextureViewKeyHasher(), EqualTo<TextureViewKey>(), context.objectArena)
     , m_retainedSubresourceStates(context.objectArena)
+    , m_creationInitialStateKnown(initialStateKnown)
     , m_context(context)
     , m_allocator(allocator)
-    , m_creationInitialStateKnown(initialStateKnown)
 {
     const usize subresourceCount = static_cast<usize>(m_creationDesc.mipLevels)
         * static_cast<usize>(m_creationDesc.arraySize)

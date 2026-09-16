@@ -25,6 +25,7 @@ namespace MaterialBindDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace __hidden_bind{
 
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
@@ -36,6 +37,7 @@ bool ParseMaterialBindResourceFieldTypeText(
 
 
 };
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -46,6 +48,7 @@ namespace MaterialCookDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+namespace __hidden_cook{
 
 static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
 static constexpr u32 s_MaterialBindByteBitCount = 8u;
@@ -218,6 +221,26 @@ static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFiel
     default: return AStringView();
     }
 }
+
+
+static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldType::Enum fieldType){
+    switch(fieldType){
+    case MaterialLayoutFieldType::SampledImage2D: return "Texture2D<float4>";
+    case MaterialLayoutFieldType::Sampler: return "SamplerState";
+    default: return AStringView();
+    }
+}
+
+static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFieldType::Enum fieldType){
+    switch(fieldType){
+    case MaterialLayoutFieldType::SampledImage2D: return "NwbHeapSampledImage2DNonUniform";
+    case MaterialLayoutFieldType::Sampler: return "NwbHeapSamplerNonUniform";
+    default: return AStringView();
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 static CookString BuildMaterialBindFieldLookupFunctionName(
@@ -624,6 +647,8 @@ static void AppendMaterialBindFieldAccessor(
 
 
 // Resources load from their patched slot, never from the aggregate struct.
+// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded
+// directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
 static bool AppendMaterialBindResourceFieldAccessor(
     const AStringView includePath,
     const MaterialLayoutFieldType::Enum fieldType,
@@ -639,6 +664,27 @@ static bool AppendMaterialBindResourceFieldAccessor(
         );
         return false;
     }
+
+    const AStringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
+    const AStringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
+    if(slangTypeName.empty() || heapAccessorName.empty())
+        return false;
+
+    inOutSource += slangTypeName;
+    inOutSource += ' ';
+    inOutSource += functionName;
+    inOutSource += "(const NwbMeshInstanceData instance){\n";
+    inOutSource += "    return ";
+    inOutSource += heapAccessorName;
+    inOutSource += "(nwbMaterialLoadConstantUInt(instance, ";
+    inOutSource += byteOffsetSymbol;
+    inOutSource += "));\n";
+    inOutSource += "}\n\n";
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     const AStringView slangTypeName = MaterialBindResourceSlangTypeName(fieldType);
     const AStringView heapAccessorName = MaterialBindResourceHeapAccessorName(fieldType);
@@ -826,6 +872,7 @@ static bool AppendMaterialBindGeneratedInstance(
     for(const MaterialBindField& field : bindStruct.fields){
         MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
         if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+        if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
             continue;
 
         const CookString functionName =
@@ -934,6 +981,7 @@ bool BuildMaterialBindIncludeSourceImpl(
         for(const MaterialBindField& field : bindStruct.fields){
             MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
             if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+            if(__hidden_bind::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
                 continue;
 
             outSource += "    ";

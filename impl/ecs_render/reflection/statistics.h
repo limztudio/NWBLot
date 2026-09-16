@@ -35,7 +35,6 @@ namespace ReflectionHistoryResetReason{
 };
 
 // A completed accepted reflection copy, regardless of later presentation outcome.
-// Layout is size-sorted (8-byte, then 4-byte, then 1-byte) to avoid padding.
 struct ReflectionStatistics{
     u64 sequence = 0u;
     u64 generation = 0u;

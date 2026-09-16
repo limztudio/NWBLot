@@ -28,7 +28,6 @@ namespace CpuTaskProfileKind{
     };
 };
 
-// 8-byte members first, then 1-byte tail to avoid padding.
 struct CpuTaskProfileEvent{
     CpuTaskHandle task;
     Name label;

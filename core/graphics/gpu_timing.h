@@ -177,9 +177,9 @@ private:
     u64 m_quarantinedScopeCount = 0u;
     u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
     Name m_scopeName = NAME_NONE;
-    Perf::TimingScopeId m_timingScope;
     u32 m_requestedQueryCount = 0u;
     bool m_captureEnabled = false;
+    Perf::TimingScopeId m_timingScope;
 };
 
 
@@ -554,10 +554,10 @@ private:
     Vector<ScopePublication, Alloc::GlobalArena> m_scopePublications;
     Vector<QueueSubmissionToken, Alloc::GlobalArena> m_submissionPrerequisites;
     Futex m_mutex;
-    usize m_reservedScopePublicationCount = 0u;
     u32 m_recordingScopeCount = 0u;
     bool m_submissionPrepared = false;
     bool m_resolved = false;
+    usize m_reservedScopePublicationCount = 0u;
 };
 
 

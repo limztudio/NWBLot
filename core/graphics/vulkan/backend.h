@@ -688,9 +688,6 @@ struct VulkanContext{
     i32 auxiliaryAsyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 transferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryTransferQueueFamilyIndex = s_InvalidQueueFamilyIndex;
-    u16 deviceGeneration = 0u;
-    bool asyncComputeLaneEnabled = false;
-    bool transferQueueEnabled = false;
 
     struct Extensions{
         bool KHR_synchronization2 = false;
@@ -717,6 +714,9 @@ struct VulkanContext{
         bool NV_ray_tracing_invocation_reorder = false;
         bool NV_ray_tracing_linear_swept_spheres = false;
     } extensions;
+    u16 deviceGeneration = 0u;
+    bool asyncComputeLaneEnabled = false;
+    bool transferQueueEnabled = false;
 
 
     explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
@@ -822,7 +822,6 @@ struct RetainedTextureStateCommit{
     ArraySlice arraySlice = 0;
 };
 
-// 8-byte strides first, then 4-byte, then small tail to avoid padding.
 struct AccelStructGeometryBuildSignature{
     VkDeviceSize vertexStride = 0u;
     VkDeviceSize radiusStride = 0u;
@@ -1521,13 +1520,12 @@ private:
     VolatileBufferState m_volatileState;
     Futex m_bufferViewsMutex;
 
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
-    const bool m_creationInitialStateKnown;
-
     bool m_persistentlyMapped = false;
     bool m_requiresInvalidate = false;
     bool m_managed = true; // if true, owns the VkBuffer or VMA allocation
+    const bool m_creationInitialStateKnown;
+    const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
 };
 
 
@@ -1676,10 +1674,10 @@ private:
     Vector<u8, Alloc::GlobalArena> m_retainedSubresourceStates;
     mutable Futex m_retainedSubresourceStatesMutex;
 
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
     const bool m_creationInitialStateKnown;
     bool m_managed = true; // if true, owns the VkImage or VMA allocation
+    const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
 };
 
 
@@ -1719,11 +1717,11 @@ private:
     Futex m_mappingMutex;
     void* m_mappedMemory = nullptr;
 
-    const VulkanContext& m_context;
-    VulkanAllocator& m_allocator;
     u32 m_bufferOffsetAlignment = 0;
     CpuAccessMode::Enum m_cpuAccess{};
     bool m_requiresInvalidate = false;
+    const VulkanContext& m_context;
+    VulkanAllocator& m_allocator;
 };
 
 
@@ -2394,8 +2392,8 @@ private:
     u64 m_descriptorBufferGeneration = 0u;
 
     mutable Futex m_mutex;
-    u32 m_accelStructBufferBindingOffset = 0u;
     bool m_initialized = false;
+    u32 m_accelStructBufferBindingOffset = 0u;
 };
 
 
@@ -2539,9 +2537,9 @@ private:
     Vector<u8, Alloc::GlobalArena> m_shaderGroupHandles;
     GraphicsVector<ShaderTableGroupMetadata> m_shaderGroups;
 
+    const bool m_allowClusterAccelerationStructuresAtCreation;
     const VulkanContext& m_context;
     Device& m_device;
-    const bool m_allowClusterAccelerationStructuresAtCreation;
 };
 
 
@@ -2654,12 +2652,12 @@ private:
 
     mutable Futex m_mutex;
 
-    const VulkanContext& m_context;
-    Device& m_device;
-
     u32 m_missCount = 0;
     u32 m_hitCount = 0;
     u32 m_callableCount = 0;
+
+    const VulkanContext& m_context;
+    Device& m_device;
 };
 
 

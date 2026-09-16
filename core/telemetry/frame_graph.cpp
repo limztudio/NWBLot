@@ -861,13 +861,13 @@ template<typename EncodedStatisticsT>
         .packetIndex = encoded.packetIndex,
         .queue = DecodeQueue(encoded.queue),
         .queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass),
+        .joinsAcceptedQueueFrontier = encoded.joinsAcceptedQueueFrontier != 0u,
+        .recoverySubmission = encoded.recoverySubmission != 0u,
         .plannedWaitTokenCount = encoded.plannedWaitTokenCount,
         .sameQueueWaitElisionCount = encoded.sameQueueWaitElisionCount,
         .timelineWaitCount = encoded.timelineWaitCount,
         .mergedTimelineWaitCount = encoded.mergedTimelineWaitCount,
         .submissionSeconds = encoded.submissionSeconds,
-        .joinsAcceptedQueueFrontier = encoded.joinsAcceptedQueueFrontier != 0u,
-        .recoverySubmission = encoded.recoverySubmission != 0u,
     };
     return IsValidFrameGraphPacketSubmissionStatistics(outStatistics);
 }

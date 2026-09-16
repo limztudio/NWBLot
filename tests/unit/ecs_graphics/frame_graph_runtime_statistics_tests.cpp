@@ -138,6 +138,9 @@ MakeValidPacketSubmissionStatistics()noexcept{
         .packet = { .generation = 12u, .index = 0u },
         .queue = { .index = 2u, .deviceGeneration = 7u },
         .queueClass = NWB::Core::CommandQueue::Compute,
+        .deviceGeneration = 7u,
+        .joinsAcceptedQueueFrontier = true,
+        .isRecoverySubmission = true,
         .taskCount = 1u,
         .nativeCommandListCount = 1u,
         .plannedWaitTokenCount = 2u,
@@ -145,9 +148,6 @@ MakeValidPacketSubmissionStatistics()noexcept{
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 0u,
         .submissionSeconds = 0.002,
-        .deviceGeneration = 7u,
-        .joinsAcceptedQueueFrontier = true,
-        .isRecoverySubmission = true,
     };
 }
 

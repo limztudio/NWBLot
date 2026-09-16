@@ -91,7 +91,6 @@ namespace GpuQueueCapability{
 };
 
 // `queueClass` keeps API capability validation; `id` selects the native transport.
-// 4-byte members first, then small tail to avoid padding.
 struct GpuPhysicalQueueInfo{
     u32 familyIndex = Limit<u32>::s_Max;
     u32 queueIndex = 0u;
@@ -100,7 +99,6 @@ struct GpuPhysicalQueueInfo{
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
     bool dedicated = false;
-    // NOTE: tail kept packed; append new small fields here.
 };
 
 // Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at
@@ -395,7 +393,6 @@ struct RenderPassAttachmentActions{
     RenderPassStoreAction::Enum storeAction = RenderPassStoreAction::Store;
 };
 
-// Small tail kept packed; append new scalar fields here.
 struct RenderPassParameters{
     Color colorClearValues[s_MaxRenderTargets]{};
     RenderPassAttachmentActions colorAttachmentActions[s_MaxRenderTargets]{};

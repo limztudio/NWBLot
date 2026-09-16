@@ -143,7 +143,6 @@ struct alignas(Float4) LightComponent{
     // Soft-shadow source size: directional angular radius; point/spot emissive radius.
     f32 angularRadius = LightDefaults::s_DirectionalAngularRadius;
     f32 sourceRadius = LightDefaults::s_PunctualSourceRadius;
-    // Byte-sized members kept last so the five f32 above pack contiguously with no internal padding.
     LightType::Enum type = LightType::Directional;
     bool enableCaustics = LightDefaults::s_EnableCaustics;
 

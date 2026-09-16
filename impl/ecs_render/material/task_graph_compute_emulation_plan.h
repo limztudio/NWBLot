@@ -27,8 +27,8 @@ namespace ECSRenderDetail{
 struct RegularSharedComputeEmulationGraphPlan{
     MaterialPassDrawItem drawItems[s_SharedComputeEmulationMaximumDrawCount] = {};
     Core::BufferHandle outputBuffer;
-    u32 outputHeapSlot = 0u;
     usize drawCount = 0u;
+    u32 outputHeapSlot = 0u;
     bool captured = false;
 
     void reset(){

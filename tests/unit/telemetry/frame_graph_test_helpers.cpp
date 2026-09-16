@@ -484,11 +484,11 @@ void BuildTestPacketSubmissionFrameGraph(
         .packetIndex = 2u,
         .queue = { .index = 1u, .deviceGeneration = 17u },
         .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
+        .joinsAcceptedQueueFrontier = true,
+        .recoverySubmission = true,
         .plannedWaitTokenCount = 1u,
         .sameQueueWaitElisionCount = 1u,
         .submissionSeconds = 0.375,
-        .joinsAcceptedQueueFrontier = true,
-        .recoverySubmission = true,
     });
     packetSubmissionStatistics.push_back(Telemetry::FrameGraphPacketSubmissionStatisticsRecord{
         .packetGeneration = 72u,
@@ -511,11 +511,11 @@ void BuildTestPacketSubmissionFrameGraph(
         .packetIndex = 1u,
         .queue = { .index = 3u, .deviceGeneration = 17u },
         .queueClass = Telemetry::FrameGraphQueueClass::Compute,
+        .joinsAcceptedQueueFrontier = true,
         .plannedWaitTokenCount = 3u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 2u,
         .submissionSeconds = 0.25,
-        .joinsAcceptedQueueFrontier = true,
     });
 }
 

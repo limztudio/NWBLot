@@ -44,7 +44,6 @@ struct GpuRecordedPacket{
     u64 commandListRecordingLeaseSerials[s_MaxCommandLists] = {};
     // These fields are written before commandListCount publishes the slot. They intentionally describe the packet
     // after graph lowering, so compile tooling can distinguish declared work from the native work that was recorded.
-    // commandListCount sits after the f64 timings so the u8 does not open a 7-byte hole.
     u32 taskCount = 0u;
     u32 barrierCount = 0u;
     f64 commandListAcquisitionSeconds = 0.0;
@@ -60,7 +59,6 @@ struct GpuRecordedPacket{
     // and scheduler-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
-    // NOTE: u32 tail kept last; extending this snapshot appends above the domain pair.
 };
 
 
@@ -106,7 +104,6 @@ struct GpuTaskGraphRecordingStatistics{
 // Immutable-by-value native recording telemetry for one exact physical queue in one compiled graph recording
 // attempt. The queue identity includes its device generation, so an auxiliary same-class queue or a recreated
 // device cannot alias this result. Counts include only successfully published native packet slots.
-// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueRecordingStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -655,7 +652,6 @@ struct GpuTaskGraphSubmissionStatistics{
 // compiled-plan handle whose packet reached Accepted through Device::executeCommandLists(); every rejected or
 // unresolved lifecycle state deliberately returns an invalid value. Wait counters preserve the
 // native submitter decomposition: planned tokens equal same-queue elisions plus emitted and merged timeline waits.
-// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -663,6 +659,9 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     GpuSubmissionPacketId packet;
     GpuPhysicalQueueId queue;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
+    u16 deviceGeneration = 0u;
+    bool joinsAcceptedQueueFrontier = false;
+    bool isRecoverySubmission = false;
     usize taskCount = 0u;
     usize nativeCommandListCount = 0u;
     usize plannedWaitTokenCount = 0u;
@@ -670,9 +669,6 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
     f64 submissionSeconds = 0.0;
-    u16 deviceGeneration = 0u;
-    bool joinsAcceptedQueueFrontier = false;
-    bool isRecoverySubmission = false;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u
@@ -695,13 +691,13 @@ struct GpuTaskGraphPacketSubmissionStatistics{
 // result. Every accepted-packet counter represents a submitter-owned native submission. `rejectedSubmissionCount`
 // separately reports packets rejected after the transaction reserves the submit path, including a failure before
 // the backend execute call.
-// Small members packed with queueClass to avoid padding.
 struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
     u64 recordingAttemptGeneration = 0u;
     GpuPhysicalQueueId queue;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
+    u16 deviceGeneration = 0u;
     usize acceptedPacketCount = 0u;
     usize acceptedTaskCount = 0u;
     usize rejectedPacketCount = 0u;
@@ -716,7 +712,6 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
-    u16 deviceGeneration = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return graphGeneration != 0u
@@ -1094,9 +1089,9 @@ private:
     // Keep that indivisible publication tail serialized while native queue work remains free to overlap.
     mutable Futex m_resolutionMutex;
     mutable Futex m_mutex;
+    u16 m_deviceGeneration = 0u;
     bool m_submissionBindingResolved = false;
     bool m_valid = false;
-    u16 m_deviceGeneration = 0u;
 };
 
 

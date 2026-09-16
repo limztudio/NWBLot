@@ -6,6 +6,10 @@
 struct NwbSmokeSurfaceMaterial{
     [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
     half4 base_color;
+    [fixture("builtin/material_fixture/checker_rgba8")]
+    texture2d base_color_map;
+    [fixture("builtin/material_fixture/linear_clamp")]
+    sampler base_color_sampler;
 };
 
 [material_mutable]

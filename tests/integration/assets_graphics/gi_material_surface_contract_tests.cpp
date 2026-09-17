@@ -129,6 +129,36 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 // Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses
 // coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the
 // material heap selector alone.
+// P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly
+// once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque
+// blocks, keep the conservative overflow fallback, and never retain crossings across instances.
+TEST(EcsGraphics, TransparentShadowInstanceOpticsFinalizeExactlyOnce){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString integrateSource;
+    AString traverseSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "shadow_integrate.slangi", integrateSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "sw_shadow_traverse.slangi", traverseSource));
+
+    const AStringView integrate(integrateSource.data(), integrateSource.size());
+    const AStringView traverse(traverseSource.data(), traverseSource.size());
+
+    EXPECT_TRUE(ContainsText(integrate, "struct NwbShadowRayOptics{"));
+    EXPECT_TRUE(ContainsText(integrate, "struct NwbShadowInstanceOptics{"));
+    EXPECT_TRUE(ContainsText(integrate, "nwbShadowInstanceIntegrateCrossing"));
+    EXPECT_TRUE(ContainsText(integrate, "nwbShadowInstanceChordLength"));
+    EXPECT_TRUE(ContainsText(integrate, "nwbShadowCombineCompletedInstance"));
+    EXPECT_TRUE(ContainsText(integrate, "nwbShadowFinalizeRayOptics"));
+    EXPECT_TRUE(ContainsText(traverse, "nwbSwShadowInstanceOptics"));
+    EXPECT_TRUE(ContainsText(traverse, "nwbSwShadowStoreCompletedInstance"));
+    EXPECT_TRUE(ContainsText(traverse, "NwbShadowInstanceStatus::Completed"));
+    EXPECT_TRUE(ContainsText(traverse, "NwbShadowInstanceStatus::OpaqueBlocked"));
+    EXPECT_TRUE(ContainsText(traverse, "NwbShadowInstanceStatus::StackOverflow"));
+    EXPECT_TRUE(ContainsText(traverse, "NwbShadowInstanceStatus::NoIntersection"));
+}
+
+
 TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

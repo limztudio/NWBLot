@@ -56,19 +56,23 @@ uint nwbSwShadowInstanceCount(){
 }
 
 
-// Per-instance traversal accumulates transparent crossings and stops on opaque hits.
-void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
+// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once.
+// The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
+// Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
+NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
     // Compile-time class filter avoids runtime traversal branching.
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     if(transparent)
-        return;
+        return NwbShadowInstanceStatus::NoIntersection;
 #elif NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
     if(!transparent)
-        return;
+        return NwbShadowInstanceStatus::NoIntersection;
 #endif
+    optics = nwbShadowInstanceOpticsBegin();
+    bool hasAbsorption = false;
     // Per-mesh heap indices are non-uniform and must be decorated at every access.
     const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
     const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
@@ -87,7 +91,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     {
         const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
-            return; // whole mesh missed: no occluder
+            return NwbShadowInstanceStatus::NoIntersection; // whole mesh missed: no occluder
     }
 
     while(true){
@@ -102,10 +106,8 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
-                if(!transparent){
-                    acc.transmittance = half3(0.0h, 0.0h, 0.0h);
-                    return;
-                }
+                if(!transparent)
+                    return NwbShadowInstanceStatus::OpaqueBlocked;
                 const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
                 const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
@@ -125,13 +127,16 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
 
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
-                nwbShadowIntegrateCrossing(acc, instanceIndex, surface.refractionIor, surface.shadowAbsorptionTint, geometricNormal, objectNormal, smoothNormalWeight, direction, triangleHit.t);
-                // Stop once transmittance is effectively opaque.
-                if(max(max(acc.transmittance.x, acc.transmittance.y), acc.transmittance.z) < NWB_SW_SHADOW_TRANSMITTANCE_EPSILON)
-                    return;
+                const float cosI = nwbShadowCosineToRay(geometricNormal, direction);
+                const float shadingCosI = nwbShadowCosineToRay(objectNormal, direction);
+                const half fresnelCosI = half(lerp(cosI, shadingCosI, saturate(smoothNormalWeight)));
+                nwbShadowInstanceIntegrateCrossing(optics, hasAbsorption, surface.refractionIor, surface.shadowAbsorptionTint, float(fresnelCosI), triangleHit.t);
             }
-            if(stackPointer == 0u)
-                return;
+            if(stackPointer == 0u){
+                if(optics.crossingCount == 0u && optics.crossingOverflow == 0u)
+                    return NwbShadowInstanceStatus::NoIntersection;
+                return NwbShadowInstanceStatus::Completed;
+            }
             --stackPointer;
             nodeIndex = stack[stackPointer];
         }
@@ -162,15 +167,63 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
             }
 
             // Conservatively block light rather than skip an over-deep subtree.
-            if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE){
-                acc.transmittance = half3(0.0h, 0.0h, 0.0h);
-                return;
-            }
+            if((stackPointer + 1u) >= NWB_SW_SHADOW_MESH_STACK_SIZE)
+                return NwbShadowInstanceStatus::StackOverflow;
             stack[stackPointer] = farChild; // defer; descend the near child inline next iteration
             ++stackPointer;
             nodeIndex = nearChild;
         }
     }
+}
+
+// Legacy accumulator entry point: preserve the existing per-bin optical contract while the scene walk migrates.
+// Stores this instance's completed chord/absorption/interface directly into its bin exactly once; the finalize path
+// below is unchanged, so reference captures stay comparable during the campaign. Opaque/overflow handling matches
+// the pre-refactor traversal (opaque zeroes the gate; over-deep subtrees conservatively block light).
+void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc, const uint instanceIndex, const NwbShadowInstanceOptics optics){
+    int slot = -1;
+    for(uint i = 0u; i < acc.binCount; ++i){
+        if(acc.bins[i].instanceId == instanceIndex){
+            slot = (int)i;
+            break;
+        }
+    }
+    if(slot < 0){
+        if(acc.binCount >= (uint)NWB_SHADOW_MAX_OCCLUDER_BINS)
+            return; // bin table full: drop this occluder's contribution (rare; a graceful slight lightening)
+        slot = (int)acc.binCount;
+        acc.bins[slot].instanceId = instanceIndex;
+        acc.bins[slot].crossingCount = 0u;
+        acc.bins[slot].crossingOverflow = 0u;
+        acc.bins[slot].absorptionCoeff = optics.absorptionCoeff;
+        acc.bins[slot].interfaceTransmittance = optics.interfaceTransmittance;
+        acc.bins[slot].tMin = optics.tMin;
+        acc.bins[slot].tMax = optics.tMax;
+        acc.binCount += 1u;
+    }
+    // One completed instance fills its bin once: record the chord endpoints plus the overflow span fallback.
+    // Pairing in finalize reproduces the instance chord; singleton/overflow semantics match the legacy path.
+    const float chordLength = nwbShadowInstanceChordLength(optics);
+    if(chordLength <= 0.0 && optics.crossingOverflow == 0u)
+        return;
+    acc.bins[slot].crossingT[0u] = optics.tMin;
+    acc.bins[slot].crossingT[1u] = optics.tMin + chordLength;
+    acc.bins[slot].crossingCount = (optics.tMin + chordLength) != optics.tMin ? 2u : 1u;
+    acc.bins[slot].crossingOverflow = optics.crossingOverflow;
+    acc.bins[slot].tMin = optics.tMin;
+    acc.bins[slot].tMax = optics.tMin + chordLength;
+}
+
+void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
+    NwbShadowInstanceOptics optics = nwbShadowInstanceOpticsBegin();
+    const NwbShadowInstanceStatus::Enum status = nwbSwShadowInstanceOptics(instanceIndex, worldOrigin, worldDirection, tMin, tMax, optics);
+    if(status == NwbShadowInstanceStatus::OpaqueBlocked || status == NwbShadowInstanceStatus::StackOverflow){
+        acc.transmittance = half3(0.0h, 0.0h, 0.0h);
+        return;
+    }
+    if(status != NwbShadowInstanceStatus::Completed)
+        return;
+    nwbSwShadowStoreCompletedInstance(acc, instanceIndex, optics);
 }
 
 // Scene traversal refines candidate instances through mesh BVHs.

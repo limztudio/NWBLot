@@ -43,8 +43,7 @@ struct SelectionContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// P9 decision gate: no proxy or light-space representation ships unqualified. Both descriptors fail closed
-// until measured evidence plus visual approval qualify them.
+// P9 decision gate: no proxy or light-space representation ships unqualified. Both descriptors fail closed until measured evidence plus visual approval qualify them.
 TEST(CoincidentOpticalVolumes, SecondaryRepresentationsFailClosedUntilQualified){
     Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
     EXPECT_FALSE(proxy.usable());

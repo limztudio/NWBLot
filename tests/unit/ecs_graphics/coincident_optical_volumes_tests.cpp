@@ -401,9 +401,7 @@ TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// P10 reference gate: agreed scene, resolution, geometry, ray budgets, and optical model stay at
-// full extent, and no approximation ships without measured qualification. Any workload reduction is
-// a new definition, not a faster profile of the same workload.
+// P10 reference gate: agreed scene, resolution, geometry, ray budgets, and optical model stay at full extent, and no approximation ships without measured qualification. Any workload reduction is a new definition, not a faster profile of the same workload.
 TEST(CoincidentOpticalVolumes, ReferencePerformanceProfileKeepsFullExtentWithoutWorkloadChange){
     const Impl::PerformanceProfile reference = Impl::ReferencePerformanceProfile();
     EXPECT_TRUE(reference.isReference);
@@ -425,8 +423,7 @@ TEST(CoincidentOpticalVolumes, ReferencePerformanceProfileKeepsFullExtentWithout
 }
 
 
-// One approved dimension at a time (15.2): 1.0x, 0.75x, or 0.5x only; a half-linear extent without
-// reconstruction loses contacts and leaks light, so it fails closed.
+// One approved dimension at a time (15.2): 1.0x, 0.75x, or 0.5x only; a half-linear extent without reconstruction loses contacts and leaks light, so it fails closed.
 TEST(CoincidentOpticalVolumes, ReducedShadowExtentRequiresReconstructionAndApprovedStep){
     Impl::PerformanceProfile candidate;
     candidate.transparentShadowExtent = 0.5f;
@@ -455,8 +452,7 @@ TEST(CoincidentOpticalVolumes, TwoChangedDimensionsAreNotASingleDimensionCandida
 }
 
 
-// Surfel reduction without a maximum-age guarantee starves the field; unqualified P9 prototypes
-// stay off until measured evidence plus visual approval qualify them (P9 decision gate).
+// Surfel reduction without a maximum-age guarantee starves the field; unqualified P9 prototypes stay off until measured evidence plus visual approval qualify them (P9 decision gate).
 TEST(CoincidentOpticalVolumes, SurfelBudgetAndProxyGatesEnforceAgeAndQualification){
     const Impl::SecondaryEffectGeometryProxyDescriptor unqualifiedProxy{};
     const Impl::LightSpaceTransmissionDescriptor unqualifiedField{};
@@ -474,8 +470,7 @@ TEST(CoincidentOpticalVolumes, SurfelBudgetAndProxyGatesEnforceAgeAndQualificati
 }
 
 
-// Removing meshes, transparent objects, or any retained effect changes the target workload
-// definition (15.2); such a candidate must not report reference-workload results.
+// Removing meshes, transparent objects, or any retained effect changes the target workload definition (15.2); such a candidate must not report reference-workload results.
 TEST(CoincidentOpticalVolumes, DroppedFeaturesRequireANewWorkloadDefinition){
     Impl::PerformanceProfile thinned;
     thinned.retainsMeshCount = false;
@@ -491,8 +486,7 @@ TEST(CoincidentOpticalVolumes, DroppedFeaturesRequireANewWorkloadDefinition){
 }
 
 
-// Dynamic per-frame resizing and backend flips stay off: oscillation, latency, memory pressure,
-// and load-spike recovery are a later step with hysteresis and logged transitions (15.4).
+// Dynamic per-frame resizing and backend flips stay off: oscillation, latency, memory pressure, and load-spike recovery are a later step with hysteresis and logged transitions (15.4).
 TEST(CoincidentOpticalVolumes, DynamicControlIsRejectedUntilQualified){
     Impl::PerformanceProfile candidate;
     candidate.transparentShadowExtent = 0.75f;
@@ -504,6 +498,9 @@ TEST(CoincidentOpticalVolumes, DynamicControlIsRejectedUntilQualified){
     candidate.dynamicControlEnabled = false;
     EXPECT_TRUE(Impl::IsSingleDimensionCandidate(candidate, proxy, field));
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 };

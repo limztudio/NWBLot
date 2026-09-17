@@ -167,6 +167,21 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     return closest;
 }
 
+// Boolean occlusion under the legacy GI contract: ANY triangle blocks (RAY_FLAG_FORCE_OPAQUE commits the first
+// accepted hit). No attribute loads, no material evaluation, no barycentric reconstruction.
+bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
+    RayDesc ray;
+    ray.Origin = origin;
+    ray.Direction = direction;
+    ray.TMin = tMin;
+    ray.TMax = tMax;
+
+    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    query.Proceed();
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

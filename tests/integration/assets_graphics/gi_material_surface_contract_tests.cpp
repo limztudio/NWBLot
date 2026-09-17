@@ -127,6 +127,33 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 // Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the material heap selector alone.
 // P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque blocks, keep the conservative overflow fallback, and never retain crossings across instances.
 // P5 hardware-transmission experiment: same optical oracle as software, bounded candidate storage, explicit fallback on overflow/CSG, disabled by default so shipping behavior is unchanged.
+// P8 boolean GI occlusion: same geometric-blocking acceptance as closest, without attribute/material work.
+TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString commonSource;
+    AString swSource;
+    AString hwSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_trace_common.slangi", commonSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_hw_trace.slangi", hwSource));
+
+    const AStringView common(commonSource.data(), commonSource.size());
+    const AStringView sw(swSource.data(), swSource.size());
+    const AStringView hw(hwSource.data(), hwSource.size());
+
+    EXPECT_TRUE(ContainsText(common, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);"));
+    EXPECT_TRUE(ContainsText(common, "nwbGiTraceOccluded("));
+    EXPECT_TRUE(ContainsText(common, "nwbGiShadeHit"));
+    EXPECT_TRUE(ContainsText(sw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
+    EXPECT_TRUE(ContainsText(sw, "nwbGiSwInstanceOccluded"));
+    EXPECT_TRUE(ContainsText(sw, "nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2)"));
+    EXPECT_TRUE(ContainsText(hw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
+    EXPECT_TRUE(ContainsText(hw, "RAY_FLAG_FORCE_OPAQUE"));
+}
+
+
 TEST(EcsGraphics, HardwareTransmissionExperimentKeepsSoftwareOracleAndStaysDisabled){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

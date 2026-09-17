@@ -50,6 +50,12 @@ struct NwbGiTraceHit{
 // here so the shared shade can re-enter it for the occlusion ray before the backend supplies the definition.
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
 
+// P8.2 boolean occlusion seam: same geometric-blocking acceptance as the legacy GI contract (ANY surface blocks,
+// including transparent-classified geometry), but returns only whether a valid blocker exists. No normal/UV/material
+// reconstruction: the SW walk returns on the first valid blocker, and the HW route uses first-accepted-hit behavior.
+// Named for geometric blocking under the legacy GI contract, not opaque-material-only blocking.
+bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -97,13 +103,14 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             }
         }
         if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > 0.0){
-            const NwbGiTraceHit shadowHit = nwbGiTraceClosest(
+            // Boolean occlusion only: the shadow ray needs blocker existence, not reconstructed attributes.
+            const bool occluded = nwbGiTraceOccluded(
                 hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE,
                 dominantLightDir,
                 NWB_GI_TRACE_RAY_MIN_DISTANCE,
                 NWB_GI_TRACE_RAY_MAX_DISTANCE
             );
-            if(shadowHit.hit)
+            if(occluded)
                 irradiance *= 0.0; // fully shadowed by the dominant-light occlusion ray
         }
     }

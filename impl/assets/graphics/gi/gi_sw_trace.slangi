@@ -323,6 +323,173 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     return closest;
 }
 
+// Per-instance boolean blocker test: same triangle acceptance as the closest path, but returns on the first valid
+// blocker without loading vertex attributes or evaluating the material surface.
+bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax){
+    const NwbSwBvhInstance instance = NwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
+
+    const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+    const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
+    const float3 invDir = nwbBvhSafeInvDir(direction);
+
+    uint stack[NWB_GI_SW_MESH_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                const uint triangle = nwbBvhLeafPrimitive(node);
+                const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+                const uint3 triIndices = NwbHeapRawBuffer(material.indexSlot).Load3(
+                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
+                );
+                const float3 v0 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v1 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const float3 v2 = asfloat(
+                    NwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
+                );
+                const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
+                if(triHit.hit)
+                    return true;
+                break;
+            }
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    tMax,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    tMax,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_GI_SW_MESH_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
+                }
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
+                break;
+            }
+        }
+    }
+    return false;
+}
+
+// Scene-level boolean occlusion: ANY surface blocks under the legacy GI contract. Returns on the first valid
+// blocker; never reconstructs attributes or shades provisional hits.
+bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
+    const float3 invDir = nwbBvhSafeInvDir(direction);
+
+    uint stack[NWB_GI_SW_SCENE_STACK_SIZE];
+    stack[0u] = 0u;
+    uint stackPointer = 1u;
+
+    [loop] while(stackPointer > 0u){
+        --stackPointer;
+        NwbBvhNode node = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
+        if(!nwbBvhRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+
+        [loop] while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                if(nwbGiSwInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax))
+                    return true;
+                break;
+            }
+            else{
+                const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
+                const uint right = nwbBvhNodeRightChildIndex(node);
+                const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[right];
+                float tLeft;
+                const bool hitLeft = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    tMax,
+                    leftNode.aabbMin,
+                    leftNode.aabbMax,
+                    0.0,
+                    tLeft
+                );
+                float tRight;
+                const bool hitRight = nwbBvhRayAabbT(
+                    origin,
+                    invDir,
+                    tMin,
+                    tMax,
+                    rightNode.aabbMin,
+                    rightNode.aabbMax,
+                    0.0,
+                    tRight
+                );
+                if(hitLeft && hitRight){
+                    if(tLeft <= tRight){
+                        if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = right;
+                            ++stackPointer;
+                        }
+                        node = leftNode;
+                    }
+                    else{
+                        if(stackPointer < NWB_GI_SW_SCENE_STACK_SIZE){
+                            stack[stackPointer] = node.leftChild;
+                            ++stackPointer;
+                        }
+                        node = rightNode;
+                    }
+                    continue;
+                }
+                if(hitLeft){ node = leftNode; continue; }
+                if(hitRight){ node = rightNode; continue; }
+                break;
+            }
+        }
+    }
+
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

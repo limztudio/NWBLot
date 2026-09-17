@@ -58,11 +58,9 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
-    // P3: evaluate each meshlet-local vertex ONCE into groupshared staging, then gather per corner. The cache
-    // index is the full local-vertex reference (not the position index) so seams with shared positions but
-    // distinct UVs/normals/tangents keep their identity. Output format is unchanged: the primitive loop below
-    // writes the same expanded triangle-corner stream as before. All lanes reach the staging barrier uniformly:
-    // meshlet-level exits above return before this cooperative phase.
+    // P3: evaluate each meshlet-local vertex ONCE into groupshared staging, then gather per corner.
+    // The cache index is the full local-vertex reference (not the position index) so seams with shared positions but distinct UVs/normals/tangents keep their identity. Output format is unchanged: the primitive loop below writes the same expanded triangle-corner stream as before.
+    // All lanes reach the staging barrier uniformly: meshlet-level exits above return before this cooperative phase.
     const uint localVertexCount = nwbMeshletVertexCount(meshlet);
     for(
         uint localVertexIndex = groupThreadID.x;

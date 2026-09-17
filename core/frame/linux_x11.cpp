@@ -8,7 +8,13 @@
 
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
+#include <X11/Xatom.h>
 #include <X11/Xutil.h>
+
+#if defined(NWB_PLATFORM_LINUX)
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 
 #ifdef Button4
 #undef Button4
@@ -400,6 +406,26 @@ bool InitX11Frame(Frame& frame){
 
     XSelectInput(GetX11Display(frameData), GetX11Window(frameData), EventMask);
     XStoreName(GetX11Display(frameData), GetX11Window(frameData), AppName);
+
+    // Tag the top-level window with the process id so smoke teardown can locate
+    // the exact window for graceful WM_DELETE_WINDOW close on headless XWayland,
+    // where the window is never mapped and PID lookup is the only match key.
+    {
+        const Atom pidAtom = XInternAtom(GetX11Display(frameData), "_NET_WM_PID", False);
+        if(pidAtom != None){
+            const long pidValue = static_cast<long>(::getpid());
+            XChangeProperty(
+                GetX11Display(frameData),
+                GetX11Window(frameData),
+                pidAtom,
+                XA_CARDINAL,
+                32,
+                PropModeReplace,
+                reinterpret_cast<const unsigned char*>(&pidValue),
+                1
+            );
+        }
+    }
 
     SetDeleteWindowMessage(frameData, XInternAtom(GetX11Display(frameData), "WM_DELETE_WINDOW", False));
     if(GetDeleteWindowMessage(frameData) == None){

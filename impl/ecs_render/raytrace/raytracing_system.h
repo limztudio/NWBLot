@@ -1286,6 +1286,8 @@ private:
     // Persist across graph declaration/recording so the immutable blob and compatibility writer never regather
     // mutable renderer state after preflight. The bytes are tightly packed NwbCausticEmissionTargetGpu records.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
+    // P7 valid-work diagnostic: cumulative degenerate caustic emission targets skipped before dispatch.
+    u64 m_causticDegenerateTargetSkips = 0u;
     // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
     // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceMaterialBytes;

@@ -7,15 +7,9 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path
-// already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its heap-selected trace-context
-// uniform selects the scene BVH / instance and shadow material buffers from the global StorageBuffer heap.
-// gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene
-// light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade +
-// NwbGiTraceHit, so a red wall bounces red identically. The producer's own shader supplies the OUTPUT bindings + main()
-// (the surfel path reduces rays in groupshared and running-means them into a surfel record).
+// The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its heap-selected trace-context uniform selects the scene BVH / instance and shadow material buffers from the global StorageBuffer heap.
+// gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade + NwbGiTraceHit, so a red wall bounces red identically.
+// The producer's own shader supplies the OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
 
 
 #include "sw_binding_slots.h"
@@ -29,39 +23,32 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the
-// deferred target-generation payload itself from the global UniformBuffer table, so this shader has no local CBV.
+// The shared scene-shading CB + light list are target-generation heap entries. The surfel trace push block selects the deferred target-generation payload itself from the global UniformBuffer table, so this shader has no local CBV.
 #define g_NwbGiSwBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbSurfelHeapPushConstants.deferredResourcesHeapSlot]
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbGiSwBindlessResources.avboitSlots.w
 
-// Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases
-// without a local selector CBV.
+// Per-trace scene/material context. Its uniform heap slot is also pushed, selecting the five StorageBuffer aliases without a local selector CBV.
 #define g_NwbGiSwMaterialContextSlots g_NwbHeapSurfelMaterialContextSlotBuffers[g_NwbSurfelHeapPushConstants.materialContextSlotsHeapSlot]
 
-// The generated material-surface evaluator reaches its typed words and mutable mesh-instance records through the
-// mesh bindless-frame route before material_typed_bindings.slangi is included by shadow_surface.slangi.
+// The generated material-surface evaluator reaches its typed words and mutable mesh-instance records through the mesh bindless-frame route before material_typed_bindings.slangi is included by shadow_surface.slangi.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.sceneSlots.w;
 }
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbGiSwMaterialContextSlots.materialSlots.x;
 }
-// The trace material surface never reads mesh view data; bindless view mode keeps bindless_heap_mesh.slangi from
-// declaring a phantom local view cbuffer while retaining a valid helper for any incidental include-time reference.
+// The trace material surface never reads mesh view data; bindless view mode keeps bindless_heap_mesh.slangi from declaring a phantom local view cbuffer while retaining a valid helper for any incidental include-time reference.
 uint nwbMeshFrameViewHeapSlot(){
     return 0u;
 }
 // Provides the typed material-word and mesh-instance views that material_typed_bindings.slangi aliases above.
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
-// Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
+// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures. Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
-// The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants
-// and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface
-// instead of guessing one project-interface field.
+// The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface instead of guessing one project-interface field.
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 
@@ -73,19 +60,15 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots;
-// the heap-selected trace context carries the scene-node slot. This include provides NwbHeapBvhNodes() and
+// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the heap-selected trace context carries the scene-node slot. This include provides NwbHeapBvhNodes() and
 // NwbHeapRawBuffer().
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Heap-selected SW scene records
 
-
-// --- Heap-selected SW scene records ---
-
-// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed
-// buffers. This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
+// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers. This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -96,16 +79,13 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapGiSwInstances(const 
     return g_NwbHeapGiSwInstanceBuffers[slot];
 }
 
-// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material
-// record. The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
+// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material record. The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-triangle-corner inputs for the material surface evaluator. This is the same 16-byte ray-trace attribute layout
-// the shadow and caustic paths use: Half4 normal at NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET and Float2 uv0
-// at NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET.
+// Per-triangle-corner inputs for the material surface evaluator. This is the same 16-byte ray-trace attribute layout the shadow and caustic paths use: Half4 normal at NWB_RAYTRACE_VERTEX_ATTRIBUTE_NORMAL_BYTE_OFFSET and Float2 uv0 at NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET.
 NwbRayTraceVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
@@ -114,9 +94,7 @@ NwbRayTraceVertexAttrib nwbGiSwLoadVertexAttrib(const uint attributeSlot, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the
-// nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the
-// authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
+// Per-instance closest-hit refinement: push the world ray into object space, walk the mesh BVH front-to-back, keep the nearest triangle crossing. On hit, compute the geometric face normal for Lambert lighting and reconstruct the authored material-surface inputs (normal + uv0 + typed material context) for the GI bounce albedo.
 void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, inout NwbGiTraceHit closest){
     const NwbSwBvhInstance instance = NwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -323,8 +301,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     return closest;
 }
 
-// Per-instance boolean blocker test: same triangle acceptance as the closest path, but returns on the first valid
-// blocker without loading vertex attributes or evaluating the material surface.
+// Per-instance boolean blocker test: same triangle acceptance as the closest path, but returns on the first valid blocker without loading vertex attributes or evaluating the material surface.
 bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax){
     const NwbSwBvhInstance instance = NwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiSwMaterialContextSlots.sceneSlots.z)[instanceIndex];
@@ -416,8 +393,7 @@ bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin,
     return false;
 }
 
-// Scene-level boolean occlusion: ANY surface blocks under the legacy GI contract. Returns on the first valid
-// blocker; never reconstructs attributes or shades provisional hits.
+// Scene-level boolean occlusion: ANY surface blocks under the legacy GI contract. Returns on the first valid blocker; never reconstructs attributes or shades provisional hits.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
     const float3 invDir = nwbBvhSafeInvDir(direction);
 

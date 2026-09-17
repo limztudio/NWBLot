@@ -56,8 +56,7 @@ uint nwbSwShadowInstanceCount(){
 }
 
 
-// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once.
-// The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
+// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once. The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
 // Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
 NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
@@ -79,7 +78,7 @@ NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex
     const float3 invDir = nwbSwShadowSafeInvDir(direction);
 
     // Near-first traversal defers only far children for early exits.
-    //
+
     // Crossing integration is order-independent; never narrow tMax for transparent occluders.
     uint stack[NWB_SW_SHADOW_MESH_STACK_SIZE];
     stack[0u] = 0u;
@@ -177,9 +176,7 @@ NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex
 }
 
 // Legacy accumulator entry point: preserve the existing per-bin optical contract while the scene walk migrates.
-// Stores this instance's completed chord/absorption/interface directly into its bin exactly once; the finalize path
-// below is unchanged, so reference captures stay comparable during the campaign. Opaque/overflow handling matches
-// the pre-refactor traversal (opaque zeroes the gate; over-deep subtrees conservatively block light).
+// Stores this instance's completed chord/absorption/interface directly into its bin exactly once; the finalize path below is unchanged, so reference captures stay comparable during the campaign. Opaque/overflow handling matches the pre-refactor traversal (opaque zeroes the gate; over-deep subtrees conservatively block light).
 void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc, const uint instanceIndex, const NwbShadowInstanceOptics optics){
     int slot = -1;
     for(uint i = 0u; i < acc.binCount; ++i){
@@ -201,8 +198,7 @@ void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc,
         acc.bins[slot].tMax = optics.tMax;
         acc.binCount += 1u;
     }
-    // One completed instance fills its bin once: record the chord endpoints plus the overflow span fallback.
-    // Pairing in finalize reproduces the instance chord; singleton/overflow semantics match the legacy path.
+    // One completed instance fills its bin once: record the chord endpoints plus the overflow span fallback. Pairing in finalize reproduces the instance chord; singleton/overflow semantics match the legacy path.
     const float chordLength = nwbShadowInstanceChordLength(optics);
     if(chordLength <= 0.0 && optics.crossingOverflow == 0u)
         return;

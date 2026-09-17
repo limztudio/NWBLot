@@ -24,10 +24,8 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Conservative geometry-equivalence key for generated-geometry reuse. A missed reuse costs performance; an
-// incorrect hit corrupts rendering, so equality starts strict: same mesh, same pipeline program and pass, same
-// instance payload, and same source-buffer/output-buffer identity. Deformation revision, view-specific culling, and
-// CSG classification extend this key before any cross-phase producer shares them.
+// Conservative geometry-equivalence key for generated-geometry reuse. A missed reuse costs performance; an incorrect hit corrupts rendering, so equality starts strict: same mesh, same pipeline program and pass, same instance payload, and same source-buffer/output-buffer identity.
+// Deformation revision, view-specific culling, and CSG classification extend this key before any cross-phase producer shares them.
 struct GeneratedGeometryEquivalenceKey{
     Name meshKey = NAME_NONE;
     Name material = NAME_NONE;
@@ -69,8 +67,7 @@ struct GeneratedGeometryEquivalenceKey{
     return key;
 }
 
-// P2-B producer contract: frozen generation inputs separated from raster-pass inputs. The producer must not rely
-// on mutable recording-time renderer state absent from this payload.
+// P2-B producer contract: frozen generation inputs separated from raster-pass inputs. The producer must not rely on mutable recording-time renderer state absent from this payload.
 struct GeneratedGeometryProducerDescriptor{
     GeneratedGeometryEquivalenceKey key{};
     usize drawIndex = 0u;
@@ -144,8 +141,7 @@ struct RegularSharedComputeEmulationGraphPlan{
 
             drawItems[drawIndex] = drawItem;
             equivalenceKeys[drawIndex] = MakeGeneratedGeometryEquivalenceKey(drawItem);
-            // P2-G diagnostic: draws sharing one output buffer plus identical keys are reuse hits; draws that
-            // alias the output with differing keys are counted as rejected aliasing, never silently shared.
+            // P2-G diagnostic: draws sharing one output buffer plus identical keys are reuse hits; draws that alias the output with differing keys are counted as rejected aliasing, never silently shared.
             if(drawIndex > 0u){
                 ++reuseOpportunities;
                 if(equivalenceKeys[drawIndex].matches(drawItems[0u]) && equivalenceKeys[0u].matches(drawItem))
@@ -164,8 +160,7 @@ struct RegularSharedComputeEmulationGraphPlan{
 
         const MaterialPassDrawItem& drawItem = drawItems[drawIndex];
         const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
-        // P2-D lease guard: buffer identity plus the frozen equivalence key must both hold at record time.
-        // A recycled buffer address with different generation inputs must never validate a stale lease.
+        // P2-D lease guard: buffer identity plus the frozen equivalence key must both hold at record time. A recycled buffer address with different generation inputs must never validate a stale lease.
         return mesh.emulationVertexBuffer
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexBuffer.get() == outputBuffer.get()

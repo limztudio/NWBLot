@@ -191,7 +191,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
     CpuTaskScope* const scope,
     const CpuTaskOptions options,
     const TaskHandle* const dependencies,
-    const usize dependencyCount){
+    const usize dependencyCount
+){
     if(
         !function || (dependencyCount != 0u && !dependencies)
         || options.cost > CpuTaskCost::Light || options.priority > CpuTaskPriority::Background
@@ -358,7 +359,8 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    const ScopeWait* const preferredScope)noexcept{
+    const ScopeWait* const preferredScope
+)noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % 32u == 31u ? 2u : (dispatch % 8u == 7u ? 1u : 0u);
@@ -404,7 +406,8 @@ bool CpuTaskScheduler::hasReadyLocked(
     const CpuAffinity::Enum affinity,
     const bool mainThread,
     const bool cooperative,
-    const ScopeWait* const preferredScope)noexcept{
+    const ScopeWait* const preferredScope
+)noexcept{
     for(usize index = 0u; index < s_QueueCount; ++index){
         if(!queueEligible(index, affinity, mainThread, cooperative))
             continue;
@@ -468,7 +471,8 @@ bool CpuTaskScheduler::queueEligible(
     const usize queue,
     const CpuAffinity::Enum affinity,
     const bool mainThread,
-    const bool cooperative)const noexcept{
+    const bool cooperative
+)const noexcept{
     const usize cost = queue % 4u;
     if(cost == 3u)
         return mainThread;
@@ -487,7 +491,8 @@ void CpuTaskScheduler::execute(
     const TaskHandle handle,
     const usize workerIndex,
     const CpuAffinity::Enum affinity,
-    const bool cooperative){
+    const bool cooperative
+){
     TaskNode* node;
     bool invoke;
     Optional<ProfileSample> profile;

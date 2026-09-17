@@ -475,8 +475,10 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it
         // dirty. This deliberately includes off-screen meshes, matching the established native traversal.
-        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
+        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending){
+            ++m_blasLedgerStaticSkipped;
             continue;
+        }
 
         PreparedMeshBlasBuild build;
         if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
@@ -562,6 +564,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
             continue;
         }
         if(build.firstBuild){
+            ++m_blasLedgerFirstBuilds;
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
                 , StringConvert(build.meshName.c_str())
                 , build.runtimeMesh
@@ -569,11 +572,23 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
                 , static_cast<u64>(build.indexCount)
             );
         }
+        else if(build.performRefit)
+            ++m_blasLedgerRefits;
+        else
+            ++m_blasLedgerRebuilds;
+        m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
     }
     // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS
     // rebuild rather than retaining a static-scene hash that may describe the retired generation.
     if(!allPlansCurrent)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}")
+        , m_blasLedgerStaticSkipped
+        , m_blasLedgerFirstBuilds
+        , m_blasLedgerRefits
+        , m_blasLedgerRebuilds
+        , m_blasLedgerUploadedBytes
+    );
     clearPreparedMeshBlasBuilds();
 }
 

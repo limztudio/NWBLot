@@ -21,13 +21,47 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GeneratedGeometryOutputVersion{
+    enum Enum : u8{
+        ExpandedTriangleCorners = 1u,
+        FixedRangeIndexed = 2u,
+    };
+};
+
+// P4 versioned generated-geometry output contract. ExpandedTriangleCorners is the shipping layout: one complete
+// 64-byte vertex per triangle corner, drawn non-indexed. FixedRangeIndexed is the opt-in ABI: unique local
+// vertices plus a fixed-range corner index stream with culled primitives represented explicitly, drawn indexed.
+// The layout version travels with the snapshot so stale cooked artifacts and mismatched producers/consumers fail
+// closed instead of misreading the output buffer.
+struct GeneratedGeometryOutputDescriptor{
+    GeneratedGeometryOutputVersion::Enum version = GeneratedGeometryOutputVersion::ExpandedTriangleCorners;
+    u32 uniqueLocalVertexCount = 0u;
+    u32 cornerIndexCount = 0u;
+    u32 indexByteWidth = 4u;
+
+    [[nodiscard]] bool indexed()const noexcept{ return version == GeneratedGeometryOutputVersion::FixedRangeIndexed; }
+
+    [[nodiscard]] bool validForCornerCount(const u32 cornerCount)const noexcept{
+        if(version == GeneratedGeometryOutputVersion::ExpandedTriangleCorners)
+            return true;
+        return uniqueLocalVertexCount > 0u
+            && cornerIndexCount == cornerCount
+            && (indexByteWidth == 2u || indexByteWidth == 4u)
+        ;
+    }
+};
+
 struct MaterialPassMeshResourceSnapshot{
     RuntimeMeshBuffers sourceBuffers;
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     Core::BufferHandle emulationVertexBuffer;
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::BufferHandle emulationIndexBuffer;
+    Core::GpuDescriptorHandle emulationIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    GeneratedGeometryOutputDescriptor generatedOutput{};
     u32 meshletCount = 0u;
     u32 meshletPrimitiveIndexCount = 0u;
+    u32 meshletLocalVertexCount = 0u;
     bool runtimeMesh = false;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;

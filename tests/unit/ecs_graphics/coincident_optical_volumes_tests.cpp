@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_render/optics/secondary_geometry_contract.h>
 
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
@@ -40,6 +41,24 @@ struct SelectionContext{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// P9 decision gate: no proxy or light-space representation ships unqualified. Both descriptors fail closed
+// until measured evidence plus visual approval qualify them.
+TEST(CoincidentOpticalVolumes, SecondaryRepresentationsFailClosedUntilQualified){
+    Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    EXPECT_FALSE(proxy.usable());
+    proxy.qualified = true;
+    EXPECT_FALSE(proxy.usable());
+    Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_FALSE(field.usable());
+    field.qualified = true;
+    EXPECT_FALSE(field.usable());
+    field.sliceCount = 16u;
+    field.nearDepth = 1.0f;
+    field.farDepth = 100.0f;
+    EXPECT_TRUE(field.usable());
+}
 
 
 TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations){

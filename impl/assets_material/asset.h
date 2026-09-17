@@ -146,8 +146,7 @@ namespace MaterialResourceSource{
     ;
 }
 
-// Serialized resource paths arrive as Name hashes, so their original text cannot be revalidated here. The explicit
-// asset source and the resource kind keep the renderer's asset-family dispatch unambiguous.
+// Serialized resource paths arrive as Name hashes, so their original text cannot be revalidated here. The explicit asset source and the resource kind keep the renderer's asset-family dispatch unambiguous.
 [[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
     const MaterialResourceKind::Enum resourceKind,
     const MaterialResourceSource::Enum resourceSource,
@@ -162,9 +161,7 @@ namespace MaterialResourceSource{
 }
 
 
-// The first material-authored resource slice deliberately exposes a tiny fixed fixture catalog instead of a general
-// image-asset pipeline. These names are cooked into MaterialResourceReference records and resolved by the renderer
-// to stable global-heap descriptors. Keep the contract here so cook, runtime loading, and renderer resolution agree.
+// The first material-authored resource slice deliberately exposes a tiny fixed fixture catalog instead of a general image-asset pipeline. These names are cooked into MaterialResourceReference records and resolved by the renderer to stable global-heap descriptors. Keep the contract here so cook, runtime loading, and renderer resolution agree.
 namespace MaterialResourceFixture{
     inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
     inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
@@ -256,8 +253,7 @@ namespace MaterialLayoutFieldType{
         Float2 = 34,
         Float3 = 35,
         Float4 = 36,
-        // Resource fields occupy one patched uint heap slot in the typed-byte payload. They intentionally live
-        // after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
+        // Resource fields occupy one patched uint heap slot in the typed-byte payload. They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
         SampledImage2D = 37,
         Sampler = 38,
     };
@@ -410,8 +406,7 @@ struct MaterialTypedLayoutField{
     UInt4U defaultValue = {};
 };
 
-// A cooked material separates resource identity from its numeric/default payload. `constantByteOffset` is the slot
-// word the renderer patches after resolving the descriptor handle. Exactly one typed reference is valid.
+// A cooked material separates resource identity from its numeric/default payload. `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle. Exactly one typed reference is valid.
 struct MaterialResourceReference{
     Name blockName = NAME_NONE;
     Name fieldName = NAME_NONE;
@@ -419,9 +414,7 @@ struct MaterialResourceReference{
     Core::Assets::AssetRef<Sampler> samplerAsset;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
     MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
-    // A cooked material keeps resource identity separate from its numeric/default typed payload.
-    // `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves
-    // the device-lifetime descriptor handle.
+    // A cooked material keeps resource identity separate from its numeric/default typed payload. `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves the device-lifetime descriptor handle.
     Name fixtureName = NAME_NONE;
     u32 constantByteOffset = 0u;
 };
@@ -500,13 +493,10 @@ public:
     [[nodiscard]] const ResourceReferenceVector& resourceReferences()const{ return m_resourceReferences; }
     [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
     [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
-    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw (the transparent-pass twin
-    // of the G-buffer PS). Valid only for surface-authored transparent materials; missing means a cook/runtime
-    // contract failure. Not a graphics stage: the material has one pixel stage, and this is the transparent-only
-    // shader the renderer selects by pass.
+    // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw (the transparent-pass twin of the G-buffer PS). Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
+    // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
-    // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface
-    // renderCoverage. Same validity contract as above.
+    // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
     [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const{ return m_transparent; }

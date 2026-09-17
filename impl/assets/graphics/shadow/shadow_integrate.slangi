@@ -7,30 +7,21 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Occlusion-ray volume-path integration for the software traversal (sw_shadow_traverse.slangi, t = triangleHit.t, geometric normal from the loaded triangle positions + the object-space ray dir). The accumulator lives as a LOCAL variable, so its per-occluder bin array indexes safely.
+
+// Must be included AFTER the surface helpers (shadow_surface.slangi -> mesh/surface.slangi), which define nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient.
 
 
-// Occlusion-ray volume-path integration for the software traversal (sw_shadow_traverse.slangi, t = triangleHit.t,
-// geometric normal from the loaded triangle positions + the object-space ray dir). The accumulator lives as a LOCAL
-// variable, so its per-occluder bin array indexes safely.
-//
-// Must be included AFTER the surface helpers (shadow_surface.slangi -> mesh/surface.slangi), which define
-// nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient.
-
-
-// Max distinct occluders one shadow ray accumulates (the per-thread transparent accumulator's bin array). A ray crosses only
-// the few refractors between it and the light; a further occluder beyond this drops its rare contribution gracefully
-// rather than mis-binning.
+// Max distinct occluders one shadow ray accumulates (the per-thread transparent accumulator's bin array). A ray crosses only the few refractors between it and the light; a further occluder beyond this drops its rare contribution gracefully rather than mis-binning.
 #define NWB_SHADOW_MAX_OCCLUDER_BINS 3
 #define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
 #define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
 #define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
 
-// Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so
-// one occluder's unbalanced crossing cannot corrupt the others. For a closed volume the robust chord is the sum of
-// sorted hit-distance pairs (t1-t0, t3-t2, ...), not a face-sign telescope: at hard triangle edges the ray query can
-// report either adjacent face first and their geometric normals may disagree about entry/exit. Pairing merged hit
-// distances treats an edge hit as one physical boundary and avoids a real through-volume segment collapsing to zero.
+// Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so one occluder's unbalanced crossing cannot corrupt the others.
+// For a closed volume the robust chord is the sum of sorted hit-distance pairs (t1-t0, t3-t2, ...), not a face-sign telescope: at hard triangle edges the ray query can report either adjacent face first and their geometric normals may disagree about entry/exit.
+// Pairing merged hit distances treats an edge hit as one physical boundary and avoids a real through-volume segment collapsing to zero.
 struct NwbShadowOccluderBin{
     uint instanceId;         // the crossing's InstanceID() / scene-BVH instance index; unique per occluder
     uint crossingCount;      // merged unique boundary hits for this occluder
@@ -42,9 +33,7 @@ struct NwbShadowOccluderBin{
     float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER]; // unique boundary hit distances, sorted in finalize
 };
 
-// Running accumulators for one occlusion ray. Final visibility = transmittance * exp(-opticalDepth), where the
-// optical depth is summed across the per-occluder bins (paired unique hit distances, or their recorded span after
-// crossing-list overflow -- see nwbShadowFinalizeVisibility).
+// Running accumulators for one occlusion ray. Final visibility = transmittance * exp(-opticalDepth), where the optical depth is summed across the per-occluder bins (paired unique hit distances, or their recorded span after crossing-list overflow -- see nwbShadowFinalizeVisibility).
 //   transmittance -- opaque-hit gate (seed 1; opaque hit zeroes it). Transparent Fresnel is held per bin until finalize so singleton edge hits cannot darken a pixel without a real volume chord.
 //   bins/binCount -- the per-occluder optical-depth bins (see NwbShadowOccluderBin).
 struct NwbShadowVisibilityAccumulator{
@@ -54,16 +43,14 @@ struct NwbShadowVisibilityAccumulator{
 };
 
 // Persistent per-ray optics: the opaque gate plus the combined transparent result of every COMPLETED instance.
-// Temporary crossing storage lives in one NwbShadowInstanceOptics below and is discarded after that instance
-// finalizes, so the next mesh traversal does not retain the prior instance's crossing list.
+// Temporary crossing storage lives in one NwbShadowInstanceOptics below and is discarded after that instance finalizes, so the next mesh traversal does not retain the prior instance's crossing list.
 struct NwbShadowRayOptics{
     half3 transmittance;
     float3 opticalDepth;
     half interfaceTransmittance;
 };
 
-// Temporary per-instance crossing state. Scoped to the single mesh traversal in nwbSwShadowInstanceOptics so its
-// crossing list is finalized exactly once and never retained across the next instance.
+// Temporary per-instance crossing state. Scoped to the single mesh traversal in nwbSwShadowInstanceOptics so its crossing list is finalized exactly once and never retained across the next instance.
 struct NwbShadowInstanceOptics{
     float3 absorptionCoeff;
     float interfaceTransmittance;
@@ -74,8 +61,7 @@ struct NwbShadowInstanceOptics{
     float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
 };
 
-// Traversal outcome for one instance: the caller combines completed optics exactly once, zeroes visibility on an
-// opaque block, keeps the conservative all-blocked fallback on stack overflow, and adds nothing on a clean miss.
+// Traversal outcome for one instance: the caller combines completed optics exactly once, zeroes visibility on an opaque block, keeps the conservative all-blocked fallback on stack overflow, and adds nothing on a clean miss.
 namespace NwbShadowInstanceStatus{
     enum Enum : uint{
         Completed,
@@ -115,8 +101,7 @@ NwbShadowInstanceOptics nwbShadowInstanceOpticsBegin(){
     return optics;
 }
 
-// Fold ONE accepted transparent crossing into temporary instance state. Order-independent: pairing happens once at
-// finalize, so traversal must never narrow tMax for transparent occluders.
+// Fold ONE accepted transparent crossing into temporary instance state. Order-independent: pairing happens once at finalize, so traversal must never narrow tMax for transparent occluders.
 void nwbShadowInstanceIntegrateCrossing(inout NwbShadowInstanceOptics optics, inout bool hasAbsorption, const float ior, const half3 transmission, const float cosI, const float t){
     for(uint i = 0u; i < optics.crossingCount; ++i){
         if(nwbShadowCrossingMatchesEndpoint(t, optics.crossingT[i]))
@@ -144,9 +129,7 @@ void nwbShadowInstanceIntegrateCrossing(inout NwbShadowInstanceOptics optics, in
     }
 }
 
-// Pair one instance's merged boundary distances into its inside chord. Matches the legacy per-bin finalize: sorted
-// unique distances pair into inside intervals, overflow (or a trailing odd count beyond the first pair) falls back
-// to the recorded first-to-last span, and a singleton contributes no volume.
+// Pair one instance's merged boundary distances into its inside chord. Matches the legacy per-bin finalize: sorted unique distances pair into inside intervals, overflow (or a trailing odd count beyond the first pair) falls back to the recorded first-to-last span, and a singleton contributes no volume.
 float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
     float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
     const uint crossingCount = min(optics.crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
@@ -172,8 +155,7 @@ float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
     return chordLength;
 }
 
-// Combine ONE completed instance into persistent ray optics exactly once. Singleton crossings hold no volume, so
-// their interface product stays faded out by the shared interface fade.
+// Combine ONE completed instance into persistent ray optics exactly once. Singleton crossings hold no volume, so their interface product stays faded out by the shared interface fade.
 void nwbShadowCombineCompletedInstance(inout NwbShadowRayOptics rayOptics, const NwbShadowInstanceOptics optics){
     if(optics.crossingCount == 0u && optics.crossingOverflow == 0u)
         return;
@@ -183,8 +165,7 @@ void nwbShadowCombineCompletedInstance(inout NwbShadowRayOptics rayOptics, const
     rayOptics.opticalDepth += optics.absorptionCoeff * chordLength;
 }
 
-// Combine persistent ray optics into final per-channel visibility. Same policy as the legacy bin finalize:
-// opaque gate * interface product * Beer-Lambert over summed independent-occluder depth.
+// Combine persistent ray optics into final per-channel visibility. Same policy as the legacy bin finalize: opaque gate * interface product * Beer-Lambert over summed independent-occluder depth.
 half3 nwbShadowFinalizeRayOptics(const NwbShadowRayOptics optics){
     return half3(saturate(float3(optics.transmittance) * float(optics.interfaceTransmittance) * exp(-max(optics.opticalDepth, float3(0.0, 0.0, 0.0)))));
 }
@@ -207,19 +188,14 @@ float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3
     return smoothstep(1e-5, 2e-3, spread);
 }
 
-// Fold ONE transparent surface crossing into the running visibility. The caller supplies the crossing's occluder id
-// + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal
-// and rayDirection MUST be in the SAME object space (invariant to the instance transform); shadingNormal is the
-// interpolated triangle-corner normal in that same space, and t is the WORLD ray distance to the hit.
-//
-// Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus Fresnel loss at each
-// accepted interface. Hard/faceted triangles use the geometric face normal so their shadow keeps the authored hard
-// edge response; smooth vertex-normal triangles blend to the interpolated shading normal to match smooth meshes.
+// Fold ONE transparent surface crossing into the running visibility.
+// The caller supplies the crossing's occluder id + the occluder's optical params (ior / transmission, from its surface hook) + the crossing geometry: geometricNormal and rayDirection MUST be in the SAME object space (invariant to the instance transform); shadingNormal is the interpolated triangle-corner normal in that same space, and t is the WORLD ray distance to the hit.
+
+// Transparent shadow visibility uses Beer-Lambert absorption through the paired chord plus Fresnel loss at each accepted interface.
+// Hard/faceted triangles use the geometric face normal so their shadow keeps the authored hard edge response; smooth vertex-normal triangles blend to the interpolated shading normal to match smooth meshes.
 // Directional refractive focusing belongs in the caustic path.
-//
-// Optical depth is BINNED PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder
-// crossings at the same t are collapsed because edge/diagonal hits can report two triangles sharing one physical
-// surface.
+
+// Optical depth is BINNED PER OCCLUDER by instance id, and each bin keeps merged hit distances; same-occluder crossings at the same t are collapsed because edge/diagonal hits can report two triangles sharing one physical surface.
 void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const uint instanceId, const float ior, const half3 transmission, const float3 geometricNormal, const float3 shadingNormal, const float smoothNormalWeight, const float3 rayDirection, const float t){
     const float cosI = nwbShadowCosineToRay(geometricNormal, rayDirection);
 
@@ -267,9 +243,7 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
 }
 
 
-// Combine into the final per-channel visibility. Per occluder: sorted unique hit distances are paired into inside
-// intervals. Overflow uses the recorded first-to-last crossing span; a singleton has no entry->exit volume path and
-// therefore contributes neither absorption nor Fresnel loss.
+// Combine into the final per-channel visibility. Per occluder: sorted unique hit distances are paired into inside intervals. Overflow uses the recorded first-to-last crossing span; a singleton has no entry->exit volume path and therefore contributes neither absorption nor Fresnel loss.
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
     float3 opticalDepth = float3(0.0, 0.0, 0.0);
     // The interface weight and Fresnel product are (0, 1) bounded factors, so half arithmetic is sufficient here.

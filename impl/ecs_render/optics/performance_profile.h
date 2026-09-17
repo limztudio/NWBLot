@@ -18,11 +18,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// P10 explicit performance profile (outside-corpus class-Q contract, not an enabled optimization).
-// current-renderer-v1 stays frozen: its captures, manifests, logs, SHA-256 pins, and per-profile
-// limits are never edited in place. A candidate profile lives beside the corpus, reports its actual
-// settings, and receives separate results. Claiming reference-workload performance while silently
-// disabling features or reducing resolution is a workload-definition violation, not a faster profile.
+// P10 explicit performance profile (outside-corpus class-Q contract, not an enabled optimization). current-renderer-v1 stays frozen: its captures, manifests, logs, SHA-256 pins, and per-profile limits are never edited in place.
+// A candidate profile lives beside the corpus, reports its actual settings, and receives separate results. Claiming reference-workload performance while silently disabling features or reducing resolution is a workload-definition violation, not a faster profile.
 namespace PerformanceBudgetDimension{
     enum Enum : u8{
         TransparentShadowExtent,
@@ -37,11 +34,8 @@ namespace PerformanceBudgetDimension{
 };
 
 
-// Static profile only. Reference keeps the agreed scene, resolution, geometry, ray budgets, and
-// optical model; every scale at 1.0 keeps full extent. A candidate varies exactly one dimension
-// from the table in 15.2 and reports it. Dynamic control stays disabled until a later step qualifies
-// hysteresis, bounded rate of change, and priority order. Presentation-only frame generation never
-// counts as rendered capacity.
+// Static profile only. Reference keeps the agreed scene, resolution, geometry, ray budgets, and optical model; every scale at 1.0 keeps full extent. A candidate varies exactly one dimension from the table in 15.2 and reports it.
+// Dynamic control stays disabled until a later step qualifies hysteresis, bounded rate of change, and priority order. Presentation-only frame generation never counts as rendered capacity.
 struct PerformanceProfile{
     bool retainsMeshCount = true;
     bool retainsTransparentObjects = true;
@@ -70,8 +64,7 @@ struct PerformanceProfile{
 }
 
 
-// Approved experiment grid from 15.2: full, 0.75x, or 0.5x linear work. Anything else is rejected
-// until measured evidence approves it.
+// Approved experiment grid from 15.2: full, 0.75x, or 0.5x linear work. Anything else is rejected until measured evidence approves it.
 [[nodiscard]] inline bool IsApprovedBudgetStep(f32 value){
     return value == 1.0f || value == 0.75f || value == 0.5f;
 }
@@ -97,9 +90,7 @@ struct PerformanceProfile{
 }
 
 
-// Reducing the visible mesh count, removing transparent objects, or disabling reflection,
-// refraction, caustics, or GI changes the target workload definition (15.2). Such a candidate
-// must be renamed and requalified; it must not report reference-workload results.
+// Reducing the visible mesh count, removing transparent objects, or disabling reflection, refraction, caustics, or GI changes the target workload definition (15.2). Such a candidate must be renamed and requalified; it must not report reference-workload results.
 [[nodiscard]] inline bool RequiresNewWorkloadDefinition(const PerformanceProfile& profile){
     return !profile.retainsMeshCount
         || !profile.retainsTransparentObjects
@@ -143,9 +134,7 @@ struct PerformanceProfile{
 }
 
 
-// One dimension at a time (15.2): a valid, same-workload, non-reference profile that changes exactly
-// one budgeted dimension. Steady-state and newly-invalidated-history quality gates from 15.3 still
-// apply before any candidate claims the workload reaches the frame target.
+// One dimension at a time (15.2): a valid, same-workload, non-reference profile that changes exactly one budgeted dimension. Steady-state and newly-invalidated-history quality gates from 15.3 still apply before any candidate claims the workload reaches the frame target.
 [[nodiscard]] inline bool IsSingleDimensionCandidate(
     const PerformanceProfile& profile,
     const SecondaryEffectGeometryProxyDescriptor& proxy,

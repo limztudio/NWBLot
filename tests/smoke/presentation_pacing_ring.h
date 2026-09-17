@@ -26,10 +26,8 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Low-overhead per-frame pacing trace for the stress timing mode. Timing runs keep expensive counters off; this ring
-// stores one compact sample per observation that advances the accepted-presentation count, so p50/p95/max describe
-// actual wall pacing instead of a handful of half-second FPS summaries. Diagnostic builds may enlarge the capacity;
-// timing claims always report the stored sample count alongside the percentiles.
+// Low-overhead per-frame pacing trace for the stress timing mode. Timing runs keep expensive counters off; this ring stores one compact sample per observation that advances the accepted-presentation count, so p50/p95/max describe actual wall pacing instead of a handful of half-second FPS summaries.
+// Diagnostic builds may enlarge the capacity; timing claims always report the stored sample count alongside the percentiles.
 struct PresentationPacingSample{
     f64 wallMsPerPresentation = 0.0;
     u64 newPresentations = 0u;
@@ -136,3 +134,4 @@ NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

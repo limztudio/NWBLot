@@ -403,10 +403,8 @@ bool GpuTaskGraphCompiler::compile(
         return true;
     };
 
-    // An import may name the exact physical queue that owned an exclusive texture/buffer/acceleration structure
-    // before graph work began.
-    // A different first packet must also name a fixed release destination, an imported completion, and a native
-    // state handoff source. That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
+    // An import may name the exact physical queue that owned an exclusive texture/buffer/acceleration structure before graph work began.
+    // A different first packet must also name a fixed release destination, an imported completion, and a native state handoff source. That keeps the compiler from manufacturing an acquire or cross-queue wait on its own.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         const bool hasExternalFinalRelease = resource.externalFinalReleaseDestinationQueue.valid();
@@ -543,9 +541,8 @@ bool GpuTaskGraphCompiler::compile(
     const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
 
     const Timer resourceStatePlanningBegin = TimerNow();
-    // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership
-    // releases. A state seed selects the actual final-state snapshot of a graph-internal producer, so it also carries
-    // the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
+    // Start with graph-planned packet state seeds, transitions, UAV dependencies, and exclusive-family ownership releases.
+    // A state seed selects the actual final-state snapshot of a graph-internal producer, so it also carries the release destination into CommandList::open where the paired Vulkan acquire is emitted before the consumer.
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> trackedResourceStates(scratchArena);
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);

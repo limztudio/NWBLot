@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
 
@@ -386,6 +387,63 @@ TEST(ComputeEmulationAliasPlan, ReceiverMatchesAllowsMirroredDuplicatesWithinEit
     plan.regularOutputBuffers.back() = plan.outputBuffers.front();
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
 }
+
+TEST(ComputeEmulationAliasPlan, SharedPlanEquivalenceKeyRejectsStaleLeasesAndCountsReuse){
+    AliasPlanContext context(5u);
+    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
+    // Force all five draws onto one shared output so the plan captures; keys stay distinct per draw.
+    Core::BufferHandle sharedOutput = context.m_regular.computeDrawItems.front().meshResources.emulationVertexBuffer;
+    const u32 sharedSlot = context.m_regular.computeDrawItems.front().meshResources.emulationVertexHeapHandle.slot();
+    for(auto& drawItem : context.m_regular.computeDrawItems){
+        drawItem.meshResources.emulationVertexBuffer = sharedOutput;
+        drawItem.meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+            Core::GpuDescriptorClass::StorageBuffer, sharedSlot
+        );
+    }
+    ASSERT_TRUE(plan.capture(context.m_regular, 5u));
+    EXPECT_TRUE(plan.captured);
+    EXPECT_EQ(plan.drawCount, 5u);
+    EXPECT_EQ(plan.reuseOpportunities, 4u);
+    // Distinct mesh keys share one aliased output: counted as rejected aliasing, never silent reuse.
+    EXPECT_EQ(plan.reuseHits, 0u);
+    EXPECT_EQ(plan.rejectionAliasedOutput, 4u);
+    EXPECT_TRUE(plan.matches(0u));
+    // Mutating a frozen generation input (instance payload) invalidates the lease at record time.
+    ++context.m_regular.computeDrawItems[2u].instanceIndex;
+    plan.drawItems[2u].instanceIndex = context.m_regular.computeDrawItems[2u].instanceIndex;
+    EXPECT_FALSE(plan.matches(2u));
+    --context.m_regular.computeDrawItems[2u].instanceIndex;
+    plan.drawItems[2u].instanceIndex = context.m_regular.computeDrawItems[2u].instanceIndex;
+    EXPECT_TRUE(plan.matches(2u));
+    // A recycled buffer address with different generation inputs must never validate a stale lease.
+    Core::BufferHandle otherOutput = context.makeBuffer(Name("tests/compute_emulation_alias/other"));
+    context.m_regular.computeDrawItems[1u].meshResources.emulationVertexBuffer = otherOutput;
+    plan.drawItems[1u].meshResources.emulationVertexBuffer = otherOutput;
+    EXPECT_FALSE(plan.matches(1u));
+    const ECSRenderDetail::GeneratedGeometryProducerDescriptor descriptor = plan.producerDescriptor(0u);
+    EXPECT_EQ(descriptor.drawIndex, 0u);
+    EXPECT_FALSE(descriptor.csgFallback);
+    EXPECT_TRUE(descriptor.viewDependentCulling);
+}
+
+TEST(ComputeEmulationAliasPlan, SharedPlanKeyMatchesIdenticalDrawsForTrueReuse){
+    AliasPlanContext context(2u);
+    ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
+    Core::BufferHandle sharedOutput = context.m_regular.computeDrawItems.front().meshResources.emulationVertexBuffer;
+    const u32 sharedSlot = context.m_regular.computeDrawItems.front().meshResources.emulationVertexHeapHandle.slot();
+    // Mirror draw 0 into draw 1: identical mesh, material, pass, instance payload, and output identity.
+    context.m_regular.computeDrawItems[1u] = context.m_regular.computeDrawItems[0u];
+    context.m_regular.computeDrawItems[1u].meshResources.emulationVertexBuffer = sharedOutput;
+    context.m_regular.computeDrawItems[1u].meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+        Core::GpuDescriptorClass::StorageBuffer, sharedSlot
+    );
+    ASSERT_TRUE(plan.capture(context.m_regular, 5u));
+    EXPECT_EQ(plan.reuseHits, 1u);
+    EXPECT_EQ(plan.rejectionAliasedOutput, 0u);
+    EXPECT_TRUE(plan.matches(0u));
+    EXPECT_TRUE(plan.matches(1u));
+}
+
 
 TEST(ComputeEmulationAliasPlan, SmallValidationUsesNoScratchAllocation){
     for(const usize count : { 0u, 1u, 8u, 16u, 32u }){

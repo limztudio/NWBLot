@@ -186,10 +186,8 @@ u32 RendererMaterialSystem::materialPassDrawDispatchFlags(
     );
     if(drawItem.pipelineKey.csgMode != MaterialPipelineCsgMode::None)
         flags &= ~ECSRenderDetail::s_MeshDispatchFlagCsgMeshletFullyRemovedCull;
-    // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word; the G-buffer
-    // pixel shader reads it back out and writes it into the base-color alpha for the deferred lighting dispatch.
-    flags = (flags & NWB_MESH_DISPATCH_FLAG_MASK)
-        | ((drawItem.shadingModelId & NWB_MESH_DISPATCH_SHADING_MODEL_MASK) << NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT);
+    // Carry the owning material's shading-model id in the high bits of the per-draw dispatch word; the G-buffer pixel shader reads it back out and writes it into the base-color alpha for the deferred lighting dispatch.
+    flags = (flags & NWB_MESH_DISPATCH_FLAG_MASK) | ((drawItem.shadingModelId & NWB_MESH_DISPATCH_SHADING_MODEL_MASK) << NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT);
     return flags;
 }
 
@@ -236,8 +234,7 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(
         return true;
     }
 
-    // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector.
-    // Mesh/compute geometry still reads the same selector from its per-instance retained slot.
+    // CSG pixel-only variants reuse the otherwise-unused generated-vertex lane as their global context selector. Mesh/compute geometry still reads the same selector from its per-instance retained slot.
     frameHeapSlots.generatedVertex = csgContextHeapSlot;
 
     ECSRenderDetail::SetShaderDrivenPushConstants(
@@ -281,8 +278,7 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipelineResources.computePipeline.get());
-    // Set 0 contains the shared push range only; every resource, including this mesh's graph-provided writable
-    // generated-vertex buffer, is selected through the global descriptor heap.
+    // Set 0 contains the shared push range only; every resource, including this mesh's graph-provided writable generated-vertex buffer, is selected through the global descriptor heap.
 
     context.commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
@@ -335,9 +331,7 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
         return;
 
-    // P4 indexed consumer: a validated FixedRangeIndexed descriptor draws the corner-index stream against the
-    // unique-vertex output; every other case keeps the expanded non-indexed draw. Bounds and overflow checks run
-    // before narrowing to GPU formats; a failed check falls back to expanded rather than issuing a bad draw.
+    // P4 indexed consumer: a validated FixedRangeIndexed descriptor draws the corner-index stream against the unique-vertex output; every other case keeps the expanded non-indexed draw. Bounds and overflow checks run before narrowing to GPU formats; a failed check falls back to expanded rather than issuing a bad draw.
     const bool indexedOutput = mesh.generatedOutput.indexed()
         && mesh.emulationIndexBuffer
         && mesh.generatedOutput.validForCornerCount(mesh.meshletPrimitiveIndexCount)
@@ -412,8 +406,7 @@ void RendererMaterialSystem::generateComputeMaterialPassDrawItems(
 ){
     if(drawItems.empty())
         return;
-    // This half deliberately has no local output transition. A graph producer must have declared every selected
-    // generated-vertex buffer as a UAV before recording it.
+    // This half deliberately has no local output transition. A graph producer must have declared every selected generated-vertex buffer as a UAV before recording it.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings.meshView.buffer);
 
@@ -435,8 +428,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
 ){
     if(drawItems.empty())
         return;
-    // This half deliberately has no local output transition. A graph consumer must have declared every selected
-    // generated-vertex buffer as a VertexBuffer before recording it.
+    // This half deliberately has no local output transition. A graph consumer must have declared every selected generated-vertex buffer as a VertexBuffer before recording it.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings.meshView.buffer);
 
@@ -471,8 +463,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
 
         setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::UnorderedAccess);
-        // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the
-        // ordinary graphics raster stage.
+        // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
 
         context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);

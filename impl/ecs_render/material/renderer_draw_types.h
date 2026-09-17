@@ -28,11 +28,8 @@ namespace GeneratedGeometryOutputVersion{
     };
 };
 
-// P4 versioned generated-geometry output contract. ExpandedTriangleCorners is the shipping layout: one complete
-// 64-byte vertex per triangle corner, drawn non-indexed. FixedRangeIndexed is the opt-in ABI: unique local
-// vertices plus a fixed-range corner index stream with culled primitives represented explicitly, drawn indexed.
-// The layout version travels with the snapshot so stale cooked artifacts and mismatched producers/consumers fail
-// closed instead of misreading the output buffer.
+// P4 versioned generated-geometry output contract. ExpandedTriangleCorners is the shipping layout: one complete 64-byte vertex per triangle corner, drawn non-indexed. FixedRangeIndexed is the opt-in ABI: unique local vertices plus a fixed-range corner index stream with culled primitives represented explicitly, drawn indexed.
+// The layout version travels with the snapshot so stale cooked artifacts and mismatched producers/consumers fail closed instead of misreading the output buffer.
 struct GeneratedGeometryOutputDescriptor{
     GeneratedGeometryOutputVersion::Enum version = GeneratedGeometryOutputVersion::ExpandedTriangleCorners;
     u32 uniqueLocalVertexCount = 0u;

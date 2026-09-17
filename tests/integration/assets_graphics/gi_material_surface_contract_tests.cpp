@@ -29,9 +29,7 @@ static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
 }
 
-// A graph task may not retain a prepared material callback if its dynamic geometry or sampled-image collection
-// failed. Keep this source-level contract narrow: the graph builder must leave the current frame for the native
-// compatibility path before it can compile a callback with an undeclared bindless access.
+// A graph task may not retain a prepared material callback if its dynamic geometry or sampled-image collection failed. Keep this source-level contract narrow: the graph builder must leave the current frame for the native compatibility path before it can compile a callback with an undeclared bindless access.
 static bool ContainsBeforeClosingBrace(
     const AStringView text,
     const AStringView anchor,
@@ -126,12 +124,8 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 }
 
 
-// Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses
-// coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the
-// material heap selector alone.
-// P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly
-// once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque
-// blocks, keep the conservative overflow fallback, and never retain crossings across instances.
+// Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the material heap selector alone.
+// P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque blocks, keep the conservative overflow fallback, and never retain crossings across instances.
 TEST(EcsGraphics, TransparentShadowInstanceOpticsFinalizeExactlyOnce){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

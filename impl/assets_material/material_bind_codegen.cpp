@@ -79,9 +79,7 @@ static bool BuildMaterialBindIncludeVirtualPathImpl(
 ){
     outIncludePath.clear();
     if(entry.virtualPath.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'")
-            , StringConvert(entry.source)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), StringConvert(entry.source));
         return false;
     }
 
@@ -191,9 +189,7 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
     };
     static_assert(
         (sizeof(s_TypeNames) / sizeof(s_TypeNames[0]))
-        == static_cast<usize>(
-            static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u
-        )
+        == static_cast<usize>(static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u)
     );
 
     if(!IsMaterialLayoutNumericFieldType(fieldType))
@@ -354,15 +350,11 @@ static bool ComputeMaterialBindStorageByteSizes(
     for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
         u32* storageByteSize = MaterialBindStorageByteSizePointer(block.blockClass, outConstantByteSize, outMutableByteSize);
         if(!storageByteSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block has invalid storage class")
-                , StringConvert(includePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block has invalid storage class"), StringConvert(includePath));
             return false;
         }
         if(block.byteSize > Limit<u32>::s_Max - *storageByteSize){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32")
-                , StringConvert(includePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), StringConvert(includePath));
             return false;
         }
 
@@ -380,9 +372,7 @@ static bool ComputeMaterialBindBlockStorageByteBegin(
 ){
     outByteBegin = 0u;
     if(blockIndex >= layout.typedLayoutBlocks.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block index is out of range")
-            , StringConvert(includePath)
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block index is out of range"), StringConvert(includePath));
         return false;
     }
 
@@ -392,9 +382,7 @@ static bool ComputeMaterialBindBlockStorageByteBegin(
         if(block.blockClass != blockClass)
             continue;
         if(block.byteSize > Limit<u32>::s_Max - outByteBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block byte offset exceeds u32")
-                , StringConvert(includePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block byte offset exceeds u32"), StringConvert(includePath));
             return false;
         }
 
@@ -626,8 +614,7 @@ static void AppendMaterialBindFieldAccessor(
 
 
 // Resources load from their patched slot, never from the aggregate struct.
-// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded
-// directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
+// Resource fields are not emitted into the aggregate material struct: opaque Slang resource handles are loaded directly from their patched constant slot so a generated block loader never attempts to copy an opaque value.
 static bool AppendMaterialBindResourceFieldAccessor(
     const AStringView includePath,
     const MaterialLayoutFieldType::Enum fieldType,
@@ -1027,9 +1014,7 @@ bool EmitMaterialBindIncludes(
         if(!BuildMaterialBindIncludeVirtualPathImpl(arena, bindEntry, includePath))
             return false;
         if(!seenIncludePaths.insert(includePath).second){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'")
-                , StringConvert(includePath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'"), StringConvert(includePath));
             return false;
         }
 
@@ -1048,9 +1033,7 @@ bool EmitMaterialBindIncludes(
         }
 
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to write generated include '{}'")
-                , PathToString<tchar>(outputPath)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
             return false;
         }
     }

@@ -7,12 +7,8 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// P5 hardware-assisted transparent-transmission experiment. Same optical oracle as the software path (shadow_integrate.slangi): per-occluder paired-chord Beer-Lambert plus interface product, order-independent. Route under test: hardware candidate collection with bounded fast storage, then the shared finalize.
 
-
-// P5 hardware-assisted transparent-transmission experiment. Same optical oracle as the software path
-// (shadow_integrate.slangi): per-occluder paired-chord Beer-Lambert plus interface product, order-independent.
-// Route under test: hardware candidate collection with bounded fast storage, then the shared finalize.
-//
 // Query contract (experimental, internal only):
 // - World-space ray segment [tMin, tMax] toward the light; same bias/segment rules as the software path.
 // - Transparent-classified instances participate; opaque hits zero the gate immediately (distinct operation).
@@ -35,6 +31,9 @@
 
 
 #if NWB_HW_TRANSMISSION_EXPERIMENT_ENABLED
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbHwTransmissionCandidate{
@@ -100,9 +99,6 @@ half3 nwbHwTransmissionExperimentFinalize(const NwbHwTransmissionExperimentState
 }
 
 
-#endif
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -110,3 +106,10 @@ half3 nwbHwTransmissionExperimentFinalize(const NwbHwTransmissionExperimentState
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

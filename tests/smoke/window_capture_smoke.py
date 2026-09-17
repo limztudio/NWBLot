@@ -1178,7 +1178,7 @@ class LinuxX11Capture:
             if children:
                 self.x11.XFree(children)
 
-    def find_window_for_pid(self, pid, title):
+    def find_window_for_pid(self, pid, title, require_mapped=True):
         stack = [self.root]
         matches = []
         while stack:
@@ -1198,7 +1198,7 @@ class LinuxX11Capture:
             attributes = self.get_attributes(window)
             if not attributes:
                 continue
-            if attributes.map_state != self.IS_VIEWABLE or attributes.width <= 0 or attributes.height <= 0:
+            if require_mapped and (attributes.map_state != self.IS_VIEWABLE or attributes.width <= 0 or attributes.height <= 0):
                 continue
 
             matches.append((attributes.width * attributes.height, window))
@@ -1209,10 +1209,10 @@ class LinuxX11Capture:
         matches.sort(reverse=True)
         return matches[0][1]
 
-    def wait_for_window(self, pid, timeout_seconds, title=None):
+    def wait_for_window(self, pid, timeout_seconds, title=None, require_mapped=True):
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
-            window = self.find_window_for_pid(pid, title)
+            window = self.find_window_for_pid(pid, title, require_mapped=require_mapped)
             if window:
                 return window
             time.sleep(0.1)
@@ -1577,11 +1577,11 @@ class WindowsCapture:
 
         return self.RECT(origin.x, origin.y, origin.x + width, origin.y + height)
 
-    def find_window_for_pid(self, pid):
+    def find_window_for_pid(self, pid, title=None, require_mapped=True):
         matches = []
 
         def enum_callback(hwnd, _):
-            if not self.user32.IsWindowVisible(hwnd):
+            if require_mapped and not self.user32.IsWindowVisible(hwnd):
                 return True
 
             window_pid = ctypes.c_uint32()
@@ -1607,11 +1607,11 @@ class WindowsCapture:
         matches.sort(reverse=True)
         return int(matches[0][1])
 
-    def wait_for_window(self, pid, timeout_seconds, title=None):
+    def wait_for_window(self, pid, timeout_seconds, title=None, require_mapped=True):
         del title
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
-            hwnd = self.find_window_for_pid(pid)
+            hwnd = self.find_window_for_pid(pid, require_mapped=require_mapped)
             if hwnd:
                 return hwnd
             time.sleep(0.1)

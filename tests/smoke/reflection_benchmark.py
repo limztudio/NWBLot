@@ -383,10 +383,20 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         runtime = launch_testbed(args, args.executable, env, port)
         # The timing project renders unfocused, so a mapped window is not required for
         # timing acquisition. Best-effort focus for representative present pacing; a
-        # headless compositor without an X11 window must not fail the benchmark.
+        # headless compositor without a mapped X11 window must not fail the benchmark.
+        # An unmapped window still carries the PID needed for graceful WM_DELETE
+        # teardown, which the app requires for its normal exit path.
         handle = backend.wait_for_window(runtime.pid, min(args.timeout, 5.0))
+        if handle is None and hasattr(backend, "find_window_for_pid"):
+            try:
+                handle = backend.find_window_for_pid(runtime.pid, None, require_mapped=False)
+            except TypeError:
+                handle = backend.find_window_for_pid(runtime.pid, None)
         if handle:
-            backend.focus_window(handle)
+            try:
+                backend.focus_window(handle)
+            except Exception:
+                pass
         deadline = time.monotonic() + args.timeout
         last_problem = "timing reports have not arrived"
         while time.monotonic() < deadline:

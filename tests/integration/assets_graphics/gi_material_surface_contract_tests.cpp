@@ -126,6 +126,29 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 
 // Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the material heap selector alone.
 // P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque blocks, keep the conservative overflow fallback, and never retain crossings across instances.
+// P5 hardware-transmission experiment: same optical oracle as software, bounded candidate storage, explicit
+// fallback on overflow/CSG, disabled by default so shipping behavior is unchanged.
+TEST(EcsGraphics, HardwareTransmissionExperimentKeepsSoftwareOracleAndStaysDisabled){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+
+    AString experimentSource;
+    AString integrateSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "hw_transmission_experiment.slangi", experimentSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "shadow_integrate.slangi", integrateSource));
+
+    const AStringView experiment(experimentSource.data(), experimentSource.size());
+    EXPECT_TRUE(ContainsText(experiment, "NWB_HW_TRANSMISSION_EXPERIMENT_ENABLED 0"));
+    EXPECT_TRUE(ContainsText(experiment, "nwbShadowInstanceIntegrateCrossing"));
+    EXPECT_TRUE(ContainsText(experiment, "nwbShadowCombineCompletedInstance"));
+    EXPECT_TRUE(ContainsText(experiment, "nwbShadowFinalizeRayOptics"));
+    EXPECT_TRUE(ContainsText(experiment, "NWB_HW_TRANSMISSION_MAX_CANDIDATES"));
+    EXPECT_TRUE(ContainsText(experiment, "overflow"));
+    EXPECT_TRUE(ContainsText(experiment, "opaqueBlocked"));
+    EXPECT_TRUE(ContainsText(experiment, "CSG"));
+}
+
+
 TEST(EcsGraphics, TransparentShadowInstanceOpticsFinalizeExactlyOnce){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

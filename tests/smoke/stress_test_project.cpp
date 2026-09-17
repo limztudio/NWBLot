@@ -6,6 +6,7 @@
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
 #include "presentation_fps_probe.h"
+#include "presentation_pacing_ring.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -289,7 +290,10 @@ private:
 
 
     bool samplePresentationFps(){
-        const auto status = m_fpsProbe.observe(m_context.graphics.getSuccessfulPresentationCount(), TimerNow());
+        const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
+        const Timer observationTime = TimerNow();
+        m_pacingRing.record(successfulPresentations, observationTime);
+        const auto status = m_fpsProbe.observe(successfulPresentations, observationTime);
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
             return false;
@@ -307,6 +311,14 @@ private:
         );
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Complete){
             const auto& total = m_fpsProbe.total();
+            const NWB::Tests::Smoke::PresentationPacingSummary pacingSummary = m_pacingRing.summarize();
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation pacing samples={} p50ms={} p95ms={} maxms={} stalls50ms={}")
+                , pacingSummary.samples
+                , pacingSummary.p50Ms
+                , pacingSummary.p95Ms
+                , pacingSummary.maxMs
+                , pacingSummary.stallsOver50Ms
+            );
             m_timingComplete = true;
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation measurement complete fps={} presentations={} seconds={} first={} last={}")
                 , total.averageFps()
@@ -346,7 +358,16 @@ public:
             }
             if(!m_timingRenderPass.start(true))
                 return false;
+            m_pacingRing.reset();
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}")
+                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::Meshlets) ? 1u : 0u
+                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 1u : 0u
+                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingPipeline) ? 1u : 0u
+                , m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct) ? 1u : 0u
+                , m_context.graphics.queryWaveLaneCount()
+                , m_context.graphics.getRendererString()
+            );
         }
 
         // Arrow keys (Left/Right) scrub the crowd yaw by hand; the live angle shows in the title bar so the exact angle a
@@ -506,6 +527,7 @@ private:
     const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
+    NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
     bool m_timingComplete = false;
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;

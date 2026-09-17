@@ -36,6 +36,19 @@ class StressMeasurementTests(unittest.TestCase):
         self.assertEqual(result["last"] - result["first"], 480)
         self.assertEqual(len(result["intervals"]), 60)
 
+    def test_optional_pacing_summary_parses_and_rejects_disorder(self):
+        paced = valid_log() + "StressTestSmokeProject: presentation pacing samples=480 p50ms=62.5 p95ms=70.0 maxms=120.0 stalls50ms=3\n"
+        parsed = smoke.parse_runtime_log(paced, 0)
+        self.assertEqual(parsed["pacing"]["samples"], 480)
+        self.assertEqual(parsed["pacing"]["stalls50ms"], 3)
+        self.assertLessEqual(parsed["pacing"]["p50ms"], parsed["pacing"]["p95ms"])
+        self.assertLessEqual(parsed["pacing"]["p95ms"], parsed["pacing"]["maxms"])
+        self.assertIsNone(smoke.parse_runtime_log(valid_log(), 0)["pacing"])
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.parse_measurement(paced.replace("p50ms=62.5 p95ms=70.0", "p50ms=80.0 p95ms=70.0"))
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.parse_measurement(paced + "StressTestSmokeProject: presentation pacing samples=1 p50ms=1 p95ms=1 maxms=1 stalls50ms=0")
+
     def test_bad_exit_rejected_even_with_complete_log(self):
         with self.assertRaises(smoke.SmokeFailure):
             smoke.parse_runtime_log(valid_log(), 1)

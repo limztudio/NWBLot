@@ -1055,6 +1055,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         nwb_configure_runtime_smoke_target(
             nwb_stress_test_smoke
@@ -1098,6 +1099,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK=1
@@ -1222,6 +1224,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_sync_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1
@@ -1241,6 +1244,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_pacing_ring.h"
         )
         target_compile_definitions(nwb_async_shadow_m4_async_benchmark PRIVATE
             NWB_ASYNC_SHADOW_M4_BENCHMARK=1

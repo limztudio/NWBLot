@@ -30,9 +30,7 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
-// A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a
-// separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather
-// than depending on a packet-local state reassertion after the decay dispatch.
+// A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
 struct CausticAccumulatorDecayGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -62,8 +60,7 @@ struct CausticAccumulatorDecayGraphTask{
         )
             return false;
 
-        // Match the selected producer's existing no-work and failed-shadow behavior.  A graph declaration can
-        // still retain the accumulator dependency, but no dispatch is issued unless the producer would run.
+        // Match the selected producer's existing no-work and failed-shadow behavior.  A graph declaration can still retain the accumulator dependency, but no dispatch is issued unless the producer would run.
         if(!payload.shadowVisibilityPrepared || !*payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics
@@ -73,8 +70,7 @@ struct CausticAccumulatorDecayGraphTask{
         if(!hasWork)
             return true;
 
-        // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the
-        // incomplete query reservation before starting the retry's one caustic-photons interval.
+        // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the incomplete query reservation before starting the retry's one caustic-photons interval.
         DiscardGpuTimingMeasure(payload.causticPhotonTiming);
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
         payload.causticPhotonTiming->emplace(
@@ -103,8 +99,7 @@ struct CausticAccumulatorDecayGraphTask{
     }
 };
 
-// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain. The renderer still
-// supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
+// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain. The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
 struct SoftwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -134,9 +129,7 @@ struct SoftwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh
-        // bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the
-        // legacy non-temporal reset here.
+        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the legacy non-temporal reset here.
         if(!payload.graphOwnsNonTemporalAccumulatorClear)
             payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
@@ -211,9 +204,7 @@ struct HardwareCausticsGraphTask{
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh
-        // bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the
-        // legacy non-temporal reset here.
+        // The typed graph clear retains black irradiance whenever no producer dispatches. Non-temporal reset, fresh bootstrap, and warm temporal decay can all be graph-owned before this callback; direct callers retain the legacy non-temporal reset here.
         if(!payload.graphOwnsNonTemporalAccumulatorClear)
             payload.raytracingSystem->clearNonTemporalCausticAccumulator(commandList, *payload.targets);
         if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
@@ -258,8 +249,7 @@ struct HardwareCausticsGraphTask{
     }
 };
 
-// Geometry downsample follows the selected photon producer in the same graph packet. Its timing begin is retained
-// until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
+// Geometry downsample follows the selected photon producer in the same graph packet. Its timing begin is retained until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
 struct CausticGeometryDownsampleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -295,8 +285,7 @@ struct CausticGeometryDownsampleGraphTask{
             *payload.targets,
             payload.graphEntryStatesOwned
         );
-        // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's
-        // nested marker now, before the packet recorder advances to the wavelet task marker.
+        // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's nested marker now, before the packet recorder advances to the wavelet task marker.
         return Core::FinishSplitGpuTimingMarker(payload.causticResolveTiming);
     }
 
@@ -306,8 +295,7 @@ struct CausticGeometryDownsampleGraphTask{
 };
 
 
-// Resolve prepare owns the first half-resolution ping-pong write. The following wavelet body receives its input and
-// output states from graph barriers, while the later alternating passes stay inside the native callback.
+// Resolve prepare owns the first half-resolution ping-pong write. The following wavelet body receives its input and output states from graph barriers, while the later alternating passes stay inside the native callback.
 struct CausticResolvePrepareGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -336,9 +324,7 @@ struct CausticResolvePrepareGraphTask{
 };
 
 
-// The first wavelet pass consumes the prepare output and writes its counterpart. The next four alternating passes
-// stay in separate graph callbacks, while only the upsample body stays native; this first read/write pair receives
-// graph-owned entry states.
+// The first wavelet pass consumes the prepare output and writes its counterpart. The next four alternating passes stay in separate graph callbacks, while only the upsample body stays native; this first read/write pair receives graph-owned entry states.
 struct CausticResolveWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -367,8 +353,7 @@ struct CausticResolveWaveletGraphTask{
 };
 
 
-// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface. The next
-// three alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
+// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface. The next three alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveSecondWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -397,8 +382,7 @@ struct CausticResolveSecondWaveletGraphTask{
 };
 
 
-// The third wavelet pass consumes the second graph-owned output and writes its counterpart. The next two alternating
-// passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
+// The third wavelet pass consumes the second graph-owned output and writes its counterpart. The next two alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveThirdWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -427,8 +411,7 @@ struct CausticResolveThirdWaveletGraphTask{
 };
 
 
-// The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface. The final
-// alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
+// The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface. The final alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
 struct CausticResolveFourthWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -457,8 +440,7 @@ struct CausticResolveFourthWaveletGraphTask{
 };
 
 
-// The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input. This
-// final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
+// The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input. This final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
 struct CausticResolveFifthWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -487,8 +469,7 @@ struct CausticResolveFifthWaveletGraphTask{
 };
 
 
-// Upsample consumes the fifth-wavelet output after the compiler has lowered the final ping-pong UAV-to-SRV handoff.
-// The following empty callback only closes the retained full-resolve timing interval.
+// Upsample consumes the fifth-wavelet output after the compiler has lowered the final ping-pong UAV-to-SRV handoff. The following empty callback only closes the retained full-resolve timing interval.
 struct CausticResolveUpsampleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -533,8 +514,7 @@ struct CausticResolveGraphTask{
         static_cast<void>(context);
         if(!payload.timingTicket || !payload.causticResolveTiming)
             return false;
-        // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and
-        // no resolve dispatch is emitted when the selected photon producer did not record.
+        // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and no resolve dispatch is emitted when the selected photon producer did not record.
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched){
             DiscardGpuTimingMeasure(payload.causticResolveTiming);
             return true;
@@ -580,8 +560,7 @@ static void DispatchCausticResolvePass(
     NWB_ASSERT(output.texture);
     NWB_ASSERT(input.texture != output.texture);
     if(!graphOwnsPassEntryStates){
-        // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original
-        // state setup, while later ping-pong passes explicitly establish their own dynamic input/output states.
+        // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup, while later ping-pong passes explicitly establish their own dynamic input/output states.
         if(!graphEntryStatesOwned){
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
@@ -629,8 +608,7 @@ static void DispatchCausticResolvePass(
 
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
-    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, while
-    // preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
+    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, while preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
 
@@ -694,9 +672,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
             continue;
 
-        // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never
-        // emit a photon, so it leaves the work list before dispatch. Proven no-contribution work only; refractive
-        // classification and visibility gates above are unchanged.
+        // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never emit a photon, so it leaves the work list before dispatch. Proven no-contribution work only; refractive classification and visibility gates above are unchanged.
         {
             Float4 storedMin{};
             Float4 storedMax{};
@@ -961,8 +937,7 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // The normal graph declares this writable cache separately from wavelet resolve, so the latter receives a
-    // compiler-lowered UAV-to-SRV handoff. Direct callers retain the original native entry setup.
+    // The normal graph declares this writable cache separately from wavelet resolve, so the latter receives a compiler-lowered UAV-to-SRV handoff. Direct callers retain the original native entry setup.
     commandList.setEnableUavBarriersForTexture(targets.causticResolveGeometry.get(), true);
 
     const u32 halfWidth = (targets.width + 1u) / 2u;
@@ -1005,8 +980,7 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
 
-    // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target.
-    // The normal graph supplies those exact entry states; compatibility callers retain the original native sequence.
+    // Prepare reads accumulated photons and resolve geometry, then writes the parity-selected half-resolution target. The normal graph supplies those exact entry states; compatibility callers retain the original native sequence.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticHistory.get(), true);
     commandList.setEnableUavBarriersForTexture(targets.causticResolveHalf.get(), true);
@@ -1207,9 +1181,7 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     )
         return false;
 
-    // The normal deferred graph arrives with the accumulator already lowered to UAV by this task's declared use.
-    // Compatibility callers retain the native transition; the following graph-owned photon task receives the
-    // compiler-planned UAV barrier, whereas direct callers keep their existing packet-local fence.
+    // The normal deferred graph arrives with the accumulator already lowered to UAV by this task's declared use. Compatibility callers retain the native transition; the following graph-owned photon task receives the compiler-planned UAV barrier, whereas direct callers keep their existing packet-local fence.
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     if(!graphEntryStatesOwned){
         commandList.setTextureState(
@@ -1727,8 +1699,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         if(!graphEntryStatesOwned){
-            // Direct compatibility callers restore heap-selected traversal inputs locally. The normal deferred
-            // graph declares and commits these descriptor-visible states before this callback begins.
+            // Direct compatibility callers restore heap-selected traversal inputs locally. The normal deferred graph declares and commits these descriptor-visible states before this callback begins.
             transitionSwShadowTraversalResources(commandList);
             commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_causticEmissionTargetBuffer.get(), Core::ResourceStates::ShaderResource);
@@ -2292,8 +2263,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         if(!graphEntryStatesOwned){
-            // Direct compatibility callers restore heap-selected static producer inputs locally. The normal deferred
-            // graph declares and commits this descriptor-visible batch before the callback begins.
+            // Direct compatibility callers restore heap-selected static producer inputs locally. The normal deferred graph declares and commits this descriptor-visible batch before the callback begins.
             for(u32 slot = 0u; slot < m_rayTracingState.m_shadowMeshCount; ++slot)
                 commandList.setBufferState(m_rayTracingState.m_shadowMeshAttributeBuffers[slot], Core::ResourceStates::ShaderResource);
             commandList.setBufferState(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), Core::ResourceStates::ShaderResource);

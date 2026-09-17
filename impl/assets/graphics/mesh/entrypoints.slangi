@@ -58,6 +58,27 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
+    // P3: evaluate each meshlet-local vertex ONCE into groupshared staging, then gather per corner. The cache
+    // index is the full local-vertex reference (not the position index) so seams with shared positions but
+    // distinct UVs/normals/tangents keep their identity. Output format is unchanged: the primitive loop below
+    // writes the same expanded triangle-corner stream as before. All lanes reach the staging barrier uniformly:
+    // meshlet-level exits above return before this cooperative phase.
+    const uint localVertexCount = nwbMeshletVertexCount(meshlet);
+    for(
+        uint localVertexIndex = groupThreadID.x;
+        localVertexIndex < localVertexCount;
+        localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X
+    ){
+        g_NwbMeshletStagedVertices[localVertexIndex] = nwbMeshBuildMeshletVertex(
+            meshletIndex,
+            meshlet,
+            decodeInfo,
+            localVertexIndex,
+            instance
+        );
+    }
+    GroupMemoryBarrierWithGroupSync();
+
     for(
         uint localPrimitiveIndex = groupThreadID.x;
         localPrimitiveIndex < primitiveCount;
@@ -66,15 +87,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
         const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
         NwbMeshGeneratedVertex generatedVertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT];
-        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner){
-            generatedVertices[corner] = nwbMeshBuildMeshletVertex(
-                meshletIndex,
-                meshlet,
-                decodeInfo,
-                localVertexIndices[corner],
-                instance
-            );
-        }
+        for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
+            generatedVertices[corner] = g_NwbMeshletStagedVertices[localVertexIndices[corner]];
 
         if(nwbMeshTriangleCulled(generatedVertices)){
             nwbMeshStoreCulledPrimitive(primitiveBase);

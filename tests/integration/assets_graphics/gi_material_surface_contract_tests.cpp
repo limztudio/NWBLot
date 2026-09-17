@@ -126,8 +126,7 @@ TEST(EcsGraphics, GiMaterialSurfaceDispatchSupportsHeterogeneousFrostInterface){
 
 // Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the material heap selector alone.
 // P1 transparent-shadow refactor: one mesh traversal owns temporary crossing state and finalizes it exactly once into persistent ray optics. The scene walk must combine completed instances, zero visibility on opaque blocks, keep the conservative overflow fallback, and never retain crossings across instances.
-// P5 hardware-transmission experiment: same optical oracle as software, bounded candidate storage, explicit
-// fallback on overflow/CSG, disabled by default so shipping behavior is unchanged.
+// P5 hardware-transmission experiment: same optical oracle as software, bounded candidate storage, explicit fallback on overflow/CSG, disabled by default so shipping behavior is unchanged.
 TEST(EcsGraphics, HardwareTransmissionExperimentKeepsSoftwareOracleAndStaysDisabled){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

@@ -62,13 +62,11 @@ struct NwbShadowInstanceOptics{
 };
 
 // Traversal outcome for one instance: the caller combines completed optics exactly once, zeroes visibility on an opaque block, keeps the conservative all-blocked fallback on stack overflow, and adds nothing on a clean miss.
-namespace NwbShadowInstanceStatus{
-    enum Enum : uint{
-        Completed,
-        NoIntersection,
-        OpaqueBlocked,
-        StackOverflow,
-    };
+enum class NwbShadowInstanceStatus : uint{
+    Completed,
+    NoIntersection,
+    OpaqueBlocked,
+    StackOverflow,
 };
 
 

@@ -58,7 +58,7 @@ uint nwbSwShadowInstanceCount(){
 
 // Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once. The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
 // Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
-NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
+NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
@@ -151,7 +151,7 @@ NwbShadowInstanceStatus::Enum nwbSwShadowInstanceOptics(const uint instanceIndex
 
             if(leftMiss && rightMiss){
                 if(stackPointer == 0u)
-                    return;
+                    return NwbShadowInstanceStatus::NoIntersection;
                 --stackPointer;
                 nodeIndex = stack[stackPointer];
                 continue;
@@ -212,7 +212,7 @@ void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc,
 
 void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     NwbShadowInstanceOptics optics = nwbShadowInstanceOpticsBegin();
-    const NwbShadowInstanceStatus::Enum status = nwbSwShadowInstanceOptics(instanceIndex, worldOrigin, worldDirection, tMin, tMax, optics);
+    const NwbShadowInstanceStatus status = nwbSwShadowInstanceOptics(instanceIndex, worldOrigin, worldDirection, tMin, tMax, optics);
     if(status == NwbShadowInstanceStatus::OpaqueBlocked || status == NwbShadowInstanceStatus::StackOverflow){
         acc.transmittance = half3(0.0h, 0.0h, 0.0h);
         return;

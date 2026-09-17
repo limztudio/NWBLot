@@ -381,10 +381,12 @@ def run_trial(args, variant, block, position, symbols, executable_identity):
         backend = create_capture_backend()
         logserver, port, log_directory, baseline, pattern = launch_logserver(args, args.executable, env)
         runtime = launch_testbed(args, args.executable, env, port)
-        handle = backend.wait_for_window(runtime.pid, min(args.timeout, 30.0))
-        if not handle:
-            raise SmokeFailure("benchmark render window did not appear")
-        backend.focus_window(handle)
+        # The timing project renders unfocused, so a mapped window is not required for
+        # timing acquisition. Best-effort focus for representative present pacing; a
+        # headless compositor without an X11 window must not fail the benchmark.
+        handle = backend.wait_for_window(runtime.pid, min(args.timeout, 5.0))
+        if handle:
+            backend.focus_window(handle)
         deadline = time.monotonic() + args.timeout
         last_problem = "timing reports have not arrived"
         while time.monotonic() < deadline:

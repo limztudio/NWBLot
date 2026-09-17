@@ -356,8 +356,7 @@ static bool ValidateMaterialBindStructAttributes(
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
-    // Resource fields accept two shapes: a fixture attribute for the static first-slice catalog, or no
-    // attributes when each material supplies its own engine/project asset path for the field.
+    // Resource fields accept two shapes: a fixture attribute for the static first-slice catalog, or no attributes when each material supplies its own engine/project asset path for the field.
     if(isResourceField && field.attributes.empty())
         return true;
     const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);

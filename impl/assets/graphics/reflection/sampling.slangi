@@ -34,12 +34,12 @@ float2 nwbReflectionSample2D(const uint2 pixel, const uint2 sampleBase, const ui
     return (float2(first >> 9u, second >> 9u) + 0.5) * 0.00000011920928955078125;
 }
 
-float3 nwbReflectionSchlick(const float3 f0, const float viewHalfCosine){
+half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
     // The Schlick factor is a (0, 1) bounded color multiplier, so half arithmetic is sufficient here.
-    const half complement = half(1.0 - saturate(viewHalfCosine));
+    const half complement = half(1.0h) - saturate(viewHalfCosine);
     const half square = complement * complement;
-    const half3 fresnel = (half3(1.0h) - half3(f0)) * square * square * complement;
-    return f0 + float3(fresnel);
+    const half3 fresnel = (half3(1.0h) - f0) * square * square * complement;
+    return f0 + fresnel;
 }
 
 
@@ -53,13 +53,13 @@ float3 nwbReflectionSchlick(const float3 f0, const float viewHalfCosine){
 void nwbReflectionSampleGgx(
     const float3 normal,
     const float3 viewDirection,
-    const float3 f0,
+    const half3 f0,
     const float roughness,
     const float2 random,
     out float3 direction,
-    out float3 throughput){
+    out half3 throughput){
     direction = reflect(-viewDirection, normal);
-    const float viewCosine = saturate(dot(normal, viewDirection));
+    const half viewCosine = half(saturate(dot(normal, viewDirection)));
     throughput = nwbReflectionSchlick(f0, viewCosine);
     const float alpha = roughness * roughness;
     // Preserve the delta interface at zero roughness. The additional limit only prevents FP32 alpha^2 underflow.
@@ -89,22 +89,22 @@ void nwbReflectionSampleGgx(
     localHalf /= max(max(abs(localHalf.x), abs(localHalf.y)), localHalf.z);
     localHalf = normalize(localHalf);
     const float3 halfVector = tangent * localHalf.x + bitangent * localHalf.y + normal * localHalf.z;
-    const float viewHalfCosine = saturate(dot(viewDirection, halfVector));
+    const half viewHalfCosine = half(saturate(dot(viewDirection, halfVector)));
     direction = reflect(-viewDirection, halfVector);
     const float lightCosine = dot(normal, direction);
     if(lightCosine <= 0.0){
         // This is a valid zero Monte Carlo sample, not a missing sample. Resampling until above the horizon biases
         // the BRDF integral, and tracing this direction would intersect the receiver's interior.
-        throughput = float3(0.0);
+        throughput = half3(0.0h);
         return;
     }
 
     const float alphaSquared = alpha * alpha;
-    const float viewRoot = sqrt(alphaSquared + (1.0 - alphaSquared) * viewCosine * viewCosine);
+    const float viewRoot = sqrt(alphaSquared + (1.0 - alphaSquared) * float(viewCosine) * float(viewCosine));
     const float lightRoot = sqrt(alphaSquared + (1.0 - alphaSquared) * lightCosine * lightCosine);
-    const float smithRatio = saturate(
-        lightCosine * (viewCosine + viewRoot) / (lightCosine * viewRoot + viewCosine * lightRoot)
-    );
+    const half smithRatio = half(saturate(
+        lightCosine * (float(viewCosine) + viewRoot) / (lightCosine * viewRoot + float(viewCosine) * lightRoot)
+    ));
     throughput = nwbReflectionSchlick(f0, viewHalfCosine) * smithRatio;
 }
 

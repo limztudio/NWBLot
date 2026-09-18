@@ -99,10 +99,10 @@ bool nwbReflectionValidateScreenHit(
     const NwbReflectionScreenRay ray,
     const float intervalFirst,
     const float intervalLast,
-    out float3 radiance,
+    out half3 radiance,
     out float confidence,
     out bool crossedSurface){
-    radiance = float3(0.0);
+    radiance = half3(0.0h);
     confidence = 0.0;
     crossedSurface = false;
     if(all(abs(int2(candidatePixel) - int2(sourcePixel)) < 2))
@@ -200,10 +200,10 @@ bool nwbReflectionValidateScreenHit(
     confidence *= 1.0 - smoothstep(
         g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, distance
     );
-    radiance = NwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb;
-    if(!all(isfinite(radiance)) || !isfinite(confidence) || confidence <= 0.0)
+    radiance = half3(NwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb);
+    if(!all(isfinite(float3(radiance))) || !isfinite(confidence) || confidence <= 0.0)
         return false;
-    radiance = max(radiance, float3(0.0));
+    radiance = max(radiance, half3(0.0h));
     return true;
 }
 
@@ -216,11 +216,11 @@ bool nwbReflectionValidateScreenHit(
 bool nwbReflectionTraceScreen(
     const uint2 pixel,
     const NwbReflectionSurface surface,
-    out float3 radiance,
+    out half3 radiance,
     out float confidence,
     out uint iterations,
     out bool limited){
-    radiance = float3(0.0);
+    radiance = half3(0.0h);
     confidence = 0.0;
     iterations = 0u;
     limited = false;

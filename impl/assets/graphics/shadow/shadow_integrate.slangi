@@ -35,8 +35,8 @@ struct NwbShadowOccluderBin{
     uint instanceId;         // the crossing's InstanceID() / scene-BVH instance index; unique per occluder
     uint crossingCount;      // merged unique boundary hits for this occluder
     uint crossingOverflow;   // set when crossingT[] is full; finalize uses the recorded first-to-last crossing span
-    float3 absorptionCoeff;  // the occluder's per-channel absorption coeff (constant per material; set on first hit)
-    float interfaceTransmittance; // product of accepted Fresnel transmissions, applied only when the bin has volume
+    half3 absorptionCoeff;   // the occluder's per-channel absorption coeff (constant per material; set on first hit)
+    half interfaceTransmittance; // product of accepted Fresnel transmissions, applied only when the bin has volume
     float tMin;              // nearest recorded crossing distance for this occluder
     float tMax;              // farthest recorded crossing distance for this occluder
     float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER]; // unique boundary hit distances, sorted in finalize
@@ -111,7 +111,7 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
         acc.bins[slot].crossingCount = 0u;
         acc.bins[slot].crossingOverflow = 0u;
         acc.bins[slot].absorptionCoeff = nwbShadowAbsorptionCoefficient(transmission);
-        acc.bins[slot].interfaceTransmittance = 1.0;
+        acc.bins[slot].interfaceTransmittance = half(1.0h);
         acc.bins[slot].tMin = t;
         acc.bins[slot].tMax = t;
         acc.binCount += 1u;
@@ -144,7 +144,7 @@ void nwbShadowIntegrateCrossing(inout NwbShadowVisibilityAccumulator acc, const 
 // intervals. Overflow uses the recorded first-to-last crossing span; a singleton has no entry->exit volume path and
 // therefore contributes neither absorption nor Fresnel loss.
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
-    float3 opticalDepth = float3(0.0, 0.0, 0.0);
+    half3 opticalDepth = half3(0.0h, 0.0h, 0.0h);
     // The interface weight and Fresnel product are (0, 1) bounded factors, so half arithmetic is sufficient here.
     half interfaceTransmittance = half(1.0h);
     for(uint i = 0u; i < acc.binCount; ++i){
@@ -177,10 +177,10 @@ half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
         }
 
         const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
-        interfaceTransmittance *= half(lerp(1.0, acc.bins[i].interfaceTransmittance, float(interfaceWeight)));
-        opticalDepth += acc.bins[i].absorptionCoeff * chordLength;
+        interfaceTransmittance *= lerp(half(1.0h), acc.bins[i].interfaceTransmittance, interfaceWeight);
+        opticalDepth += acc.bins[i].absorptionCoeff * half(chordLength);
     }
-    return half3(saturate(float3(acc.transmittance) * float(interfaceTransmittance) * exp(-max(opticalDepth, float3(0.0, 0.0, 0.0)))));
+    return half3(saturate(acc.transmittance * interfaceTransmittance * exp(-max(opticalDepth, half3(0.0h, 0.0h, 0.0h)))));
 }
 
 

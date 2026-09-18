@@ -31,25 +31,25 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-float3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direction){
+half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direction){
     float3 normal = nwbSafeNormalize(hit.surface.normal, hit.geometricNormal);
     if(dot(normal, direction) > 0.0)
         normal = -normal;
-    float3 radiance = float3(0.0);
+    half3 radiance = half3(0.0h);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint lightIndex = 0u; lightIndex < lightCount; ++lightIndex){
         float3 lightVector;
         half3 lightRadiance;
         nwbSceneResolveLight(g_NwbSceneLights[lightIndex], hit.position, lightVector, lightRadiance);
-        radiance += float3(lightRadiance) * max(dot(normal, lightVector), 0.0);
+        radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0));
     }
     // Offscreen hits have no camera lighting cache. This deliberately bounded diffuse approximation shares the
     // authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
-    return radiance * float3(hit.surface.baseColor);
+    return radiance * hit.surface.baseColor;
 }
 
-bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefractionEntry entry, const bool includeTransparency, out float3 radiance){
-    radiance = float3(0.0);
+bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefractionEntry entry, const bool includeTransparency, out half3 radiance){
+    radiance = half3(0.0h);
     uint2 pixel;
     float projectedDepth;
     if(!nwbRefractionProject(hit.position, pixel, projectedDepth))
@@ -63,8 +63,8 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
     // and incorrectly returns an opaque foreground object's lighting for a hidden RT hit.
     if(abs(projectedDepth - opaqueDepth) > 0.0002 || length(opaqueWorld - hit.position) > max(0.01, cameraDistance * 0.002))
         return false;
-    radiance = includeTransparency ? nwbRefractionBackgroundForEntry(pixel, entry)
-        : nwbRefractionOpaqueBackground(pixel);
+    radiance = includeTransparency ? half3(nwbRefractionBackgroundForEntry(pixel, entry))
+        : half3(nwbRefractionOpaqueBackground(pixel));
     return true;
 }
 
@@ -118,11 +118,11 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     // would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
     if(dot(outgoingDirection, outgoingDirection) < 0.5)
         return float4(0.0, 0.0, 0.0, 1.0);
-    const float3 attenuation = nwbRefractionAttenuation(entry.tint,
+    const half3 attenuation = nwbRefractionAttenuation(entry.tint,
         pathLength, entry.ior, entry.cosine, exitCosine);
 
     float3 origin = exitHit.position + outgoingDirection * entry.bias;
-    float3 accumulated = float3(0.0);
+    half3 accumulated = half3(0.0h);
     // Layer transmittance and backdrop coverage are (0, 1) bounded factors, so half arithmetic is sufficient here.
     half transmittance = half(1.0h);
     // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query.
@@ -137,12 +137,12 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
             break;
         const half coverage = half(saturate(float(background.surface.renderCoverage)));
         if(coverage >= half(0.999h)){
-            float3 radiance;
+            half3 radiance;
             if(!nwbRefractionCachedHit(background, entry, layer == 0u, radiance))
                 radiance = nwbRefractionShadeHit(background, outgoingDirection);
-            return float4((accumulated + float(transmittance) * radiance) * attenuation, 1.0);
+            return float4((accumulated + transmittance * half3(radiance)) * half3(attenuation), 1.0);
         }
-        accumulated += float(transmittance * coverage) * nwbRefractionShadeHit(background, outgoingDirection);
+        accumulated += transmittance * coverage * nwbRefractionShadeHit(background, outgoingDirection);
         transmittance *= half(1.0h) - coverage;
         origin = background.position + outgoingDirection * entry.bias;
     }
@@ -152,10 +152,10 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     // partially traced transparent layers are not also counted through the cached AVBOIT accumulation.
     NwbRefractionEntry exitEntry = entry;
     exitEntry.position = exitHit.position;
-    float3 backgroundRadiance;
+    half3 backgroundRadiance;
     if(!nwbRefractionScreenBackground(exitEntry, outgoingDirection, backgroundRadiance))
-        backgroundRadiance = nwbRefractionBackground(pixel);
-    return float4(backgroundRadiance * attenuation, 1.0);
+        backgroundRadiance = half3(nwbRefractionBackground(pixel));
+    return float4(half3(backgroundRadiance) * half3(attenuation), 1.0);
 }
 
 

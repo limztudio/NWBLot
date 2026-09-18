@@ -121,13 +121,13 @@ bool nwbReflectionClassifySurface(
     nwbReflectionRecordDiagnostic(
         glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u
     );
-    if(!any(surface.weight > 0.0)){
+    if(!any(surface.weight > half3(0.0h))){
         // Below-horizon VNDF samples remain true zeros, but still contributed to stable eligibility above.
         result.a = 1.0;
         return false;
     }
-    const float3 environment = nwbReflectionEnvironment(surface.direction);
-    result = float4(surface.weight * environment, 1.0);
+    const half3 environment = half3(nwbReflectionEnvironment(surface.direction));
+    result = float4(float3(surface.weight * environment), 1.0);
     const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN
         || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;
     if(screen && stableTraceEligible){
@@ -136,7 +136,7 @@ bool nwbReflectionClassifySurface(
         else{
             observations |= s_NwbReflectionAttemptObservation;
             nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS, 1u);
-            float3 radiance;
+            half3 radiance;
             float confidence;
             uint iterations;
             bool limited;
@@ -146,7 +146,7 @@ bool nwbReflectionClassifySurface(
                 observations |= s_NwbReflectionReturnObservation;
                 // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only
                 // through the ordinary fallback route; feedback never drops a useful screen return.
-                result = float4(surface.weight * lerp(environment, radiance, confidence), 2.0 + 0.5 * confidence);
+                result = float4(float3(surface.weight * lerp(environment, radiance, half(confidence))), 2.0 + 0.5 * confidence);
                 if(confidence >= g_NwbReflectionParameters.screenConfidenceThreshold){
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
                     return false;

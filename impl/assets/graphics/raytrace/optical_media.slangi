@@ -44,7 +44,7 @@ struct NwbOpticalMedium{
     int priority;
     uint winding;
     float ior;
-    float3 absorption;
+    half3 absorption;
 };
 
 struct NwbOpticalMedia{

@@ -45,7 +45,7 @@ void nwbCausticAccumulate(const int2 pixel, const uint channel, const uint value
     InterlockedAdd(NWB_CAUSTIC_SPLAT_ACCUMULATOR[uint3(uint2(pixel), channel)], value);
 }
 
-void nwbCausticSplat(const float3 worldPos, const float3 flux){
+void nwbCausticSplat(const float3 worldPos, const half3 flux){
     const float4 clip = mul(NWB_CAUSTIC_SPLAT_VIEW.worldToClip, float4(worldPos, 1.0));
     if(clip.w <= 1e-6)
         return;
@@ -100,11 +100,11 @@ void nwbCausticSplat(const float3 worldPos, const float3 flux){
     const int2 t11 = baseTexel + int2(1, 1);
 
     for(uint channel = 0u; channel < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++channel){
-        const float fluxChannel = flux[channel];
-        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w00)));
-        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w10)));
-        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w01)));
-        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(fluxChannel * float(w11)));
+        const half fluxChannel = flux[channel];
+        nwbCausticAccumulate(t00, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w00)));
+        nwbCausticAccumulate(t10, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w10)));
+        nwbCausticAccumulate(t01, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w01)));
+        nwbCausticAccumulate(t11, channel, nwbCausticFluxToFixedPoint(float(fluxChannel) * float(w11)));
     }
 }
 

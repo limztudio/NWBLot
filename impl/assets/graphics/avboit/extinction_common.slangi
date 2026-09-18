@@ -29,9 +29,9 @@ uint nwbAvboitExtinctionByteShift(uint physicalSlice){
     return (physicalSlice & (NWB_AVBOIT_EXTINCTION_SLICES_PER_WORD - 1u)) * NWB_AVBOIT_EXTINCTION_BYTE_BITS;
 }
 
-float nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
+half nwbAvboitUnpackExtinctionByte(uint packedWord, uint physicalSlice){
     const uint packedByte = (packedWord >> nwbAvboitExtinctionByteShift(physicalSlice)) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    return float(packedByte) / nwbAvboitExtinctionFixedScale();
+    return half(packedByte) / half(nwbAvboitExtinctionFixedScale());
 }
 
 

@@ -57,8 +57,8 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 // Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * the authored
 // material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term. The occlusion ray re-enters the traversal
 // seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
-float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
-    float3 irradiance = float3(0.0, 0.0, 0.0);
+half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
+    half3 irradiance = half3(0.0h, 0.0h, 0.0h);
 
     const float3 normal = hit.normal;
     // Face-forward the normal against the ray (the ray could hit a back face -- use the face the ray sees).
@@ -72,8 +72,8 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
         nwbSceneResolveLight(light, hit.worldPos, lightVector, lightRadiance);
         if(all(lightRadiance <= half3(0.0h)))
             continue;
-        const float ndotl = max(dot(facingNormal, lightVector), 0.0);
-        irradiance += float3(lightRadiance) * ndotl;
+        const half ndotl = half(max(dot(facingNormal, lightVector), 0.0));
+        irradiance += lightRadiance * ndotl;
     }
 
 #if NWB_GI_HIT_SHADOW_RAYS
@@ -110,7 +110,7 @@ float3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
 #endif
 
     // Apply the authored material-surface base colour (the bounce's diffuse reflectance).
-    irradiance *= float3(hit.albedo);
+    irradiance *= hit.albedo;
     return irradiance;
 }
 

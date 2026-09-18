@@ -37,8 +37,8 @@ float nwbReflectionRoundHistoryHalf(const float value, const uint random){
     return float((significand >> shift) + increment) * 0.000000059604644775390625;
 }
 
-float3 nwbReflectionRoundHistory(
-    const float3 radiance,
+half3 nwbReflectionRoundHistory(
+    const half3 radiance,
     const uint2 pixel,
     const uint sampleIndex,
     const uint samplingSeed){
@@ -46,10 +46,10 @@ float3 nwbReflectionRoundHistory(
     // Rounding has a separate domain from the VNDF sequence and each color channel. Its accepted sample index
     // continues after the history count reaches its cap; repeating a rounding seed would introduce correlation.
     const uint roundingSeed = pixelSeed ^ nwbReflectionSamplingHash(sampleIndex ^ 0xa511e9b3u);
-    return float3(
-        nwbReflectionRoundHistoryHalf(radiance.r, nwbReflectionSamplingHash(roundingSeed)),
-        nwbReflectionRoundHistoryHalf(radiance.g, nwbReflectionSamplingHash(roundingSeed ^ 0x63d83595u)),
-        nwbReflectionRoundHistoryHalf(radiance.b, nwbReflectionSamplingHash(roundingSeed ^ 0x9e3779b9u))
+    return half3(
+        half(nwbReflectionRoundHistoryHalf(float(radiance.r), nwbReflectionSamplingHash(roundingSeed))),
+        half(nwbReflectionRoundHistoryHalf(float(radiance.g), nwbReflectionSamplingHash(roundingSeed ^ 0x63d83595u))),
+        half(nwbReflectionRoundHistoryHalf(float(radiance.b), nwbReflectionSamplingHash(roundingSeed ^ 0x9e3779b9u)))
     );
 }
 

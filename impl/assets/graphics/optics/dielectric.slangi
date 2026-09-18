@@ -17,8 +17,8 @@
 
 struct NwbDielectricInterface{
     float3 direction;
-    float reflectedFraction;
-    float radianceTransmission;
+    half reflectedFraction;
+    half radianceTransmission;
     bool totalInternalReflection;
 };
 
@@ -34,7 +34,7 @@ NwbDielectricInterface nwbDielectricTransmit(
     NwbDielectricInterface result = (NwbDielectricInterface)0;
     if(etaIncident == etaTransmitted){
         result.direction = direction;
-        result.radianceTransmission = 1.0;
+        result.radianceTransmission = half(1.0h);
         return result;
     }
     const float cosineIncident = saturate(-dot(direction, opposingNormal));
@@ -42,7 +42,7 @@ NwbDielectricInterface nwbDielectricTransmit(
     const float sineTransmittedSquared = eta * eta * max(0.0, 1.0 - cosineIncident * cosineIncident);
     if(sineTransmittedSquared >= 1.0){
         result.direction = reflect(direction, opposingNormal);
-        result.reflectedFraction = 1.0;
+        result.reflectedFraction = half(1.0h);
         result.totalInternalReflection = true;
         return result;
     }
@@ -51,23 +51,23 @@ NwbDielectricInterface nwbDielectricTransmit(
         / (etaIncident * cosineIncident + etaTransmitted * cosineTransmitted);
     const float parallel = (etaTransmitted * cosineIncident - etaIncident * cosineTransmitted)
         / (etaTransmitted * cosineIncident + etaIncident * cosineTransmitted);
-    result.reflectedFraction = saturate(0.5 * (perpendicular * perpendicular + parallel * parallel));
+    result.reflectedFraction = half(saturate(0.5 * (perpendicular * perpendicular + parallel * parallel)));
     result.direction = nwbSafeNormalize(
         eta * direction + (eta * cosineIncident - cosineTransmitted) * opposingNormal,
         direction
     );
-    result.radianceTransmission = (1.0 - result.reflectedFraction) * eta * eta;
+    result.radianceTransmission = (half(1.0h) - result.reflectedFraction) * half(eta * eta);
     return result;
 }
 
 // The authored RGB tint specifies survival over one world unit, matching the existing transparent-material
 // contract. Homogeneous closed volumes retain this coefficient from their entry boundary.
-float3 nwbDielectricAbsorptionCoefficient(const float3 unitSurvival){
-    return -log(clamp(unitSurvival, float3(1e-4), float3(1.0)));
+half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
+    return -log(clamp(unitSurvival, half3(half(1e-4h)), half3(1.0h)));
 }
 
-float3 nwbDielectricBeerTransmission(const float3 absorption, const float distance){
-    return exp(-absorption * max(distance, 0.0));
+half3 nwbDielectricBeerTransmission(const half3 absorption, const float distance){
+    return exp(-absorption * half(max(distance, 0.0)));
 }
 
 

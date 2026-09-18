@@ -40,7 +40,7 @@
 
 
 // Gathers the surfel irradiance at a shaded point. Returns false if no surfel covers it (caller -> hemiAmbient).
-bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out float3 outIrradiance){
+bool nwbSurfelGather(const float3 worldPosition, const float3 normal, out half3 outIrradiance){
     return nwbSurfelGatherField(worldPosition, normal, 0u, outIrradiance);
 }
 

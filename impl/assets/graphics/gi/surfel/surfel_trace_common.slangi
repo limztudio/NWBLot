@@ -50,9 +50,9 @@
 
 
 // Infinite-bounce gather from the previous-frame surfel snapshot, queried with the face-forwarded hit normal.
-float3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNormal){
+half3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNormal){
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
-    float3 irradiance;
+    half3 irradiance;
     nwbSurfelGatherField(worldPosition, queryNormal, poolCapacity, irradiance);
     return irradiance;
 }
@@ -118,18 +118,18 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             NWB_GI_TRACE_RAY_MIN_DISTANCE,
             NWB_GI_TRACE_RAY_MAX_DISTANCE
         );
-        float3 radiance = float3(0.0, 0.0, 0.0);
+        half3 radiance = half3(0.0h, 0.0h, 0.0h);
         if(hit.hit){
             radiance = nwbGiShadeHit(hit, rayDir);
             const float3 facingNormal = dot(hit.normal, rayDir) < 0.0 ? hit.normal : -hit.normal;
-            const float3 bounce = min(nwbSurfelBounceGather(hit.worldPos, facingNormal), float3(NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP, NWB_SURFEL_BOUNCE_CLAMP));
-            radiance += float3(hit.albedo) * bounce;
+            const half3 bounce = min(nwbSurfelBounceGather(hit.worldPos, facingNormal), half3(half(NWB_SURFEL_BOUNCE_CLAMP), half(NWB_SURFEL_BOUNCE_CLAMP), half(NWB_SURFEL_BOUNCE_CLAMP)));
+            radiance += hit.albedo * bounce;
         }
 
         const float4 basis = nwbSurfelShBasis(rayDir);
-        s_surfelShR[rayIndex] = radiance.r * basis;
-        s_surfelShG[rayIndex] = radiance.g * basis;
-        s_surfelShB[rayIndex] = radiance.b * basis;
+        s_surfelShR[rayIndex] = float(radiance.r) * basis;
+        s_surfelShG[rayIndex] = float(radiance.g) * basis;
+        s_surfelShB[rayIndex] = float(radiance.b) * basis;
     }
 
 #if NWB_SURFEL_USE_WAVE_REDUCE

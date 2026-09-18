@@ -151,6 +151,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int fw = (int)g_NwbCausticResolvePushConstants.width;
                 const int fh = (int)g_NwbCausticResolvePushConstants.height;
                 const int2 base = int2(texel.x * 2, texel.y * 2);
+                // The uint32 accumulator holds fixed-point photon counts; keep its sum at full precision and
+                // convert to half only for the final irradiance divide, preserving small-flux accuracy.
                 float3 flux = float3(0.0, 0.0, 0.0);
                 [unroll] for(int oy = 0; oy < 2; ++oy){
                     [unroll] for(int ox = 0; ox < 2; ++ox){
@@ -164,7 +166,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 }
                 flux /= NWB_CAUSTIC_FIXED_POINT_SCALE;
                 const float area = nwbCausticResolveHalfPixelArea(texel);
-                g_NwbCausticResolveOutput[pixel] = float4(flux / area * g_NwbCausticResolvePushConstants.causticIntensity, 1.0);
+                const half3 irradiance = half3(flux / area * g_NwbCausticResolvePushConstants.causticIntensity);
+                g_NwbCausticResolveOutput[pixel] = float4(float3(irradiance), 1.0);
             }
         }
         return;

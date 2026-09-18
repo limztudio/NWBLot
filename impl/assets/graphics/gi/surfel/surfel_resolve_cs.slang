@@ -54,8 +54,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);
 
     float3 gi;
-    if(nwbSurfelGather(worldPosition, normal, gi))
+    half3 halfGi;
+    if(nwbSurfelGather(worldPosition, normal, halfGi)){
+        gi = float3(halfGi);
         g_NwbSurfelResolveOutput[halfPixel] = float4(gi, 1.0);
+    }
     else
         g_NwbSurfelResolveOutput[halfPixel] = float4(0.0, 0.0, 0.0, 0.0);
 }

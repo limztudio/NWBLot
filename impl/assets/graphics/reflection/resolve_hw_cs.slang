@@ -90,7 +90,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.dimensionsAndRoute.x, linearPixel / g_NwbReflectionParameters.dimensionsAndRoute.x);
     NwbReflectionSurface surface;
     if(
-        !nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > 0.0)
+        !nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > half3(0.0h))
         || surface.bias >= g_NwbReflectionParameters.maxRayDistance
     )
         return;
@@ -108,12 +108,12 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         config, surface.position + surface.normal * surface.bias, surface.direction
     );
     nwbReflectionRecordOpticalDiagnostics(result);
-    float3 radiance = result.radiance;
+    half3 radiance = half3(result.radiance);
     if(!result.transparentPath && result.termination == NWB_OPTICAL_TERMINATION_OPAQUE){
-        const float rangeWeight = 1.0 - smoothstep(
+        const half rangeWeight = half(1.0h) - half(smoothstep(
             g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, result.distance
-        );
-        radiance = lerp(nwbReflectionEnvironment(surface.direction), radiance, rangeWeight);
+        ));
+        radiance = lerp(half3(nwbReflectionEnvironment(surface.direction)), radiance, rangeWeight);
     }
     // Optical continuation supplies its accumulated radiance, including ordinary exterior misses. A capped or
     // ambiguous in-medium path discards unresolved energy; blending sky here would leak light through glass.
@@ -130,12 +130,12 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         g_NwbReflectionMaterialContext.sceneSlots.z, surface.position + surface.normal * surface.bias,
         surface.direction, surface.bias, g_NwbReflectionParameters.maxRayDistance
     );
-    float3 radiance = nwbReflectionEnvironment(surface.direction);
+    half3 radiance = half3(nwbReflectionEnvironment(surface.direction));
     if(hit.hit){
-        const float rangeWeight = 1.0 - smoothstep(
+        const half rangeWeight = half(1.0h) - half(smoothstep(
             g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance
-        );
-        radiance = lerp(radiance, nwbRayTraceSurfaceRadiance(hit, -surface.direction), rangeWeight);
+        ));
+        radiance = lerp(radiance, half3(nwbRayTraceSurfaceRadiance(hit, -surface.direction)), rangeWeight);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);
     }

@@ -51,14 +51,14 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
 struct NwbCausticPhoton{
     float3 origin;
     float3 direction;
-    float3 flux;
+    half3 flux;
     bool inside;
 };
 
 struct NwbCausticSplat{
     bool valid;
     float3 worldPos;
-    float3 flux;
+    half3 flux;
 };
 
 
@@ -77,11 +77,11 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
     NwbCausticSplat splat;
     splat.valid = false;
     splat.worldPos = float3(0.0, 0.0, 0.0);
-    splat.flux = float3(0.0, 0.0, 0.0);
+    splat.flux = half3(0.0h, 0.0h, 0.0h);
 
     float3 origin = photon.origin;
     float3 direction = photon.direction;
-    float3 flux = photon.flux;
+    half3 flux = photon.flux;
     bool inside = photon.inside;
     // Ignore direct photons that never crossed a refractor.
     uint refractiveCrossings = 0u;
@@ -125,10 +125,10 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
         // Schlick requires the air-side cosine on both entry and exit. The Fresnel cosine is a (0, 1)
         // bounded factor input, so half arithmetic is sufficient here.
         const half fresnelCosI = inside ? half(abs(dot(nwbSafeNormalize(refracted, direction), normal))) : half(cosI);
-        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, float(fresnelCosI));
+        flux *= nwbShadowFresnelTransmittedFraction(hit.ior, fresnelCosI);
 
         if(inside)
-            flux *= exp(-nwbShadowAbsorptionCoefficient(hit.transmission) * hit.t);
+            flux *= exp(-nwbShadowAbsorptionCoefficient(hit.transmission) * half(hit.t));
 
         origin = hit.worldPos;
         direction = nwbSafeNormalize(refracted, direction);
@@ -243,18 +243,18 @@ NwbCausticEmission nwbCausticEmitPhotonAtTarget(float3 lightDir, float3 aabbMin,
     return emission;
 }
 
-float3 nwbCausticLightColor(const float4 colorIntensity){
-    return clamp(colorIntensity.xyz, float3(0.0), float3(1.5)) * min(max(colorIntensity.w, 0.0), 2.0);
+half3 nwbCausticLightColor(const float4 colorIntensity){
+    return half3(clamp(colorIntensity.xyz, float3(0.0), float3(1.5))) * half(min(max(colorIntensity.w, 0.0), 2.0));
 }
 
 NwbCausticPhoton nwbCausticCreatePhoton(
     const NwbCausticEmission emission,
-    const float3 lightColor,
+    const half3 lightColor,
     const uint emissionTargetCount,
     const uint photonCount
 ){
     // Area- and count-normalized flux keeps emitted energy invariant under photon-count and target-partition changes.
-    const float perPhoton = emission.domainArea * (float)emissionTargetCount / (float)max(photonCount, 1u);
+    const half perPhoton = half(emission.domainArea) * half(emissionTargetCount) / half(max(photonCount, 1u));
 
     NwbCausticPhoton photon;
     photon.origin = emission.origin;

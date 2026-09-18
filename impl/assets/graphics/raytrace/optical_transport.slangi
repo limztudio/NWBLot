@@ -103,7 +103,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
     if(!nwbOpticalBootstrap(config, origin, direction, media, result))
         return result;
 
-    float3 throughput = float3(1.0);
+    half3 throughput = half3(1.0h, 1.0h, 1.0h);
     float minDistance = config.minDistance;
     float continuationUncertainty = 0.0;
     [loop]
@@ -123,7 +123,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
                 result.termination = NWB_OPTICAL_TERMINATION_RANGE;
                 return result;
             }
-            result.radiance += throughput * nwbOpticalEnvironmentRadiance(direction);
+            result.radiance += float3(throughput * half3(nwbOpticalEnvironmentRadiance(direction)));
             result.termination = NWB_OPTICAL_TERMINATION_MISS_OUTSIDE;
             return result;
         }
@@ -143,7 +143,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
         if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
             return result;
         if((optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u){
-            result.radiance += throughput * nwbOpticalSurfaceRadiance(hit, -direction);
+            result.radiance += float3(throughput * half3(nwbOpticalSurfaceRadiance(hit, -direction)));
             result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
             return result;
         }
@@ -171,9 +171,9 @@ NwbOpticalTraceResult nwbOpticalTrace(
             // The backdrop alpha is a (0, 1) bounded factor, so half arithmetic is sufficient here.
             const half alpha = half(saturate(coverage));
             if(alpha > half(0.0h))
-                result.radiance += throughput * float(alpha) * nwbOpticalSurfaceRadiance(hit, -direction);
-            throughput *= 1.0 - float(alpha);
-            if(alpha == 1.0){
+                result.radiance += float3(throughput * alpha * half3(nwbOpticalSurfaceRadiance(hit, -direction)));
+            throughput *= half(1.0h) - alpha;
+            if(alpha == half(1.0h)){
                 result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
                 return result;
             }
@@ -201,7 +201,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
             if(boundary.totalInternalReflection)
                 ++result.tirCount;
             else{
-                throughput *= boundary.radianceTransmission;
+                throughput *= half(boundary.radianceTransmission);
                 media = transmittedMedia;
             }
         }

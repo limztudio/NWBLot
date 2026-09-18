@@ -45,8 +45,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     // The camera and complete content stamp are unchanged. Every pixel contributes one sample, including true
     // zero and environment samples. This pointwise update has no neighboring read/write race or spatial feedback.
     // The difference form keeps equal finite-half endpoints exact, including 65504 at the upper storage limit.
-    const float3 radiance = previous.rgb + (current.rgb - previous.rgb) * (1.0 / float(count));
-    const float3 roundedRadiance = nwbReflectionRoundHistory(
+    const half3 radiance = half3(previous.rgb) + (half3(current.rgb) - half3(previous.rgb)) * (half(1.0h) / half(float(count)));
+    const half3 roundedRadiance = nwbReflectionRoundHistory(
         radiance, pixel, g_NwbReflectionTemporal.sampleIndex, g_NwbReflectionTemporal.samplingSeed
     );
     NwbHeapStorageImage2DFloat4(g_NwbReflectionTemporal.currentRadianceUavSlot)[pixel] = float4(roundedRadiance, current.a);

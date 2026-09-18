@@ -67,19 +67,19 @@ struct NwbReflectionSurface{
     float3 position;
     float3 normal;
     float3 direction;
-    float3 weight;
+    half3 weight;
     float roughness;
     float bias;
 };
 
 float3 nwbReflectionEnvironment(const float3 direction){
-    const float3 top = float3(g_NwbReflectionParameters.environmentTopR, g_NwbReflectionParameters.environmentTopG, g_NwbReflectionParameters.environmentTopB);
-    const float3 bottom = float3(g_NwbReflectionParameters.environmentBottomR, g_NwbReflectionParameters.environmentBottomG, g_NwbReflectionParameters.environmentBottomB);
-    return lerp(bottom, top, saturate(direction.y * 0.5 + 0.5));
+    const half3 top = half3(half(g_NwbReflectionParameters.environmentTopR), half(g_NwbReflectionParameters.environmentTopG), half(g_NwbReflectionParameters.environmentTopB));
+    const half3 bottom = half3(half(g_NwbReflectionParameters.environmentBottomR), half(g_NwbReflectionParameters.environmentBottomG), half(g_NwbReflectionParameters.environmentBottomB));
+    return float3(lerp(bottom, top, half(saturate(direction.y * 0.5 + 0.5))));
 }
 
-void nwbReflectionStore(const uint2 pixel, const bool glass, const float3 radiance, const float source){
-    const float4 output = float4(max(radiance, float3(0.0)), source);
+void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radiance, const float source){
+    const float4 output = float4(float3(max(radiance, half3(0.0h))), source);
     // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring
     // storage-image nonuniform indexing beyond the existing device contract.
     if(glass)
@@ -107,7 +107,7 @@ bool nwbReflectionLoadSurface(
     const float4 specularRoughness = NwbHeapSampledImage2DNonUniform(specularSlot).Load(texel);
     const uint normalSlot = glass ? g_NwbReflectionResources.refractionSlots0.y : g_NwbReflectionResources.gbufferSlots.y;
     float4 packedNormal = float4(0.0);
-    float3 f0 = saturate(specularRoughness.rgb);
+    half3 f0 = half3(saturate(specularRoughness.rgb));
     if(glass){
         packedNormal = NwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= 1.0001)
@@ -115,10 +115,10 @@ bool nwbReflectionLoadSurface(
         // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two
         // entry terms remain complementary even when an authored opaque-reflection parameter is absent.
         const float ior = clamp(packedNormal.w, 1.0, 4.0);
-        const float ratio = (ior - 1.0) / (ior + 1.0);
-        f0 = float3(ratio * ratio);
+        const half ratio = half((ior - 1.0) / (ior + 1.0));
+        f0 = half3(ratio * ratio);
     }
-    if(!isfinite(specularRoughness.a) || !all(isfinite(f0)) || !any(f0 > 0.0))
+    if(!isfinite(specularRoughness.a) || !all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
         return false;
     const uint depthSlot = glass ? g_NwbReflectionResources.refractionSlots0.x : g_NwbReflectionResources.gbufferSlots.w;
     const float depth = NwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
@@ -158,8 +158,10 @@ bool nwbReflectionLoadSurface(
     surface.direction = reflect(incident, surface.normal);
     // Rough glass requires paired microfacet transmission; retain the existing complementary smooth interface.
     surface.roughness = glass ? 0.0 : saturate(specularRoughness.a);
-    const float cosine = saturate(-dot(incident, surface.normal));
-    surface.weight = f0 + (1.0 - f0) * pow(1.0 - cosine, 5.0);
+    const half cosine = half(saturate(-dot(incident, surface.normal)));
+    // The Schlick weight is a (0, 1) bounded factor, so half arithmetic is sufficient here.
+    const half3 weight = half3(f0) + (half3(1.0h) - half3(f0)) * half(pow(half(1.0h) - cosine, half(5.0h)));
+    surface.weight = weight;
     surface.bias = max(0.001, originUncertainty + length(cameraRay) * 1e-5);
     if(
         !isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight))

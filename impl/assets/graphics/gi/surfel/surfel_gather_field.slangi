@@ -42,16 +42,16 @@ bool nwbSurfelGatherField(
     const float3 worldPosition,
     const float3 normal,
     const uint poolCapacity,
-    out float3 outIrradiance
+    out half3 outIrradiance
 ){
-    outIrradiance = float3(0.0, 0.0, 0.0);
+    outIrradiance = half3(0.0h);
 
     const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cameraPositionCellSize.w;
     const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
     const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.z;
     const float3 biasedPosition = worldPosition + normal * normalBias;
 
-    float3 irradianceSum = float3(0.0, 0.0, 0.0);
+    half3 irradianceSum = half3(0.0h);
     // Gather weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
     half totalWeight = half(0.0h);
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
@@ -71,7 +71,7 @@ bool nwbSurfelGatherField(
                 const half weight = normalWeight * distanceWeight * confidence;
                 // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
                 // gates leakage while the SH reconstruction retains the surfel's directional response.
-                irradianceSum += nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal) * float(weight);
+                irradianceSum += half3(nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal)) * weight;
                 totalWeight += weight;
             }
             id = surfel.nextInCell;
@@ -81,7 +81,7 @@ bool nwbSurfelGatherField(
 
     if(totalWeight < half(NWB_SURFEL_GATHER_WEIGHT_EPSILON))
         return false;
-    outIrradiance = irradianceSum / float(totalWeight);
+    outIrradiance = irradianceSum / totalWeight;
     return true;
 }
 

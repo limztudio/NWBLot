@@ -58,7 +58,7 @@ bool nwbOpticalSetMediumProperties(
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
         return false;
     }
-    medium.absorption = nwbDielectricAbsorptionCoefficient(float3(surface.shadowAbsorptionTint));
+    medium.absorption = nwbDielectricAbsorptionCoefficient(surface.shadowAbsorptionTint);
     return true;
 }
 

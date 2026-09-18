@@ -24,13 +24,8 @@ NWB_IMPL_BEGIN
 
 
 bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Shader::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("ShaderAssetCodec::serialize"))))
         return false;
-    }
 
     const Shader& shader = static_cast<const Shader&>(asset);
     const Core::Assets::AssetBytes& bytecode = shader.bytecode();

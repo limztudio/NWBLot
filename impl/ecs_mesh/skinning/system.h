@@ -290,6 +290,9 @@ private:
     MeshSkinningRuntimeCache m_runtimeMeshCache;
 
     HashMap<u64, RuntimeResources, Hasher<u64>, EqualTo<u64>, Core::Alloc::GlobalArena> m_runtimeResources;
+    // Reused across submitFrameSkinningGraph() calls so per-frame render performs no GlobalArena creation.
+    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> m_frameDispatchPlans;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_frameLiveBuffers;
     // The graph-runtime cache retains only accepted live skinning resources between graph generations.
     Core::GpuPersistentResourceStateCache m_acceptedSkinningState;
     Core::BindingLayoutHandle m_skinningBindingLayout;

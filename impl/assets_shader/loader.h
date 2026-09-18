@@ -89,25 +89,20 @@ template<typename ShaderPathResolver>
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager.loadSync(Shader::AssetTypeName(), shaderVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load shader '{}'"), ownerName, StringConvert(shaderVirtualPath.c_str()));
+    const Shader* loadedShader = assetManager.loadTypedSync<Shader>(
+        shaderVirtualPath,
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("ShaderAssetLoader::Load")),
+        ownerName,
+        "shader"
+    );
+    if(!loadedShader)
         return false;
-    }
-    if(!loadedAsset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader asset '{}' is null"), ownerName, StringConvert(shaderVirtualPath.c_str()));
-        return false;
-    }
-    if(loadedAsset->assetType() != Shader::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a shader"), ownerName, StringConvert(shaderVirtualPath.c_str()));
-        return false;
-    }
 
-    const Shader& shaderAsset = static_cast<const Shader&>(*loadedAsset);
+    const Shader& shaderAsset = *loadedShader;
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
-    if(shaderAsset.entryPoint().empty() || shaderBinary.empty() || (shaderBinary.size() & 3u) != 0u){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: shader '{}' has invalid bytecode"), ownerName, StringConvert(shaderVirtualPath.c_str()));
-        return false;
-    }
+    // Shader::loadBinary already ran DecodeAssetPayload; keep a debug-only invariant here.
+    NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
 
     Core::ShaderDesc shaderDesc(shaderBinary.get_allocator().arena());
     shaderDesc.setShaderType(shaderType);

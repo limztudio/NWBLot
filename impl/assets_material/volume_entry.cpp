@@ -46,17 +46,12 @@ static bool ParseMaterialDocument(
     );
 }
 
-static bool BuildMaterialCookedAsset(MaterialCookEntry& entry, Material& outAsset){
-    return BuildMaterialAsset(entry, outAsset);
-}
-
 static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<MaterialCookEntry, Material, MaterialAssetCodec>(
-        Material::AssetTypeName(),
+    return Core::Assets::RegisterSingleDocumentCookEntry<MaterialCookEntry, Material, MaterialAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("material")),
         &ParseMaterialDocument,
-        nullptr,
-        &BuildMaterialCookedAsset,
+        [](MaterialCookEntry& entry, Material& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMaterialAsset); },
         false
     );
 }
@@ -65,7 +60,7 @@ static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_MaterialCookEntryRegistrar(&RegisterMaterialCookEntry);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MaterialCookEntryRegistrar, RegisterMaterialCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

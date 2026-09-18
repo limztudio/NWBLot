@@ -25,7 +25,7 @@ namespace __hidden_skeleton_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_SkeletonAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SkeletonAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkeletonAssetCodecAutoRegistrar, SkeletonAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,10 +98,8 @@ u32 Skeleton::findJointIndex(const Name jointName)const{
 }
 
 bool Skeleton::validatePayload()const{
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Skeleton::validatePayload"))))
         return false;
-    }
     if(m_joints.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton has no joints"));
         return false;

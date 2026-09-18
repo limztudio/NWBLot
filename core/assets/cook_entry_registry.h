@@ -489,6 +489,60 @@ public:
     explicit CookEntryAutoRegistrar(CookEntryRegistrationFunction function);
 };
 
+#define NWB_DEFINE_COOK_ENTRY_REGISTRAR(registrarVariable, registerFunction) \
+    Core::Assets::CookEntryAutoRegistrar registrarVariable(&registerFunction)
+
+// Shared single-entry cook registration shape: one document parser plus one asset builder.
+template<typename EntryT, typename AssetT, typename CodecT>
+[[nodiscard]] inline bool RegisterSingleDocumentCookEntry(
+    CookEntryRegistry& registry,
+    const NotNull<const tchar*> assetKindText,
+    typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
+    typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
+    const bool logBuildFailure = true
+){
+    return RegisterDocumentValueCookEntry<EntryT, AssetT, CodecT>(
+        registry,
+        assetKindText,
+        parseDocument,
+        nullptr,
+        buildAsset,
+        logBuildFailure
+    );
+}
+
+// Shared cook registration shape: one document parser, one asset_bunch value parser, plus one asset builder.
+template<typename EntryT, typename AssetT, typename CodecT>
+[[nodiscard]] inline bool RegisterDocumentValueCookEntry(
+    CookEntryRegistry& registry,
+    const NotNull<const tchar*> assetKindText,
+    typename CookEntryBucket<EntryT, AssetT, CodecT>::DocumentParseFunction parseDocument,
+    typename CookEntryBucket<EntryT, AssetT, CodecT>::ValueParseFunction parseValue,
+    typename CookEntryBucket<EntryT, AssetT, CodecT>::BuildAssetFunction buildAsset,
+    const bool logBuildFailure = true
+){
+    return registry.registerType<EntryT, AssetT, CodecT>(
+        AssetT::AssetTypeName(),
+        assetKindText,
+        parseDocument,
+        parseValue,
+        buildAsset,
+        logBuildFailure
+    );
+}
+
+// Shared pass-through asset builder: forwards the parsed cook entry to the domain build function.
+template<typename EntryT, typename AssetT, typename BuildFunction>
+[[nodiscard]] inline bool ForwardCookBuild(EntryT& entry, AssetT& outAsset, BuildFunction buildAsset){
+    return buildAsset(entry, outAsset);
+}
+
+// Shared asset builder with a scratch arena: forwards the parsed cook entry plus scratch to the domain build function.
+template<typename EntryT, typename AssetT, typename ScratchT, typename BuildFunction>
+[[nodiscard]] inline bool ForwardCookBuildWithScratch(EntryT& entry, AssetT& outAsset, ScratchT& scratch, BuildFunction buildAsset){
+    return buildAsset(entry, outAsset, scratch);
+}
+
 [[nodiscard]] bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry);
 
 

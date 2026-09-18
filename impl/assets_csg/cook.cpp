@@ -373,10 +373,8 @@ bool ParseCsgShapeCookMetadata(
     outEntry = CsgShapeCookEntry(cookArena);
 
     const Core::Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "CSG shape meta"))
         return false;
-    }
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,

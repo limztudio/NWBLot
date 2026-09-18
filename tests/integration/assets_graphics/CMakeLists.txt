@@ -37,12 +37,12 @@ nwb_target_link_libraries_whole_archive(nwb_assets_graphics_tests
     nwb_assets_texture_volume_entry
     nwb_assets_sampler_volume_entry
     nwb_assets_graphics_cook
+    nwb_assets_graphics_gather
 )
 target_link_libraries(nwb_assets_graphics_tests PRIVATE
     nwb_pipeline_asset_builder
     nwb_pipeline_asset_gatherer
     nwb_ecs_csg
-    nwb_assets_graphics_gather
     nwb_assets_cook
     nwb_shader_archive
     nwb_graphics

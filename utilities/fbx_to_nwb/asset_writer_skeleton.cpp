@@ -26,6 +26,12 @@ namespace AssetWriterSkeletonDetail{
 
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
+inline constexpr const char* s_PositionStreamLabel = "position";
+inline constexpr const char* s_NormalStreamLabel = "normal";
+inline constexpr const char* s_TangentStreamLabel = "tangent";
+inline constexpr const char* s_Uv0StreamLabel = "uv0";
+inline constexpr const char* s_ColorsStreamLabel = "color";
+inline constexpr AStringView s_JointFallbackNamePrefix = "joint_";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,19 +60,19 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
     }
 
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.position, mesh.positions.size(), "position", context))
+        if(!ValidateStreamIndex(ref.position, mesh.positions.size(), s_PositionStreamLabel, context))
             return false;
-        if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), "normal", context))
+        if(!ValidateStreamIndex(ref.normal, mesh.normals.size(), s_NormalStreamLabel, context))
             return false;
         if(ref.tangent == s_MissingSourceStreamIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: mesh vertex_ref tangent is missing"), StringConvert(context));
             return false;
         }
-        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), "tangent", context))
+        if(!ValidateStreamIndex(ref.tangent, mesh.tangents.size(), s_TangentStreamLabel, context))
             return false;
-        if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), "uv0", context))
+        if(!ValidateStreamIndex(ref.uv0, mesh.uv0.size(), s_Uv0StreamLabel, context))
             return false;
-        if(!ValidateStreamIndex(ref.color, mesh.colors.size(), "color", context))
+        if(!ValidateStreamIndex(ref.color, mesh.colors.size(), s_ColorsStreamLabel, context))
             return false;
     }
 
@@ -153,7 +159,7 @@ AString NodeName(const ufbx_node* node, const usize fallbackIndex){
         return name;
 
     AStringStream out;
-    out << "joint_" << fallbackIndex;
+    out << s_JointFallbackNamePrefix << fallbackIndex;
     return out.str();
 }
 
@@ -358,7 +364,7 @@ bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){
         return false;
     }
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), "skin", s_Context))
+        if(!ValidateStreamIndex(ref.skin, mesh.skin.size(), s_SkinStreamLabel, s_Context))
             return false;
     }
     return true;

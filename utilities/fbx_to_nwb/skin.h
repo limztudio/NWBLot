@@ -23,6 +23,10 @@ namespace FbxSkinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr const char* s_NullNodeLabel = "<null>";
+inline constexpr const char* s_UnnamedNodeLabel = "<unnamed node>";
+
+
 struct ExportContext{
     UtilityVector<ufbx_node*> joints;
     UtilityVector<JointMatrix> bindPoseMatrices;

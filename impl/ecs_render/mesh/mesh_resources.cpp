@@ -40,6 +40,47 @@ namespace __hidden_mesh{
 static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
 inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
 
+[[nodiscard]] static bool ReportMeshBufferSetupFailure(
+    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure,
+    const Name& meshName,
+    const tchar* label
+){
+    switch(failure){
+    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
+        return true;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
+            , StringConvert(meshName.c_str())
+            , label
+        );
+        return false;
+    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
+        break;
+    }
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
+        , label
+        , StringConvert(meshName.c_str())
+    );
+    return false;
+}
+
+[[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const tchar* label){
+    const Name bufferName = DeriveName(meshName, suffix);
+    if(!bufferName){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
+            , label
+            , StringConvert(meshName.c_str())
+        );
+    }
+    return bufferName;
+}
+
 template<typename PayloadT, typename PayloadVector>
 [[nodiscard]] static Core::BufferHandle SetupMeshBuffer(
     Core::GraphicsRuntime& graphics,
@@ -50,14 +91,9 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false
 ){
-    const Name bufferName = DeriveName(meshName, suffix);
-    if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
-            , label
-            , StringConvert(meshName.c_str())
-        );
+    const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
+    if(!bufferName)
         return {};
-    }
 
     Core::BufferHandle buffer;
     const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
@@ -72,29 +108,9 @@ template<typename PayloadT, typename PayloadVector>
         },
         buffer
     );
-    switch(failure){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
-        return buffer;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
-            , StringConvert(meshName.c_str())
-            , label
-        );
+    if(!ReportMeshBufferSetupFailure(failure, meshName, label))
         return {};
-    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return {};
-    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
-        break;
-    }
-    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
-        , label
-        , StringConvert(meshName.c_str())
-    );
-    return {};
+    return buffer;
 }
 
 template<typename PayloadT, typename PayloadVector>
@@ -132,14 +148,9 @@ template<typename PayloadVector>
 ){
     outBuffer = nullptr;
 
-    const Name bufferName = DeriveName(meshName, suffix);
-    if(!bufferName){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
-            , label
-            , StringConvert(meshName.c_str())
-        );
+    const Name bufferName = DeriveMeshBufferName(meshName, suffix, label);
+    if(!bufferName)
         return false;
-    }
 
     const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure =
         RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
@@ -156,31 +167,10 @@ template<typename PayloadVector>
             outBuffer
         )
     ;
-    switch(failure){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
+    if(failure == RuntimeMeshBufferUpload::BufferSetupFailure::None)
         return true;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return false;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
-            , StringConvert(meshName.c_str())
-            , label
-        );
-        return false;
-    case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
-            , label
-            , StringConvert(meshName.c_str())
-        );
-        return false;
-    }
 
-    NWB_ASSERT(false);
-    return false;
+    return ReportMeshBufferSetupFailure(failure, meshName, label);
 }
 
 [[nodiscard]] static bool ValidateRawBufferLogicalByteCount(
@@ -253,39 +243,30 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
     const auto foundMesh = m_meshState.m_meshes.find(meshPath);
     if(foundMesh != m_meshState.m_meshes.end()){
-        if(!meshRenderBindingsReady(foundMesh.value())){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached mesh '{}' is missing creation-time render bindings")
-                , StringConvert(meshPath.c_str())
-            );
+        NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
+        if(!meshRenderBindingsReady(foundMesh.value()))
             return false;
-        }
         outMesh = &foundMesh.value();
         NWB_ASSERT(outMesh->valid());
         return true;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Mesh::AssetTypeName(), meshPath, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load mesh '{}'"), StringConvert(meshPath.c_str()));
+    const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
+        meshPath,
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("RendererMeshSystem::createMeshResources")),
+        NWB_TEXT("RendererSystem"),
+        "mesh"
+    );
+    if(!loadedMesh)
         return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Mesh::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: asset '{}' is not mesh"), StringConvert(meshPath.c_str()));
-        return false;
-    }
 
-    const Mesh& mesh = static_cast<const Mesh&>(*loadedAsset);
+    const Mesh& mesh = *loadedMesh;
+    // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
     NWB_ASSERT(mesh.validatePayload());
-
-    if(
-        mesh.meshlets().size() > static_cast<usize>(Limit<u32>::s_Max)
-        || mesh.meshletPrimitiveIndices().size() > static_cast<usize>(Limit<u32>::s_Max)
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' meshlet payload exceeds u32 limits")
-            , StringConvert(meshPath.c_str())
-        );
-        return false;
-    }
+    NWB_ASSERT(mesh.meshlets().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(mesh.meshletPrimitiveIndices().size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     MeshResources createdMesh;
     createdMesh.meshName = meshPath;
@@ -517,6 +498,7 @@ bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& m
 
 bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& outMesh){
     outMesh = nullptr;
+    NWB_ASSERT(meshKey);
     if(!meshKey)
         return false;
 
@@ -524,6 +506,7 @@ bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& 
     if(foundMesh == m_meshState.m_meshes.end())
         return false;
 
+    NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
     if(!meshRenderBindingsReady(foundMesh.value()))
         return false;
 
@@ -550,12 +533,9 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             m_meshState.m_meshes.erase(foundMesh);
         }
         else{
-            if(!meshRenderBindingsReady(foundMesh.value())){
-                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached runtime mesh '{}' is missing creation-time render bindings")
-                    , StringConvert(desc.meshKey.c_str())
-                );
+            NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
+            if(!meshRenderBindingsReady(foundMesh.value()))
                 return false;
-            }
             outMesh = &foundMesh.value();
             NWB_ASSERT(outMesh->valid());
             return true;
@@ -629,6 +609,7 @@ bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, M
     if(!mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.version)
         return false;
 
+    NWB_ASSERT(meshRenderBindingsReady(mesh));
     if(!meshRenderBindingsReady(mesh))
         return false;
 

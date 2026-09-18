@@ -23,6 +23,7 @@ namespace __hidden_output{
 
 
 inline constexpr AStringView s_NewLine = "\r\n";
+inline constexpr AStringView s_NwbOutputExtension = ".nwb";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -248,28 +249,28 @@ bool WriteTexturePayload(const Path& path, const TexturePayload& payload){
 bool ResolveOutputPaths(const Path& inputPath, const AString& outputArgument, OutputPaths& outOutputPaths){
     if(outputArgument.empty()){
         outOutputPaths.metadata = inputPath;
-        outOutputPaths.metadata.replace_extension(".nwb");
+        outOutputPaths.metadata.replace_extension(s_NwbOutputExtension);
     }
     else{
         const Path outputBase(UtilityDetail::Arena(), outputArgument);
         const AString extension = LowerPathExtension<AString>(outputBase);
         if(extension.empty())
             outOutputPaths.metadata = outputBase;
-        else if(extension == ".nwb")
+        else if(extension == s_NwbOutputExtension)
             outOutputPaths.metadata = outputBase;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return false;
         }
-        outOutputPaths.metadata.replace_extension(".nwb");
+        outOutputPaths.metadata.replace_extension(s_NwbOutputExtension);
     }
 
     outOutputPaths.data = outOutputPaths.metadata;
-    outOutputPaths.data.replace_extension(".tex");
+    outOutputPaths.data.replace_extension(s_TextureDataExtension);
     outOutputPaths.metadataTemporary = outOutputPaths.metadata;
-    outOutputPaths.metadataTemporary += ".tmp";
+    outOutputPaths.metadataTemporary += s_TemporaryOutputSuffix;
     outOutputPaths.dataTemporary = outOutputPaths.data;
-    outOutputPaths.dataTemporary += ".tmp";
+    outOutputPaths.dataTemporary += s_TemporaryOutputSuffix;
     return true;
 }
 

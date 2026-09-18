@@ -46,17 +46,12 @@ static bool ParseSamplerDocument(
     );
 }
 
-static bool BuildSamplerCookedAsset(SamplerCookEntry& entry, Sampler& outAsset){
-    return BuildSamplerAsset(entry, outAsset);
-}
-
 static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<SamplerCookEntry, Sampler, SamplerAssetCodec>(
-        Sampler::AssetTypeName(),
+    return Core::Assets::RegisterSingleDocumentCookEntry<SamplerCookEntry, Sampler, SamplerAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("sampler")),
         &ParseSamplerDocument,
-        nullptr,
-        &BuildSamplerCookedAsset,
+        [](SamplerCookEntry& entry, Sampler& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSamplerAsset); },
         false
     );
 }
@@ -65,7 +60,7 @@ static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_SamplerCookEntryRegistrar(&RegisterSamplerCookEntry);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_SamplerCookEntryRegistrar, RegisterSamplerCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -636,10 +636,8 @@ bool ParseMaterialMeta(
     outEntry.reset();
 
     const Core::Metascript::Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Material meta"))
         return false;
-    }
 
     // Derive the material's virtual path as readable text (stored verbatim; the cook builds generated-shader file
     // paths / identities from it, and the framework dedups by the Name it hashes to via ToCookEntryName). Validate

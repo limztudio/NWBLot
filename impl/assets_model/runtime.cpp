@@ -27,7 +27,7 @@ namespace __hidden_model_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_ModelAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<ModelAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ModelAssetCodecAutoRegistrar, ModelAssetCodec);
 
 
 static constexpr u8 s_SkeletonObjectName = 1u;
@@ -45,10 +45,8 @@ using ObjectNameMap = HashMap<Name, u8, Core::Alloc::ScratchArena>;
 
 
 bool Model::validatePayload(Core::Alloc::ScratchArena& scratchArena)const{
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Model::validatePayload"))))
         return false;
-    }
     if(m_skeletonObjects.empty() && m_staticMeshObjects.empty() && m_skinnedMeshObjects.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Model::validatePayload failed: model has no objects"));
         return false;

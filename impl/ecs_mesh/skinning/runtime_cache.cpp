@@ -60,15 +60,11 @@ static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag:
 
 
 const Mesh* MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const{
-    if(!meshAsset || meshAsset->assetType() != Mesh::AssetTypeName())
-        return nullptr;
-    return checked_cast<const Mesh*>(meshAsset.get());
+    return Core::Assets::CastAsset<Mesh>(meshAsset.get());
 }
 
 const Skin* MeshSkinningRuntimeCache::MeshSkinningSource::skin()const{
-    if(!skinAsset || skinAsset->assetType() != Skin::AssetTypeName())
-        return nullptr;
-    return checked_cast<const Skin*>(skinAsset.get());
+    return Core::Assets::CastAsset<Skin>(skinAsset.get());
 }
 
 

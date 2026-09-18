@@ -33,25 +33,56 @@ namespace __hidden_material_surface{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void ReleaseTextureAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
-    for(auto it = resources.textureAssetCache.begin(); it != resources.textureAssetCache.end(); ++it){
+template<typename CacheT, typename ReleaseFn>
+static void ReleaseAssetCache(CacheT& cache, ReleaseFn&& releaseItem){
+    for(auto it = cache.begin(); it != cache.end(); ++it){
         if(it.value())
-            TextureAssetLoader::Release(*it.value(), graphics);
+            releaseItem(*it.value());
     }
-    resources.textureAssetCache.clear();
+    cache.clear();
+}
+
+static void ReleaseTextureAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
+    ReleaseAssetCache(resources.textureAssetCache, [&](TextureGpuResource& resource){ TextureAssetLoader::Release(resource, graphics); });
 }
 
 static void ReleaseSamplerAssetCache(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
-    for(auto it = resources.samplerAssetCache.begin(); it != resources.samplerAssetCache.end(); ++it){
-        if(it.value())
-            SamplerAssetLoader::Release(*it.value(), graphics);
-    }
-    resources.samplerAssetCache.clear();
+    ReleaseAssetCache(resources.samplerAssetCache, [&](SamplerGpuResource& resource){ SamplerAssetLoader::Release(resource, graphics); });
 }
 
 static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, RendererMaterialResourceState& resources){
     ReleaseTextureAssetCache(graphics, resources);
     ReleaseSamplerAssetCache(graphics, resources);
+}
+
+template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, typename ReleaseFn>
+[[nodiscard]] static ResourceT* FindOrCreateCachedAsset(
+    CacheT& cache,
+    const Core::Assets::AssetRef<AssetT>& assetRef,
+    const char* emptyKindText,
+    LoadFn&& loadResource,
+    ReleaseFn&& releaseResource
+){
+    if(!assetRef.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), emptyKindText);
+        return nullptr;
+    }
+
+    const Name& assetPath = assetRef.name();
+    auto assetIt = cache.find(assetPath);
+    if(assetIt == cache.end()){
+        UniquePtr<ResourceT> resource = MakeUnique<ResourceT>();
+        if(!loadResource(*resource, assetRef, assetPath))
+            return nullptr;
+
+        auto insertResult = cache.try_emplace(assetPath, Move(resource));
+        assetIt = insertResult.first;
+        if(!insertResult.second && resource)
+            releaseResource(*resource);
+    }
+
+    NWB_ASSERT(assetIt.value());
+    return assetIt.value().get();
 }
 
 [[nodiscard]] static bool ResolveTextureAssetSlot(
@@ -62,49 +93,43 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
     u32& outHeapSlot
 ){
     outHeapSlot = 0u;
-    if(!textureAsset.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material Texture2D asset reference is empty"));
+    TextureGpuResource* const textureResource = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
+        resources.textureAssetCache,
+        textureAsset,
+        "Texture2D",
+        [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
+            if(!TextureAssetLoader::Load(
+                outResource,
+                assetRef,
+                assetPath,
+                graphics,
+                assetManager,
+                NWB_TEXT("RendererSystem")
+            ))
+                return false;
+            if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
+                    , StringConvert(assetPath.c_str())
+                );
+                TextureAssetLoader::Release(outResource, graphics);
+                return false;
+            }
+            return true;
+        },
+        [&](TextureGpuResource& liveResource){ TextureAssetLoader::Release(liveResource, graphics); }
+    );
+    if(!textureResource)
         return false;
-    }
 
     const Name& texturePath = textureAsset.name();
-    auto textureAssetIt = resources.textureAssetCache.find(texturePath);
-    if(textureAssetIt == resources.textureAssetCache.end()){
-        UniquePtr<TextureGpuResource> textureResource = MakeUnique<TextureGpuResource>();
-        if(!TextureAssetLoader::Load(
-            *textureResource,
-            textureAsset,
-            texturePath,
-            graphics,
-            assetManager,
-            NWB_TEXT("RendererSystem")
-        ))
-            return false;
-
-        if(textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: Texture2D asset '{}' has an incompatible texture dimension")
-                , StringConvert(texturePath.c_str())
-            );
-            TextureAssetLoader::Release(*textureResource, graphics);
-            return false;
-        }
-
-        auto insertResult = resources.textureAssetCache.try_emplace(texturePath, Move(textureResource));
-        textureAssetIt = insertResult.first;
-        if(!insertResult.second && textureResource)
-            TextureAssetLoader::Release(*textureResource, graphics);
-    }
-
-    NWB_ASSERT(textureAssetIt.value());
-    const TextureGpuResource& textureResource = *textureAssetIt.value();
-    if(!textureResource.valid() || textureResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
+    if(!textureResource->valid() || textureResource->sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached Texture2D asset '{}' is invalid")
             , StringConvert(texturePath.c_str())
         );
         return false;
     }
 
-    outHeapSlot = textureResource.sampledImageHeapHandle.slot();
+    outHeapSlot = textureResource->sampledImageHeapHandle.slot();
     return true;
 }
 
@@ -116,36 +141,29 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
     u32& outHeapSlot
 ){
     outHeapSlot = 0u;
-    if(!samplerAsset.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material sampler asset reference is empty"));
+    SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
+        resources.samplerAssetCache,
+        samplerAsset,
+        "sampler",
+        [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
+            return SamplerAssetLoader::Load(
+                outResource,
+                assetRef,
+                assetPath,
+                graphics,
+                assetManager,
+                NWB_TEXT("RendererSystem")
+            );
+        },
+        [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
+    );
+    if(!samplerResource)
         return false;
-    }
 
     const Name& samplerPath = samplerAsset.name();
-    auto samplerAssetIt = resources.samplerAssetCache.find(samplerPath);
-    if(samplerAssetIt == resources.samplerAssetCache.end()){
-        UniquePtr<SamplerGpuResource> samplerResource = MakeUnique<SamplerGpuResource>();
-        if(!SamplerAssetLoader::Load(
-            *samplerResource,
-            samplerAsset,
-            samplerPath,
-            graphics,
-            assetManager,
-            NWB_TEXT("RendererSystem")
-        ))
-            return false;
-
-        auto insertResult = resources.samplerAssetCache.try_emplace(samplerPath, Move(samplerResource));
-        samplerAssetIt = insertResult.first;
-        if(!insertResult.second && samplerResource)
-            SamplerAssetLoader::Release(*samplerResource, graphics);
-    }
-
-    NWB_ASSERT(samplerAssetIt.value());
-    const SamplerGpuResource& samplerResource = *samplerAssetIt.value();
     if(
-        !samplerResource.valid()
-        || samplerResource.samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
+        !samplerResource->valid()
+        || samplerResource->samplerHeapHandle.descriptorClass() != Core::GpuDescriptorClass::Sampler
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: cached sampler asset '{}' is invalid")
             , StringConvert(samplerPath.c_str())
@@ -153,7 +171,7 @@ static void ReleaseMaterialResourceState(Core::GraphicsRuntime& graphics, Render
         return false;
     }
 
-    outHeapSlot = samplerResource.samplerHeapHandle.slot();
+    outHeapSlot = samplerResource->samplerHeapHandle.slot();
     return true;
 }
 
@@ -439,30 +457,17 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     MaterialTypedByteVector& outConstantTypedBytes,
     MaterialTypedByteVector& outMutableDefaultTypedBytes
 ){
+    static_cast<void>(materialPath);
     outConstantTypedBytes.clear();
     outMutableDefaultTypedBytes.clear();
 
     const auto& packedTypedBytes = material.typedBlockBytes();
     usize sourceByteOffset = 0u;
     for(const MaterialTypedLayoutBlock& block : material.typedLayoutBlocks()){
-        if(!IsValidMaterialBlockClass(block.blockClass)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has invalid typed material block class")
-                , StringConvert(materialPath.c_str())
-            );
-            return false;
-        }
-        if((block.byteSize & (sizeof(u32) - 1u)) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block size is not u32 aligned")
-                , StringConvert(materialPath.c_str())
-            );
-            return false;
-        }
-        if(sourceByteOffset > packedTypedBytes.size() || block.byteSize > packedTypedBytes.size() - sourceByteOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block bytes exceed packed data")
-                , StringConvert(materialPath.c_str())
-            );
-            return false;
-        }
+        // Material::loadBinary already ran ValidateMaterialTypedLayout; keep a debug-only invariant here.
+        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
+        NWB_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
+        NWB_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
 
         MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant
             ? outConstantTypedBytes
@@ -475,12 +480,8 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
         );
         sourceByteOffset += block.byteSize;
     }
-    if(sourceByteOffset != packedTypedBytes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material layout size does not match packed data")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
+    // Material::loadBinary already validated the packed byte count against the cooked layout.
+    NWB_ASSERT(sourceByteOffset == packedTypedBytes.size());
 
     return true;
 }
@@ -489,6 +490,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     outInfo = nullptr;
 
     const Name materialPath = materialAsset.name();
+    NWB_ASSERT(materialPath);
     if(!materialPath){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
         return false;
@@ -503,26 +505,23 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     }
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!m_assetManager.loadSync(Material::AssetTypeName(), materialPath, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to load material '{}'"), StringConvert(materialPath.c_str()));
+    const Material* loadedMaterial = m_assetManager.loadTypedSync<Material>(
+        materialPath,
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("RendererMaterialSystem::createMaterialSurfaceInfo")),
+        NWB_TEXT("RendererSystem"),
+        "material"
+    );
+    if(!loadedMaterial)
         return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Material::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: asset '{}' is not a material"), StringConvert(materialPath.c_str()));
-        return false;
-    }
 
-    const Material& material = static_cast<const Material&>(*loadedAsset);
+    const Material& material = *loadedMaterial;
     const auto& typedBlockBytes = material.typedBlockBytes();
 
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
-    if(material.shaderVariant().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
+    // Material::loadBinary already rejected empty shader variants and missing material interfaces.
+    NWB_ASSERT(!material.shaderVariant().empty());
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
     const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
@@ -543,37 +542,13 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     }
 
-    if(!material.materialInterface()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required material interface")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
     createdInfo.materialInterface = material.materialInterface();
-    if(material.typedLayoutHash() == 0u || typedBlockBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
-    if(material.typedLayoutBlocks().size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block count exceeds u32 limits")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
-    if(material.typedLayoutFields().size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material field count exceeds u32 limits")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
-    if(typedBlockBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material data exceeds u32 limits")
-            , StringConvert(materialPath.c_str())
-        );
-        return false;
-    }
+    NWB_ASSERT(createdInfo.materialInterface);
+    // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
+    NWB_ASSERT(material.typedLayoutHash() != 0u && !typedBlockBytes.empty());
+    NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(typedBlockBytes.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     createdInfo.typedLayoutHash = material.typedLayoutHash();
     createdInfo.typedLayoutBlocks.assign(material.typedLayoutBlocks().begin(), material.typedLayoutBlocks().end());

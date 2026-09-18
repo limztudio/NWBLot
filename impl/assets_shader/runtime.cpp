@@ -24,7 +24,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_ShaderAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<ShaderAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ShaderAssetCodecAutoRegistrar, ShaderAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,10 +37,8 @@ Core::Assets::AssetCodecAutoRegistrar s_ShaderAssetCodecAutoRegistrar(&Core::Ass
 
 
 bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Shader::loadBinary"))))
         return false;
-    }
 
     Core::Assets::AssetString entryPoint(m_entryPoint.get_allocator().arena());
     Core::Assets::AssetBytes bytecode(m_bytecode.get_allocator().arena());

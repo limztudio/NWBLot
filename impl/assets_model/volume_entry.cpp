@@ -65,12 +65,12 @@ static bool ParseModelValue(
 
 static bool BuildModelCookedAsset(ModelCookEntry& entry, Model& outAsset){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_BuildAssetArena);
-    return BuildModelAsset(entry, outAsset, scratchArena);
+    return Core::Assets::ForwardCookBuildWithScratch(entry, outAsset, scratchArena, &BuildModelAsset);
 }
 
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<ModelCookEntry, Model, ModelAssetCodec>(
-        Model::AssetTypeName(),
+    return Core::Assets::RegisterDocumentValueCookEntry<ModelCookEntry, Model, ModelAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("model")),
         &ParseModelDocument,
         &ParseModelValue,
@@ -82,7 +82,7 @@ static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_ModelCookEntryRegistrar(&RegisterModelCookEntry);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_ModelCookEntryRegistrar, RegisterModelCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

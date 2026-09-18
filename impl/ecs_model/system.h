@@ -9,6 +9,8 @@
 
 #include <core/assets/ref.h>
 #include <core/ecs/system.h>
+#include <impl/assets_skeleton/asset.h>
+#include <impl/assets_skeleton/joint_types.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,6 +83,14 @@ struct ModelObjectRendererHooks{
 };
 
 
+struct ModelAttachmentJointQuery{
+    Core::ECS::EntityID parentEntity;
+    u32 parentJointIndex = s_SkeletonInvalidJointIndex;
+    SkeletonJointMatrix jointMatrix{};
+    bool resolved = false;
+};
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -120,6 +130,9 @@ private:
     Core::Assets::AssetManager& m_assetManager;
     ModelObjectRendererCallback m_applyRenderer;
     Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena> m_scratchJoints;
+    // Reused across updateStaticMeshAttachments() calls so per-frame updates perform no allocations.
+    Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena> m_attachmentJointQueries;
+    Vector<usize, Core::Alloc::GlobalArena> m_attachmentParentOrder;
 };
 
 

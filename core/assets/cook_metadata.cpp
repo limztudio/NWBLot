@@ -12,6 +12,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <global/assert.h>
 #include <global/auto_registration.h>
 
 
@@ -331,8 +332,7 @@ AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpan
     __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
     for(const AssetBunchExpandFunction function : functions){
-        if(function == nullptr)
-            continue;
+        NWB_ASSERT(function != nullptr);
 
         const AssetBunchExpandResult::Enum result = function(context);
         if(result == AssetBunchExpandResult::Unsupported)

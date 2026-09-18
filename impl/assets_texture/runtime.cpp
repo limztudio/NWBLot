@@ -27,7 +27,7 @@ namespace __hidden_texture_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_TextureAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<TextureAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_TextureAssetCodecAutoRegistrar, TextureAssetCodec);
 
 using TextureFormat::ComputeCompleteMipCount;
 using TextureFormat::ComputeMipPlaneBlockLayout;
@@ -128,10 +128,8 @@ using TextureFormat::ComputeMipSliceCount;
 
 
 bool Texture::validatePayload()const{
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Texture::validatePayload"))))
         return false;
-    }
     if(!IsValidTextureColorSpace(m_colorSpace)){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::validatePayload failed: texture '{}' has an invalid color space")
             , StringConvert(virtualPath().c_str())
@@ -260,10 +258,8 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
     m_mipLevels.clear();
     m_payloadBytes.clear();
 
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Texture::loadBinary"))))
         return false;
-    }
 
     usize prefixCursor = 0u;
     TextureBinaryPayload::HeaderPrefix headerPrefix;

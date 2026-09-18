@@ -25,7 +25,7 @@ namespace __hidden_sampler_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_SamplerAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SamplerAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SamplerAssetCodecAutoRegistrar, SamplerAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,10 +38,8 @@ Core::Assets::AssetCodecAutoRegistrar s_SamplerAssetCodecAutoRegistrar(&Core::As
 
 
 bool Sampler::validatePayload()const{
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Sampler::validatePayload"))))
         return false;
-    }
     if(!IsValidSamplerDescription(m_description)){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::validatePayload failed: sampler '{}' has an invalid description")
             , StringConvert(virtualPath().c_str())

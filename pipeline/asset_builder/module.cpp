@@ -21,6 +21,12 @@ namespace __hidden_asset_builder{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr AStringView s_ImplSourceDirectoryName = "impl";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static bool AddRoot(const NWB::Path& path, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
     auto text = PathToString(arena, path.lexically_normal());
@@ -30,7 +36,7 @@ static bool AddRoot(const NWB::Path& path, NWB::Pipeline::AssetBuilder::AssetBui
     }
     auto parentName = PathToString(arena, path.parent_path().filename());
     CanonicalizeTextInPlace(parentName);
-    const ACompactString virtualRoot(parentName == "impl" ? "engine" : "project");
+    const ACompactString virtualRoot(parentName == s_ImplSourceDirectoryName ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot);
     options.assetRoots.emplace_back(arena, AStringView(text), virtualRoot);
     return true;
 }
@@ -95,26 +101,23 @@ int RunPipelineTool(const int argc, char** argv){
     NWB::Core::Assets::AssetArena arena(Name("pipeline/asset_builder"));
     PipelineOptions parsed(arena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
-    return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
-        if(!commandLine.parse(argc, argv, parsed))
-            return 1;
-
+    return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
         NWB::Core::CpuTaskScheduler cpuScheduler(cores > 1u ? cores - 1u : 0u);
-        NWB::Pipeline::AssetBuilder::AssetBuildOptions options(arena, cpuScheduler);
-        options.repoRoot = parsed.repoRoot;
-        options.outputDirectory = parsed.outputDirectory;
-        options.cacheDirectory = parsed.cacheDirectory;
-        options.configuration = parsed.configuration;
-        options.assetType = parsed.assetType;
-        options.inputs = parsed.inputs;
-        options.useExplicitInputs = true;
-        if(!__hidden_asset_builder::ResolveRoots(parsed, options))
+        NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
+        buildOptions.repoRoot = options.repoRoot;
+        buildOptions.outputDirectory = options.outputDirectory;
+        buildOptions.cacheDirectory = options.cacheDirectory;
+        buildOptions.configuration = options.configuration;
+        buildOptions.assetType = options.assetType;
+        buildOptions.inputs = options.inputs;
+        buildOptions.useExplicitInputs = true;
+        if(!__hidden_asset_builder::ResolveRoots(options, buildOptions))
             return 1;
-        const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(options);
+        const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions);
         cpuScheduler.wait();
         return built ? 0 : 1;
-    }, [&](const CLI::ParseError& error){ return commandLine.exit(error); }, [](){ return -1; });
+    });
 }
 
 

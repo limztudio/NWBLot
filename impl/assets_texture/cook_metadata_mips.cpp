@@ -51,15 +51,9 @@ using TextureFormat::ComputeMipSliceCount;
 ){
     outMipLevels.clear();
 
-    const Value* const mipsField = FindField(asset, s_MipsField);
-    if(!mipsField || !mipsField->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_MipsField)
-        );
+    const Value* const mipsField = ::NWB::Core::Assets::FindMetadataListField(nwbFilePath, asset, s_DiagnosticPrefix, s_MipsField);
+    if(!mipsField)
         return false;
-    }
 
     const Value::ListType& mips = mipsField->asList();
     if(mips.size() != expectedMipCount){

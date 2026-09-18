@@ -24,7 +24,7 @@ namespace __hidden_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_MaterialAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MaterialAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MaterialAssetCodecAutoRegistrar, MaterialAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -330,10 +330,8 @@ static bool ReadMaterialTypedLayout(
 
 
 bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Material::loadBinary"))))
         return false;
-    }
 
     m_shaderVariant.clear();
     m_materialInterface = NAME_NONE;

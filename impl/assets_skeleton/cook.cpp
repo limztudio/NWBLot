@@ -29,13 +29,8 @@ NWB_IMPL_BEGIN
 
 
 bool SkeletonAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkeletonAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Skeleton::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SkeletonAssetCodec::serialize"))))
         return false;
-    }
 
     const Skeleton& skeleton = static_cast<const Skeleton&>(asset);
     if(!skeleton.validatePayload())
@@ -217,27 +212,17 @@ bool ParseSkeletonCookMetadata(
 
     outEntry = SkeletonCookEntry(outEntry.joints.get_allocator().arena());
 
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Skeleton meta"))
         return false;
-    }
 
-    outEntry.virtualPath = virtualPath;
-    if(!outEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, nwbFilePath, "Skeleton meta"))
         return false;
-    }
     if(!ValidateSkeletonAssetFields(nwbFilePath, asset))
         return false;
 
-    const Value* joints = FindField(asset, s_JointsField);
-    if(!joints || !joints->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton meta '{}': field '{}' must be a list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_JointsField)
-        );
+    const Value* joints = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skeleton meta", s_JointsField);
+    if(!joints)
         return false;
-    }
 
     const auto& jointList = joints->asList();
     outEntry.joints.reserve(jointList.size());

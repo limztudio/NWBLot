@@ -237,31 +237,13 @@ NWB_INLINE u32 SIMDCALL GetIntLane(SIMDVector value)noexcept{
 template<u32 Lane>
 NWB_INLINE void SIMDCALL StoreLane(f32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-#if defined(NWB_HAS_SCALAR)
-    out = value.f[Lane];
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_f32(&out, value, Lane);
-#else
-    if constexpr(Lane == 0u)
-        _mm_store_ss(&out, value);
-    else
-        *reinterpret_cast<i32*>(&out) = _mm_extract_ps(value, Lane);
-#endif
+    out = GetLane<Lane>(value);
 }
 
 template<u32 Lane>
 NWB_INLINE void SIMDCALL StoreIntLane(u32& out, SIMDVector value)noexcept{
     static_assert(Lane < 4u);
-#if defined(NWB_HAS_SCALAR)
-    out = value.u[Lane];
-#elif defined(NWB_HAS_NEON)
-    vst1q_lane_u32(&out, vreinterpretq_u32_f32(value), Lane);
-#else
-    if constexpr(Lane == 0u)
-        _mm_store_ss(reinterpret_cast<f32*>(&out), value);
-    else
-        out = static_cast<u32>(_mm_extract_epi32(_mm_castps_si128(value), Lane));
-#endif
+    out = GetIntLane<Lane>(value);
 }
 
 template<u32 Lane>
@@ -518,16 +500,8 @@ NWB_INLINE SIMDVector SIMDCALL VectorReplicate(f32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorReplicatePtr(const f32& value)noexcept{
-#if defined(NWB_HAS_SCALAR)
+NWB_INLINE SIMDVector SIMDCALL VectorReplicatePtr(const f32 value)noexcept{
     return VectorReplicate(value);
-#elif defined(NWB_HAS_NEON)
-    return vld1q_dup_f32(&value);
-#elif defined(NWB_HAS_AVX2)
-    return _mm_broadcast_ss(&value);
-#else
-    return _mm_load_ps1(&value);
-#endif
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorReplicateInt(u32 value)noexcept{
@@ -540,14 +514,8 @@ NWB_INLINE SIMDVector SIMDCALL VectorReplicateInt(u32 value)noexcept{
 #endif
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorReplicateIntPtr(const u32& value)noexcept{
-#if defined(NWB_HAS_SCALAR)
+NWB_INLINE SIMDVector SIMDCALL VectorReplicateIntPtr(const u32 value)noexcept{
     return VectorReplicateInt(value);
-#elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_dup_u32(&value));
-#else
-    return _mm_castsi128_ps(_mm_set1_epi32(static_cast<i32>(value)));
-#endif
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorTrueInt()noexcept{
@@ -590,10 +558,10 @@ NWB_INLINE void SIMDCALL VectorGetByIndexPtr(f32& out, SIMDVector value, usize i
     out = VectorGetByIndex(value, index);
 }
 
-NWB_INLINE void SIMDCALL VectorGetXPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<0u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetYPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<1u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetZPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<2u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetWPtr(f32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreLane<3u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetXPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetX(value); }
+NWB_INLINE void SIMDCALL VectorGetYPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetY(value); }
+NWB_INLINE void SIMDCALL VectorGetZPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetZ(value); }
+NWB_INLINE void SIMDCALL VectorGetWPtr(f32& out, SIMDVector value)noexcept{ out = VectorGetW(value); }
 
 NWB_INLINE u32 SIMDCALL VectorGetIntX(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<0u>(value); }
 NWB_INLINE u32 SIMDCALL VectorGetIntY(SIMDVector value)noexcept{ return SIMDVectorDetail::GetIntLane<1u>(value); }
@@ -615,10 +583,10 @@ NWB_INLINE void SIMDCALL VectorGetIntByIndexPtr(u32& out, SIMDVector value, usiz
     out = VectorGetIntByIndex(value, index);
 }
 
-NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<0u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<1u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<2u>(out, value); }
-NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32& out, SIMDVector value)noexcept{ SIMDVectorDetail::StoreIntLane<3u>(out, value); }
+NWB_INLINE void SIMDCALL VectorGetIntXPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntX(value); }
+NWB_INLINE void SIMDCALL VectorGetIntYPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntY(value); }
+NWB_INLINE void SIMDCALL VectorGetIntZPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntZ(value); }
+NWB_INLINE void SIMDCALL VectorGetIntWPtr(u32& out, SIMDVector value)noexcept{ out = VectorGetIntW(value); }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetX(SIMDVector value, f32 x)noexcept{
 #if defined(NWB_HAS_SCALAR)
@@ -674,53 +642,25 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetByIndex(SIMDVector value, f32 component,
     }
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32& component, usize index)noexcept{
+NWB_INLINE SIMDVector SIMDCALL VectorSetByIndexPtr(SIMDVector value, const f32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     return VectorSetByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetXPtr(SIMDVector value, const f32& x)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.f[0] = x;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(&x, value, 0);
-#else
-    return _mm_move_ss(value, _mm_load_ss(&x));
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetXPtr(SIMDVector value, const f32 x)noexcept{
+    return VectorSetX(value, x);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetYPtr(SIMDVector value, const f32& y)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.f[1] = y;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(&y, value, 1);
-#else
-    return _mm_insert_ps(value, _mm_load_ss(&y), 0x10);
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetYPtr(SIMDVector value, const f32 y)noexcept{
+    return VectorSetY(value, y);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetZPtr(SIMDVector value, const f32& z)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.f[2] = z;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(&z, value, 2);
-#else
-    return _mm_insert_ps(value, _mm_load_ss(&z), 0x20);
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetZPtr(SIMDVector value, const f32 z)noexcept{
+    return VectorSetZ(value, z);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetWPtr(SIMDVector value, const f32& w)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.f[3] = w;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vld1q_lane_f32(&w, value, 3);
-#else
-    return _mm_insert_ps(value, _mm_load_ss(&w), 0x30);
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetWPtr(SIMDVector value, const f32 w)noexcept{
+    return VectorSetW(value, w);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSetIntX(SIMDVector value, u32 x)noexcept{
@@ -777,53 +717,25 @@ NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndex(SIMDVector value, u32 compone
     }
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndexPtr(SIMDVector value, const u32& component, usize index)noexcept{
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntByIndexPtr(SIMDVector value, const u32 component, usize index)noexcept{
     NWB_ASSERT(index < 4);
     return VectorSetIntByIndex(value, component, index);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntXPtr(SIMDVector value, const u32& x)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.u[0] = x;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(&x, vreinterpretq_u32_f32(value), 0));
-#else
-    return _mm_move_ss(value, _mm_load_ss(reinterpret_cast<const f32*>(&x)));
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntXPtr(SIMDVector value, const u32 x)noexcept{
+    return VectorSetIntX(value, x);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntYPtr(SIMDVector value, const u32& y)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.u[1] = y;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(&y, vreinterpretq_u32_f32(value), 1));
-#else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(y), 1));
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntYPtr(SIMDVector value, const u32 y)noexcept{
+    return VectorSetIntY(value, y);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntZPtr(SIMDVector value, const u32& z)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.u[2] = z;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(&z, vreinterpretq_u32_f32(value), 2));
-#else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(z), 2));
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntZPtr(SIMDVector value, const u32 z)noexcept{
+    return VectorSetIntZ(value, z);
 }
 
-NWB_INLINE SIMDVector SIMDCALL VectorSetIntWPtr(SIMDVector value, const u32& w)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    value.u[3] = w;
-    return value;
-#elif defined(NWB_HAS_NEON)
-    return vreinterpretq_f32_u32(vld1q_lane_u32(&w, vreinterpretq_u32_f32(value), 3));
-#else
-    return _mm_castsi128_ps(_mm_insert_epi32(_mm_castps_si128(value), static_cast<i32>(w), 3));
-#endif
+NWB_INLINE SIMDVector SIMDCALL VectorSetIntWPtr(SIMDVector value, const u32 w)noexcept{
+    return VectorSetIntW(value, w);
 }
 
 NWB_INLINE SIMDVector SIMDCALL VectorSplatX(SIMDVector value)noexcept{ return SIMDVectorDetail::SplatLane<0u>(value); }

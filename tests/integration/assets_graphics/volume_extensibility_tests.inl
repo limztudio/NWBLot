@@ -40,10 +40,10 @@ public:
 
 public:
     virtual bool serialize(const NWB::Core::Assets::IAsset& asset, NWB::Core::Assets::AssetBytes& outBinary)const override{
-        if(asset.assetType() != ProjectProbeAsset::AssetTypeName())
-            return false;
+        const ProjectProbeAsset* probe = NWB::Core::Assets::CastAsset<ProjectProbeAsset>(&asset);
+        NWB_ASSERT(probe != nullptr);
 
-        AppendPOD(outBinary, static_cast<const ProjectProbeAsset&>(asset).marker());
+        AppendPOD(outBinary, probe->marker());
         return true;
     }
 };
@@ -127,8 +127,9 @@ static bool LoadProjectProbeAsset(
     ))
         return false;
 
-    EXPECT_EQ(loadedAsset->assetType(), ProjectProbeAsset::AssetTypeName());
-    const ProjectProbeAsset* probe = static_cast<const ProjectProbeAsset*>(loadedAsset.get());
+    NWB_ASSERT(loadedAsset);
+    const ProjectProbeAsset* probe = NWB::Core::Assets::CastAsset<ProjectProbeAsset>(loadedAsset.get());
+    NWB_ASSERT(probe != nullptr);
     EXPECT_EQ(probe->marker(), expectedMarker);
     return probe->marker() == expectedMarker;
 }

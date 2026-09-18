@@ -42,6 +42,7 @@
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/spirv_entry_point.h>
 
+#include <global/assert.h>
 #include <global/binary.h>
 #include <global/compile.h>
 #include <global/cpu_topology.h>

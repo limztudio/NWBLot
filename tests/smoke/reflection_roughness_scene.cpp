@@ -8,6 +8,7 @@
 
 #include <core/common/log.h>
 #include <core/assets/manager.h>
+#include <global/assert.h>
 #include <global/math/constant.h>
 #include <global/math/convert.h>
 #include <global/math/frame.h>
@@ -175,15 +176,21 @@ Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef
 bool ReflectionRoughnessScene::createDeformingSource(){
     using namespace __hidden_reflection_roughness_scene;
     UniquePtr<Core::Assets::IAsset> modelAsset;
-    if(!m_context.assetManager.loadSync(Impl::Model::AssetTypeName(), s_Model.name(), modelAsset) || !modelAsset)
+    if(!m_context.assetManager.loadSync(Impl::Model::AssetTypeName(), s_Model.name(), modelAsset))
         return false;
-    const auto& model = *checked_cast<const Impl::Model*>(modelAsset.get());
+    NWB_ASSERT(modelAsset);
+    const Impl::Model* modelPtr = Core::Assets::CastAsset<Impl::Model>(modelAsset.get());
+    NWB_ASSERT(modelPtr != nullptr);
+    const auto& model = *modelPtr;
     if(model.skeletonObjects().empty())
         return false;
     UniquePtr<Core::Assets::IAsset> skeletonAsset;
-    if(!m_context.assetManager.loadSync(Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name(), skeletonAsset) || !skeletonAsset)
+    if(!m_context.assetManager.loadSync(Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name(), skeletonAsset))
         return false;
-    const auto& skeleton = *checked_cast<const Impl::Skeleton*>(skeletonAsset.get());
+    NWB_ASSERT(skeletonAsset);
+    const Impl::Skeleton* skeletonPtr = Core::Assets::CastAsset<Impl::Skeleton>(skeletonAsset.get());
+    NWB_ASSERT(skeletonPtr != nullptr);
+    const auto& skeleton = *skeletonPtr;
     if(skeleton.joints().size() < 2u)
         return false;
     m_bindJoints.reserve(skeleton.joints().size());

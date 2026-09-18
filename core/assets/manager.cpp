@@ -36,10 +36,12 @@ void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
 bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, UniquePtr<IAsset>& outAsset)const{
     outAsset.reset();
 
+    NWB_ASSERT(assetType);
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
         return false;
     }
+    NWB_ASSERT(virtualPath);
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: virtual path is empty"));
         return false;

@@ -28,47 +28,13 @@ namespace MaterialBindDetail{
 
 bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc){
     CookString bindText{arena};
-    if(!ReadTextFile(bindFilePath, bindText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read Bind '{}'"), PathToString<tchar>(bindFilePath));
-        return false;
-    }
-    StripUtf8Bom(bindText);
-
-    if(!outDoc.parseWithImplicitAsset(AStringView(bindText), s_AssetTypeMaterialBind, s_AssetVariableMaterialBind)){
-        for(const Metascript::ParseError& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Bind '{}' parse error at {}:{}: {}")
-                , PathToString<tchar>(bindFilePath)
-                , err.line
-                , err.column
-                , StringConvert(AStringView(err.message.data(), err.message.size()))
-            );
-        }
-        return false;
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static const Metascript::Value* FindAssetMapValue(const Path& bindFilePath, const Metascript::Document& doc){
-    const Metascript::MStringView assetVariable = doc.assetVariable();
-    const Metascript::Value* asset = doc.findVariable(assetVariable);
-    if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset variable '{}' has no assignments")
-            , PathToString<tchar>(bindFilePath)
-            , StringConvert(AStringView(assetVariable.data(), assetVariable.size()))
-        );
-        return nullptr;
-    }
-
-    if(!asset->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset is not a map"), PathToString<tchar>(bindFilePath));
-        return nullptr;
-    }
-
-    return asset;
+    return Core::Assets::ParseMetadataDocumentText(
+        bindFilePath,
+        "Material bind",
+        bindText,
+        outDoc,
+        [&](const AStringView text){ return outDoc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }
+    );
 }
 
 
@@ -80,18 +46,13 @@ static bool ValidatePairedSourceExtension(
     const CookString& sourcePath,
     ScratchArena& scratchArena
 ){
-    const Path sourcePathValue(bindFilePath.arena(), sourcePath);
-    ScratchString extension = PathToString(scratchArena, sourcePathValue.extension());
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) == MaterialBindNames::SourceExtensionText())
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': paired source '{}' must use '{}' extension")
-        , PathToString<tchar>(bindFilePath)
-        , StringConvert(sourcePath)
-        , StringConvert(MaterialBindNames::SourceExtensionText())
+    return Core::Assets::CheckPairedSourceExtension(
+        bindFilePath,
+        sourcePath,
+        MaterialBindNames::SourceExtensionText(),
+        "Material bind",
+        scratchArena
     );
-    return false;
 }
 
 
@@ -659,7 +620,7 @@ bool ParseMaterialBindSource(
     if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source, scratchArena))
         return false;
 
-    const Metascript::Value* assetValue = FindAssetMapValue(bindFilePath, doc);
+    const Metascript::Value* assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");
     if(!assetValue)
         return false;
     if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, *assetValue, "Material bind", { "structs", "instances" }))

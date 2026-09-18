@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
+#include <global/assert.h>
 #include <global/math/frame.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
@@ -236,20 +237,24 @@ private:
         const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset) || !modelAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
             return fallback;
         }
-        const auto* model = checked_cast<const NWB::Impl::Model*>(modelAsset.get());
+        NWB_ASSERT(modelAsset);
+        const auto* model = Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
+        NWB_ASSERT(model != nullptr);
         if(model->skeletonObjects().empty())
             return fallback;
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset) || !skeletonAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
             return fallback;
         }
-        const auto* skeleton = checked_cast<const NWB::Impl::Skeleton*>(skeletonAsset.get());
+        NWB_ASSERT(skeletonAsset);
+        const auto* skeleton = Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
+        NWB_ASSERT(skeleton != nullptr);
 
         const u32 jointCount = skeleton->jointCount();
         const u32 anchorIndex = skeleton->findJointIndex(s_CutterAnchorBoneName);

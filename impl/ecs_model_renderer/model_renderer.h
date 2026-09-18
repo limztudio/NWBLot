@@ -64,7 +64,7 @@ inline void ApplyModelObjectRenderer(
     return ModelObjectRendererHooks{
         &ApplyModelObjectRenderer,
         s_Accesses,
-        sizeof(s_Accesses) / sizeof(s_Accesses[0])
+        LengthOf(s_Accesses)
     };
 }
 

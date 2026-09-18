@@ -29,13 +29,8 @@ NWB_IMPL_BEGIN
 
 
 bool ModelAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Model::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("ModelAssetCodec::serialize"))))
         return false;
-    }
 
     const Model& model = static_cast<const Model&>(asset);
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_SerializeArena);
@@ -473,16 +468,11 @@ bool ParseModelCookMetadata(
 
     outEntry = ModelCookEntry(outEntry.skeletonObjects.get_allocator().arena());
 
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Model meta"))
         return false;
-    }
 
-    outEntry.virtualPath = virtualPath;
-    if(!outEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Model meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, nwbFilePath, "Model meta"))
         return false;
-    }
     if(!ValidateModelAssetFields(nwbFilePath, asset))
         return false;
 

@@ -124,6 +124,8 @@ void RendererFramePipeline::invalidateResources(){
     m_preparedCsgFrameState = CsgFrameState{};
     m_preparedCsgFrameStateValid = false;
     m_preparedHasTransparentRenderers = false;
+    m_preparedRefractionActive = false;
+    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
     m_deferredBindlessSlotsUploadTask = {};
@@ -417,6 +419,8 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_shadowPreparationOutcome.resourcesValid = false;
     m_shadowPreparationOutcome.ready = false;
     m_preparedHasTransparentRenderers = false;
+    m_preparedRefractionActive = false;
+    m_preparedRefractionResources = RayTracingRefractionGraphResources{};
     m_preparedTaskGraphPresentationContributor = nullptr;
 
     if(!framebuffer)
@@ -526,6 +530,19 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
     m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
     ++m_reflectionFrameIndex;
+
+    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the
+    // render-time graph build only consumes the prepared snapshot and never creates resources.
+    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers
+        && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
+    m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
+    m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;
+    if(!m_refractionEnabled){
+        m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
+        m_preparedRefractionResources.usesHardwareTrace = false;
+        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    }
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){
         if(contributor->prepareTaskGraphPresentation(presentationFrame))

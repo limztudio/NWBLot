@@ -7,42 +7,31 @@
 
 #include "global.h"
 
-#include <core/assets/gather_merge_registry.h>
-#include <core/assets/module.h>
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_ASSETS_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSET_GATHERER_BEGIN
+using AssetGatherMergeFunction = bool (*)(const Name& virtualPath, AssetBytes& existingPayload, const void* incomingPayload, usize incomingSize);
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using AssetGatherMergeFunction = Core::Assets::AssetGatherMergeFunction;
-
-struct AssetGatherOptions{
-    Core::Assets::AssetVector<Core::Assets::AssetString> inputs;
-    Core::Assets::AssetString outputDirectory;
-    ACompactString configuration;
-    AssetGatherMergeFunction mergePayloads = nullptr;
-
-    explicit AssetGatherOptions(Core::Assets::AssetArena& arena)
-        : inputs(arena)
-        , outputDirectory(arena)
-    {}
+class AssetGatherMergeAutoRegistrar final{
+public:
+    explicit AssetGatherMergeAutoRegistrar(AssetGatherMergeFunction function);
 };
 
 
-[[nodiscard]] bool GatherAssets(const AssetGatherOptions& options);
+[[nodiscard]] AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge();
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB_ASSET_GATHERER_END
+NWB_ASSETS_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-

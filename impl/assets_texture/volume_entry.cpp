@@ -46,17 +46,12 @@ static bool ParseTextureDocument(
     );
 }
 
-static bool BuildTextureCookedAsset(TextureCookEntry& entry, Texture& outAsset){
-    return BuildTextureAsset(entry, outAsset);
-}
-
 static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<TextureCookEntry, Texture, TextureAssetCodec>(
-        Texture::AssetTypeName(),
+    return Core::Assets::RegisterSingleDocumentCookEntry<TextureCookEntry, Texture, TextureAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("texture")),
         &ParseTextureDocument,
-        nullptr,
-        &BuildTextureCookedAsset,
+        [](TextureCookEntry& entry, Texture& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildTextureAsset); },
         false
     );
 }
@@ -65,7 +60,7 @@ static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_TextureCookEntryRegistrar(&RegisterTextureCookEntry);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_TextureCookEntryRegistrar, RegisterTextureCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

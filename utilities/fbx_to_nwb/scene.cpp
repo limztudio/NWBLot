@@ -170,13 +170,13 @@ bool SelectMeshInstances(
     outSelection.clear();
 
     const AString normalized = NormalizeOptionText(selector);
-    if(normalized.empty() || normalized == "all"){
+    if(normalized.empty() || normalized == s_DefaultMeshSelectorText){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
             outSelection.push_back(instanceIndex);
         return true;
     }
-    if(normalized == "first"){
+    if(normalized == s_FirstMeshSelectorText){
         if(instances.empty()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
             return false;

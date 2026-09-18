@@ -115,6 +115,9 @@ private:
     // Every conflicting predecessor keeps registration order; independent work has no stage barrier.
     Vector<DependencyList, Alloc::GlobalArena> m_dependencies;
     SystemList m_allSystems;
+    // Reused across execute() calls so per-frame updates perform no allocations.
+    Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionHandles;
+    Vector<CpuTaskScheduler::TaskHandle, Alloc::GlobalArena> m_executionDependencies;
     bool m_dirty;
 };
 

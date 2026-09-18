@@ -61,17 +61,13 @@ static bool ParseSkeletonValue(
     );
 }
 
-static bool BuildSkeletonCookedAsset(SkeletonCookEntry& entry, Skeleton& outAsset){
-    return BuildSkeletonAsset(entry, outAsset);
-}
-
 static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
-        Skeleton::AssetTypeName(),
+    return Core::Assets::RegisterDocumentValueCookEntry<SkeletonCookEntry, Skeleton, SkeletonAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("skeleton")),
         &ParseSkeletonDocument,
         &ParseSkeletonValue,
-        &BuildSkeletonCookedAsset
+        [](SkeletonCookEntry& entry, Skeleton& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkeletonAsset); }
     );
 }
 
@@ -79,7 +75,7 @@ static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_SkeletonCookEntryRegistrar(&RegisterSkeletonCookEntry);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_SkeletonCookEntryRegistrar, RegisterSkeletonCookEntry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

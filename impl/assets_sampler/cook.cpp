@@ -47,31 +47,43 @@ static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
 static constexpr AStringView s_BorderColorField = "border_color";
 
+static constexpr Core::Assets::NamedEnumCase<bool> s_FilterCases[] = {
+    { "nearest", false },
+    { "linear", true },
+};
+
 [[nodiscard]] static bool ParseFilter(
     const Path& nwbFilePath,
     const Value& asset,
     const AStringView fieldName,
     bool& outLinear
 ){
-    AStringView value;
-    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
-        return false;
-    if(value == "nearest"){
-        outLinear = false;
-        return true;
-    }
-    if(value == "linear"){
-        outLinear = true;
-        return true;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be 'nearest' or 'linear'")
-        , StringConvert(s_DiagnosticPrefix)
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(fieldName)
+    return Core::Assets::ParseNamedMetadataEnumField<bool>(
+        nwbFilePath,
+        asset,
+        s_DiagnosticPrefix,
+        fieldName,
+        s_FilterCases,
+        LengthOf(s_FilterCases),
+        outLinear,
+        "must be 'nearest' or 'linear'"
     );
-    return false;
 }
+
+static constexpr Core::Assets::NamedEnumCase<Core::SamplerAddressMode::Enum> s_AddressModeCases[] = {
+    { "clamp", Core::SamplerAddressMode::Clamp },
+    { "wrap", Core::SamplerAddressMode::Wrap },
+    { "border", Core::SamplerAddressMode::Border },
+    { "mirror", Core::SamplerAddressMode::Mirror },
+    { "mirror_once", Core::SamplerAddressMode::MirrorOnce },
+};
+
+static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTypeCases[] = {
+    { "standard", Core::SamplerReductionType::Standard },
+    { "comparison", Core::SamplerReductionType::Comparison },
+    { "minimum", Core::SamplerReductionType::Minimum },
+    { "maximum", Core::SamplerReductionType::Maximum },
+};
 
 [[nodiscard]] static bool ParseAddressMode(
     const Path& nwbFilePath,
@@ -79,29 +91,16 @@ static constexpr AStringView s_BorderColorField = "border_color";
     const AStringView fieldName,
     Core::SamplerAddressMode::Enum& outAddressMode
 ){
-    AStringView value;
-    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, fieldName, true, value))
-        return false;
-
-    if(value == "clamp")
-        outAddressMode = Core::SamplerAddressMode::Clamp;
-    else if(value == "wrap")
-        outAddressMode = Core::SamplerAddressMode::Wrap;
-    else if(value == "border")
-        outAddressMode = Core::SamplerAddressMode::Border;
-    else if(value == "mirror")
-        outAddressMode = Core::SamplerAddressMode::Mirror;
-    else if(value == "mirror_once")
-        outAddressMode = Core::SamplerAddressMode::MirrorOnce;
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' has an unsupported address mode")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-    return true;
+    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(
+        nwbFilePath,
+        asset,
+        s_DiagnosticPrefix,
+        fieldName,
+        s_AddressModeCases,
+        LengthOf(s_AddressModeCases),
+        outAddressMode,
+        "has an unsupported address mode"
+    );
 }
 
 [[nodiscard]] static bool ParseReductionType(
@@ -109,27 +108,16 @@ static constexpr AStringView s_BorderColorField = "border_color";
     const Value& asset,
     Core::SamplerReductionType::Enum& outReductionType
 ){
-    AStringView value;
-    if(!Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ReductionField, true, value))
-        return false;
-
-    if(value == "standard")
-        outReductionType = Core::SamplerReductionType::Standard;
-    else if(value == "comparison")
-        outReductionType = Core::SamplerReductionType::Comparison;
-    else if(value == "minimum")
-        outReductionType = Core::SamplerReductionType::Minimum;
-    else if(value == "maximum")
-        outReductionType = Core::SamplerReductionType::Maximum;
-    else{
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' has an unsupported reduction type")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_ReductionField)
-        );
-        return false;
-    }
-    return true;
+    return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerReductionType::Enum>(
+        nwbFilePath,
+        asset,
+        s_DiagnosticPrefix,
+        s_ReductionField,
+        s_ReductionTypeCases,
+        LengthOf(s_ReductionTypeCases),
+        outReductionType,
+        "has an unsupported reduction type"
+    );
 }
 
 [[nodiscard]] static bool ParseBorderColor(
@@ -176,13 +164,8 @@ static constexpr AStringView s_BorderColorField = "border_color";
 
 
 bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SamplerAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Sampler::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SamplerAssetCodec::serialize"))))
         return false;
-    }
 
     const Sampler& sampler = static_cast<const Sampler&>(asset);
     if(!sampler.validatePayload())
@@ -222,13 +205,8 @@ bool ParseSamplerCookMetadata(
 
     outEntry = SamplerCookEntry(*outEntry.arena);
     const Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-        );
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
         return false;
-    }
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,

@@ -267,7 +267,7 @@ inline bool DebugValidateNotNull(const tchar* operationName, const tchar* messag
 #else
     static_cast<void>(operationName);
     static_cast<void>(message);
-    ((void)pointers, ...);
+    (static_cast<void>(pointers), ...);
 #endif
 
     return true;

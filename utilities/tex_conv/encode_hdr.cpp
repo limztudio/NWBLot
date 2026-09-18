@@ -175,7 +175,7 @@ namespace EncodeBackendDetail{
         const basisu::imagef& source = sourcePlanes[planeIndex];
         basisu::imagef& target = outPlanes[planeIndex];
         target.resize(targetWidth, targetHeight);
-        if(!basisu::image_resample(source, target, "box", 1.0f, false, 0u, s_HdrChannelCount)){
+        if(!basisu::image_resample(source, target, s_BasisResampleBoxFilter, s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate an HDR mip level."));
             return false;
         }
@@ -216,10 +216,10 @@ namespace EncodeBackendDetail{
             if(!basisu::image_resample(
                 sourcePlanes[sourceZ],
                 filteredPlane,
-                "box",
-                1.0f,
+                s_BasisResampleBoxFilter,
+                s_BasisResampleFilterScale,
                 false,
-                0u,
+                s_BasisResampleFilterChannelStart,
                 s_HdrChannelCount
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate an HDR volume mip level."));

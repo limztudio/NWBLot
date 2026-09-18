@@ -65,9 +65,7 @@ static bool ParseMeshValue(
     );
 }
 
-static bool BuildMeshCookedAsset(MeshCookEntry& entry, Mesh& outAsset){
-    return BuildMeshAsset(entry, outAsset);
-}
+static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -106,28 +104,20 @@ static bool ParseSkinValue(
     );
 }
 
-static bool BuildSkinCookedAsset(SkinCookEntry& entry, Skin& outAsset){
-    return BuildSkinAsset(entry, outAsset);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
-    return registry.registerType<MeshCookEntry, Mesh, MeshAssetCodec>(
-        Mesh::AssetTypeName(),
+    return Core::Assets::RegisterDocumentValueCookEntry<MeshCookEntry, Mesh, MeshAssetCodec>(
+        registry,
         MakeNotNull(NWB_TEXT("mesh")),
         &ParseMeshDocument,
         &ParseMeshValue,
-        &BuildMeshCookedAsset
+        [](MeshCookEntry& entry, Mesh& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMeshAsset); }
     )
-        && registry.registerType<SkinCookEntry, Skin, SkinAssetCodec>(
-            Skin::AssetTypeName(),
+        && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
+            registry,
             MakeNotNull(NWB_TEXT("skin")),
             &ParseSkinDocument,
             &ParseSkinValue,
-            &BuildSkinCookedAsset
+            [](SkinCookEntry& entry, Skin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkinAsset); }
         )
     ;
 }
@@ -136,7 +126,7 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::CookEntryAutoRegistrar s_MeshCookEntryRegistrar(&RegisterMeshCookEntries);
+NWB_DEFINE_COOK_ENTRY_REGISTRAR(s_MeshCookEntryRegistrar, RegisterMeshCookEntries);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

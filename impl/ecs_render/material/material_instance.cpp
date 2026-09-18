@@ -98,22 +98,14 @@ bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     u32 constantBlockByteBegin = 0u;
     u32 mutableBlockByteBegin = 0u;
     for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
-        if(!IsValidMaterialBlockClass(block.blockClass)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has invalid typed material block class")
-                , StringConvert(materialInfo.materialName.c_str())
-            );
-            return false;
-        }
+        // MaterialSurfaceInfo copies the already-validated cooked layout; keep a debug-only invariant here.
+        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
 
         const bool mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
         const u32 blockByteBegin = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
         u32& blockByteEnd = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
-        if(block.byteSize > Limit<u32>::s_Max - blockByteEnd){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block byte range exceeds u32")
-                , StringConvert(materialInfo.materialName.c_str())
-            );
-            return false;
-        }
+        // MaterialSurfaceInfo copies the already-validated cooked byte sizes; keep a debug-only invariant here.
+        NWB_ASSERT(block.byteSize <= Limit<u32>::s_Max - blockByteEnd);
         blockByteEnd += block.byteSize;
 
         if(block.blockName != parameter.blockName)
@@ -121,12 +113,8 @@ bool RendererMaterialSystem::findMaterialInstanceOverrideField(
 
         const usize fieldBegin = static_cast<usize>(block.fieldBegin);
         const usize fieldCount = static_cast<usize>(block.fieldCount);
-        if(fieldBegin > materialInfo.typedLayoutFields.size() || fieldCount > materialInfo.typedLayoutFields.size() - fieldBegin){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block field range is invalid")
-                , StringConvert(materialInfo.materialName.c_str())
-            );
-            return false;
-        }
+        // MaterialSurfaceInfo copies the already-validated cooked field ranges; keep a debug-only invariant here.
+        NWB_ASSERT(fieldBegin <= materialInfo.typedLayoutFields.size() && fieldCount <= materialInfo.typedLayoutFields.size() - fieldBegin);
 
         for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
             const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];

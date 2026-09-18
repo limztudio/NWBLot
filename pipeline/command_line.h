@@ -51,6 +51,17 @@ public:
     [[nodiscard]] bool parse(int argc, char** argv, PipelineOptions& options);
     [[nodiscard]] int exit(const CLI::ParseError& error)const;
 
+public:
+    // Shared RunPipelineTool wrapper: parse options, then invoke the tool body inside the terminal entry.
+    template<typename ToolBody>
+    [[nodiscard]] int run(const int argc, char** argv, PipelineOptions& options, ToolBody&& body){
+        return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
+            if(!parse(argc, argv, options))
+                return 1;
+            return body(options);
+        }, [&](const CLI::ParseError& error){ return exit(error); }, [](){ return -1; });
+    }
+
 
 private:
     InteropVector<AInteropString> m_inputs;

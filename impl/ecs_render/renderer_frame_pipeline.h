@@ -561,6 +561,8 @@ private:
     bool m_reflectionHardwareLogged = false;
     bool m_reflectionFallbackLogged = false;
     bool m_refractionEnabled = true;
+    bool m_preparedRefractionActive = false;
+    RayTracingRefractionGraphResources m_preparedRefractionResources;
     bool m_refractionHardwareLogged = false;
     bool m_refractionScreenLogged = false;
     LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;

@@ -84,7 +84,7 @@ const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(
     if(field && field->isList())
         return field;
 
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list")
         , metaKind.get()
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)

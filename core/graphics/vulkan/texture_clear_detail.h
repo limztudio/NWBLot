@@ -9,6 +9,7 @@
 #include "arena_names.h"
 
 #include <global/math/convert.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,11 +333,17 @@ inline i32 FloatToSNormClearValue(const f32 value, const i32 maxValue){
     return static_cast<i32>(RoundClearFloatToUInt(scaled));
 }
 
+inline SIMDVector LinearToSRGBClearVector(const SIMDVector linear){
+    const SIMDVector clamped = VectorSaturate(linear);
+    const SIMDVector threshold = VectorReplicate(s_SRGBClearLinearThreshold);
+    const SIMDVector linearPart = VectorMultiply(clamped, VectorReplicate(s_SRGBClearLinearScale));
+    const SIMDVector power = VectorPow(clamped, VectorReplicate(1.0f / s_SRGBClearNonlinearExponent));
+    const SIMDVector nonlinearPart = VectorSubtract(VectorMultiply(VectorReplicate(s_SRGBClearNonlinearScale), power), VectorReplicate(s_SRGBClearNonlinearOffset));
+    return VectorSelect(nonlinearPart, linearPart, VectorLessOrEqual(clamped, threshold));
+}
+
 inline f32 LinearToSRGBClearValue(const f32 value){
-    const f32 clamped = ClampClearFloat(value, 0.0f, 1.0f);
-    if(clamped <= s_SRGBClearLinearThreshold)
-        return clamped * s_SRGBClearLinearScale;
-    return s_SRGBClearNonlinearScale * Pow(clamped, 1.0f / s_SRGBClearNonlinearExponent) - s_SRGBClearNonlinearOffset;
+    return VectorGetX(LinearToSRGBClearVector(VectorReplicate(value)));
 }
 
 inline u16 PackRGB565ClearValue(const f32 r, const f32 g, const f32 b){
@@ -348,9 +355,10 @@ inline u16 PackRGB565ClearValue(const f32 r, const f32 g, const f32 b){
 }
 
 inline void WriteBC1ColorClearBlock(u8* outPattern, const f32 r, const f32 g, const f32 b, const f32 a, const bool srgb){
-    const f32 encodedR = srgb ? LinearToSRGBClearValue(r) : r;
-    const f32 encodedG = srgb ? LinearToSRGBClearValue(g) : g;
-    const f32 encodedB = srgb ? LinearToSRGBClearValue(b) : b;
+    const SIMDVector srgbEncodedTriple = LinearToSRGBClearVector(VectorSet(r, g, b, 0.0f));
+    const f32 encodedR = srgb ? VectorGetX(srgbEncodedTriple) : r;
+    const f32 encodedG = srgb ? VectorGetY(srgbEncodedTriple) : g;
+    const f32 encodedB = srgb ? VectorGetZ(srgbEncodedTriple) : b;
 
     u16 color0 = PackRGB565ClearValue(encodedR, encodedG, encodedB);
     u16 color1 = color0;
@@ -392,9 +400,15 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
 
     auto writeUNorm8Components = [&](const u32 componentCount, const bool srgb){
+        const SIMDVector encodedValues = LinearToSRGBClearVector(VectorSet(values[0], values[1], values[2], values[3]));
         for(u32 component = 0u; component < componentCount; ++component){
             const bool colorComponent = component < s_TextureClearColorComponentCount;
-            const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(values[component]) : values[component];
+            f32 value = values[component];
+            if(srgb && colorComponent){
+                if(component == 0u) value = VectorGetX(encodedValues);
+                else if(component == 1u) value = VectorGetY(encodedValues);
+                else value = VectorGetZ(encodedValues);
+            }
             const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
         }
@@ -403,9 +417,15 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm8BGRAComponents = [&](const bool srgb){
         const f32 orderedValues[] = { values[2], values[1], values[0], values[3] };
+        const SIMDVector encodedOrderedValues = LinearToSRGBClearVector(VectorSet(orderedValues[0], orderedValues[1], orderedValues[2], orderedValues[3]));
         for(u32 component = 0u; component < s_TextureClearRGBAComponentCount; ++component){
             const bool colorComponent = component < s_TextureClearColorComponentCount;
-            const f32 value = srgb && colorComponent ? LinearToSRGBClearValue(orderedValues[component]) : orderedValues[component];
+            f32 value = orderedValues[component];
+            if(srgb && colorComponent){
+                if(component == 0u) value = VectorGetX(encodedOrderedValues);
+                else if(component == 1u) value = VectorGetY(encodedOrderedValues);
+                else value = VectorGetZ(encodedOrderedValues);
+            }
             const u8 packed = static_cast<u8>(FloatToUNormClearValue(value, static_cast<u32>(Limit<u8>::s_Max)));
             WriteClearPatternValue(outPattern + component * sizeof(packed), sizeof(packed), &packed, sizeof(packed));
         }

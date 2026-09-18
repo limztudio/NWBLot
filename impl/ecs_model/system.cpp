@@ -32,12 +32,7 @@ namespace __hidden_model_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct AttachmentJointQuery{
-    Core::ECS::EntityID parentEntity;
-    u32 parentJointIndex = s_SkeletonInvalidJointIndex;
-    SkeletonJointMatrix jointMatrix{};
-    bool resolved = false;
-};
+using AttachmentJointQuery = ModelAttachmentJointQuery;
 
 static void ResolveAttachmentJointQueries(
     Core::ECS::World& world,
@@ -126,21 +121,23 @@ bool LoadSkeleton(
     outSkeleton = nullptr;
 
     const Name skeletonName = skeletonRef.name();
+    NWB_ASSERT(skeletonName);
     if(!skeletonName)
         return false;
 
-    if(!assetManager.loadSync(Skeleton::AssetTypeName(), skeletonName, outAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: failed to load skeleton '{}'"), StringConvert(skeletonName.c_str()));
-        return false;
-    }
-    if(!outAsset || outAsset->assetType() != Skeleton::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: asset '{}' is not a skeleton"), StringConvert(skeletonName.c_str()));
+    const Skeleton* loadedSkeleton = assetManager.loadTypedSync<Skeleton>(
+        skeletonName,
+        outAsset,
+        MakeNotNull(NWB_TEXT("LoadSkeleton")),
+        NWB_TEXT("ModelSystem"),
+        "skeleton"
+    );
+    if(!loadedSkeleton){
         outAsset.reset();
         return false;
     }
 
-    outSkeleton = checked_cast<const Skeleton*>(outAsset.get());
-    NWB_ASSERT(outSkeleton != nullptr);
+    outSkeleton = loadedSkeleton;
     return true;
 }
 
@@ -165,6 +162,8 @@ ModelSystem::ModelSystem(
     , m_assetManager(assetManager)
     , m_applyRenderer(Move(rendererHooks.apply))
     , m_scratchJoints(arena)
+    , m_attachmentJointQueries(arena)
+    , m_attachmentParentOrder(arena)
 {
     readAccess<ModelComponent>();
     writeAccess<ModelRuntimeComponent>();
@@ -279,18 +278,19 @@ void ModelSystem::ensureModelRuntime(
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Name modelName = component.model.name();
-    if(!m_assetManager.loadSync(Model::AssetTypeName(), modelName, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: failed to load model '{}'"), StringConvert(modelName.c_str()));
-        runtime = ModelRuntimeComponent{};
-        return;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Model::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("ModelSystem: asset '{}' is not a model"), StringConvert(modelName.c_str()));
+    const Model* loadedModel = m_assetManager.loadTypedSync<Model>(
+        modelName,
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("ModelSystem::ensureModelRuntime")),
+        NWB_TEXT("ModelSystem"),
+        "model"
+    );
+    if(!loadedModel){
         runtime = ModelRuntimeComponent{};
         return;
     }
 
-    const Model& model = *checked_cast<const Model*>(loadedAsset.get());
+    const Model& model = *loadedModel;
     if(!expandModel(entity, model, runtime))
         clearModelRuntime(entity, scratchArena);
 }
@@ -518,13 +518,12 @@ void ModelSystem::updateStaticMeshAttachments(){
         );
     }
 
-    // This operation owns grouping storage; zero or one joint query needs neither an index nor a scratch arena.
-    Optional<Core::Alloc::ScratchArena> scratchArena;
-    Optional<Vector<__hidden_model_system::AttachmentJointQuery, Core::Alloc::ScratchArena>> jointQueries;
+    // Attachment grouping storage is reused member state; zero or one joint query needs neither an index nor scratch.
+    // Only capacity growth may allocate, never per-frame creation.
+    Vector<ModelAttachmentJointQuery, Core::Alloc::GlobalArena>& jointQueries = m_attachmentJointQueries;
+    jointQueries.clear();
     if(queryCount > 1u){
-        scratchArena.emplace(Name("impl/ecs_model/attachment_joints"));
-        jointQueries.emplace(*scratchArena);
-        jointQueries->reserve(queryCount);
+        jointQueries.reserve(queryCount);
         bool sharedParent = true;
         attachments.each(
             [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
@@ -534,25 +533,26 @@ void ModelSystem::updateStaticMeshAttachments(){
                 static_cast<void>(transform);
                 if(!attachment.parentEntity.valid() || attachment.parentJointIndex == s_SkeletonInvalidJointIndex)
                     return;
-                if(!jointQueries->empty() && jointQueries->front().parentEntity != attachment.parentEntity)
+                if(!jointQueries.empty() && jointQueries.front().parentEntity != attachment.parentEntity)
                     sharedParent = false;
-                jointQueries->push_back(__hidden_model_system::AttachmentJointQuery{
+                jointQueries.push_back(ModelAttachmentJointQuery{
                     .parentEntity = attachment.parentEntity,
                     .parentJointIndex = attachment.parentJointIndex,
                 });
             }
         );
-        auto* const queries = jointQueries->data();
+        auto* const queries = jointQueries.data();
         if(sharedParent){
             __hidden_model_system::ResolveAttachmentJointQueries(m_world, m_scratchJoints, queries, queryCount, nullptr);
         }
         else{
-            Vector<usize, Core::Alloc::ScratchArena> parentOrder(*scratchArena);
+            Vector<usize, Core::Alloc::GlobalArena>& parentOrder = m_attachmentParentOrder;
+            parentOrder.clear();
             parentOrder.reserve(queryCount);
             for(usize queryIndex = 0u; queryIndex < queryCount; ++queryIndex)
                 parentOrder.push_back(queryIndex);
             Sort(parentOrder.begin(), parentOrder.end(), [&](const usize lhs, const usize rhs){
-                return (*jointQueries)[lhs].parentEntity < (*jointQueries)[rhs].parentEntity;
+                return jointQueries[lhs].parentEntity < jointQueries[rhs].parentEntity;
             });
             __hidden_model_system::ResolveAttachmentJointQueries(
                 m_world, m_scratchJoints, queries, queryCount, parentOrder.data()
@@ -595,8 +595,8 @@ void ModelSystem::updateStaticMeshAttachments(){
             }
             else{
                 SIMDMatrix jointMatrix{};
-                if(jointQueries){
-                    const __hidden_model_system::AttachmentJointQuery& query = (*jointQueries)[nextQuery++];
+                if(queryCount > 1u){
+                    const ModelAttachmentJointQuery& query = jointQueries[nextQuery++];
                     if(!query.resolved)
                         return;
                     jointMatrix = LoadFloat(query.jointMatrix);

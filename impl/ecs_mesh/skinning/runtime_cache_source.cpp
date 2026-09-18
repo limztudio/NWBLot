@@ -294,10 +294,13 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     MeshSkinningSource* source = nullptr;
     if(!ensureSourceLoaded(component.mesh, component.skin, source))
         return false;
-    const Mesh* mesh = source ? source->mesh() : nullptr;
-    const Skin* skin = source ? source->skin() : nullptr;
-    if(!mesh || !skin)
+    NWB_ASSERT(source != nullptr);
+    const Mesh* mesh = source->mesh();
+    const Skin* skin = source->skin();
+    if(!mesh || !skin){
+        NWB_ASSERT(false);
         return false;
+    }
 
     MeshSkinningRuntimeInstance instance(m_arena);
     instance.entity = entity;
@@ -355,38 +358,33 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end()){
         outSource = &foundSource.value();
+        NWB_ASSERT(outSource->mesh() != nullptr && outSource->skin() != nullptr);
         return outSource->mesh() != nullptr && outSource->skin() != nullptr;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedMeshAsset;
-    if(!m_assetManager.loadSync(Mesh::AssetTypeName(), meshAsset.name(), loadedMeshAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to load mesh '{}' for skinning binding")
-            , StringConvert(meshAsset.name().c_str())
-        );
+    const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
+        meshAsset.name(),
+        loadedMeshAsset,
+        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
+        NWB_TEXT("MeshSkinningRuntimeCache"),
+        "mesh"
+    );
+    if(!loadedMesh)
         return false;
-    }
-    if(!loadedMeshAsset || loadedMeshAsset->assetType() != Mesh::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: asset '{}' is not mesh")
-            , StringConvert(meshAsset.name().c_str())
-        );
-        return false;
-    }
 
     UniquePtr<Core::Assets::IAsset> loadedSkinAsset;
-    if(!m_assetManager.loadSync(Skin::AssetTypeName(), skinAsset.name(), loadedSkinAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: failed to load skin '{}' for skinning binding")
-            , StringConvert(skinAsset.name().c_str())
-        );
+    const Skin* preloadedSkin = m_assetManager.loadTypedSync<Skin>(
+        skinAsset.name(),
+        loadedSkinAsset,
+        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
+        NWB_TEXT("MeshSkinningRuntimeCache"),
+        "skin"
+    );
+    if(!preloadedSkin)
         return false;
-    }
-    if(!loadedSkinAsset || loadedSkinAsset->assetType() != Skin::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: asset '{}' is not skin")
-            , StringConvert(skinAsset.name().c_str())
-        );
-        return false;
-    }
 
-    const Skin* loadedSkin = checked_cast<const Skin*>(loadedSkinAsset.get());
+    const Skin* loadedSkin = preloadedSkin;
     if(loadedSkin->mesh().name() != meshAsset.name()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skin '{}' targets a different mesh than '{}'")
             , StringConvert(skinAsset.name().c_str())
@@ -403,6 +401,7 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     auto result = m_sources.try_emplace(sourceName, Move(source));
     auto it = result.first;
     outSource = &it.value();
+    NWB_ASSERT(outSource->mesh() != nullptr && outSource->skin() != nullptr);
     return outSource->mesh() != nullptr && outSource->skin() != nullptr;
 }
 

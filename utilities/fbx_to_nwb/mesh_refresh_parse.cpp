@@ -24,6 +24,17 @@ namespace MeshRefreshParseDetail{
 
 
 static constexpr AStringView s_MeshMetaKind = "Mesh";
+static constexpr AStringView s_PositionsField = "positions";
+static constexpr AStringView s_NormalsField = "normals";
+static constexpr AStringView s_TangentsField = "tangents";
+static constexpr AStringView s_Uv0Field = "uv0";
+static constexpr AStringView s_ColorsField = "colors";
+static constexpr AStringView s_VertexRefsField = "vertex_refs";
+static constexpr AStringView s_IndicesField = "indices";
+static constexpr AStringView s_PositionField = "position";
+static constexpr AStringView s_NormalField = "normal";
+static constexpr AStringView s_TangentField = "tangent";
+static constexpr AStringView s_ColorField = "color";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -182,7 +193,7 @@ template<typename ElementT, usize ComponentCount>
 ){
     outVertexRefs.clear();
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, "vertex_refs");
+    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
     if(!field)
         return false;
 
@@ -346,10 +357,10 @@ template<typename ElementT, usize ComponentCount>
 ){
     outIndices.clear();
 
-    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, "indices");
+    const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
     if(!field)
         return false;
-    if(!FillIndicesRecursive(nwbFilePath, *field, "indices", outIndices))
+    if(!FillIndicesRecursive(nwbFilePath, *field, s_IndicesField, outIndices))
         return false;
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
@@ -380,15 +391,15 @@ template<typename ElementT, usize ComponentCount>
 
 [[nodiscard]] bool ValidateMesh(const Path& nwbFilePath, const SourceMeshStreams& mesh){
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        if(!ValidateStreamIndex(nwbFilePath, "position", ref.position, mesh.positions.size()))
+        if(!ValidateStreamIndex(nwbFilePath, s_PositionField, ref.position, mesh.positions.size()))
             return false;
-        if(!ValidateStreamIndex(nwbFilePath, "normal", ref.normal, mesh.normals.size()))
+        if(!ValidateStreamIndex(nwbFilePath, s_NormalField, ref.normal, mesh.normals.size()))
             return false;
-        if(!ValidateStreamIndex(nwbFilePath, "tangent", ref.tangent, mesh.tangents.size()))
+        if(!ValidateStreamIndex(nwbFilePath, s_TangentField, ref.tangent, mesh.tangents.size()))
             return false;
-        if(!ValidateStreamIndex(nwbFilePath, "uv0", ref.uv0, mesh.uv0.size()))
+        if(!ValidateStreamIndex(nwbFilePath, s_Uv0Field, ref.uv0, mesh.uv0.size()))
             return false;
-        if(!ValidateStreamIndex(nwbFilePath, "color", ref.color, mesh.colors.size()))
+        if(!ValidateStreamIndex(nwbFilePath, s_ColorField, ref.color, mesh.colors.size()))
             return false;
         if(ref.skin != s_MissingSourceStreamIndex){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index")
@@ -413,14 +424,6 @@ template<typename ElementT, usize ComponentCount>
 }
 
 [[nodiscard]] bool IsAllowedMeshAssetField(const Core::Metascript::MStringView fieldName){
-    static constexpr AStringView s_PositionsField = "positions";
-    static constexpr AStringView s_NormalsField = "normals";
-    static constexpr AStringView s_TangentsField = "tangents";
-    static constexpr AStringView s_Uv0Field = "uv0";
-    static constexpr AStringView s_ColorsField = "colors";
-    static constexpr AStringView s_VertexRefsField = "vertex_refs";
-    static constexpr AStringView s_IndicesField = "indices";
-
     return fieldName == Core::Metascript::MStringView(s_PositionsField.data(), s_PositionsField.size())
         || fieldName == Core::Metascript::MStringView(s_NormalsField.data(), s_NormalsField.size())
         || fieldName == Core::Metascript::MStringView(s_TangentsField.data(), s_TangentsField.size())
@@ -469,11 +472,11 @@ template<typename ElementT, usize ComponentCount>
 ){
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
         return false;
-    return ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, "positions", outMesh.positions)
-        && ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, "normals", outMesh.normals)
-        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, "tangents", outMesh.tangents)
-        && ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, "uv0", outMesh.uv0)
-        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, "colors", outMesh.colors)
+    return ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField, outMesh.positions)
+        && ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField, outMesh.normals)
+        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField, outMesh.tangents)
+        && ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field, outMesh.uv0)
+        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField, outMesh.colors)
         && ParseVertexRefs(nwbFilePath, asset, outMesh.vertexRefs)
         && ParseIndices(nwbFilePath, asset, outMesh.indices)
         && ValidateMesh(nwbFilePath, outMesh)

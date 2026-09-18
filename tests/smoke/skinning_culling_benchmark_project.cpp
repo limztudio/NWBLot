@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
+#include <global/assert.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
 #include <impl/assets_skeleton/asset.h>
@@ -334,12 +335,9 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
-        if(!loadedModelAsset || loadedModelAsset->assetType() != NWB::Impl::Model::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model loaded with an unexpected asset type"));
-            return false;
-        }
-
-        const auto* model = static_cast<const NWB::Impl::Model*>(loadedModelAsset.get());
+        NWB_ASSERT(loadedModelAsset);
+        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset.get());
+        NWB_ASSERT(model != nullptr);
         const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
         for(const NWB::Impl::ModelSkeletonObject& object : model->skeletonObjects()){
             if(object.name == s_ModelSkeletonObject){
@@ -359,12 +357,9 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
-        if(!loadedSkeletonAsset || loadedSkeletonAsset->assetType() != NWB::Impl::Skeleton::AssetTypeName()){
-            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton loaded with an unexpected asset type"));
-            return false;
-        }
-
-        const auto* skeleton = static_cast<const NWB::Impl::Skeleton*>(loadedSkeletonAsset.get());
+        NWB_ASSERT(loadedSkeletonAsset);
+        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset.get());
+        NWB_ASSERT(skeleton != nullptr);
         if(skeleton->joints().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
             return false;

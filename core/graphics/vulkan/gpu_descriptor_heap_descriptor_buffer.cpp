@@ -73,12 +73,16 @@ bool IsResourceTypeCompatible(
 }
 
 bool IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass){
-    return descriptorClass == GpuDescriptorClass::SampledImage
-        || descriptorClass == GpuDescriptorClass::SampledImage2DArray
-        || descriptorClass == GpuDescriptorClass::SampledImage3D
-        || descriptorClass == GpuDescriptorClass::SampledImage2DArrayUint
-        || descriptorClass == GpuDescriptorClass::SampledImageCube
-    ;
+    switch(descriptorClass){
+    case GpuDescriptorClass::SampledImage:
+    case GpuDescriptorClass::SampledImage2DArray:
+    case GpuDescriptorClass::SampledImage3D:
+    case GpuDescriptorClass::SampledImage2DArrayUint:
+    case GpuDescriptorClass::SampledImageCube:
+        return true;
+    default:
+        return false;
+    }
 }
 
 TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum descriptorClass){
@@ -509,9 +513,9 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = {
         GpuDescriptorClass::Sampler
     };
-    if(!carve(m_resourceLayout, m_resourceBufferBlock, s_ResourceClasses, static_cast<u32>(sizeof(s_ResourceClasses) / sizeof(s_ResourceClasses[0]))))
+    if(!carve(m_resourceLayout, m_resourceBufferBlock, s_ResourceClasses, static_cast<u32>(LengthOf(s_ResourceClasses))))
         return false;
-    if(!carve(m_samplerLayout, m_samplerBufferBlock, s_SamplerClasses, static_cast<u32>(sizeof(s_SamplerClasses) / sizeof(s_SamplerClasses[0]))))
+    if(!carve(m_samplerLayout, m_samplerBufferBlock, s_SamplerClasses, static_cast<u32>(LengthOf(s_SamplerClasses))))
         return false;
 
     return true;

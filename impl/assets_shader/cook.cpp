@@ -81,7 +81,7 @@ static constexpr AStringView s_SpirvBaselineCapabilities[]{
     "spvMinLod",
     "spvFragmentFullyCoveredEXT",
 };
-static constexpr usize s_BaseCompilerArgumentCount = 16u + sizeof(s_SpirvBaselineCapabilities) / sizeof(s_SpirvBaselineCapabilities[0]) * 2u;
+static constexpr usize s_BaseCompilerArgumentCount = 16u + LengthOf(s_SpirvBaselineCapabilities) * 2u;
 static constexpr usize s_MaxTargetProfileCapabilityCount = 1u;
 static constexpr usize s_MaxOptimizationArgumentCount = 1u;
 
@@ -1028,48 +1028,13 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 
 static bool ParseMetascriptDocument(const Path& sourceFilePath, const AStringView sourceKind, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
     CookString metaText{arena};
-    if(!ReadTextFile(sourceFilePath, metaText)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to read {} '{}'"), StringConvert(sourceKind), PathToString<tchar>(sourceFilePath));
-        return false;
-    }
-    StripUtf8Bom(metaText);
-
-    if(!outDoc.parse(AStringView(metaText))){
-        for(const Metascript::ParseError& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}")
-                , StringConvert(sourceKind)
-                , PathToString<tchar>(sourceFilePath)
-                , err.line
-                , err.column
-                , StringConvert(AStringView(err.message.data(), err.message.size()))
-            );
-        }
-        return false;
-    }
-    return true;
-}
-
-static const Metascript::Value* FindAssetMapValue(const Path& nwbFilePath, const Metascript::Document& doc, const AStringView metaKind){
-    const Metascript::MStringView assetVariable = doc.assetVariable();
-    const Metascript::Value* asset = doc.findVariable(assetVariable);
-    if(!asset){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': asset variable '{}' has no assignments")
-            , StringConvert(metaKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(AStringView(assetVariable.data(), assetVariable.size()))
-        );
-        return nullptr;
-    }
-
-    if(!asset->isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': asset is not a map")
-            , StringConvert(metaKind)
-            , PathToString<tchar>(nwbFilePath)
-        );
-        return nullptr;
-    }
-
-    return asset;
+    return Assets::ParseMetadataDocumentText(
+        sourceFilePath,
+        sourceKind,
+        metaText,
+        outDoc,
+        [&](const AStringView text){ return outDoc.parse(text); }
+    );
 }
 
 static bool ValidatePairedSourceExtension(
@@ -1079,19 +1044,7 @@ static bool ValidatePairedSourceExtension(
     const AStringView metaKind,
     Alloc::ScratchArena& scratchArena
 ){
-    const Path sourcePathValue(nwbFilePath.arena(), sourcePath);
-    ScratchString extension = PathToString(scratchArena, sourcePathValue.extension());
-    CanonicalizeTextInPlace(extension);
-    if(AStringView(extension) == expectedExtension)
-        return true;
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': paired source '{}' must use '{}' extension")
-        , StringConvert(metaKind)
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(sourcePath)
-        , StringConvert(expectedExtension)
-    );
-    return false;
+    return Assets::CheckPairedSourceExtension(nwbFilePath, sourcePath, expectedExtension, metaKind, scratchArena);
 }
 
 static bool ParseOptionalIntegerFlagField(
@@ -1218,7 +1171,7 @@ bool ShaderCook::parseShaderMeta(
     if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeShader)
         return true;
 
-    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Shader");
+    const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Shader");
     if(!assetValue)
         return false;
     const Metascript::Value& asset = *assetValue;
@@ -1354,7 +1307,7 @@ bool ShaderCook::parseIncludeMeta(
     ))
         return false;
 
-    const Metascript::Value* assetValue = __hidden_shader_cook::FindAssetMapValue(nwbFilePath, doc, "Include");
+    const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Include");
     if(!assetValue)
         return false;
     const Metascript::Value& asset = *assetValue;

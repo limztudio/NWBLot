@@ -73,6 +73,8 @@ SystemScheduler::SystemScheduler(Alloc::GlobalArena& arena)
     : m_arena(arena)
     , m_dependencies(arena)
     , m_allSystems(arena)
+    , m_executionHandles(arena)
+    , m_executionDependencies(arena)
     , m_dirty(false)
 {}
 
@@ -102,6 +104,8 @@ void SystemScheduler::removeSystem(ISystem& system){
 void SystemScheduler::clear(){
     m_allSystems.clear();
     m_dependencies.clear();
+    m_executionHandles.clear();
+    m_executionDependencies.clear();
     m_dirty = false;
 }
 
@@ -136,10 +140,13 @@ void SystemScheduler::execute(World& world, f32 delta){
         return;
 
     using TaskHandle = CpuTaskScheduler::TaskHandle;
-    Alloc::ScratchArena scratchArena(EcsArenaScope::s_SchedulerExecutionScratch);
-    Vector<TaskHandle, Alloc::ScratchArena> handles(m_allSystems.size(), TaskHandle{}, scratchArena);
-    Vector<TaskHandle, Alloc::ScratchArena> dependencies(scratchArena);
-    dependencies.reserve(m_allSystems.size());
+    // Handles/dependencies are reused member storage; only capacity growth may allocate, never per-frame creation.
+    m_executionHandles.clear();
+    m_executionHandles.resize(m_allSystems.size(), TaskHandle{});
+    m_executionDependencies.clear();
+    m_executionDependencies.reserve(m_allSystems.size());
+    Vector<TaskHandle, Alloc::GlobalArena>& handles = m_executionHandles;
+    Vector<TaskHandle, Alloc::GlobalArena>& dependencies = m_executionDependencies;
     CpuTaskScope& tasks = world.taskScope();
 
     // Keep world/system data alive if publishing a later node throws after earlier work has started.

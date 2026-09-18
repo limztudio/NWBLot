@@ -14,5 +14,6 @@ target_sources(nwb_global PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh/triangle_area.h"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit.h"
     "${CMAKE_CURRENT_LIST_DIR}/termination.h"
+    "${CMAKE_CURRENT_LIST_DIR}/texture_payload.h"
 )
 

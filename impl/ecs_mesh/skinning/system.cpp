@@ -259,6 +259,8 @@ MeshSkinningSystem::MeshSkinningSystem(
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_runtimeMeshCache(arena, graphics, assetManager)
     , m_runtimeResources(0, Hasher<u64>(), EqualTo<u64>(), arena)
+    , m_frameDispatchPlans(arena)
+    , m_frameLiveBuffers(arena)
     , m_acceptedSkinningState(arena)
 {
     writeAccess<SkinnedMeshBindingComponent>();
@@ -374,7 +376,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuTaskGraph graph(m_arena);
     Core::GpuTaskId terminalTask;
     Core::Alloc::ScratchArena scratchArena(SkinningArenaScope::s_FrameUploadArena);
-    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> dispatchPlans(m_arena);
+    // Dispatch plans are reused member storage; only capacity growth may allocate, never per-frame creation.
+    Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& dispatchPlans = m_frameDispatchPlans;
+    dispatchPlans.clear();
     auto skinningBindings = m_world.view<SkinnedMeshBindingComponent>();
     dispatchPlans.reserve(skinningBindings.candidateCount());
     bool declarationFailed = false;
@@ -785,7 +789,10 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     ;
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
+    // Payload plan lists reuse member storage; only capacity growth may allocate, never per-frame creation.
     TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena);
+    finalizerPayload.plans.clear();
+    finalizerPayload.plans.reserve(dispatchPlans.size());
     for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans)
         finalizerPayload.plans.push_back(plan);
     Core::GpuTaskId postDispatchDependency = terminalTask;
@@ -793,6 +800,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena);
         deformationPayload.system = this;
         deformationPayload.timingTicket = &timingTicket;
+        deformationPayload.plans.clear();
+        deformationPayload.plans.reserve(dispatchPlans.size());
         for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
             if(plan.hasActiveSkin)
                 deformationPayload.plans.push_back(plan);
@@ -897,7 +906,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
 
     transaction.reset(compiledGraph);
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
+    // Live-buffer list is reused member storage; only capacity growth may allocate, never per-frame creation.
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
+    liveBuffers.clear();
     collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
     Core::GpuPersistentResourceStateCache::Candidate acceptedStateCandidate(m_acceptedSkinningState);
     struct SkinningStateContext{

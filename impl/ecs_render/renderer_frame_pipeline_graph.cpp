@@ -1252,14 +1252,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     const bool opticalCaptureRequested = hasTransparentRenderers
         && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
-    const bool refractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
-    RayTracingRefractionGraphResources refractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
-    refractionResources.refractionEnabled = m_refractionEnabled;
-    if(!m_refractionEnabled){
-        refractionResources.pipeline = refractionResources.screenFallbackPipeline;
-        refractionResources.usesHardwareTrace = false;
-        refractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
-    }
+    const bool refractionActive = m_preparedRefractionActive && opticalCaptureRequested;
+    RayTracingRefractionGraphResources refractionResources = m_preparedRefractionResources;
     const Core::GpuTaskId refractionCaptureTask = DeclareAvboitRefractionCapture(
         m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
         csgFrameState, csgResources, frameBindings, meshViewState, avboitIntervalCompletionTask,

@@ -18,10 +18,14 @@ namespace __hidden_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr auto s_LoggerAppName = NWB_TEXT("tex_conv");
+inline constexpr auto s_LoggerInitFailureText = NWB_TEXT("[tex_conv] logger.init() failed");
+
+
 int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
-    if(!logger.init(NWB_TEXT("tex_conv"))){
-        NWB_CERR << "[tex_conv] logger.init() failed\n";
+    if(!logger.init(s_LoggerAppName)){
+        NWB_CERR << s_LoggerInitFailureText << "\n";
         return -1;
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);

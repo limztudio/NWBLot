@@ -37,6 +37,9 @@ inline constexpr Name s_AssetBunchExpandersScratch("core/assets/asset_bunch_expa
 inline constexpr Name s_AutoRegistrationQueueArena("core/assets/cook_entry_auto_registration_queue");
 inline constexpr Name s_RegisterAutoCollectedScratch("core/assets/cook_entry_register_auto_collected_scratch");
 
+inline constexpr Name s_GatherMergeQueueArena("core/assets/gather_merge_queue");
+inline constexpr Name s_GatherMergeQueryScratch("core/assets/gather_merge_query_scratch");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

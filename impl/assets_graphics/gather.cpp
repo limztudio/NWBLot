@@ -5,6 +5,7 @@
 #include "gather.h"
 
 #include <core/alloc/scratch.h>
+#include <core/assets/gather_merge_registry.h>
 #include <core/graphics/shader_archive.h>
 #include <core/common/log.h>
 #include <global/binary.h>
@@ -112,6 +113,8 @@ bool MergeGatheredGraphicsAsset(
     existingPayload = Move(merged);
     return true;
 }
+
+static Core::Assets::AssetGatherMergeAutoRegistrar s_GraphicsGatherMergeRegistrar(&MergeGatheredGraphicsAsset);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

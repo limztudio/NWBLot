@@ -78,11 +78,11 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
             outValue = defaultValue;
             return true;
         }
-        if(line == "y" || line == "yes" || line == "true" || line == "1"){
+        if(line == s_ConfirmYesShort || line == s_ConfirmYesText || line == s_ConfirmTrueText || line == s_ConfirmOneText){
             outValue = true;
             return true;
         }
-        if(line == "n" || line == "no" || line == "false" || line == "0"){
+        if(line == s_ConfirmNoShort || line == s_ConfirmNoText || line == s_ConfirmFalseText || line == s_ConfirmZeroText){
             outValue = false;
             return true;
         }
@@ -268,7 +268,7 @@ bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
 }
 
 bool IsNwbRefreshMode(const ImportOptions& options){
-    return options.refreshNwb || LowerPathExtension<AString>(Path(UtilityDetail::Arena(), options.inputPath)) == ".nwb";
+    return options.refreshNwb || LowerPathExtension<AString>(Path(UtilityDetail::Arena(), options.inputPath)) == s_NwbOutputExtension;
 }
 
 void WriteRefreshCount(AStringStream& report, const char* name, const usize before, const usize after){
@@ -276,14 +276,14 @@ void WriteRefreshCount(AStringStream& report, const char* name, const usize befo
 }
 
 void WriteCanonicalizeReport(AStringStream& report, const SourceMeshCanonicalizeReport& canonicalizeReport){
-    WriteRefreshCount(report, "positions", canonicalizeReport.before.positions, canonicalizeReport.after.positions);
-    WriteRefreshCount(report, "normals", canonicalizeReport.before.normals, canonicalizeReport.after.normals);
-    WriteRefreshCount(report, "tangents", canonicalizeReport.before.tangents, canonicalizeReport.after.tangents);
-    WriteRefreshCount(report, "uv0", canonicalizeReport.before.uv0, canonicalizeReport.after.uv0);
-    WriteRefreshCount(report, "colors", canonicalizeReport.before.colors, canonicalizeReport.after.colors);
-    WriteRefreshCount(report, "skin", canonicalizeReport.before.skin, canonicalizeReport.after.skin);
-    WriteRefreshCount(report, "vertex_refs", canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs);
-    WriteRefreshCount(report, "indices", canonicalizeReport.before.indices, canonicalizeReport.after.indices);
+    WriteRefreshCount(report, s_PositionsStreamLabel, canonicalizeReport.before.positions, canonicalizeReport.after.positions);
+    WriteRefreshCount(report, s_NormalsStreamLabel, canonicalizeReport.before.normals, canonicalizeReport.after.normals);
+    WriteRefreshCount(report, s_TangentsStreamLabel, canonicalizeReport.before.tangents, canonicalizeReport.after.tangents);
+    WriteRefreshCount(report, s_Uv0StreamLabel, canonicalizeReport.before.uv0, canonicalizeReport.after.uv0);
+    WriteRefreshCount(report, s_ColorsStreamLabel, canonicalizeReport.before.colors, canonicalizeReport.after.colors);
+    WriteRefreshCount(report, s_SkinStreamLabel, canonicalizeReport.before.skin, canonicalizeReport.after.skin);
+    WriteRefreshCount(report, s_VertexRefsStreamLabel, canonicalizeReport.before.vertexRefs, canonicalizeReport.after.vertexRefs);
+    WriteRefreshCount(report, s_IndicesStreamLabel, canonicalizeReport.before.indices, canonicalizeReport.after.indices);
 }
 
 int RunNwbRefresh(ImportOptions& options, const OptionPresence& presence, Core::CpuTaskScheduler& cpuScheduler, bool& prompted){
@@ -546,10 +546,10 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             << "  asset_type: " << options.assetType << "\n"
             << "  normal_mode: " << options.normalMode << "\n"
             << "  tangents: " << SourceTangentModeText(tangentReport.mode) << "\n"
-            << "  vertex colors: " << (sawVertexColors ? "imported" : "default") << "\n";
+            << "  vertex colors: " << (sawVertexColors ? s_ImportedSourceLabel : s_DefaultSourceLabel) << "\n";
         if(assetTypeValue == OutputAssetType::Bunch)
-            report << "  asset_layout: " << (options.separateAssets ? "separate" : "bunch") << "\n";
-        report << "  uv0: " << (sawVertexUvs ? "imported" : "default") << "\n";
+            report << "  asset_layout: " << (options.separateAssets ? s_SeparateAssetLayoutLabel : s_DefaultOutputAssetTypeText) << "\n";
+        report << "  uv0: " << (sawVertexUvs ? s_ImportedSourceLabel : s_DefaultSourceLabel) << "\n";
         if(!skeletonJoints.empty())
             report << "  skeleton_joints: " << skeletonJoints.size() << "\n";
         if(tangentReport.mode == SourceTangentMode::GeneratedFallback){

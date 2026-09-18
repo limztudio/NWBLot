@@ -379,19 +379,12 @@ bool EmitMaterialAvboitExtinctionPixelShaders(
 
 
 bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Material::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("MaterialAssetCodec::serialize"))))
         return false;
-    }
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: virtual path is empty"));
+    if(!material.checkVirtualPath(MakeNotNull(NWB_TEXT("MaterialAssetCodec::serialize"))))
         return false;
-    }
     if(material.stageShaderCount() == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
         return false;

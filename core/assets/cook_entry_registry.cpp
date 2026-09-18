@@ -11,6 +11,7 @@
 #include "cook_entry_registry.h"
 #include "arena_names.h"
 
+#include <global/assert.h>
 #include <global/auto_registration.h>
 
 
@@ -54,8 +55,7 @@ bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
     __hidden_cook_entry_registry::QueryAutoRegistrationQueue().copyTo(functions);
 
     for(const CookEntryRegistrationFunction function : functions){
-        if(function == nullptr)
-            continue;
+        NWB_ASSERT(function != nullptr);
         if(function(registry))
             continue;
 

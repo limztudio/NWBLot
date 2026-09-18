@@ -312,7 +312,7 @@ template<typename Value, typename WriteValue>
     outSkinVariableName.clear();
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
-        if(!IsSameText(Core::Metascript::MStringView(declaration.type.data(), declaration.type.size()), "skin"))
+        if(!IsSameText(Core::Metascript::MStringView(declaration.type.data(), declaration.type.size()), s_SkinAssetTypeText))
             continue;
 
         const Core::Metascript::MStringView skinVariable(declaration.variable.data(), declaration.variable.size());
@@ -320,7 +320,7 @@ template<typename Value, typename WriteValue>
         if(!skinAsset || !skinAsset->isMap())
             continue;
 
-        const Core::Metascript::Value* meshField = Core::Metascript::FindField(*skinAsset, "mesh");
+        const Core::Metascript::Value* meshField = Core::Metascript::FindField(*skinAsset, s_MeshAssetTypeText);
         if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
             continue;
 

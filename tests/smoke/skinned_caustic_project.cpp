@@ -8,6 +8,7 @@
 #include <core/common/log.h>
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
+#include <global/assert.h>
 #include <global/math/frame.h>
 #include <impl/assets_model/asset.h>
 #include <impl/assets_material/asset.h>
@@ -138,22 +139,26 @@ private:
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset) || !modelAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
             return false;
         }
-        const auto* model = checked_cast<const NWB::Impl::Model*>(modelAsset.get());
+        NWB_ASSERT(modelAsset);
+        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
+        NWB_ASSERT(model != nullptr);
         if(model->skeletonObjects().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: model has no skeleton object"));
             return false;
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset) || !skeletonAsset){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
             return false;
         }
-        const auto* skeleton = checked_cast<const NWB::Impl::Skeleton*>(skeletonAsset.get());
+        NWB_ASSERT(skeletonAsset);
+        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
+        NWB_ASSERT(skeleton != nullptr);
         if(skeleton->joints().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: skeleton has no joints"));
             return false;

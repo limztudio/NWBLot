@@ -98,19 +98,11 @@ static bool ParseMeshMeta(
 ){
     outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
 
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': asset is not a map"), PathToString<tchar>(discoveredFile.filePath));
+    if(!Core::Assets::CheckMetadataAssetMap(discoveredFile.filePath, asset, "Mesh meta"))
         return false;
-    }
 
-    outEntry.virtualPath = virtualPath;
-    if(!outEntry.virtualPath){
-        NWB_LOGGER_ERROR(
-            NWB_TEXT("Mesh meta '{}': virtual path must not be empty"),
-            PathToString<tchar>(discoveredFile.filePath)
-        );
+    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, discoveredFile.filePath, "Mesh meta"))
         return false;
-    }
     if(!ValidateMeshAssetFields(discoveredFile, asset))
         return false;
     return ParseSourceMeshMeta(discoveredFile, asset, outEntry, cpuScheduler, scratchArena);
@@ -206,13 +198,8 @@ bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
 
 
 bool MeshAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Mesh::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("MeshAssetCodec::serialize"))))
         return false;
-    }
 
     const Mesh& mesh = static_cast<const Mesh&>(asset);
     if(!mesh.validatePayload())

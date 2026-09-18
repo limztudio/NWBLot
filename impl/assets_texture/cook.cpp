@@ -30,13 +30,8 @@ NWB_IMPL_BEGIN
 
 
 bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("TextureAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Texture::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("TextureAssetCodec::serialize"))))
         return false;
-    }
 
     const Texture& texture = static_cast<const Texture&>(asset);
     if(!texture.validatePayload())

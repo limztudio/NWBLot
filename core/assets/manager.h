@@ -6,6 +6,9 @@
 
 
 #include "registry.h"
+#include "ref.h"
+
+#include <core/common/log.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,6 +85,53 @@ public:
 
     [[nodiscard]] u64 pendingRequestCount()const;
     [[nodiscard]] u64 completedRequestCount()const;
+
+
+public:
+    // Shared Load() prologue for typed GPU-resource loaders: rejects empty refs and already-valid resources.
+    template<typename TAsset, typename TResource>
+    [[nodiscard]] static bool CheckLoaderEnter(
+        const AssetRef<TAsset>& assetRef,
+        const TResource& resource,
+        const tchar* owner,
+        const char* assetKindText
+    ){
+        if(!assetRef.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, assetKindText);
+            return false;
+        }
+        return !resource.valid();
+    }
+
+    // Shared loadSync + asset-type check used by typed asset loaders. Returns the typed asset on success.
+    template<typename AssetT>
+    [[nodiscard]] const AssetT* loadTypedSync(
+        const Name& virtualPath,
+        UniquePtr<IAsset>& outLoadedAsset,
+        const NotNull<const tchar*>& failureContext,
+        const tchar* ownerName,
+        const char* assetKindText
+    )const{
+        static_cast<void>(failureContext);
+        if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
+                , ownerName
+                , assetKindText
+                , StringConvert(virtualPath.c_str())
+            );
+            return nullptr;
+        }
+        const AssetT* typedAsset = CastAsset<AssetT>(outLoadedAsset.get());
+        if(!typedAsset){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
+                , ownerName
+                , StringConvert(virtualPath.c_str())
+                , assetKindText
+            );
+            return nullptr;
+        }
+        return typedAsset;
+    }
 
 
 private:

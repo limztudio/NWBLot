@@ -10,7 +10,7 @@ target_sources(nwb_tex_conv PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/output.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.h"
-    "${PROJECT_SOURCE_DIR}/impl/assets_texture/format.h"
+    "${PROJECT_SOURCE_DIR}/global/texture_payload.h"
 )
 target_link_libraries(nwb_tex_conv PRIVATE
     nwb_common

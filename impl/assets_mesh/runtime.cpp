@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_MeshAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<MeshAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_MeshAssetCodecAutoRegistrar, MeshAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,10 +60,8 @@ bool Mesh::validatePayload()const{
 
 
 bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Mesh::loadBinary"))))
         return false;
-    }
 
     clearGeometryPayload();
 

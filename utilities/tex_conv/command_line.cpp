@@ -19,6 +19,34 @@ NWB_TEX_CONV_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace TexConvCliDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr const char* s_InputOptionName = "input";
+inline constexpr const char* s_CubeOptionName = "--cube";
+inline constexpr const char* s_VolumeOptionName = "--volume";
+inline constexpr const char* s_OutputOptionName = "-o,--output";
+inline constexpr const char* s_AlphaOptionName = "--alpha";
+inline constexpr const char* s_LinearFlagName = "--linear";
+inline constexpr const char* s_ForceFlagName = "--force";
+inline constexpr int s_MinVolumeSliceCount = 1;
+inline constexpr int s_UnboundedOptionCount = -1;
+inline constexpr u32 s_SingleTextureInputModeCount = 1u;
+inline constexpr int s_AlphaOptionPresentCount = 0;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 int Run(const int argc, char** argv){
     AInteropString inputArgument;
     AInteropString outputArgument;
@@ -29,13 +57,13 @@ int Run(const int argc, char** argv){
     bool linear = false;
 
     CLI::App app{ "Convert LDR or HDR images into an NWB 2D, cube, or volume texture asset." };
-    app.add_option("input", inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.add_option("--cube", cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(s_TextureCubeFaceCount));
-    app.add_option("--volume", volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(1, -1);
-    app.add_option("-o,--output", outputArgument, "Output base name or .nwb filename");
-    CLI::Option* alphaOption = app.add_option("--alpha", alphaArgument, "Alpha source: mask image red channel, white, or black");
-    app.add_flag("--linear", linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
-    app.add_flag("--force", force, "Replace existing .nwb and .tex output files");
+    app.add_option(TexConvCliDetail::s_InputOptionName, inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
+    app.add_option(TexConvCliDetail::s_CubeOptionName, cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(s_TextureCubeFaceCount));
+    app.add_option(TexConvCliDetail::s_VolumeOptionName, volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
+    app.add_option(TexConvCliDetail::s_OutputOptionName, outputArgument, "Output base name or .nwb filename");
+    CLI::Option* alphaOption = app.add_option(TexConvCliDetail::s_AlphaOptionName, alphaArgument, "Alpha source: mask image red channel, white, or black");
+    app.add_flag(TexConvCliDetail::s_LinearFlagName, linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
+    app.add_flag(TexConvCliDetail::s_ForceFlagName, force, "Replace existing .nwb and .tex output files");
 
     return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);
@@ -50,7 +78,7 @@ int Run(const int argc, char** argv){
                 + static_cast<u32>(!cubeArguments.empty())
                 + static_cast<u32>(!volumeArguments.empty())
             ;
-            if(modeCount != 1u){
+            if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
                 return 1;
             }
@@ -76,16 +104,16 @@ int Run(const int argc, char** argv){
                 }
             }
 
-            if(alphaOption->count() > 0u){
+            if(alphaOption->count() > TexConvCliDetail::s_AlphaOptionPresentCount){
                 const AString alphaText(alphaArgument.data(), alphaArgument.size());
                 const AString alphaKeyword = ToAsciiLowerCopy(alphaText);
-                if(alphaKeyword == "white"){
+                if(alphaKeyword == s_AlphaWhiteKeyword){
                     alphaSource.mode = AlphaSourceMode::Constant;
-                    alphaSource.constant = 1.0f;
+                    alphaSource.constant = s_AlphaWhiteConstant;
                 }
-                else if(alphaKeyword == "black"){
+                else if(alphaKeyword == s_AlphaBlackKeyword){
                     alphaSource.mode = AlphaSourceMode::Constant;
-                    alphaSource.constant = 0.0f;
+                    alphaSource.constant = s_AlphaBlackConstant;
                 }
                 else if(alphaText.empty()){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));

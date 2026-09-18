@@ -34,6 +34,12 @@ using TextWrite::WriteVec4;
 using TextWrite::s_OutputFloatPrecision;
 
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
+inline constexpr const char* s_PositionStreamLabel = "position";
+inline constexpr const char* s_NormalStreamLabel = "normal";
+inline constexpr const char* s_TangentStreamLabel = "tangent";
+inline constexpr const char* s_Uv0StreamLabel = "uv0";
+inline constexpr const char* s_ColorsStreamLabel = "color";
+inline constexpr const char* s_SkinStreamLabel = "skin";
 
 template<typename Value>
 struct StreamSortEntry{
@@ -210,17 +216,17 @@ template<typename Value>
     const UtilityVector<u32>& skin
 ){
     for(SourceVertexRef& ref : mesh.vertexRefs){
-        if(!RemapRequiredIndex(ref.position, positions, "position"))
+        if(!RemapRequiredIndex(ref.position, positions, s_PositionStreamLabel))
             return false;
-        if(!RemapRequiredIndex(ref.normal, normals, "normal"))
+        if(!RemapRequiredIndex(ref.normal, normals, s_NormalStreamLabel))
             return false;
-        if(!RemapRequiredIndex(ref.tangent, tangents, "tangent"))
+        if(!RemapRequiredIndex(ref.tangent, tangents, s_TangentStreamLabel))
             return false;
-        if(!RemapRequiredIndex(ref.uv0, uv0, "uv0"))
+        if(!RemapRequiredIndex(ref.uv0, uv0, s_Uv0StreamLabel))
             return false;
-        if(!RemapRequiredIndex(ref.color, colors, "color"))
+        if(!RemapRequiredIndex(ref.color, colors, s_ColorsStreamLabel))
             return false;
-        if(!RemapOptionalIndex(ref.skin, skin, "skin"))
+        if(!RemapOptionalIndex(ref.skin, skin, s_SkinStreamLabel))
             return false;
     }
     return true;
@@ -254,13 +260,13 @@ template<typename Value>
     for(usize i = 0u; i < skinRemap.size(); ++i)
         skinRemap[i] = static_cast<u32>(i);
 
-    if(!DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, "normal"))
+    if(!DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, s_NormalStreamLabel))
         return false;
-    if(!DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, "tangent"))
+    if(!DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, s_TangentStreamLabel))
         return false;
-    if(!DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, "uv0"))
+    if(!DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, s_Uv0StreamLabel))
         return false;
-    if(!DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, "color"))
+    if(!DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, s_ColorsStreamLabel))
         return false;
 
     if(!RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
@@ -359,17 +365,17 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskSchedul
     UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap;
 
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, "position"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, s_PositionStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, "normal"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, s_NormalStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, "tangent"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, s_TangentStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, "uv0"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, s_Uv0StreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, "color"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, s_ColorsStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, "skin"))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, s_SkinStreamLabel))
         return false;
     if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
         return false;
@@ -397,7 +403,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         const Core::Metascript::MStringView typeName(declaration.type.data(), declaration.type.size());
-        if(!MeshRefreshTextDetail::IsSameText(typeName, "mesh"))
+        if(!MeshRefreshTextDetail::IsSameText(typeName, s_MeshAssetTypeText))
             continue;
 
         sawMesh = true;

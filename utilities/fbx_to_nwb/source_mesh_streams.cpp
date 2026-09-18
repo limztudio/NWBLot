@@ -199,7 +199,7 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
         const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), generatedTangent);
-        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, "tangent", ref.tangent))
+        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel, ref.tangent))
             return false;
     }
     outTangentReport.degenerateUvTriangleCount = rebuildResult.degenerateUvTriangleCount;
@@ -220,24 +220,24 @@ bool FbxSourceMeshStreams::InternSourceCorner(
     u32& outVertexRefIndex
 ){
     SourceVertexRef ref;
-    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, "position", ref.position))
+    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel, ref.position))
         return false;
-    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, "normal", ref.normal))
+    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel, ref.normal))
         return false;
     if(corner.hasTangent){
-        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, "tangent", ref.tangent))
+        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel, ref.tangent))
             return false;
     }
-    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, "uv0", ref.uv0))
+    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label, ref.uv0))
         return false;
-    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, "color", ref.color))
+    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel, ref.color))
         return false;
     if(wantsSkinning){
-        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, "skin", ref.skin))
+        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText, ref.skin))
             return false;
     }
 
-    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, "vertex_ref", outVertexRefIndex);
+    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel, outVertexRefIndex);
 }
 
 

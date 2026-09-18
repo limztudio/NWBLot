@@ -121,10 +121,11 @@ metadata parsers, and build registrations remain in their owning asset modules.
 The retired cooker interface, registry, combined volume cooker, and executable
 are removed.
 
-Library callers gathering independently built graphics assets set
-`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` to
-`NWB::Impl::MergeGatheredGraphicsAsset`, declared
-in `impl/assets_graphics/gather.h` and linked through `nwb_assets_graphics_gather`.
+Library callers gathering independently built graphics assets leave
+`NWB::Pipeline::AssetGatherer::AssetGatherOptions::mergePayloads` at the auto-collected default
+(`NWB::Core::Assets::QueryAutoCollectedAssetGatherMerge()`, declared in
+`core/assets/gather_merge_registry.h`). The graphics asset implementation self-registers its merge hook, so the
+gather tool no longer names an `impl/` symbol directly.
 The generic gather API also accepts a project callback for other metadata merge
 contracts. A callback receives the duplicate virtual identity, an existing payload
 to update, and the incoming payload bytes. Returning `false` rejects the conflict

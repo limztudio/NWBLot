@@ -25,7 +25,7 @@ namespace __hidden_skin_runtime{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::Assets::AssetCodecAutoRegistrar s_SkinAssetCodecAutoRegistrar(&Core::Assets::CreateAssetCodec<SkinAssetCodec>);
+NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_SkinAssetCodecAutoRegistrar, SkinAssetCodec);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,10 +38,8 @@ Core::Assets::AssetCodecAutoRegistrar s_SkinAssetCodecAutoRegistrar(&Core::Asset
 
 
 bool Skin::validatePayload()const{
-    if(!virtualPath()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: virtual path is empty"));
+    if(!checkVirtualPath(MakeNotNull(NWB_TEXT("Skin::validatePayload"))))
         return false;
-    }
     if(!m_mesh.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("Skin::validatePayload failed: mesh reference is empty"));
         return false;

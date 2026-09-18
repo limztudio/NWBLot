@@ -14,164 +14,193 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AString NormalizeAssetTypeText(AString value){
-    return NormalizeOptionText(Move(value));
+static AString MakeOptionsErrorText(const AStringView prefix, const AString& options){
+    AString message(prefix);
+    message += options;
+    return message;
 }
+
+template<typename EnumT, typename TextFunction>
+static AString BuildOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount){
+    AString text;
+    for(usize i = 0u; i < valueCount; ++i){
+        if(i > 0u)
+            text += (i + 1u == valueCount) ? ", or " : ", ";
+        text += textFunction(values[i]);
+    }
+    return text;
+}
+
+template<typename EnumT, typename ParseFunction>
+static bool ParseOptionText(const AString& value, EnumT& outValue, ParseFunction parseValue){
+    const AString normalized = NormalizeOptionText(value);
+    return parseValue(normalized, outValue);
+}
+
+template<typename EnumT, typename TextFunction, typename ParseFunction, typename ErrorFunction>
+static bool ValidateOptionText(
+    AString& inOutValue,
+    TextFunction textFunction,
+    ParseFunction parseValue,
+    ErrorFunction errorText,
+    const EnumT initial
+){
+    inOutValue = NormalizeOptionText(Move(inOutValue));
+    EnumT parsed = initial;
+    if(parseValue(inOutValue, parsed)){
+        inOutValue = AString(textFunction(parsed));
+        return true;
+    }
+
+    NWB_LOGGER_WARNING(StringConvert(errorText()));
+    return false;
+}
+
+static constexpr OutputAssetType::Enum s_OutputAssetTypeValues[] = {
+    OutputAssetType::Bunch,
+    OutputAssetType::Mesh,
+    OutputAssetType::Model,
+    OutputAssetType::Skeleton,
+    OutputAssetType::Skin,
+};
+
+static constexpr NormalMode::Enum s_NormalModeValues[] = {
+    NormalMode::Imported,
+    NormalMode::Smooth,
+    NormalMode::Regenerate,
+};
 
 static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
     switch(assetType){
     case OutputAssetType::Bunch:
-        return "bunch";
+        return s_DefaultOutputAssetTypeText;
     case OutputAssetType::Mesh:
-        return "mesh";
+        return s_MeshAssetTypeText;
     case OutputAssetType::Model:
-        return "model";
+        return s_ModelAssetTypeText;
     case OutputAssetType::Skeleton:
-        return "skeleton";
+        return s_SkeletonAssetTypeText;
     case OutputAssetType::Skin:
-        return "skin";
+        return s_SkinAssetTypeText;
     default:
         return {};
     }
 }
 
 AString OutputAssetTypeOptionsText(){
-    AString text;
-    text += OutputAssetTypeText(OutputAssetType::Bunch);
-    text += ", ";
-    text += OutputAssetTypeText(OutputAssetType::Mesh);
-    text += ", ";
-    text += OutputAssetTypeText(OutputAssetType::Model);
-    text += ", ";
-    text += OutputAssetTypeText(OutputAssetType::Skeleton);
-    text += ", or ";
-    text += OutputAssetTypeText(OutputAssetType::Skin);
-    return text;
+    return BuildOptionTexts<OutputAssetType::Enum>(
+        OutputAssetTypeText,
+        s_OutputAssetTypeValues,
+        LengthOf(s_OutputAssetTypeValues)
+    );
 }
 
 AString OutputAssetTypeErrorText(){
-    AString message = "Asset type must be ";
-    message += OutputAssetTypeOptionsText();
-    return message;
+    return MakeOptionsErrorText("Asset type must be ", OutputAssetTypeOptionsText());
 }
 
-static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
-    if(value == OutputAssetTypeText(OutputAssetType::Bunch) || value == "asset_bunch" || value == "asset-bunch"){
-        outAssetType = OutputAssetType::Bunch;
-        return true;
+template<typename EnumT>
+static bool ParseNormalizedEnumText(
+    const AStringView value,
+    EnumT& outValue,
+    AStringView (*textFunction)(EnumT),
+    const EnumT* values,
+    const usize valueCount,
+    const EnumT fallback,
+    const Core::Assets::NamedEnumCase<EnumT>* aliases = nullptr,
+    const usize aliasCount = 0u
+){
+    for(usize i = 0u; i < valueCount; ++i){
+        if(value == textFunction(values[i])){
+            outValue = values[i];
+            return true;
+        }
     }
-    if(value == OutputAssetTypeText(OutputAssetType::Mesh)){
-        outAssetType = OutputAssetType::Mesh;
+    if(Core::Assets::ParseNamedEnumText<EnumT>(value, outValue, nullptr, 0u, aliases, aliasCount))
         return true;
-    }
-    if(value == OutputAssetTypeText(OutputAssetType::Model)){
-        outAssetType = OutputAssetType::Model;
-        return true;
-    }
-    if(value == OutputAssetTypeText(OutputAssetType::Skeleton)){
-        outAssetType = OutputAssetType::Skeleton;
-        return true;
-    }
-    if(value == OutputAssetTypeText(OutputAssetType::Skin)){
-        outAssetType = OutputAssetType::Skin;
-        return true;
-    }
 
-    outAssetType = OutputAssetType::Bunch;
+    outValue = fallback;
     return false;
+}
+
+static constexpr Core::Assets::NamedEnumCase<OutputAssetType::Enum> s_OutputAssetTypeAliases[] = {
+    { s_AssetBunchAliasUnderscore, OutputAssetType::Bunch },
+    { s_AssetBunchAliasDash, OutputAssetType::Bunch },
+};
+
+static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+    return ParseNormalizedEnumText<OutputAssetType::Enum>(
+        value,
+        outAssetType,
+        OutputAssetTypeText,
+        s_OutputAssetTypeValues,
+        LengthOf(s_OutputAssetTypeValues),
+        OutputAssetType::Bunch,
+        s_OutputAssetTypeAliases,
+        LengthOf(s_OutputAssetTypeAliases)
+    );
 }
 
 bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType){
-    const AString normalized = NormalizeAssetTypeText(value);
-    return ParseNormalizedAssetTypeText(normalized, outAssetType);
+    return ParseOptionText<OutputAssetType::Enum>(value, outAssetType, ParseNormalizedAssetTypeText);
 }
 
 bool ValidateAssetTypeText(AString& inOutValue){
-    inOutValue = NormalizeAssetTypeText(Move(inOutValue));
-    OutputAssetType::Enum assetType = OutputAssetType::Mesh;
-    if(ParseNormalizedAssetTypeText(inOutValue, assetType)){
-        inOutValue = AString(OutputAssetTypeText(assetType));
-        return true;
-    }
-
-    NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
-    return false;
-}
-
-static AString NormalizeNormalModeText(AString value){
-    return NormalizeOptionText(Move(value));
+    return ValidateOptionText<OutputAssetType::Enum>(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText, OutputAssetTypeErrorText, OutputAssetType::Mesh);
 }
 
 static AStringView NormalModeText(const NormalMode::Enum normalMode){
     switch(normalMode){
     case NormalMode::Imported:
-        return "imported";
+        return s_DefaultNormalModeText;
     case NormalMode::Smooth:
-        return "smooth";
+        return s_SmoothNormalModeText;
     case NormalMode::Regenerate:
-        return "regenerate";
+        return s_RegenerateNormalModeText;
     default:
         return {};
     }
 }
 
 AString NormalModeOptionsText(){
-    AString text;
-    text += NormalModeText(NormalMode::Imported);
-    text += ", ";
-    text += NormalModeText(NormalMode::Smooth);
-    text += ", or ";
-    text += NormalModeText(NormalMode::Regenerate);
-    return text;
+    return BuildOptionTexts<NormalMode::Enum>(
+        NormalModeText,
+        s_NormalModeValues,
+        LengthOf(s_NormalModeValues)
+    );
 }
 
 AString NormalModeErrorText(){
-    AString message = "normal mode must be ";
-    message += NormalModeOptionsText();
-    return message;
+    return MakeOptionsErrorText("normal mode must be ", NormalModeOptionsText());
 }
 
 static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
-    if(value == NormalModeText(NormalMode::Imported)){
-        outNormalMode = NormalMode::Imported;
-        return true;
-    }
-    if(value == NormalModeText(NormalMode::Smooth)){
-        outNormalMode = NormalMode::Smooth;
-        return true;
-    }
-    if(value == NormalModeText(NormalMode::Regenerate)){
-        outNormalMode = NormalMode::Regenerate;
-        return true;
-    }
-
-    outNormalMode = NormalMode::Imported;
-    return false;
+    return ParseNormalizedEnumText<NormalMode::Enum>(
+        value,
+        outNormalMode,
+        NormalModeText,
+        s_NormalModeValues,
+        LengthOf(s_NormalModeValues),
+        NormalMode::Imported
+    );
 }
 
 bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode){
-    const AString normalized = NormalizeNormalModeText(value);
-    return ParseNormalizedNormalModeText(normalized, outNormalMode);
+    return ParseOptionText<NormalMode::Enum>(value, outNormalMode, ParseNormalizedNormalModeText);
 }
 
 bool ValidateNormalModeText(AString& inOutValue){
-    inOutValue = NormalizeNormalModeText(Move(inOutValue));
-    NormalMode::Enum normalMode = NormalMode::Imported;
-    if(ParseNormalizedNormalModeText(inOutValue, normalMode))
-        return true;
-
-    NWB_LOGGER_WARNING(StringConvert(NormalModeErrorText()));
-    return false;
+    return ValidateOptionText<NormalMode::Enum>(inOutValue, NormalModeText, ParseNormalizedNormalModeText, NormalModeErrorText, NormalMode::Imported);
 }
 
 AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
     switch(mode){
     case SourceTangentMode::Imported:
-        return "imported";
+        return s_DefaultNormalModeText;
     case SourceTangentMode::GeneratedUv:
-        return "generated_uv";
+        return s_GeneratedUvTangentModeText;
     case SourceTangentMode::GeneratedFallback:
-        return "generated_fallback";
+        return s_GeneratedFallbackTangentModeText;
     default:
         return {};
     }
@@ -203,7 +232,7 @@ bool ParseColorText(const AString& text, Vec4& outColor){
 
 Path DefaultOutputPath(const AString& inputPath){
     Path outputPath(UtilityDetail::Arena(), inputPath);
-    outputPath.replace_extension(".nwb");
+    outputPath.replace_extension(s_NwbOutputExtension);
     return outputPath;
 }
 

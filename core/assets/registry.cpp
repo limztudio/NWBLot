@@ -5,6 +5,7 @@
 #include "registry.h"
 
 #include <core/common/log.h>
+#include <global/assert.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,10 +86,11 @@ bool AssetRegistry::deserializeAssetByName(
 )const{
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
-    if(found == m_codecs.end() || found.value() == nullptr){
+    if(found == m_codecs.end()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.c_str()));
         return false;
     }
+    NWB_ASSERT(found.value() != nullptr);
 
     return found.value()->deserialize(m_arena, virtualPath, binary, outAsset);
 }

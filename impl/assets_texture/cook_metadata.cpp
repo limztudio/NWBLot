@@ -38,13 +38,8 @@ bool ParseTextureCookMetadata(
     outEntry = TextureCookEntry(outEntry.mipLevels.get_allocator().arena());
 
     const Value& asset = doc.asset();
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map")
-            , StringConvert(s_DiagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-        );
+    if(!::NWB::Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
         return false;
-    }
     if(
         !::NWB::Core::Assets::ValidateMetadataAssetFields(
             nwbFilePath,

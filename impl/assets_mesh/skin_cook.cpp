@@ -31,13 +31,8 @@ NWB_IMPL_BEGIN
 
 
 bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(asset.assetType() != assetType()){
-        NWB_LOGGER_ERROR(NWB_TEXT("SkinAssetCodec::serialize failed: invalid asset type '{}', expected '{}'")
-            , StringConvert(asset.assetType().c_str())
-            , StringConvert(Skin::s_AssetTypeText)
-        );
+    if(!checkSerializeAssetType(asset, MakeNotNull(NWB_TEXT("SkinAssetCodec::serialize"))))
         return false;
-    }
 
     const Skin& skin = static_cast<const Skin&>(asset);
     if(!skin.validatePayload())
@@ -278,14 +273,9 @@ template<usize ComponentCount>
 ){
     outInfluences.clear();
 
-    const Value* influences = FindField(asset, s_InfluencesField);
-    if(!influences || !influences->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': field '{}' must be a list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_InfluencesField)
-        );
+    const Value* influences = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InfluencesField);
+    if(!influences)
         return false;
-    }
 
     const auto& influenceList = influences->asList();
     outInfluences.reserve(influenceList.size());
@@ -322,14 +312,9 @@ template<usize ComponentCount>
 ){
     outMatrices.clear();
 
-    const Value* matrices = FindField(asset, s_InverseBindMatricesField);
-    if(!matrices || !matrices->isList()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': field '{}' must be a list")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(s_InverseBindMatricesField)
-        );
+    const Value* matrices = Core::Assets::FindMetadataListField(nwbFilePath, asset, "Skin meta", s_InverseBindMatricesField);
+    if(!matrices)
         return false;
-    }
 
     const auto& matrixList = matrices->asList();
     outMatrices.reserve(matrixList.size());
@@ -410,16 +395,11 @@ bool ParseSkinCookMetadata(
 
     outEntry = SkinCookEntry(outEntry.influences.get_allocator().arena());
 
-    if(!asset.isMap()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': asset is not a map"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Skin meta"))
         return false;
-    }
 
-    outEntry.virtualPath = virtualPath;
-    if(!outEntry.virtualPath){
-        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': virtual path must not be empty"), PathToString<tchar>(nwbFilePath));
+    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, nwbFilePath, "Skin meta"))
         return false;
-    }
     if(!ValidateSkinAssetFields(nwbFilePath, asset))
         return false;
     if(

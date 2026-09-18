@@ -190,7 +190,7 @@ static AStringView MaterialBindFieldLookupFunctionTypeName(const MaterialLayoutF
         "Float4"
     };
     static_assert(
-        (sizeof(s_TypeNames) / sizeof(s_TypeNames[0]))
+        LengthOf(s_TypeNames)
         == static_cast<usize>(
             static_cast<u32>(MaterialLayoutFieldType::Float4) - static_cast<u32>(MaterialLayoutFieldType::Bool) + 1u
         )

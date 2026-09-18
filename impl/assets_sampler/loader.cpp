@@ -26,19 +26,15 @@ bool SamplerAssetLoader::Create(
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
+    NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
         return true;
     if(outResource.sampler || outResource.samplerHeapHandle.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler resource is partially initialized; release it before recreating"), owner);
         return false;
     }
-    if(!samplerAsset.validatePayload()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler '{}' has an invalid cooked description")
-            , owner
-            , StringConvert(samplerName.c_str())
-        );
-        return false;
-    }
+    // Sampler::loadBinary already validated the cooked description; keep a debug-only invariant here.
+    NWB_ASSERT(samplerAsset.validatePayload());
 
     Core::Device& device = graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
@@ -81,26 +77,23 @@ bool SamplerAssetLoader::Load(
     const tchar* const ownerName
 ){
     const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
-    if(!samplerAsset.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: sampler asset reference is empty"), owner);
-        return false;
-    }
-    if(outResource.valid())
-        return true;
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, "sampler"))
+        return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
 
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager.loadSync(Sampler::AssetTypeName(), samplerVirtualPath, loadedAsset)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load sampler asset '{}'"), owner, StringConvert(samplerVirtualPath.c_str()));
+    const Sampler* loadedSampler = assetManager.loadTypedSync<Sampler>(
+        samplerVirtualPath,
+        loadedAsset,
+        MakeNotNull(NWB_TEXT("SamplerAssetLoader::Load")),
+        owner,
+        "sampler"
+    );
+    if(!loadedSampler)
         return false;
-    }
-    if(!loadedAsset || loadedAsset->assetType() != Sampler::AssetTypeName()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a sampler"), owner, StringConvert(samplerVirtualPath.c_str()));
-        return false;
-    }
 
-    return Create(outResource, static_cast<const Sampler&>(*loadedAsset), debugName, graphics, owner);
+    return Create(outResource, *loadedSampler, debugName, graphics, owner);
 }
 
 void SamplerAssetLoader::Release(SamplerGpuResource& inOutResource, Core::GraphicsRuntime& graphics){

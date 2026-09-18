@@ -646,6 +646,193 @@ template<typename AssetT, typename MetadataValue>
     );
 }
 
+template<typename SourceStringT, typename MetadataDocument, typename ParseDocument>
+[[nodiscard]] inline bool ParseMetadataDocumentText(
+    const Path& filePath,
+    const AStringView diagnosticPrefix,
+    SourceStringT& ioText,
+    MetadataDocument& outDoc,
+    ParseDocument&& parseDoc
+){
+    if(!ReadTextFile(filePath, ioText)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(filePath)
+        );
+        return false;
+    }
+    StripUtf8Bom(ioText);
+
+    if(!parseDoc(AStringView(ioText))){
+        for(const auto& err : outDoc.errors()){
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}")
+                , StringConvert(diagnosticPrefix)
+                , PathToString<tchar>(filePath)
+                , err.line
+                , err.column
+                , StringConvert(AStringView(err.message.data(), err.message.size()))
+            );
+        }
+        return false;
+    }
+    return true;
+}
+
+template<typename ScratchArenaT, typename SourceStringT>
+[[nodiscard]] inline bool CheckPairedSourceExtension(
+    const Path& nwbFilePath,
+    const SourceStringT& sourcePath,
+    const AStringView expectedExtension,
+    const AStringView diagnosticPrefix,
+    ScratchArenaT& scratchArena
+){
+    const Path sourcePathValue(nwbFilePath.arena(), sourcePath);
+    AString<ScratchArenaT> extension(PathToString(scratchArena, sourcePathValue.extension()));
+    CanonicalizeTextInPlace(extension);
+    if(AStringView(extension) == expectedExtension)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': paired source '{}' must use '{}' extension")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(sourcePath)
+        , StringConvert(expectedExtension)
+    );
+    return false;
+}
+
+template<typename MetadataValue>
+[[nodiscard]] inline const MetadataValue* FindMetadataListField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName
+){
+    const auto* fieldValue = object.findField(fieldName);
+    if(fieldValue && fieldValue->isList())
+        return fieldValue;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(fieldName)
+    );
+    return nullptr;
+}
+
+template<typename CookEntryT>
+[[nodiscard]] inline bool AssignCookEntryVirtualPath(
+    CookEntryT& outEntry,
+    const Name& virtualPath,
+    const Path& nwbFilePath,
+    const AStringView diagnosticPrefix
+){
+    outEntry.virtualPath = virtualPath;
+    if(outEntry.virtualPath)
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': virtual path must not be empty")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+    );
+    return false;
+}
+
+// Shared "asset payload must be a map" guard used by every .nwb metadata parser entry point.
+template<typename MetadataValue>
+[[nodiscard]] inline bool CheckMetadataAssetMap(
+    const Path& nwbFilePath,
+    const MetadataValue& asset,
+    const AStringView diagnosticPrefix
+){
+    if(asset.isMap())
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+    );
+    return false;
+}
+
+template<typename MetadataDocument, typename MetadataValue>
+[[nodiscard]] inline const MetadataValue* FindMetadataAssetMapValue(
+    const Path& nwbFilePath,
+    const MetadataDocument& doc,
+    const AStringView diagnosticPrefix
+){
+    const auto assetVariable = doc.assetVariable();
+    const auto* asset = doc.findVariable(assetVariable);
+    if(!asset){
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset variable '{}' has no assignments")
+            , StringConvert(diagnosticPrefix)
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(AStringView(assetVariable.data(), assetVariable.size()))
+        );
+        return nullptr;
+    }
+    if(!CheckMetadataAssetMap(nwbFilePath, *asset, diagnosticPrefix))
+        return nullptr;
+    return asset;
+}
+
+// Shared named-enum metadata reader: one string-field read plus a table lookup, with a field-specific error tail.
+template<typename NamedEnumT>
+struct NamedEnumCase{
+    AStringView text;
+    NamedEnumT value;
+};
+
+template<typename NamedEnumT>
+[[nodiscard]] inline bool ParseNamedEnumText(
+    const AStringView value,
+    NamedEnumT& outValue,
+    const NamedEnumCase<NamedEnumT>* cases,
+    const usize caseCount,
+    const NamedEnumCase<NamedEnumT>* aliasCases = nullptr,
+    const usize aliasCaseCount = 0u
+){
+    for(usize i = 0u; i < caseCount; ++i){
+        if(value == cases[i].text){
+            outValue = cases[i].value;
+            return true;
+        }
+    }
+    for(usize i = 0u; i < aliasCaseCount; ++i){
+        if(value == aliasCases[i].text){
+            outValue = aliasCases[i].value;
+            return true;
+        }
+    }
+    return false;
+}
+
+template<typename NamedEnumT, typename MetadataValue>
+[[nodiscard]] inline bool ParseNamedMetadataEnumField(
+    const Path& nwbFilePath,
+    const MetadataValue& object,
+    const AStringView diagnosticPrefix,
+    const AStringView fieldName,
+    const NamedEnumCase<NamedEnumT>* cases,
+    const usize caseCount,
+    NamedEnumT& outValue,
+    const AStringView errorDetailText
+){
+    AStringView text;
+    if(!ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, true, text))
+        return false;
+    if(ParseNamedEnumText<NamedEnumT>(text, outValue, cases, caseCount))
+        return true;
+
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}")
+        , StringConvert(diagnosticPrefix)
+        , PathToString<tchar>(nwbFilePath)
+        , StringConvert(fieldName)
+        , StringConvert(errorDetailText)
+    );
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

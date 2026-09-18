@@ -13,6 +13,7 @@
 #include "arena_names.h"
 
 #include <core/common/log.h>
+#include <global/assert.h>
 #include <global/auto_registration.h>
 
 
@@ -64,8 +65,7 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
     __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue().copyTo(functions);
 
     for(const AssetVolumePrepareFunction function : functions){
-        if(function == nullptr)
-            continue;
+        NWB_ASSERT(function != nullptr);
         if(function(context))
             continue;
 

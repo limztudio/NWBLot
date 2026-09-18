@@ -25,6 +25,24 @@ template<typename CharT>
     return text ? BasicStringView<CharT>(text) : BasicStringView<CharT>();
 }
 
+[[nodiscard]] inline constexpr const char* BoolToYesNoText(const bool value)noexcept{
+    return value ? "yes" : "no";
+}
+
+[[nodiscard]] inline constexpr const char* BoolToAvailabilityText(const bool value)noexcept{
+    return value ? "available" : "unavailable";
+}
+
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> TruncateView(const BasicStringView<CharT> text, const usize maxChars){
+    return text.substr(0u, text.size() < maxChars ? text.size() : maxChars);
+}
+
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> TruncateView(const CharT* const text, const usize maxChars)noexcept{
+    return text ? TruncateView(BasicStringView<CharT>(text), maxChars) : BasicStringView<CharT>();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

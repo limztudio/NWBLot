@@ -69,7 +69,7 @@ static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directi
 }
 
 [[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
-    return Min(Max(pitchRadians, -pitchLimitRadians), pitchLimitRadians);
+    return Clamp(pitchRadians, -pitchLimitRadians, pitchLimitRadians);
 }
 
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
@@ -130,8 +130,8 @@ static void ResolveFlyCameraInput(
 
     const f32 safeMouseDeltaX = IsFinite(mouseDeltaX) ? mouseDeltaX : 0.0f;
     const f32 safeMouseDeltaY = IsFinite(mouseDeltaY) ? mouseDeltaY : 0.0f;
-    const f32 safeRightAxis = IsFinite(rightAxis) ? Min(Max(rightAxis, -1.0f), 1.0f) : 0.0f;
-    const f32 safeForwardAxis = IsFinite(forwardAxis) ? Min(Max(forwardAxis, -1.0f), 1.0f) : 0.0f;
+    const f32 safeRightAxis = IsFinite(rightAxis) ? Clamp(rightAxis, -1.0f, 1.0f) : 0.0f;
+    const f32 safeForwardAxis = IsFinite(forwardAxis) ? Clamp(forwardAxis, -1.0f, 1.0f) : 0.0f;
     const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
 
     yawRadians += safeMouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;

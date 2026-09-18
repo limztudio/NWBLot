@@ -125,7 +125,7 @@ static void SetWaylandContext(Common::LinuxFrame& frameData, WaylandContext* con
 }
 
 static i32 ClampBufferScale(i32 value){
-    return value > 1 ? value : 1;
+    return Max(value, 1);
 }
 
 static void ApplyBufferScale(WaylandContext& context, i32 value){

@@ -25,15 +25,15 @@ namespace __hidden_vulkan_device_diagnostics{
 
 
 static AStringView TrimGpuCrashText(const AStringView text){
-    return AStringView(text.data(), Min(text.size(), s_MaxGpuCrashMarkerChars));
+    return TruncateView(text, s_MaxGpuCrashMarkerChars);
 }
 
 static AStringView TrimGpuCrashText(const char* const text){
-    return text ? TrimGpuCrashText(AStringView(text)) : AStringView();
+    return TruncateView<char>(text, s_MaxGpuCrashMarkerChars);
 }
 
 static const char* GpuCrashAvailabilityText(const bool available){
-    return available ? "available" : "unavailable";
+    return BoolToAvailabilityText(available);
 }
 
 

@@ -150,7 +150,7 @@ private:
             f32 parsed = s_DefaultAngularRadius;
             if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE", parsed))
                 return s_DefaultAngularRadius;
-            return Min(Max(parsed, 0.0f), 0.2f);
+            return Clamp(parsed, 0.0f, 0.2f);
         }();
         return s_angle;
     }
@@ -163,7 +163,7 @@ private:
             f32 parsed = s_DefaultSourceRadius;
             if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", parsed))
                 return s_DefaultSourceRadius;
-            return Min(Max(parsed, 0.0f), 1.0f);
+            return Clamp(parsed, 0.0f, 1.0f);
         }();
         return s_radius;
     }

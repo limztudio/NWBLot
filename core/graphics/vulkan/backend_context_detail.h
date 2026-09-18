@@ -197,7 +197,7 @@ inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
 }
 
 inline const char* BoolToString(bool value){
-    return value ? "yes" : "no";
+    return BoolToYesNoText(value);
 }
 
 inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 version){

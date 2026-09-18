@@ -103,7 +103,6 @@ void World::destroyEntityComponents(EntityID entityId){
     while(nodeIndex != s_InvalidEntityComponentNode){
         EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
         const u32 nextNode = node.next;
-        NWB_ASSERT(node.pool);
         node.pool->remove(entityId);
         releaseEntityComponentNode(nodeIndex);
         nodeIndex = nextNode;
@@ -156,13 +155,13 @@ u32 World::acquireEntityComponentNode(ComponentTypeId typeId, IComponentPool& po
         const u32 nodeIndex = m_freeEntityComponentNode;
         EntityComponentNode& node = m_entityComponentNodes[nodeIndex];
         m_freeEntityComponentNode = node.next;
-        node = EntityComponentNode{ typeId, &pool, nextNode };
+        node = EntityComponentNode{ typeId, MakeNotNull(&pool), nextNode };
         return nodeIndex;
     }
 
     NWB_ASSERT(m_entityComponentNodes.size() < static_cast<usize>(Limit<u32>::s_Max));
     const u32 nodeIndex = static_cast<u32>(m_entityComponentNodes.size());
-    m_entityComponentNodes.push_back(EntityComponentNode{ typeId, &pool, nextNode });
+    m_entityComponentNodes.push_back(EntityComponentNode{ typeId, MakeNotNull(&pool), nextNode });
     return nodeIndex;
 }
 

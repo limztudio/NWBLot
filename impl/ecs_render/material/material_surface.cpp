@@ -59,7 +59,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 [[nodiscard]] static ResourceT* FindOrCreateCachedAsset(
     CacheT& cache,
     const Core::Assets::AssetRef<AssetT>& assetRef,
-    const char* emptyKindText,
+    const NotNull<const char*> emptyKindText,
     LoadFn&& loadResource,
     ReleaseFn&& releaseResource
 ){
@@ -96,7 +96,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     TextureGpuResource* const textureResource = FindOrCreateCachedAsset<Texture, TextureGpuResource>(
         resources.textureAssetCache,
         textureAsset,
-        "Texture2D",
+        MakeNotNull("Texture2D"),
         [&](TextureGpuResource& outResource, const Core::Assets::AssetRef<Texture>& assetRef, const Name& assetPath){
             if(!TextureAssetLoader::Load(
                 outResource,
@@ -144,7 +144,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
-        "sampler",
+        MakeNotNull("sampler"),
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
             return SamplerAssetLoader::Load(
                 outResource,

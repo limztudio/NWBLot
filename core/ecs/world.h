@@ -31,7 +31,7 @@ class World : NoCopy{
 private:
     struct EntityComponentNode{
         ComponentTypeId typeId;
-        IComponentPool* pool;
+        NotNull<IComponentPool*> pool;
         u32 next;
     };
 
@@ -89,12 +89,12 @@ private:
     template<typename T, typename... Args>
     T& addComponent(EntityID entityId, Args&&... args){
         NWB_ASSERT(m_entityManager.alive(entityId));
-        auto* pool = assurePool<T>();
-        if(T* existing = pool->tryGet(entityId))
+        ComponentPool<T>& pool = assurePool<T>();
+        if(T* existing = pool.tryGet(entityId))
             return *existing;
 
-        T& component = pool->add(entityId, Forward<Args>(args)...);
-        addEntityComponentType(entityId, ComponentType<T>(), *pool);
+        T& component = pool.add(entityId, Forward<Args>(args)...);
+        addEntityComponentType(entityId, ComponentType<T>(), pool);
         return component;
     }
 
@@ -217,7 +217,7 @@ private:
     }
 
     template<typename T>
-    ComponentPool<T>* assurePool(){
+    ComponentPool<T>& assurePool(){
         const auto typeId = ComponentType<T>();
         if(typeId >= m_pools.size())
             m_pools.resize(typeId + 1u);
@@ -225,7 +225,7 @@ private:
         auto& pool = m_pools[typeId];
         if(!pool)
             pool = MakeGlobalUnique<ComponentPool<T>>(m_arena, m_arena);
-        return checked_cast<ComponentPool<T>*>(pool.get());
+        return *checked_cast<ComponentPool<T>*>(pool.get());
     }
     template<typename T>
     ComponentPool<T>& requirePool(){

@@ -463,8 +463,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
     }
 
-    // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction,
-    // each a presence flag plus shader name hash.
+    // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction, each a presence flag plus shader name hash.
     const auto readOptionalAvboitPixelShader = [&](const NotNull<const tchar*> passLabel, Core::Assets::AssetRef<Shader>& outShaderRef) -> bool{
         u32 hasShader = 0u;
         if(!ReadPOD(binary, cursor, hasShader)){

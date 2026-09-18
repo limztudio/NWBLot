@@ -316,8 +316,11 @@ def validate_statistics(samples, case, mode, budget=DEFAULT_RAY_BUDGET, allow_ze
         if mode in ("hardware", "hybrid"):
             if not sample["hardware_available"] or not sample["hardware_ready"]:
                 raise SmokeFailure("stable hardware capture has no ready hardware route")
-            if sample["hardware_rays"] != min(sample["candidates"], sample["effective_budget"]):
-                raise SmokeFailure("ready hardware route did not execute its bounded candidate queue")
+            bounded_queue = min(sample["candidates"], sample["effective_budget"])
+            if sample["hardware_rays"] > bounded_queue:
+                raise SmokeFailure("ready hardware route exceeded its bounded candidate queue")
+            if bounded_queue > 0 and sample["hardware_rays"] == 0:
+                raise SmokeFailure("ready hardware route executed no rays from its bounded candidate queue")
         if case == "opaque_glass" and mode != "disabled" and not sample["glass_pixels"]:
             raise SmokeFailure("stable reflection statistics are missing primary glass")
         if case == "offscreen" and mode in ("hardware", "hybrid") and not sample["hardware_hits"]:

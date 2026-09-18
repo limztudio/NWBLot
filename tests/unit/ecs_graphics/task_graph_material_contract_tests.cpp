@@ -18,8 +18,7 @@ using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
-// A material draw packet owns the exact mesh buffers, descriptor handles, and executable pipelines selected while
-// the graph is declared. Recording and compute-plan materialization must never resolve a mutable registry key again.
+// A material draw packet owns the exact mesh buffers, descriptor handles, and executable pipelines selected while the graph is declared. Recording and compute-plan materialization must never resolve a mutable registry key again.
 TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -104,7 +103,11 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_FALSE(ContainsText(resourceSets, "RendererMeshSystem& meshSystem"));
     EXPECT_FALSE(ContainsText(resourceSets, "findMeshResources("));
 
-    EXPECT_EQ(CountText(plans, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"), 5u);
+    EXPECT_EQ(CountText(plans, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"), 6u);
+    // P4 versioned output contract: expanded stays the shipping layout; indexed draws require a validated descriptor.
+    EXPECT_TRUE(ContainsText(drawTypes, "GeneratedGeometryOutputVersion::ExpandedTriangleCorners"));
+    EXPECT_TRUE(ContainsText(drawTypes, "GeneratedGeometryOutputVersion::FixedRangeIndexed"));
+    EXPECT_TRUE(ContainsText(drawTypes, "validForCornerCount"));
     EXPECT_EQ(CountText(plans, "outputBuffers.push_back(mesh.emulationVertexBuffer);"), 4u);
     EXPECT_EQ(CountText(plans, "outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());"), 2u);
     EXPECT_TRUE(ContainsText(plans, "outputBuffer = mesh.emulationVertexBuffer;"));
@@ -132,9 +135,7 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
 }
 
 
-// Scene-light and shading constants are prepared before graph declaration and published from accepted graph work.
-// The previous direct compatibility writer had no callers, so keep it retired instead of letting an unreachable
-// native state/submit bridge silently return to the deferred subsystem.
+// Scene-light and shading constants are prepared before graph declaration and published from accepted graph work. The previous direct compatibility writer had no callers, so keep it retired instead of letting an unreachable native state/submit bridge silently return to the deferred subsystem.
 TEST(EcsGraphics, DeferredSceneShadingUploadsHaveNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -154,9 +155,7 @@ TEST(EcsGraphics, DeferredSceneShadingUploadsHaveNoNativeCompatibilityDispatcher
 }
 
 
-// AVBOIT's normal path rejects an uncaptured transparent phase before recording. Its last aggregate native
-// dispatcher therefore had no caller and only kept mutable mesh/material/CSG writes reachable in dead code.
-// Keep that bridge retired so every supported transparent phase starts from its declaration-time graph snapshot.
+// AVBOIT's normal path rejects an uncaptured transparent phase before recording. Its last aggregate native dispatcher therefore had no caller and only kept mutable mesh/material/CSG writes reachable in dead code. Keep that bridge retired so every supported transparent phase starts from its declaration-time graph snapshot.
 TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -269,8 +268,7 @@ TEST(EcsGraphics, AvboitMaterialUploadsHaveNoNativeCompatibilityDispatcher){
 }
 
 
-// Shadow Prepare consumes the immutable material-context selector uploaded before graph recording. Do not retain
-// a native writer that can re-read descriptor slots after that declaration boundary.
+// Shadow Prepare consumes the immutable material-context selector uploaded before graph recording. Do not retain a native writer that can re-read descriptor slots after that declaration boundary.
 TEST(EcsGraphics, RayTraceMaterialContextSelectorHasNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -294,8 +292,7 @@ TEST(EcsGraphics, RayTraceMaterialContextSelectorHasNoNativeCompatibilityDispatc
 }
 
 
-// A frozen caustic-emission stream is either represented by a graph upload blob or absent. Recording must not
-// re-upload it natively after the packet has declared the target buffer.
+// A frozen caustic-emission stream is either represented by a graph upload blob or absent. Recording must not re-upload it natively after the packet has declared the target buffer.
 TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -320,8 +317,7 @@ TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
 }
 
 
-// Surfel frame constants are frozen while the graph is declared. The Shadow Prepare and optional hybrid-tail
-// callbacks must consume that upload rather than recomputing and writing a later mutable constant buffer.
+// Surfel frame constants are frozen while the graph is declared. The Shadow Prepare and optional hybrid-tail callbacks must consume that upload rather than recomputing and writing a later mutable constant buffer.
 TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -346,8 +342,7 @@ TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
 }
 
 
-// The current deferred bindless selector has a mandatory graph upload before any Shadow/Lighting/Composite/Present
-// consumer. Those render callbacks must not retain a native writer for a target-generation selector.
+// The current deferred bindless selector has a mandatory graph upload before any Shadow/Lighting/Composite/Present consumer. Those render callbacks must not retain a native writer for a target-generation selector.
 TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -378,8 +373,7 @@ TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
-// Frozen graph batches and the explicit hybrid restore own every supported shadow material-context upload. Keep
-// mutable compatibility writers and the no-data hybrid restore overload out of the ray-tracing subsystem.
+// Frozen graph batches and the explicit hybrid restore own every supported shadow material-context upload. Keep mutable compatibility writers and the no-data hybrid restore overload out of the ray-tracing subsystem.
 TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -402,8 +396,7 @@ TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
 }
 
 
-// Renderer-owned hybrid material/scene bytes must enter through immutable graph batches. Native AS build/state work
-// remains separately documented, but it must not grow another live buffer writer in the scene gather recorder.
+// Renderer-owned hybrid material/scene bytes must enter through immutable graph batches. Native AS build/state work remains separately documented, but it must not grow another live buffer writer in the scene gather recorder.
 TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -446,8 +439,7 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_FALSE(ContainsText(adaptiveLifecycle, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
     EXPECT_FALSE(ContainsText(adaptiveLifecycle, "hybrid hardware material-context fallback retried directly"));
 
-    // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze
-    // an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
+    // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
     EXPECT_EQ(CountText(shadow, "clearBufferUInt("), 0u);
     EXPECT_EQ(CountText(shadow, "copyBuffer("), 0u);
     EXPECT_EQ(CountText(shadow, "m_swShadowCompactEnabled"), 0u);
@@ -468,8 +460,7 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_TRUE(ContainsText(shadowTaskGraph, "!splitSoftTransparentFold && rayTracingPlan.adaptivePlan.enabled"));
     EXPECT_TRUE(ContainsText(shadowTaskGraph, "GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = graphOwnedAdaptiveCandidate"));
 
-    // UI presentation is fully graph-owned. Callback-free rejection retains the live frame, while an opaque callback
-    // rejection stops the device generation instead of replaying arbitrary user code.
+    // UI presentation is fully graph-owned. Callback-free rejection retains the live frame, while an opaque callback rejection stops the device generation instead of replaying arbitrary user code.
     EXPECT_EQ(CountText(ui, "executeCommandLists("), 0u);
     EXPECT_FALSE(ContainsText(ui, "ensureRenderCommandList"));
     EXPECT_TRUE(ContainsText(ui, "retaining callback-free frame for graph retry"));
@@ -477,9 +468,7 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
 }
 
 
-// The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared
-// by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global
-// descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.
+// The current renderer has exactly two runtime-selected sampled-image domains: material Texture2D assets (shared by raster and ray-trace surface dispatch) and ImGui textures.  A new domain must not silently rely on a global descriptor slot: keep the supported domain small and require each one to retain handles before graph declaration.
 TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -532,8 +521,7 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     const AStringView ui(uiSource.data(), uiSource.size());
     const AStringView uiTextures(uiTextureSource.data(), uiTextureSource.size());
 
-    // Material resource validation supports only a Texture2D asset and a sampler. The prepared collector must
-    // resolve the former to a retained texture handle, while samplers deliberately have no resource state to track.
+    // Material resource validation supports only a Texture2D asset and a sampler. The prepared collector must resolve the former to a retained texture handle, while samplers deliberately have no resource state to track.
     EXPECT_TRUE(ContainsText(materialAssetHeader, "SampledImage2D = 1"));
     EXPECT_TRUE(ContainsText(materialAssetHeader, "Sampler = 2"));
     EXPECT_TRUE(ContainsText(materialAssetHeader, "return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler"));
@@ -541,8 +529,7 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     EXPECT_TRUE(ContainsText(sampledTextureCollection, "collector.append(textureResource.texture)"));
     EXPECT_TRUE(ContainsText(sampledTextureCollection, "default:\n            return false;"));
 
-    // Raster and trace consumers share the frozen material collection. The named sets make a future dynamic
-    // bindless consumer visible to the audit rather than allowing it to hide behind the descriptor heap.
+    // Raster and trace consumers share the frozen material collection. The named sets make a future dynamic bindless consumer visible to the audit rather than allowing it to hide behind the descriptor heap.
     EXPECT_TRUE(ContainsText(taskGraph, "GatherPreparedMaterialSampledTextureResourceSet"));
     EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.gbuffer.material_sampled_textures"));
     EXPECT_TRUE(ContainsText(taskGraph, "render.graphics_prefix.csg_interval_sample.material_sampled_textures"));
@@ -556,9 +543,7 @@ TEST(EcsGraphics, DynamicBindlessSampledImagesHaveFrozenGraphDeclarationOwners){
     EXPECT_TRUE(ContainsText(geometryBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
     EXPECT_TRUE(ContainsText(transparentBuilder, "GatherPreparedMaterialSampledTextureResourceSet("));
 
-    // ImGui is the other dynamic domain. Its draw command retains the selected texture and heap slot, its upload
-    // path imports the exact destination, and the terminal task declares that frozen texture rather than reading
-    // the mutable ImGui command list.
+    // ImGui is the other dynamic domain. Its draw command retains the selected texture and heap slot, its upload path imports the exact destination, and the terminal task declares that frozen texture rather than reading the mutable ImGui command list.
     EXPECT_TRUE(ContainsText(uiHeader, "Core::TextureHandle texture;"));
     EXPECT_TRUE(ContainsText(uiHeader, "Core::GpuDescriptorHandle textureHeapHandle"));
     EXPECT_TRUE(ContainsText(uiHeap, "heap.allocate(Core::GpuDescriptorClass::SampledImage)"));

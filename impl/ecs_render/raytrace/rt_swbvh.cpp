@@ -277,8 +277,7 @@ template<typename RayTracingState>
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
-        && meshResources.blasRefitsSinceRebuild
-            < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
+        && meshResources.blasRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
     ;
     outBuild.meshName = meshResources.meshName;
     outBuild.positionBuffer = meshResources.positionBuffer;
@@ -367,9 +366,7 @@ template<typename RayTracingState>
     if(build.performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Direct/retry and incomplete hybrid callbacks immediately hand these shared streams to the software-BVH
-    // builder, so they retain the native bridge. Verified frozen graph routes establish this input state in their
-    // packet prologue instead.
+    // Direct/retry and incomplete hybrid callbacks immediately hand these shared streams to the software-BVH builder, so they retain the native bridge. Verified frozen graph routes establish this input state in their packet prologue instead.
     if(!meshBlasGeometryBuildInputStatesGraphOwned){
         commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
         commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
@@ -445,15 +442,11 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight failed for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: BLAS resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             allResourcesReady = false;
         }
     }
@@ -473,16 +466,15 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it
-        // dirty. This deliberately includes off-screen meshes, matching the established native traversal.
-        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
+        // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it dirty. This deliberately includes off-screen meshes, matching the established native traversal.
+        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending){
+            ++m_blasLedgerStaticSkipped;
             continue;
+        }
 
         PreparedMeshBlasBuild build;
         if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             clearPreparedMeshBlasBuilds();
             return false;
         }
@@ -506,9 +498,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
             || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'")
-                , StringConvert(build.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.c_str()));
             return false;
         }
     }
@@ -519,9 +509,7 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
             meshBlasAccelStructStatesGraphOwned,
             meshBlasGeometryBuildInputStatesGraphOwned
         )){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'")
-                , StringConvert(build.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen BLAS build for mesh '{}'"), StringConvert(build.meshName.c_str()));
             return false;
         }
     }
@@ -562,6 +550,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
             continue;
         }
         if(build.firstBuild){
+            ++m_blasLedgerFirstBuilds;
             NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: built BLAS for mesh '{}' (runtime {}, {} vertices, {} indices)")
                 , StringConvert(build.meshName.c_str())
                 , build.runtimeMesh
@@ -569,11 +558,22 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
                 , static_cast<u64>(build.indexCount)
             );
         }
+        else if(build.performRefit)
+            ++m_blasLedgerRefits;
+        else
+            ++m_blasLedgerRebuilds;
+        m_blasLedgerUploadedBytes += static_cast<u64>(build.positionByteSize);
     }
-    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS
-    // rebuild rather than retaining a static-scene hash that may describe the retired generation.
+    // An unexpected replacement after recording is not rolled into the accepted mesh cache. Force a future TLAS rebuild rather than retaining a static-scene hash that may describe the retired generation.
     if(!allPlansCurrent)
         m_rayTracingState.m_tlasStaticSceneHashValid = false;
+    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: BLAS ownership staticSkipped={} firstBuilds={} refits={} rebuilds={} uploadedBytes={}")
+        , m_blasLedgerStaticSkipped
+        , m_blasLedgerFirstBuilds
+        , m_blasLedgerRefits
+        , m_blasLedgerRebuilds
+        , m_blasLedgerUploadedBytes
+    );
     clearPreparedMeshBlasBuilds();
 }
 
@@ -590,9 +590,7 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(
 
         if(meshResources.runtimeMesh){
             if(!updateMeshSwBvh(commandList, meshResources)){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh '{}' software BVH update failed")
-                    , StringConvert(meshResources.meshName.c_str())
-                );
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh '{}' software BVH update failed"), StringConvert(meshResources.meshName.c_str()));
                 allBuildsReady = false;
             }
             else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
@@ -605,9 +603,7 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(
         if(!meshResources.swBvhBuildPending)
             continue;
         if(!updateMeshSwBvh(commandList, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: static mesh '{}' software BVH build failed")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: static mesh '{}' software BVH build failed"), StringConvert(meshResources.meshName.c_str()));
             allBuildsReady = false;
             continue;
         }
@@ -641,9 +637,7 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scr
         const u32 primitiveCount = meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
         ECSRenderDetail::MeshRayTracingResourceSnapshot boundResources;
         if(!m_meshSystem.ensureRayTracingInputHeapHandles(meshResources, boundResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH input heap registration failed for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             allResourcesReady = false;
             continue;
         }
@@ -655,15 +649,11 @@ bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::Scr
             preparedResources.swBvhNodeHeapHandle,
             preparedResources.swBvhParentHeapHandle
         )){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preparation failed for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             allResourcesReady = false;
         }
         else if(!m_meshSystem.commitRayTracingResourceSnapshot(boundResources, preparedResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'")
-                , StringConvert(meshResources.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software BVH resource preflight lost mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
             allResourcesReady = false;
         }
     }
@@ -688,8 +678,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             break;
         }
     }
-    // A software-only frame can have no dirty/static or runtime mesh work. In that case the shared scratch has not
-    // necessarily been allocated, and an authoritative empty plan must retain the established no-op path.
+    // A software-only frame can have no dirty/static or runtime mesh work. In that case the shared scratch has not necessarily been allocated, and an authoritative empty plan must retain the established no-op path.
     if(!hasCandidate){
         m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
@@ -708,8 +697,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
         return false;
 
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
-        // Runtime meshes update every software-only frame; static meshes enter exactly while their topology is
-        // pending. This mirrors the direct loop, including off-screen mesh resources.
+        // Runtime meshes update every software-only frame; static meshes enter exactly while their topology is pending. This mirrors the direct loop, including off-screen mesh resources.
         if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
             continue;
         if(
@@ -727,9 +715,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
             || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
         ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'")
-                , StringConvert(mesh.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
             clearPreparedMeshSwBvhBuilds();
             return false;
         }
@@ -845,9 +831,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
     const bool graphBoundaryStatesOwned
 ){
     if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'")
-            , StringConvert(build.meshName.c_str())
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.c_str()));
         return false;
     }
 
@@ -889,9 +873,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuild(
         )
     ;
     if(!recorded){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'")
-            , StringConvert(build.meshName.c_str())
-        );
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to record frozen software BVH build for mesh '{}'"), StringConvert(build.meshName.c_str()));
     }
     return recorded;
 }
@@ -900,8 +882,7 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuildAfterGraphClears(
     Core::CommandList& commandList,
     const PreparedMeshSwBvhBuild& build
 ){
-    // The graph callback has exact SRV/UAV uses and a typed clear predecessor, so it owns both the entry and
-    // successor state boundaries. The native recorder keeps only dispatch-internal UAV fences.
+    // The graph callback has exact SRV/UAV uses and a typed clear predecessor, so it owns both the entry and successor state boundaries. The native recorder keeps only dispatch-internal UAV fences.
     return recordPreparedMeshSwBvhBuild(commandList, build, true, true, true);
 }
 
@@ -912,13 +893,10 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
     if(!m_preparedMeshSwBvhBuildsReady || m_preparedMeshSwBvhBuilds.empty())
         return false;
 
-    // Preserve the aggregate recorder's all-plan validation before it emits any direct commands. The graph-split
-    // pure-software route instead rejects its one shared packet if a later individual snapshot no longer matches.
+    // Preserve the aggregate recorder's all-plan validation before it emits any direct commands. The graph-split pure-software route instead rejects its one shared packet if a later individual snapshot no longer matches.
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
         if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'")
-                , StringConvert(build.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.c_str()));
             return false;
         }
     }
@@ -1038,8 +1016,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
-    // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this
-    // parallel handle stream until the accepting Shadow Preparation packet has submitted.
+    // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this parallel handle stream until the accepting Shadow Preparation packet has submitted.
     Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena> instanceBlases{ scratchArena };
     // Kept parallel to instances for hardware InstanceID lookup.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -1181,9 +1158,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             if(materialInfo->transparent)
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
-            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless
-            // slots. Retain the exact resolved handles during preflight; recording must never discover a texture
-            // after the shared graph fixed its immutable resource set.
+            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight; recording must never discover a texture after the shared graph fixed its immutable resource set.
             if(
                 !commandList
                 && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
@@ -1205,8 +1180,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         }
         if(!materialInfo || materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max)
             contentComplete = false;
-        // An opaque surface hook can be unavailable without hiding an optical boundary. Unknown classification
-        // or an unevaluable transparent surface cannot support the outside-volume shortcut.
+        // An opaque surface hook can be unavailable without hiding an optical boundary. Unknown classification or an unevaluable transparent surface cannot support the outside-volume shortcut.
         if(!materialInfo || (materialInfo->transparent && materialInfo->shadowTransmittanceModelId == Limit<u32>::s_Max))
             opticalScene.markIncomplete();
         instanceMaterial.indexSlot = m_rayTracingState.m_shadowMeshIndexHandles[meshSlot].slot();
@@ -1302,9 +1276,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         auto& device = m_graphics.getDevice();
         Core::RayTracingAccelStructHandle tlas = device.createAccelStruct(accelStructDesc);
         if(!tlas){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})")
-                , static_cast<u64>(capacity)
-            );
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene TLAS (capacity {})"), static_cast<u64>(capacity));
             return false;
         }
         // Retire the old heap block before replacing the TLAS generation.
@@ -1316,14 +1288,11 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasBackingFresh = true;
         m_rayTracingState.m_tlasBackingStateHandoffPending = false;
         m_rayTracingState.m_tlasMaxInstances = capacity;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)")
-            , static_cast<u64>(capacity)
-        );
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created scene TLAS (capacity {} instances)"), static_cast<u64>(capacity));
     }
 
     if(!canReuseTlas && commandList){
-        // The backend records the acceleration-structure build directly. Keep the task graph's declared
-        // AccelStructRead boundary truthful by explicitly publishing the native build write and its final read.
+        // The backend records the acceleration-structure build directly. Keep the task graph's declared AccelStructRead boundary truthful by explicitly publishing the native build write and its final read.
         commandList->setAccelStructState(m_rayTracingState.m_tlas.get(), Core::ResourceStates::AccelStructWrite);
         commandList->commitBarriers();
         commandList->buildTopLevelAccelStruct(
@@ -1362,10 +1331,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasHeapHandle = tlasHeapHandle;
     }
 
-    // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material
-    // context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained
-    // software traversal table confirms the frozen graph context. Do not overwrite or validate it as a HW-only
-    // snapshot here. If that optional tail misses, its declared callback restores the immutable HW fallback triple.
+    // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained software traversal table confirms the frozen graph context.
+    // Do not overwrite or validate it as a HW-only snapshot here. If that optional tail misses, its declared callback restores the immutable HW fallback triple.
     const bool hybridSoftwareMaterialContextGraphOwned =
         commandList
         && shadowMaterialContextBatchGraphOwned
@@ -1471,9 +1438,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         }
     }
 
-    // Freeze the selected hardware instance stream for opaque and hybrid frames. Hybrid recording keeps a direct
-    // retry boundary: if the frozen plan loses its generation or BLAS identity, it rebuilds the current TLAS and
-    // retains the valid opaque result before the optional software tail decides whether transparent tracing runs.
+    // Freeze the selected hardware instance stream for opaque and hybrid frames. Hybrid recording keeps a direct retry boundary: if the frozen plan loses its generation or BLAS identity, it rebuilds the current TLAS and retains the valid opaque result before the optional software tail decides whether transparent tracing runs.
     if(!commandList && !canReuseTlas){
         if(!capturePreparedSceneTlasBuild(
             staticScene,
@@ -1485,8 +1450,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
                 return false;
             }
-            // A hybrid capture miss remains a direct compatibility fallback. The software material/scene snapshots
-            // may still be graph-owned independently, so do not discard the whole preflight transaction here.
+            // A hybrid capture miss remains a direct compatibility fallback. The software material/scene snapshots may still be graph-owned independently, so do not discard the whole preflight transaction here.
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid scene TLAS build; retaining direct retry fallback"));
         }
     }
@@ -1495,8 +1459,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasStaticSceneHash = tlasStaticSceneHash;
         m_rayTracingState.m_tlasStaticSceneHashValid = true;
     }
-    // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or
-    // an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
+    // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
     if(!commandList){
         if(!m_hardwareOpticalScene.prepare(opticalScene))
             return false;
@@ -1584,9 +1547,7 @@ bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallba
         return false;
     }
 
-    // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained
-    // preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task
-    // did not declare.
+    // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task did not declare.
     if(
         NWB_MEMCMP(
             m_preparedHybridHardwareFallbackBytes.data(),
@@ -1724,14 +1685,11 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         if(meshResolution == RenderableMeshResolution::Absent)
             continue;
         const bool meshReady = meshResolution == RenderableMeshResolution::Ready;
-        // Preflight allocates storage before the first GPU topology build.  It may therefore gather a pending mesh
-        // using the selected storage, while the recording path still requires the topology to have completed.
+        // Preflight allocates storage before the first GPU topology build.  It may therefore gather a pending mesh using the selected storage, while the recording path still requires the topology to have completed.
         const bool topologyReady = meshReady && (
             mesh.swBvhTopologyBuilt
             || (!commandList && (mesh.runtimeMesh || mesh.swBvhBuildPending))
-            // A frozen software-only plan records before this scene gather but commits MeshResources only after the
-            // packet accepts. Its exact full-build operation therefore authoritatively supplies topology for this
-            // one recording pass without an optimistic CPU-side state mutation.
+            // A frozen software-only plan records before this scene gather but commits MeshResources only after the packet accepts. Its exact full-build operation therefore authoritatively supplies topology for this one recording pass without an optimistic CPU-side state mutation.
             || (commandList && meshSwBvhBuildsGraphOwned && preparedMeshSwBvhBuildProducesTopology(mesh))
         );
         if(
@@ -1851,8 +1809,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
         if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
-            // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the
-            // hardware path. Freeze its sampled textures alongside the scene-BVH material context.
+            // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(
                 !commandList
                 && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
@@ -2114,9 +2071,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 )
             )
                 return false;
-            // This replaces the hardware snapshot gathered before the hybrid software path. Retain that exact
-            // immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering
-            // renderer/material data while Shadow Preparation is recording.
+            // This replaces the hardware snapshot gathered before the hybrid software path. Retain that exact immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering renderer/material data while Shadow Preparation is recording.
             if(
                 hybridSoftwareMaterialContextCaptureRequired
                 && (
@@ -2251,9 +2206,7 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(
     accelStructDesc.setDebugName(DeriveName(meshResources.meshName, AStringView(":blas")));
     Core::RayTracingAccelStructHandle blas = m_graphics.getDevice().createAccelStruct(accelStructDesc);
     if(!blas){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'")
-            , StringConvert(meshResources.meshName.c_str())
-        );
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BLAS for mesh '{}'"), StringConvert(meshResources.meshName.c_str()));
         return false;
     }
     meshResources.blas = Move(blas);
@@ -2471,8 +2424,7 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     Core::Buffer* keysBuffer = m_rayTracingState.m_bvhSortKeysBuffer.get();
     Core::Buffer* payloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer.get();
 
-    // Sort scratch is allocated for the maximum mesh size. Fence only this dispatch's padded lanes, including
-    // sentinel entries that participate in the sorting network.
+    // Sort scratch is allocated for the maximum mesh size. Fence only this dispatch's padded lanes, including sentinel entries that participate in the sorting network.
     const Core::BufferRange sortRange(0u, static_cast<u64>(paddedCount) * sizeof(u32));
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);
@@ -2844,8 +2796,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     StoreFloat(VectorSetW(aabbMin, 0.0f), pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), pushConstants.aabbMax);
 
-    // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct
-    // and hybrid compatibility routes preserve their established native sentinel setup here.
+    // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct and hybrid compatibility routes preserve their established native sentinel setup here.
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::CopyDest);
         commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
@@ -2881,8 +2832,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.dispatch(groupCount, 1u, 1u);
     };
 
-    // The pure-software graph callback declares every input/output state. It owns the first boundary after its
-    // typed clears; direct and hybrid callers retain the standalone native transition/UAV fence.
+    // The pure-software graph callback declares every input/output state. It owns the first boundary after its typed clears; direct and hybrid callers retain the standalone native transition/UAV fence.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
 
@@ -2903,8 +2853,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     }
 
     dispatchBuildKernel(m_rayTracingState.m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
-    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV
-    // handoffs for graph callers. Keep the direct/hybrid close fence for compatibility recorders.
+    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV handoffs for graph callers. Keep the direct/hybrid close fence for compatibility recorders.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
     return true;
@@ -2948,8 +2897,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
-    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear
-    // immediately before the callback; hybrid and direct routes retain the native compatibility primitive.
+    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback; hybrid and direct routes retain the native compatibility primitive.
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
@@ -2961,8 +2909,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Fit declares all scratch views, so direct/hybrid callers retain its native entry UAV fence. The graph-split
-    // pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
+    // Fit declares all scratch views, so direct/hybrid callers retain its native entry UAV fence. The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
     if(!graphBoundaryStatesOwned){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);

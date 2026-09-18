@@ -27,9 +27,7 @@ namespace MaterialBinaryPayload{
 
 inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9 (added static material resource fixture references)
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
-// Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the
-// caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported
-// bits; loadBinary rejects anything outside it.
+// Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported bits; loadBinary rejects anything outside it.
 namespace MaterialFlag{
     enum Mask : u32{
         None = 0u,
@@ -81,8 +79,7 @@ static_assert(
     "MaterialTypedLayoutFieldBinary must stay binary-serializable"
 );
 
-// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization initializes the typed
-// asset reference, and the renderer writes the resolved heap slot into constantByteOffset.
+// Per-material resource identity. resourceNameHash is MTL8 transport only: deserialization initializes the typed asset reference, and the renderer writes the resolved heap slot into constantByteOffset.
 struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};
@@ -141,8 +138,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
             if(!IsMaterialLayoutResourceFieldType(field.fieldType))
                 continue;
 
-            // Opaque handles are intentionally static constants. A resource in mutable storage would make the
-            // cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
+            // Opaque handles are intentionally static constants. A resource in mutable storage would make the cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
             if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
             if(field.offset > Limit<u32>::s_Max - constantByteBegin)
@@ -163,8 +159,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                 )
                     return false;
 
-                // The static first slice resolves its fixture at runtime and carries no per-material asset
-                // path; asset-sourced fields carry a typed asset reference instead.
+                // The static first slice resolves its fixture at runtime and carries no per-material asset path; asset-sourced fields carry a typed asset reference instead.
                 if(resourceReference.fixtureName){
                     if(
                         resourceReference.resourceSource != MaterialResourceSource::Asset
@@ -204,8 +199,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
         }
     }
 
-    // Every cooked record must correspond to exactly one resource field. Since duplicate matching records above
-    // are rejected, this also excludes stray references to numeric or mutable fields.
+    // Every cooked record must correspond to exactly one resource field. Since duplicate matching records above are rejected, this also excludes stray references to numeric or mutable fields.
     return resourceFieldCount == resourceReferences.size();
 }
 

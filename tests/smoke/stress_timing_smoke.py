@@ -83,12 +83,33 @@ def parse_runtime_log(text, exit_code, application_args=()):
         raise SmokeFailure("interval counts do not match completion")
     if not math.isclose(sum(row["seconds"] for row in intervals), total["seconds"], rel_tol=1e-9, abs_tol=1e-9):
         raise SmokeFailure("interval wall times do not match completion")
+    pacing = [line for line in lines if line.startswith("StressTestSmokeProject: presentation pacing ")]
+    pacing_summary = None
+    if len(pacing) == 1:
+        pace = re.fullmatch(re.escape("StressTestSmokeProject: presentation pacing ") + r"samples=(\d+) p50ms=(\S+) p95ms=(\S+) maxms=(\S+) stalls50ms=(\d+)", pacing[0])
+        if not pace:
+            raise SmokeFailure("malformed presentation pacing summary")
+        try:
+            samples, p50, p95, maxms, stalls = (int(pace[1]), float(pace[2]), float(pace[3]), float(pace[4]), int(pace[5]))
+        except ValueError as error:
+            raise SmokeFailure("invalid presentation pacing number") from error
+        if samples < 0 or not all(math.isfinite(v) for v in (p50, p95, maxms)) or stalls < 0 or p50 < 0 or p95 < 0 or maxms < 0:
+            raise SmokeFailure("presentation pacing values must be finite and nonnegative")
+        if not p50 <= p95 <= maxms:
+            raise SmokeFailure("presentation pacing percentiles must be ordered p50 <= p95 <= max")
+        pacing_summary = {"samples": samples, "p50ms": p50, "p95ms": p95, "maxms": maxms, "stalls50ms": stalls}
+    elif len(pacing) > 1:
+        raise SmokeFailure("exactly one presentation pacing summary is allowed")
+    capability = [line for line in lines if line.startswith("StressTestSmokeProject: device capability ")]
+    if len(capability) > 1:
+        raise SmokeFailure("exactly one device capability report is allowed")
     extents = re.findall(r"deferred rendering targets ready \((\d+)x(\d+),", text)
     if not extents or any(pair != ("1280", "900") for pair in extents):
         raise SmokeFailure("actual stress extent must be 1280x900")
     return {"measurement": total | {"frame_ms": 1000.0 * total["seconds"] / total["presentations"]},
         "intervals": intervals, "width": 1280, "height": 900, "warmup_seconds": 5,
-        "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present"}
+        "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present",
+        "pacing": pacing_summary}
 
 
 def parse_measurement(log_text):

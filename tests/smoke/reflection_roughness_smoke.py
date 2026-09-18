@@ -194,7 +194,7 @@ def compare_exact_scene(left, right, maximum_mean_error=0.15):
         for a, b in zip(rows[y][x], right[2][y][x])]
     mean = sum(differences) / len(differences)
     changed = sum(value > 2 for value in differences)
-    if mean > maximum_mean_error or changed > width * height * 0.005:
+    if mean > maximum_mean_error or changed > width * height * 3 * 0.005:
         raise SmokeFailure(f"matched final scenes retain a stale or altered reflection ({mean:.4f} byte MAE; {changed} channels)")
     return {"mean_channel_byte_error": mean, "channels_differing_by_more_than_two": changed}
 

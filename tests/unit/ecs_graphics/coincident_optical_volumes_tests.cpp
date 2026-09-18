@@ -3,6 +3,8 @@
 
 
 #include <impl/ecs_render/optics/coincident_volumes.h>
+#include <impl/ecs_render/optics/performance_profile.h>
+#include <impl/ecs_render/optics/secondary_geometry_contract.h>
 
 #include <core/alloc/general.h>
 #include <core/alloc/scratch.h>
@@ -40,6 +42,23 @@ struct SelectionContext{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// P9 decision gate: no proxy or light-space representation ships unqualified. Both descriptors fail closed until measured evidence plus visual approval qualify them.
+TEST(CoincidentOpticalVolumes, SecondaryRepresentationsFailClosedUntilQualified){
+    Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    EXPECT_FALSE(proxy.usable());
+    proxy.qualified = true;
+    EXPECT_FALSE(proxy.usable());
+    Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_FALSE(field.usable());
+    field.qualified = true;
+    EXPECT_FALSE(field.usable());
+    field.sliceCount = 16u;
+    field.nearDepth = 1.0f;
+    field.farDepth = 100.0f;
+    EXPECT_TRUE(field.usable());
+}
 
 
 TEST(CoincidentOpticalVolumes, AutomaticSelectionComparesBytesFromSeparateAllocations){
@@ -377,6 +396,107 @@ TEST(CoincidentOpticalVolumes, EmptyAndSingleCandidateFastPathsDoNotAllocate){
     EXPECT_EQ(ownerAfter.reallocationCount, ownerBefore.reallocationCount);
     EXPECT_EQ(scratchAfter.allocationCount, scratchBefore.allocationCount);
     EXPECT_EQ(scratchAfter.reallocationCount, scratchBefore.reallocationCount);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// P10 reference gate: agreed scene, resolution, geometry, ray budgets, and optical model stay at full extent, and no approximation ships without measured qualification. Any workload reduction is a new definition, not a faster profile of the same workload.
+TEST(CoincidentOpticalVolumes, ReferencePerformanceProfileKeepsFullExtentWithoutWorkloadChange){
+    const Impl::PerformanceProfile reference = Impl::ReferencePerformanceProfile();
+    EXPECT_TRUE(reference.isReference);
+    EXPECT_TRUE(reference.retainsMeshCount);
+    EXPECT_TRUE(reference.retainsTransparentObjects);
+    EXPECT_TRUE(reference.retainsReflection);
+    EXPECT_TRUE(reference.retainsRefraction);
+    EXPECT_TRUE(reference.retainsCaustics);
+    EXPECT_TRUE(reference.retainsSurfelGi);
+    EXPECT_FALSE(reference.secondaryRayProxyEnabled);
+    EXPECT_FALSE(reference.lightSpaceTransmissionEnabled);
+    EXPECT_FALSE(reference.dynamicControlEnabled);
+    EXPECT_EQ(Impl::ChangedPerformanceDimensionCount(reference), 0u);
+    EXPECT_FALSE(Impl::RequiresNewWorkloadDefinition(reference));
+    const Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    const Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_TRUE(Impl::ValidatePerformanceProfile(reference, proxy, field));
+    EXPECT_FALSE(Impl::IsSingleDimensionCandidate(reference, proxy, field));
+}
+
+
+// One approved dimension at a time (15.2): 1.0x, 0.75x, or 0.5x only; a half-linear extent without reconstruction loses contacts and leaks light, so it fails closed.
+TEST(CoincidentOpticalVolumes, ReducedShadowExtentRequiresReconstructionAndApprovedStep){
+    Impl::PerformanceProfile candidate;
+    candidate.transparentShadowExtent = 0.5f;
+    const Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    const Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(candidate, proxy, field));
+    candidate.extentReconstruction = true;
+    EXPECT_TRUE(Impl::ValidatePerformanceProfile(candidate, proxy, field));
+    EXPECT_TRUE(Impl::IsSingleDimensionCandidate(candidate, proxy, field));
+    candidate.transparentShadowExtent = 0.6f;
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(candidate, proxy, field));
+}
+
+
+// Two changed dimensions stop being a one-dimension experiment, even when each step is approved.
+TEST(CoincidentOpticalVolumes, TwoChangedDimensionsAreNotASingleDimensionCandidate){
+    Impl::PerformanceProfile candidate;
+    candidate.transparentShadowExtent = 0.75f;
+    candidate.causticBudget = 0.5f;
+    candidate.extentReconstruction = true;
+    const Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    const Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_TRUE(Impl::ValidatePerformanceProfile(candidate, proxy, field));
+    EXPECT_EQ(Impl::ChangedPerformanceDimensionCount(candidate), 2u);
+    EXPECT_FALSE(Impl::IsSingleDimensionCandidate(candidate, proxy, field));
+}
+
+
+// Surfel reduction without a maximum-age guarantee starves the field; unqualified P9 prototypes stay off until measured evidence plus visual approval qualify them (P9 decision gate).
+TEST(CoincidentOpticalVolumes, SurfelBudgetAndProxyGatesEnforceAgeAndQualification){
+    const Impl::SecondaryEffectGeometryProxyDescriptor unqualifiedProxy{};
+    const Impl::LightSpaceTransmissionDescriptor unqualifiedField{};
+    Impl::PerformanceProfile aged{};
+    aged.surfelUpdateBudget = 0.5f;
+    aged.surfelMaxAgeFrames = 0u;
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(aged, unqualifiedProxy, unqualifiedField));
+    Impl::PerformanceProfile proxied;
+    proxied.secondaryRayProxyEnabled = true;
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(proxied, unqualifiedProxy, unqualifiedField));
+    Impl::PerformanceProfile lightSpace;
+    lightSpace.lightSpaceTransmissionEnabled = true;
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(lightSpace, unqualifiedProxy, unqualifiedField));
+    EXPECT_FALSE(Impl::RequiresNewWorkloadDefinition(proxied));
+}
+
+
+// Removing meshes, transparent objects, or any retained effect changes the target workload definition (15.2); such a candidate must not report reference-workload results.
+TEST(CoincidentOpticalVolumes, DroppedFeaturesRequireANewWorkloadDefinition){
+    Impl::PerformanceProfile thinned;
+    thinned.retainsMeshCount = false;
+    const Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    const Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_TRUE(Impl::RequiresNewWorkloadDefinition(thinned));
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(thinned, proxy, field));
+    EXPECT_FALSE(Impl::IsSingleDimensionCandidate(thinned, proxy, field));
+    Impl::PerformanceProfile noGi;
+    noGi.retainsSurfelGi = false;
+    EXPECT_TRUE(Impl::RequiresNewWorkloadDefinition(noGi));
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(noGi, proxy, field));
+}
+
+
+// Dynamic per-frame resizing and backend flips stay off: oscillation, latency, memory pressure, and load-spike recovery are a later step with hysteresis and logged transitions (15.4).
+TEST(CoincidentOpticalVolumes, DynamicControlIsRejectedUntilQualified){
+    Impl::PerformanceProfile candidate;
+    candidate.transparentShadowExtent = 0.75f;
+    candidate.extentReconstruction = true;
+    candidate.dynamicControlEnabled = true;
+    const Impl::SecondaryEffectGeometryProxyDescriptor proxy{};
+    const Impl::LightSpaceTransmissionDescriptor field{};
+    EXPECT_FALSE(Impl::ValidatePerformanceProfile(candidate, proxy, field));
+    candidate.dynamicControlEnabled = false;
+    EXPECT_TRUE(Impl::IsSingleDimensionCandidate(candidate, proxy, field));
 }
 
 

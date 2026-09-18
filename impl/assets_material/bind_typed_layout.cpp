@@ -450,8 +450,7 @@ static bool BuildMaterialTypedLayoutDefaultValue(
     outDefaultValue = {};
 
     // Resource slots start zero; asset paths patch in once the heap is live.
-    // Resource fields store an initially-zero global-heap slot word.  Their static fixture identity is carried by
-    // MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
+    // Resource fields store an initially-zero global-heap slot word.  Their static fixture identity is carried by MaterialResourceReference and patched only after the renderer owns a live descriptor heap.
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return true;
 
@@ -774,9 +773,7 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
-            // Fixture-backed resource slots are fixed by the cooked fixture reference and are never material
-            // .nwb parameters. Bare resource fields still accept per-material asset paths, so only the
-            // fixture-backed ones are excluded from the parameter lookup.
+            // Fixture-backed resource slots are fixed by the cooked fixture reference and are never material .nwb parameters. Bare resource fields still accept per-material asset paths, so only the fixture-backed ones are excluded from the parameter lookup.
             if(IsMaterialLayoutResourceFieldType(field.fieldType) && !bindField.fixtureArgument().empty())
                 continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){

@@ -126,10 +126,10 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             radiance += hit.albedo * bounce;
         }
 
-        const float4 basis = nwbSurfelShBasis(rayDir);
-        s_surfelShR[rayIndex] = float(radiance.r) * basis;
-        s_surfelShG[rayIndex] = float(radiance.g) * basis;
-        s_surfelShB[rayIndex] = float(radiance.b) * basis;
+        const half4 basis = nwbSurfelShBasis(rayDir);
+        s_surfelShR[rayIndex] = float4(half4(radiance.r) * basis);
+        s_surfelShG[rayIndex] = float4(half4(radiance.g) * basis);
+        s_surfelShB[rayIndex] = float4(half4(radiance.b) * basis);
     }
 
 #if NWB_SURFEL_USE_WAVE_REDUCE
@@ -162,10 +162,10 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 #endif
 
     if(rayIndex == 0u){
-        const float projectionScale = nwbSurfelShProjectionScale(rayCount);
-        const float4 frameShR = sumR * projectionScale;
-        const float4 frameShG = sumG * projectionScale;
-        const float4 frameShB = sumB * projectionScale;
+        const half projectionScale = half(nwbSurfelShProjectionScale(rayCount));
+        const float4 frameShR = sumR * float(projectionScale);
+        const float4 frameShG = sumG * float(projectionScale);
+        const float4 frameShB = sumB * float(projectionScale);
 
         const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
         const uint n = min(surfel.sampleCount, accumCap);

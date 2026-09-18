@@ -17,8 +17,8 @@
 
 // The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor
 // environment assets, reflection outputs, screen-space caches, or feature statistics buffers.
-float3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
-float3 nwbOpticalEnvironmentRadiance(const float3 direction);
+half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
+half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
 // Resolve numerical ties around the true nearest transparent boundary before changing membership. A second
 // bounded candidate query is necessary because a committed nearest hit alone cannot reveal coincident independent
@@ -123,7 +123,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
                 result.termination = NWB_OPTICAL_TERMINATION_RANGE;
                 return result;
             }
-            result.radiance += float3(throughput * half3(nwbOpticalEnvironmentRadiance(direction)));
+            result.radiance += throughput * nwbOpticalEnvironmentRadiance(direction);
             result.termination = NWB_OPTICAL_TERMINATION_MISS_OUTSIDE;
             return result;
         }
@@ -143,7 +143,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
         if(!nwbOpticalReadInstance(config, hit.instance, optical, result))
             return result;
         if((optical.flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) == 0u){
-            result.radiance += float3(throughput * half3(nwbOpticalSurfaceRadiance(hit, -direction)));
+            result.radiance += throughput * nwbOpticalSurfaceRadiance(hit, -direction);
             result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;
             return result;
         }
@@ -171,7 +171,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
             // The backdrop alpha is a (0, 1) bounded factor, so half arithmetic is sufficient here.
             const half alpha = half(saturate(coverage));
             if(alpha > half(0.0h))
-                result.radiance += float3(throughput * alpha * half3(nwbOpticalSurfaceRadiance(hit, -direction)));
+                result.radiance += throughput * alpha * nwbOpticalSurfaceRadiance(hit, -direction);
             throughput *= half(1.0h) - alpha;
             if(alpha == half(1.0h)){
                 result.termination = NWB_OPTICAL_TERMINATION_OPAQUE;

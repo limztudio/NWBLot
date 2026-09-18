@@ -72,10 +72,10 @@ struct NwbReflectionSurface{
     float bias;
 };
 
-float3 nwbReflectionEnvironment(const float3 direction){
+half3 nwbReflectionEnvironment(const float3 direction){
     const half3 top = half3(half(g_NwbReflectionParameters.environmentTopR), half(g_NwbReflectionParameters.environmentTopG), half(g_NwbReflectionParameters.environmentTopB));
     const half3 bottom = half3(half(g_NwbReflectionParameters.environmentBottomR), half(g_NwbReflectionParameters.environmentBottomG), half(g_NwbReflectionParameters.environmentBottomB));
-    return float3(lerp(bottom, top, half(saturate(direction.y * 0.5 + 0.5))));
+    return lerp(bottom, top, half(saturate(direction.y * 0.5 + 0.5)));
 }
 
 void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radiance, const float source){

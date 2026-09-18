@@ -126,7 +126,7 @@ bool nwbReflectionClassifySurface(
         result.a = 1.0;
         return false;
     }
-    const half3 environment = half3(nwbReflectionEnvironment(surface.direction));
+    const half3 environment = nwbReflectionEnvironment(surface.direction);
     result = float4(float3(surface.weight * environment), 1.0);
     const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN
         || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;

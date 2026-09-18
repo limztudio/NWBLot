@@ -27,7 +27,7 @@ struct NwbOpticalTraceConfig{
 };
 
 struct NwbOpticalTraceResult{
-    float3 radiance;
+    half3 radiance;
     float distance;
     uint queryCount;
     uint bootstrapEventCount;

@@ -36,9 +36,9 @@ bool nwbBxdfRequiresLinearOutput(){
 // observerDirection points from the hit back along the incident ray. Material BXDFs consume this explicit view
 // vector and return linear radiance. This bounded approximation uses the authored direct-light loop and hemispheric
 // indirect fallback; it does not trace secondary shadow, GI, or recursive specular rays.
-float3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection){
+half3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection){
     if(!hit.hit)
-        return float3(0.0);
+        return half3(0.0h);
 
     NwbBxdfSurface surface;
     surface.baseColor = hit.surface.baseColor;
@@ -52,7 +52,7 @@ float3 nwbRayTraceSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 
     surface.param1 = hit.surface.param1;
     surface.isBackground = false;
     surface.indirectIrradiance = nwbBxdfIndirectIrradiance(surface.worldPosition, surface.normal);
-    return max(float3(nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(-1, -1))), float3(0.0));
+    return max(nwbDeferredDispatchBxdf(surface.shadingModel, surface, int2(-1, -1)), half3(0.0h));
 }
 
 

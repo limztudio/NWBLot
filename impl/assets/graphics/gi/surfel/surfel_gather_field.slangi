@@ -71,7 +71,7 @@ bool nwbSurfelGatherField(
                 const half weight = normalWeight * distanceWeight * confidence;
                 // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
                 // gates leakage while the SH reconstruction retains the surfel's directional response.
-                irradianceSum += half3(nwbSurfelShReconstruct(surfel.shR, surfel.shG, surfel.shB, normal)) * weight;
+                irradianceSum += nwbSurfelShReconstruct(half4(surfel.shR), half4(surfel.shG), half4(surfel.shB), normal) * weight;
                 totalWeight += weight;
             }
             id = surfel.nextInCell;

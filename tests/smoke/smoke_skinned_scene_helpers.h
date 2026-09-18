@@ -58,18 +58,20 @@ inline void DestroySmokeSkinnedRenderWorld(
     if(!world.owner())
         return;
 
-    auto* meshSkinningSystem = world->getSystem<Impl::MeshSkinningSystem>();
-    NWB_ASSERT(meshSkinningSystem);
-    context.graphics.removeRenderPass(*meshSkinningSystem);
+    auto* meshSkinningSystemPtr = world->getSystem<Impl::MeshSkinningSystem>();
+    NWB_ASSERT(meshSkinningSystemPtr);
+    Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
+    context.graphics.removeRenderPass(meshSkinningSystem);
 
     RemoveSmokeRendererSystem(context, *world);
     FinishDestroyingSmokeWorld(context, world);
 }
 
 inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
-    auto* modelSystem = world.getSystem<Impl::ModelSystem>();
-    NWB_ASSERT(modelSystem);
-    modelSystem->syncModelRuntimes();
+    auto* modelSystemPtr = world.getSystem<Impl::ModelSystem>();
+    NWB_ASSERT(modelSystemPtr);
+    Impl::ModelSystem& modelSystem = *modelSystemPtr;
+    modelSystem.syncModelRuntimes();
 }
 
 [[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
@@ -81,10 +83,9 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
-    bool* const outTintApplied = nullptr
+    bool& outTintApplied
 ){
-    if(outTintApplied)
-        *outTintApplied = false;
+    outTintApplied = false;
 
     const SmokeTintedEntitySetup setup = CreateSmokeTintedEntity(
         world,
@@ -99,10 +100,33 @@ inline void SyncSmokeModelRuntimes(Core::ECS::World& world){
     modelComponent.model = model;
 
     const bool tintApplied = ApplySmokeMaterialTint(world, setup, colorTint);
-    if(outTintApplied)
-        *outTintApplied = tintApplied;
+    outTintApplied = tintApplied;
 
     return setup.entity;
+}
+
+[[nodiscard]] inline Core::ECS::EntityID CreateTintedModelEntity(
+    Core::ECS::World& world,
+    Core::Alloc::GlobalArena& arena,
+    const SmokeModelRef& model,
+    const SmokeMaterialRef& material,
+    const AStringView materialInterfacePath,
+    const Float4& colorTint,
+    const Float4& position,
+    const Float4& scale
+){
+    bool tintApplied = false;
+    return CreateTintedModelEntity(
+        world,
+        arena,
+        model,
+        material,
+        materialInterfacePath,
+        colorTint,
+        position,
+        scale,
+        tintApplied
+    );
 }
 
 [[nodiscard]] inline Core::ECS::EntityID FindSpawnedModelObject(

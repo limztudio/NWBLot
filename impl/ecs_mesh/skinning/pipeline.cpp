@@ -46,7 +46,7 @@ static bool LoadComputeShader(
         graphics,
         assetManager,
         shaderPathResolver,
-        NWB_TEXT("MeshSkinningSystem")
+        MakeNotNull(NWB_TEXT("MeshSkinningSystem"))
     );
 }
 

@@ -535,9 +535,9 @@ public:
             requestQuit();
             return true;
         }
-        auto* meshSystem = m_world->getSystem<NWB::Impl::MeshSystem>();
-        auto* meshSkinningSystem = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
-        if(!meshSystem || !meshSkinningSystem || !m_runtimeMeshProvider.install(*meshSystem, *meshSkinningSystem)){
+        auto* meshSystemPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
+        auto* meshSkinningSystemPtr = m_world->getSystem<NWB::Impl::MeshSkinningSystem>();
+        if(!meshSystemPtr || !meshSkinningSystemPtr || !m_runtimeMeshProvider.install(*meshSystemPtr, *meshSkinningSystemPtr)){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to install benchmark runtime mesh provider"));
             requestQuit();
             return true;

@@ -328,7 +328,12 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         return;
 
     auto rendererView = m_world.view<RendererComponent>();
-    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!ecsMeshSystemPtr){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; material pass cannot resolve meshes"));
+        return;
+    }
+    NWB::Impl::MeshSystem& ecsMeshSystem = *ecsMeshSystemPtr;
     const usize rendererCapacity = rendererView.candidateCount();
     drawItems.reserve(rendererCapacity);
     instanceData.reserve(rendererCapacity);
@@ -670,13 +675,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        if(!ecsMeshSystem){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: MeshSystem is not registered; renderers cannot resolve mesh"));
-            break;
-        }
-
         RenderableMeshDesc resolvedMesh;
-        if(!ecsMeshSystem->resolveRenderableMesh(entity, resolvedMesh))
+        if(!ecsMeshSystem.resolveRenderableMesh(entity, resolvedMesh))
             continue;
 
         MeshResources* mesh = nullptr;

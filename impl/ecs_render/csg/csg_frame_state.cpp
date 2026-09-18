@@ -134,11 +134,12 @@ CsgFrameState RendererCsgSystem::buildFrameState(
     if(receiverLookup.empty())
         return finishFrameState(state);
 
-    auto* ecsMeshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!ecsMeshSystem){
+    auto* ecsMeshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!ecsMeshSystemPtr){
         frameStateCacheable = false;
         return finishFrameState(state);
     }
+    NWB::Impl::MeshSystem& ecsMeshSystem = *ecsMeshSystemPtr;
 
     auto rendererView = m_world.view<RendererComponent>();
     for(auto&& [entity, renderer] : rendererView){
@@ -151,7 +152,7 @@ CsgFrameState RendererCsgSystem::buildFrameState(
             continue;
 
         RenderableMeshDesc resolvedMesh;
-        if(!ecsMeshSystem->resolveRenderableMesh(entity, resolvedMesh)){
+        if(!ecsMeshSystem.resolveRenderableMesh(entity, resolvedMesh)){
             frameStateCacheable = false;
             continue;
         }

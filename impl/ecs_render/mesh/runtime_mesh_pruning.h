@@ -31,6 +31,46 @@ namespace ECSRenderDetail{
 template<typename ReleaseMesh>
 void PruneRuntimeMeshResources(
     HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>& meshes,
+    const MeshSystem& meshSystem,
+    ReleaseMesh&& releaseMesh,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    usize runtimeMeshCount = 0u;
+    for(const auto& entry : meshes){
+        if(entry.second.runtimeMesh)
+            ++runtimeMeshCount;
+    }
+    if(runtimeMeshCount == 0u)
+        return;
+    Optional<RuntimeMeshRequestSet> requests;
+    requests.emplace(scratchArena, runtimeMeshCount);
+    for(const auto& entry : meshes){
+        const MeshResources& mesh = entry.second;
+        if(mesh.runtimeMesh)
+            requests->add(mesh.meshName, mesh.runtimeMeshVersion);
+    }
+    meshSystem.markLiveRuntimeMeshes(*requests);
+    for(auto it = meshes.begin(); it != meshes.end();){
+        const MeshResources& mesh = it.value();
+        if(!mesh.runtimeMesh){
+            ++it;
+            continue;
+        }
+
+        if(requests && requests->containsLive(mesh.meshName, mesh.runtimeMeshVersion)){
+            ++it;
+            continue;
+        }
+
+        releaseMesh(it.value());
+        it = meshes.erase(it);
+    }
+}
+
+// Optional-system overload: prunes every runtime mesh when no MeshSystem is available.
+template<typename ReleaseMesh>
+void PruneRuntimeMeshResources(
+    HashMap<Name, MeshResources, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena>& meshes,
     const MeshSystem* meshSystem,
     ReleaseMesh&& releaseMesh,
     Core::Alloc::ScratchArena& scratchArena

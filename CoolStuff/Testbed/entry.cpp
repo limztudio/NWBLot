@@ -103,19 +103,22 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
 void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
     NWB_ASSERT(world);
 
-    auto* meshSkinningSystem = world->getSystem<NWB::Impl::MeshSkinningSystem>();
-    NWB_ASSERT(meshSkinningSystem);
+    auto* meshSkinningSystemPtr = world->getSystem<NWB::Impl::MeshSkinningSystem>();
+    NWB_ASSERT(meshSkinningSystemPtr);
+    NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
 
-    auto* rendererSystem = world->getSystem<NWB::Impl::RendererSystem>();
-    NWB_ASSERT(rendererSystem);
+    auto* rendererSystemPtr = world->getSystem<NWB::Impl::RendererSystem>();
+    NWB_ASSERT(rendererSystemPtr);
+    NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
 
-    auto* uiSystem = world->getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystem);
+    auto* uiSystemPtr = world->getSystem<NWB::Impl::UiSystem>();
+    NWB_ASSERT(uiSystemPtr);
+    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
 
-    context.frameGraphRegistry.unregisterContributor(*rendererSystem);
-    context.graphics.removeRenderPass(*meshSkinningSystem);
-    context.graphics.removeRenderPass(*rendererSystem);
-    context.graphics.removeRenderPass(*uiSystem);
+    context.frameGraphRegistry.unregisterContributor(rendererSystem);
+    context.graphics.removeRenderPass(meshSkinningSystem);
+    context.graphics.removeRenderPass(rendererSystem);
+    context.graphics.removeRenderPass(uiSystem);
 
     context.graphics.waitTasks();
     const bool deviceIdle = context.graphics.waitForIdle();

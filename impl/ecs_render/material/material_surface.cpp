@@ -104,7 +104,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                NWB_TEXT("RendererSystem")
+                MakeNotNull(NWB_TEXT("RendererSystem"))
             ))
                 return false;
             if(outResource.sampledImageHeapHandle.descriptorClass() != Core::GpuDescriptorClass::SampledImage){
@@ -152,7 +152,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
                 assetPath,
                 graphics,
                 assetManager,
-                NWB_TEXT("RendererSystem")
+                MakeNotNull(NWB_TEXT("RendererSystem"))
             );
         },
         [&](SamplerGpuResource& liveResource){ SamplerAssetLoader::Release(liveResource, graphics); }
@@ -509,8 +509,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         materialPath,
         loadedAsset,
         MakeNotNull(NWB_TEXT("RendererMaterialSystem::createMaterialSurfaceInfo")),
-        NWB_TEXT("RendererSystem"),
-        "material"
+        MakeNotNull(NWB_TEXT("RendererSystem")),
+        MakeNotNull("material")
     );
     if(!loadedMaterial)
         return false;

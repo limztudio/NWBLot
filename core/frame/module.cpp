@@ -221,19 +221,19 @@ bool Frame::render(){
 }
 
 NotNull<const tchar*> Frame::windowTitleOrDefault()const{
-    const tchar* title = m_graphics.getWindowTitle();
-    return MakeNotNull(title && title[0] != 0 ? title : NWB_TEXT("NWB"));
+    const NotNull<const tchar*> title = m_graphics.getWindowTitle();
+    return MakeNotNull(title.get()[0] != 0 ? title.get() : NWB_TEXT("NWB"));
 }
 
 const tchar* Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
         NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
 
-    const tchar* title = m_graphics.getWindowTitle();
-    if(!title || m_appliedWindowTitle == title)
+    const NotNull<const tchar*> title = m_graphics.getWindowTitle();
+    if(m_appliedWindowTitle == title.get())
         return nullptr;
 
-    m_appliedWindowTitle = title;
+    m_appliedWindowTitle = title.get();
     return m_appliedWindowTitle.c_str();
 }
 

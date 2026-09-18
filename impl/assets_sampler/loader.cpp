@@ -22,9 +22,9 @@ bool SamplerAssetLoader::Create(
     const Sampler& samplerAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const tchar* const ownerName
+    const NotNull<const tchar*> ownerName
 ){
-    const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
+    const NotNull<const tchar*> owner = ownerName;
     const Name samplerName = debugName ? debugName : samplerAsset.virtualPath();
     NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
@@ -74,10 +74,10 @@ bool SamplerAssetLoader::Load(
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const tchar* const ownerName
+    const NotNull<const tchar*> ownerName
 ){
-    const tchar* const owner = ownerName ? ownerName : NWB_TEXT("SamplerAssetLoader");
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, "sampler"))
+    const NotNull<const tchar*> owner = ownerName;
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, MakeNotNull("sampler")))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
@@ -88,7 +88,7 @@ bool SamplerAssetLoader::Load(
         loadedAsset,
         MakeNotNull(NWB_TEXT("SamplerAssetLoader::Load")),
         owner,
-        "sampler"
+        MakeNotNull("sampler")
     );
     if(!loadedSampler)
         return false;

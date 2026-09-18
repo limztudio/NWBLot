@@ -267,7 +267,7 @@ public:
 
     void getWindowDimensions(i32& width, i32& height)const;
     void getDPIScaleInfo(f32& x, f32& y)const;
-    [[nodiscard]] const tchar* getWindowTitle()const{ return m_windowTitle.c_str(); }
+    [[nodiscard]] NotNull<const tchar*> getWindowTitle()const{ return MakeNotNull(m_windowTitle.c_str()); }
     void setWindowTitle(NotNull<const tchar*> title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 

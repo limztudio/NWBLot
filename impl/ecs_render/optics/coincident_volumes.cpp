@@ -107,8 +107,8 @@ void RendererOpticalVolumeSelection::prepare(
     RendererMaterialSystem& materials,
     Core::Alloc::ScratchArena& scratchArena){
     auto rendererView = world.view<RendererComponent>();
-    const MeshSystem* meshSystem = world.getSystem<MeshSystem>();
-    if(!meshSystem || rendererView.candidateCount() < 2u){
+    const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
+    if(!meshSystemPtr || rendererView.candidateCount() < 2u){
         reset();
         return;
     }
@@ -141,7 +141,7 @@ void RendererOpticalVolumeSelection::prepare(
             continue;
 
         RenderableMeshDesc mesh;
-        if(!meshSystem->resolveRenderableMesh(entity, mesh) || mesh.runtime || !mesh.mesh.valid())
+        if(!meshSystemPtr->resolveRenderableMesh(entity, mesh) || mesh.runtime || !mesh.mesh.valid())
             continue;
         // Runtime providers and CSG can change boundaries; skip them here.
         if(
@@ -167,10 +167,10 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.mediumPriority = renderer.opticalMediumPriority;
         candidate.mutableTypedBytes = mutableBytes->data();
         candidate.mutableTypedByteCount = mutableBytes->size();
-        if(const auto* transform = world.tryGetComponent<Scene::TransformComponent>(entity)){
-            candidate.position = Float3U(transform->position.x, transform->position.y, transform->position.z);
-            candidate.rotation = Float4U(transform->rotation.x, transform->rotation.y, transform->rotation.z, transform->rotation.w);
-            candidate.scale = Float3U(transform->scale.x, transform->scale.y, transform->scale.z);
+        if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
+            candidate.position = Float3U(transformPtr->position.x, transformPtr->position.y, transformPtr->position.z);
+            candidate.rotation = Float4U(transformPtr->rotation.x, transformPtr->rotation.y, transformPtr->rotation.z, transformPtr->rotation.w);
+            candidate.scale = Float3U(transformPtr->scale.x, transformPtr->scale.y, transformPtr->scale.z);
         }
         candidates.push_back(candidate);
     }

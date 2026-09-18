@@ -369,8 +369,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
         meshAsset.name(),
         loadedMeshAsset,
         MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
-        NWB_TEXT("MeshSkinningRuntimeCache"),
-        "mesh"
+        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
+        MakeNotNull("mesh")
     );
     if(!loadedMesh)
         return false;
@@ -380,8 +380,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
         skinAsset.name(),
         loadedSkinAsset,
         MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
-        NWB_TEXT("MeshSkinningRuntimeCache"),
-        "skin"
+        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
+        MakeNotNull("skin")
     );
     if(!preloadedSkin)
         return false;

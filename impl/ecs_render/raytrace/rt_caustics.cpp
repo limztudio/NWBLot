@@ -634,8 +634,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
 
-    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystem)
+    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystemPtr)
         return true;
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -654,7 +654,7 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
-            *meshSystem,
+            *meshSystemPtr,
             m_meshSystem,
             entity,
             resolvedMesh,
@@ -669,13 +669,13 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!materialInfo || !materialInfo->refractive)
             continue;
 
-        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = transform
+        const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const SIMDMatrix objectToWorld = transformPtr
             ? MatrixAffineTransformation(
-                LoadFloat(transform->scale),
+                LoadFloat(transformPtr->scale),
                 VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
+                LoadFloat(transformPtr->rotation),
+                LoadFloat(transformPtr->position)
             )
             : MatrixIdentity()
         ;

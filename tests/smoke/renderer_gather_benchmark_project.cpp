@@ -104,14 +104,13 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
             return false;
         }
-        Impl::RendererSystem* renderer;
-        if(m_runtime){
+        if(m_runtime)
             AddSmokeSkinnedRenderSystems(*m_world, m_context);
-            renderer = m_world->getSystem<Impl::RendererSystem>();
-            NWB_ASSERT(renderer);
-        }
         else
-            renderer = &AddSmokeRenderSystems(*m_world, m_context);
+            AddSmokeRenderSystems(*m_world, m_context);
+        auto* rendererPtr = m_world->getSystem<Impl::RendererSystem>();
+        NWB_ASSERT(rendererPtr);
+        Impl::RendererSystem& renderer = *rendererPtr;
         m_worldReady = true;
         Impl::ReflectionSettings settings;
         settings.traceMode = Impl::ReflectionTraceMode::Hardware;
@@ -122,10 +121,10 @@ public:
         settings.screenFeedbackEnabled = false;
         settings.diagnosticsEnabled = false;
         settings.samplingSeed = 0u;
-        if(!renderer->setReflectionSettings(settings))
+        if(!renderer.setReflectionSettings(settings))
             return false;
-        renderer->setRefractionEnabled(true);
-        renderer->setRefractionHardwareTracingEnabled(true);
+        renderer.setRefractionEnabled(true);
+        renderer.setRefractionHardwareTracingEnabled(true);
         const auto cameraEntity = CreateSmokeCamera(*m_world, 2.6f, 9.0f, 0.0f);
         if(!cameraEntity.valid())
             return false;
@@ -265,8 +264,9 @@ private:
     }
 
     [[nodiscard]] bool readActualCounts(){
-        auto* meshes = m_world->getSystem<Impl::MeshSystem>();
-        NWB_ASSERT(meshes);
+        auto* meshesPtr = m_world->getSystem<Impl::MeshSystem>();
+        NWB_ASSERT(meshesPtr);
+        Impl::MeshSystem& meshes = *meshesPtr;
         m_renderers = 0u;
         m_runtimeRenderers = 0u;
         auto view = m_world->view<Impl::RendererComponent>();
@@ -274,7 +274,7 @@ private:
             if(!renderer.visible)
                 continue;
             Impl::RenderableMeshDesc mesh;
-            if(!meshes->resolveRenderableMesh(entity, mesh))
+            if(!meshes.resolveRenderableMesh(entity, mesh))
                 continue;
             ++m_renderers;
             if(mesh.runtime)

@@ -1031,8 +1031,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct))
         return false;
 
-    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystem)
+    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystemPtr)
         return false;
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -1101,7 +1101,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
-            *meshSystem,
+            *meshSystemPtr,
             m_meshSystem,
             entity,
             resolvedMesh,
@@ -1162,13 +1162,13 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         instanceDesc.setInstanceID(static_cast<u32>(instances.size()));
         instanceDesc.setInstanceMask(s_RayTracingAllInstanceMask);
 
-        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        if(transform){
+        const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        if(transformPtr){
             const SIMDMatrix instanceWorld = MatrixAffineTransformation(
-                LoadFloat(transform->scale),
+                LoadFloat(transformPtr->scale),
                 VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
+                LoadFloat(transformPtr->rotation),
+                LoadFloat(transformPtr->position)
             );
             StoreFloat(instanceWorld, instanceDesc.transform);
         }
@@ -1643,8 +1643,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         m_preparedSceneContentStamp = {};
 
     // Software scene BVH and material context share hardware instance ordering.
-    auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
-    if(!meshSystem)
+    auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
+    if(!meshSystemPtr)
         return false;
 
     auto rendererView = m_world.view<RendererComponent>();
@@ -1715,7 +1715,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
-            *meshSystem,
+            *meshSystemPtr,
             m_meshSystem,
             entity,
             resolvedMesh,
@@ -1817,13 +1817,13 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             ++m_rayTracingState.m_swShadowMeshCount;
         }
 
-        const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
-        const SIMDMatrix objectToWorld = transform
+        const NWB::Impl::Scene::TransformComponent* objectTransformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
+        const SIMDMatrix objectToWorld = objectTransformPtr
             ? MatrixAffineTransformation(
-                LoadFloat(transform->scale),
+                LoadFloat(objectTransformPtr->scale),
                 VectorZero(),
-                LoadFloat(transform->rotation),
-                LoadFloat(transform->position)
+                LoadFloat(objectTransformPtr->rotation),
+                LoadFloat(objectTransformPtr->position)
             )
             : MatrixIdentity()
         ;

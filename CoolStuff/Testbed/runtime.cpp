@@ -81,15 +81,17 @@ static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directi
 }
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
-    auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystem);
-    return uiSystem->wantsKeyboardCapture();
+    auto* uiSystemPtr = world.getSystem<NWB::Impl::UiSystem>();
+    NWB_ASSERT(uiSystemPtr);
+    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
+    return uiSystem.wantsKeyboardCapture();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
-    auto* uiSystem = world.getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystem);
-    return uiSystem->wantsMouseCapture();
+    auto* uiSystemPtr = world.getSystem<NWB::Impl::UiSystem>();
+    NWB_ASSERT(uiSystemPtr);
+    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
+    return uiSystem.wantsMouseCapture();
 }
 
 static void ResolveFlyCameraAnglesFromRotation(
@@ -315,9 +317,10 @@ bool ProjectTestbed::onStartup(){
     NWB_ASSERT(pointLight.valid());
 
     createDefaultScene();
-    auto* modelSystem = m_world->getSystem<NWB::Impl::ModelSystem>();
-    NWB_ASSERT(modelSystem);
-    modelSystem->syncModelRuntimes();
+    auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
+    NWB_ASSERT(modelSystemPtr);
+    NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
+    modelSystem.syncModelRuntimes();
     registerInputHandler();
     return true;
 }

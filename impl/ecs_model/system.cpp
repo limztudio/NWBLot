@@ -129,8 +129,8 @@ bool LoadSkeleton(
         skeletonName,
         outAsset,
         MakeNotNull(NWB_TEXT("LoadSkeleton")),
-        NWB_TEXT("ModelSystem"),
-        "skeleton"
+        MakeNotNull(NWB_TEXT("ModelSystem")),
+        MakeNotNull("skeleton")
     );
     if(!loadedSkeleton){
         outAsset.reset();
@@ -282,8 +282,8 @@ void ModelSystem::ensureModelRuntime(
         modelName,
         loadedAsset,
         MakeNotNull(NWB_TEXT("ModelSystem::ensureModelRuntime")),
-        NWB_TEXT("ModelSystem"),
-        "model"
+        MakeNotNull(NWB_TEXT("ModelSystem")),
+        MakeNotNull("model")
     );
     if(!loadedModel){
         runtime = ModelRuntimeComponent{};

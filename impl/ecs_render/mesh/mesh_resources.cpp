@@ -256,8 +256,8 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         meshPath,
         loadedAsset,
         MakeNotNull(NWB_TEXT("RendererMeshSystem::createMeshResources")),
-        NWB_TEXT("RendererSystem"),
-        "mesh"
+        MakeNotNull(NWB_TEXT("RendererSystem")),
+        MakeNotNull("mesh")
     );
     if(!loadedMesh)
         return false;
@@ -622,11 +622,21 @@ void RendererMeshSystem::pruneRuntimeMeshResources(){
     if(m_meshState.m_meshes.empty())
         return;
 
-    const auto* meshSystem = m_world.getSystem<NWB::Impl::MeshSystem>();
+    const auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
     Core::Alloc::ScratchArena scratchArena(__hidden_mesh::s_RuntimeMeshPruningArena);
+    if(meshSystemPtr){
+        const NWB::Impl::MeshSystem& meshSystem = *meshSystemPtr;
+        ECSRenderDetail::PruneRuntimeMeshResources(
+            m_meshState.m_meshes,
+            meshSystem,
+            [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
+            scratchArena
+        );
+        return;
+    }
     ECSRenderDetail::PruneRuntimeMeshResources(
         m_meshState.m_meshes,
-        meshSystem,
+        meshSystemPtr,
         [this](MeshResources& mesh){ releaseMeshGeometryHeapHandles(mesh); },
         scratchArena
     );

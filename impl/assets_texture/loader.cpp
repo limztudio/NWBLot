@@ -230,9 +230,9 @@ bool TextureAssetLoader::Create(
     const Texture& textureAsset,
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
-    const tchar* const ownerName
+    const NotNull<const tchar*> ownerName
 ){
-    const tchar* const owner = ownerName ? ownerName : NWB_TEXT("TextureAssetLoader");
+    const NotNull<const tchar*> owner = ownerName;
     NWB_ASSERT(!outResource.valid());
     if(outResource.valid())
         return true;
@@ -431,10 +431,10 @@ bool TextureAssetLoader::Load(
     const Name& debugName,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    const tchar* const ownerName
+    const NotNull<const tchar*> ownerName
 ){
-    const tchar* const owner = ownerName ? ownerName : NWB_TEXT("TextureAssetLoader");
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, "texture"))
+    const NotNull<const tchar*> owner = ownerName;
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, MakeNotNull("texture")))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
@@ -445,7 +445,7 @@ bool TextureAssetLoader::Load(
         loadedAsset,
         MakeNotNull(NWB_TEXT("TextureAssetLoader::Load")),
         owner,
-        "texture"
+        MakeNotNull("texture")
     );
     if(!loadedTexture)
         return false;

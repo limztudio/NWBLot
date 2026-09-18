@@ -71,7 +71,7 @@ static bool LoadShader(
         graphics,
         assetManager,
         shaderPathResolver,
-        NWB_TEXT("UiSystem")
+        MakeNotNull(NWB_TEXT("UiSystem"))
     );
 }
 

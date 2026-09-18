@@ -40,7 +40,7 @@ template<typename ShaderPathResolver>
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolver& shaderPathResolver,
-    const tchar* ownerName,
+    const NotNull<const tchar*> ownerName,
     const Name* archiveStageName = nullptr
 ){
     if(outShader)
@@ -94,7 +94,7 @@ template<typename ShaderPathResolver>
         loadedAsset,
         MakeNotNull(NWB_TEXT("ShaderAssetLoader::Load")),
         ownerName,
-        "shader"
+        MakeNotNull("shader")
     );
     if(!loadedShader)
         return false;

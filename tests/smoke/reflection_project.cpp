@@ -56,9 +56,10 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
     const AStringView caseName(caseText.data(), caseText.size());
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
         AddSmokeSkinnedRenderSystems(world, context);
-        auto* renderer = world.getSystem<NWB::Impl::RendererSystem>();
-        NWB_FATAL_ASSERT(renderer);
-        return *renderer;
+        auto* rendererPtr = world.getSystem<NWB::Impl::RendererSystem>();
+        NWB_FATAL_ASSERT(rendererPtr);
+        Impl::RendererSystem& renderer = *rendererPtr;
+        return renderer;
     }
     return AddSmokeRenderSystems(world, context);
 }

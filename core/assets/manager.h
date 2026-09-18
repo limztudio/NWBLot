@@ -93,8 +93,8 @@ public:
     [[nodiscard]] static bool CheckLoaderEnter(
         const AssetRef<TAsset>& assetRef,
         const TResource& resource,
-        const tchar* owner,
-        const char* assetKindText
+        const NotNull<const tchar*> owner,
+        const NotNull<const char*> assetKindText
     ){
         if(!assetRef.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner, assetKindText);
@@ -109,8 +109,8 @@ public:
         const Name& virtualPath,
         UniquePtr<IAsset>& outLoadedAsset,
         const NotNull<const tchar*>& failureContext,
-        const tchar* ownerName,
-        const char* assetKindText
+        const NotNull<const tchar*> ownerName,
+        const NotNull<const char*> assetKindText
     )const{
         static_cast<void>(failureContext);
         if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){

@@ -16,6 +16,14 @@
 
 
 template<typename ArenaT>
+[[nodiscard]] inline bool EnvironmentVariableEquals(ArenaT& arena, const char* name, const AStringView expectedValue){
+    AString<ArenaT> current(arena);
+    if(!ReadEnvironmentVariable(name, current))
+        return false;
+    return AStringView(current.data(), current.size()) == expectedValue;
+}
+
+template<typename ArenaT>
 [[nodiscard]] inline bool ReadEnvironmentVariable(const char* name, AString<ArenaT>& outValue){
     outValue.clear();
     if(!name || name[0] == 0)

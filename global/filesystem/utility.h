@@ -63,6 +63,16 @@ template<typename StringT, typename PathT>
     return ToAsciiLowerCopy(PathToGenericString<StringT>(path.extension()));
 }
 
+template<typename PathT, typename ExtensionArray>
+[[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const ExtensionArray& extensions){
+    const auto extension = LowerPathExtension<AStringView>(path);
+    for(usize i = 0u; i < LengthOf(extensions); ++i){
+        if(extension == extensions[i])
+            return true;
+    }
+    return false;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

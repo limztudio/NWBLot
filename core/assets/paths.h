@@ -778,33 +778,18 @@ template<typename MetadataDocument, typename MetadataValue>
 
 // Shared named-enum metadata reader: one string-field read plus a table lookup, with a field-specific error tail.
 template<typename NamedEnumT>
-struct NamedEnumCase{
-    AStringView text;
-    NamedEnumT value;
-};
+using NamedEnumCase = ::NamedEnumCase<NamedEnumT>;
 
-template<typename NamedEnumT>
+template<typename NamedEnumT, typename ViewT = AStringView>
 [[nodiscard]] inline bool ParseNamedEnumText(
-    const AStringView value,
+    const ViewT value,
     NamedEnumT& outValue,
     const NamedEnumCase<NamedEnumT>* cases,
     const usize caseCount,
     const NamedEnumCase<NamedEnumT>* aliasCases = nullptr,
     const usize aliasCaseCount = 0u
 ){
-    for(usize i = 0u; i < caseCount; ++i){
-        if(value == cases[i].text){
-            outValue = cases[i].value;
-            return true;
-        }
-    }
-    for(usize i = 0u; i < aliasCaseCount; ++i){
-        if(value == aliasCases[i].text){
-            outValue = aliasCases[i].value;
-            return true;
-        }
-    }
-    return false;
+    return ::ParseNamedEnumText<NamedEnumT, ViewT>(value, outValue, cases, caseCount, aliasCases, aliasCaseCount);
 }
 
 template<typename NamedEnumT, typename MetadataValue>

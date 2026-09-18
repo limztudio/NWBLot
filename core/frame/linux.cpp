@@ -57,8 +57,7 @@ static bool HasEnvValue(Alloc::GlobalArena& arena, const char* name){
 }
 
 static bool EnvEquals(Alloc::GlobalArena& arena, const char* name, const char* expectedValue){
-    AString<Alloc::GlobalArena> current(arena);
-    return ReadEnvironmentVariable(name, current) && current == expectedValue;
+    return EnvironmentVariableEquals(arena, name, AStringView(expectedValue));
 }
 #endif
 

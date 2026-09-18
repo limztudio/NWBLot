@@ -14,15 +14,6 @@ NWB_TEX_CONV_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool HasInputExtension(const Path& path, const AStringView* extensions, const usize extensionCount){
-    const AString extension = LowerPathExtension<AString>(path);
-    for(usize i = 0u; i < extensionCount; ++i){
-        if(extension == extensions[i])
-            return true;
-    }
-    return false;
-}
-
 static constexpr AStringView s_PngExtension = ".png";
 static constexpr AStringView s_JpgExtension = ".jpg";
 static constexpr AStringView s_JpegExtension = ".jpeg";
@@ -48,17 +39,12 @@ static constexpr AStringView s_HdrInputExtensions[] = {
     s_HdrExtension,
 };
 
-template<typename ExtensionArray>
-static bool HasListedInputExtension(const Path& path, const ExtensionArray& extensions){
-    return HasInputExtension(path, extensions, LengthOf(extensions));
-}
-
 bool IsSupportedInputPath(const Path& path){
-    return HasListedInputExtension(path, s_SupportedInputExtensions);
+    return PathHasListedExtension(path, s_SupportedInputExtensions);
 }
 
 bool IsHdrInputPath(const Path& path){
-    return HasListedInputExtension(path, s_HdrInputExtensions);
+    return PathHasListedExtension(path, s_HdrInputExtensions);
 }
 
 

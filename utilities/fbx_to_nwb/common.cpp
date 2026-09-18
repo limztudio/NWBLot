@@ -14,29 +14,6 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static AString MakeOptionsErrorText(const AStringView prefix, const AString& options){
-    AString message(prefix);
-    message += options;
-    return message;
-}
-
-template<typename EnumT, typename TextFunction>
-static AString BuildOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount){
-    AString text;
-    for(usize i = 0u; i < valueCount; ++i){
-        if(i > 0u)
-            text += (i + 1u == valueCount) ? ", or " : ", ";
-        text += textFunction(values[i]);
-    }
-    return text;
-}
-
-template<typename EnumT, typename ParseFunction>
-static bool ParseOptionText(const AString& value, EnumT& outValue, ParseFunction parseValue){
-    const AString normalized = NormalizeOptionText(value);
-    return parseValue(normalized, outValue);
-}
-
 template<typename EnumT, typename TextFunction, typename ParseFunction, typename ErrorFunction>
 static bool ValidateOptionText(
     AString& inOutValue,
@@ -88,7 +65,7 @@ static AStringView OutputAssetTypeText(const OutputAssetType::Enum assetType){
 }
 
 AString OutputAssetTypeOptionsText(){
-    return BuildOptionTexts<OutputAssetType::Enum>(
+    return BuildEnumOptionTexts<AString, OutputAssetType::Enum>(
         OutputAssetTypeText,
         s_OutputAssetTypeValues,
         LengthOf(s_OutputAssetTypeValues)
@@ -96,40 +73,16 @@ AString OutputAssetTypeOptionsText(){
 }
 
 AString OutputAssetTypeErrorText(){
-    return MakeOptionsErrorText("Asset type must be ", OutputAssetTypeOptionsText());
+    return MakeOptionsErrorText<AString>("Asset type must be ", OutputAssetTypeOptionsText());
 }
 
-template<typename EnumT>
-static bool ParseNormalizedEnumText(
-    const AStringView value,
-    EnumT& outValue,
-    AStringView (*textFunction)(EnumT),
-    const EnumT* values,
-    const usize valueCount,
-    const EnumT fallback,
-    const Core::Assets::NamedEnumCase<EnumT>* aliases = nullptr,
-    const usize aliasCount = 0u
-){
-    for(usize i = 0u; i < valueCount; ++i){
-        if(value == textFunction(values[i])){
-            outValue = values[i];
-            return true;
-        }
-    }
-    if(Core::Assets::ParseNamedEnumText<EnumT>(value, outValue, nullptr, 0u, aliases, aliasCount))
-        return true;
-
-    outValue = fallback;
-    return false;
-}
-
-static constexpr Core::Assets::NamedEnumCase<OutputAssetType::Enum> s_OutputAssetTypeAliases[] = {
+static constexpr NamedEnumCase<OutputAssetType::Enum> s_OutputAssetTypeAliases[] = {
     { s_AssetBunchAliasUnderscore, OutputAssetType::Bunch },
     { s_AssetBunchAliasDash, OutputAssetType::Bunch },
 };
 
 static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
-    return ParseNormalizedEnumText<OutputAssetType::Enum>(
+    return ::ParseNormalizedEnumText<OutputAssetType::Enum, AStringView (*)(OutputAssetType::Enum)>(
         value,
         outAssetType,
         OutputAssetTypeText,
@@ -142,7 +95,7 @@ static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetTyp
 }
 
 bool ParseAssetTypeText(const AString& value, OutputAssetType::Enum& outAssetType){
-    return ParseOptionText<OutputAssetType::Enum>(value, outAssetType, ParseNormalizedAssetTypeText);
+    return ::ParseOptionText<OutputAssetType::Enum>(value, outAssetType, ParseNormalizedAssetTypeText);
 }
 
 bool ValidateAssetTypeText(AString& inOutValue){
@@ -163,7 +116,7 @@ static AStringView NormalModeText(const NormalMode::Enum normalMode){
 }
 
 AString NormalModeOptionsText(){
-    return BuildOptionTexts<NormalMode::Enum>(
+    return BuildEnumOptionTexts<AString, NormalMode::Enum>(
         NormalModeText,
         s_NormalModeValues,
         LengthOf(s_NormalModeValues)
@@ -171,11 +124,11 @@ AString NormalModeOptionsText(){
 }
 
 AString NormalModeErrorText(){
-    return MakeOptionsErrorText("normal mode must be ", NormalModeOptionsText());
+    return MakeOptionsErrorText<AString>("normal mode must be ", NormalModeOptionsText());
 }
 
 static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
-    return ParseNormalizedEnumText<NormalMode::Enum>(
+    return ::ParseNormalizedEnumText<NormalMode::Enum, AStringView (*)(NormalMode::Enum)>(
         value,
         outNormalMode,
         NormalModeText,
@@ -186,7 +139,7 @@ static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::E
 }
 
 bool ParseNormalModeText(const AString& value, NormalMode::Enum& outNormalMode){
-    return ParseOptionText<NormalMode::Enum>(value, outNormalMode, ParseNormalizedNormalModeText);
+    return ::ParseOptionText<NormalMode::Enum>(value, outNormalMode, ParseNormalizedNormalModeText);
 }
 
 bool ValidateNormalModeText(AString& inOutValue){

@@ -60,12 +60,7 @@ struct PathSelectionIndex{
 };
 
 [[nodiscard]] static bool ContainsPath(const AStringView root, const AStringView file){
-    if(root == file)
-        return true;
-    return
-        !root.empty() && file.size() > root.size() && file.starts_with(root)
-        && (root.back() == '/' || file[root.size()] == '/')
-    ;
+    return IsPathPrefixText(root, file);
 }
 
 [[nodiscard]] static bool SelectPathRange(

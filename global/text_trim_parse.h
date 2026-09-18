@@ -72,6 +72,16 @@ template<typename CharT, usize N>
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
+template<typename CharT>
+[[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file){
+    if(root == file)
+        return true;
+    return
+        !root.empty() && file.size() > root.size() && StartsWith(file, root)
+        && (root.back() == static_cast<CharT>('/') || file[root.size()] == static_cast<CharT>('/'))
+    ;
+}
+
 
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline BasicString<CharT, ArenaT> Trim(ArenaT& arena, const BasicStringView<CharT> text){
@@ -106,6 +116,24 @@ template<typename StringT>
     return text;
 }
 
+
+template<typename StringT, typename ViewT>
+[[nodiscard]] inline StringT JoinUrlWithEndpoint(const ViewT baseUrl, const ViewT endpoint){
+    StringT output(baseUrl.data(), baseUrl.size());
+    if(output.empty() || endpoint.empty())
+        return output;
+
+    using CharT = typename StringT::value_type;
+    const bool baseHasSlash = output.back() == static_cast<CharT>('/');
+    const bool endpointHasSlash = endpoint.front() == static_cast<CharT>('/');
+    if(baseHasSlash && endpointHasSlash)
+        output.pop_back();
+    else if(!baseHasSlash && !endpointHasSlash)
+        output += static_cast<CharT>('/');
+
+    output.append(endpoint.data(), endpoint.size());
+    return output;
+}
 
 template<typename CharT, typename ArenaT>
 inline void TrimTrailingCarriageReturn(BasicString<CharT, ArenaT>& inOutLine){

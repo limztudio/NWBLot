@@ -407,6 +407,20 @@ template<typename CharT>
     }
     return false;
 }
+
+template<typename CharT>
+[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text){
+    for(const CharT ch : text){
+        if(ch == CharT('\n') || ch == CharT('\r'))
+            return true;
+    }
+    return false;
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool IsSingleLinePathText(const BasicStringView<CharT> text){
+    return !text.empty() && !HasEmbeddedNull(text) && !HasLineBreak(text);
+}
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
@@ -421,6 +435,75 @@ template<typename StringT>
     using CharT = typename StringT::value_type;
     return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
 }
+
+
+template<typename EnumT>
+struct NamedEnumCase{
+    AStringView text;
+    EnumT value;
+};
+
+template<typename EnumT, typename ViewT = AStringView>
+[[nodiscard]] inline bool ParseNamedEnumText(
+    const ViewT value,
+    EnumT& outValue,
+    const NamedEnumCase<EnumT>* cases,
+    const usize caseCount,
+    const NamedEnumCase<EnumT>* aliasCases = nullptr,
+    const usize aliasCaseCount = 0u
+){
+    for(usize i = 0u; i < caseCount; ++i){
+        if(value == ViewT(cases[i].text.data(), cases[i].text.size())){
+            outValue = cases[i].value;
+            return true;
+        }
+    }
+    for(usize i = 0u; i < aliasCaseCount; ++i){
+        if(value == ViewT(aliasCases[i].text.data(), aliasCases[i].text.size())){
+            outValue = aliasCases[i].value;
+            return true;
+        }
+    }
+    return false;
+}
+
+template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
+[[nodiscard]] inline bool ParseNormalizedEnumText(
+    const ViewT value,
+    EnumT& outValue,
+    TextFunction textFunction,
+    const EnumT* values,
+    const usize valueCount,
+    const EnumT fallback,
+    const NamedEnumCase<EnumT>* aliases = nullptr,
+    const usize aliasCount = 0u
+){
+    for(usize i = 0u; i < valueCount; ++i){
+        if(value == textFunction(values[i])){
+            outValue = values[i];
+            return true;
+        }
+    }
+    if(ParseNamedEnumText<EnumT, ViewT>(value, outValue, nullptr, 0u, aliases, aliasCount))
+        return true;
+
+    outValue = fallback;
+    return false;
+}
+
+template<typename StringT, typename EnumT, typename TextFunction>
+[[nodiscard]] inline StringT BuildEnumOptionTexts(TextFunction textFunction, const EnumT* values, const usize valueCount){
+    StringT text;
+    for(usize i = 0u; i < valueCount; ++i){
+        if(i > 0u)
+            text += (i + 1u == valueCount) ? ", or " : ", ";
+        text += textFunction(values[i]);
+    }
+    return text;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 template<typename CharT, typename Container>

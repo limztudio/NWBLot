@@ -28,6 +28,9 @@ namespace __hidden_graphics_texture_upload{
 
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
+inline constexpr Name s_UploadTextureBatchResourceIdentity("graphics.upload_texture_batch.resource");
+inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_texture_batch.upload");
+
 [[nodiscard]] static bool TextureUploadRequiresGraphicsQueue(const TextureDesc& textureDesc)noexcept{
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
     return formatInfo.hasDepth || formatInfo.hasStencil;
@@ -173,7 +176,7 @@ struct TextureUploadBatchSubmissionData{
     const GpuGraphResourceId destination = graph.importTexture(
         submissionData.setupDesc.destination,
         GpuGraphResourceDesc{}
-            .setIdentity(Name("graphics.upload_texture_batch.resource"))
+            .setIdentity(s_UploadTextureBatchResourceIdentity)
             .setMarkerLabel("Texture Upload Batch")
             .setType(GpuGraphResourceType::Texture)
             .setInitialState(submissionData.graphInitialState)
@@ -204,7 +207,7 @@ struct TextureUploadBatchSubmissionData{
         scheduling.preserveSameClassQueueWithDirectDependency = previousTask.valid();
         GpuTaskDesc uploadTaskDesc;
         uploadTaskDesc
-            .setIdentity(Name("graphics.upload_texture_batch.upload"))
+            .setIdentity(s_UploadTextureBatchUploadIdentity)
             .setMarkerLabel("Texture Upload Batch")
             .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(
                 submissionData.uploadQueue,

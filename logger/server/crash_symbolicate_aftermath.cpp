@@ -33,6 +33,12 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
+inline constexpr char s_AftermathSectionHeader[] = "\n[aftermath]\n";
+inline constexpr char s_AftermathSkippedReport[] = "status=skipped\ndetail=logserver built without the Aftermath SDK\n";
+inline constexpr char s_AftermathCreateDecoderFailedReport[] = "status=decode_failed\ndetail=create_decoder\n";
+inline constexpr char s_AftermathGenerateJsonFailedReport[] = "status=decode_failed\ndetail=generate_json\n";
+inline constexpr char s_AftermathGetJsonFailedReport[] = "status=decode_failed\ndetail=get_json\n";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,7 +98,8 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
 
 #if !defined(NWB_WITH_AFTERMATH)
     static_cast<void>(arena);
-    outReport += "\n[aftermath]\nstatus=skipped\ndetail=logserver built without the Aftermath SDK\n";
+    outReport += s_AftermathSectionHeader;
+    outReport += s_AftermathSkippedReport;
 #else
     Vector<u8, LogArena> dumpBytes(arena);
     ErrorCode readError;
@@ -112,7 +119,8 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
         !GFSDK_Aftermath_SUCCEED(decoderLib.createDecoder(GFSDK_Aftermath_Version_API, dumpBytes.data(), static_cast<uint32_t>(dumpBytes.size()), &decoder))
         || !decoder
     ){
-        outReport += "\n[aftermath]\nstatus=decode_failed\ndetail=create_decoder\n";
+        outReport += s_AftermathSectionHeader;
+        outReport += s_AftermathCreateDecoderFailedReport;
         return;
     }
 
@@ -129,7 +137,8 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     );
     if(!GFSDK_Aftermath_SUCCEED(generateResult) || jsonSize == 0u){
         decoderLib.destroyDecoder(decoder);
-        outReport += "\n[aftermath]\nstatus=decode_failed\ndetail=generate_json\n";
+        outReport += s_AftermathSectionHeader;
+        outReport += s_AftermathGenerateJsonFailedReport;
         return;
     }
 
@@ -138,7 +147,8 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     const GFSDK_Aftermath_Result getResult = decoderLib.getJson(decoder, jsonSize, json.data());
     decoderLib.destroyDecoder(decoder);
     if(!GFSDK_Aftermath_SUCCEED(getResult)){
-        outReport += "\n[aftermath]\nstatus=decode_failed\ndetail=get_json\n";
+        outReport += s_AftermathSectionHeader;
+        outReport += s_AftermathGetJsonFailedReport;
         return;
     }
 
@@ -148,7 +158,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     if(jsonLength > s_AftermathMaxJsonBytes)
         jsonLength = s_AftermathMaxJsonBytes;
 
-    outReport += "\n[aftermath]\n";
+    outReport += s_AftermathSectionHeader;
     outReport.append(json.data(), jsonLength);
     if(jsonLength == 0u || json[jsonLength - 1u] != '\n')
         outReport.push_back('\n');

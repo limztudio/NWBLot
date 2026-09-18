@@ -28,6 +28,10 @@ namespace __hidden_built_asset{
 inline constexpr u32 s_Magic = 0x4142574eu;
 inline constexpr u32 s_Version = 1u;
 inline constexpr usize s_HeaderSize = sizeof(u32) * 2u + sizeof(NameHash) + sizeof(u64) * 2u;
+inline constexpr char s_TemporaryNamePrefix[] = ".nwb_";
+inline constexpr char s_TemporaryNameSeparator = '_';
+inline constexpr char s_TemporaryNameExtension[] = ".tmp";
+inline constexpr u64 s_TemporarySequenceStep = 1u;
 Atomic<u64> g_TemporarySequence{0u};
 
 static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes& existing){
@@ -35,11 +39,11 @@ static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes
     if(ReadBinaryFile(path, existing, error) && existing == bytes)
         return true;
 
-    AssetString temporaryName(".nwb_", path.arena());
+    AssetString temporaryName(s_TemporaryNamePrefix, path.arena());
     AppendHexU64(CurrentProcessId(), temporaryName);
-    temporaryName += '_';
-    AppendHexU64(g_TemporarySequence.fetch_add(1u, MemoryOrder::relaxed), temporaryName);
-    temporaryName += ".tmp";
+    temporaryName += s_TemporaryNameSeparator;
+    AppendHexU64(g_TemporarySequence.fetch_add(s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
+    temporaryName += s_TemporaryNameExtension;
     const Path temporary = path.parent_path() / temporaryName;
     if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing, error)
         || existing != bytes || !RenamePath(temporary, path, error)){

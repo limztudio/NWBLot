@@ -25,6 +25,12 @@ namespace __hidden_graphics_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_SetupBufferResourceIdentity("graphics.setup_buffer.resource");
+inline constexpr Name s_SetupBufferUploadIdentity("graphics.setup_buffer.upload");
+inline constexpr Name s_SetupTextureResourceIdentity("graphics.setup_texture.resource");
+inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.upload");
+
+
 [[nodiscard]] static bool ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc, usize& outRequiredBytes){
     outRequiredBytes = 0;
 
@@ -93,7 +99,7 @@ struct BufferSetupSubmissionData{
     const GpuGraphResourceId destination = graph.importBuffer(
         submissionData.buffer,
         GpuGraphResourceDesc{}
-            .setIdentity(Name("graphics.setup_buffer.resource"))
+            .setIdentity(s_SetupBufferResourceIdentity)
             .setMarkerLabel("Setup Buffer")
             .setType(GpuGraphResourceType::Buffer)
             .setInitialState(submissionData.uploadDesc.initialState)
@@ -109,7 +115,7 @@ struct BufferSetupSubmissionData{
 
     GpuTaskDesc uploadTaskDesc;
     uploadTaskDesc
-        .setIdentity(Name("graphics.setup_buffer.upload"))
+        .setIdentity(s_SetupBufferUploadIdentity)
         .setMarkerLabel("Setup Buffer Upload")
         .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(submissionData.uploadQueue))
         .setScheduling(GraphicsModuleDetail::SetupUploadGraphScheduling(
@@ -146,7 +152,7 @@ struct TextureSetupSubmissionData{
     const GpuGraphResourceId destination = graph.importTexture(
         submissionData.texture,
         GpuGraphResourceDesc{}
-            .setIdentity(Name("graphics.setup_texture.resource"))
+            .setIdentity(s_SetupTextureResourceIdentity)
             .setMarkerLabel("Setup Texture")
             .setType(GpuGraphResourceType::Texture)
             // Vulkan creates this texture in UNDEFINED layout. The upload task owns its first concrete transition;
@@ -164,7 +170,7 @@ struct TextureSetupSubmissionData{
 
     GpuTaskDesc uploadTaskDesc;
     uploadTaskDesc
-        .setIdentity(Name("graphics.setup_texture.upload"))
+        .setIdentity(s_SetupTextureUploadIdentity)
         .setMarkerLabel("Setup Texture Upload")
         .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(
             submissionData.uploadQueue,

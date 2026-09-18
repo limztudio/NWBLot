@@ -30,13 +30,23 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr char s_X11BackendName[] = "X11";
+inline constexpr char s_WaylandBackendName[] = "Wayland";
+inline constexpr char s_NoneBackendName[] = "None";
+inline constexpr char s_LinuxBackendEnvName[] = "NWB_LINUX_BACKEND";
+inline constexpr char s_X11BackendRequest[] = "x11";
+inline constexpr char s_WaylandBackendRequest[] = "wayland";
+inline constexpr char s_XdgSessionTypeEnvName[] = "XDG_SESSION_TYPE";
+inline constexpr char s_WaylandDisplayEnvName[] = "WAYLAND_DISPLAY";
+
+
 static const char* BackendName(Common::LinuxFrameBackend::Enum backend){
     switch(backend){
-    case Common::LinuxFrameBackend::Enum::X11: return "X11";
-    case Common::LinuxFrameBackend::Enum::Wayland: return "Wayland";
+    case Common::LinuxFrameBackend::Enum::X11: return s_X11BackendName;
+    case Common::LinuxFrameBackend::Enum::Wayland: return s_WaylandBackendName;
     case Common::LinuxFrameBackend::Enum::None:
     default:
-        return "None";
+        return s_NoneBackendName;
     }
 }
 
@@ -63,8 +73,8 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
     usize count = 0;
 
     AString<Alloc::GlobalArena> requestedBackend(arena);
-    if(ReadEnvironmentVariable("NWB_LINUX_BACKEND", requestedBackend)){
-        if(requestedBackend == "x11"){
+    if(ReadEnvironmentVariable(s_LinuxBackendEnvName, requestedBackend)){
+        if(requestedBackend == s_X11BackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
@@ -73,7 +83,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
         }
 
 #if defined(NWB_WITH_WAYLAND)
-        if(requestedBackend == "wayland"){
+        if(requestedBackend == s_WaylandBackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
             return count;
@@ -84,7 +94,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
     }
 
 #if defined(NWB_WITH_WAYLAND)
-    const bool preferWayland = EnvEquals(arena, "XDG_SESSION_TYPE", "wayland") || HasEnvValue(arena, "WAYLAND_DISPLAY");
+    const bool preferWayland = EnvEquals(arena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest) || HasEnvValue(arena, s_WaylandDisplayEnvName);
     if(preferWayland){
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);

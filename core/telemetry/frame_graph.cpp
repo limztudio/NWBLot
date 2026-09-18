@@ -35,6 +35,7 @@ namespace __hidden_telemetry_frame_graph{
 );
 
 static constexpr f64 s_DoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
+inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStatisticsValidation");
 
 
 [[nodiscard]] static bool IsValidStringTableText(const AStringView text)noexcept{
@@ -1259,7 +1260,7 @@ bool BuildFrameGraphPayloadImpl(
 
     const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
-        Alloc::ScratchArena scratchArena(Name("Telemetry/PacketStatisticsValidation"));
+        Alloc::ScratchArena scratchArena(s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
             scratchArena,
             nodes,
@@ -1913,7 +1914,7 @@ bool ParseFrameGraphPayload(
         outPayload.packetSubmissionStatistics.push_back(statistics);
     }
     if(outPayload.packetSubmissionStatisticsPresent){
-        Alloc::ScratchArena scratchArena(Name("Telemetry/PacketStatisticsValidation"));
+        Alloc::ScratchArena scratchArena(s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
             scratchArena,
             outPayload.nodes,

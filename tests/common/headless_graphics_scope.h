@@ -32,6 +32,10 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Name s_ValidationLayerQueryScratch("tests/common/headless_graphics/validation_layer_query_scratch");
+inline constexpr char s_KhronosValidationLayerName[] = "VK_LAYER_KHRONOS_validation";
+
+
 // Keep an unavailable validation layer as a GPU-optional test condition. BackendContext correctly reports a
 // missing required layer as an error, but that debug diagnostic breaks before Google Test can turn it into a skip.
 #if !defined(NWB_FINAL)
@@ -43,13 +47,13 @@ namespace Tests{
     if(vkEnumerateInstanceLayerProperties(&layerCount, nullptr) != VK_SUCCESS || layerCount == 0u)
         return false;
 
-    Core::Alloc::ScratchArena scratchArena(Name("tests/common/headless_graphics/validation_layer_query_scratch"));
+    Core::Alloc::ScratchArena scratchArena(s_ValidationLayerQueryScratch);
     Vector<VkLayerProperties, Core::Alloc::ScratchArena> availableLayers(layerCount, scratchArena);
     if(vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data()) != VK_SUCCESS)
         return false;
 
     for(u32 layerIndex = 0u; layerIndex < layerCount; ++layerIndex){
-        if(NWB_STRCMP(availableLayers[layerIndex].layerName, "VK_LAYER_KHRONOS_validation") == 0)
+        if(NWB_STRCMP(availableLayers[layerIndex].layerName, s_KhronosValidationLayerName) == 0)
             return true;
     }
     return false;

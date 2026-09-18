@@ -40,7 +40,7 @@ static void AppendOptionalTextFile(LogArena& arena, CrashReportText& outReport, 
 }
 
 void AppendHexAddress(LogArena& arena, CrashReportText& outReport, const u64 address){
-    outReport += "0x";
+    outReport += s_HexAddressPrefix;
     outReport += FormatHex64A(arena, address);
 }
 
@@ -60,14 +60,14 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     ErrorCode error;
     const bool exists = IsDirectory(symbolStoreDirectory, error);
     if(error)
-        outReport += "error";
+        outReport += s_SymbolStoreErrorText;
     else
-        outReport += exists ? "present" : "missing";
+        outReport += exists ? s_SymbolStorePresentText : s_SymbolStoreMissingText;
     outReport += "\n";
 }
 
 static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, const CrashPackageSummary& summary){
-    if(summary.reasonKind == "signal"){
+    if(summary.reasonKind == s_SignalReasonKind){
         outReport += "exception=";
         outReport += Core::Crash::PosixSignalName(summary.reasonCode);
         outReport += " (";
@@ -76,7 +76,7 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += ")\n";
         return;
     }
-    if(summary.reasonKind == "windows_exception"){
+    if(summary.reasonKind == s_WindowsExceptionReasonKind){
         outReport += "exception=";
         outReport += Core::Crash::WindowsExceptionName(summary.reasonCode);
         outReport += " ";
@@ -84,15 +84,15 @@ static void AppendExceptionSummary(LogArena& arena, CrashReportText& outReport, 
         outReport += "\n";
         return;
     }
-    if(summary.reasonKind == "terminate"){
+    if(summary.reasonKind == s_TerminateReasonKind){
         outReport += "exception=std::terminate\n";
         return;
     }
-    if(summary.reasonKind == "manual_dump"){
+    if(summary.reasonKind == s_ManualDumpReasonKind){
         outReport += "exception=manual diagnostic dump\n";
         return;
     }
-    if(summary.reasonKind == "gpu_crash"){
+    if(summary.reasonKind == s_GpuCrashReasonKind){
         outReport += "exception=GPU device removed / crash\n";
         return;
     }
@@ -278,7 +278,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     Symbolicate::AppendSymbolStoreStatus(arena, detailReport, config);
     Symbolicate::AppendEventSummary(arena, summary, detailReport);
 
-    if(summary.platform == "windows"){
+    if(summary.platform == s_WindowsPlatformName){
 #if defined(NWB_PLATFORM_WINDOWS)
         if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport))
             NWB_LOGGER_WARNING(NWB_TEXT("Windows minidump stack could not be fully decoded"));
@@ -286,10 +286,10 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
-    else if(summary.platform == "linux"){
+    else if(summary.platform == s_LinuxPlatformName){
         Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, detailReport);
     }
-    else if(summary.platform == "android"){
+    else if(summary.platform == s_AndroidPlatformName){
         Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, detailReport);
     }
     else{

@@ -27,6 +27,23 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
+inline constexpr char s_LinuxUnknownSymbolText[] = "??";
+inline constexpr char s_LinuxUnknownLocationPrefix[] = "??:";
+inline constexpr char s_LinuxSymbolFrameSeparator[] = " <- ";
+inline constexpr char s_LinuxSymbolLocationSeparator[] = " at ";
+inline constexpr char s_LinuxSymbolLocationBarePrefix[] = "at ";
+inline constexpr char s_LlvmSymbolizerTool[] = "llvm-symbolizer";
+inline constexpr char s_Addr2LineTool[] = "addr2line";
+inline constexpr char s_LlvmSymbolizerObjectPrefix[] = "--obj=";
+inline constexpr char s_LlvmSymbolizerDemangleFlag[] = "--demangle";
+inline constexpr char s_LlvmSymbolizerFunctionsFlag[] = "--functions";
+inline constexpr char s_LlvmSymbolizerInliningFlag[] = "--inlining=true";
+inline constexpr char s_Addr2LineFunctionsFlag[] = "-f";
+inline constexpr char s_Addr2LineDemangleFlag[] = "-C";
+inline constexpr char s_Addr2LineInlineFlag[] = "-i";
+inline constexpr char s_Addr2LineExeFlag[] = "-e";
+inline constexpr char s_AnonymousModulePath[] = "<anonymous>";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -65,7 +82,7 @@ struct LinuxSymbolFileCache{
 
 
 [[nodiscard]] static bool ParseCallstackFrameAddress(const AStringView line, u64& outAddress){
-    const usize prefix = line.find("0x");
+    const usize prefix = line.find(s_HexAddressPrefix);
     if(prefix == AStringView::npos)
         return false;
 
@@ -81,7 +98,7 @@ struct LinuxSymbolFileCache{
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 [[nodiscard]] static bool IsUnknownSymbolLine(const AStringView line){
     const AStringView trimmed = TrimView(line);
-    return trimmed.empty() || trimmed == "??" || StartsWith(trimmed, "??:");
+    return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
 }
 
 [[nodiscard]] static bool ExtractSymbolizerResult(
@@ -103,7 +120,7 @@ struct LinuxSymbolFileCache{
             continue;
 
         if(!outSymbol.empty())
-            outSymbol += " <- ";
+            outSymbol += s_LinuxSymbolFrameSeparator;
         bool wroteFrame = false;
         if(hasFunction){
             outSymbol.append(function.data(), function.size());
@@ -111,9 +128,9 @@ struct LinuxSymbolFileCache{
         }
         if(hasLocation){
             if(wroteFrame)
-                outSymbol += " at ";
+                outSymbol += s_LinuxSymbolLocationSeparator;
             else
-                outSymbol += "at ";
+                outSymbol += s_LinuxSymbolLocationBarePrefix;
             outSymbol.append(location.data(), location.size());
         }
     }
@@ -143,16 +160,16 @@ struct LinuxSymbolFileCache{
     CrashReportText addressArgument{arena};
     AppendHexAddress(arena, addressArgument, moduleOffset);
 
-    if(toolName == "llvm-symbolizer"){
+    if(toolName == s_LlvmSymbolizerTool){
         CrashReportText objectArgument{arena};
-        objectArgument += "--obj=";
+        objectArgument += s_LlvmSymbolizerObjectPrefix;
         objectArgument.append(modulePathText.data(), modulePathText.size());
 
         const char* const argv[] = {
-            "llvm-symbolizer",
-            "--demangle",
-            "--functions",
-            "--inlining=true",
+            s_LlvmSymbolizerTool,
+            s_LlvmSymbolizerDemangleFlag,
+            s_LlvmSymbolizerFunctionsFlag,
+            s_LlvmSymbolizerInliningFlag,
             objectArgument.c_str(),
             addressArgument.c_str(),
             nullptr
@@ -165,11 +182,11 @@ struct LinuxSymbolFileCache{
     modulePathArgument.append(modulePathText.data(), modulePathText.size());
 
     const char* const argv[] = {
-        "addr2line",
-        "-f",
-        "-C",
-        "-i",
-        "-e",
+        s_Addr2LineTool,
+        s_Addr2LineFunctionsFlag,
+        s_Addr2LineDemangleFlag,
+        s_Addr2LineInlineFlag,
+        s_Addr2LineExeFlag,
         modulePathArgument.c_str(),
         addressArgument.c_str(),
         nullptr
@@ -184,7 +201,7 @@ struct LinuxSymbolFileCache{
     const CrashSymbolicationConfig& config,
     Path& outPath
 ){
-    if(modulePathText.empty() || modulePathText == "<anonymous>")
+    if(modulePathText.empty() || modulePathText == s_AnonymousModulePath)
         return false;
 
     const Path modulePath(arena, modulePathText);
@@ -256,8 +273,8 @@ struct LinuxSymbolFileCache{
     if(!FindLinuxSymbolFileText(arena, cache, modulePathText, config, symbolPathText))
         return false;
 
-    return TryRunLinuxSymbolizer(arena, "llvm-symbolizer", symbolPathText, moduleOffset, outSymbol)
-        || TryRunLinuxSymbolizer(arena, "addr2line", symbolPathText, moduleOffset, outSymbol)
+    return TryRunLinuxSymbolizer(arena, s_LlvmSymbolizerTool, symbolPathText, moduleOffset, outSymbol)
+        || TryRunLinuxSymbolizer(arena, s_Addr2LineTool, symbolPathText, moduleOffset, outSymbol)
     ;
 }
 #endif

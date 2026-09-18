@@ -26,6 +26,19 @@ namespace LoggerCrashSymbolicateDetail{
 inline constexpr usize s_DecimalTextBufferCapacity = 32u;
 inline constexpr usize s_CrashReportReserveBytes = 4096u;
 
+inline constexpr char s_HexAddressPrefix[] = "0x";
+inline constexpr char s_SymbolStorePresentText[] = "present";
+inline constexpr char s_SymbolStoreMissingText[] = "missing";
+inline constexpr char s_SymbolStoreErrorText[] = "error";
+inline constexpr char s_SignalReasonKind[] = "signal";
+inline constexpr char s_WindowsExceptionReasonKind[] = "windows_exception";
+inline constexpr char s_TerminateReasonKind[] = "terminate";
+inline constexpr char s_ManualDumpReasonKind[] = "manual_dump";
+inline constexpr char s_GpuCrashReasonKind[] = "gpu_crash";
+inline constexpr char s_WindowsPlatformName[] = "windows";
+inline constexpr char s_LinuxPlatformName[] = "linux";
+inline constexpr char s_AndroidPlatformName[] = "android";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

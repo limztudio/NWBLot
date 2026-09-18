@@ -67,11 +67,11 @@ void AppendFrameGraphPhysicalQueueJson(
     const Telemetry::FrameGraphPhysicalQueueId& queue
 ){
     if(!queue.valid()){
-        out += "null";
+        out += s_JsonNullText;
         return;
     }
 
-    StringAppendFormat(out, "{{\"index\": {}, \"deviceGeneration\": {}}}", queue.index, queue.deviceGeneration);
+    StringAppendFormat(out, s_JsonQueueIndexFormat, queue.index, queue.deviceGeneration);
 }
 
 void AppendFrameGraphQueueAssignmentJson(
@@ -79,24 +79,24 @@ void AppendFrameGraphQueueAssignmentJson(
     const Telemetry::FrameGraphQueueAssignment& assignment
 ){
     if(!assignment.present){
-        out += "null";
+        out += s_JsonNullText;
         return;
     }
 
-    out += "{\"initialQueue\": ";
+    out += s_JsonInitialQueueKey;
     AppendFrameGraphPhysicalQueueJson(out, assignment.initialQueue);
-    out += ", \"plannedQueue\": ";
+    out += s_JsonPlannedQueueKey;
     AppendFrameGraphPhysicalQueueJson(out, assignment.plannedQueue);
-    out += ", \"acceptedQueue\": ";
+    out += s_JsonAcceptedQueueKey;
     AppendFrameGraphPhysicalQueueJson(out, assignment.acceptedQueue);
-    out += ", \"previousAcceptedQueue\": ";
+    out += s_JsonPreviousAcceptedQueueKey;
     AppendFrameGraphPhysicalQueueJson(out, assignment.previousAcceptedQueue);
-    out += ", \"queueClass\": ";
+    out += s_JsonQueueClassKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(assignment.queueClass)));
-    out += ", \"reason\": ";
+    out += s_JsonReasonKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentReasonText(assignment.reason)));
     StringAppendFormat(out, ", \"modifierMask\": {}", static_cast<u32>(assignment.modifiers));
-    out += ", \"acceptance\": ";
+    out += s_JsonAcceptanceKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueAssignmentAcceptanceText(assignment.acceptance)));
     StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? "true" : "false");
     StringAppendFormat(
@@ -118,7 +118,7 @@ void AppendFrameGraphCompiledTaskJson(
     const Telemetry::FrameGraphCompiledTask& compiledTask
 ){
     if(!compiledTask.present){
-        out += "null";
+        out += s_JsonNullText;
         return;
     }
 
@@ -376,7 +376,7 @@ void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
 ){
     out += "{\"queue\": ";
     AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
-    out += ", \"queueClass\": ";
+    out += s_JsonQueueClassKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
     out += ", \"compile\": ";
     AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(out, statistics.compile);
@@ -402,7 +402,7 @@ void AppendFrameGraphPacketSubmissionStatisticsJson(
         statistics.packetGeneration
     );
     AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
-    out += ", \"queueClass\": ";
+    out += s_JsonQueueClassKey;
     AppendJsonQuotedText(out, AStringView(FrameGraphQueueClassText(statistics.queueClass)));
     StringAppendFormat(
         out,
@@ -436,7 +436,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const bool resourceVersionStatisticsPresent
 ){
     if(!statistics.present){
-        out += "null";
+        out += s_JsonNullText;
         return;
     }
 
@@ -456,7 +456,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
     AppendFrameGraphSubmissionRuntimeStatisticsJson(out, statistics.submission, recoverySubmissionCountPresent);
     out += ", \"physicalQueues\": ";
     if(!physicalQueueRuntimeStatisticsPresent)
-        out += "null";
+        out += s_JsonNullText;
     else{
         out += '[';
         for(usize index = ownerRange.physicalQueueBegin; index < ownerRange.physicalQueueEnd; ++index){
@@ -470,7 +470,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
 
     out += ", \"packetSubmissions\": ";
     if(!packetSubmissionStatisticsPresent)
-        out += "null";
+        out += s_JsonNullText;
     else{
         out += '[';
         for(usize index = ownerRange.packetSubmissionBegin; index < ownerRange.packetSubmissionEnd; ++index){

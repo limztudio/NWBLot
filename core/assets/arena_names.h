@@ -40,6 +40,8 @@ inline constexpr Name s_RegisterAutoCollectedScratch("core/assets/cook_entry_reg
 inline constexpr Name s_GatherMergeQueueArena("core/assets/gather_merge_queue");
 inline constexpr Name s_GatherMergeQueryScratch("core/assets/gather_merge_query_scratch");
 
+inline constexpr Name s_InputListScratch("assets/input_list");
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -23,6 +23,11 @@ WAIT_TIMEOUT = 0x00000102
 INFINITE_TIMEOUT_LIMIT = 0xFFFFFFFE
 FORCED_EXIT_CODE = 1
 MAX_WINDOWS_IMAGE_PATH = 32768
+MILLISECONDS_PER_SECOND = 1000.0
+PROCESS_ENUM_INITIAL_CAPACITY = 1024
+PROCESS_ENUM_CAPACITY_GROWTH_FACTOR = 2
+QUERY_IMAGE_PATH_UNUSED_FLAGS = 0
+WINDOW_ENUM_CONTINUE = True
 
 
 @dataclass(frozen=True)
@@ -60,7 +65,7 @@ class WindowsProcessApi:
         self._bind_functions()
 
     def process_ids(self) -> Tuple[int, ...]:
-        capacity = 1024
+        capacity = PROCESS_ENUM_INITIAL_CAPACITY
         while True:
             process_ids = (ctypes.c_uint32 * capacity)()
             bytes_written = ctypes.c_uint32(0)
@@ -70,7 +75,7 @@ class WindowsProcessApi:
             count = bytes_written.value // ctypes.sizeof(ctypes.c_uint32)
             if count < capacity:
                 return tuple(int(process_ids[index]) for index in range(count))
-            capacity *= 2
+            capacity *= PROCESS_ENUM_CAPACITY_GROWTH_FACTOR
 
     def open_process(self, pid: int) -> Optional[WindowsProcessHandle]:
         handle = self._kernel32.OpenProcess(PROCESS_QUERY_WAIT_AND_TERMINATE_ACCESS, False, pid)
@@ -83,7 +88,7 @@ class WindowsProcessApi:
     def query_process_image_path(self, handle: WindowsProcessHandle) -> Optional[str]:
         buffer = ctypes.create_unicode_buffer(MAX_WINDOWS_IMAGE_PATH)
         length = ctypes.c_uint32(len(buffer))
-        if not self._kernel32.QueryFullProcessImageNameW(handle.native_handle, 0, buffer, ctypes.byref(length)):
+        if not self._kernel32.QueryFullProcessImageNameW(handle.native_handle, QUERY_IMAGE_PATH_UNUSED_FLAGS, buffer, ctypes.byref(length)):
             return None
         return buffer.value[:length.value]
 
@@ -94,16 +99,16 @@ class WindowsProcessApi:
         def enum_window(hwnd, _lparam):
             owner_pid = ctypes.c_uint32(0)
             self._user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
-            if owner_pid.value == pid and self._user32.PostMessageW(hwnd, WM_CLOSE, 0, 0):
+            if owner_pid.value == pid and self._user32.PostMessageW(hwnd, WM_CLOSE, QUERY_IMAGE_PATH_UNUSED_FLAGS, QUERY_IMAGE_PATH_UNUSED_FLAGS):
                 posted[0] = True
-            return True
+            return WINDOW_ENUM_CONTINUE
 
-        if not self._user32.EnumWindows(enum_window, 0):
+        if not self._user32.EnumWindows(enum_window, QUERY_IMAGE_PATH_UNUSED_FLAGS):
             return False
         return posted[0]
 
     def wait_for_exit(self, handle: WindowsProcessHandle, timeout_seconds: float) -> bool:
-        timeout_milliseconds = min(INFINITE_TIMEOUT_LIMIT, max(0, math.ceil(timeout_seconds * 1000.0)))
+        timeout_milliseconds = min(INFINITE_TIMEOUT_LIMIT, max(QUERY_IMAGE_PATH_UNUSED_FLAGS, math.ceil(timeout_seconds * MILLISECONDS_PER_SECOND)))
         result = self._kernel32.WaitForSingleObject(handle.native_handle, timeout_milliseconds)
         if result == WAIT_OBJECT_0:
             return True

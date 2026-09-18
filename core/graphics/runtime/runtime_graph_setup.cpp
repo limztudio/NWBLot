@@ -30,6 +30,11 @@ namespace __hidden_graphics_graph_setup{
 // callers that know a small upload benefits can still request CommandQueue::Transfer explicitly.
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
+inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
+inline constexpr Name s_SetupUploadReadinessBridgeIdentity("graphics.setup_upload.readiness_bridge");
+inline constexpr Name s_FrameTimingResetIdentity("graphics.frame_timing.reset");
+inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_task_graph_scratch");
+
 
 [[nodiscard]] static CommandQueue::Enum ResolveTransferPreferredQueue(GraphicsBackend::Device& device)noexcept{
     if(device.getQueue(CommandQueue::Transfer))
@@ -86,7 +91,7 @@ struct StandaloneTaskGraphRecoveryTask{
     scheduling.isRecoverySubmission = true;
     GpuTaskDesc recoveryDesc;
     recoveryDesc
-        .setIdentity(Name("graphics.standalone_task_graph.recovery"))
+        .setIdentity(s_StandaloneTaskGraphRecoveryIdentity)
         .setMarkerLabel("Standalone Task Graph Recovery")
         .setQueue(GpuQueueRequest{
             GpuQueueCapability::Graphics,
@@ -124,7 +129,7 @@ struct StandaloneTaskGraphRecoveryTask{
         scheduling.overlapPreferred = false;
         GpuTaskDesc bridgeDesc;
         bridgeDesc
-            .setIdentity(Name("graphics.setup_upload.readiness_bridge"))
+            .setIdentity(s_SetupUploadReadinessBridgeIdentity)
             .setMarkerLabel("Setup Upload Readiness Bridge")
             .setQueue(GraphicsModuleDetail::SetupUploadGraphQueueRequest(consumerQueue))
             .setScheduling(scheduling)
@@ -241,7 +246,7 @@ struct FrameTimingResetSubmissionData{
     auto& submissionData = *static_cast<FrameTimingResetSubmissionData*>(userData);
     GpuTaskDesc resetDesc;
     resetDesc
-        .setIdentity(Name("graphics.frame_timing.reset"))
+        .setIdentity(s_FrameTimingResetIdentity)
         .setMarkerLabel("Frame GPU-Timing Reset")
         .setQueue(FrameTimingResetQueueRequest())
         .setScheduling(FrameTimingResetScheduling())
@@ -463,7 +468,7 @@ bool SubmitGraphOwnedStandaloneTask(
     GpuCompiledGraph compiledGraph(graphArena);
     GpuRecordedGraph recordedGraph(graphArena);
     GpuGraphSubmissionTransaction transaction(graphArena);
-    Alloc::ScratchArena scratchArena(Name("graphics.standalone_task_graph_scratch"));
+    Alloc::ScratchArena scratchArena(s_StandaloneTaskGraphScratchArena);
     const GpuTaskGraphCompiler compiler;
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena))

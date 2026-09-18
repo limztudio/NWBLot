@@ -18,6 +18,16 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace GpuTaskGraphDetail{
+
+inline constexpr Name s_DeclarationScratchArena("core/task/gpu/declaration_scratch");
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 u64 GpuTaskGraph::allocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
 
@@ -39,7 +49,7 @@ u64 GpuTaskGraph::allocateGeneration()noexcept{
 
 GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     : m_arena(arena)
-    , m_declarationScratch(Name("core/task/gpu/declaration_scratch"))
+    , m_declarationScratch(GpuTaskGraphDetail::s_DeclarationScratchArena)
     , m_tasks(arena)
     , m_dependencies(arena)
     , m_externalDependencies(arena)

@@ -25,6 +25,10 @@ namespace LoggerCrashSymbolicateDetail{
 
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 
+inline constexpr char s_GpuDetectiveSectionHeader[] = "\n[gpu_detective]\n";
+inline constexpr char s_GpuDetectiveDecodeFailedStatus[] = "status=decode_failed\n";
+inline constexpr char s_ReportDetailPrefix[] = "detail=";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,16 +46,17 @@ void AppendRadeonGpuDetectiveSummary(LogArena& arena, const Path& packageDirecto
 
     AInteropString decoded;
     if(!nwb_rgd::DecodeCrashDumpToText(AInteropString(capturePath.data(), capturePath.size()), decoded)){
-        outReport += "\n[gpu_detective]\nstatus=decode_failed\n";
+        outReport += s_GpuDetectiveSectionHeader;
+        outReport += s_GpuDetectiveDecodeFailedStatus;
         if(!decoded.empty()){
-            outReport += "detail=";
+            outReport += s_ReportDetailPrefix;
             outReport.append(decoded.data(), decoded.size());
             outReport.push_back('\n');
         }
         return;
     }
 
-    outReport += "\n[gpu_detective]\n";
+    outReport += s_GpuDetectiveSectionHeader;
     outReport.append(decoded.data(), decoded.size());
     if(decoded.empty() || decoded.back() != '\n')
         outReport.push_back('\n');

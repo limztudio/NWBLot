@@ -4,6 +4,8 @@
 
 #include "input_list.h"
 
+#include "arena_names.h"
+
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
@@ -18,7 +20,7 @@ NWB_ASSETS_BEGIN
 
 
 bool ReadAssetInputList(const Path& path, AssetVector<AssetString>& inputs, const bool resolveRelativePaths){
-    Alloc::ScratchArena scratchArena(Name("assets/input_list"));
+    Alloc::ScratchArena scratchArena(AssetsArenaScope::s_InputListScratch);
     AString<Alloc::ScratchArena> text(scratchArena);
     if(!ReadTextFile(path, text) || HasEmbeddedNull(AStringView(text))){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to read input list '{}'"), PathToString<tchar>(path));

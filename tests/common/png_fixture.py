@@ -7,12 +7,24 @@ import struct
 import zlib
 
 
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+PNG_IHDR_CHUNK = b"IHDR"
+PNG_IDAT_CHUNK = b"IDAT"
+PNG_IEND_CHUNK = b"IEND"
+PNG_CRC_MASK = 0xFFFFFFFF
+PNG_IHDR_BIT_DEPTH = 8
+PNG_IHDR_COMPRESSION_FILTER_INTERLACE = (0, 0, 0)
+PNG_BIG_ENDIAN_U32 = ">I"
+PNG_IHDR_STRUCT = ">IIBBBBB"
+PNG_DEFAULT_COMPRESSION_LEVEL = -1
+
+
 def png_chunk(kind: bytes, data: bytes) -> bytes:
     return (
-        struct.pack(">I", len(data))
+        struct.pack(PNG_BIG_ENDIAN_U32, len(data))
         + kind
         + data
-        + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        + struct.pack(PNG_BIG_ENDIAN_U32, zlib.crc32(kind + data) & PNG_CRC_MASK)
     )
 
 
@@ -23,12 +35,12 @@ def write_png_rows(
     color_type: int,
     rows: bytes | bytearray,
     *,
-    compression_level: int = -1,
+    compression_level: int = PNG_DEFAULT_COMPRESSION_LEVEL,
 ) -> None:
     png = (
-        b"\x89PNG\r\n\x1a\n"
-        + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0))
-        + png_chunk(b"IDAT", zlib.compress(bytes(rows), level=compression_level))
-        + png_chunk(b"IEND", b"")
+        PNG_SIGNATURE
+        + png_chunk(PNG_IHDR_CHUNK, struct.pack(PNG_IHDR_STRUCT, width, height, PNG_IHDR_BIT_DEPTH, color_type, *PNG_IHDR_COMPRESSION_FILTER_INTERLACE))
+        + png_chunk(PNG_IDAT_CHUNK, zlib.compress(bytes(rows), level=compression_level))
+        + png_chunk(PNG_IEND_CHUNK, b"")
     )
     path.write_bytes(png)

@@ -53,6 +53,15 @@ inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
 inline constexpr AStringView s_ResourceDirectoryName = "res";
 inline constexpr AStringView s_GraphicsVolumeName = "graphics";
+inline constexpr char s_FallbackExecutableDirectory[] = ".";
+inline constexpr char s_FallbackExecutableName[] = "nwb";
+inline constexpr char s_UnknownBuildLabel[] = "unknown";
+inline constexpr char s_CrashSpoolDirectoryName[] = "crashes";
+inline constexpr char s_RuntimeCrashMetadataKey[] = "runtime";
+inline constexpr char s_LoaderCrashMetadataValue[] = "loader";
+inline constexpr char s_GpuDebugCrashMetadataKey[] = "gpu_debug";
+inline constexpr char s_EnabledText[] = "true";
+inline constexpr char s_DisabledText[] = "false";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -221,19 +230,19 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
 bool InstallCrashCapture(CrashArena& crashArena){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))
-        executableDirectory = ::Path<CrashArena>(crashArena, ".");
+        executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
 
     ::Path<CrashArena> executableName(crashArena);
     if(!GetExecutableName(executableName))
-        executableName = ::Path<CrashArena>(crashArena, "nwb");
+        executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
 
     AString<CrashArena> applicationName = PathToString<char>(crashArena, executableName);
 
     NWB::Core::Crash::CrashConfig crashConfig(crashArena);
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
-    crashConfig.buildId = AStringView("unknown");
-    crashConfig.version = AStringView("unknown");
-    crashConfig.spoolDirectory = executableDirectory / "crashes";
+    crashConfig.buildId = AStringView(s_UnknownBuildLabel);
+    crashConfig.version = AStringView(s_UnknownBuildLabel);
+    crashConfig.spoolDirectory = executableDirectory / s_CrashSpoolDirectoryName;
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
 
     if(!NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig))
@@ -277,9 +286,9 @@ void ConfigureCrashReporting(const LoaderOptions& options){
     ;
     if(!NWB::Core::Crash::SetCrashUploadDestination(logServerUrl, AStringView(options.crashUploadToken.data(), options.crashUploadToken.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
-    if(!NWB::Core::Crash::SetCrashMetadata("runtime", "loader"))
+    if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
-    if(!NWB::Core::Crash::SetCrashMetadata("gpu_debug", options.enableGpuDebug ? "true" : "false"))
+    if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, options.enableGpuDebug ? s_EnabledText : s_DisabledText)))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 

@@ -89,6 +89,8 @@ inline constexpr usize s_NumberTextBufferBytes = 128u;
 inline constexpr wchar_t s_AsciiCharacterMax = 0x7F;
 inline constexpr StringView s_NullText = "(null)";
 inline constexpr StringView s_PointerHexPrefix = "0x";
+inline constexpr StringView s_TrueText = "true";
+inline constexpr StringView s_FalseText = "false";
 inline constexpr StringView s_UnprintableText = "<unprintable>";
 inline constexpr i32 s_PointerTextRadix = 16;
 
@@ -204,7 +206,7 @@ template<typename T>
 inline void AppendEventArgument(char (&outText)[s_MaxEventTextBytes], usize& outCursor, const T& value)noexcept{
     using RawT = std::remove_cvref_t<T>;
     if constexpr(std::is_same_v<RawT, bool>){
-        AppendEventText(outText, outCursor, value ? std::string_view("true") : std::string_view("false"));
+        AppendEventText(outText, outCursor, value ? std::string_view(s_TrueText) : std::string_view(s_FalseText));
     }
     else if constexpr(std::is_same_v<RawT, char>){
         AppendEventChar(outText, outCursor, value);

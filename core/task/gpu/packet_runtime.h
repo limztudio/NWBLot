@@ -32,6 +32,14 @@ class GpuGraphSubmissionTransactionGateTestAccess;
 struct GpuTaskGraphRuntimeStatistics;
 
 
+namespace GpuPacketRuntimeDetail{
+
+inline constexpr Name s_ExternalResourceHandoffScratchArena("core/task/gpu/external_resource_handoff");
+inline constexpr Name s_PacketStateFanInScratchArena("core/task/gpu/packet_state_fan_in");
+
+};
+
+
 struct GpuRecordedPacket{
     static constexpr usize s_MaxCommandLists = 12u;
 
@@ -850,7 +858,7 @@ public:
         : m_arena(arena)
         , m_packets(arena)
         , m_latestAcceptedQueueTokens(arena)
-        , m_externalResourceHandoffBuildScratch(Name("core/task/gpu/external_resource_handoff"))
+        , m_externalResourceHandoffBuildScratch(GpuPacketRuntimeDetail::s_ExternalResourceHandoffScratchArena)
         , m_transactionIdentity(GpuTaskGraph::allocateGeneration())
     {}
     ~GpuGraphSubmissionTransaction()noexcept;

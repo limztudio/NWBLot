@@ -128,21 +128,27 @@ half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapO
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM (4.0 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (0.05 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 
-half nwbShadowResolveValueWeight(const float centerVis, const float tapVis, const float sigmaLum){
+half nwbShadowResolveValueWeight(const half centerVis, const half tapVis, const float sigmaLum){
     // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
-    return half(exp(-abs(tapVis - centerVis) / sigmaLum));
+    return half(exp(-abs(tapVis - centerVis) / half(sigmaLum)));
 }
 
 float nwbShadowResolveLuma(const float v){
     return v;
 }
+half nwbShadowResolveLuma(const half v){
+    return v;
+}
 float nwbShadowResolveLuma(const float3 c){
+    return nwbLuminance(c);
+}
+half nwbShadowResolveLuma(const half3 c){
     return nwbLuminance(c);
 }
 
 half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){
-    // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
-    return half(exp(-abs(nwbShadowResolveLuma(tapVis) - nwbShadowResolveLuma(centerVis)) / sigmaLum));
+    // The value-similarity weight is a (0, 1) bounded filter factor: run the luma delta in half, matching RGBA16F storage.
+    return half(exp(-abs(half(nwbShadowResolveLuma(tapVis)) - half(nwbShadowResolveLuma(centerVis))) / half(sigmaLum)));
 }
 
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
@@ -184,7 +190,7 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
                 continue;
             const half4 sColor = half4(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(t, (int)slot, 0)));
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-            const half v = half(nwbShadowResolveLuma(float3(sColor.rgb)));
+            const half v = nwbShadowResolveLuma(sColor.rgb);
 #else
             const half v = sColor.r;
 #endif
@@ -196,8 +202,9 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     if(cnt <= 0)
         return NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
     const float invCount = 1.0 / (float)cnt;
-    const float varSpatial = max(mean2 * invCount - (mean * invCount) * (mean * invCount), 0.0);
-    return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(varSpatial) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
+    // Visibility moments stay in (0, 1), so compute the spatial variance in half; FP16 has headroom here.
+    const half varSpatial = max(half(mean2) * half(invCount) - (half(mean) * half(invCount)) * (half(mean) * half(invCount)), half(0.0h));
+    return NWB_SHADOW_RESOLVE_SIGMA_LUM * sqrt(float(varSpatial)) + NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS;
 }
 
 

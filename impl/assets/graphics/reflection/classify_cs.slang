@@ -146,7 +146,8 @@ bool nwbReflectionClassifySurface(
                 observations |= s_NwbReflectionReturnObservation;
                 // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only
                 // through the ordinary fallback route; feedback never drops a useful screen return.
-                result = float4(float3(surface.weight * lerp(environment, radiance, half(confidence))), 2.0 + 0.5 * confidence);
+                // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
+                result = float4(float3(half3(surface.weight) * lerp(half3(environment), radiance, half(confidence))), 2.0 + 0.5 * confidence);
                 if(confidence >= g_NwbReflectionParameters.screenConfidenceThreshold){
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_HITS, 1u);
                     return false;

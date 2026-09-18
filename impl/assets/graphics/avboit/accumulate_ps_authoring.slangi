@@ -115,7 +115,8 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
         NwbAvboitAccumulatePixelOutput capture;
         capture.accumColor = float4(nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0)), ior);
-        capture.accumExtinction = float4(clamp(float3(surface.shadowAbsorptionTint), float3(0.0), float3(1.0)), float(alpha));
+        // Shadow absorption tint is a (0, 1) color factor, so half math is sufficient; widen only for the float4 store.
+        capture.accumExtinction = float4(float3(half3(clamp(half3(surface.shadowAbsorptionTint), half3(0.0h), half3(1.0h)))), float(alpha));
 #if NWB_CSG_ENABLED
         // The triangle TLAS does not contain boolean-cut exits. Resolve this primary through the raster-aware
         // screen fallback instead of tracing the original uncut volume. Coverage is not used for optical masking.

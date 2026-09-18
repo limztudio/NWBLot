@@ -45,21 +45,23 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     // Composite color is linear RGBA16F. Exposure and display mapping happen once, after every transport effect.
     const half3 compositeColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
     // Bound extreme finite exposure controls to the representable scene range before HDR conversion or division.
-    const float3 exposedColor = min(
-        clamp(float3(compositeColor), float3(0.0), float3(65504.0)) * g_NwbDeferredCompositePushConstants.exposure,
-        float3(65504.0)
+    // Exposure color math stays in FP16: inputs/outputs are RGBA16F and the 65504 clamp matches half max.
+    const half3 exposedColor = min(
+        clamp(compositeColor, half3(0.0h), half3(65504.0h)) * half(g_NwbDeferredCompositePushConstants.exposure),
+        half3(65504.0h)
     );
-    const float3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD
-        ? exposedColor / (exposedColor + g_NwbDeferredCompositePushConstants.shoulder)
+    const half3 sdrColor = g_NwbDeferredCompositePushConstants.toneMap == NWB_DEFERRED_TONE_MAP_REINHARD
+        ? exposedColor / (exposedColor + half(g_NwbDeferredCompositePushConstants.shoulder))
         : saturate(exposedColor)
     ;
 
     NwbDeferredCompositePixelOutput output;
-    const float3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
-        ? nwbHdr10EncodeScene(exposedColor)
+    // HDR10 PQ needs FP32 precision, so widen only for the encode and narrow back to the half presentation color.
+    const half3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
+        ? half3(nwbHdr10EncodeScene(float3(exposedColor)))
         : sdrColor
     ;
-    output.color = half4(half3(presentationColor), half(1.0h));
+    output.color = half4(presentationColor, half(1.0h));
     return output;
 }
 

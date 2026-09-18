@@ -42,11 +42,12 @@ NwbImguiPixelOutput main(NwbImguiPixelInput input){
     const half4 source = half4(input.color) * half4(texture.Sample(sampler, input.uv));
 
     NwbImguiPixelOutput output;
-    const float3 presentationColor = g_NwbImguiPushConstants.presentationMode == NWB_IMGUI_PRESENTATION_HDR10
-        ? nwbHdr10EncodeUiSrgb(float3(source.rgb))
-        : float3(source.rgb)
+    // UI blend stays half: RGBA8 vertex color and normalized UI textures fit FP16; widen only for HDR10 PQ math.
+    const half3 presentationColor = g_NwbImguiPushConstants.presentationMode == NWB_IMGUI_PRESENTATION_HDR10
+        ? half3(nwbHdr10EncodeUiSrgb(float3(source.rgb)))
+        : source.rgb
     ;
-    output.color = half4(half3(presentationColor), source.a);
+    output.color = half4(presentationColor, source.a);
     return output;
 }
 

@@ -5,11 +5,13 @@
 #include "handler.h"
 #include "package_internal.h"
 
+#include <global/diagnostics.h>
+
 #include <cstdlib>
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <global/blocking_io.h>
-#if defined(_MSC_VER) && !defined(NDEBUG)
+#if defined(_MSC_VER) && defined(NWB_DEBUG)
 #include <crtdbg.h>
 #endif
 #include <windows.h>
@@ -42,15 +44,9 @@ inline constexpr int s_ProcessFailureExitCode = -1;
 template<typename CharT>
 [[nodiscard]] static bool __hidden_arg_equals(const CharT* lhs, const CharT* rhs)noexcept{
     if(!lhs || !rhs)
-        return false;
+        return lhs == rhs;
 
-    while(*lhs || *rhs){
-        if(*lhs != *rhs)
-            return false;
-        ++lhs;
-        ++rhs;
-    }
-    return true;
+    return DiagnosticDetail::TextEquals(lhs, rhs);
 }
 
 template<typename CharT>
@@ -76,7 +72,7 @@ static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, c
 static void __hidden_silence_process()noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-#if defined(_MSC_VER) && !defined(NDEBUG)
+#if defined(_MSC_VER) && defined(NWB_DEBUG)
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
     _CrtSetReportMode(_CRT_WARN, 0);
     _CrtSetReportMode(_CRT_ERROR, 0);

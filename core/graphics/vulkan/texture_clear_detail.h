@@ -304,11 +304,7 @@ inline bool TextureDepthStencilClearAspectsAreValid(
 }
 
 inline f32 ClampClearFloat(const f32 value, const f32 minValue, const f32 maxValue){
-    if(!(value > minValue))
-        return minValue;
-    if(value > maxValue)
-        return maxValue;
-    return value;
+    return Clamp(value, minValue, maxValue);
 }
 
 inline u32 RoundClearFloatToUInt(const f32 value){

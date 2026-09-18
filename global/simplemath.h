@@ -42,6 +42,40 @@ template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T Abs(const T value){ return value < static_cast<T>(0) ? -value : value; }
 
 template<typename T>
+[[nodiscard]] constexpr NWB_INLINE T Clamp(const T value, const T minValue, const T maxValue){
+    if(!(value > minValue))
+        return minValue;
+    if(value > maxValue)
+        return maxValue;
+    return value;
+}
+
+template<typename T>
+[[nodiscard]] constexpr bool IsPowerOfTwo(const T value){
+    return value > static_cast<T>(0) && (value & (value - static_cast<T>(1))) == static_cast<T>(0);
+}
+
+template<typename T>
+[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align){
+    return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
+}
+
+template<typename T>
+[[nodiscard]] constexpr bool AlignUpPowerOfTwoChecked(const T value, const T alignment, T& outValue){
+    if(alignment == 0){
+        outValue = value;
+        return true;
+    }
+
+    const T mask = alignment - static_cast<T>(1);
+    if(value > Limit<T>::s_Max - mask)
+        return false;
+
+    outValue = (value + mask) & ~mask;
+    return true;
+}
+
+template<typename T>
 [[nodiscard]] constexpr NWB_INLINE T Saturate(const T value){
     if(value < static_cast<T>(0))
         return static_cast<T>(0);

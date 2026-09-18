@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
+#include <global/compile.h>
 #include <impl/ecs_render/shader/shader_system.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/material/material_system.h>
@@ -437,7 +438,7 @@ static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, 
 // Hardware uses full density; photon count must equal gridSide squared.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
 inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
-#if defined(NDEBUG)
+#if defined(NWB_FINAL) || defined(NWB_OPTIMIZE)
 inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 #else
 inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;

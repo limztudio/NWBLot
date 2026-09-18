@@ -6,6 +6,7 @@
 
 #include <global/algorithm.h>
 #include <global/overflow.h>
+#include <global/simplemath.h>
 
 #include <new>
 
@@ -57,24 +58,11 @@ static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free lin
 
 
 [[nodiscard]] constexpr bool IsSupportedAlignment(const usize align){
-    return align <= 1u || (align & (align - 1u)) == 0u;
+    return IsSupportedAlignmentValue(align);
 }
 
 [[nodiscard]] constexpr usize EffectiveAlignment(const usize align){
     return align > s_BlockAlignment ? align : s_BlockAlignment;
-}
-
-[[nodiscard]] constexpr bool AlignUpPowerOfTwoChecked(
-    const usize value,
-    const usize alignment,
-    usize& outValue
-){
-    const usize mask = alignment - 1u;
-    if(value > Limit<usize>::s_Max - mask)
-        return false;
-
-    outValue = (value + mask) & ~mask;
-    return true;
 }
 
 [[nodiscard]] constexpr usize MinimumFreeSpan(){
@@ -141,7 +129,7 @@ inline void StoreBlockForAllocation(void* const p, Block* const block)noexcept{
         return false;
 
     usize userAddress = 0u;
-    if(!AlignUpPowerOfTwoChecked(dataAddress + sizeof(Block*), alignment, userAddress))
+    if(!::AlignUpPowerOfTwoChecked(dataAddress + sizeof(Block*), alignment, userAddress))
         return false;
     if(userAddress < dataAddress)
         return false;
@@ -151,7 +139,7 @@ inline void StoreBlockForAllocation(void* const p, Block* const block)noexcept{
         return false;
 
     usize spanBytes = 0u;
-    if(!AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
+    if(!::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
         return false;
 
     outLayout = AllocationLayout{
@@ -170,7 +158,7 @@ inline void StoreBlockForAllocation(void* const p, Block* const block)noexcept{
         return false;
 
     usize spanBytes = 0u;
-    if(!AlignUpPowerOfTwoChecked(s_UserOffset + requestedBytes, s_BlockAlignment, spanBytes))
+    if(!::AlignUpPowerOfTwoChecked(s_UserOffset + requestedBytes, s_BlockAlignment, spanBytes))
         return false;
 
     outLayout = AllocationLayout{
@@ -196,7 +184,7 @@ inline void StoreBlockForAllocation(void* const p, Block* const block)noexcept{
         return false;
 
     usize spanBytes = 0u;
-    if(!AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
+    if(!::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
         return false;
 
     outLayout = AllocationLayout{

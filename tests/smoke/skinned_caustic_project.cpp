@@ -145,7 +145,10 @@ private:
         }
         NWB_ASSERT(modelAsset);
         const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
-        NWB_ASSERT(model != nullptr);
+        if(!model){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded model has unexpected type"));
+            return false;
+        }
         if(model->skeletonObjects().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: model has no skeleton object"));
             return false;
@@ -158,7 +161,10 @@ private:
         }
         NWB_ASSERT(skeletonAsset);
         const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
-        NWB_ASSERT(skeleton != nullptr);
+        if(!skeleton){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: loaded skeleton has unexpected type"));
+            return false;
+        }
         if(skeleton->joints().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: skeleton has no joints"));
             return false;

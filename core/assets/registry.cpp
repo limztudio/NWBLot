@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <global/assert.h>
+#include <global/not_null.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -90,9 +91,9 @@ bool AssetRegistry::deserializeAssetByName(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.c_str()));
         return false;
     }
-    NWB_ASSERT(found.value() != nullptr);
+    const NotNull<IAssetCodec*> codec(found.value().get());
 
-    return found.value()->deserialize(m_arena, virtualPath, binary, outAsset);
+    return codec->deserialize(m_arena, virtualPath, binary, outAsset);
 }
 
 

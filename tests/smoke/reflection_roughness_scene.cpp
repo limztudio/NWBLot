@@ -180,7 +180,8 @@ bool ReflectionRoughnessScene::createDeformingSource(){
         return false;
     NWB_ASSERT(modelAsset);
     const Impl::Model* modelPtr = Core::Assets::CastAsset<Impl::Model>(modelAsset.get());
-    NWB_ASSERT(modelPtr != nullptr);
+    if(!modelPtr)
+        return false;
     const auto& model = *modelPtr;
     if(model.skeletonObjects().empty())
         return false;
@@ -189,7 +190,8 @@ bool ReflectionRoughnessScene::createDeformingSource(){
         return false;
     NWB_ASSERT(skeletonAsset);
     const Impl::Skeleton* skeletonPtr = Core::Assets::CastAsset<Impl::Skeleton>(skeletonAsset.get());
-    NWB_ASSERT(skeletonPtr != nullptr);
+    if(!skeletonPtr)
+        return false;
     const auto& skeleton = *skeletonPtr;
     if(skeleton.joints().size() < 2u)
         return false;

@@ -20,6 +20,8 @@
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
 
+#include <global/not_null.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -406,9 +408,8 @@ public:
 
     template<typename EntryT>
     [[nodiscard]] CookVector<EntryT>& entries(const Name& assetType)const{
-        ICookEntryBucket* bucket = find(assetType);
-        NWB_ASSERT(bucket != nullptr);
-        return static_cast<CookEntryBucketTyped<EntryT>*>(bucket)->entries();
+        const NotNull<ICookEntryBucket*> bucket(find(assetType));
+        return static_cast<CookEntryBucketTyped<EntryT>*>(bucket.get())->entries();
     }
 
     [[nodiscard]] bool parseDocument(

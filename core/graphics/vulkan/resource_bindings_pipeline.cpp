@@ -99,10 +99,14 @@ bool Device::createPipelineLayoutForBindingLayouts(
     }
 
     if(bindingLayouts.size() == 1 && descriptorSetLayoutCount == 0u){
-        auto* layout = bindingLayouts[0].get();
-        NWB_ASSERT(layout != nullptr);
-        outPipelineLayout = layout->m_pipelineLayout;
-        outPushConstantByteSize = layout->m_pushConstantByteSize;
+        auto* layoutPtr = bindingLayouts[0].get();
+        if(!layoutPtr){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout 0 is invalid"), operationName);
+            return false;
+        }
+        const BindingLayout& layout = *layoutPtr;
+        outPipelineLayout = layout.m_pipelineLayout;
+        outPushConstantByteSize = layout.m_pushConstantByteSize;
         return true;
     }
 
@@ -122,7 +126,10 @@ bool Device::createPipelineLayoutForBindingLayouts(
         if(setCount == 0u)
             continue;
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
-        NWB_ASSERT(bindlessDesc != nullptr);
+        if(!bindlessDesc){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
+            return false;
+        }
         const u32 base = bindlessDesc->descriptorSetIndex;
         if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1u)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
@@ -151,7 +158,10 @@ bool Device::createPipelineLayoutForBindingLayouts(
         if(layout.m_descriptorSetLayouts.empty())
             continue;
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
-        NWB_ASSERT(bindlessDesc != nullptr);
+        if(!bindlessDesc){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
+            return false;
+        }
         const u32 base = bindlessDesc->descriptorSetIndex;
         for(usize localSetIndex = 0; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
             const u32 setIndex = base + static_cast<u32>(localSetIndex);

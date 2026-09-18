@@ -55,7 +55,10 @@ bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
     __hidden_cook_entry_registry::QueryAutoRegistrationQueue().copyTo(functions);
 
     for(const CookEntryRegistrationFunction function : functions){
-        NWB_ASSERT(function != nullptr);
+        if(!function){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function"));
+            return false;
+        }
         if(function(registry))
             continue;
 

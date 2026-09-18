@@ -65,7 +65,10 @@ bool RegisterAutoCollectedAssetVolumePreparers(AssetVolumePrepareContext& contex
     __hidden_asset_volume_prepare_registry::QueryAutoPrepareQueue().copyTo(functions);
 
     for(const AssetVolumePrepareFunction function : functions){
-        NWB_ASSERT(function != nullptr);
+        if(!function){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: collected null volume prepare function"));
+            return false;
+        }
         if(function(context))
             continue;
 

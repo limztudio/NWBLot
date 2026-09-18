@@ -243,7 +243,8 @@ private:
         }
         NWB_ASSERT(modelAsset);
         const auto* model = Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
-        NWB_ASSERT(model != nullptr);
+        if(!model)
+            return fallback;
         if(model->skeletonObjects().empty())
             return fallback;
 
@@ -254,7 +255,8 @@ private:
         }
         NWB_ASSERT(skeletonAsset);
         const auto* skeleton = Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
-        NWB_ASSERT(skeleton != nullptr);
+        if(!skeleton)
+            return fallback;
 
         const u32 jointCount = skeleton->jointCount();
         const u32 anchorIndex = skeleton->findJointIndex(s_CutterAnchorBoneName);

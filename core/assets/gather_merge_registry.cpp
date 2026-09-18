@@ -54,7 +54,8 @@ AssetGatherMergeFunction QueryAutoCollectedAssetGatherMerge(){
     __hidden_gather_merge_registry::QueryAutoMergeQueue().copyTo(functions);
 
     for(const AssetGatherMergeFunction function : functions){
-        NWB_ASSERT(function != nullptr);
+        if(!function)
+            return nullptr;
         return function;
     }
     return nullptr;

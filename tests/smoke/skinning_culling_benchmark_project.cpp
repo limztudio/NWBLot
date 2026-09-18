@@ -337,7 +337,10 @@ private:
         }
         NWB_ASSERT(loadedModelAsset);
         const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset.get());
-        NWB_ASSERT(model != nullptr);
+        if(!model){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model has unexpected type"));
+            return false;
+        }
         const NWB::Impl::ModelSkeletonObject* skeletonObject = nullptr;
         for(const NWB::Impl::ModelSkeletonObject& object : model->skeletonObjects()){
             if(object.name == s_ModelSkeletonObject){
@@ -359,7 +362,10 @@ private:
         }
         NWB_ASSERT(loadedSkeletonAsset);
         const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset.get());
-        NWB_ASSERT(skeleton != nullptr);
+        if(!skeleton){
+            NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has unexpected type"));
+            return false;
+        }
         if(skeleton->joints().empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has no joints"));
             return false;

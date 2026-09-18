@@ -291,12 +291,14 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
         component.runtimeMesh.reset();
     }
 
-    MeshSkinningSource* source = nullptr;
-    if(!ensureSourceLoaded(component.mesh, component.skin, source))
+    MeshSkinningSource* sourcePtr = nullptr;
+    if(!ensureSourceLoaded(component.mesh, component.skin, sourcePtr))
         return false;
-    NWB_ASSERT(source != nullptr);
-    const Mesh* mesh = source->mesh();
-    const Skin* skin = source->skin();
+    if(!sourcePtr)
+        return false;
+    MeshSkinningSource& source = *sourcePtr;
+    const Mesh* mesh = source.mesh();
+    const Skin* skin = source.skin();
     if(!mesh || !skin){
         NWB_ASSERT(false);
         return false;
@@ -333,7 +335,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
         instance.dirtyFlags & ~__hidden_runtime_cache_source::s_GpuUploadHandledDirtyFlags
     );
 
-    ++source->referenceCount;
+    ++source.referenceCount;
     const RuntimeMeshHandle handle = instance.handle;
     auto result = m_instances.try_emplace(entity, Move(instance));
     auto it = result.first;
@@ -358,8 +360,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const auto foundSource = m_sources.find(sourceName);
     if(foundSource != m_sources.end()){
         outSource = &foundSource.value();
-        NWB_ASSERT(outSource->mesh() != nullptr && outSource->skin() != nullptr);
-        return outSource->mesh() != nullptr && outSource->skin() != nullptr;
+        MeshSkinningSource& cachedSource = *outSource;
+        return cachedSource.mesh() != nullptr && cachedSource.skin() != nullptr;
     }
 
     UniquePtr<Core::Assets::IAsset> loadedMeshAsset;
@@ -401,8 +403,8 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     auto result = m_sources.try_emplace(sourceName, Move(source));
     auto it = result.first;
     outSource = &it.value();
-    NWB_ASSERT(outSource->mesh() != nullptr && outSource->skin() != nullptr);
-    return outSource->mesh() != nullptr && outSource->skin() != nullptr;
+    MeshSkinningSource& storedSource = *outSource;
+    return storedSource.mesh() != nullptr && storedSource.skin() != nullptr;
 }
 
 

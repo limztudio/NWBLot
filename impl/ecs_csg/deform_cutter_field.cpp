@@ -115,7 +115,10 @@ bool CsgDeformCutterField::ShapeDistances(
     default:
         break;
     }
-    NWB_ASSERT(distanceFunc != nullptr);
+    if(!distanceFunc){
+        outReason = CsgDeformViabilityReason::InvalidCutter;
+        return false;
+    }
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);

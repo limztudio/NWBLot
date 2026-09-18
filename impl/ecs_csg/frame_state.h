@@ -134,8 +134,12 @@ public:
         const usize cutterEnd = firstCutter + cutterCount;
         for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
             const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
-            NWB_ASSERT(cutterRef.cutter != nullptr);
-            handler(cutterRef.entity, *cutterRef.cutter);
+            if(!cutterRef.cutter){
+                NWB_ASSERT(false);
+                continue;
+            }
+            const CsgCutterComponent& cutter = *cutterRef.cutter;
+            handler(cutterRef.entity, cutter);
         }
     }
     template<typename CutterHandler>

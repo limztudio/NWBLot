@@ -332,7 +332,8 @@ AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpan
     __hidden_cook_metadata::QueryAutoAssetBunchExpanderQueue().copyTo(functions);
 
     for(const AssetBunchExpandFunction function : functions){
-        NWB_ASSERT(function != nullptr);
+        if(!function)
+            continue;
 
         const AssetBunchExpandResult::Enum result = function(context);
         if(result == AssetBunchExpandResult::Unsupported)

@@ -242,8 +242,10 @@ bool FbxMeshBuild::AppendInstanceMesh(
 ){
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
-    NWB_ASSERT(mesh != nullptr);
-    NWB_ASSERT(node != nullptr);
+    if(!mesh || !node){
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
+        return false;
+    }
     if(!mesh->vertex_position.exists){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
         return false;
@@ -438,7 +440,10 @@ bool FbxMeshBuild::EstimateSelectedTriangleCorners(
         }
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
-        NWB_ASSERT(mesh != nullptr);
+        if(!mesh){
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
+            return false;
+        }
         if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / s_TriangleIndexCount){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;

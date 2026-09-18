@@ -41,7 +41,8 @@ public:
 public:
     virtual bool serialize(const NWB::Core::Assets::IAsset& asset, NWB::Core::Assets::AssetBytes& outBinary)const override{
         const ProjectProbeAsset* probe = NWB::Core::Assets::CastAsset<ProjectProbeAsset>(&asset);
-        NWB_ASSERT(probe != nullptr);
+        if(!probe)
+            return false;
 
         AppendPOD(outBinary, probe->marker());
         return true;
@@ -129,7 +130,8 @@ static bool LoadProjectProbeAsset(
 
     NWB_ASSERT(loadedAsset);
     const ProjectProbeAsset* probe = NWB::Core::Assets::CastAsset<ProjectProbeAsset>(loadedAsset.get());
-    NWB_ASSERT(probe != nullptr);
+    if(!probe)
+        return false;
     EXPECT_EQ(probe->marker(), expectedMarker);
     return probe->marker() == expectedMarker;
 }

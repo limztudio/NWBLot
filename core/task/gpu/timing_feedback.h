@@ -188,9 +188,9 @@ struct GpuTaskTimingHistoryEntry{
 // when the timing query that established the last accepted route completes several frames later.
 struct GpuTaskTimingAssignmentState{
     GpuTaskTimingAssignmentKey key;
-    GpuPhysicalQueueId lastAcceptedQueue;
     u64 lastAcceptedFrameIndex = 0u;
     u64 lastSwitchFrameIndex = 0u;
+    GpuPhysicalQueueId lastAcceptedQueue;
     bool hasAcceptedAssignment = false;
 
     [[nodiscard]] bool valid()const noexcept{

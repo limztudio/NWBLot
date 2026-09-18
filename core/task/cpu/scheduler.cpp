@@ -34,10 +34,10 @@ CpuTaskScheduler::Execution::Execution(
     CpuAffinity::Enum workerAffinity
 )noexcept
     : scheduler(owner)
+    , previous(s_execution)
     , task(handle)
     , workerIndex(index)
     , affinity(workerAffinity)
-    , previous(s_execution)
 {
     s_execution = this;
 }

@@ -192,9 +192,9 @@ bool BackendContext::createDevice(){
     };
     physicalQueues.push_back(VulkanPhysicalQueueDesc{
         .nativeQueueIndex = graphicsNativeQueueIndex,
+        .timestampValidBits = timestampValidBitsForFamily(m_graphicsQueueFamily),
         .queueClass = CommandQueue::Graphics,
         .capabilities = graphicsQueueCapabilities,
-        .timestampValidBits = timestampValidBitsForFamily(m_graphicsQueueFamily),
         .dedicated = false,
         .primaryForClass = true,
     });
@@ -202,9 +202,9 @@ bool BackendContext::createDevice(){
     if(m_computeQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
             .nativeQueueIndex = computeNativeQueueIndex,
+            .timestampValidBits = timestampValidBitsForFamily(schedulerComputeQueueFamily),
             .queueClass = CommandQueue::Compute,
             .capabilities = computeQueueCapabilities,
-            .timestampValidBits = timestampValidBitsForFamily(schedulerComputeQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });
@@ -213,9 +213,9 @@ bool BackendContext::createDevice(){
     if(m_transferQueueEnabled){
         physicalQueues.push_back(VulkanPhysicalQueueDesc{
             .nativeQueueIndex = transferNativeQueueIndex,
+            .timestampValidBits = timestampValidBitsForFamily(m_transferQueueFamily),
             .queueClass = CommandQueue::Transfer,
             .capabilities = transferQueueCapabilities,
-            .timestampValidBits = timestampValidBitsForFamily(m_transferQueueFamily),
             .dedicated = true,
             .primaryForClass = true,
         });

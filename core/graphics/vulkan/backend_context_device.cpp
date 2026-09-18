@@ -709,9 +709,9 @@ bool BackendContext::createVulkanDevice(){
 
             m_sameClassQueues.push_back(VulkanPhysicalQueueDesc{
                 .nativeQueueIndex = nativeQueueIndex,
+                .timestampValidBits = physicalQueueFamilies[static_cast<usize>(request.family)].timestampValidBits,
                 .queueClass = queueClass,
                 .capabilities = capabilitiesForSameClassQueue(request.family),
-                .timestampValidBits = physicalQueueFamilies[static_cast<usize>(request.family)].timestampValidBits,
                 .dedicated = queueClass != CommandQueue::Graphics,
                 .primaryForClass = false,
             });

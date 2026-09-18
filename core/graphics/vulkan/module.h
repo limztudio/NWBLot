@@ -54,9 +54,9 @@ struct VulkanNativeQueueDesc{
 // graph packets use the Device-assigned physical ID.
 struct VulkanPhysicalQueueDesc{
     u32 nativeQueueIndex = Limit<u32>::s_Max;
+    u32 timestampValidBits = 0u;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuQueueCapability::Mask capabilities = GpuQueueCapability::None;
-    u32 timestampValidBits = 0u;
     bool dedicated = false;
     bool primaryForClass = false;
 };

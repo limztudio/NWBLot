@@ -64,8 +64,8 @@ private:
         u32 generation = 1u;
         u32 latestCanceledGeneration = 0u;
         u32 next = TaskHandle::s_InvalidIndex;
-        TaskState state = TaskState::Free;
         bool canceled = false;
+        TaskState state = TaskState::Free;
 
         explicit TaskNode(Alloc::GlobalArena& arena);
     };
@@ -94,8 +94,8 @@ private:
         u64 captureEpoch;
         usize workerIndex;
         CpuTaskProfileLabel label;
-        CpuTaskProfileKind::Enum kind;
         CpuAffinity::Enum affinity;
+        CpuTaskProfileKind::Enum kind;
     };
 
     class ProfileMeasure final : NoCopy{
@@ -116,10 +116,10 @@ private:
 
     struct Execution{
         CpuTaskScheduler& scheduler;
+        Execution* previous;
         TaskHandle task;
         usize workerIndex;
         CpuAffinity::Enum affinity;
-        Execution* previous;
 
         Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity)noexcept;
         ~Execution();

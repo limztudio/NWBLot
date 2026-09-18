@@ -22,6 +22,8 @@ namespace __hidden_asset_builder{
 
 
 inline constexpr AStringView s_ImplSourceDirectoryName = "impl";
+inline constexpr Name s_AssetBuilderArena("pipeline/asset_builder");
+inline constexpr u32 s_MinParallelCoreCount = 1u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -98,12 +100,12 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
 
 
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(Name("pipeline/asset_builder"));
+    NWB::Core::Assets::AssetArena arena(s_AssetBuilderArena);
     PipelineOptions parsed(arena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
     return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        NWB::Core::CpuTaskScheduler cpuScheduler(cores > 1u ? cores - 1u : 0u);
+        NWB::Core::CpuTaskScheduler cpuScheduler(cores > s_MinParallelCoreCount ? cores - s_MinParallelCoreCount : 0u);
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
         buildOptions.outputDirectory = options.outputDirectory;
@@ -113,10 +115,10 @@ int RunPipelineTool(const int argc, char** argv){
         buildOptions.inputs = options.inputs;
         buildOptions.useExplicitInputs = true;
         if(!__hidden_asset_builder::ResolveRoots(options, buildOptions))
-            return 1;
+            return s_PipelineExitFailure;
         const bool built = NWB::Pipeline::AssetBuilder::BuildAssets(buildOptions);
         cpuScheduler.wait();
-        return built ? 0 : 1;
+        return built ? s_PipelineExitSuccess : s_PipelineExitFailure;
     });
 }
 

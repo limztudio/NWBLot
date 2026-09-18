@@ -29,6 +29,9 @@ namespace ApplicationEntryDetail{
 using UnicodeEntryPointFn = int(*)(isize, wchar**, void*);
 using AnsiEntryPointFn = int(*)(isize, char**, void*);
 
+inline constexpr int s_ApplicationEntryFailure = -1;
+inline constexpr int s_EmptyArgCount = 0;
+
 // RAII detach of Name callbacks on exit; WriteDefaultFile still works after uninstall.
 class ScopedNameSymbolRegistry final{
 public:
@@ -44,9 +47,9 @@ template<typename Invoke>
     const auto terminalFailure = [](){
 #if defined(NWB_BUILDMODE)
         if(!NameSymbols::WriteDefaultFile())
-            return -1;
+            return s_ApplicationEntryFailure;
 #endif
-        return -1;
+        return s_ApplicationEntryFailure;
     };
     return InvokeTerminalEntry<GeneralException>([&](){
         const ScopedNameSymbolRegistry nameSymbolRegistry;
@@ -58,7 +61,7 @@ template<typename Invoke>
         const int result = Forward<Invoke>(invoke)();
 #if defined(NWB_BUILDMODE)
         if(!NameSymbols::WriteDefaultFile())
-            return -1;
+            return s_ApplicationEntryFailure;
 #endif
         return result;
     }, [&](const GeneralException&){ return terminalFailure(); }, terminalFailure);
@@ -153,7 +156,7 @@ public:
     [[nodiscard]] wchar** argv()const{ return m_argv; }
 
 private:
-    int m_argc = 0;
+    int m_argc = s_EmptyArgCount;
     LPWSTR* m_argv = nullptr;
 };
 
@@ -164,7 +167,7 @@ template<typename EntryPoint>
         if(args.valid())
             return entryPoint(args.argc(), args.argv(), hInstance);
 
-        return -1;
+        return s_ApplicationEntryFailure;
     });
 }
 
@@ -175,7 +178,7 @@ template<typename EntryPoint>
         if(args.valid())
             return entryPoint(args.argc(), args.argv(), GetModuleHandleW(nullptr));
 
-        return -1;
+        return s_ApplicationEntryFailure;
     });
 }
 

@@ -36,6 +36,11 @@ struct SymbolRecordView{
     const SymbolString* text = nullptr;
 };
 
+inline constexpr char s_NamesymRecordSeparator = '\t';
+inline constexpr char s_NamesymRecordTerminator = '\n';
+inline constexpr char s_NamesymProducerSuffix[] = "\tproducer=runtime\n";
+inline constexpr char s_NamesymRuntimeSource[] = "\truntime\t";
+
 void AppendDebugHashText(SymbolString& outText, const NameHash& hash){
     char hashText[NameSymbols::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(hash, hashText, sizeof(hashText));
@@ -124,15 +129,15 @@ public:
         );
 
         outText += NameSymbols::s_FileHeader;
-        outText += "\tproducer=runtime\n";
+        outText += s_NamesymProducerSuffix;
         for(const SymbolRecordView& record : records){
             if(!record.text)
                 continue;
 
             AppendDebugHashText(outText, record.hash);
-            outText += "\truntime\t";
+            outText += s_NamesymRuntimeSource;
             AppendEscapedNamesymText(outText, AStringView(record.text->data(), record.text->size()));
-            outText += '\n';
+            outText += s_NamesymRecordTerminator;
         }
     }
 
@@ -189,11 +194,11 @@ public:
         if(StartsWith(line, AStringView(NameSymbols::s_FileHeader)))
             return true;
 
-        const usize hashEnd = line.find('\t');
+        const usize hashEnd = line.find(s_NamesymRecordSeparator);
         if(hashEnd == AStringView::npos)
             return false;
 
-        const usize sourceEnd = line.find('\t', hashEnd + 1u);
+        const usize sourceEnd = line.find(s_NamesymRecordSeparator, hashEnd + 1u);
         if(sourceEnd == AStringView::npos)
             return false;
 

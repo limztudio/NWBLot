@@ -62,6 +62,15 @@ inline constexpr char s_LoaderCrashMetadataValue[] = "loader";
 inline constexpr char s_GpuDebugCrashMetadataKey[] = "gpu_debug";
 inline constexpr char s_EnabledText[] = "true";
 inline constexpr char s_DisabledText[] = "false";
+inline constexpr int s_LoaderExitSuccess = 0;
+inline constexpr int s_LoaderExitFailure = -1;
+inline constexpr u16 s_EmptyFrameClientExtent = 0u;
+inline constexpr tchar s_EmptyWindowTitleTerminator = 0;
+inline constexpr u16 s_StandaloneLoggerPort = 0u;
+inline constexpr char s_LoaderAppName[] = "loader";
+inline constexpr char s_CrashUploadTokenOption[] = "--crash-upload-token";
+inline constexpr char s_ForceSdrOutputFlag[] = "--sdr";
+inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -320,15 +329,15 @@ static int RunProjectRuntime(
         // to the hash hex in release, which the server resolves.
 
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
-        if(frameClientSize.width == 0 || frameClientSize.height == 0){
+        if(frameClientSize.width == __hidden_loader::s_EmptyFrameClientExtent || frameClientSize.height == __hidden_loader::s_EmptyFrameClientExtent){
             NWB_LOGGER_FATAL(NWB_TEXT("Invalid project frame client size: {}x{}"), frameClientSize.width, frameClientSize.height);
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         }
 
         const tchar* projectWindowTitle = NWB::QueryProjectWindowTitle();
-        if(!projectWindowTitle || projectWindowTitle[0] == 0){
+        if(!projectWindowTitle || projectWindowTitle[0] == __hidden_loader::s_EmptyWindowTitleTerminator){
             NWB_LOGGER_FATAL(NWB_TEXT("Invalid project window title"));
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         }
 
         NWB::Core::Frame frame(inst, frameClientSize.width, frameClientSize.height);
@@ -340,29 +349,29 @@ static int RunProjectRuntime(
         NWB::ProjectStartupContext startupContext{ frame.graphics(), frame.projectObjectArena(), {} };
         if(!NWB::ConfigureProjectRuntime(startupContext)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: project runtime configuration failed before device initialization"));
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         }
         if(!frame.graphics().setFilesystemFactory(startupContext.filesystemFactory))
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         if(!__hidden_loader::ApplyGraphicsOptions(frame.graphics(), options))
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
 
         if(!frame.init())
-            return -1;
-        i32 initializedFrameWidth = 0;
-        i32 initializedFrameHeight = 0;
+            return __hidden_loader::s_LoaderExitFailure;
+        i32 initializedFrameWidth = __hidden_loader::s_UninitializedFrameExtent;
+        i32 initializedFrameHeight = __hidden_loader::s_UninitializedFrameExtent;
         frame.graphics().getWindowDimensions(initializedFrameWidth, initializedFrameHeight);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: frame initialized ({}x{})"), initializedFrameWidth, initializedFrameHeight);
 
         NWB::Core::Filesystem::VolumeMountDesc graphicsMount(frame.projectObjectArena());
         if(!graphicsMount.volumeName.assign(__hidden_loader::s_GraphicsVolumeName))
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         graphicsMount.mountDirectory = resourceMountDirectory;
         UniquePtr<NWB::Core::Filesystem::IFilesystem> graphicsFilesystem = NWB::Core::Filesystem::CreateFilesystem(
             frame.projectObjectArena(), graphicsMount, startupContext.filesystemFactory
         );
         if(!graphicsFilesystem)
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: mounted graphics volume from '{}'"), PathToString<tchar>(resourceMountDirectory));
 
         {
@@ -378,7 +387,7 @@ static int RunProjectRuntime(
                 NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
                     , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
                 );
-                return -1;
+                return __hidden_loader::s_LoaderExitFailure;
             }
 
             NWB::Core::CpuTaskScope projectTasks(
@@ -427,7 +436,7 @@ static int RunProjectRuntime(
             auto callbacks = NWB::CreateProjectEntryCallbacks(context);
             if(!callbacks){
                 NWB_LOGGER_FATAL(NWB_TEXT("CreateProjectEntryCallbacks failed: callback instance is null"));
-                return -1;
+                return __hidden_loader::s_LoaderExitFailure;
             }
             __hidden_loader::CallbackShutdownGuard callbackShutdownGuard{
                 *callbacks,
@@ -438,35 +447,35 @@ static int RunProjectRuntime(
             callbackShutdownGuard.activate();
             if(!callbacks->onStartup()){
                 NWB_LOGGER_FATAL(NWB_TEXT("Project startup callback returned false"));
-                return -1;
+                return __hidden_loader::s_LoaderExitFailure;
             }
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: project startup complete"));
             frame.setProjectUpdateCallback(&__hidden_loader::ProjectTickCallback, &updateCallbackContext);
 
             if(!frame.showFrame()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame show failed"));
-                return -1;
+                return __hidden_loader::s_LoaderExitFailure;
             }
 
             if(!frame.mainLoop()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Loader: frame main loop failed"));
-                return -1;
+                return __hidden_loader::s_LoaderExitFailure;
             }
         }
         if(!graphicsFilesystem->unmount()){
             NWB_LOGGER_ERROR(NWB_TEXT("Loader: failed to unmount project filesystem"));
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         }
     }
 
-    return 0;
+    return __hidden_loader::s_LoaderExitSuccess;
 }
 
 static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader::LoaderOptions& options, void* inst, const bool crashReportingInstalled){
     if(options.useStandaloneLogger){
         NWB::Log::ClientStandalone logger;
         if(!logger.init())
-            return -1;
+            return __hidden_loader::s_LoaderExitFailure;
         NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: using standalone log output"));
         if(crashReportingInstalled)
@@ -479,7 +488,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 
     NWB::Log::Client logger;
     if(!logger.init(MakeNotNull(options.logAddress.c_str())))
-        return -1;
+        return __hidden_loader::s_LoaderExitFailure;
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: connected to log server '{}'"), StringConvert(options.logAddress.c_str()));
     if(crashReportingInstalled)
@@ -506,25 +515,25 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
 
     NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
-    CLI::App app{ "loader" };
+    CLI::App app{ __hidden_loader::s_LoaderAppName };
 
     AInteropString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
     u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
-    app.add_option("--crash-upload-token", options.crashUploadToken, "Bearer token sent with crash uploads");
-    app.add_flag("--sdr", options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
+    app.add_option(__hidden_loader::s_CrashUploadTokenOption, options.crashUploadToken, "Bearer token sent with crash uploads");
+    app.add_flag(__hidden_loader::s_ForceSdrOutputFlag, options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
     __hidden_loader::AddDebugCommandLineOptions(app, options);
 
     return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
         CommandLineParseApp(app, argc, argv);
 
-        options.useStandaloneLogger = address.empty() || port == 0u;
+        options.useStandaloneLogger = address.empty() || port == __hidden_loader::s_StandaloneLoggerPort;
         if(!options.useStandaloneLogger)
             options.logAddress = StringFormat(commandLineArena, "{}:{}", AStringView(address.data(), address.size()), port);
 
         return MainLogic(commandLineArena, options, inst, crashReportingInstalled);
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; },
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return __hidden_loader::s_LoaderExitFailure; },
         NWB::Core::Common::TerminalErrorExitPolicy::ApplicationFailure
     );
 }

@@ -36,6 +36,9 @@ inline constexpr int s_MinVolumeSliceCount = 1;
 inline constexpr int s_UnboundedOptionCount = -1;
 inline constexpr u32 s_SingleTextureInputModeCount = 1u;
 inline constexpr int s_AlphaOptionPresentCount = 0;
+inline constexpr int s_TexConvExitSuccess = 0;
+inline constexpr int s_TexConvExitFailure = 1;
+inline constexpr int s_TexConvExitFatal = -1;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,7 +83,7 @@ int Run(const int argc, char** argv){
             ;
             if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
-                return 1;
+                return s_TexConvExitFailure;
             }
 
             if(!inputArgument.empty()){
@@ -117,7 +120,7 @@ int Run(const int argc, char** argv){
                 }
                 else if(alphaText.empty()){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
                 else{
                     alphaSource.mode = AlphaSourceMode::Image;
@@ -133,20 +136,20 @@ int Run(const int argc, char** argv){
                         , PathToString<tchar>(inputPath)
                         , StringConvert(errorCode.message())
                     );
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
                 if(!inputIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(inputPath)
                     );
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(inputPath)){
                     NWB_LOGGER_ERROR(NWB_TEXT(
                         "tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
             }
 
@@ -158,32 +161,32 @@ int Run(const int argc, char** argv){
                         , PathToString<tchar>(alphaSource.path)
                         , StringConvert(errorCode.message())
                     );
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
                 if(!alphaIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(alphaSource.path)
                     );
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(alphaSource.path)){
                     NWB_LOGGER_ERROR(NWB_TEXT(
                         "tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
-                    return 1;
+                    return s_TexConvExitFailure;
                 }
             }
 
             OutputPaths outputPaths;
             if(!ResolveOutputPaths(inputPaths.front(), outputPathText, outputPaths) || !ValidateOutputPaths(outputPaths, force))
-                return 1;
+                return s_TexConvExitFailure;
 
             TexturePayload payload;
             if(!EncodeTexture(inputPaths, dimension, !linear, alphaSource, payload))
-                return 1;
+                return s_TexConvExitFailure;
             if(!WriteOutputs(outputPaths, payload, force))
-                return 1;
+                return s_TexConvExitFailure;
 
             AStringStream report;
             report
@@ -200,9 +203,9 @@ int Run(const int argc, char** argv){
                 << ", " << payload.mips.size() << " mips, " << totalPayloadBytes << " bytes\n"
             ;
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
-            return 0;
+            return s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return s_TexConvExitFatal; });
 }
 
 

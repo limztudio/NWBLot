@@ -22,6 +22,20 @@ namespace PipelineTool{
     };
 };
 
+inline constexpr int s_PipelineExitSuccess = 0;
+inline constexpr int s_PipelineExitFailure = 1;
+inline constexpr int s_PipelineExitFatal = -1;
+inline constexpr char s_PipelineAppDescription[] = "NWB asset pipeline";
+inline constexpr char s_PipelineInputOption[] = "input,--input";
+inline constexpr char s_PipelineInputListOption[] = "--input-list";
+inline constexpr char s_PipelineOutputOption[] = "-o,--output,--output-directory";
+inline constexpr char s_PipelineRepoRootOption[] = "--repo-root";
+inline constexpr char s_PipelineAssetRootOption[] = "--asset-root";
+inline constexpr char s_PipelineCacheDirectoryOption[] = "--cache-directory";
+inline constexpr char s_PipelineAssetTypeOption[] = "--asset-type";
+inline constexpr char s_PipelineConfigurationOption[] = "--configuration";
+inline constexpr char s_PipelineCliHelpRequestName[] = "CallForHelp";
+
 struct PipelineOptions{
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> inputs;
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> assetRoots;
@@ -57,9 +71,9 @@ public:
     [[nodiscard]] int run(const int argc, char** argv, PipelineOptions& options, ToolBody&& body){
         return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
             if(!parse(argc, argv, options))
-                return 1;
+                return s_PipelineExitFailure;
             return body(options);
-        }, [&](const CLI::ParseError& error){ return exit(error); }, [](){ return -1; });
+        }, [&](const CLI::ParseError& error){ return exit(error); }, [](){ return s_PipelineExitFatal; });
     }
 
 

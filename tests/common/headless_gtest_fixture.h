@@ -35,6 +35,8 @@ struct HeadlessGraphicsTestConfig{
     static constexpr bool s_SkipInSetUpTestSuite = true;
     static constexpr const char* s_SkipMessage = "no usable validation-enabled headless Vulkan device on this host";
     static constexpr const tchar* s_VulkanErrorMessage = NWB_TEXT("validation-enabled GPU tests emitted a Vulkan severity=error message");
+    static constexpr const char* s_ThreadsafeDeathTestStyle = "threadsafe";
+    static constexpr const tchar* s_VulkanErrorSeverityToken = NWB_TEXT("Vulkan debug: [severity=error");
 };
 
 template<typename Config = HeadlessGraphicsTestConfig>
@@ -43,7 +45,7 @@ protected:
     static void SetUpTestSuite(){
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
         if constexpr(Config::s_DeathTestThreadsafe)
-            GTEST_FLAG_SET(death_test_style, "threadsafe");
+            GTEST_FLAG_SET(death_test_style, Config::s_ThreadsafeDeathTestStyle);
 #endif
 
         s_logger.emplace();
@@ -66,7 +68,7 @@ protected:
     static void TearDownTestSuite(){
         s_scope.reset();
         if(s_deviceInitialized && s_logger.has_value()){
-            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
+            EXPECT_FALSE(s_logger->sawMessageContaining(Config::s_VulkanErrorSeverityToken))
                 << Config::s_VulkanErrorMessage;
         }
         s_loggerGuard.reset();

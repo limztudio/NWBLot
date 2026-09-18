@@ -54,20 +54,20 @@ static bool AssignInputs(const InteropVector<AInteropString>& values, NWB::Core:
 
 PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
     : m_tool(inTool)
-    , m_app("NWB asset pipeline")
+    , m_app(s_PipelineAppDescription)
 {
-    m_app.add_option("input,--input", m_inputs, "Input assets; accepts multiple paths and repeated options");
-    m_app.add_option("--input-list", m_inputList, "UTF-8 newline-separated input paths");
-    m_app.add_option("-o,--output,--output-directory", m_outputDirectory,
+    m_app.add_option(s_PipelineInputOption, m_inputs, "Input assets; accepts multiple paths and repeated options");
+    m_app.add_option(s_PipelineInputListOption, m_inputList, "UTF-8 newline-separated input paths");
+    m_app.add_option(s_PipelineOutputOption, m_outputDirectory,
         m_tool == PipelineTool::DependencyComputer ? "Output dependency list file" : "Output directory")->required();
     if(m_tool == PipelineTool::AssetBuilder){
-        m_app.add_option("--repo-root", m_repoRoot, "Repository root; defaults to the working directory");
-        m_app.add_option("--asset-root", m_assetRoots, "Asset root directories used to resolve virtual paths");
-        m_app.add_option("--cache-directory", m_cacheDirectory, "Asset build cache directory");
-        m_app.add_option("--asset-type", m_assetType, "Asset build domain; graphics is currently supported");
+        m_app.add_option(s_PipelineRepoRootOption, m_repoRoot, "Repository root; defaults to the working directory");
+        m_app.add_option(s_PipelineAssetRootOption, m_assetRoots, "Asset root directories used to resolve virtual paths");
+        m_app.add_option(s_PipelineCacheDirectoryOption, m_cacheDirectory, "Asset build cache directory");
+        m_app.add_option(s_PipelineAssetTypeOption, m_assetType, "Asset build domain; graphics is currently supported");
     }
     if(m_tool != PipelineTool::DependencyComputer)
-        m_app.add_option("--configuration", m_configuration, "Build configuration label");
+        m_app.add_option(s_PipelineConfigurationOption, m_configuration, "Build configuration label");
 }
 
 bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& options){
@@ -102,13 +102,13 @@ bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& op
 }
 
 int PipelineCommandLine::exit(const CLI::ParseError& error)const{
-    if(error.get_name() == "CallForHelp"){
+    if(error.get_name() == s_PipelineCliHelpRequestName){
         NWB_COUT << m_app.help();
-        return 0;
+        return s_PipelineExitSuccess;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: failed to parse command line: {}"), StringConvert(error.what()));
     NWB_CERR << m_app.help();
-    return 1;
+    return s_PipelineExitFailure;
 }
 
 

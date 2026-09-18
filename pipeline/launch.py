@@ -21,6 +21,8 @@ import launcher as ROOT_LAUNCHER  # noqa: E402
 
 
 TARGET = "nwb_pipeline"
+EXIT_SUCCESS = 0
+EXIT_FAILURE = 1
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -189,11 +191,11 @@ def main(argv: Sequence[str]) -> int:
         cook(options)
     except (OSError, ValueError) as error:
         print(f"pipeline: {error}", file=sys.stderr)
-        return 1
+        return EXIT_FAILURE
     except subprocess.CalledProcessError as error:
         print(f"pipeline: {Path(error.cmd[0]).stem} failed with exit code {error.returncode}", file=sys.stderr)
-        return 1
-    return 0
+        return EXIT_FAILURE
+    return EXIT_SUCCESS
 
 
 if __name__ == "__main__":

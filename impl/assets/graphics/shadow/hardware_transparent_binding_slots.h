@@ -9,7 +9,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_HW_TRANSPARENT_CROSSING_CAPACITY 12u
+#define NWB_HW_TRANSPARENT_CROSSING_CAPACITY 24u
+#if NWB_HW_TRANSPARENT_CROSSING_CAPACITY == 0u || NWB_HW_TRANSPARENT_CROSSING_CAPACITY >= 32u
+#error Hardware transparent crossing capacity must fit the evaluator's 32-bit remaining mask.
+#endif
 #define NWB_HW_TRANSPARENT_CROSSING_WORDS 5u
 #define NWB_HW_TRANSPARENT_WORDS_PER_RAY (1u + NWB_HW_TRANSPARENT_CROSSING_CAPACITY * NWB_HW_TRANSPARENT_CROSSING_WORDS)
 #define NWB_HW_TRANSPARENT_OVERFLOW_COUNT (NWB_HW_TRANSPARENT_CROSSING_CAPACITY + 1u)

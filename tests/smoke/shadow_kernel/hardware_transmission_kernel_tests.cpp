@@ -473,7 +473,9 @@ void RunCase(
         EXPECT_NEAR(actual->selected[channel], expected.raw[channel], 0.002f);
         EXPECT_NEAR(actual->continuation[channel], expected.raw[channel], 0.002f);
     }
-    const bool overflow = testCase.instanceCount * testCase.shellCount * 2u > NWB_HW_TRANSPARENT_CROSSING_CAPACITY;
+    // Dense fixtures use rays away from triangle edges; an inside origin omits exactly the first entry boundary.
+    const u32 denseCrossingCount = testCase.instanceCount * testCase.shellCount * 2u - (testCase.origin.z > 1.0f ? 1u : 0u);
+    const bool overflow = denseCrossingCount > NWB_HW_TRANSPARENT_CROSSING_CAPACITY;
     EXPECT_EQ(actual->usedContinuation, overflow ? 1u : 0u);
     EXPECT_EQ(actual->overflowCount, overflow ? 1u : 0u);
     EXPECT_EQ(actual->overflowGroups, overflow ? 1u : 0u);
@@ -482,6 +484,8 @@ void RunCase(
         EXPECT_EQ(actual->crossingCount, NWB_HW_TRANSPARENT_OVERFLOW_COUNT);
     else if(testCase.opaque || testCase.origin.x > 2.0f)
         EXPECT_EQ(actual->crossingCount, 0u);
+    else if(testCase.shellCount > 1u)
+        EXPECT_EQ(actual->crossingCount, denseCrossingCount);
     else
         EXPECT_GE(actual->crossingCount, 1u);
 }
@@ -663,9 +667,25 @@ TEST_F(HardwareTransmissionKernelTest, AuthoredClosedOriginsAndHardwareContinuat
         { .name = "closed origin inside", .origin = { 0.125f, 0.25f, 1.5f } },
         { .name = "finite ray ends inside closed volume", .rayLength = 1.5f },
         { .name = "unspecified retains legacy singleton", .origin = { 0.125f, 0.25f, 1.5f }, .closed = false },
-        { .name = "eighteen boundaries complete on hardware", .shellCount = 9u },
-        { .name = "seventeen boundaries from interior", .shellCount = 9u, .origin = { 0.125f, 0.25f, 1.5f } },
-        { .name = "eight overlapping instances exceed scratch", .instanceCount = 8u, .instanceStep = 0.125f },
+        {
+            .name = "exact scratch capacity remains gathered",
+            .shellCount = (NWB_HW_TRANSPARENT_CROSSING_CAPACITY + 1u) / 2u,
+            .origin = { 0.125f, 0.25f, (NWB_HW_TRANSPARENT_CROSSING_CAPACITY & 1u) != 0u ? 1.5f : 0.0f }
+        },
+        {
+            .name = "first crossing beyond capacity requires continuation",
+            .shellCount = (NWB_HW_TRANSPARENT_CROSSING_CAPACITY + 2u) / 2u,
+            .origin = { 0.125f, 0.25f, (NWB_HW_TRANSPARENT_CROSSING_CAPACITY & 1u) != 0u ? 0.0f : 1.5f }
+        },
+        { .name = "dense closed shells complete on hardware", .shellCount = NWB_HW_TRANSPARENT_CROSSING_CAPACITY / 2u + 3u },
+        {
+            .name = "dense interior origin completes on hardware",
+            .shellCount = NWB_HW_TRANSPARENT_CROSSING_CAPACITY / 2u + 3u, .origin = { 0.125f, 0.25f, 1.5f }
+        },
+        {
+            .name = "overlapping instances exceed scratch", .instanceCount = NWB_HW_TRANSPARENT_CROSSING_CAPACITY / 2u + 2u,
+            .instanceStep = 0.125f
+        },
     };
     for(const Case& testCase : cases)
         ASSERT_NO_FATAL_FAILURE(RunCase(device(), arena(), *collect, *evaluate, testCase, scratchArena));

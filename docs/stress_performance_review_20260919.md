@@ -164,9 +164,34 @@ Current hardware smoke expectations require the new hardware transparent dispatc
 
 Two implementation limits remain explicit. The engine currently creates one triangle geometry per BLAS, which is the material/primitive indexing contract. Forward intersections cannot infer occupancy for a finite segment wholly inside a volume with no boundary crossing; the previous software path also lacked that information. At exact silhouettes, paired opposite-facing reports are treated as a tangent, but a lone exit remains ambiguous with an inside-origin exit. The tested tangent cases pass on Adreno X2-90; this is not a claim that every hardware intersection convention resolves the ambiguity.
 
+## Gather capacity tuning, 2026-09-20
+
+The first hardware replacement spent approximately three quarters of transparent trace time completing rays that exceeded its twelve-crossing gather buffer. Raising the capacity to **24** lets more rays use the separate, bounded material-evaluation pass. The complete hardware continuation remains in place for a twenty-fifth candidate; no crossings are discarded. Canonical event ordering, instance clustering, material math, ray counts, sampling and denoising are unchanged. A shared compile-time guard now restricts capacity to 1 through 31, matching the evaluator's 32-bit remaining-event mask.
+
+This increases the full-frame crossing allocation at 1280 x 900 from **70,272,000 to 139,392,000 bytes**, an additional **69,120,000 bytes**. Overflow-list storage remains 1,152,000 bytes plus sixteen argument bytes. Rays with at most twelve events still touch the same number of record planes and process the same actual event count; allocated capacity is not an unconditional doubling of memory traffic.
+
+The frozen baseline is `208998137`. The test order was baseline, candidate, candidate, baseline, with the same all-features 1280 x 900, 10-body stress workload, fixed yaw and simulation, five-second warmup and thirty-second native presentation measurement:
+
+| Measurement | Capacity 12 | Capacity 24 |
+| --- | ---: | ---: |
+| Run 1 | 30.4050 FPS | 37.9811 FPS |
+| Run 2 | 30.3117 FPS | 37.9822 FPS |
+| Aggregate presentations / aggregate seconds | 30.3583 FPS | 37.9816 FPS |
+| Aggregate wall time per presentation | 32.940 ms | 26.329 ms |
+| Transparent trace, first run mean per range | 8.438 ms | 2.232 ms |
+| Continuation, first run work over six dispatches | 6.362 ms | 0.0186 ms |
+
+The observed gain is **25.11%**, saving **6.611 ms per presentation**. Gather and evaluation together account for approximately 2.20 ms of the candidate's trace work; continuation is now small in this scene. Nested/asynchronous GPU scopes have different sample counts and must not be added into a frame budget. These short tests are not a sustained thermal qualification. **60 FPS remains unmet**, and these results continue to cover five opaque plus five transparent bodies rather than the requested 20-body scene.
+
+The native fixture now derives its dense geometry from the shared capacity and covers **24 analytic scenes**. New cases exercise exactly 24 gathered crossings and the twenty-fifth crossing entering continuation. Dense 30/29-boundary paths and 28 crossings through distinct overlapping instances retain real hardware-overflow coverage. Tests still compare both gathered/selected and complete continuation output to analytic RGB, and read back the overflow sentinel, route, queue index and dispatch-group count. All ten native shadow tests pass, including the six reconstruction tests and retained software traversal regression. Production shader cooking and native builds passed; the separate complete-scene Vulkan validation run passed with the validation layer and debug messenger enabled. The validation timing is excluded from the comparison.
+
+Matched stress captures freeze at yaw 0.6 after 360 rendered frames. Visual inspection found no structural change; mean absolute RGB channel difference is 0.0995/255 and the 95th percentile is 1/255. These are observations from the captured scene, not a claim of pixel identity or a fix for pre-existing glass surface artifacts.
+
+Local logs, frozen executable/resources, resource identities and arithmetic are under `__artifacts/stress_60fps/continuation_208998137/`. `baseline_run{1,2}`, `capacity24_run{1,2}`, `comparison24.json`, `native_all24.log`, `capture_comparison.json` and `validation24` contain the evidence. The next memory improvement is to reuse the same capacity-24 storage across bounded row tiles; this requires independent validation of global pixel/jitter coordinates, partial tiles and overflow, and is not part of this capacity change.
+
 ## Next architecture work
 
-1. **Profile the remaining hardware shadow stages.** The separate gather, optical evaluation and hardware continuation now exist. Measure candidate-count distributions and overflow frequency before changing scratch capacity or intersection ordering. Keep complete per-instance integration and use end-to-end presentation timing to qualify further changes.
+1. **Bound hardware shadow scratch memory.** Reuse capacity-24 storage across row tiles with a fixed byte budget. Keep global receiver/jitter/output coordinates and complete overflow integration intact. Measure dispatch overhead and total frame time separately from the already-demonstrated capacity gain.
 2. **Use indexed generated vertices.** The current shader already evaluates each meshlet-local vertex once, then expands a 64-byte record per triangle corner. Index by full meshlet-local vertex identity to preserve normal, tangent and UV seams. This targets generated writes, raster fetches and repeated vertex work without changing materials.
 
 60 FPS requires at most 16.67 ms per frame. Even eliminating the approximately 1.3 ms GI envelope would not close the gap. Re-measure after each architectural change before adjusting samples, resolution or temporal quality. None of the unimplemented directions above is a demonstrated guarantee of 60 FPS, particularly for the requested 20-body workload.

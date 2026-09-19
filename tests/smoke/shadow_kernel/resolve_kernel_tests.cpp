@@ -87,6 +87,9 @@ struct ResolveCase{
     Guidance::Enum guidance = Guidance::Flat;
     bool multiply = false;
     bool backgroundBorder = false;
+    u32 stage = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE;
+    u32 stepWidth = 1u;
+    bool momentsValid = false;
 };
 
 using HalfPixels = Vector<HalfPixel, Alloc::ScratchArena>;
@@ -149,14 +152,19 @@ void RunResolveCase(
     const u32 halfHeight = DivideUp(testCase.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
     const usize fullCount = static_cast<usize>(testCase.width) * testCase.height;
     const usize halfCount = static_cast<usize>(halfWidth) * halfHeight;
+    const bool wavelet = testCase.stage == NWB_SHADOW_RESOLVE_STAGE_WAVELET;
+    const u32 outputWidth = wavelet ? halfWidth : testCase.width;
+    const u32 outputHeight = wavelet ? halfHeight : testCase.height;
     HalfPixels colors(scratchArena);
     HalfPixels geometry(scratchArena);
+    HalfPixels moments(scratchArena);
     HalfPixels depth(scratchArena);
     HalfPixels world(scratchArena);
     HalfPixels normals(scratchArena);
     HalfPixels prior(scratchArena);
     colors.reserve(halfCount);
     geometry.reserve(halfCount);
+    moments.reserve(halfCount);
     depth.reserve(fullCount);
     world.reserve(fullCount);
     normals.reserve(fullCount);
@@ -184,6 +192,7 @@ void RunResolveCase(
             }
             colors.push_back(ToHalfPixel(color));
             geometry.push_back(ToHalfPixel(guide));
+            moments.push_back(ToHalfPixel({ 0.5f, 0.5f, 8.0f, 1.0f }));
         }
     }
     for(u32 y = 0u; y < testCase.height; ++y){
@@ -214,11 +223,18 @@ void RunResolveCase(
     colorDesc.setDimension(TextureDimension::Texture2DArray).setArraySize(1u);
     const TextureHandle sources[] = {
         graphicsDevice.createTexture(colorDesc), graphicsDevice.createTexture(halfDesc),
-        graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc)
+        graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc),
+        graphicsDevice.createTexture(colorDesc)
     };
-    const HalfPixels* const data[] = { &colors, &geometry, &depth, &world, &normals };
+    const HalfPixels* const data[] = { &colors, &geometry, &depth, &world, &normals, &moments };
     TextureDesc outputDesc = fullDesc;
-    outputDesc.setDimension(TextureDimension::Texture2DArray).setArraySize(1u).setInUAV(true);
+    outputDesc
+        .setWidth(outputWidth)
+        .setHeight(outputHeight)
+        .setDimension(TextureDimension::Texture2DArray)
+        .setArraySize(1u)
+        .setInUAV(true)
+    ;
     const TextureHandle output = graphicsDevice.createTexture(outputDesc);
     const StagingTextureHandle readback = graphicsDevice.createStagingTexture(outputDesc, CpuAccessMode::Read);
     ASSERT_TRUE(output);
@@ -228,7 +244,7 @@ void RunResolveCase(
     const BufferHandle scene = graphicsDevice.createBuffer(sceneDesc);
     ASSERT_TRUE(scene);
     auto& heap = graphicsDevice.getDescriptorHeap();
-    GpuDescriptorHandle descriptors[7]{};
+    GpuDescriptorHandle descriptors[8]{};
     ScopeExit releaseDescriptors([&]()noexcept{
         for(const GpuDescriptorHandle descriptor : descriptors){
             if(descriptor.valid())
@@ -238,21 +254,21 @@ void RunResolveCase(
     });
     for(u32 index = 0u; index < LengthOf(sources); ++index){
         ASSERT_TRUE(sources[index]);
-        descriptors[index] = heap.allocate(index == 0u ? GpuDescriptorClass::SampledImage2DArray : GpuDescriptorClass::SampledImage);
+        descriptors[index] = heap.allocate((index == 0u || index == 5u) ? GpuDescriptorClass::SampledImage2DArray : GpuDescriptorClass::SampledImage);
         ASSERT_TRUE(descriptors[index].valid());
         ASSERT_TRUE(heap.write(descriptors[index], DescriptorWriteItem::Texture_SRV(0u, sources[index].get())));
     }
-    descriptors[5] = heap.allocate(GpuDescriptorClass::StorageImage);
-    descriptors[6] = heap.allocate(GpuDescriptorClass::UniformBuffer);
-    ASSERT_TRUE(descriptors[5].valid());
+    descriptors[6] = heap.allocate(GpuDescriptorClass::StorageImage);
+    descriptors[7] = heap.allocate(GpuDescriptorClass::UniformBuffer);
     ASSERT_TRUE(descriptors[6].valid());
-    ASSERT_TRUE(heap.write(descriptors[5], DescriptorWriteItem::Texture_UAV(0u, output.get())));
-    ASSERT_TRUE(heap.write(descriptors[6], DescriptorWriteItem::ConstantBuffer(0u, scene.get())));
+    ASSERT_TRUE(descriptors[7].valid());
+    ASSERT_TRUE(heap.write(descriptors[6], DescriptorWriteItem::Texture_UAV(0u, output.get())));
+    ASSERT_TRUE(heap.write(descriptors[7], DescriptorWriteItem::ConstantBuffer(0u, scene.get())));
     const CommandListHandle commandList = graphicsDevice.createCommandList();
     ASSERT_TRUE(commandList);
     commandList->open();
     for(u32 index = 0u; index < LengthOf(sources); ++index){
-        const usize pitch = (index < 2u ? halfWidth : testCase.width) * sizeof(HalfPixel);
+        const usize pitch = (index < 2u || index == 5u ? halfWidth : testCase.width) * sizeof(HalfPixel);
         ASSERT_TRUE(commandList->tryWriteTexture(*sources[index], 0u, 0u, data[index]->data(), pitch));
         commandList->setTextureState(sources[index].get(), s_AllSubresources, ResourceStates::ShaderResource);
     }
@@ -267,16 +283,16 @@ void RunResolveCase(
     commandList->setComputeState(state);
     heap.bindCompute(*commandList, pipeline);
     const ResolvePushConstants push{
-        testCase.width, testCase.height, halfWidth, halfHeight, 1u, NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE,
-        0u, 1u, 0u, testCase.multiply ? 1u : 0u,
+        testCase.width, testCase.height, halfWidth, halfHeight, testCase.stepWidth, testCase.stage,
+        0u, 1u, testCase.momentsValid ? 1u : 0u, testCase.multiply ? 1u : 0u,
         descriptors[1].slot(), descriptors[2].slot(), descriptors[3].slot(), descriptors[4].slot(),
-        descriptors[0].slot(), descriptors[0].slot(), descriptors[0].slot(), descriptors[5].slot(),
-        descriptors[5].slot(), descriptors[6].slot(), 0u
+        descriptors[0].slot(), descriptors[0].slot(), descriptors[5].slot(), descriptors[6].slot(),
+        descriptors[6].slot(), descriptors[7].slot(), 0u
     };
     commandList->setPushConstants(&push, sizeof(push));
     commandList->dispatch(
-        DivideUp(testCase.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
-        DivideUp(testCase.height, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u
+        DivideUp(outputWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
+        DivideUp(outputHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u
     );
     commandList->copyTexture(*readback, TextureSlice{}, *output, TextureSlice{});
     ASSERT_FALSE(commandList->commandRecordingFailed());
@@ -294,11 +310,11 @@ void RunResolveCase(
     );
     ASSERT_NE(mapped, nullptr);
     ScopeExit unmap([&]()noexcept{ graphicsDevice.unmapStagingTexture(*readback); });
-    ASSERT_GE(rowPitch, testCase.width * sizeof(HalfPixel));
+    ASSERT_GE(rowPitch, outputWidth * sizeof(HalfPixel));
     actual.clear();
-    actual.reserve(fullCount);
-    for(u32 y = 0u; y < testCase.height; ++y){
-        for(u32 x = 0u; x < testCase.width; ++x){
+    actual.reserve(static_cast<usize>(outputWidth) * outputHeight);
+    for(u32 y = 0u; y < outputHeight; ++y){
+        for(u32 x = 0u; x < outputWidth; ++x){
             HalfPixel pixel;
             NWB_MEMCPY(&pixel, sizeof(pixel), mapped + y * rowPitch + x * sizeof(pixel), sizeof(pixel));
             actual.push_back({
@@ -320,7 +336,12 @@ void RunResolveCase(
 
 class ShadowResolveKernelTest : public ShadowKernelTest{
 protected:
-    [[nodiscard]] bool loadResolveKernel(Alloc::ScratchArena& scratchArena, ComputePipelineHandle& outPipeline, bool rgb = true);
+    [[nodiscard]] bool loadResolveKernel(
+        Alloc::ScratchArena& scratchArena,
+        ComputePipelineHandle& outPipeline,
+        bool rgb = true,
+        u32 compiledStage = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
+    );
 };
 
 
@@ -330,7 +351,8 @@ protected:
 bool ShadowResolveKernelTest::loadResolveKernel(
     Alloc::ScratchArena& scratchArena,
     ComputePipelineHandle& outPipeline,
-    const bool rgb){
+    const bool rgb,
+    const u32 compiledStage){
     auto& graphicsDevice = device();
     auto& heap = graphicsDevice.getDescriptorHeap();
     auto& memoryArena = arena();
@@ -342,7 +364,11 @@ bool ShadowResolveKernelTest::loadResolveKernel(
     ErrorCode directoryError;
     if(!CreateDirectories(outputRoot, directoryError) && directoryError)
         return false;
-    const Path outputPath = outputRoot / (rgb ? "shadow_resolve_rgb_cs.spv" : "shadow_resolve_cs.spv");
+    const bool wavelet = compiledStage == NWB_SHADOW_RESOLVE_STAGE_WAVELET;
+    const Path outputPath = outputRoot / (rgb
+        ? (wavelet ? "shadow_resolve_rgb_wavelet_cs.spv" : "shadow_resolve_rgb_upsample_cs.spv")
+        : (wavelet ? "shadow_resolve_wavelet_cs.spv" : "shadow_resolve_upsample_cs.spv")
+    );
     Impl::ShaderCook shaderCook(memoryArena);
     Impl::ShaderCook::ShaderEntry entry(memoryArena);
     Impl::ShaderCook::CookVector<u8> bytecode(memoryArena);
@@ -357,18 +383,19 @@ bool ShadowResolveKernelTest::loadResolveKernel(
             Impl::ShaderCook::CookVector<Path> dependencies(memoryArena);
             if(!shaderCook.gatherShaderDependencies(sourcePath, includes, dependencies, scratchArena))
                 return false;
+            const Impl::ShaderCook::ShaderMacroDefinition definition{ "NWB_SHADOW_RESOLVE_COMPILED_STAGE", wavelet ? "1" : "2" };
             const Impl::ShaderCook::ShaderCompilerRequest request{
                 .shaderName = rgb ? "tests/shadow_kernel/shadow_resolve_rgb_cs" : "tests/shadow_kernel/shadow_resolve_cs",
                 .stage = entry.stage.view(),
                 .targetProfile = entry.targetProfile.view(),
                 .entryPoint = AStringView(entry.entryPoint.data(), entry.entryPoint.size()),
-                .variantName = "default",
-                .defines = nullptr,
+                .variantName = wavelet ? "NWB_SHADOW_RESOLVE_COMPILED_STAGE=1" : "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2",
+                .defines = &definition,
                 .includeDirectories = includes,
                 .dependencies = dependencies,
                 .sourcePath = sourcePath,
                 .outputPath = outputPath,
-                .defineCount = 0u,
+                .defineCount = 1u,
                 .optimizationLevel = entry.optimizationLevel
             };
             return shaderCook.compileVariant(request, bytecode) && !bytecode.empty();
@@ -403,6 +430,87 @@ bool ShadowResolveKernelTest::loadResolveKernel(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST_F(ShadowResolveKernelTest, WaveletVariantsPreserveUniformVisibilityAndRejectInvalidGuidance){
+    using namespace __hidden_shadow_resolve_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/shadow_kernel/resolve_wavelet_guidance"));
+    const u32 steps[] = { 1u, NWB_SHADOW_RESOLVE_LDS_MAX_STEP, NWB_SHADOW_RESOLVE_LDS_MAX_STEP + 1u };
+    const Guidance::Enum guides[] = { Guidance::Flat, Guidance::AllInvalid, Guidance::MixedInvalid };
+    Pixels actual(scratchArena);
+    for(const bool rgb : { false, true }){
+        SCOPED_TRACE(rgb);
+        ComputePipelineHandle pipeline;
+        ASSERT_TRUE(loadResolveKernel(scratchArena, pipeline, rgb, NWB_SHADOW_RESOLVE_STAGE_WAVELET));
+        for(const u32 step : steps){
+            SCOPED_TRACE(step);
+            for(const Guidance::Enum guidance : guides){
+                SCOPED_TRACE(static_cast<u32>(guidance));
+                const ResolveCase testCase{
+                    .width = 35u, .height = 31u, .pattern = Pattern::Uniform, .guidance = guidance,
+                    .stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET, .stepWidth = step
+                };
+                ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
+                const u32 width = DivideUp(testCase.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+                const u32 height = DivideUp(testCase.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+                ASSERT_EQ(actual.size(), static_cast<usize>(width) * height);
+                for(u32 y = 0u; y < height; ++y){
+                    for(u32 x = 0u; x < width; ++x){
+                        SCOPED_TRACE(x);
+                        SCOPED_TRACE(y);
+                        const bool invalid = guidance == Guidance::AllInvalid
+                            || (guidance == Guidance::MixedInvalid && ((x + y) & 1u) != 0u);
+                        const Float4U expected = invalid ? Float4U{ 1.0f, 1.0f, 1.0f, 1.0f }
+                            : rgb ? Float4U{ 0.25f, 0.5f, 0.75f, 1.0f } : Float4U{ 0.25f, 0.25f, 0.25f, 1.0f };
+                        ExpectPixelNear(actual[y * width + x], expected);
+                    }
+                }
+            }
+        }
+    }
+}
+
+TEST_F(ShadowResolveKernelTest, WaveletVariantsSmoothAnEdgeWithinItsVisibilityBounds){
+    using namespace __hidden_shadow_resolve_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/shadow_kernel/resolve_wavelet_edge"));
+    Pixels actual(scratchArena);
+    for(const bool rgb : { false, true }){
+        SCOPED_TRACE(rgb);
+        ComputePipelineHandle pipeline;
+        ASSERT_TRUE(loadResolveKernel(scratchArena, pipeline, rgb, NWB_SHADOW_RESOLVE_STAGE_WAVELET));
+        for(const bool history : { false, true }){
+            SCOPED_TRACE(history);
+            for(const u32 step : { 1u, static_cast<u32>(NWB_SHADOW_RESOLVE_LDS_MAX_STEP + 1u) }){
+                SCOPED_TRACE(step);
+                const ResolveCase testCase{
+                    .width = 35u, .height = 31u, .pattern = Pattern::Edge,
+                    .stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET, .stepWidth = step, .momentsValid = history
+                };
+                ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
+                const u32 width = DivideUp(testCase.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+                const u32 height = DivideUp(testCase.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+                ASSERT_EQ(actual.size(), static_cast<usize>(width) * height);
+                const usize edge = static_cast<usize>(height / 2u) * width + width / 2u;
+                // A copy or wrong-stage dispatch cannot satisfy these strict changes on both sides of the half-resolution edge.
+                EXPECT_GT(actual[edge - 1u].x, 0.125f + 0.001f);
+                EXPECT_LT(actual[edge].x, 0.875f - 0.001f);
+                for(const Float4U& pixel : actual){
+                    EXPECT_TRUE(IsFinite(pixel.x) && IsFinite(pixel.y) && IsFinite(pixel.z));
+                    EXPECT_GE(pixel.x, 0.125f - 0.001f);
+                    EXPECT_LE(pixel.x, 0.875f + 0.001f);
+                    EXPECT_FLOAT_EQ(pixel.w, 1.0f);
+                    if(rgb){
+                        EXPECT_NEAR(pixel.y, 0.5f, 0.001f);
+                        EXPECT_NEAR(pixel.x + pixel.z, 1.0f, 0.002f);
+                    }
+                    else{
+                        EXPECT_FLOAT_EQ(pixel.y, pixel.x);
+                        EXPECT_FLOAT_EQ(pixel.z, pixel.x);
+                    }
+                }
+            }
+        }
+    }
+}
 
 TEST_F(ShadowResolveKernelTest, FlatReceiverInterpolatesRampAndEdgeWithoutPairedPixelPlateaus){
     using namespace __hidden_shadow_resolve_kernel_tests;

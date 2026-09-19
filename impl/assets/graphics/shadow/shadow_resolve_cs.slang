@@ -13,6 +13,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Compile each stage separately so the full-resolution upsample does not reserve the wavelet shared-memory tile.
+#ifndef NWB_SHADOW_RESOLVE_COMPILED_STAGE
+#error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select a resolve stage.
+#endif
+#if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_WAVELET \
+    && NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
+#error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select the wavelet or upsample stage.
+#endif
+
 // Scalar opaque and RGB transparent variants share this resolve.
 #ifndef NWB_SHADOW_RESOLVE_CHANNELS
 #define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_SCALAR
@@ -216,7 +225,7 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
 
 [numthreads(NWB_SHADOW_RESOLVE_GROUP_SIZE, NWB_SHADOW_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-    const uint stage = g_NwbShadowResolvePushConstants.stage;
+    const uint stage = NWB_SHADOW_RESOLVE_COMPILED_STAGE;
     const uint slotStart = g_NwbShadowResolvePushConstants.lightSlotStart;
     const uint slotEnd = min(slotStart + g_NwbShadowResolvePushConstants.lightSlotCount, NWB_SCENE_SHADOW_SLOT_COUNT);
 

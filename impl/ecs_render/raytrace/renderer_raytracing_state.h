@@ -8,6 +8,7 @@
 #include <impl/global.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
+#include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
@@ -169,13 +170,8 @@ struct RtShadowState{
     // Periodic async-safe edge-stat readback.
     Core::BufferHandle m_swShadowEdgeStatsBuffer;
     Core::BufferHandle m_swShadowEdgeStatsReadback;
-    // Push-only a-trous opaque shadow resolve.
-    Core::BindingLayoutHandle m_shadowResolveBindingLayout;
-    Core::ShaderHandle m_shadowResolveShader;
-    Core::ComputePipelineHandle m_shadowResolvePipeline;
-    // RGB variant shares the opaque resolve layout.
-    Core::ShaderHandle m_shadowResolveRgbShader;
-    Core::ComputePipelineHandle m_shadowResolveRgbPipeline;
+    // Scalar and RGB wavelet/upsample pipelines share one push-constant layout.
+    SoftShadowResolveState m_softShadowResolve;
     // Compaction buffers get fresh heap views after target recreation.
     Core::BufferHandle m_swShadowEdgeCounterBuffer;
     Core::BufferHandle m_swShadowEdgeListBuffer;
@@ -223,8 +219,6 @@ struct RtShadowState{
     // Compaction dispatches edge rays indirectly when enabled.
     bool m_swShadowCompactEnabled = true;
     bool m_swShadowEdgeStatsPending = false;
-    bool m_shadowResolvePipelineFailed = false;
-    bool m_shadowResolveRgbPipelineFailed = false;
     Core::GpuPhysicalQueueId m_swShadowEdgeStatsPendingSubmissionPhysicalQueue;
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;

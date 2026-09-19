@@ -406,7 +406,11 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 114u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 109u);
+    // Both channel families release their stage handles and clear failures through their feature owner.
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>"));
+    EXPECT_EQ(CountText(compactStateHeader, "SoftShadowResolveStatem_softShadowResolve;"), 1u);
+    EXPECT_EQ(CountText(compactStateSystem, "m_softShadowResolve=SoftShadowResolveState{};"), 1u);
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionBindingLayout.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionScreenShader.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionHwShader.reset();"));
@@ -448,6 +452,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(pipelineHeaderSource, "RendererRayTracingState m_rayTracingState;"));
     EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.cpp"));
     EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.h"));
+    EXPECT_TRUE(ContainsText(rendererCmakeSource, "${CMAKE_CURRENT_LIST_DIR}/raytrace/soft_shadow_resolve_state.h"));
 }
 
 

@@ -257,7 +257,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         : targets.bindless.shadowSoftHalfA.slot()
     ;
     SoftShadowResolveDispatch opaqueDispatch;
-    opaqueDispatch.pipeline = m_rayTracingState.m_shadowResolvePipeline.get();
+    opaqueDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_wavelet.m_pipeline.get();
+    opaqueDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_scalar.m_upsample.m_pipeline.get();
     opaqueDispatch.firstWaveletResources = {
         opaqueWaveletInput, opaqueWaveletInput, opaqueResolveMoments, targets.shadowSoftHalfB.get(),
         opaqueWaveletInputSlot, opaqueWaveletInputSlot, opaqueResolveMomentsSlot, targets.bindless.shadowSoftHalfBStorage.slot()
@@ -411,7 +412,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
             : targets.bindless.transparentSoftHalf.slot()
         ;
         SoftShadowResolveDispatch transparentDispatch;
-        transparentDispatch.pipeline = m_rayTracingState.m_shadowResolveRgbPipeline.get();
+        transparentDispatch.waveletPipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_wavelet.m_pipeline.get();
+        transparentDispatch.upsamplePipeline = m_rayTracingState.m_softShadowResolve.m_rgb.m_upsample.m_pipeline.get();
         transparentDispatch.firstWaveletResources = {
             transparentWaveletInput, transparentWaveletInput, transparentResolveMoments, targets.shadowSoftHalfA.get(),
             transparentWaveletInputSlot, transparentWaveletInputSlot, transparentResolveMomentsSlot, targets.bindless.shadowSoftHalfAStorage.slot()

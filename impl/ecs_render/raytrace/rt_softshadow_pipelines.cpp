@@ -15,6 +15,62 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_softshadow_pipelines{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool EnsureResolveChannel(
+    RendererShaderSystem& shaderSystem,
+    Core::GraphicsBackend::Device& device,
+    const Core::BindingLayoutHandle& bindingLayout,
+    const Name& shaderName,
+    SoftShadowResolveChannelState& channel){
+    struct StageRequest{
+        AStringView m_variant;
+        SoftShadowResolveStageState& m_state;
+    };
+    const StageRequest stages[] = {
+        { "NWB_SHADOW_RESOLVE_COMPILED_STAGE=1", channel.m_wavelet },
+        { "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2", channel.m_upsample },
+    };
+    static_assert(NWB_SHADOW_RESOLVE_STAGE_WAVELET == 1u && NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE == 2u);
+    auto& heap = device.getDescriptorHeap();
+    for(const StageRequest& stage : stages){
+        if(stage.m_state.m_pipeline)
+            continue;
+        if(!shaderSystem.loadShader(stage.m_state.m_shader, shaderName, stage.m_variant, Core::ShaderType::Compute, "ECSRender_SoftShadowResolve")){
+            channel.m_failed = true;
+            return false;
+        }
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .setComputeShader(stage.m_state.m_shader)
+            .addBindingLayout(bindingLayout)
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+        stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
+        if(!stage.m_state.m_pipeline){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized shadow resolve pipeline"));
+            channel.m_failed = true;
+            return false;
+        }
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(m_rayTracingState.m_shadowGeometryDownsamplePipeline)
         return true;
@@ -61,83 +117,43 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
-    if(m_rayTracingState.m_shadowResolvePipeline)
+    auto& resolve = m_rayTracingState.m_softShadowResolve;
+    if(resolve.m_scalar.m_wavelet.m_pipeline && resolve.m_scalar.m_upsample.m_pipeline)
         return true;
-    if(m_rayTracingState.m_shadowResolvePipelineFailed)
+    if(resolve.m_scalar.m_failed)
         return false;
 
     auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
+    if(!device.getDescriptorHeap().isInitialized())
         return false;
-    if(!m_rayTracingState.m_shadowResolveBindingLayout){
+    if(!resolve.m_bindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
-        m_rayTracingState.m_shadowResolveBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_shadowResolveBindingLayout){
-            m_rayTracingState.m_shadowResolvePipelineFailed = true;
+        resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
+        if(!resolve.m_bindingLayout){
+            resolve.m_scalar.m_failed = true;
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader(
-        m_rayTracingState.m_shadowResolveShader,
-        AssetsGraphicsShadow::s_SoftResolveShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_SoftShadowResolve"
-    )){
-        m_rayTracingState.m_shadowResolvePipelineFailed = true;
-        return false;
-    }
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowResolveShader)
-        .addBindingLayout(m_rayTracingState.m_shadowResolveBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
-    m_rayTracingState.m_shadowResolvePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_shadowResolvePipeline){
-        m_rayTracingState.m_shadowResolvePipelineFailed = true;
-        return false;
-    }
-    return true;
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(
+        m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveShaderName, resolve.m_scalar
+    );
 }
 
 bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
-    if(m_rayTracingState.m_shadowResolveRgbPipeline)
+    auto& resolve = m_rayTracingState.m_softShadowResolve;
+    if(resolve.m_rgb.m_wavelet.m_pipeline && resolve.m_rgb.m_upsample.m_pipeline)
         return true;
-    if(m_rayTracingState.m_shadowResolveRgbPipelineFailed || !m_rayTracingState.m_shadowResolveBindingLayout)
+    if(resolve.m_rgb.m_failed || !resolve.m_bindingLayout)
         return false;
 
     auto& device = m_graphics.getDevice();
-    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
-    if(!heap.isInitialized())
+    if(!device.getDescriptorHeap().isInitialized())
         return false;
-    if(!m_shaderSystem.loadShader(
-        m_rayTracingState.m_shadowResolveRgbShader,
-        AssetsGraphicsShadow::s_SoftResolveRgbShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_SoftShadowResolveRgb"
-    )){
-        m_rayTracingState.m_shadowResolveRgbPipelineFailed = true;
-        return false;
-    }
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_shadowResolveRgbShader)
-        .addBindingLayout(m_rayTracingState.m_shadowResolveBindingLayout)
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
-    m_rayTracingState.m_shadowResolveRgbPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_shadowResolveRgbPipeline){
-        m_rayTracingState.m_shadowResolveRgbPipelineFailed = true;
-        return false;
-    }
-    return true;
+    return __hidden_softshadow_pipelines::EnsureResolveChannel(
+        m_shaderSystem, device, resolve.m_bindingLayout, AssetsGraphicsShadow::s_SoftResolveRgbShaderName, resolve.m_rgb
+    );
 }
 
 void RendererRayTracingSystem::dispatchSoftShadowResolve(
@@ -150,7 +166,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
     const bool dispatchFirstWavelet,
     const bool dispatchTail
 ){
-    NWB_ASSERT(dispatch.pipeline);
+    NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
     NWB_ASSERT(dispatch.visibilityTexture);
     const u32 halfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 halfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -219,10 +235,14 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         push.visibilityStorageSlot = dispatch.visibilityStorage;
         push.sceneShadingSlot = dispatch.sceneShading;
 
+        Core::ComputePipeline& pipeline = stage == ShadowResolveStage::Upsample
+            ? *dispatch.upsamplePipeline
+            : *dispatch.waveletPipeline
+        ;
         Core::ComputeState state;
-        state.setPipeline(dispatch.pipeline);
+        state.setPipeline(&pipeline);
         commandList.setComputeState(state);
-        heap.bindCompute(commandList, *dispatch.pipeline);
+        heap.bindCompute(commandList, pipeline);
         commandList.setPushConstants(&push, sizeof(push));
         commandList.dispatch(groupsX, groupsY, 1u);
     };

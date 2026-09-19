@@ -148,7 +148,8 @@ private:
     };
     // Heap-only soft resolve dispatch description.
     struct SoftShadowResolveDispatch{
-        Core::ComputePipeline* pipeline = nullptr;
+        Core::ComputePipeline* waveletPipeline = nullptr;
+        Core::ComputePipeline* upsamplePipeline = nullptr;
         SoftShadowResolvePassResources firstWaveletResources;
         SoftShadowResolvePassResources outputHalfAResources;
         SoftShadowResolvePassResources outputHalfBResources;

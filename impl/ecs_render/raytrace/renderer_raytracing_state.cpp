@@ -185,10 +185,7 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
     m_softShadowFrameIndex = 0u;
     m_softShadowSlotMask = 0u;
-    m_shadowResolveBindingLayout.reset();
-    m_shadowResolveShader.reset();
-    m_shadowResolvePipeline.reset();
-    m_shadowResolvePipelineFailed = false;
+    m_softShadowResolve = SoftShadowResolveState{};
     m_shadowGeometryDownsampleBindingLayout.reset();
     m_shadowGeometryDownsampleShader.reset();
     m_shadowGeometryDownsamplePipeline.reset();
@@ -204,9 +201,6 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowReprojectMergeShader.reset();
     m_shadowReprojectMergePipeline.reset();
     m_shadowReprojectMergePipelineFailed = false;
-    m_shadowResolveRgbShader.reset();
-    m_shadowResolveRgbPipeline.reset();
-    m_shadowResolveRgbPipelineFailed = false;
     m_softTransparentReady = false;
     m_softTransparentTemporalReady = false;
     m_swShadowEdgeStatsPendingTick = 0u;

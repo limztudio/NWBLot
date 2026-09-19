@@ -187,11 +187,46 @@ The native fixture now derives its dense geometry from the shared capacity and c
 
 Matched stress captures freeze at yaw 0.6 after 360 rendered frames. Visual inspection found no structural change; mean absolute RGB channel difference is 0.0995/255 and the 95th percentile is 1/255. These are observations from the captured scene, not a claim of pixel identity or a fix for pre-existing glass surface artifacts.
 
-Local logs, frozen executable/resources, resource identities and arithmetic are under `__artifacts/stress_60fps/continuation_208998137/`. `baseline_run{1,2}`, `capacity24_run{1,2}`, `comparison24.json`, `native_all24.log`, `capture_comparison.json` and `validation24` contain the evidence. The next memory improvement is to reuse the same capacity-24 storage across bounded row tiles; this requires independent validation of global pixel/jitter coordinates, partial tiles and overflow, and is not part of this capacity change.
+Local logs, frozen executable/resources, resource identities and arithmetic are under `__artifacts/stress_60fps/continuation_208998137/`. `baseline_run{1,2}`, `capacity24_run{1,2}`, `comparison24.json`, `native_all24.log`, `capture_comparison.json` and `validation24` contain the evidence. The subsequent bounded-row-tile experiment is recorded below; it is not part of this capacity change.
+
+## Rejected bounded shadow scratch experiment, 2026-09-20
+
+A capacity-24 row-tile experiment limited crossing storage, the overflow list and indirect arguments to a combined 64 MiB budget. At 1280 x 900, this selected 208 + 208 + 34 half-resolution rows and reduced the actual allocation from 140,544,016 to 64,962,576 bytes (53.78%). Global receiver, jitter and output coordinates were preserved while scratch used local tile coordinates. The seven allocation-policy tests and complete 412-test enabled ECS suite passed for this experiment.
+
+The baseline/candidate/candidate/baseline presentation comparison measured 38.1073/38.2020 FPS for the original implementation and 37.8365/37.8444 FPS for tiling. Aggregate performance changed from **38.1546 to 37.8405 FPS**, a **0.82% regression**, or **0.218 ms additional wall time per presentation**. Transparent trace increased from approximately 2.217 to 2.417/2.422 ms. A subsequent experiment removing the barrier between disjoint gathered/overflow output writes measured 37.6356 FPS and did not establish an improvement.
+
+The memory saving is real, but this change was **not retained** because the current target is frame rate. Production and test sources were restored to `4d4eb56c7` before the next experiment. The final tiled production-entrypoint test fixture was written but was not built or executed; no claim of complete tile correctness qualification is made. Source snapshots, patch, allocation tests, measurements and the frozen baseline remain in ignored local artifacts under `__artifacts/stress_60fps/tiles_4d4eb56c7/`. The current production scratch allocation therefore remains unchanged.
+
+## Specialized shadow resolve stages, 2026-09-20
+
+Opaque scalar visibility and transparent RGB visibility previously each used one shader for wavelet filtering and full-resolution upsampling, selected by a runtime push constant. Both compiled shaders consequently carried the wavelet shared-memory declarations into the upsample pipeline. The accepted implementation cooks explicit wavelet and upsample variants of each existing asset and selects the corresponding pipeline at dispatch. Filter equations, precision, tap counts, ray counts, temporal behavior, reconstruction, transparent multiplication and the 84-byte push-constant ABI are unchanged.
+
+The resolve feature now owns its shared layout, scalar/RGB stage shaders, pipelines and failure flags in `raytrace/soft_shadow_resolve_state.h`. A channel is ready only when both stages exist; resource invalidation resets the complete feature owner. Variant keys are explicit and each stage has its own shader handle, avoiding the loader's existing-handle fast path mixing variants.
+
+Production SPIR-V inspection confirms that both upsample variants contain **zero workgroup variables and zero control barriers**. Scalar/RGB wavelet variants retain four shared arrays and two barriers. Wavelet binaries are 23,684/24,244 bytes, and upsample binaries are 15,320/16,080 bytes. This establishes removal of unused shader resources; it does not directly measure native register allocation or occupancy.
+
+The frozen baseline is `4d4eb56c7`, using the binaries/resources preserved before the rejected tile experiment. A fresh baseline/candidate/candidate/baseline comparison used the same all-features 1280 x 900, five-opaque/five-transparent scene, fixed yaw/simulation, five-second warmup and thirty-second native presentation interval:
+
+| Measurement | Combined-stage shader | Specialized stages |
+| --- | ---: | ---: |
+| Run 1 | 38.1156 FPS | 39.7573 FPS |
+| Run 2 | 38.0903 FPS | 39.4633 FPS |
+| Aggregate presentations / aggregate seconds | 38.1030 FPS | 39.6103 FPS |
+| Aggregate wall time per presentation | 26.245 ms | 25.246 ms |
+| Opaque resolve, first run mean per GPU range | 1.769 ms | 1.438 ms |
+| Transparent resolve, first run mean per GPU range | 2.422 ms | 1.713 ms |
+
+The observed end-to-end improvement is **3.96%**, saving **0.999 ms per presentation**. Both repeated resolve measurements support the intended reduction. The full trace and material features remain enabled. Nested/asynchronous scopes have different sample counts and must not be summed into the wall-frame budget. These short runs do not establish sustained thermal performance or a confidence interval. **60 FPS remains unmet**, and the original twenty-body target is not qualified by these ten-body measurements.
+
+All twelve native shadow GPU tests passed: the six existing upsample cases, two new scalar/RGB wavelet tests, three hardware transmission groups covering 24 analytic scenes, and the retained software traversal regression. Wavelet coverage includes uniform preservation, invalid/mixed guidance, actual edge smoothing, temporal moments, partial workgroups, shared-memory steps 1/4 and direct-texture step 5. Production cooking and native builds passed. All 405 enabled ECS graphics tests passed (61 existing disabled). The separate full-scene Vulkan validation run passed with the validation layer and debug messenger enabled; its timing is excluded from the performance comparison. An initial validation run caught a layout-handle ownership error in the new helper. Passing the original owning handle into pipeline descriptions preserves its arena deleter, and the corrected build completed shutdown without the leak. Source formatting and named-namespace checks passed.
+
+Matched stress captures use yaw 0.6 and freeze after 360 rendered frames. Visual inspection found no structural change; the mean absolute RGB channel difference is 0.0812/255 and the 95th percentile is 1/255. The existing glass surface artifacts remain visible in both captures. This comparison does not establish pixel identity or correctness for every scene. `qualified_stress.bmp` and `capture_comparison.json` preserve the final capture and numerical comparison.
+
+Local evidence is under `__artifacts/stress_60fps/resolve_stages_4d4eb56c7/`: `baseline_run{2,3}`, `qualified_run{1,2}`, `comparison_final.json`, `native_all.log`, `ecs_tests_final.log`, `validation_final` and `compiled_stage_audit.json` contain the final measurements, checks and cooked-module evidence. The final presentation comparison was repeated after the owning-handle correction; the earlier `specialized_run{1,2}` measurements remain exploratory evidence.
 
 ## Next architecture work
 
-1. **Bound hardware shadow scratch memory.** Reuse capacity-24 storage across row tiles with a fixed byte budget. Keep global receiver/jitter/output coordinates and complete overflow integration intact. Measure dispatch overhead and total frame time separately from the already-demonstrated capacity gain.
-2. **Use indexed generated vertices.** The current shader already evaluates each meshlet-local vertex once, then expands a 64-byte record per triangle corner. Index by full meshlet-local vertex identity to preserve normal, tangent and UV seams. This targets generated writes, raster fetches and repeated vertex work without changing materials.
+1. **Use indexed generated vertices.** The current shader already evaluates each meshlet-local vertex once, then expands a 64-byte record per triangle corner. Preserve full local-reference identity, attribute seams and meshlet-specific CSG flags. A generated index stream can preserve dynamic triangle rejection by indexing a defined culled sentinel. Vertex/index resources must travel together through ownership, frame-graph transitions, aliasing and cross-pass reuse. This targets generated writes, raster fetches and repeated vertex work without changing materials.
+2. **Factor repeated guided-fit arithmetic.** A future resolve experiment can compute one FP32 guidance coefficient per tap and reuse it across light layers. Keep negative coefficients, current precision and final clamping; algebraic reassociation needs numerical and image qualification before acceptance.
 
-60 FPS requires at most 16.67 ms per frame. Even eliminating the approximately 1.3 ms GI envelope would not close the gap. Re-measure after each architectural change before adjusting samples, resolution or temporal quality. None of the unimplemented directions above is a demonstrated guarantee of 60 FPS, particularly for the requested 20-body workload.
+60 FPS requires at most 16.67 ms per frame. The current result still needs approximately 8.58 ms removed per presentation. Re-measure each change before adjusting samples, resolution or temporal quality. Neither unimplemented direction above guarantees 60 FPS, particularly for the requested twenty-body workload.

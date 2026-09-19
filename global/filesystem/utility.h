@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <string>
 #include "operations.h"
 #include "../text_utils.h"
 #include "../thread.h"
@@ -65,7 +66,7 @@ template<typename StringT, typename PathT>
 
 template<typename PathT, typename ExtensionArray>
 [[nodiscard]] inline bool PathHasListedExtension(const PathT& path, const ExtensionArray& extensions){
-    const auto extension = LowerPathExtension<AStringView>(path);
+    const std::string extension = LowerPathExtension<std::string>(path);
     for(usize i = 0u; i < LengthOf(extensions); ++i){
         if(extension == extensions[i])
             return true;

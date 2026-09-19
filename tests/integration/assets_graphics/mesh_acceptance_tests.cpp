@@ -2,6 +2,227 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_mesh_acceptance{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AString = AssetsGraphicsFixture::AString;
+using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using Path = AssetsGraphicsFixture::Path;
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+template<
+    typename MeshT,
+    typename PositionRefT
+>
+static bool TestDecodeMeshletPositionRef(
+    const MeshT& mesh,
+    const NWB::Impl::MeshletDesc& meshlet,
+    const u32 localPositionIndex,
+    PositionRefT& outRef
+){
+    return NWB::Impl::DecodeMeshletPositionRef(
+        mesh.meshletPositionRefDeltas().data(),
+        mesh.meshletPositionRefDeltas().size(),
+        meshlet,
+        localPositionIndex,
+        NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()),
+        outRef
+    );
+}
+
+template<
+    typename MeshT,
+    typename AttributeRefT
+>
+static bool TestDecodeMeshletAttributeRef(
+    const MeshT& mesh,
+    const NWB::Impl::MeshletDesc& meshlet,
+    const u32 localAttributeIndex,
+    AttributeRefT& outRef
+){
+    return NWB::Impl::DecodeMeshletAttributeRef(
+        mesh.meshletAttributeRefDeltas().data(),
+        mesh.meshletAttributeRefDeltas().size(),
+        meshlet,
+        localAttributeIndex,
+        outRef
+    );
+}
+
+template<
+    typename MeshT,
+    typename PositionStreamT,
+    typename NormalStreamT,
+    typename LocalRefVectorT
+>
+static bool TestMeshletHasPositionNormalValue(
+    const MeshT& mesh,
+    const NWB::Impl::MeshletDesc& meshlet,
+    const PositionStreamT& positions,
+    const NormalStreamT& normals,
+    const LocalRefVectorT& localRefs,
+    const Float3U& expectedPosition,
+    const Float4U& expectedNormal
+){
+    for(u32 localVertexIndex = 0u; localVertexIndex < NWB::Impl::MeshletVertexCount(meshlet); ++localVertexIndex){
+        const NWB::Impl::MeshletLocalVertexRef& localRef = localRefs[meshlet.localVertexOffset + localVertexIndex];
+        NWB::Impl::MeshletPositionStreamRef positionRef;
+        NWB::Impl::MeshletAttributeStreamRef attributeRef;
+        if(
+            !TestDecodeMeshletPositionRef(mesh, meshlet, localRef.localDeformedPosition, positionRef)
+            || !TestDecodeMeshletAttributeRef(mesh, meshlet, localRef.localAttribute, attributeRef)
+        )
+            return false;
+
+        const Float3U& position = positions[positionRef.position];
+        const Float4U normal = LoadHalf4U(normals[attributeRef.normal]);
+        if(
+            position.x == expectedPosition.x
+            && position.y == expectedPosition.y
+            && position.z == expectedPosition.z
+            && normal.x == expectedNormal.x
+            && normal.y == expectedNormal.y
+            && normal.z == expectedNormal.z
+            && normal.w == expectedNormal.w
+        )
+            return true;
+    }
+
+    return false;
+}
+
+template<typename MeshT>
+static bool TestMeshletPositionRefsAreFirstUseOrdered(
+    const NWB::Impl::MeshletDesc& meshlet,
+    const MeshT& mesh
+){
+    for(u32 localPositionIndex = 0u; localPositionIndex < NWB::Impl::MeshletPositionCount(meshlet); ++localPositionIndex){
+        NWB::Impl::MeshletPositionStreamRef ref;
+        if(!TestDecodeMeshletPositionRef(mesh, meshlet, localPositionIndex, ref))
+            return false;
+        if(ref.position != localPositionIndex)
+            return false;
+    }
+
+    return true;
+}
+
+template<typename MeshT, typename SelectorT>
+static bool TestMeshletAttributeRefsAreFirstUseOrdered(
+    const NWB::Impl::MeshletDesc& meshlet,
+    const MeshT& mesh,
+    SelectorT&& selector
+){
+    u8 seen[NWB::Impl::s_MeshMaxMeshletVertices] = {};
+    u32 nextStreamIndex = 0u;
+    for(u32 localAttributeIndex = 0u; localAttributeIndex < NWB::Impl::MeshletAttributeCount(meshlet); ++localAttributeIndex){
+        NWB::Impl::MeshletAttributeStreamRef ref;
+        if(!TestDecodeMeshletAttributeRef(mesh, meshlet, localAttributeIndex, ref))
+            return false;
+        const u32 streamIndex = selector(ref);
+        if(streamIndex >= NWB::Impl::s_MeshMaxMeshletVertices)
+            return false;
+        if(seen[streamIndex])
+            continue;
+
+        if(streamIndex != nextStreamIndex)
+            return false;
+        seen[streamIndex] = 1u;
+        ++nextStreamIndex;
+    }
+
+    return true;
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletLogicalPositionRefCount(const MeshT& mesh){
+    usize count = 0u;
+    for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
+        count += NWB::Impl::MeshletPositionCount(meshlet);
+    return count;
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletLogicalAttributeRefCount(const MeshT& mesh){
+    usize count = 0u;
+    for(const NWB::Impl::MeshletDesc& meshlet : mesh.meshlets())
+        count += NWB::Impl::MeshletAttributeCount(meshlet);
+    return count;
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletCompressedReferencePayloadBytes(const MeshT& mesh){
+    return mesh.meshlets().size() * sizeof(NWB::Impl::MeshletDesc)
+        + mesh.meshletPositionRefDeltas().size()
+        + mesh.meshletAttributeRefDeltas().size()
+    ;
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletUncompressedReferencePayloadBytes(const MeshT& mesh){
+    static constexpr usize s_PreCompressionMeshletDescBytes = sizeof(u32) * 5u;
+    return mesh.meshlets().size() * s_PreCompressionMeshletDescBytes
+        + TestMeshletLogicalPositionRefCount(mesh) * sizeof(NWB::Impl::MeshletPositionStreamRef)
+        + TestMeshletLogicalAttributeRefCount(mesh) * sizeof(NWB::Impl::MeshletAttributeStreamRef)
+    ;
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletCompressedReferenceBandwidthBytes(const MeshT& mesh){
+    return mesh.meshletPositionRefDeltas().size() + mesh.meshletAttributeRefDeltas().size();
+}
+
+template<typename MeshT>
+[[nodiscard]] static usize TestMeshletUncompressedReferenceBandwidthBytes(const MeshT& mesh){
+    return TestMeshletLogicalPositionRefCount(mesh) * sizeof(NWB::Impl::MeshletPositionStreamRef)
+        + TestMeshletLogicalAttributeRefCount(mesh) * sizeof(NWB::Impl::MeshletAttributeStreamRef)
+    ;
+}
+
+template<typename MeshT>
+[[nodiscard]] static bool TestMeshletReferenceCompressionShrinksPayload(const MeshT& mesh){
+    return TestMeshletCompressedReferencePayloadBytes(mesh) < TestMeshletUncompressedReferencePayloadBytes(mesh);
+}
+
+template<typename MeshT>
+[[nodiscard]] static bool TestMeshletReferenceCompressionBandwidthNeutralOrBetter(const MeshT& mesh){
+    return TestMeshletCompressedReferenceBandwidthBytes(mesh) <= TestMeshletUncompressedReferenceBandwidthBytes(mesh);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+
 static bool CookAndLoadSmokeMesh(
     TestArena& testArena,
     const char* assetFilename,
@@ -11,7 +232,7 @@ static bool CookAndLoadSmokeMesh(
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
     Path outputDirectory(testArena.arena);
-    const bool cooked = CookSmokeMeshMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(
         assetFilename,
         caseName,
         testArena,
@@ -21,7 +242,7 @@ static bool CookAndLoadSmokeMesh(
     EXPECT_TRUE(cooked);
     if(!cooked)
         return false;
-    return LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
+    return AssetsGraphicsFixture::LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
 }
 
 struct MeshletAcceptanceVertexKey{
@@ -102,7 +323,7 @@ static void ForEachMeshletAcceptanceAlternatingConeTriangle(FuncT&& func){
 template<typename... Args>
 static void AppendMeshletAcceptanceFormattedMeta(AString& meta, AFormatString<Args...> format, Args&&... args){
     const auto line = StringFormat(NWB::Tests::TestDetail::Arena(), format, Forward<Args>(args)...);
-    AppendTestMeta(meta, AStringView(line.data(), line.size()));
+    AssetsGraphicsFixture::AppendTestMeta(meta, AStringView(line.data(), line.size()));
 }
 
 static void AppendMeshletAcceptanceVertexRefMeta(AString& meta, const MeshletAcceptanceVertexKey& vertexRef){
@@ -137,7 +358,7 @@ static MeshletAcceptanceTriangleKey BuildMeshletAcceptanceTriangleKey(const u32 
 static AString BuildMeshletAcceptanceAlternatingConeMeshMeta(){
     AString meta;
     meta.reserve(8192u);
-    AppendTestMeta(meta, R"(mesh asset;
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(mesh asset;
 
 asset.positions = [
     [0.0, 0.0, 0.0],
@@ -174,7 +395,7 @@ asset.vertex_refs = [
     for(const MeshletAcceptanceVertexKey& vertexRef : s_MeshletAcceptanceAlternatingConeVertexRefs)
         AppendMeshletAcceptanceVertexRefMeta(meta, vertexRef);
 
-    AppendTestMeta(meta, R"(];
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(];
 
 asset.indices = [
 )");
@@ -183,7 +404,7 @@ asset.indices = [
         AppendMeshletAcceptanceTriangleMeta(meta, triangle);
     });
 
-    AppendTestMeta(meta, "];\n");
+    AssetsGraphicsFixture::AppendTestMeta(meta, "];\n");
     return meta;
 }
 
@@ -425,7 +646,7 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildMeshletAcceptanceAlternatingConeMeshMeta();
-    const bool cooked = CookSingleMeshMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleMeshMeta(
         AStringView(meta.data(), meta.size()),
         "quality_builder_acceptance",
         testArena,
@@ -435,9 +656,9 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
     EXPECT_TRUE(cooked);
     if(cooked){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
+        if(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
             const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
-            auto sourceTriangles = MakeAssetVector<MeshletAcceptanceTriangleKey>(testArena);
+            auto sourceTriangles = AssetsGraphicsFixture::MakeAssetVector<MeshletAcceptanceTriangleKey>(testArena);
             BuildMeshletAcceptanceAlternatingConeSourceTriangles(sourceTriangles);
             const MeshletAcceptanceQualityMetrics cookedMetrics = BuildCookedMeshletAcceptanceQualityMetrics(loadedMesh);
 
@@ -580,5 +801,23 @@ TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
         }
     );
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

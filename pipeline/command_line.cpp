@@ -20,7 +20,7 @@ namespace __hidden_command_line{
 
 static bool AssignText(const AInteropString& value, NWB::Core::Assets::AssetString& output){
     const AStringView text(value.data(), value.size());
-    if(!IsSingleLinePathText(text)){
+    if(!text.empty() && !IsSingleLinePathText(text)){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: paths must not contain nulls or newlines"));
         return false;
     }

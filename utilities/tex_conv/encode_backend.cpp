@@ -41,7 +41,7 @@ void ResetPayload(
     outPayload.srgb = srgb;
     outPayload.hasAlpha = false;
     outPayload.alphaMode = TextureAlphaMode::Opaque;
-    outPayload.alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+    outPayload.alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     outPayload.mips.clear();
     outPayload.bytes.clear();
     outPayload.alphaBytes.clear();
@@ -82,7 +82,7 @@ void ResetPayload(
     u32 blocksX = 0u;
     u32 blocksY = 0u;
     u64 planeByteCount = 0u;
-    if(!ComputeMipPlaneBlockLayout(
+    if(!TextureFormat::ComputeMipPlaneBlockLayout(
         inOutPayload.format,
         width,
         height,

@@ -61,7 +61,7 @@ int Run(const int argc, char** argv){
 
     CLI::App app{ "Convert LDR or HDR images into an NWB 2D, cube, or volume texture asset." };
     app.add_option(TexConvCliDetail::s_InputOptionName, inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.add_option(TexConvCliDetail::s_CubeOptionName, cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(s_TextureCubeFaceCount));
+    app.add_option(TexConvCliDetail::s_CubeOptionName, cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
     app.add_option(TexConvCliDetail::s_VolumeOptionName, volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
     app.add_option(TexConvCliDetail::s_OutputOptionName, outputArgument, "Output base name or .nwb filename");
     CLI::Option* alphaOption = app.add_option(TexConvCliDetail::s_AlphaOptionName, alphaArgument, "Alpha source: mask image red channel, white, or black");
@@ -83,7 +83,7 @@ int Run(const int argc, char** argv){
             ;
             if(modeCount != TexConvCliDetail::s_SingleTextureInputModeCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: provide exactly one of a 2D input, --cube, or --volume."));
-                return s_TexConvExitFailure;
+                return TexConvCliDetail::s_TexConvExitFailure;
             }
 
             if(!inputArgument.empty()){
@@ -120,7 +120,7 @@ int Run(const int argc, char** argv){
                 }
                 else if(alphaText.empty()){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --alpha expects an image path, white, or black."));
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 else{
                     alphaSource.mode = AlphaSourceMode::Image;
@@ -136,20 +136,20 @@ int Run(const int argc, char** argv){
                         , PathToString<tchar>(inputPath)
                         , StringConvert(errorCode.message())
                     );
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!inputIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(inputPath)
                     );
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(inputPath)){
                     NWB_LOGGER_ERROR(NWB_TEXT(
                         "tex_conv: unsupported input format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
             }
 
@@ -161,32 +161,32 @@ int Run(const int argc, char** argv){
                         , PathToString<tchar>(alphaSource.path)
                         , StringConvert(errorCode.message())
                     );
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!alphaIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(alphaSource.path)
                     );
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
                 if(!IsSupportedInputPath(alphaSource.path)){
                     NWB_LOGGER_ERROR(NWB_TEXT(
                         "tex_conv: unsupported alpha image format; accepted: PNG, JPEG/JFIF, TGA, QOI, OpenEXR, "
                         "and Radiance HDR."
                     ));
-                    return s_TexConvExitFailure;
+                    return TexConvCliDetail::s_TexConvExitFailure;
                 }
             }
 
             OutputPaths outputPaths;
             if(!ResolveOutputPaths(inputPaths.front(), outputPathText, outputPaths) || !ValidateOutputPaths(outputPaths, force))
-                return s_TexConvExitFailure;
+                return TexConvCliDetail::s_TexConvExitFailure;
 
             TexturePayload payload;
             if(!EncodeTexture(inputPaths, dimension, !linear, alphaSource, payload))
-                return s_TexConvExitFailure;
+                return TexConvCliDetail::s_TexConvExitFailure;
             if(!WriteOutputs(outputPaths, payload, force))
-                return s_TexConvExitFailure;
+                return TexConvCliDetail::s_TexConvExitFailure;
 
             AStringStream report;
             report
@@ -203,9 +203,9 @@ int Run(const int argc, char** argv){
                 << ", " << payload.mips.size() << " mips, " << totalPayloadBytes << " bytes\n"
             ;
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
-            return s_TexConvExitSuccess;
+            return TexConvCliDetail::s_TexConvExitSuccess;
         }
-    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return s_TexConvExitFatal; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return TexConvCliDetail::s_TexConvExitFatal; });
 }
 
 

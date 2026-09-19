@@ -297,7 +297,7 @@ void ConfigureCrashReporting(const LoaderOptions& options){
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set crash upload destination"));
     if(!NWB::Core::Crash::SetCrashMetadata(s_RuntimeCrashMetadataKey, s_LoaderCrashMetadataValue))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'runtime' crash metadata"));
-    if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, options.enableGpuDebug ? s_EnabledText : s_DisabledText)))
+    if(!NWB::Core::Crash::SetCrashMetadata(s_GpuDebugCrashMetadataKey, options.enableGpuDebug ? s_EnabledText : s_DisabledText))
         NWB_LOGGER_WARNING(NWB_TEXT("Loader: failed to set 'gpu_debug' crash metadata"));
 }
 

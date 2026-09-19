@@ -2,6 +2,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_texture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AString = AssetsGraphicsFixture::AString;
+using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using Path = AssetsGraphicsFixture::Path;
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_TextureTestMetadata =
     "texture asset;\n\n"
     "asset.version = 1;\n"
@@ -111,7 +147,7 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(
     const usize byteCount = 96u,
     const u8 initialValue = 0u
 ){
-    NWB::Core::Assets::AssetBytes bytes = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     bytes.resize(byteCount);
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(initialValue + index);
@@ -145,7 +181,7 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureVolumeTestMipLevels(TestAre
 }
 
 static NWB::Core::Assets::AssetBytes MakeTextureTestHdrPayload(TestArena& testArena){
-    NWB::Core::Assets::AssetBytes bytes = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     // HDR RGB blocks come first; the matched LDR alpha blocks deliberately use
     // a different byte range so the tests exercise the trailing-stream boundary.
     bytes.resize(96u);
@@ -266,7 +302,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV2UastcLdrMipPayload){
     ASSERT_TRUE(texture.validatePayload());
 
     NWB::Impl::TextureAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 96u);
     usize headerCursor = 0u;
@@ -330,7 +366,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
     ASSERT_TRUE(texture.validatePayload());
 
     NWB::Impl::TextureAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinary) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 96u);
 
@@ -393,7 +429,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
         );
         ASSERT_TRUE(cube.validatePayload());
 
-        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(cube, binary));
         ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 2u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
 
@@ -423,7 +459,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
         );
         ASSERT_TRUE(volume.validatePayload());
 
-        NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+        NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(volume, binary));
         ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 3u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 80u);
 
@@ -449,7 +485,7 @@ TEST(AssetsGraphics, TextureCodecRejectsLegacyV1Binary){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     const NWB::Impl::Texture::MipLevelVector mipLevels = MakeTextureTestMipLevels(testArena);
     const NWB::Core::Assets::AssetBytes uastcBlocks = MakeTextureTestUastcPayload(testArena);
     AppendLegacyTextureV1Binary(binary, mipLevels, uastcBlocks);
@@ -471,7 +507,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "texture_cooker_round_trip",
         root,
@@ -482,12 +518,12 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     const Path textureDirectory = assetRoot / "textures";
     const Path metadataPath = textureDirectory / "checker.nwb";
     const Path dataPath = textureDirectory / "checker.tex";
-    ASSERT_TRUE(WriteTextFile(metadataPath, s_TextureTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(dataPath, MakeTextureTestUastcPayload(testArena)));
-    ASSERT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/checker"),
@@ -515,7 +551,7 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "texture_hdr_cooker_round_trip",
         root,
@@ -524,12 +560,12 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
 
     const Path assetRoot = root / "assets";
     const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(WriteTextFile(textureDirectory / "bright.nwb", s_TextureHdrTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "bright.nwb", s_TextureHdrTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "bright.tex", MakeTextureTestHdrPayload(testArena)));
-    ASSERT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/bright"),
@@ -567,7 +603,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "texture_cube_volume_cooker_round_trip",
         root,
@@ -576,14 +612,14 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
 
     const Path assetRoot = root / "assets";
     const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(WriteTextFile(textureDirectory / "sky.nwb", s_TextureCubeTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "sky.nwb", s_TextureCubeTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "sky.tex", MakeTextureTestUastcPayload(testArena, 192u, 0x40u)));
-    ASSERT_TRUE(WriteTextFile(textureDirectory / "fog.nwb", s_TextureVolumeTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "fog.nwb", s_TextureVolumeTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "fog.tex", MakeTextureTestUastcPayload(testArena, 80u, 0x80u)));
-    ASSERT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> cubeAsset;
-    ASSERT_TRUE(LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/sky"),
@@ -598,7 +634,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     EXPECT_EQ(cube.mipLevels()[0u].sliceCount, 6u);
 
     UniquePtr<NWB::Core::Assets::IAsset> volumeAsset;
-    ASSERT_TRUE(LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/fog"),
@@ -632,10 +668,10 @@ TEST(AssetsGraphics, TextureCookerRejectsUnsupportedMetadataVersion){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_legacy_metadata") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_legacy_metadata") / "assets";
     const Path metadataPath = assetRoot / "textures" / "checker.nwb";
     NWB::Impl::TextureCookEntry entry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
         assetRoot,
         "project",
@@ -663,10 +699,10 @@ TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "texture_path_traversal") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_path_traversal") / "assets";
     const Path metadataPath = assetRoot / "textures" / "checker.nwb";
     NWB::Impl::TextureCookEntry entry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
         assetRoot,
         "project",
@@ -679,6 +715,24 @@ TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
 #else
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

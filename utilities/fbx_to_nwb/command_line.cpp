@@ -361,8 +361,8 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     ImportOptions options;
     __hidden_command_line::OptionPresence presence;
 
-    CLI::App app{ s_FbxToNwbAppName };
-    app.set_help_flag(s_FbxToNwbHelpFlag, "Show help");
+    CLI::App app{ __hidden_command_line::s_FbxToNwbAppName };
+    app.set_help_flag(__hidden_command_line::s_FbxToNwbHelpFlag, "Show help");
 
     AInteropString inputPath(options.inputPath.data(), options.inputPath.size());
     AInteropString outputPathText(options.outputPath.data(), options.outputPath.size());
@@ -375,33 +375,33 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
     bool local = false;
     bool ignoreColors = false;
 
-    app.add_option(s_FbxToNwbInputOption, inputPath, "Input FBX file path");
-    CLI::Option* outputOption = app.add_option(s_FbxToNwbOutputOption, outputPathText, "Output NWB asset metadata path");
+    app.add_option(__hidden_command_line::s_FbxToNwbInputOption, inputPath, "Input FBX file path");
+    CLI::Option* outputOption = app.add_option(__hidden_command_line::s_FbxToNwbOutputOption, outputPathText, "Output NWB asset metadata path");
     AInteropString assetTypeDescription = "Output asset type: ";
     const AString assetTypeOptions = OutputAssetTypeOptionsText();
     assetTypeDescription.append(assetTypeOptions.data(), assetTypeOptions.size());
-    CLI::Option* assetTypeOption = app.add_option(s_FbxToNwbAssetTypeOption, assetType, assetTypeDescription);
-    app.add_option(s_FbxToNwbVirtualRootOption, virtualRoot, "Virtual asset root used when output path is outside an assets directory");
-    CLI::Option* meshOption = app.add_option(s_FbxToNwbMeshOption, meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
+    CLI::Option* assetTypeOption = app.add_option(__hidden_command_line::s_FbxToNwbAssetTypeOption, assetType, assetTypeDescription);
+    app.add_option(__hidden_command_line::s_FbxToNwbVirtualRootOption, virtualRoot, "Virtual asset root used when output path is outside an assets directory");
+    CLI::Option* meshOption = app.add_option(__hidden_command_line::s_FbxToNwbMeshOption, meshSelector, "Mesh selector: all, first, zero-based index, node name, or mesh name");
     CLI::Option* normalModeOption = app.add_option(
-        s_FbxToNwbNormalModeOption,
+        __hidden_command_line::s_FbxToNwbNormalModeOption,
         normalMode,
         "Normal mode: imported, smooth shared-position normals, or regenerated per-triangle face normals"
     );
-    CLI::Option* scaleOption = app.add_option(s_FbxToNwbScaleOption, options.scale, "Additional uniform scale applied after import");
+    CLI::Option* scaleOption = app.add_option(__hidden_command_line::s_FbxToNwbScaleOption, options.scale, "Additional uniform scale applied after import");
     app.add_option(
-        s_FbxToNwbTriangleAreaEpsilonOption,
+        __hidden_command_line::s_FbxToNwbTriangleAreaEpsilonOption,
         options.triangleAreaLengthSquaredEpsilon,
         "Minimum squared triangle cross-product length kept during import"
     );
-    CLI::Option* defaultColorOption = app.add_option(s_FbxToNwbDefaultColorOption, defaultColorText, "Default RGBA color, for example 1,1,1,1");
-    CLI::Option* preserveSpaceOption = app.add_flag(s_FbxToNwbPreserveSpaceFlag, options.preserveSpace, "Keep the FBX source axes and units");
-    CLI::Option* includeHiddenOption = app.add_flag(s_FbxToNwbIncludeHiddenFlag, options.includeHidden, "Include hidden FBX mesh nodes");
-    CLI::Option* localOption = app.add_flag(s_FbxToNwbLocalFlag, local, "Do not bake node transforms into mesh");
-    CLI::Option* ignoreColorsOption = app.add_flag(s_FbxToNwbIgnoreColorsFlag, ignoreColors, "Use the default color instead of FBX vertex colors");
-    CLI::Option* flipWindingOption = app.add_flag(s_FbxToNwbFlipWindingFlag, options.flipWinding, "Swap the second and third index of every triangle");
-    CLI::Option* separateAssetsOption = app.add_flag(s_FbxToNwbSeparateAssetsFlag, options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
-    CLI::Option* refreshNwbOption = app.add_flag(s_FbxToNwbRefreshNwbFlag, options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
+    CLI::Option* defaultColorOption = app.add_option(__hidden_command_line::s_FbxToNwbDefaultColorOption, defaultColorText, "Default RGBA color, for example 1,1,1,1");
+    CLI::Option* preserveSpaceOption = app.add_flag(__hidden_command_line::s_FbxToNwbPreserveSpaceFlag, options.preserveSpace, "Keep the FBX source axes and units");
+    CLI::Option* includeHiddenOption = app.add_flag(__hidden_command_line::s_FbxToNwbIncludeHiddenFlag, options.includeHidden, "Include hidden FBX mesh nodes");
+    CLI::Option* localOption = app.add_flag(__hidden_command_line::s_FbxToNwbLocalFlag, local, "Do not bake node transforms into mesh");
+    CLI::Option* ignoreColorsOption = app.add_flag(__hidden_command_line::s_FbxToNwbIgnoreColorsFlag, ignoreColors, "Use the default color instead of FBX vertex colors");
+    CLI::Option* flipWindingOption = app.add_flag(__hidden_command_line::s_FbxToNwbFlipWindingFlag, options.flipWinding, "Swap the second and third index of every triangle");
+    CLI::Option* separateAssetsOption = app.add_flag(__hidden_command_line::s_FbxToNwbSeparateAssetsFlag, options.separateAssets, "Write a model package as separate .nwb files instead of one asset bunch");
+    CLI::Option* refreshNwbOption = app.add_flag(__hidden_command_line::s_FbxToNwbRefreshNwbFlag, options.refreshNwb, "Read a mesh .nwb, canonicalize mesh streams, and rewrite it");
     app.add_flag("--force", options.forceOverwrite, "Overwrite an existing output file");
     app.add_flag("-y,--yes", options.acceptDefaults, "Use defaults for any import options that were not supplied");
     app.add_flag("--list-meshes", options.listMeshes, "List importable mesh instances and exit");
@@ -420,41 +420,41 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         options.bakeTransforms = !local;
         options.importColors = !ignoreColors;
 
-        presence.output = outputOption->count() > s_CliOptionPresentCount;
-        presence.assetType = assetTypeOption->count() > s_CliOptionPresentCount;
-        presence.mesh = meshOption->count() > s_CliOptionPresentCount;
-        presence.normalMode = normalModeOption->count() > s_CliOptionPresentCount;
-        presence.scale = scaleOption->count() > s_CliOptionPresentCount;
-        presence.defaultColor = defaultColorOption->count() > s_CliOptionPresentCount;
-        presence.preserveSpace = preserveSpaceOption->count() > s_CliOptionPresentCount;
-        presence.includeHidden = includeHiddenOption->count() > s_CliOptionPresentCount;
-        presence.local = localOption->count() > s_CliOptionPresentCount;
-        presence.ignoreColors = ignoreColorsOption->count() > s_CliOptionPresentCount;
-        presence.flipWinding = flipWindingOption->count() > s_CliOptionPresentCount;
-        presence.separateAssets = separateAssetsOption->count() > s_CliOptionPresentCount;
-        presence.refreshNwb = refreshNwbOption->count() > s_CliOptionPresentCount;
+        presence.output = outputOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.assetType = assetTypeOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.mesh = meshOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.normalMode = normalModeOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.scale = scaleOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.defaultColor = defaultColorOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.preserveSpace = preserveSpaceOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.includeHidden = includeHiddenOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.local = localOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.ignoreColors = ignoreColorsOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.flipWinding = flipWindingOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.separateAssets = separateAssetsOption->count() > __hidden_command_line::s_CliOptionPresentCount;
+        presence.refreshNwb = refreshNwbOption->count() > __hidden_command_line::s_CliOptionPresentCount;
 
         if(!__hidden_command_line::ConfigurePromptsBeforeLoad(options, presence, prompted))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!IsFinite(options.scale) || options.scale <= 0.0){
             NWB_LOGGER_WARNING(NWB_TEXT("--scale must be a positive finite number."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!IsFinite(options.triangleAreaLengthSquaredEpsilon) || options.triangleAreaLengthSquaredEpsilon < 0.0){
             NWB_LOGGER_WARNING(NWB_TEXT("--triangle-area-length-squared-epsilon must be a finite non-negative number."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         ErrorCode errorCode;
         const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
         if(errorCode && !IsMissingPathError(errorCode)){
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile){
             NWB_LOGGER_WARNING(NWB_TEXT("Input file was not found: {}"), StringConvert(options.inputPath));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         if(__hidden_command_line::IsNwbRefreshMode(options))
@@ -462,7 +462,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
 
         SceneHandle scene;
         if(!LoadScene(options, scene))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
             __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, options.includeHidden, prompted);
@@ -470,58 +470,58 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         UtilityVector<MeshInstance> instances = CollectMeshInstances(scene.scene, options.includeHidden);
         if(options.listMeshes){
             PrintMeshInstances(instances);
-            return s_FbxToNwbExitSuccess;
+            return __hidden_command_line::s_FbxToNwbExitSuccess;
         }
         if(instances.empty()){
             if(options.includeHidden)
                 NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
             else
                 NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         if(!__hidden_command_line::ConfigurePromptsAfterLoad(options, presence, instances, prompted))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!ValidateAssetTypeText(options.assetType))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         if(!ValidateNormalModeText(options.normalMode))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         Vec4 defaultColor;
         if(!ParseColorText(options.defaultColorText, defaultColor)){
             NWB_LOGGER_WARNING(NWB_TEXT("--default-color must contain four finite numbers, for example 1,1,1,1."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         UtilityVector<usize> selection;
         if(!SelectMeshInstances(instances, options.meshSelector, selection))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         OutputAssetType::Enum assetTypeValue = OutputAssetType::Mesh;
         if(!ParseAssetTypeText(options.assetType, assetTypeValue)){
             NWB_LOGGER_WARNING(StringConvert(OutputAssetTypeErrorText()));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         bool usesSkinning = false;
         bool wantsSkinning = false;
         if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
             if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
-                return s_FbxToNwbExitFailure;
+                return __hidden_command_line::s_FbxToNwbExitFailure;
             usesSkinning = wantsSkinning;
         }
         if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning){
             NWB_LOGGER_WARNING(NWB_TEXT("Selected source mesh is not skinned; requested asset type requires skinning."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
         const Path outputPath(UtilityDetail::Arena(), options.outputPath);
         if(outputPath.empty()){
             NWB_LOGGER_WARNING(NWB_TEXT("Output path is empty."));
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         SourceMeshStreams mesh;
         UtilityVector<ufbx_node*> skeletonJoints;
@@ -545,7 +545,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             sawVertexUvs,
             tangentReport
         ))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!WriteNwbAsset(
             outputPath,
@@ -557,7 +557,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
             skeletonBindPoseMatrices,
             inverseBindMatrices
         ))
-            return s_FbxToNwbExitFailure;
+            return __hidden_command_line::s_FbxToNwbExitFailure;
 
         AStringStream report;
         report
@@ -582,7 +582,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         }
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
-        return s_FbxToNwbExitSuccess;
+        return __hidden_command_line::s_FbxToNwbExitSuccess;
     }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
 }
 

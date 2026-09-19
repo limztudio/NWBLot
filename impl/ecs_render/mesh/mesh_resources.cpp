@@ -51,20 +51,20 @@ inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pr
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
             , StringConvert(meshName.c_str())
-            , label
+            , label.get()
         );
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
             , StringConvert(meshName.c_str())
-            , label
+            , label.get()
         );
         return false;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
     NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create {} buffer for mesh '{}'")
-        , label
+        , label.get()
         , StringConvert(meshName.c_str())
     );
     return false;
@@ -74,7 +74,7 @@ inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pr
     const Name bufferName = DeriveName(meshName, suffix);
     if(!bufferName){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive {} buffer name for mesh '{}'")
-            , label
+            , label.get()
             , StringConvert(meshName.c_str())
         );
     }
@@ -182,7 +182,7 @@ template<typename PayloadVector>
     if(!buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has no {} buffer")
             , StringConvert(meshName.c_str())
-            , label
+            , label.get()
         );
         return false;
     }
@@ -194,7 +194,7 @@ template<typename PayloadVector>
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} buffer cannot cover {} logical bytes")
             , StringConvert(meshName.c_str())
-            , label
+            , label.get()
             , logicalByteCount
         );
         return false;

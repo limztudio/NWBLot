@@ -468,7 +468,7 @@ bool SubmitGraphOwnedStandaloneTask(
     GpuCompiledGraph compiledGraph(graphArena);
     GpuRecordedGraph recordedGraph(graphArena);
     GpuGraphSubmissionTransaction transaction(graphArena);
-    Alloc::ScratchArena scratchArena(s_StandaloneTaskGraphScratchArena);
+    Alloc::ScratchArena scratchArena(__hidden_graphics_graph_setup::s_StandaloneTaskGraphScratchArena);
     const GpuTaskGraphCompiler compiler;
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena))

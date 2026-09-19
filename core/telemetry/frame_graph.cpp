@@ -1260,7 +1260,7 @@ bool BuildFrameGraphPayloadImpl(
 
     const bool hasPacketSubmissionStatistics = packetSubmissionStatistics != nullptr;
     if(hasPacketSubmissionStatistics){
-        Alloc::ScratchArena scratchArena(s_PacketStatisticsValidationScratch);
+        Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
             scratchArena,
             nodes,
@@ -1914,7 +1914,7 @@ bool ParseFrameGraphPayload(
         outPayload.packetSubmissionStatistics.push_back(statistics);
     }
     if(outPayload.packetSubmissionStatisticsPresent){
-        Alloc::ScratchArena scratchArena(s_PacketStatisticsValidationScratch);
+        Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
             scratchArena,
             outPayload.nodes,

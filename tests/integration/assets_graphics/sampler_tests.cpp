@@ -2,6 +2,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_sampler{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AString = AssetsGraphicsFixture::AString;
+using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using Path = AssetsGraphicsFixture::Path;
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_SamplerTestMetadata =
     "sampler asset;\n\n"
     "asset.min_filter = \"nearest\";\n"
@@ -37,7 +73,7 @@ TEST(AssetsGraphics, SamplerCodecRoundTripPreservesDescription){
     ASSERT_TRUE(sampler.validatePayload());
 
     NWB::Impl::SamplerAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(sampler, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
 
@@ -66,7 +102,7 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "sampler_cooker_round_trip",
         root,
@@ -74,11 +110,11 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     ));
 
     const Path assetRoot = root / "assets";
-    ASSERT_TRUE(WriteTextFile(assetRoot / "samplers" / "linear_clamp.nwb", s_SamplerTestMetadata));
-    ASSERT_TRUE(CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "linear_clamp.nwb", s_SamplerTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/samplers/linear_clamp"),
@@ -115,10 +151,10 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
     const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
     NWB::Impl::SamplerCookEntry entry(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_CodecScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
     EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(
         assetRoot,
         "project",
@@ -131,6 +167,24 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
 #else
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -208,7 +208,7 @@ private:
             CharacterTint(classIndex, transparent),
             Float4(x, s_CharacterLift, z, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &tintApplied
+            tintApplied
         );
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: failed to set character tint (index {})"), index);

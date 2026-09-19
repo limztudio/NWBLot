@@ -188,7 +188,7 @@ private:
             Float4(0.72f, 0.86f, 1.0f, 0.42f),
             Float4(0.0f, s_CharacterLift, 0.0f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &tintApplied
+            tintApplied
         );
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SkinnedCausticSmokeProject: failed to set glass character tint"));

@@ -196,7 +196,7 @@ public:
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(-s_CharacterSpacingX, 0.0f, s_OpaqueBackZ, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &opaqueTintApplied
+            opaqueTintApplied
         );
         bool transparentTintApplied = false;
         m_transparentOwner = CreateTintedModelEntity(
@@ -208,7 +208,7 @@ public:
             Float4(0.72f, 0.86f, 1.00f, 0.42f), // glass tint, sub-1 alpha
             Float4(s_CharacterSpacingX, 0.0f, s_TransparentFrontZ, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &transparentTintApplied
+            transparentTintApplied
         );
         if(!opaqueTintApplied || !transparentTintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("FlickerTestSmokeProject: failed to set character tint (opaque {}, transparent {})"), opaqueTintApplied, transparentTintApplied);

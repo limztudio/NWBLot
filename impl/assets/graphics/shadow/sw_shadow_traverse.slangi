@@ -192,8 +192,8 @@ void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc,
         acc.bins[slot].instanceId = instanceIndex;
         acc.bins[slot].crossingCount = 0u;
         acc.bins[slot].crossingOverflow = 0u;
-        acc.bins[slot].absorptionCoeff = optics.absorptionCoeff;
-        acc.bins[slot].interfaceTransmittance = optics.interfaceTransmittance;
+        acc.bins[slot].absorptionCoeff = half3(optics.absorptionCoeff);
+        acc.bins[slot].interfaceTransmittance = half(optics.interfaceTransmittance);
         acc.bins[slot].tMin = optics.tMin;
         acc.bins[slot].tMax = optics.tMax;
         acc.binCount += 1u;

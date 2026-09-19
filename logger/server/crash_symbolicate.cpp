@@ -278,7 +278,7 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
     Symbolicate::AppendSymbolStoreStatus(arena, detailReport, config);
     Symbolicate::AppendEventSummary(arena, summary, detailReport);
 
-    if(summary.platform == s_WindowsPlatformName){
+    if(summary.platform == LoggerCrashSymbolicateDetail::s_WindowsPlatformName){
 #if defined(NWB_PLATFORM_WINDOWS)
         if(!Symbolicate::AppendWindowsMinidumpStack(arena, packageDirectory, summary, config, detailReport))
             NWB_LOGGER_WARNING(NWB_TEXT("Windows minidump stack could not be fully decoded"));
@@ -286,10 +286,10 @@ CrashReportText BuildCrashSymbolicationReport(LogArena& arena, const Path& packa
         detailReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=Windows minidump resolver is only available on Windows logserver builds\n";
 #endif
     }
-    else if(summary.platform == s_LinuxPlatformName){
+    else if(summary.platform == LoggerCrashSymbolicateDetail::s_LinuxPlatformName){
         Symbolicate::AppendLinuxArtifactSummary(arena, packageDirectory, config, detailReport);
     }
-    else if(summary.platform == s_AndroidPlatformName){
+    else if(summary.platform == LoggerCrashSymbolicateDetail::s_AndroidPlatformName){
         Symbolicate::AppendAndroidTombstoneSummary(arena, packageDirectory, detailReport);
     }
     else{

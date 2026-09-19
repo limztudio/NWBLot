@@ -94,8 +94,8 @@ namespace GpuTaskGraphQueueAssignmentStatus{
 };
 
 struct GpuTaskQueueAssignmentDiagnostic{
-    GpuTaskGraphQueueAssignmentStatus::Enum status = GpuTaskGraphQueueAssignmentStatus::NotAssigned;
     GpuTaskId task;
+    GpuTaskGraphQueueAssignmentStatus::Enum status = GpuTaskGraphQueueAssignmentStatus::NotAssigned;
     GpuQueueCapability::Mask requiredCapabilities = GpuQueueCapability::None;
 };
 
@@ -106,8 +106,8 @@ struct GpuTaskQueueAssignment{
     GpuQueueAssignmentScore score;
     CommandQueue::Enum queueClass = CommandQueue::kCount;
     GpuTaskQueueAssignmentReason::Enum reason = GpuTaskQueueAssignmentReason::Unknown;
-    GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
     bool dedicated = false;
+    GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
 // Migration starts with explicitly requested compatible merges. Frontier-safe packetization preserves those requests

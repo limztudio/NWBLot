@@ -2,6 +2,41 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_volume_extensibility{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using Path = AssetsGraphicsFixture::Path;
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class ProjectProbeAsset final : public NWB::Core::Assets::TypedAsset<ProjectProbeAsset>{
 public:
     NWB_DEFINE_ASSET_TYPE("project_probe")
@@ -119,7 +154,7 @@ static bool LoadProjectProbeAsset(
     const u32 expectedMarker
 ){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!LoadCookedAsset<ProjectProbeAssetCodec>(
+    if(!AssetsGraphicsFixture::LoadCookedAsset<ProjectProbeAssetCodec>(
         testArena,
         outputDirectory,
         assetName,
@@ -137,7 +172,7 @@ static bool LoadProjectProbeAsset(
 }
 
 TEST(AssetsGraphics, ProjectCookEntryAutoRegistration){
-    NWB::Core::Assets::CookArena arena(s_ProjectCookEntryArena);
+    NWB::Core::Assets::CookArena arena(AssetsGraphicsFixture::s_ProjectCookEntryArena);
     NWB::Core::Assets::CookEntryRegistry registry(arena);
 
     EXPECT_FALSE(registry.has(ProjectProbeAsset::AssetTypeName()));
@@ -152,7 +187,7 @@ TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         "project_probe asset;\n\n"
         "asset.label = \"document\";\n",
         "project_cook_entry_document",
@@ -182,7 +217,7 @@ TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         "project_probe probe;\n"
         "probe.label = \"bunch\";\n\n"
         "asset_bunch bunch = [\n"
@@ -207,6 +242,24 @@ TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
     );
     EXPECT_EQ(logger.errorCount(), 0u);
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

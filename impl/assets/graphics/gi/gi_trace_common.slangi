@@ -99,7 +99,7 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
                 NWB_GI_TRACE_RAY_MAX_DISTANCE
             );
             if(occluded)
-                irradiance *= 0.0; // fully shadowed by the dominant-light occlusion ray
+                irradiance *= 0.0h; // fully shadowed by the dominant-light occlusion ray
         }
     }
 #endif

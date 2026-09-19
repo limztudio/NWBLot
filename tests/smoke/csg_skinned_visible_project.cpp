@@ -192,7 +192,7 @@ private:
             colorTint,
             position,
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &tintApplied
+            tintApplied
         );
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to set receiver material tint"));
@@ -242,7 +242,7 @@ private:
             return fallback;
         }
         NWB_ASSERT(modelAsset);
-        const auto* model = Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
+        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
         if(!model)
             return fallback;
         if(model->skeletonObjects().empty())
@@ -254,7 +254,7 @@ private:
             return fallback;
         }
         NWB_ASSERT(skeletonAsset);
-        const auto* skeleton = Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
+        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
         if(!skeleton)
             return fallback;
 

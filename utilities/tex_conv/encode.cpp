@@ -162,7 +162,7 @@ private:
     const AlphaSource& alphaSource,
     TexturePayload& outPayload
 ){
-    const u32 planeCount = dimension == TextureDimension::TextureCube ? s_TextureCubeFaceCount : 1u;
+    const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
         return false;
 
@@ -226,7 +226,7 @@ private:
     }
 
     u32 mipCount = 0u;
-    if(!ComputeCompleteMipCount(dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u, mipCount)){
+    if(!TextureFormat::ComputeCompleteMipCount(dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u, mipCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid mip chain."));
         return false;
     }
@@ -453,7 +453,7 @@ private:
     const u32 height = sourcePlanes.front().get_height();
     const u32 depth = static_cast<u32>(sourcePlanes.size());
     u32 mipCount = 0u;
-    if(!ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
+    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: volume dimensions cannot form a complete mip chain."));
         return false;
     }
@@ -528,7 +528,7 @@ bool EncodeTexture(
             : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource, outPayload)
         ;
     case TextureDimension::TextureCube:
-        if(inputPaths.size() != s_TextureCubeFaceCount){
+        if(inputPaths.size() != TextureFormat::s_TextureCubeFaceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
             return false;
         }

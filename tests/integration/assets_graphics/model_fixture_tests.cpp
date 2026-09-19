@@ -2,6 +2,42 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_model_fixture{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using AString = AssetsGraphicsFixture::AString;
+using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
+using Path = AssetsGraphicsFixture::Path;
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr AStringView s_ModelFixtureMeshMeta =
 R"(mesh mesh;
 
@@ -83,16 +119,16 @@ skin.inverse_bind_matrices = [
 )";
 
 static void AppendModelFixtureBase(AString& inOutMeta){
-    AppendTestMeta(inOutMeta, s_ModelFixtureMeshMeta);
-    AppendTestMeta(inOutMeta, s_ModelFixtureSkeletonMeta);
-    AppendTestMeta(inOutMeta, s_ModelFixtureSkinMeta);
+    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureSkeletonMeta);
+    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureSkinMeta);
 }
 
 static AString BuildValidModelBunchFixture(){
     AString meta;
     meta.reserve(4096u);
     AppendModelFixtureBase(meta);
-    AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -151,7 +187,7 @@ static bool LoadCookedModel(
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
-    return LoadCookedAsset<NWB::Impl::ModelAssetCodec>(
+    return AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ModelAssetCodec>(
         testArena,
         outputDirectory,
         assetName,
@@ -168,7 +204,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildValidModelBunchFixture();
-    const bool cooked = CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_local_references",
         "characters",
@@ -223,9 +259,9 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
 static AString BuildStaticAttachmentModelBunchFixture(){
     AString meta;
     meta.reserve(4096u);
-    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AppendTestMeta(meta, s_ModelFixtureSkeletonMeta);
-    AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureSkeletonMeta);
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -263,7 +299,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildStaticAttachmentModelBunchFixture();
-    const bool cooked = CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_static_attachment",
         "characters",
@@ -312,8 +348,8 @@ TEST(AssetsGraphics, ModelBunchRejectsNonAffineFourthTransformRow){
 
     AString meta;
     meta.reserve(2048u);
-    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
 
 model.static_meshes = {
     "tool": {
@@ -336,7 +372,7 @@ asset_bunch bunch = [
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_FALSE(CookSingleGraphicsMeta(
+    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_non_affine_fourth_transform_row",
         "characters",
@@ -362,7 +398,7 @@ static bool ExpandModelBunchFixture(
     if(!doc.parse(meta))
         return false;
 
-    const Path assetRoot = AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
     const Path nwbFilePath = assetRoot / "characters" / "model_fixture.nwb";
     return NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
         assetRoot,
@@ -382,8 +418,8 @@ TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
 
     AString meta;
     meta.reserve(2048u);
-    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -400,7 +436,7 @@ asset_bunch bunch = [
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
     NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,
@@ -423,8 +459,8 @@ TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
 
     AString meta;
     meta.reserve(2048u);
-    AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -440,7 +476,7 @@ asset_bunch bunch = [
 
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
-    NWB::Core::Alloc::ScratchArena scratchArena(s_ModelFixtureScratchArena);
+    NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
     NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
     const bool expanded = ExpandModelBunchFixture(
         testArena,
@@ -454,6 +490,24 @@ asset_bunch bunch = [
 #else
 #endif
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

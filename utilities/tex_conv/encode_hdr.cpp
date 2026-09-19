@@ -264,7 +264,7 @@ namespace EncodeBackendDetail{
     bool foundAlpha = false;
     bool allOpaque = true;
     bool allConstant = true;
-    u8 constantAlpha = s_OpaqueAlphaUnorm8;
+    u8 constantAlpha = TextureFormat::s_OpaqueAlphaUnorm8;
     outAlphaMips.clear();
     outAlphaMips.resize(inOutMipPlanes.size());
     for(usize mipIndex = 0u; mipIndex < inOutMipPlanes.size(); ++mipIndex){
@@ -295,7 +295,7 @@ namespace EncodeBackendDetail{
                         quantizedAlpha,
                         quantizedAlpha,
                         quantizedAlpha,
-                        s_OpaqueAlphaUnorm8
+                        TextureFormat::s_OpaqueAlphaUnorm8
                     );
                     hdrColor[3u] = 1.0f;
 
@@ -305,7 +305,7 @@ namespace EncodeBackendDetail{
                     }
                     else if(quantizedAlpha != constantAlpha)
                         allConstant = false;
-                    if(quantizedAlpha != s_OpaqueAlphaUnorm8)
+                    if(quantizedAlpha != TextureFormat::s_OpaqueAlphaUnorm8)
                         allOpaque = false;
                 }
             }
@@ -316,7 +316,7 @@ namespace EncodeBackendDetail{
 
     if(allOpaque){
         outAlphaMode = TextureAlphaMode::Opaque;
-        outAlphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+        outAlphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     }
     else if(allConstant){
         outAlphaMode = TextureAlphaMode::ConstantUnorm8;
@@ -324,7 +324,7 @@ namespace EncodeBackendDetail{
     }
     else{
         outAlphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-        outAlphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+        outAlphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     }
     return true;
 }
@@ -523,7 +523,7 @@ namespace EncodeBackendDetail{
 
     VolumeMips alphaMips;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     if(!ExtractHdrAlphaMips(inOutMipPlanes, alphaMips, alphaMode, alphaConstantUnorm8))
         return false;
 
@@ -558,7 +558,7 @@ namespace EncodeBackendDetail{
     const AlphaSource& alphaSource,
     TexturePayload& outPayload
 ){
-    const u32 planeCount = dimension == TextureDimension::TextureCube ? s_TextureCubeFaceCount : 1u;
+    const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
         return false;
 
@@ -577,7 +577,7 @@ namespace EncodeBackendDetail{
     }
 
     u32 mipCount = 0u;
-    if(!ComputeCompleteMipCount(dimension, width, height, 1u, mipCount)){
+    if(!TextureFormat::ComputeCompleteMipCount(dimension, width, height, 1u, mipCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR texture dimensions cannot form a complete mip chain."));
         return false;
     }
@@ -609,7 +609,7 @@ namespace EncodeBackendDetail{
     const u32 height = sourcePlanes.front().get_height();
     const u32 depth = static_cast<u32>(sourcePlanes.size());
     u32 mipCount = 0u;
-    if(!ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
+    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR volume dimensions cannot form a complete mip chain."));
         return false;
     }

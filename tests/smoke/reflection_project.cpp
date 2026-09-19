@@ -58,7 +58,7 @@ static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World
         AddSmokeSkinnedRenderSystems(world, context);
         auto* rendererPtr = world.getSystem<NWB::Impl::RendererSystem>();
         NWB_FATAL_ASSERT(rendererPtr);
-        Impl::RendererSystem& renderer = *rendererPtr;
+        NWB::Impl::RendererSystem& renderer = *rendererPtr;
         return renderer;
     }
     return AddSmokeRenderSystems(world, context);
@@ -686,7 +686,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    Core::Alloc::GlobalArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
+    NWB::Core::Alloc::GlobalArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
     Tests::Smoke::SmokeEnvironmentString extent(arena);
     if(!Tests::Smoke::ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_EXTENT", extent) || extent == "native")
         return { 960, 720 };

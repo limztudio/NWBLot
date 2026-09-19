@@ -288,7 +288,7 @@ public:
             Float4(0.86f, 0.80f, 0.74f, 1.0f),
             Float4(0.7f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &tintApplied
+            tintApplied
         );
         if(!tintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set character tint"));
@@ -314,7 +314,7 @@ public:
             Float4(0.20f, 0.55f, 0.12f, 0.6f),
             Float4(-0.6f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),
-            &glassTintApplied
+            glassTintApplied
         );
         if(!glassTintApplied)
             NWB_LOGGER_ERROR(NWB_TEXT("SoftShadowTestSmokeProject: failed to set glass tint"));

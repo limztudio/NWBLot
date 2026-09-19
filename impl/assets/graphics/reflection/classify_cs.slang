@@ -198,8 +198,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
         opaqueCandidate = nwbReflectionClassifySurface(pixel, false, opaqueTile, opaqueResult, opaqueObservations, opaqueWork);
         glassCandidate = nwbReflectionClassifySurface(pixel, true, glassTile, glassResult, glassObservations, glassWork);
         // Every surface receives exactly one dispatch-owned write, including invalid surfaces and true zeros.
-        nwbReflectionStore(pixel, false, opaqueResult.rgb, opaqueResult.a);
-        nwbReflectionStore(pixel, true, glassResult.rgb, glassResult.a);
+        nwbReflectionStore(pixel, false, half3(opaqueResult.rgb), opaqueResult.a);
+        nwbReflectionStore(pixel, true, half3(glassResult.rgb), glassResult.a);
     }
 
     if(sharedWork){

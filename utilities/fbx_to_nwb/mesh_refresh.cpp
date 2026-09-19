@@ -365,17 +365,17 @@ bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskSchedul
     UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap;
 
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, s_PositionStreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, __hidden_mesh_refresh::s_PositionStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, s_NormalStreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, __hidden_mesh_refresh::s_NormalStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, s_TangentStreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, __hidden_mesh_refresh::s_TangentStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, s_Uv0StreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, __hidden_mesh_refresh::s_Uv0StreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, s_ColorsStreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, __hidden_mesh_refresh::s_ColorsStreamLabel))
         return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, s_SkinStreamLabel))
+    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, __hidden_mesh_refresh::s_SkinStreamLabel))
         return false;
     if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
         return false;

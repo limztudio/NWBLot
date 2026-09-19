@@ -100,12 +100,12 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
 
 
 int RunPipelineTool(const int argc, char** argv){
-    NWB::Core::Assets::AssetArena arena(s_AssetBuilderArena);
+    NWB::Core::Assets::AssetArena arena(__hidden_asset_builder::s_AssetBuilderArena);
     PipelineOptions parsed(arena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
     return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
-        NWB::Core::CpuTaskScheduler cpuScheduler(cores > s_MinParallelCoreCount ? cores - s_MinParallelCoreCount : 0u);
+        NWB::Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);
         buildOptions.repoRoot = options.repoRoot;
         buildOptions.outputDirectory = options.outputDirectory;

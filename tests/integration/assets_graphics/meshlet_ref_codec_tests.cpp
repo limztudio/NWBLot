@@ -2,6 +2,39 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "assets_graphics_fixture.h"
+
+
+#include <gtest/gtest.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_assets_graphics_meshlet_ref_codec{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+using TestArena = AssetsGraphicsFixture::TestArena;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
     EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(0u), NWB::Impl::MeshletRefDeltaWidth::U8);
     EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(255u), NWB::Impl::MeshletRefDeltaWidth::U8);
@@ -10,28 +43,10 @@ TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
     EXPECT_EQ(NWB::Impl::MeshletRefDeltaWidthForMaxDelta(65536u), NWB::Impl::MeshletRefDeltaWidth::U32);
 }
 
-static bool EncodeTestMeshletRefs(
-    NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,
-    const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletPositionStreamRef>& positionRefs,
-    const NWB::Core::Assets::AssetVector<NWB::Impl::MeshletAttributeStreamRef>& attributeRefs,
-    NWB::Core::Assets::AssetVector<u8>& positionRefDeltas,
-    NWB::Core::Assets::AssetVector<u8>& attributeRefDeltas,
-    const bool skinRequired
-){
-    return NWB::Impl::EncodeMeshletRefDeltas(
-        meshlets,
-        positionRefs,
-        attributeRefs,
-        positionRefDeltas,
-        attributeRefDeltas,
-        skinRequired,
-        [](const usize, const tchar*){ return false; }
-    );
-}
 
 TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
     TestArena testArena;
-    auto meshlets = MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
+    auto meshlets = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
     meshlets.push_back(NWB::Impl::MeshletDesc{
         0u,
         0u,
@@ -40,19 +55,19 @@ TEST(AssetsGraphics, MeshletRefEncodingRoundTrip){
         NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
     });
 
-    auto positionRefs = MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
+    auto positionRefs = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 0u, 1000u });
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 256u, 1001u });
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 65536u, 1002u });
 
-    auto attributeRefs = MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
+    auto attributeRefs = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 5u, 1000u, 0u, 20u });
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 6u, 1256u, 65536u, 21u });
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 7u, 1257u, 65537u, 22u });
 
-    auto positionRefDeltas = MakeAssetVector<u8>(testArena);
-    auto attributeRefDeltas = MakeAssetVector<u8>(testArena);
-    const bool encoded = EncodeTestMeshletRefs(
+    auto positionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
+    auto attributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
+    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(
         meshlets,
         positionRefs,
         attributeRefs,
@@ -120,6 +135,24 @@ TEST(AssetsGraphics, MeshletConeOctPackingRoundTrip){
             EXPECT_LT(VectorGetZ(unpacked), 0.0f);
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

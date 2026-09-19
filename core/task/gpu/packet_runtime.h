@@ -57,7 +57,6 @@ struct GpuRecordedPacket{
     f64 commandListAcquisitionSeconds = 0.0;
     f64 graphBarrierRecordingSeconds = 0.0;
     f64 taskRecordSeconds = 0.0;
-    u8 commandListCount = 0u;
     // Monotonic steady-clock endpoints make actual CPU recording overlap observable without exposing Timer in the
     // public packet snapshot. Both endpoints are published before commandListCount makes the slot visible.
     u64 recordingBeginNanoseconds = 0u;
@@ -67,6 +66,7 @@ struct GpuRecordedPacket{
     // and scheduler-local index.
     u64 recordingWorkerDomain = 0u;
     u32 recordingWorkerIndex = 0u;
+    u8 commandListCount = 0u;
 };
 
 

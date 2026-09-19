@@ -1169,7 +1169,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             if(!m_materialSystem.appendShadowOccluderMaterialContext(
                 entity,
                 *materialInfo,
-                transform,
+                transformPtr,
                 shadowMaterialTypedBytes,
                 shadowMutableTypedRanges,
                 shadowInstance,
@@ -1820,7 +1820,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
             if(!m_materialSystem.appendShadowOccluderMaterialContext(
                 entity,
                 *materialInfo,
-                transform,
+                objectTransformPtr,
                 shadowMaterialTypedBytes,
                 shadowMutableTypedRanges,
                 shadowInstance,

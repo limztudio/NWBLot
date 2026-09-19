@@ -175,7 +175,7 @@ void WriteVertexRef(Stream& out, const SourceVertexRef& ref){
     out << "[" << ref.position << ", " << ref.normal << ", " << ref.tangent << ", " << ref.uv0 << ", " << ref.color << "]";
 }
 
-bool EnsureOutputDirectory(const Path& outputPath, const char* assetKind){
+bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
     ErrorCode errorCode;
     const Path parentPath = outputPath.parent_path();
     if(parentPath.empty())
@@ -413,8 +413,8 @@ template<typename Stream>
 void WriteSkinAssetBody(
     Stream& file,
     const AStringView variableName,
-    const AString& meshName,
-    const AString& skeletonName,
+    const AStringView meshName,
+    const AStringView skeletonName,
     const UtilityVector<MeshSkinInfluence>& influences,
     const UtilityVector<JointMatrix>& inverseBindMatrices,
     const bool quoteReferences = true
@@ -481,7 +481,7 @@ template<typename Stream>
 void WriteModelAssetBody(
     Stream& file,
     const AStringView variableName,
-    const AString& meshName,
+    const AStringView meshName,
     const AString* skinName,
     const AString* skeletonName,
     const AStringView skinnedMeshSkeletonName = s_SkeletonAssetKindText,
@@ -654,7 +654,7 @@ bool WriteNwbAsset(
 
     const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
     const Path packageDirectory = outputPath.parent_path() / outputPath.stem();
-    const Path meshPath = packageDirectory / s_MeshSplitFileName;
+    const Path meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const AString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
     const AString meshName = virtualBase + "/mesh";
 
@@ -708,8 +708,8 @@ bool WriteNwbAsset(
     if(!AssetWriterSkeletonDetail::RemapSkinInfluences(positionSkin, skeletonOutput.oldToNewJointIndices))
         return false;
 
-    const Path skeletonPath = packageDirectory / s_SkeletonSplitFileName;
-    const Path skinPath = packageDirectory / s_SkinSplitFileName;
+    const Path skeletonPath = packageDirectory / __hidden_asset_writer::s_SkeletonSplitFileName;
+    const Path skinPath = packageDirectory / __hidden_asset_writer::s_SkinSplitFileName;
     const AString skeletonName = virtualBase + "/skeleton";
     const AString skinName = virtualBase + "/skin";
 

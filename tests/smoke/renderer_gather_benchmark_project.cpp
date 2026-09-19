@@ -42,9 +42,9 @@ static constexpr u32 s_InFlightRanges = 32u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TimingPass final : public Core::IRenderPass{
+class TimingPass final : public NWB::Core::IRenderPass{
 public:
-    explicit TimingPass(Core::GraphicsRuntime& graphics)
+    explicit TimingPass(NWB::Core::GraphicsRuntime& graphics)
         : IRenderPass(graphics)
     {}
 
@@ -98,8 +98,8 @@ public:
         m_memoryEnabled = mode == "memory";
         m_runtime = workload == "runtime";
         if(
-            !m_context.graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct)
-            || !m_context.graphics.queryFeatureSupport(Core::Feature::RayQuery)
+            !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
+            || !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery)
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererGatherBenchmark: hardware ray queries are required"));
             return false;
@@ -108,12 +108,12 @@ public:
             AddSmokeSkinnedRenderSystems(*m_world, m_context);
         else
             AddSmokeRenderSystems(*m_world, m_context);
-        auto* rendererPtr = m_world->getSystem<Impl::RendererSystem>();
+        auto* rendererPtr = m_world->getSystem<NWB::Impl::RendererSystem>();
         NWB_ASSERT(rendererPtr);
-        Impl::RendererSystem& renderer = *rendererPtr;
+        NWB::Impl::RendererSystem& renderer = *rendererPtr;
         m_worldReady = true;
-        Impl::ReflectionSettings settings;
-        settings.traceMode = Impl::ReflectionTraceMode::Hardware;
+        NWB::Impl::ReflectionSettings settings;
+        settings.traceMode = NWB::Impl::ReflectionTraceMode::Hardware;
         settings.maxHardwareRaysPerFrame = 4096u;
         settings.maxOpticalQueries = 16u;
         settings.temporalEnabled = false;
@@ -128,8 +128,8 @@ public:
         const auto cameraEntity = CreateSmokeCamera(*m_world, 2.6f, 9.0f, 0.0f);
         if(!cameraEntity.valid())
             return false;
-        const auto light = Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.f, Float4(1.f, 0.96f, 0.88f), 2.f);
-        m_world->entity(light).getComponent<Impl::Scene::LightComponent>().enableCaustics = false;
+        const auto light = NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.9f, 0.65f, 0.f, Float4(1.f, 0.96f, 0.88f), 2.f);
+        m_world->entity(light).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = false;
         if(!createBackdrop())
             return false;
         for(u32 index = 0u; index < s_ObjectCount; ++index){
@@ -150,20 +150,20 @@ public:
                 material = SmokeMaterialRef(materialPath.c_str());
             }
             auto entity = m_world->createEntity();
-            auto& transform = entity.addComponent<Impl::Scene::TransformComponent>();
+            auto& transform = entity.addComponent<NWB::Impl::Scene::TransformComponent>();
             transform.position = position;
             transform.scale = Float4(0.43f, 0.43f, 0.43f, 0.f);
-            entity.addComponent<Impl::MeshComponent>().mesh = mesh;
-            auto& component = entity.addComponent<Impl::RendererComponent>();
+            entity.addComponent<NWB::Impl::MeshComponent>().mesh = mesh;
+            auto& component = entity.addComponent<NWB::Impl::RendererComponent>();
             component.material = material;
             if(!opaque){
-                component.opticalBoundaryMode = Impl::OpticalBoundaryMode::ClosedNested;
+                component.opticalBoundaryMode = NWB::Impl::OpticalBoundaryMode::ClosedNested;
                 ++m_transparentRenderers;
             }
             ++m_renderers;
             if(workload == "overrides"){
-                entity.addComponent<Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
-                if(!Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint",
+                entity.addComponent<NWB::Impl::MaterialInstanceComponent>(m_context.objectArena, Name(s_Interface));
+                if(!NWB::Impl::SetMaterialMutableHalf4(*m_world, entity.id(), Name(s_Interface), "runtime.color_tint",
                     Float4(0.55f + static_cast<f32>(index) / 256.f, 0.85f, 1.f, 1.f)))
                     return false;
             }
@@ -179,7 +179,7 @@ public:
             if(!m_compilerProbe.start(*renderer, MakeNotNull(compilerOutput.c_str())))
                 return false;
         }
-        Core::Perf::CaptureOptions capture;
+        NWB::Core::Perf::CaptureOptions capture;
         capture.enabled = true;
         capture.cpuTiming = true;
         capture.gpuTiming = true;
@@ -229,15 +229,15 @@ private:
             Float4(0.1f, 0.1f, 0.1f, 1.f), Float4(0.f, 2.6f, 2.f, 0.f), Float4(5.f, 1.f, 3.5f, 0.f));
         if(!backdrop.valid())
             return false;
-        auto& transform = m_world->entity(backdrop).getComponent<Impl::Scene::TransformComponent>();
+        auto& transform = m_world->entity(backdrop).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
         const Half4U f0 = MakeHalf4U(0.35f, 0.35f, 0.35f, 0.f);
         const Half roughness = ConvertFloatToHalf(0.f);
-        if(!Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0",
-            Impl::MaterialLayoutFieldType::Half3, Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.specular_f0",
+            NWB::Impl::MaterialLayoutFieldType::Half3, NWB::Impl::PackMaterialInstanceBytes(f0.raw, sizeof(Half) * 3u)))
             return false;
-        if(!Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness",
-            Impl::MaterialLayoutFieldType::Half, Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
+        if(!NWB::Impl::SetMaterialMutableParameter(*m_world, backdrop, Name(s_Interface), "runtime.perceptual_roughness",
+            NWB::Impl::MaterialLayoutFieldType::Half, NWB::Impl::PackMaterialInstanceBytes(&roughness, sizeof(roughness))))
             return false;
         ++m_renderers;
         return true;
@@ -246,14 +246,14 @@ private:
     [[nodiscard]] bool createRuntime(const u32 index, const Float4& position){
         bool tintApplied = false;
         const auto owner = CreateTintedModelEntity(*m_world, m_context.objectArena, s_Model, s_Opaque, s_Interface,
-            Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f), &tintApplied);
+            Float4(0.9f, 0.45f, 0.2f, 1.f), position, Float4(0.22f, 0.22f, 0.22f, 0.f), tintApplied);
         if(!owner.valid() || !tintApplied)
             return false;
         SyncSmokeModelRuntimes(*m_world);
-        const auto skeleton = FindSpawnedModelObject(*m_world, owner, Name("skeleton"), Impl::ModelObjectKind::Skeleton);
+        const auto skeleton = FindSpawnedModelObject(*m_world, owner, Name("skeleton"), NWB::Impl::ModelObjectKind::Skeleton);
         if(!skeleton.valid())
             return false;
-        auto& pose = m_world->entity(skeleton).getComponent<Impl::SkeletonPoseComponent>();
+        auto& pose = m_world->entity(skeleton).getComponent<NWB::Impl::SkeletonPoseComponent>();
         if(pose.localJoints.size() < 2u)
             return false;
         const f32 yaw = (index & 8u) != 0u ? 0.08f : -0.08f;
@@ -264,16 +264,16 @@ private:
     }
 
     [[nodiscard]] bool readActualCounts(){
-        auto* meshesPtr = m_world->getSystem<Impl::MeshSystem>();
+        auto* meshesPtr = m_world->getSystem<NWB::Impl::MeshSystem>();
         NWB_ASSERT(meshesPtr);
-        Impl::MeshSystem& meshes = *meshesPtr;
+        NWB::Impl::MeshSystem& meshes = *meshesPtr;
         m_renderers = 0u;
         m_runtimeRenderers = 0u;
-        auto view = m_world->view<Impl::RendererComponent>();
+        auto view = m_world->view<NWB::Impl::RendererComponent>();
         for(auto&& [entity, renderer] : view){
             if(!renderer.visible)
                 continue;
-            Impl::RenderableMeshDesc mesh;
+            NWB::Impl::RenderableMeshDesc mesh;
             if(!meshes.resolveRenderableMesh(entity, mesh))
                 continue;
             ++m_renderers;
@@ -308,7 +308,7 @@ private:
 
 private:
     ProjectRuntimeContext& m_context;
-    NotNullUniquePtr<Core::ECS::World> m_world;
+    NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     TimingPass m_timingPass;
     RendererGatherBenchmarkProbe m_probe;
     RendererCompilerStatisticsProbe m_compilerProbe;

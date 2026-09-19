@@ -69,7 +69,7 @@ struct TexturePayload{
     TextureDimension::Enum dimension = TextureDimension::Texture2D;
     TexturePayloadFormat::Enum format = TexturePayloadFormat::UastcLdr4x4;
     TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = s_OpaqueAlphaUnorm8;
+    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     bool srgb = false;
     bool hasAlpha = false;
 };

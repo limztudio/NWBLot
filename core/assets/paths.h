@@ -780,18 +780,6 @@ template<typename MetadataDocument, typename MetadataValue>
 template<typename NamedEnumT>
 using NamedEnumCase = ::NamedEnumCase<NamedEnumT>;
 
-template<typename NamedEnumT, typename ViewT = AStringView>
-[[nodiscard]] inline bool ParseNamedEnumText(
-    const ViewT value,
-    NamedEnumT& outValue,
-    const NamedEnumCase<NamedEnumT>* cases,
-    const usize caseCount,
-    const NamedEnumCase<NamedEnumT>* aliasCases = nullptr,
-    const usize aliasCaseCount = 0u
-){
-    return ::ParseNamedEnumText<NamedEnumT, ViewT>(value, outValue, cases, caseCount, aliasCases, aliasCaseCount);
-}
-
 template<typename NamedEnumT, typename MetadataValue>
 [[nodiscard]] inline bool ParseNamedMetadataEnumField(
     const Path& nwbFilePath,

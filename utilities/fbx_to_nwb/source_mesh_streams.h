@@ -156,7 +156,7 @@ public:
         UtilityVector<Value>& stream,
         Lookup& lookup,
         const Value& value,
-        const char* streamName,
+        const AStringView streamName,
         u32& outIndex
     );
     [[nodiscard]] static bool GenerateSourceMeshTangents(
@@ -185,7 +185,7 @@ template<typename Value, typename Lookup>
     UtilityVector<Value>& stream,
     Lookup& lookup,
     const Value& value,
-    const char* streamName,
+    const AStringView streamName,
     u32& outIndex
 ){
     auto found = lookup.find(value);

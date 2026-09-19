@@ -1,0 +1,68 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_CONTINUATION_SLANGI
+#define NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_CONTINUATION_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "hardware_transparent_evaluate.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbHwShadowFindNextCrossing(
+    const RayDesc ray,
+    const bool hasPrevious,
+    const NwbHardwareTransparentCrossing previous,
+    out NwbHardwareTransparentCrossing next){
+    next = (NwbHardwareTransparentCrossing)0;
+    bool found = false;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    while(query.Proceed()){
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE)
+            continue;
+        NwbHardwareTransparentCrossing candidate;
+        candidate.distance = query.CandidateTriangleRayT();
+        candidate.instance = query.CandidateInstanceID();
+        candidate.primitive = query.CandidatePrimitiveIndex();
+        candidate.barycentrics = query.CandidateTriangleBarycentrics();
+        if(hasPrevious && !nwbHwShadowCrossingBefore(previous, candidate))
+            continue;
+        if(!found || nwbHwShadowCrossingBefore(candidate, next)){
+            next = candidate;
+            found = true;
+        }
+    }
+    return found;
+}
+
+float3 nwbHwShadowEvaluateContinuation(const RayDesc ray){
+    NwbHardwareTransparentStream stream = nwbHwShadowStreamBegin();
+    NwbHardwareTransparentCrossing previous = (NwbHardwareTransparentCrossing)0;
+    bool hasPrevious = false;
+    NwbHardwareTransparentCrossing next;
+    // A complete scan selects each next event. The original segment never advances, retaining coincident instances
+    // and every face in a distance cluster. Material dispatch happens only after the query has completed.
+    while(nwbHwShadowFindNextCrossing(ray, hasPrevious, previous, next)){
+        nwbHwShadowConsumeCrossing(stream, ray, next);
+        previous = next;
+        hasPrevious = true;
+    }
+    return nwbHwShadowStreamFinish(stream, ray);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

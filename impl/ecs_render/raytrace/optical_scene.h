@@ -68,13 +68,6 @@ struct RayTracingOpticalSceneGather{
     [[nodiscard]] u64 contentHash()const noexcept;
 };
 
-[[nodiscard]] bool OpticalInstanceOrderMatches(
-    const u8* leftBytes,
-    usize leftCount,
-    const RayTracingOpticalInstanceGpu* right,
-    usize rightCount
-)noexcept;
-
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
 [[nodiscard]] bool ComputeOpticalWorldBounds(
     const Float34U& objectToWorld,

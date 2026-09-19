@@ -310,7 +310,7 @@ private:
         ;
         if(rayQueryHardwareAvailable){
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware")
+                NWB_TEXT("TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware")
             );
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
@@ -603,8 +603,8 @@ public:
         m_rightShape = rightShapeEntity;
 
         // Two STATIC OPAQUE occluders (the octahedron + cone meshes with the OPAQUE ground material) to exercise the
-        // hybrid opaque-shadow path: opaque occluders cast a HARD (binary) shadow via the hardware RayQuery pass, while
-        // the spinning transparent shapes cast their colored shadow via the software pass. Placed between the
+        // separate opaque and transparent hardware shadow passes. The spinning transparent shapes cast colored shadows
+        // whose volume thickness comes from their hardware intersection records. Placed between the
         // transparent shapes so their fixed hard shadows OVERLAP the sweeping colored shadows -- verifying the
         // multiplicative combine (opaque fully blocks: the receiver is black even under a colored tint).
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(

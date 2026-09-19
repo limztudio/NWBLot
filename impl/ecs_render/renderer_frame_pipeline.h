@@ -70,6 +70,7 @@ NWB_IMPL_BEGIN
 class Shader;
 class Mesh;
 struct GraphClearTimingRecordState;
+struct RayTracingSceneGraphReads;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -267,6 +268,7 @@ private:
         const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources,
         const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,
         const RayTracingShadowVisibilityGraphPlanSnapshot& rayTracingPlan,
+        const RayTracingSceneGraphReads& hardwareSceneReads,
         bool hardwareShadowSupported,
         Core::GpuGraphResourceId worldPosition,
         Core::GpuGraphResourceId normal,
@@ -276,9 +278,9 @@ private:
         Core::GpuGraphResourceId sceneShading,
         Core::GpuGraphResourceId lights,
         Core::GpuGraphResourceId materialContextSlots,
-        const Core::GpuGraphResourceId* softwareTraceGeometryResources,
-        usize softwareTraceGeometryResourceCount,
-        Core::GpuGraphResourceSetId softwareTraceGeometrySet,
+        const Core::GpuGraphResourceId* traceGeometryResources,
+        usize traceGeometryResourceCount,
+        Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId prefixTask,
         Core::GpuExternalCompletionId laggedLightingHistoryWriterDrainCompletion,
@@ -423,8 +425,6 @@ private:
     // Pure-software prepared per-mesh builds lower their typed sentinel clears and native compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that same packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
-    // Hybrid HW-to-SW preparation retains its opaque fallback inside the accepting Shadow Preparation packet, but records the software continuation as a separate packet-local callback so its bridge can be lowered next.
-    Core::GpuTaskId m_deferredShadowPrepareHybridSoftwareTailTask;
     // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their descriptor-visible AccelStructRead boundaries. It must remain in the same first Graphics packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;

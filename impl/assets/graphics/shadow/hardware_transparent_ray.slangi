@@ -1,0 +1,74 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_RAY_SLANGI
+#define NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_RAY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "hardware_transparent_resources.slangi"
+#include "sw_binding_slots.h"
+
+#define NWB_HW_TRANSPARENT_DEFERRED_RESOURCES NwbHeapDeferredBindlessResources(g_NwbHardwareTransparentPush.deferredResourcesHeapSlot)
+#define NWB_SCENE_SHADING_HEAP_SLOT NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.avboitSlots.w
+#include "../scene/buffer.slangi"
+#include "shadow_sampling.slangi"
+#include "shadow_ray_setup.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint2 nwbHwShadowTraceExtent(){
+    return (uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height) + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+}
+
+bool nwbHwShadowBuildRay(const uint2 halfPixel, out RayDesc ray){
+    ray = (RayDesc)0;
+    const uint2 fullExtent = uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height);
+    const int3 texel = int3(min(halfPixel * NWB_SW_SHADOW_SOFT_FACTOR, fullExtent - 1u), 0);
+    if(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH)
+        return false;
+    const half3 positionSample = half3(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
+    const half3 normalSample = half3(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
+    const float3 worldPosition = float3(positionSample);
+    const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
+    const float2 jitter = nwbShadowLowDiscrepancy2D(
+        halfPixel,
+        g_NwbHardwareTransparentPush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP
+            + g_NwbHardwareTransparentPush.sampleIndex + NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT
+    );
+    const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
+    for(uint i = 0u; i < lightCount; ++i){
+        const NwbSceneLight light = g_NwbSceneLights[i];
+        if(light.params.z != float(g_NwbHardwareTransparentPush.lightSlot))
+            continue;
+        if(!nwbShadowBuildLightRay(worldPosition, normal, light, jitter, ray.Direction, ray.TMin, ray.TMax))
+            return false;
+        ray.Origin = worldPosition + normal * ray.TMin;
+        return true;
+    }
+    return false;
+}
+
+void nwbHwShadowStoreVisibility(const uint2 halfPixel, const float3 visibility){
+    const uint3 texel = uint3(halfPixel, g_NwbHardwareTransparentPush.lightSlot);
+    float3 accumulated = visibility / float(g_NwbHardwareTransparentPush.sampleCount);
+    if(g_NwbHardwareTransparentPush.sampleIndex != 0u)
+        accumulated += NwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel].rgb;
+    NwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel] = float4(accumulated, 1.0);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

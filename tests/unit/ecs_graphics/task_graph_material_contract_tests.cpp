@@ -313,7 +313,7 @@ TEST(EcsGraphics, CausticEmissionTargetsHaveNoNativeCompatibilityDispatcher){
 }
 
 
-// Surfel frame constants are frozen while the graph is declared. The Shadow Prepare and optional hybrid-tail callbacks must consume that upload rather than recomputing and writing a later mutable constant buffer.
+// Surfel frame constants are frozen during graph declaration; Shadow Prepare consumes that immutable upload.
 TEST(EcsGraphics, SurfelFrameConstantsHaveNoNativeCompatibilityDispatcher){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -369,7 +369,7 @@ TEST(EcsGraphics, DeferredBindlessSelectorHasNoNativeCompatibilityDispatcher){
 }
 
 
-// Frozen graph batches and the explicit hybrid restore own every supported shadow material-context upload. Keep mutable compatibility writers and the no-data hybrid restore overload out of the ray-tracing subsystem.
+// Frozen graph batches own shadow material-context uploads; scene recording must not retain a mutable bulk uploader.
 TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -386,13 +386,11 @@ TEST(EcsGraphics, ShadowMaterialContextHasNoDeadNativeBulkUploader){
 
     EXPECT_FALSE(ContainsText(rayTracingHeader, "uploadShadowMaterialContextBuffers"));
     EXPECT_FALSE(ContainsText(shadow, "uploadShadowMaterialContextBuffers"));
-    EXPECT_EQ(CountText(rayTracingHeader, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
-    EXPECT_EQ(CountText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback("), 1u);
     EXPECT_FALSE(ContainsText(swBvh, "UploadPreparedShadowMaterialContextBuffers"));
 }
 
 
-// Renderer-owned hybrid material/scene bytes must enter through immutable graph batches. Native AS build/state work remains separately documented, but it must not grow another live buffer writer in the scene gather recorder.
+// Renderer-owned material and scene bytes enter through immutable graph batches; native AS work has explicit boundaries.
 TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -431,9 +429,6 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_TRUE(ContainsText(swBvh, "if(shadowMaterialContextBatchGraphOwned){"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned HW shadow material context unexpectedly reused a native cache"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned SW shadow material context unexpectedly reused a native cache"));
-    EXPECT_TRUE(ContainsText(swBvh, "recordPreparedHybridHardwareMaterialContextFallback"));
-    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "forceHybridHardwareFallbackSnapshotStaleForTesting"));
-    EXPECT_FALSE(ContainsText(adaptiveLifecycle, "hybrid hardware material-context fallback retried directly"));
 
     // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
     EXPECT_EQ(CountText(shadow, "clearBufferUInt("), 0u);

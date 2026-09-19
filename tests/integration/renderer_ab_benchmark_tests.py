@@ -27,9 +27,10 @@ def scopes(workload, frames=200, frame_ms=5.0):
         for name, multiplier in workload.scope_multipliers}
 
 
-def log_text(route="hybrid"):
+def log_text(route="hardware"):
     natural = next(message for message, name in benchmark.SHADOW_ROUTES.items() if name == route)
-    return "\n".join((natural, "AvboitTimingProbe: in-flight ranges 32",
+    return "\n".join((natural, "RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware"
+        else "RendererSystem: dispatched software shadow traversal", "AvboitTimingProbe: in-flight ranges 32",
         "AvboitTimingProbe: render unfocused 1",
         "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created",
         "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
@@ -143,7 +144,7 @@ class WorkloadPolicyTests(unittest.TestCase):
             benchmark.device_material_signature(log_text().replace("\n", "\r\n")))
         workload = benchmark.workloads()["transparent-multi"]
         expected = benchmark.transparent_multi_log(log_text(), workload, True)
-        self.assertEqual(expected["shadow_route"], "hybrid")
+        self.assertEqual(expected["shadow_route"], "hardware")
         self.assertEqual(expected, benchmark.transparent_multi_log(log_text().replace("\n", "\r\n"), workload, True))
         software = benchmark.transparent_multi_log(log_text("software"), workload, False)
         self.assertEqual(software["shadow_route"], "software")
@@ -157,6 +158,17 @@ class WorkloadPolicyTests(unittest.TestCase):
             log_text() + "\nFramebufferCapture: capture ready", log_text().replace("Vulkan: created device", "device")):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
+
+    def test_current_hardware_route_requires_dispatch_and_preserves_frozen_hybrid_identity(self):
+        workload = benchmark.workloads()["transparent-multi"]
+        marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        for altered in (log_text().replace(marker, ""),
+            log_text() + "\nRendererSystem: dispatched software shadow traversal"):
+            with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.transparent_multi_log(altered, workload, True)
+        legacy = benchmark.transparent_multi_log(log_text("hybrid"), workload, True)
+        self.assertEqual(legacy["shadow_route"], "hybrid")
+        self.assertNotEqual(legacy["shadow_route"], benchmark.transparent_multi_log(log_text(), workload, True)["shadow_route"])
 
     def test_cli_defaults_and_lower_coverage_or_unbalanced_plans(self):
         common = ["--baseline-executable", "a", "--baseline-runtime", "ar", "--baseline-source-manifest", "as.json",
@@ -250,11 +262,12 @@ class WorkloadControlSelectionTests(unittest.TestCase):
             benchmark.compare_trials(trials[:-1], orders, self.shadow_workload())
 
 
-def soft_shadow_log_text(workload, route="hybrid"):
+def soft_shadow_log_text(workload, route="hardware"):
     values = dict(workload.environment_overrides)
     return "\n".join(("ShadowTimingProbe: in-flight ranges 32", "ShadowTimingProbe: render unfocused 1",
         "ShadowTimingProbe: caustic emission 0", "ShadowTimingProbe: indirect response hemi-ambient",
         f"ShadowTimingProbe: natural shadow route {route}",
+        "RendererSystem: dispatched hardware transparent shadow traversal" if route == "hardware" else "RendererSystem: dispatched software shadow traversal",
         f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
         "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
         "RendererSystem: deferred rendering targets ready (1280x900, samples=1)",
@@ -294,9 +307,19 @@ class ShadowWorkloadPolicyTests(unittest.TestCase):
             for altered in (text.replace("in-flight ranges 32", "in-flight ranges 2"),
                 text.replace("caustic emission 0", "caustic emission 1"), text.replace("1280x900", "960x720"),
                 text.replace("SoftShadowTestSmokeProject: shutdown", ""), text + "\nShadowTimingProbe: render unfocused 0",
-                text.replace("natural shadow route hybrid", "natural shadow route software")):
+                text.replace("natural shadow route hardware", "natural shadow route software")):
                 with self.subTest(name=name, text=altered), self.assertRaises(benchmark.SmokeFailure):
                     benchmark.soft_shadow_log(altered, workload, True)
+
+    def test_shadow_hardware_dispatch_evidence_and_legacy_frozen_route_are_distinct(self):
+        workload = benchmark.workloads()["shadow-zero-extent"]
+        marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        text = soft_shadow_log_text(workload)
+        for altered in (text.replace(marker, ""), text + "\nRendererSystem: dispatched software shadow traversal"):
+            with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.soft_shadow_log(altered, workload, True)
+        legacy = benchmark.soft_shadow_log(soft_shadow_log_text(workload, "hybrid"), workload, True)
+        self.assertEqual(legacy["shadow_route"], "hybrid")
 
     def test_shadow_logs_require_exact_material_indirect_response(self):
         workload = benchmark.workloads()["shadow-zero-extent"]
@@ -633,7 +656,8 @@ def caustic_log_text(preset="populated", enabled=True, capture=False):
     text = "\n".join((
         "Vulkan: created device 'Example GPU'",
         "RendererSystem: material 'glass' selected CS + PS through compute emulation",
-        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware",
+        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware",
+        "RendererSystem: dispatched hardware transparent shadow traversal",
         "AvboitTimingProbe: in-flight ranges 32", "AvboitTimingProbe: render unfocused 1",
         "AvboitTimingProbe: caustic in-flight ranges 32",
         "CausticSphereSmokeProject: reflection mode 0", "CausticSphereSmokeProject: camera refraction disabled",
@@ -709,6 +733,23 @@ class CausticMeasurementTests(unittest.TestCase):
                 text + "\nAvboitTimingProbe: caustic in-flight ranges 2"):
                 with self.subTest(preset=preset, changed=changed[-120:]), self.assertRaises(benchmark.SmokeFailure):
                     workload.validate_log(changed, workload, True)
+
+    def test_caustic_current_route_is_strict_and_frozen_legacy_requires_explicit_opt_in(self):
+        workload = benchmark.workloads()["caustic-populated"]
+        settings = dict(workload.environment_overrides)
+        text = caustic_log_text()
+        hardware_marker = "RendererSystem: dispatched hardware transparent shadow traversal"
+        legacy = text.replace("natural hardware shadow route", "natural hybrid shadow route").replace(
+            hardware_marker, "RendererSystem: dispatched software shadow traversal")
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.caustic.validate_log(legacy, settings)
+        preserved = benchmark.caustic.validate_log(legacy, settings, allow_legacy_shadow_route=True)
+        self.assertEqual(preserved["shadow_route"], "hybrid")
+        self.assertEqual(workload.validate_log(legacy, workload, True)["shadow_route"], "hybrid")
+        for altered in (text.replace(hardware_marker, ""),
+            text + "\nRendererSystem: dispatched software shadow traversal"):
+            with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.caustic.validate_log(altered, settings)
 
     def test_capture_evidence_is_required_for_qualification_and_forbidden_for_timing(self):
         workload = benchmark.workloads()["caustic-populated"]

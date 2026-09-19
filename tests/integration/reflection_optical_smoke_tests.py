@@ -279,6 +279,23 @@ class CombinedCausticTests(unittest.TestCase):
         self.assertEqual(environment["NWB_REFLECTION_SMOKE_MODE"], "disabled")
         self.assertEqual(environment["NWB_CAUSTIC_SMOKE_ENABLED"], "1")
 
+    def test_caustic_capture_requires_hardware_traversal_when_missing_hardware_can_skip(self):
+        for require_hardware in (False, True):
+            args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
+                working_directory=Path("runtime"), logserver_executable=None, timeout=60,
+                require_hardware=require_hardware, application_arg=[])
+            with self.subTest(require_hardware=require_hardware), patch.object(caustic.subprocess, "run",
+                return_value=SimpleNamespace(returncode=77)) as run:
+                self.assertIsNone(caustic.capture(args, "combined"))
+            command = run.call_args.args[0]
+            pairs = set(zip(command, command[1:]))
+            self.assertIn(("--expect-log-message", "RendererSystem: dispatched hardware transparent shadow traversal"), pairs)
+            self.assertNotIn(("--expect-log-message", "RendererSystem: dispatched software shadow traversal"), pairs)
+            if require_hardware:
+                self.assertIn(("--expect-log-message", "natural hardware shadow route selected on RayQuery-capable hardware"), pairs)
+            else:
+                self.assertIn(("--skip-log-message", "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"), pairs)
+
     def test_disabled_refraction_retains_glass_reflection_composition_pass(self):
         args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
             working_directory=Path("runtime"), logserver_executable=None, timeout=60,

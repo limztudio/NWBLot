@@ -48,7 +48,6 @@ struct ShadowPrepareGraphTask{
         bool meshBlasGeometryBuildInputStatesGraphOwned = false;
         bool meshSwBvhBuildsGraphOwned = false;
         bool preparedMeshSwBvhBuildsRecordedByGraph = false;
-        bool deferHybridSoftwareTail = false;
     };
 
     [[nodiscard]] static bool record(
@@ -75,34 +74,6 @@ struct ShadowPrepareSoftwareBvhBuildGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-};
-
-
-// Hybrid HW-to-SW shadow preparation keeps the established opaque-HW fallback transaction, but records its
-// software continuation after the hardware build as an explicit packet-local callback. The compiler must retain it
-// in Shadow Preparation's accepting Graphics packet: the tail can restore the frozen hardware material context and
-// its final resource state joins the same persistent handoff as the preceding BLAS/TLAS work.
-struct ShadowPrepareHybridSoftwareTailGraphTask{
-    struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        bool* hardwarePreparationReady = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        bool shadowMaterialContextBatchGraphOwned = false;
-        bool sceneBvhBatchGraphOwned = false;
-        bool meshSwBvhBuildsGraphOwned = false;
-        bool meshSwBvhInputStatesGraphOwned = false;
-        Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
-        Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
-        Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;
-    };
-
-    [[nodiscard]] static bool record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
-    static void discarded(Payload& payload);
 };
 
 

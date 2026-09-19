@@ -56,8 +56,9 @@ def capture(args, variant):
         command += ["--expect-log-message", "AVBOIT refraction resolve:"]
     command += ["--expect-log-message" if variant != "caustics_disabled" else "--reject-log-message", "caustic producer ("]
     command += ["--expect-log-message" if args.require_hardware else "--skip-log-message",
-        "natural hybrid shadow route selected on RayQuery-capable hardware" if args.require_hardware
+        "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware
         else "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"]
+    command += ["--expect-log-message", "RendererSystem: dispatched hardware transparent shadow traversal"]
     if args.logserver_executable:
         command += ["--logserver-executable", str(args.logserver_executable)]
     else:

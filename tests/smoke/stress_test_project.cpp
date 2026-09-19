@@ -66,8 +66,8 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 // TRANSPARENT (glass) and OPAQUE, staggered front/back so their shadows overlap -- lit by one directional + one point light.
 // Each character SPINS about its vertical axis
 // (no skeleton-pose animation; the bodies render in bind pose and the whole entity rotates), so its instance transform
-// changes every frame -- exercising the per-frame scene BVH/TLAS rebuild + the hybrid shadow path (opaque->HW binary,
-// transparent->SW colored) across TWO shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
+// changes every frame -- exercising scene TLAS updates and separate opaque/transparent hardware shadows across TWO
+// shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
 // glass/ground materials (no new assets).
 static constexpr StressModelRef s_Model{"project/characters/body/model"};
 static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"}; // glass
@@ -167,6 +167,7 @@ private:
         return RendererBaselineFixedDelta();
     }
 
+    // The legacy benchmark identifier now compares hardware transparent shadows against an opaque-only scene.
     [[nodiscard]] static bool hybridShadowOpaqueBaseline(){
 #if defined(NWB_HYBRID_SHADOW_BOUNDARY_BENCHMARK)
         static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE");
@@ -434,16 +435,16 @@ public:
         ;
         if(!rayQueryCapable){
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable")
+                NWB_TEXT("StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable")
             );
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available")
+                NWB_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available")
             );
             if(hybridShadowOpaqueBaseline())
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
             else
-                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark"));
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"));
         }
 #endif
 

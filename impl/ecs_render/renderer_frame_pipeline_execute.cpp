@@ -226,6 +226,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const RayTracingShadowPreparationResourceSnapshot rayTracingShadowResources =
         m_raytracingSystem.snapshotShadowPreparationResources()
     ;
+    const RayTracingDeferredGraphResourceSnapshot rayTracingGraphResources = m_raytracingSystem.snapshotDeferredGraphResources();
     const RayTracingSurfelPersistentResourceSnapshot rayTracingSurfelResources =
         m_raytracingSystem.snapshotSurfelPersistentResources()
     ;
@@ -495,7 +496,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     ShadowPreparePacketValidationResult shadowPreparePacket;
     shadowPreparePacketValidator.validate(deferredCompiledPlan, shadowPreparePacket);
     const bool shadowPrepareSoftwareBvhBuildsMerged = shadowPreparePacket.softwareBvhBuildsMerged;
-    const bool shadowPrepareHybridSoftwareTailMerged = shadowPreparePacket.hybridSoftwareTailMerged;
     const bool shadowPrepareAccelStructFinalizeMerged = shadowPreparePacket.accelStructFinalizeMerged;
     const bool deferredBindlessSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.bindlessSlotsUploadMerged;
     const bool rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket = shadowPreparePacket.rayTraceMaterialContextSlotsUploadMerged;
@@ -638,7 +638,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowPrepareTask.valid()
         || !taskIsCompiled(m_deferredShadowPrepareTask)
         || !shadowPrepareSoftwareBvhBuildsMerged
-        || !shadowPrepareHybridSoftwareTailMerged
         || !shadowPrepareAccelStructFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket
@@ -1098,6 +1097,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         rayTracingShadowResources.swShadowEdgeCounterBuffer,
         rayTracingShadowResources.swShadowEdgeListBuffer,
         rayTracingShadowResources.swShadowIndirectArgsBuffer,
+        rayTracingGraphResources.hardwareTransparentCrossingsBuffer,
+        rayTracingGraphResources.hardwareTransparentOverflowListBuffer,
+        rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,
     };
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_shadowVisibilityReturnState);
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_shadowComputePersistentState);

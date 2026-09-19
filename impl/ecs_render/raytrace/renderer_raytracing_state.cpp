@@ -64,6 +64,7 @@ void RendererRayTracingState::restorePreparedLightingCpuState(const RayTracingFr
 
 
 void RendererRayTracingState::invalidateResources(){
+    m_hardwareTransparentShadow = HardwareTransparentShadowState{};
     m_refractionBindingLayout.reset();
     m_refractionScreenShader.reset();
     m_refractionHwShader.reset();
@@ -217,7 +218,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowIndirectArgsBuffer.reset();
     m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_sceneHasTransparentOccluder = false;
-    m_hybridTransparentShadowReady = false;
     m_swCausticBindingLayout.reset();
     m_swCausticShader.reset();
     m_swCausticPipeline.reset();

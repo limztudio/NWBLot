@@ -1,0 +1,51 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_COLLECT_SLANGI
+#define NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_COLLECT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "hardware_transparent_resources.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void nwbHwShadowCollect(const RayDesc ray, const uint pixel, const uint rayCount){
+    uint count = 0u;
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    while(query.Proceed()){
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE)
+            continue;
+        if(count == NWB_HW_TRANSPARENT_CROSSING_CAPACITY){
+            g_NwbHardwareTransparentCrossings[pixel] = NWB_HW_TRANSPARENT_OVERFLOW_COUNT;
+            nwbHwShadowAppendOverflow(pixel);
+            query.Abort();
+            return;
+        }
+        // Engine triangle BLASes contain one geometry; the material table indexes that geometry's primitive stream.
+        NwbHardwareTransparentCrossing crossing;
+        crossing.distance = query.CandidateTriangleRayT();
+        crossing.instance = query.CandidateInstanceID();
+        crossing.primitive = query.CandidatePrimitiveIndex();
+        crossing.barycentrics = query.CandidateTriangleBarycentrics();
+        nwbHwShadowStoreCrossing(pixel, rayCount, count, crossing);
+        ++count;
+    }
+    g_NwbHardwareTransparentCrossings[pixel] = count;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -21,7 +21,6 @@ NWB_IMPL_BEGIN
 
 struct ShadowPrepareGeometryInputs{
     const PreparedMeshBlasBuildVector& blasBuilds;
-    const PreparedMeshSwBvhBuildVector& softwareBuilds;
     const Core::GpuGraphResourceId* traceResources = nullptr;
     usize traceResourceCount = 0u;
     bool blasBuildsGraphOwned = false;
@@ -34,8 +33,7 @@ private:
         const Core::BufferHandle* source = nullptr;
         Core::GpuGraphResourceId resource;
         bool listedForTrace = false;
-        u8 requestedRoles = 0u;
-        u8 selectedRoles = 0u;
+        bool selected = false;
     };
     struct InlineRequest{
         Core::Buffer* buffer = nullptr;
@@ -59,8 +57,6 @@ private:
 
 private:
     static constexpr usize s_InlineCount = 32u;
-    static constexpr u8 s_BlasRole = 1u;
-    static constexpr u8 s_SoftwareRole = 2u;
 
 
 public:
@@ -74,30 +70,28 @@ public:
 
 public:
     // Collect identities without reading graph state; size outputs from distinct buffers.
-    void prepareStorage(bool blasInputStatesGraphOwned, bool softwareInputStatesGraphOwned);
+    void prepareStorage(bool blasInputStatesGraphOwned);
     void gatherBuildInputs(
         const Core::GpuTaskGraph& graph,
-        bool& blasInputStatesGraphOwned,
-        bool& softwareInputStatesGraphOwned
+        bool& blasInputStatesGraphOwned
     );
     [[nodiscard]] bool gatherRemainingTraceResources();
     [[nodiscard]] bool isPreparedMeshBlasBuild(const Name& meshName)const;
 
 
 private:
-    void addRequest(const Core::BufferHandle& buffer, u8 role);
+    void addRequest(const Core::BufferHandle& buffer);
     [[nodiscard]] BufferRequest* findRequest(Core::Buffer* buffer);
     void promoteRequests();
     [[nodiscard]] bool resolveRequests(const Core::GpuTaskGraph& graph);
     [[nodiscard]] BufferRequest* findResolvedRequest(Core::GpuGraphResourceId resource);
-    [[nodiscard]] bool appendBuildInput(ResourceVector& resources, const Core::BufferHandle& buffer, u8 role);
+    [[nodiscard]] bool appendBuildInput(const Core::BufferHandle& buffer);
     void clearBuildInputs()noexcept;
     void prepareNames()const;
 
 
 public:
     ResourceVector m_blasBuildInputs;
-    ResourceVector m_softwareTailInputs;
     ResourceVector m_remainingTraceGeometry;
 
 
@@ -109,15 +103,12 @@ private:
     Optional<RequestIndex> m_requests;
     // Request storage is complete before the index retains pointers; it never grows after.
     Optional<ResourceIndex> m_resources;
-    usize m_blasRequestCount = 0u;
-    usize m_softwareRequestCount = 0u;
     u64 m_graphGeneration = 0u;
     // Prepared build names stay frozen and outlive this operation; membership borrows them.
     mutable const NameHash* m_inlineNames[s_InlineCount];
     mutable usize m_inlineNameCount = 0u;
     mutable Optional<NameIndex> m_names;
     bool m_preparedBlasPolicy = false;
-    bool m_preparedSoftwarePolicy = false;
     bool m_storagePrepared = false;
     bool m_inputsGathered = false;
     mutable bool m_namesPrepared = false;

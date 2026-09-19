@@ -30,6 +30,7 @@ void RendererRayTracingSystem::invalidateResources(){
     releaseRayTraceMaterialContextHeapHandles();
     releaseSwBvhScratchHeapHandles();
     releaseSurfelGiHeapHandles();
+    releaseHardwareTransparentShadowResources();
     m_rayTracingState.invalidateResources();
 }
 
@@ -98,14 +99,14 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
     return RayTracingShadowPreparationResourceSnapshot{
         .sceneTlas = m_rayTracingState.m_tlas,
         .sceneTlasBackingBuffer = m_rayTracingState.m_tlas ? m_rayTracingState.m_tlas->getBackingBufferHandle() : nullptr,
-        .bvhSortKeysBuffer = m_rayTracingState.m_bvhSortKeysBuffer,
-        .bvhSortPayloadBuffer = m_rayTracingState.m_bvhSortPayloadBuffer,
-        .bvhVisitCounterBuffer = m_rayTracingState.m_bvhVisitCounterBuffer,
-        .swShadowEdgeStatsBuffer = m_rayTracingState.m_swShadowEdgeStatsBuffer,
-        .swShadowEdgeStatsReadback = m_rayTracingState.m_swShadowEdgeStatsReadback,
-        .swShadowEdgeCounterBuffer = m_rayTracingState.m_swShadowEdgeCounterBuffer,
-        .swShadowEdgeListBuffer = m_rayTracingState.m_swShadowEdgeListBuffer,
-        .swShadowIndirectArgsBuffer = m_rayTracingState.m_swShadowIndirectArgsBuffer,
+        .bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer,
+        .bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer,
+        .bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer,
+        .swShadowEdgeStatsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeStatsBuffer,
+        .swShadowEdgeStatsReadback = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeStatsReadback,
+        .swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer,
+        .swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer,
+        .swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer,
     };
 }
 
@@ -118,8 +119,11 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
         .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
         .causticEmissionTargetBuffer = state.m_causticEmissionTargetBuffer,
         .surfelFrameConstantsBuffer = state.m_surfelConstants,
-        .sceneBvhNodeBuffer = state.m_sceneBvhNodeBuffer,
-        .sceneInstanceBuffer = state.m_sceneInstanceBuffer,
+        .hardwareTransparentCrossingsBuffer = state.m_hardwareTransparentShadow.m_crossingsBuffer,
+        .hardwareTransparentOverflowListBuffer = state.m_hardwareTransparentShadow.m_overflowListBuffer,
+        .hardwareTransparentOverflowArgsBuffer = state.m_hardwareTransparentShadow.m_overflowArgsBuffer,
+        .sceneBvhNodeBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneBvhNodeBuffer,
+        .sceneInstanceBuffer = m_shadowVisibilityHardwareSupported ? nullptr : state.m_sceneInstanceBuffer,
         .sceneTlas = state.m_tlas,
         .causticTemporalDecay = state.m_causticTemporalDecay,
         .causticAccumulatorInitialized = state.m_causticAccumulatorInitialized,
@@ -154,12 +158,16 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     const bool hardwareShadowSupported
 )const noexcept{
     const auto& state = m_rayTracingState;
+    const bool hardwareTransparentTrace = hardwareShadowSupported && state.m_softTransparentReady && hardwareTransparentShadowReady();
+    const bool transparentSceneReady = hardwareTransparentTrace
+        ? state.m_tlas && state.m_tlasHeapHandle.valid()
+        : state.m_sceneBvhNodeBuffer && state.m_sceneInstanceBuffer
+    ;
     const bool softTransparentFoldReady =
         state.m_softShadowReady
         && state.m_softShadowSlotMask != 0u
         && softTransparentShadowReady()
-        && state.m_sceneBvhNodeBuffer
-        && state.m_sceneInstanceBuffer
+        && transparentSceneReady
         && state.m_shadowInstanceMaterialBuffer
         && state.m_shadowMaterialTypedBuffer
         && state.m_shadowInstanceBuffer
@@ -168,11 +176,8 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     if(
         state.m_swShadowAdaptiveEnabled
         && !softTransparentShadowReady()
-        && (
-            hardwareShadowSupported
-                ? hybridTransparentShadowReady()
-                : shadowVisibilitySoftwareResourcesPreflighted()
-        )
+        && !hardwareShadowSupported
+        && shadowVisibilitySoftwareResourcesPreflighted()
         && state.m_swShadowEdgeStatsBuffer
         && state.m_swShadowEdgeStatsReadback
         && state.m_swShadowEdgeCounterBuffer
@@ -189,6 +194,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
 
     return RayTracingShadowVisibilityGraphPlanSnapshot{
         .adaptivePlan = adaptivePlan,
+        .hardwareTransparentTrace = hardwareTransparentTrace,
         .softTransparentFoldReady = softTransparentFoldReady,
         .softShadowHistoryReadable =
             state.m_softShadowTemporalReady
@@ -312,13 +318,7 @@ bool RendererRayTracingSystem::shadowVisibilityHardwareSupported()const noexcept
 
 bool RendererRayTracingSystem::shadowVisibilitySoftwareResourcesPreflighted()const noexcept{
     return m_shadowVisibilityTraceResourcesPreflighted
-        && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridResourcesPreflighted)
-    ;
-}
-
-bool RendererRayTracingSystem::hybridShadowVisibilityResourcesPreflighted()const noexcept{
-    return m_shadowVisibilityHardwareSupported
-        && m_shadowVisibilityHybridResourcesPreflighted
+        && !m_shadowVisibilityHardwareSupported
     ;
 }
 

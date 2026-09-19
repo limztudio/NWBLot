@@ -247,7 +247,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -612,9 +611,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const Core::GpuTaskId shadowPrepareHandoffTask = m_deferredShadowPrepareAccelStructFinalizeTask.valid()
         ? m_deferredShadowPrepareAccelStructFinalizeTask
-        : (m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-            ? m_deferredShadowPrepareHybridSoftwareTailTask
-            : m_deferredShadowPrepareTask)
+        : m_deferredShadowPrepareTask
     ;
 
     ECSRenderDetail::MeshViewGpuData meshViewState;
@@ -689,6 +686,17 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
         m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
     ;
+    const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
+    RayTracingSceneGraphReads sceneReads;
+    if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace){
+        sceneReads = ImportRayTracingSceneGraphReads(
+            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
+        );
+        if(!sceneReads.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware transparent shadow scene reads"));
+            return;
+        }
+    }
 
     if(useLaggedLightingHistory){
         Core::GpuExternalCompletionDesc lightingHistoryReadReadyDesc;
@@ -749,6 +757,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         rayTracingShadowResources,
         rayTracingGraphResources,
         rayTracingShadowVisibilityPlan,
+        sceneReads,
         declaresHardwareCaustics,
         worldPosition,
         normal,
@@ -758,9 +767,9 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         sceneShading,
         lights,
         materialContextSlots,
-        softwareTraceGeometryResources.data(),
-        softwareTraceGeometryResources.size(),
-        softwareTraceGeometrySet,
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometryResources.data() : softwareTraceGeometryResources.data(),
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometryResources.size() : softwareTraceGeometryResources.size(),
+        rayTracingShadowVisibilityPlan.hardwareTransparentTrace ? hardwareTraceGeometrySet : softwareTraceGeometrySet,
         traceMaterialSampledTextureSet,
         m_graphicsPrefixTask,
         features.laggedLightingHistoryWriterWaitPending
@@ -2175,7 +2184,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredLightingTask = deferredLightingStageResult.lightingTask;
 
 
-    const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     reflectionContentStamp.geometry = sceneResources.contentStamp.geometry;
     reflectionContentStamp.material = sceneResources.contentStamp.material;
     // CSG evaluation and lagged screen lighting do not have a matching content stamp for this first history policy.
@@ -2187,8 +2195,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     );
     if(!reflectionResources.valid())
         return;
-    RayTracingSceneGraphReads sceneReads;
-    if(reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace)){
+    if(
+        !sceneReads.valid()
+        && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))
+    ){
         sceneReads = ImportRayTracingSceneGraphReads(
             m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
         );

@@ -118,15 +118,6 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     return m_prepared;
 }
 
-bool RayTracingOpticalSceneResources::matchesInstanceOrder(const RayTracingOpticalSceneGather& gather)const noexcept{
-    if(!m_prepared || !m_resources.upload)
-        return false;
-    return OpticalInstanceOrderMatches(
-        m_resources.upload->bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES, m_resources.upload->instanceCount,
-        gather.instances.data(), gather.instances.size()
-    );
-}
-
 RayTracingOpticalSceneSnapshot RayTracingOpticalSceneResources::snapshot()const{
     return m_prepared ? m_resources : RayTracingOpticalSceneSnapshot{};
 }

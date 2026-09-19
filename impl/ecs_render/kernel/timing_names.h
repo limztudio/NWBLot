@@ -48,6 +48,9 @@ inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("rend
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTemporal("render.shadow_opaque_temporal");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueResolve("render.shadow_opaque_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTrace("render.shadow_transparent_trace");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentGather("render.shadow_transparent_gather");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentEvaluate("render.shadow_transparent_evaluate");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentContinuation("render.shadow_transparent_continuation");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTemporal("render.shadow_transparent_temporal");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentResolve("render.shadow_transparent_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_SwBvhSort("render.sw_bvh_sort");

@@ -29,7 +29,6 @@ class RendererFramePipeline;
 // Shadow-prepare packet validation owns first-packet merge checks for uploads plus BVH builds.
 struct ShadowPreparePacketValidationResult{
     bool softwareBvhBuildsMerged = false;
-    bool hybridSoftwareTailMerged = false;
     bool accelStructFinalizeMerged = false;
     bool bindlessSlotsUploadMerged = false;
     bool rayTraceMaterialContextSlotsUploadMerged = false;

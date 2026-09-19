@@ -48,7 +48,6 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_preparedShadowInstanceMaterialBytes(arena)
     , m_preparedShadowInstanceBytes(arena)
     , m_preparedShadowMaterialTypedBytes(arena)
-    , m_preparedHybridHardwareFallbackBytes(arena)
     , m_preparedSceneBvhNodeBytes(arena)
     , m_preparedSceneBvhInstanceBytes(arena)
     , m_preparedSceneSwBvhMeshes(arena)
@@ -686,8 +685,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Al
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
 
-    // Raw tables are populated by preflight. A hardware-only frame can leave old software tables intact.
-    // Hybrid direct SW builds still need normalization when transparent traversal preflight later fails.
+    // Raw tables are populated by preflight. Only the selected backend contributes trace geometry.
     const ShadowTraceGeometrySelection selection{
         .hardwarePositions = m_rayTracingState.m_shadowMeshPositionBuffers,
         .hardwareIndices = m_rayTracingState.m_shadowMeshIndexBuffers,
@@ -698,7 +696,7 @@ bool RendererRayTracingSystem::freezePreparedShadowTraceGeometryBuffers(Core::Al
         .softwareAttributes = m_rayTracingState.m_swShadowMeshAttributeBuffers,
         .includeHardware = m_shadowVisibilityHardwareSupported && m_shadowVisibilityTraceResourcesPreflighted,
         .includeSoftware = m_shadowVisibilityTraceResourcesPreflighted
-            && (!m_shadowVisibilityHardwareSupported || m_shadowVisibilityHybridResourcesPreflighted),
+            && !m_shadowVisibilityHardwareSupported,
     };
     return FreezePreparedShadowTraceGeometryBuffers(
         meshes, selection, scratchArena, m_acceptedShadowTraceGeometryBuffers, m_preparedShadowTraceGeometryBuffers
@@ -755,7 +753,6 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     clearPreparedShadowTraceMaterialSampledTextures();
     m_preparedCausticEmissionTargetBytes.clear();
     clearPreparedShadowMaterialContext();
-    clearPreparedHybridHardwareMaterialContextFallback();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
@@ -768,9 +765,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
-    m_shadowVisibilityHybridResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
-    m_shadowVisibilityHybridPipelinePreflighted = false;
 
     // A rejected preparation packet may have selected newly grown storage but never uploaded its contents.  Keep
     // the allocations, invalidate every semantic cache, and force both static and runtime meshes through a safe
@@ -779,7 +774,6 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
     m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
     m_rayTracingState.m_swShadowMaterialContextHashValid = false;
-    m_rayTracingState.m_hybridTransparentShadowReady = false;
     m_rayTracingState.m_surfelEnabled = false;
     m_rayTracingState.m_surfelUseHwTrace = false;
 
@@ -801,19 +795,18 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_shadowVisibilityResourcesPreflighted = false;
     m_shadowVisibilityHardwareSupported = false;
     m_shadowVisibilityTraceResourcesPreflighted = false;
-    m_shadowVisibilityHybridResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
-    m_shadowVisibilityHybridPipelinePreflighted = false;
     clearPreparedShadowTraceMaterialSampledTextures();
     clearPreparedShadowMaterialContext();
-    clearPreparedHybridHardwareMaterialContextFallback();
     clearPreparedSceneBvh();
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
     // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse
     // the preceding frame's backend selection and dispatch against stale trace inputs.
-    m_rayTracingState.m_hybridTransparentShadowReady = false;
+    m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
+    m_rayTracingState.m_softTransparentReady = false;
+    m_rayTracingState.m_softTransparentTemporalReady = false;
     m_rayTracingState.m_surfelEnabled = false;
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
@@ -849,62 +842,14 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_shadowVisibilityResourcesPreflighted = true;
             return true;
         }
-        // Per-mesh hardware BLAS work is independent from the later software material/scene gather.  Freeze it
-        // for both opaque and hybrid frames. An opaque capture miss must drop the paired frozen TLAS; a hybrid miss
-        // retains the established direct hardware path, whose result remains valid when the optional SW tail fails.
+        // Hardware shadows and optical effects share one immutable TLAS/material context.
         if(!capturePreparedMeshBlasBuilds(scratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hardware BLAS build plan"));
-            if(!m_rayTracingState.m_sceneHasTransparentOccluder)
-                clearPreparedSceneTlasBuild();
+            clearPreparedSceneTlasBuild();
         }
         m_shadowVisibilityTraceResourcesPreflighted = true;
-
-        // Hardware path casts the OPAQUE (binary) shadow via inline RayQuery.
-        const bool backendReady =
-            ensureShadowPipeline()
-        ;
+        const bool backendReady = ensureShadowPipeline();
         m_shadowVisibilityBackendPipelinePreflighted = backendReady;
-
-        // Hybrid TRANSPARENT shadow: when the scene holds a transparent occluder, also build the software scene/mesh
-        // BVH and traversal pipeline. Its gather matches buildSceneTlas's (same RendererComponent view, aligned
-        // conditions), so the scene-BVH leaf index equals the hardware InstanceID and the material context it builds
-        // remains byte-identical -- leaving the HW caustic (which reads that context by InstanceID) untouched. The render
-        // runs the SW traversal as a second pass that MULTIPLIES its colored transparent transmittance onto the opaque
-        // mask. Built BEFORE prepareHwCausticResources so its heap slots are final before the outer preparation uploads
-        // the shared material-context cbuffer. Opaque-only scenes skip all of this and pay no software cost.
-        m_rayTracingState.m_hybridTransparentShadowReady = false;
-        if(backendReady && m_rayTracingState.m_sceneHasTransparentOccluder){
-            const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
-            if(!meshResourcesReady)
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow software BVH resource preparation failed"));
-            // Guard m_swShadowMeshCount > 0: if no per-mesh software BVH was available this frame the software pass
-            // simply does not run (HW opaque-only), rather than aborting.
-            const bool swPipelineReady = meshResourcesReady && ensureSwShadowPipeline();
-            const bool swReady =
-                swPipelineReady
-                && prepareSceneSwBvhResources(scratchArena)
-                && m_rayTracingState.m_swShadowMeshCount > 0u
-                && m_rayTracingState.m_sceneBvhInstanceCount > 0u
-            ;
-            m_shadowVisibilityHybridResourcesPreflighted = swReady;
-            m_shadowVisibilityHybridPipelinePreflighted = swReady;
-            if(m_shadowVisibilityHybridPipelinePreflighted){
-                m_rayTracingState.m_hybridTransparentShadowReady = true;
-                // The per-mesh build is independent from the later CPU scene/material gather. Freeze it as a
-                // graph-owned plan when possible; a capture miss retains the native mesh-build compatibility path.
-                if(!capturePreparedMeshSwBvhBuilds(scratchArena))
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid transparent software BVH build plan"));
-            }
-            else
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow preparation failed; transparent shadows absent this frame"));
-        }
-        // A healthy hybrid packet finishes with the software-compatible material context: its node slots drive the
-        // transparent traversal while its shared attribute slots remain valid for the HW caustic and surfel consumers.
-        // Keep that exact immutable snapshot only after the software pipeline is available. An earlier failure leaves
-        // the already-frozen HW material/TLAS plan intact, so opaque shadows remain graph-owned for this frame.
-        // The scene-BVH pair is retained only for a healthy hybrid frame with its matching traversal table.
-        if(!m_shadowVisibilityHybridResourcesPreflighted)
-            clearPreparedSceneBvh();
 
         // Route the HW opaque shadow through the same half-res soft denoise chain the SW path uses: half-res jittered trace
         // -> temporal reproject-merge -> a-trous resolve -> upsample. The HW opaque-soft trace writes shadowSoftHalfA, then
@@ -928,18 +873,16 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
-        // Colored transparent shadow uses the same soft transparent trace+fold path on the HW and SW shadow branches:
-        // trace against the transparent-only software scene BVH, then multiply the denoised result onto soft-opaque
-        // visibility inside dispatchSoftShadowDenoiseAndTransparentFold. Gate this on the HW opaque soft path and the
-        // transparent SW BVH resources; opaque-only scenes leave m_softTransparentReady false. Non-fatal: a sub-ensure
-        // failure leaves the state false and system.cpp can run the hybrid multiply fallback.
+        // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
+        // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
         m_rayTracingState.m_softTransparentReady =
             m_rayTracingState.m_softShadowReady
-            && m_rayTracingState.m_hybridTransparentShadowReady
+            && m_rayTracingState.m_sceneHasTransparentOccluder
+            && prepareHardwareTransparentShadowResources(targets)
             && ensureSoftTransparentResolvePipeline()
         ;
-        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_hybridTransparentShadowReady && !m_rayTracingState.m_softTransparentReady)
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft transparent shadow resource preparation failed; colored shadows fall back to the hybrid multiply this frame"));
+        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_sceneHasTransparentOccluder && !m_rayTracingState.m_softTransparentReady)
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame"));
 
         m_rayTracingState.m_softTransparentTemporalReady =
             m_rayTracingState.m_softTransparentReady
@@ -1062,13 +1005,11 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     DeferredFrameTargets& targets,
     bool& outBackendReady,
     const bool shadowMaterialContextBatchGraphOwned,
-    const bool sceneBvhBatchGraphOwned,
     const bool sceneTlasBuildGraphOwned,
     const bool meshBlasBuildsGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
-    const bool preparedMeshSwBvhBuildsRecordedByGraph,
-    const bool deferHybridSoftwareTail
+    const bool preparedMeshSwBvhBuildsRecordedByGraph
 ){
     outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
@@ -1082,125 +1023,30 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
         return true;
 
     if(m_shadowVisibilityHardwareSupported){
-        // When a complete hybrid preflight froze the final software-compatible context, the hardware TLAS must not
-        // overwrite it before the optional software tail restores its retained traversal table. A tail miss restores
-        // the current hardware context below; a precursor miss simply disables material consumers while preserving
-        // the packet fallback.
-        const bool hybridSoftwareMaterialContextGraphOwned =
-            shadowMaterialContextBatchGraphOwned
-            && m_shadowVisibilityHybridPipelinePreflighted
-            && m_preparedShadowMaterialContextReady
-            && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
-        ;
-        const auto discardHybridGraphMaterialContext = [&](){
-            clearPreparedShadowMaterialContext();
-            m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
-            m_rayTracingState.m_swShadowMaterialContextHashValid = false;
-            m_rayTracingState.m_hybridTransparentShadowReady = false;
-            m_rayTracingState.m_softTransparentReady = false;
-            m_rayTracingState.m_softTransparentTemporalReady = false;
-        };
-        const auto disableHybridMaterialConsumers = [&](){
-            m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
-            m_rayTracingState.m_surfelEnabled = false;
-            m_rayTracingState.m_surfelUseHwTrace = false;
-        };
-        // A transparent scene keeps a valid opaque-HW fallback even when its later software tail cannot record.
-        // If its independent frozen BLAS plan no longer matches, discard that plan and retry the established live
-        // loop rather than rejecting the whole packet. Opaque-only frozen plans remain all-or-nothing.
-        const bool hybridHardwareFallback = m_rayTracingState.m_sceneHasTransparentOccluder;
-        bool meshBlasReady = meshBlasBuildsGraphOwned
-            ? recordPreparedMeshBlasBuilds(
-                commandList,
-                true,
-                meshBlasGeometryBuildInputStatesGraphOwned
-            )
+        const bool meshBlasReady = meshBlasBuildsGraphOwned
+            ? recordPreparedMeshBlasBuilds(commandList, true, meshBlasGeometryBuildInputStatesGraphOwned)
             : buildPendingMeshBlas(commandList, scratchArena)
         ;
-        if(!meshBlasReady && meshBlasBuildsGraphOwned && hybridHardwareFallback){
-            clearPreparedMeshBlasBuilds();
-            meshBlasReady = buildPendingMeshBlas(commandList, scratchArena);
-        }
         if(!meshBlasReady){
-            if(
-                sceneTlasBuildGraphOwned
-                || (meshBlasBuildsGraphOwned && !hybridHardwareFallback)
-            )
-                return false;
-            // A hybrid SW-BVH plan has not recorded when the HW precursor misses. Do not let packet acceptance
-            // publish optimistic mesh topology state for work that never reached this command list.
-            if(meshSwBvhBuildsGraphOwned)
-                clearPreparedMeshSwBvhBuilds();
-            if(sceneBvhBatchGraphOwned)
-                clearPreparedSceneBvh();
-            if(hybridSoftwareMaterialContextGraphOwned){
-                discardHybridGraphMaterialContext();
-                disableHybridMaterialConsumers();
-            }
-            return true;
-        }
-        // A healthy hybrid frozen TLAS plan is independent from the immutable software material/context uploads.
-        // If its native record no longer matches, discard only the plan and retry the current direct TLAS build;
-        // buildSceneTlas preserves a graph-owned SW material triple for the following optional-tail validation.
-        const bool hybridSceneTlasFallback =
-            sceneTlasBuildGraphOwned
-            && m_shadowVisibilityHybridPipelinePreflighted
-        ;
-        bool sceneTlasReady = sceneTlasBuildGraphOwned
-            ? recordPreparedSceneTlasBuild(commandList, true)
-            : buildSceneTlas(
-                commandList,
-                scratchArena,
-                shadowMaterialContextBatchGraphOwned
-            )
-        ;
-        if(!sceneTlasReady && hybridSceneTlasFallback){
-            clearPreparedSceneTlasBuild();
-            sceneTlasReady = buildSceneTlas(
-                commandList,
-                scratchArena,
-                shadowMaterialContextBatchGraphOwned
-            );
-        }
-        if(!sceneTlasReady){
-            if(
-                (sceneTlasBuildGraphOwned && !hybridSceneTlasFallback)
-                || (shadowMaterialContextBatchGraphOwned && !hybridSoftwareMaterialContextGraphOwned)
-            )
-                return false;
+            m_rayTracingState.m_softTransparentReady = false;
+            m_rayTracingState.m_softTransparentTemporalReady = false;
             m_rayTracingState.m_surfelEnabled = false;
             m_rayTracingState.m_surfelUseHwTrace = false;
-            // As above, retain only plans whose native commands were actually recorded.
-            if(meshSwBvhBuildsGraphOwned)
-                clearPreparedMeshSwBvhBuilds();
-            if(sceneBvhBatchGraphOwned)
-                clearPreparedSceneBvh();
-            if(hybridSoftwareMaterialContextGraphOwned){
-                discardHybridGraphMaterialContext();
-                disableHybridMaterialConsumers();
-            }
-            return true;
+            return !meshBlasBuildsGraphOwned && !sceneTlasBuildGraphOwned;
         }
-
-        outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-        if(deferHybridSoftwareTail)
-            return true;
-        // Opaque hardware frames intentionally do not prepare the optional software traversal resources. Only enter
-        // the direct compatibility builder after preflight selected that hybrid tail; otherwise its missing buffers
-        // would produce false per-mesh build failures even though no software consumer can run.
-        const bool directMeshSwBvhBuildReady = !m_shadowVisibilityHybridResourcesPreflighted
-            || meshSwBvhBuildsGraphOwned
-            || buildPendingMeshSwBvh(commandList, scratchArena)
+        const bool sceneTlasReady = sceneTlasBuildGraphOwned
+            ? recordPreparedSceneTlasBuild(commandList, true)
+            : buildSceneTlas(commandList, scratchArena, shadowMaterialContextBatchGraphOwned)
         ;
-        return recordPreflightHybridSoftwareTail(
-            commandList,
-            targets,
-            outBackendReady,
-            directMeshSwBvhBuildReady,
-            shadowMaterialContextBatchGraphOwned,
-            sceneBvhBatchGraphOwned,
-            meshSwBvhBuildsGraphOwned
-        );
+        if(!sceneTlasReady){
+            m_rayTracingState.m_softTransparentReady = false;
+            m_rayTracingState.m_softTransparentTemporalReady = false;
+            m_rayTracingState.m_surfelEnabled = false;
+            m_rayTracingState.m_surfelUseHwTrace = false;
+            return !sceneTlasBuildGraphOwned && !shadowMaterialContextBatchGraphOwned;
+        }
+        outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
+        return true;
     }
 
     const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
@@ -1232,126 +1078,6 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-    return true;
-}
-
-
-bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(
-    Core::CommandList& commandList,
-    DeferredFrameTargets& targets,
-    const bool hardwareBackendReady,
-    const bool directMeshSwBvhBuildReady,
-    const bool shadowMaterialContextBatchGraphOwned,
-    const bool sceneBvhBatchGraphOwned,
-    const bool meshSwBvhBuildsGraphOwned,
-    const bool meshSwBvhInputStatesGraphOwned,
-    const void* const hybridHardwareFallbackInstanceMaterialData,
-    const usize hybridHardwareFallbackInstanceMaterialByteCount,
-    const void* const hybridHardwareFallbackInstanceData,
-    const usize hybridHardwareFallbackInstanceByteCount,
-    const void* const hybridHardwareFallbackMaterialTypedData,
-    const usize hybridHardwareFallbackMaterialTypedByteCount
-){
-    if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
-        return false;
-
-    // When a complete hybrid preflight froze the final software-compatible context, a tail miss must restore its
-    // retained hardware descriptor context before the first accepting packet closes. Keep that transaction here so
-    // the graph callback can move independently without weakening the opaque-HW fallback.
-    const bool hybridSoftwareMaterialContextGraphOwned =
-        shadowMaterialContextBatchGraphOwned
-        && m_shadowVisibilityHybridPipelinePreflighted
-        && m_preparedShadowMaterialContextReady
-        && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
-    ;
-    const auto discardHybridGraphMaterialContext = [&](){
-        clearPreparedShadowMaterialContext();
-        m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
-        m_rayTracingState.m_swShadowMaterialContextHashValid = false;
-        m_rayTracingState.m_hybridTransparentShadowReady = false;
-        m_rayTracingState.m_softTransparentReady = false;
-        m_rayTracingState.m_softTransparentTemporalReady = false;
-    };
-    m_rayTracingState.m_hybridTransparentShadowReady = false;
-    bool hybridMeshSwBvhBuildRecorded = false;
-    bool hybridSceneBvhBuildRecorded = false;
-    if(
-        hardwareBackendReady
-        && m_shadowVisibilityHybridResourcesPreflighted
-        // Revalidate a frozen hybrid payload even when an intervening material edit removed its transparency.
-        // Otherwise the graph upload could survive without either the SW consumer or a direct HW restoration.
-        && (m_rayTracingState.m_sceneHasTransparentOccluder || hybridSoftwareMaterialContextGraphOwned)
-    ){
-        const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-            // A fully frozen and import-verified hybrid packet declares every prepared SW input as ShaderResource
-            // on this tail. Its preceding Shadow Preparation callback supplied build inputs for the frozen BLAS
-            // plan, so the packet runtime lowers their exact AccelStructBuildInput -> ShaderResource handoff before
-            // this recorder runs. Direct, retry, and incomplete-plan paths retain the native bridge.
-            ? recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhInputStatesGraphOwned)
-            : directMeshSwBvhBuildReady
-        ;
-        hybridMeshSwBvhBuildRecorded = meshSwBvhBuildsGraphOwned && meshSwBvhReady;
-        if(!meshSwBvhReady){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent shadow per-mesh software BVH build failed"));
-            // This failure is deliberately non-fatal: HW opaque shadows still submit. Drop the frozen plan so the
-            // accepted packet cannot commit a topology build that did not record.
-            if(meshSwBvhBuildsGraphOwned)
-                clearPreparedMeshSwBvhBuilds();
-        }
-        const bool canRecordSceneSwBvh = !meshSwBvhBuildsGraphOwned || meshSwBvhReady;
-        // Fresh scene bytes and accepted static-cache reuse both retain the exact preflight traversal. A stale or
-        // missing snapshot fails the optional SW tail so the already-declared immutable HW fallback can take over.
-        const bool hybridSceneTraversalFrozen =
-            canRecordSceneSwBvh
-            && shadowMaterialContextBatchGraphOwned
-            && m_preparedSceneSwBvhReady
-            && m_shadowVisibilityHybridPipelinePreflighted
-        ;
-        const bool sceneSwBvhReady =
-            hybridSceneTraversalFrozen
-            && recordPreparedSceneSwBvhTraversal()
-        ;
-        hybridSceneBvhBuildRecorded = sceneBvhBatchGraphOwned && sceneSwBvhReady;
-        const bool swReady =
-            sceneSwBvhReady
-            && m_rayTracingState.m_swShadowMeshCount > 0u
-            && m_rayTracingState.m_sceneBvhInstanceCount > 0u
-            && m_shadowVisibilityHybridPipelinePreflighted
-        ;
-        if(swReady){
-            m_rayTracingState.m_hybridTransparentShadowReady = true;
-        }
-        else{
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame"));
-            if(hybridSoftwareMaterialContextGraphOwned){
-                // The immutable SW triple has already recorded in this packet. Replace it with the declared HW
-                // fallback triple before accepting opaque shadows; a mismatched fallback rejects the merged packet.
-                discardHybridGraphMaterialContext();
-                if(!recordPreparedHybridHardwareMaterialContextFallback(
-                    commandList,
-                    hybridHardwareFallbackInstanceMaterialData,
-                    hybridHardwareFallbackInstanceMaterialByteCount,
-                    hybridHardwareFallbackInstanceData,
-                    hybridHardwareFallbackInstanceByteCount,
-                    hybridHardwareFallbackMaterialTypedData,
-                    hybridHardwareFallbackMaterialTypedByteCount
-                )){
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet"));
-                    return false;
-                }
-            }
-        }
-    }
-    // A graph-owned hybrid plan may exist only for the optional software tail. It is eligible for the common
-    // acceptance callback exactly when its commands were emitted; all other HW-only early-outs retain their native
-    // fallback without falsely advancing the SW-BVH CPU cache.
-    if(meshSwBvhBuildsGraphOwned && !hybridMeshSwBvhBuildRecorded)
-        clearPreparedMeshSwBvhBuilds();
-    // The graph may already contain the immutable pair upload, but only a restored traversal table or successful
-    // immutable traversal may publish its static-scene cache. An optional-tail miss clears the retained pair before
-    // the common acceptance callback can observe it.
-    if(sceneBvhBatchGraphOwned && !hybridSceneBvhBuildRecorded)
-        clearPreparedSceneBvh();
     return true;
 }
 

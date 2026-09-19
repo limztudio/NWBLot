@@ -60,7 +60,6 @@ public:
     void invalidate();
     void resetPrepared()noexcept{ m_prepared = false; }
     [[nodiscard]] bool prepare(const RayTracingOpticalSceneGather& gather);
-    [[nodiscard]] bool matchesInstanceOrder(const RayTracingOpticalSceneGather& gather)const noexcept;
     [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const;
 
 private:

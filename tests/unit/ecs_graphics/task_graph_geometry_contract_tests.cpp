@@ -69,8 +69,8 @@ TEST(EcsGraphics, ShadowTraceGeometryAcceptancePreflightsUnionCapacityAndPublish
 
 
 // Accepted static scene-BVH and software-material cache hits have no upload bytes, but they still freeze the exact
-// storage identities and traversal table during preflight. Pure software consumes that snapshot or rejects the
-// packet; hybrid consumes it or restores HW. Neither route regathers ECS/material data after graph declaration.
+// storage identities and traversal table during preflight. Software recording consumes that snapshot or rejects
+// the packet without regathering ECS/material data after graph declaration.
 TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRegather){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -142,7 +142,7 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
         "bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads("
     );
     const usize materialRetainEndOffset = materialContext.find(
-        "bool RendererRayTracingSystem::retainPreparedHybridHardwareMaterialContextFallbackUploads(",
+        "void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()",
         materialRetainOffset
     );
     ASSERT_NE(materialRetainOffset, AStringView::npos);
@@ -233,7 +233,7 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
         "bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources("
     );
     const usize pureRecordEndOffset = rayTracing.find(
-        "bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(",
+        "NWB_IMPL_END",
         pureRecordOffset
     );
     ASSERT_NE(pureRecordOffset, AStringView::npos);
@@ -242,74 +242,60 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     EXPECT_TRUE(ContainsText(pureRecord, "if(!m_preparedSceneSwBvhReady)"));
     EXPECT_TRUE(ContainsText(pureRecord, "if(!recordPreparedSceneSwBvhTraversal())"));
     EXPECT_FALSE(ContainsText(pureRecord, "buildSceneSwBvh("));
-
-    const usize hybridTailOffset = rayTracing.find("bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(");
-    const usize hybridTailEndOffset = rayTracing.find("// A graph-owned hybrid plan may exist", hybridTailOffset);
-    ASSERT_NE(hybridTailOffset, AStringView::npos);
-    ASSERT_NE(hybridTailEndOffset, AStringView::npos);
-    const AStringView hybridTail = rayTracing.substr(hybridTailOffset, hybridTailEndOffset - hybridTailOffset);
-    EXPECT_TRUE(ContainsText(hybridTail, "const bool hybridSceneTraversalFrozen ="));
-    EXPECT_TRUE(ContainsText(hybridTail, "&& m_preparedSceneSwBvhReady"));
-    EXPECT_TRUE(ContainsText(hybridTail, "&& recordPreparedSceneSwBvhTraversal()"));
-    EXPECT_TRUE(ContainsText(hybridTail, "recordPreparedHybridHardwareMaterialContextFallback("));
-    EXPECT_FALSE(ContainsText(hybridTail, "buildSceneSwBvh("));
-    EXPECT_FALSE(ContainsText(hybridTail, "Core::Alloc::ScratchArena"));
 }
 
 
-// Opaque hardware shadows never prepare the optional software traversal resources. Keep the direct compatibility
-// builder behind the frozen hybrid-resource gate without removing the real pure-software fallback.
-TEST(EcsGraphics, HardwareOpaqueShadowPreparationDoesNotEagerlyBuildSoftwareBvhs){
+// Hardware shadows share the TLAS route; only devices without ray queries prepare and record software BVHs.
+TEST(EcsGraphics, HardwareShadowPreparationKeepsSoftwareBvhsExclusiveToSoftwareDevices){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString rayTracingSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
-
     const AStringView rayTracing(rayTracingSource.data(), rayTracingSource.size());
-    const usize recordOffset = rayTracing.find(
-        "bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources("
-    );
-    const usize recordEndOffset = rayTracing.find(
-        "bool RendererRayTracingSystem::recordPreflightHybridSoftwareTail(",
-        recordOffset
-    );
+    const usize preflightOffset = rayTracing.find("bool RendererRayTracingSystem::preflightShadowVisibilityResources(");
+    const usize recordOffset = rayTracing.find("bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(");
+    const usize recordEndOffset = rayTracing.find("NWB_IMPL_END", recordOffset);
+    ASSERT_NE(preflightOffset, AStringView::npos);
     ASSERT_NE(recordOffset, AStringView::npos);
     ASSERT_NE(recordEndOffset, AStringView::npos);
+
+    const AStringView preflight = rayTracing.substr(preflightOffset, recordOffset - preflightOffset);
+    const usize hardwarePreflightOffset = preflight.find("if(m_shadowVisibilityHardwareSupported){");
+    const usize softwarePreflightOffset = preflight.find("// No hardware ray tracing:", hardwarePreflightOffset);
+    ASSERT_NE(hardwarePreflightOffset, AStringView::npos);
+    ASSERT_NE(softwarePreflightOffset, AStringView::npos);
+    const AStringView hardwarePreflight = preflight.substr(hardwarePreflightOffset, softwarePreflightOffset - hardwarePreflightOffset);
+    EXPECT_TRUE(ContainsText(hardwarePreflight, "preparePendingMeshBlasResources(scratchArena)"));
+    EXPECT_TRUE(ContainsText(hardwarePreflight, "prepareSceneTlasResources(scratchArena)"));
+    EXPECT_TRUE(ContainsText(hardwarePreflight, "prepareHardwareTransparentShadowResources(targets)"));
+    EXPECT_FALSE(ContainsText(hardwarePreflight, "preparePendingMeshSwBvhResources("));
+    EXPECT_FALSE(ContainsText(hardwarePreflight, "prepareSceneSwBvhResources("));
+    EXPECT_FALSE(ContainsText(hardwarePreflight, "capturePreparedMeshSwBvhBuilds("));
+    const AStringView softwarePreflight = preflight.substr(softwarePreflightOffset);
+    EXPECT_TRUE(ContainsText(softwarePreflight, "preparePendingMeshSwBvhResources(scratchArena)"));
+    EXPECT_TRUE(ContainsText(softwarePreflight, "prepareSceneSwBvhResources(scratchArena)"));
+    EXPECT_TRUE(ContainsText(softwarePreflight, "capturePreparedMeshSwBvhBuilds(scratchArena)"));
+
     const AStringView record = rayTracing.substr(recordOffset, recordEndOffset - recordOffset);
-
-    const usize hardwareBranchOffset = record.find("if(m_shadowVisibilityHardwareSupported){");
-    const usize softwareBranchOffset = record.find("const bool meshSwBvhReady =", hardwareBranchOffset);
-    ASSERT_NE(hardwareBranchOffset, AStringView::npos);
-    ASSERT_NE(softwareBranchOffset, AStringView::npos);
-    const AStringView hardwareBranch = record.substr(
-        hardwareBranchOffset,
-        softwareBranchOffset - hardwareBranchOffset
-    );
-    const usize directBuildAssignmentOffset = hardwareBranch.find("const bool directMeshSwBvhBuildReady =");
-    const usize hybridTailCallOffset = hardwareBranch.find("return recordPreflightHybridSoftwareTail(");
-    const usize directBuildCallOffset = hardwareBranch.find("buildPendingMeshSwBvh(commandList, scratchArena)");
-    ASSERT_NE(directBuildAssignmentOffset, AStringView::npos);
-    ASSERT_NE(hybridTailCallOffset, AStringView::npos);
-    ASSERT_NE(directBuildCallOffset, AStringView::npos);
-    EXPECT_TRUE(ContainsText(
-        hardwareBranch,
-        "const bool directMeshSwBvhBuildReady = !m_shadowVisibilityHybridResourcesPreflighted\n"
-        "            || meshSwBvhBuildsGraphOwned\n"
-        "            || buildPendingMeshSwBvh(commandList, scratchArena)"
-    ));
-    EXPECT_EQ(CountText(hardwareBranch, "buildPendingMeshSwBvh(commandList, scratchArena)"), 1u);
-    EXPECT_LT(directBuildAssignmentOffset, directBuildCallOffset);
-    EXPECT_LT(directBuildCallOffset, hybridTailCallOffset);
-
-    const AStringView softwareBranch = record.substr(softwareBranchOffset);
-    EXPECT_TRUE(ContainsText(softwareBranch, ": buildPendingMeshSwBvh(commandList, scratchArena)"));
+    const usize hardwareRecordOffset = record.find("if(m_shadowVisibilityHardwareSupported){");
+    const usize softwareRecordOffset = record.find("const bool meshSwBvhReady =", hardwareRecordOffset);
+    ASSERT_NE(hardwareRecordOffset, AStringView::npos);
+    ASSERT_NE(softwareRecordOffset, AStringView::npos);
+    const AStringView hardwareRecord = record.substr(hardwareRecordOffset, softwareRecordOffset - hardwareRecordOffset);
+    EXPECT_TRUE(ContainsText(hardwareRecord, "recordPreparedMeshBlasBuilds("));
+    EXPECT_TRUE(ContainsText(hardwareRecord, "recordPreparedSceneTlasBuild("));
+    EXPECT_FALSE(ContainsText(hardwareRecord, "buildPendingMeshSwBvh("));
+    EXPECT_FALSE(ContainsText(hardwareRecord, "recordPreparedMeshSwBvhBuilds("));
+    const AStringView softwareRecord = record.substr(softwareRecordOffset);
+    EXPECT_TRUE(ContainsText(softwareRecord, "buildPendingMeshSwBvh(commandList, scratchArena)"));
+    EXPECT_TRUE(ContainsText(softwareRecord, "recordPreparedMeshSwBvhBuilds("));
+    EXPECT_TRUE(ContainsText(softwareRecord, "recordPreparedSceneSwBvhTraversal()"));
 }
 
 
-// Hybrid transparent shadows build a software BVH on ray-tracing hardware, so both static and skinned trace inputs
-// must expose the raw views consumed by their global descriptor-heap slots.
-TEST(EcsGraphics, HybridSoftwareBvhInputsExposeRawViewsOnRayTracingHardware){
+// Hardware material reconstruction and software traversal both read static/skinned geometry through raw heap views.
+TEST(EcsGraphics, RayTracingMaterialAndSoftwareInputsExposeRawViews){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
 
@@ -485,10 +471,12 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
             + CountText(hardwareCaustics, s_SceneTlasImport),
         5u
     );
+    // Hardware shadows import early; reflection/refraction import only when that shared read set is still absent.
+    EXPECT_EQ(CountText(taskGraph, "sceneReads = ImportRayTracingSceneGraphReads("), 2u);
     EXPECT_EQ(
         CountText(taskGraph, "sceneTlasBackingInitialState()")
             + CountText(hardwareCaustics, "sceneTlasBackingInitialState()"),
-        5u
+        6u
     );
     EXPECT_TRUE(ContainsText(
         taskGraph,

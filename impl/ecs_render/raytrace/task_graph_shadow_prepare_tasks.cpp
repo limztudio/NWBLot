@@ -57,13 +57,11 @@ bool ShadowPrepareGraphTask::record(
             *payload.targets,
             payload.outcome->ready,
             payload.shadowMaterialContextBatchGraphOwned,
-            payload.sceneBvhBatchGraphOwned,
             payload.sceneTlasBuildGraphOwned,
             payload.meshBlasBuildsGraphOwned,
             payload.meshBlasGeometryBuildInputStatesGraphOwned,
             payload.meshSwBvhBuildsGraphOwned,
-            payload.preparedMeshSwBvhBuildsRecordedByGraph,
-            payload.deferHybridSoftwareTail
+            payload.preparedMeshSwBvhBuildsRecordedByGraph
         )
     ;
     // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
@@ -116,70 +114,6 @@ bool ShadowPrepareSoftwareBvhBuildGraphTask::record(
         commandList,
         payload.build
     );
-}
-
-
-bool ShadowPrepareHybridSoftwareTailGraphTask::record(
-    const Payload& payload,
-    Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context
-){
-    if(!payload.raytracingSystem || !payload.targets || !payload.hardwarePreparationReady || !payload.timingTicket)
-        return false;
-
-    const void* hybridHardwareFallbackInstanceMaterialData = nullptr;
-    const void* hybridHardwareFallbackInstanceData = nullptr;
-    const void* hybridHardwareFallbackMaterialTypedData = nullptr;
-    usize hybridHardwareFallbackInstanceMaterialByteCount = 0u;
-    usize hybridHardwareFallbackInstanceByteCount = 0u;
-    usize hybridHardwareFallbackMaterialTypedByteCount = 0u;
-    hybridHardwareFallbackInstanceMaterialData = context.declarations.uploadBlobData(
-        payload.hybridHardwareFallbackInstanceMaterialBlob,
-        hybridHardwareFallbackInstanceMaterialByteCount
-    );
-    hybridHardwareFallbackInstanceData = context.declarations.uploadBlobData(
-        payload.hybridHardwareFallbackInstanceBlob,
-        hybridHardwareFallbackInstanceByteCount
-    );
-    hybridHardwareFallbackMaterialTypedData = context.declarations.uploadBlobData(
-        payload.hybridHardwareFallbackMaterialTypedBlob,
-        hybridHardwareFallbackMaterialTypedByteCount
-    );
-    if(
-        !hybridHardwareFallbackInstanceMaterialData
-        || !hybridHardwareFallbackInstanceData
-        || !hybridHardwareFallbackMaterialTypedData
-        || hybridHardwareFallbackInstanceMaterialByteCount == 0u
-        || hybridHardwareFallbackInstanceByteCount == 0u
-        || hybridHardwareFallbackMaterialTypedByteCount == 0u
-    )
-        return false;
-
-    // The tail shares the accepting packet's timing ticket for SW-BVH scopes.
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-
-    return payload.raytracingSystem->recordPreflightHybridSoftwareTail(
-        commandList,
-        *payload.targets,
-        *payload.hardwarePreparationReady,
-        true,
-        payload.shadowMaterialContextBatchGraphOwned,
-        payload.sceneBvhBatchGraphOwned,
-        payload.meshSwBvhBuildsGraphOwned,
-        payload.meshSwBvhInputStatesGraphOwned,
-        hybridHardwareFallbackInstanceMaterialData,
-        hybridHardwareFallbackInstanceMaterialByteCount,
-        hybridHardwareFallbackInstanceData,
-        hybridHardwareFallbackInstanceByteCount,
-        hybridHardwareFallbackMaterialTypedData,
-        hybridHardwareFallbackMaterialTypedByteCount
-    );
-}
-
-
-void ShadowPrepareHybridSoftwareTailGraphTask::discarded(Payload& payload){
-    if(payload.hardwarePreparationReady)
-        *payload.hardwarePreparationReady = false;
 }
 
 

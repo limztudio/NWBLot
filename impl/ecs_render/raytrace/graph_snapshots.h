@@ -36,6 +36,7 @@ struct GraphOwnedAdaptiveShadowPlan{
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
 
+    bool hardwareTransparentTrace = false;
     bool softTransparentFoldReady = false;
     bool softShadowHistoryReadable = false;
     bool opaqueTemporalMergeReady = false;
@@ -104,6 +105,9 @@ struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle shadowInstanceBuffer;
     Core::BufferHandle causticEmissionTargetBuffer;
     Core::BufferHandle surfelFrameConstantsBuffer;
+    Core::BufferHandle hardwareTransparentCrossingsBuffer;
+    Core::BufferHandle hardwareTransparentOverflowListBuffer;
+    Core::BufferHandle hardwareTransparentOverflowArgsBuffer;
     Core::BufferHandle sceneBvhNodeBuffer;
     Core::BufferHandle sceneInstanceBuffer;
     Core::RayTracingAccelStructHandle sceneTlas;

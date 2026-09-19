@@ -720,31 +720,12 @@ struct ShadowVisibilityGraphTask{
             );
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
-            else if(
-                !payload.raytracingSystem->softTransparentShadowReady()
-                && payload.raytracingSystem->hybridTransparentShadowReady()
-            ){
-                if(!payload.raytracingSystem->renderGpuBvhShadowVisibility(
-                    commandList,
-                    *payload.targets,
-                    payload.deferredLightingResources,
-                    true,
-                    payload.graphEntryStatesOwned,
-                    false,
-                    nullptr,
-                    false,
-                    false,
-                    graphOwnedAdaptivePlan
-                ))
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid transparent software shadow pass failed"));
-            }
         }
         else if(payload.prepared && *payload.prepared){
             shadowVisibilityWritten = payload.raytracingSystem->renderGpuBvhShadowVisibility(
                 commandList,
                 *payload.targets,
                 payload.deferredLightingResources,
-                false,
                 payload.graphEntryStatesOwned,
                 false,
                 nullptr,
@@ -883,8 +864,7 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
         return false;
     }
 
-    // Hardware effects retain hardware InstanceID order even when the hybrid material table uses software node
-    // descriptors. Pure software selects its own order. Neither a late hybrid fallback nor recording allocates views.
+    // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
     const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported
         ? m_hardwareOpticalScene.snapshot() : m_softwareOpticalScene.snapshot();
     if(opticalScene.valid()){
@@ -1563,7 +1543,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         false,
         false
     );
-    reportSoftwareShadowTraversal(targets);
+    if(!hardwareTransparentShadowReady())
+        reportSoftwareShadowTraversal(targets);
     return true;
 }
 
@@ -1874,7 +1855,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool multiplyOntoOpaque,
     const bool graphEntryStatesOwned,
     const bool splitSoftTransparentFold,
     u32* const opaqueFrameIndex,
@@ -1883,7 +1863,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan
 ){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
-    // Hybrid mode folds transparent software transmittance onto the hardware opaque mask.
     if(!targets.shadowVisibility)
         return false;
     NWB_ASSERT(targets.bindless.valid());
@@ -1912,7 +1891,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         return false;
     }
 
-    NWB_ASSERT(!splitSoftTransparentFold || !multiplyOntoOpaque);
     Optional<Core::GpuTimingMeasure> timing;
     if(!splitSoftTransparentFold)
         timing.emplace(m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowVisibility, m_graphics.getDevice(), commandList);
@@ -1971,109 +1949,106 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     // Skip the fallback after a soft transparent fold.
     bool softTransparentRan = false;
 
-    // Software-only mode first creates the opaque mask.
-    if(!multiplyOntoOpaque){
-        // Soft upsample overwrites the opaque prepass.
-        const bool softWillRun = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softShadowSlotMask != 0u;
-        if(!softWillRun){
-            commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.commitBarriers();
-            SwShadowHeapPushConstants opaquePush = makePush();
-            opaquePush.width = targets.width;
-            opaquePush.height = targets.height;
-            commandList.setComputeState(passState(m_rayTracingState.m_swShadowOpaquePrepassPipeline));
-            bindPassHeap(m_rayTracingState.m_swShadowOpaquePrepassPipeline);
-            commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
-            commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
-        }
-
-        // The transparent pass reads and multiplies the opaque mask in place.
+    // Soft upsample overwrites the opaque prepass.
+    const bool softWillRun = m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softShadowSlotMask != 0u;
+    if(!softWillRun){
         commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();
+        SwShadowHeapPushConstants opaquePush = makePush();
+        opaquePush.width = targets.width;
+        opaquePush.height = targets.height;
+        commandList.setComputeState(passState(m_rayTracingState.m_swShadowOpaquePrepassPipeline));
+        bindPassHeap(m_rayTracingState.m_swShadowOpaquePrepassPipeline);
+        commandList.setPushConstants(&opaquePush, sizeof(opaquePush));
+        commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
+    }
 
-        // Soft opaque resolve replaces the full-resolution mask.
-        if(softWillRun){
-            const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-            const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-            const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
-            const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
+    // The transparent pass reads and multiplies the opaque mask in place.
+    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+    commandList.commitBarriers();
 
-            // Advance the primary producer's jitter sequence once.
-            const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+    // Soft opaque resolve replaces the full-resolution mask.
+    if(softWillRun){
+        const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+        const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+        const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
+        const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
 
-            // Resolve reads the soft trace and geometry scratch in place.
-            commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
-            commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
-            // Temporal merge writes history before later reads.
-            if(m_rayTracingState.m_softShadowTemporalReady){
-                commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
-                commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
-                commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
-                commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
-            }
+        // Advance the primary producer's jitter sequence once.
+        const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
 
+        // Resolve reads the soft trace and geometry scratch in place.
+        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfB.get(), true);
+        commandList.setEnableUavBarriersForTexture(targets.shadowSoftGeometry.get(), true);
+        // Temporal merge writes history before later reads.
+        if(m_rayTracingState.m_softShadowTemporalReady){
+            commandList.setEnableUavBarriersForTexture(targets.shadowHistA.get(), true);
+            commandList.setEnableUavBarriersForTexture(targets.shadowHistB.get(), true);
+            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsA.get(), true);
+            commandList.setEnableUavBarriersForTexture(targets.shadowMomentsB.get(), true);
+        }
+
+        commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+        {
+            Core::GpuTimingMeasure opaqueTraceTiming(
+                m_graphics.gpuTiming(),
+                RendererGpuTimingScope::s_ShadowOpaqueTrace,
+                m_graphics.getDevice(),
+                commandList
+            );
+            SwShadowHeapPushConstants softTracePush = makePush();
+            softTracePush.width = targets.width;
+            softTracePush.height = targets.height;
+            softTracePush.frameIndex = frameIndex;
+            softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
+                ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
+                : NWB_SW_SHADOW_SOFT_SPP;
+            commandList.setComputeState(passState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
+            bindPassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline);
+            commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
+            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+        }
+
+        // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
+        // Direct and unsplit compatibility paths retain the established local fence.
+        if(!splitOpaqueSoftResolve){
             commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
-            {
-                Core::GpuTimingMeasure opaqueTraceTiming(
-                    m_graphics.gpuTiming(),
-                    RendererGpuTimingScope::s_ShadowOpaqueTrace,
-                    m_graphics.getDevice(),
-                    commandList
-                );
-                SwShadowHeapPushConstants softTracePush = makePush();
-                softTracePush.width = targets.width;
-                softTracePush.height = targets.height;
-                softTracePush.frameIndex = frameIndex;
-                softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
-                    ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
-                    : NWB_SW_SHADOW_SOFT_SPP;
-                commandList.setComputeState(passState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
-                bindPassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline);
-                commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
-                commandList.dispatch(softGroupsX, softGroupsY, 1u);
-            }
-
-            // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
-            // Direct and unsplit compatibility paths retain the established local fence.
-            if(!splitOpaqueSoftResolve){
-                commandList.setTextureState(targets.shadowSoftHalfA.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-                commandList.commitBarriers();
-            }
-
-            // Shared resolve also guards against a second transparent fold.
-            dispatchSoftShadowDenoiseAndTransparentFold(
-                commandList,
-                targets,
-                deferredLightingResources,
-                frameIndex,
-                softGroupsX,
-                softGroupsY,
-                graphEntryStatesOwned,
-                true,
-                !splitOpaqueSoftResolve,
-                !splitSoftTransparentFold,
-                !splitSoftTransparentFold,
-                false,
-                false,
-                false,
-                graphOwnsOpaqueTemporalMergeEntryStates,
-                false,
-                !splitOpaqueSoftResolve,
-                false
-            );
-            if(splitSoftTransparentFold){
-                NWB_ASSERT(opaqueFrameIndex);
-                if(opaqueFrameIndex)
-                    *opaqueFrameIndex = frameIndex;
-                // The graph-owned transparent tail records in a later callback, so preserve the normal route's
-                // one-shot traversal diagnostic before this opaque producer returns.
-                reportSoftwareShadowTraversal(targets);
-                return true;
-            }
-            softTransparentRan = m_rayTracingState.m_softTransparentReady;
         }
+
+        // Shared resolve also guards against a second transparent fold.
+        dispatchSoftShadowDenoiseAndTransparentFold(
+            commandList,
+            targets,
+            deferredLightingResources,
+            frameIndex,
+            softGroupsX,
+            softGroupsY,
+            graphEntryStatesOwned,
+            true,
+            !splitOpaqueSoftResolve,
+            !splitSoftTransparentFold,
+            !splitSoftTransparentFold,
+            false,
+            false,
+            false,
+            graphOwnsOpaqueTemporalMergeEntryStates,
+            false,
+            !splitOpaqueSoftResolve,
+            false
+        );
+        if(splitSoftTransparentFold){
+            NWB_ASSERT(opaqueFrameIndex);
+            if(opaqueFrameIndex)
+                *opaqueFrameIndex = frameIndex;
+            // The graph-owned transparent tail records in a later callback, so preserve the normal route's
+            // one-shot traversal diagnostic before this opaque producer returns.
+            reportSoftwareShadowTraversal(targets);
+            return true;
+        }
+        softTransparentRan = m_rayTracingState.m_softTransparentReady;
     }
 
     // Fallback transparent fold; it is mutually exclusive with the soft path.
@@ -2224,17 +2199,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
         commandList,
         targets,
         deferredLightingResources,
-        false,
         graphEntryStatesOwned,
         true,
         &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,
         true
     );
-}
-
-bool RendererRayTracingSystem::hybridTransparentShadowReady()const noexcept{
-    return m_rayTracingState.m_hybridTransparentShadowReady;
 }
 
 bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{

@@ -326,7 +326,7 @@ void RendererMeshSystem::collectRetainedAccelerationStateBuffers(ECSRenderDetail
             outBuffers.push_back(mesh.triangleIndexBuffer);
             outBuffers.push_back(mesh.blas->getBackingBufferHandle());
         }
-        // Preserve mesh-local SW buffers across route changes for hybrid-to-software switches.
+        // Preserve mesh-local software buffers across tracing-backend changes.
         outBuffers.push_back(mesh.swBvhNodeBuffer);
         outBuffers.push_back(mesh.swBvhParentBuffer);
     }

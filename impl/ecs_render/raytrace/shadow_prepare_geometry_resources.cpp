@@ -18,45 +18,32 @@ ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(
     const ShadowPrepareGeometryInputs& inputs,
     Core::Alloc::ScratchArena& scratchArena)
     : m_blasBuildInputs(scratchArena)
-    , m_softwareTailInputs(scratchArena)
     , m_remainingTraceGeometry(scratchArena)
     , m_inputs(inputs)
     , m_scratchArena(scratchArena)
 {}
 
-void ShadowPrepareGeometryResources::prepareStorage(
-    const bool blasInputStatesGraphOwned,
-    const bool softwareInputStatesGraphOwned){
+void ShadowPrepareGeometryResources::prepareStorage(const bool blasInputStatesGraphOwned){
     NWB_ASSERT(!m_storagePrepared);
     if(blasInputStatesGraphOwned){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
-            addRequest(build.positionBuffer, s_BlasRole);
-            addRequest(build.triangleIndexBuffer, s_BlasRole);
+            addRequest(build.positionBuffer);
+            addRequest(build.triangleIndexBuffer);
         }
     }
-    if(softwareInputStatesGraphOwned){
-        for(const PreparedMeshSwBvhBuild& build : m_inputs.softwareBuilds){
-            addRequest(build.positionBuffer, s_SoftwareRole);
-            addRequest(build.triangleIndexBuffer, s_SoftwareRole);
-        }
-    }
-    m_blasBuildInputs.reserve(m_blasRequestCount);
-    m_softwareTailInputs.reserve(m_softwareRequestCount);
+    m_blasBuildInputs.reserve(m_requests ? m_requests->size() : m_inlineRequestCount);
     m_remainingTraceGeometry.reserve(m_inputs.traceResourceCount);
     m_preparedBlasPolicy = blasInputStatesGraphOwned;
-    m_preparedSoftwarePolicy = softwareInputStatesGraphOwned;
     m_storagePrepared = true;
 }
 
 void ShadowPrepareGeometryResources::gatherBuildInputs(
     const Core::GpuTaskGraph& graph,
-    bool& blasInputStatesGraphOwned,
-    bool& softwareInputStatesGraphOwned){
+    bool& blasInputStatesGraphOwned){
     NWB_ASSERT(m_storagePrepared && !m_inputsGathered);
-    NWB_ASSERT(m_preparedBlasPolicy == blasInputStatesGraphOwned && m_preparedSoftwarePolicy == softwareInputStatesGraphOwned);
+    NWB_ASSERT(m_preparedBlasPolicy == blasInputStatesGraphOwned);
     if(!resolveRequests(graph)){
         blasInputStatesGraphOwned = false;
-        softwareInputStatesGraphOwned = false;
         clearBuildInputs();
         m_inputsGathered = true;
         return;
@@ -64,26 +51,11 @@ void ShadowPrepareGeometryResources::gatherBuildInputs(
     if(blasInputStatesGraphOwned){
         for(const PreparedMeshBlasBuild& build : m_inputs.blasBuilds){
             if(
-                !appendBuildInput(m_blasBuildInputs, build.positionBuffer, s_BlasRole)
-                || !appendBuildInput(m_blasBuildInputs, build.triangleIndexBuffer, s_BlasRole)
+                !appendBuildInput(build.positionBuffer)
+                || !appendBuildInput(build.triangleIndexBuffer)
             ){
                 // A missing frozen stream keeps the native bridge instead of rejecting the packet.
                 blasInputStatesGraphOwned = false;
-                softwareInputStatesGraphOwned = false;
-                clearBuildInputs();
-                break;
-            }
-        }
-    }
-    if(softwareInputStatesGraphOwned){
-        for(const PreparedMeshSwBvhBuild& build : m_inputs.softwareBuilds){
-            if(
-                !appendBuildInput(m_softwareTailInputs, build.positionBuffer, s_SoftwareRole)
-                || !appendBuildInput(m_softwareTailInputs, build.triangleIndexBuffer, s_SoftwareRole)
-            ){
-                // The SW recorder accepts one all-or-native input-state policy for both callbacks.
-                blasInputStatesGraphOwned = false;
-                softwareInputStatesGraphOwned = false;
                 clearBuildInputs();
                 break;
             }
@@ -100,7 +72,7 @@ bool ShadowPrepareGeometryResources::gatherRemainingTraceResources(){
         if(!resource.valid())
             return false;
         const BufferRequest* const request = hasBlasInputs ? findResolvedRequest(resource) : nullptr;
-        if(request && (request->selectedRoles & s_BlasRole) != 0u)
+        if(request && request->selected)
             continue;
         m_remainingTraceGeometry.push_back(resource);
     }
@@ -130,7 +102,7 @@ bool ShadowPrepareGeometryResources::isPreparedMeshBlasBuild(const Name& meshNam
     return false;
 }
 
-void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer, const u8 role){
+void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer){
     if(!buffer)
         return;
     BufferRequest* request = findRequest(buffer.get());
@@ -149,13 +121,6 @@ void ShadowPrepareGeometryResources::addRequest(const Core::BufferHandle& buffer
             ++m_inlineRequestCount;
         }
     }
-    if((request->requestedRoles & role) != 0u)
-        return;
-    request->requestedRoles |= role;
-    if(role == s_BlasRole)
-        ++m_blasRequestCount;
-    else
-        ++m_softwareRequestCount;
 }
 
 ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findRequest(Core::Buffer* const buffer){
@@ -231,30 +196,26 @@ ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::f
     return nullptr;
 }
 
-bool ShadowPrepareGeometryResources::appendBuildInput(
-    ResourceVector& resources,
-    const Core::BufferHandle& buffer,
-    const u8 role){
+bool ShadowPrepareGeometryResources::appendBuildInput(const Core::BufferHandle& buffer){
     BufferRequest* const request = findRequest(buffer.get());
     if(!request || !request->resource.valid() || !request->listedForTrace)
         return false;
-    if((request->selectedRoles & role) == 0u){
-        resources.push_back(request->resource);
-        request->selectedRoles |= role;
+    if(!request->selected){
+        m_blasBuildInputs.push_back(request->resource);
+        request->selected = true;
     }
     return true;
 }
 
 void ShadowPrepareGeometryResources::clearBuildInputs()noexcept{
     m_blasBuildInputs.clear();
-    m_softwareTailInputs.clear();
     if(m_requests){
         for(auto request = m_requests->begin(); request != m_requests->end(); ++request)
-            request.value().selectedRoles = 0u;
+            request.value().selected = false;
     }
     else{
         for(usize index = 0u; index < m_inlineRequestCount; ++index)
-            m_inlineRequests[index].request.selectedRoles = 0u;
+            m_inlineRequests[index].request.selected = false;
     }
 }
 

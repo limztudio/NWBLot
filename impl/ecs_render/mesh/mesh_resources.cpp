@@ -317,7 +317,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     }
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
-    // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
+    // Both tracing backends read raw position/index buffers for material evaluation.
     const bool swShadow = !rtSupported;
 
     bool uploaded = true;
@@ -468,7 +468,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         );
 
         createdMesh.blasBuildPending = rtSupported;
-        // SW-BVH covers no-RT fallback and hybrid transparent shadows on RT hardware.
+        // Keep software geometry pending until a software preparation route accepts its build.
         createdMesh.swBvhBuildPending = swShadow || rtSupported;
     }
 
@@ -497,7 +497,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         RuntimeMeshBufferUpload::BufferFlags attributeFlags;
         attributeFlags.canHaveRawViews = true;
-        // Hybrid tracing shares these attributes on AsyncCompute; keep shared-read input.
+        // Tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
             m_graphics,

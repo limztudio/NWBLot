@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
@@ -115,9 +116,8 @@ struct RtSceneBvhState{
     // handoff records its final state. This remains true across discarded frozen plans.
     bool m_tlasBackingFresh = false;
     bool m_tlasBackingStateHandoffPending = false;
-    // HW traces opaque shadows; SW adds transparent transmittance when needed.
+    // The selected tracing backend prepares transparency only when the scene requires it.
     bool m_sceneHasTransparentOccluder = false;
-    bool m_hybridTransparentShadowReady = false;
     bool m_prevWorldToClipValid = false;
     bool m_swCausticDispatchLogged = false;
     bool m_swCausticPipelineFailed = false;
@@ -453,6 +453,10 @@ public:
 
 private:
     void invalidateResources();
+
+
+private:
+    HardwareTransparentShadowState m_hardwareTransparentShadow;
 };
 
 

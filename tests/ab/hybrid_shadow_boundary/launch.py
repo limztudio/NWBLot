@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Build and run the natural hybrid-versus-opaque shadow-boundary A/B benchmark.
+"""Build and run the hardware transparent-versus-opaque shadow-boundary A/B benchmark.
 
 From the repository root:
 
     python -m launcher hybrid-shadow-boundary
 
-The launcher builds one fixed-yaw stress-scene executable and runs it twice: the normal hybrid-shadow arm and
-a test-owned opaque-only scene baseline that naturally uses hardware shadows without a transparent software tail.
+The launcher builds one fixed-yaw stress-scene executable and runs it twice: the normal hardware transparent-shadow arm and
+a test-owned opaque-only scene baseline that naturally uses hardware shadows without a transparent shadow tail.
+The legacy hybrid target and launcher identifiers remain stable for existing automation.
 It writes timestamped artifacts beneath ``.cozter/out/ab-results/hybrid-shadow-boundary``.
 Pass options for ``run.py`` after ``--``, for example:
 
@@ -60,7 +61,7 @@ def require_diagnostic_configuration(config: str) -> None:
     if config not in DIAGNOSTIC_CONFIGURATIONS:
         raise SystemExit(
             "hybrid-shadow-boundary requires --config dbg or --config opt because fin omits the warning "
-            "diagnostics used to reject transient hybrid-route degradation"
+            "diagnostics used to reject transient hardware-shadow route degradation"
         )
 
 
@@ -148,7 +149,7 @@ def run_runner(args: argparse.Namespace, paths: BoundaryPaths) -> int:
 def make_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     ROOT_LAUNCHER.add_build_options(parser)
-    parser.add_argument("--healthy-executable", type=Path, help="Override the healthy hybrid-shadow executable.")
+    parser.add_argument("--healthy-executable", type=Path, help="Override the healthy hardware transparent-shadow executable.")
     parser.add_argument(
         "--baseline-executable",
         dest="baseline_executable",

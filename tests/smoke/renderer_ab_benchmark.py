@@ -41,6 +41,8 @@ OBSERVATIONS = ("render.deferred_composite", "render.deferred_present")
 AVBOIT = ("render.avboit_clear", OCCUPANCY, "render.avboit_depth_warp",
     "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate")
 SHADOW_ROUTES = {
+    "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": "hardware",
+    # Frozen baselines retain their historical route identity; current scenes emit hardware.
     "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": "hybrid",
     "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable": "software",
 }
@@ -178,14 +180,16 @@ def transparent_multi_log(text, workload, require_hardware):
     if extents != {(workload.width, workload.height)}:
         raise SmokeFailure(f"render extent changed or differs from the workload: {sorted(extents)}")
     routes = [SHADOW_ROUTES[line] for line in lines if line in SHADOW_ROUTES]
-    if len(routes) != 1 or (require_hardware and routes != ["hybrid"]):
+    if len(routes) != 1 or (require_hardware and routes[0] not in ("hardware", "hybrid")):
         raise SmokeFailure(f"natural shadow route is missing, contradictory, or unsupported: {routes}")
+    if routes == ["hardware"]:
+        validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     return {**device_material_signature(text), "shadow_route": routes[0],
         "extent": list(extents.pop()), "timing_in_flight_ranges": 32}
 
 
 def caustic_log(text, workload, require_hardware):
-    policy = caustic.validate_log(text, dict(workload.environment_overrides), capture=False)
+    policy = caustic.validate_log(text, dict(workload.environment_overrides), capture=False, allow_legacy_shadow_route=True)
     return {**device_material_signature(text), **policy}
 
 
@@ -206,7 +210,7 @@ def soft_shadow_log(text, workload, require_hardware):
         raise SmokeFailure("one actual soft-shadow scene startup is required")
     route_prefix = "ShadowTimingProbe: natural shadow route "
     routes = [line[len(route_prefix):] for line in lines if line.startswith(route_prefix)]
-    if len(routes) != 1 or routes[0] not in ("hybrid", "software") or (require_hardware and routes != ["hybrid"]):
+    if len(routes) != 1 or routes[0] not in ("hardware", "hybrid", "software") or (require_hardware and routes[0] not in ("hardware", "hybrid")):
         raise SmokeFailure("natural shadow route is missing, contradictory, or unsupported")
     extents = re.findall(r"^ShadowTimingProbe: source extents angular=(\S+) radius=(\S+)$", text, re.MULTILINE)
     if len(extents) != 1:
@@ -227,6 +231,8 @@ def soft_shadow_log(text, workload, require_hardware):
     dimensions = {(int(width), int(height)) for width, height in DIMENSIONS.findall(text)}
     if dimensions != {(workload.width, workload.height)}:
         raise SmokeFailure("shadow render extent differs from the frozen workload")
+    if routes == ["hardware"]:
+        validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     return {**device_material_signature(text), "shadow_route": routes[0], "extent": [workload.width, workload.height],
         "source_extents": actual_extents, "caustic_emission": False, "indirect_response": "hemi-ambient",
         "timing_in_flight_ranges": 32}

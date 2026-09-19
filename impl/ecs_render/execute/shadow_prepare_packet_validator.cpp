@@ -46,14 +46,6 @@ void ShadowPreparePacketValidator::validate(
                 )
             )
     ;
-    // The hybrid tail keeps the old acceptance boundary in this packet.
-    outResult.hybridSoftwareTailMerged =
-        !pipeline.m_deferredShadowPrepareHybridSoftwareTailTask.valid()
-        || compiledPlan.tasksSharePacket(
-            pipeline.m_deferredShadowPrepareTask,
-            pipeline.m_deferredShadowPrepareHybridSoftwareTailTask
-        )
-    ;
     // Frozen transitions must share the build's submission for an atomic handoff.
     outResult.accelStructFinalizeMerged =
         !pipeline.m_deferredShadowPrepareAccelStructFinalizeTask.valid()

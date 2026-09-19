@@ -89,7 +89,7 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "raytrace/task_graph_shadow_prepare_tasks.h",
         {
             { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
-            { "RendererRayTracingSystem* raytracingSystem = nullptr;", 3u },
+            { "RendererRayTracingSystem* raytracingSystem = nullptr;", 2u },
             { "ShadowPreparationOutcome* outcome = nullptr;", 1u },
         }
     );

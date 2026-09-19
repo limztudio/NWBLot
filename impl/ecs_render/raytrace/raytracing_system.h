@@ -247,36 +247,15 @@ public:
         DeferredFrameTargets& targets,
         bool& outBackendReady,
         bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false,
         bool sceneTlasBuildGraphOwned = false,
         bool meshBlasBuildsGraphOwned = false,
         bool meshBlasGeometryBuildInputStatesGraphOwned = false,
         bool meshSwBvhBuildsGraphOwned = false,
-        bool preparedMeshSwBvhBuildsRecordedByGraph = false,
-        bool deferHybridSoftwareTail = false
-    );
-    // The hybrid HW-to-SW continuation stays in the accepting Shadow Preparation packet, but records after the frozen hardware build so its verified BLAS-input -> SW-BVH-input handoff can be graph-owned at the callback boundary.
-    // Direct and unsplit callers continue through recordPreflightShadowVisibilityResources without deferring this tail.
-    [[nodiscard]] bool recordPreflightHybridSoftwareTail(
-        Core::CommandList& commandList,
-        DeferredFrameTargets& targets,
-        bool hardwareBackendReady,
-        bool directMeshSwBvhBuildReady,
-        bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false,
-        bool meshSwBvhBuildsGraphOwned = false,
-        bool meshSwBvhInputStatesGraphOwned = false,
-        const void* hybridHardwareFallbackInstanceMaterialData = nullptr,
-        usize hybridHardwareFallbackInstanceMaterialByteCount = 0u,
-        const void* hybridHardwareFallbackInstanceData = nullptr,
-        usize hybridHardwareFallbackInstanceByteCount = 0u,
-        const void* hybridHardwareFallbackMaterialTypedData = nullptr,
-        usize hybridHardwareFallbackMaterialTypedByteCount = 0u
+        bool preparedMeshSwBvhBuildsRecordedByGraph = false
     );
     [[nodiscard]] bool shadowVisibilityResourcesPreflighted()const noexcept;
     [[nodiscard]] bool shadowVisibilityHardwareSupported()const noexcept;
     [[nodiscard]] bool shadowVisibilitySoftwareResourcesPreflighted()const noexcept;
-    [[nodiscard]] bool hybridShadowVisibilityResourcesPreflighted()const noexcept;
     void discardPreflightShadowVisibilityResources()noexcept;
     // These are retained handles for the current frozen trace plan. The graph imports each physical buffer once and uses the shared IDs for every packet that manually stages it.
     [[nodiscard]] bool freezePreparedShadowTraceGeometryBuffers(Core::Alloc::ScratchArena& scratchArena);
@@ -325,23 +304,6 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob,
         Core::GpuUploadBlobId& outMaterialTypedBlob
     )const;
-    // A healthy hybrid preflight retains an immutable hardware context before the final software context replaces it. The optional tail may need that exact hardware snapshot again, so retain three graph-owned blobs without allowing a late recorder to re-read the renderer/material stream. A healthy hybrid tail requires all three.
-    [[nodiscard]] bool retainPreparedHybridHardwareMaterialContextFallbackUploads(
-        Core::GpuTaskGraph& graph,
-        Core::GpuUploadBlobId& outInstanceMaterialBlob,
-        Core::GpuUploadBlobId& outInstanceBlob,
-        Core::GpuUploadBlobId& outMaterialTypedBlob
-    )const;
-    // Records the retained hardware fallback against graph-owned immutable bytes. Validation failure rejects the merged preparation packet so the next frame can preflight a fresh pair of contexts.
-    [[nodiscard]] bool recordPreparedHybridHardwareMaterialContextFallback(
-        Core::CommandList& commandList,
-        const void* instanceMaterialData,
-        usize instanceMaterialByteCount,
-        const void* instanceData,
-        usize instanceByteCount,
-        const void* materialTypedData,
-        usize materialTypedByteCount
-    );
     void confirmPreparedShadowMaterialContextUploads()noexcept;
     // The software scene hierarchy and its leaf instances share topology and leaf indices, so retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
     [[nodiscard]] bool retainPreparedSceneBvhUploads(
@@ -350,20 +312,19 @@ public:
         Core::GpuUploadBlobId& outInstanceBlob
     )const;
     void confirmPreparedSceneBvhUploads()noexcept;
-    // Opaque and healthy hybrid hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts; a hybrid record miss retries direct TLAS work.
+    // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
     // Only a newly allocated backing generation has a descriptor-native source. Every graph import uses this current-generation query so direct and frozen paths agree; retained generations deliberately remain Unknown until the accepted Shadow Preparation state handoff supplies their native state.
     [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
     // Direct fallback recording cannot publish native state until its Shadow Preparation packet accepts.
     void confirmAcceptedShadowPrepareAccelStructStateHandoffs()noexcept;
-    // Opaque and independent hybrid hardware BLAS build/refit choices retain their selected handles through recording. Hybrid mismatch falls back to the established direct loop; only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
+    // Hardware BLAS build/refit choices retain their selected handles through recording. Only Shadow Preparation acceptance publishes a frozen plan's mesh-cache progress.
     [[nodiscard]] bool preparedMeshBlasBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds();
-    // Software-only frames and the independent per-mesh portion of hybrid frames freeze selected build/refit work against its shared scratch generation. Hybrid scene/material snapshots remain independently graph-owned while their optional software tail preserves its narrow direct compatibility fallback.
+    // Software frames freeze selected build/refit work against its shared scratch generation; scene and material snapshots remain independently graph-owned.
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
-    [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence; any miss rejects the shared packet so the existing acceptance callback cannot publish partial topology.
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(
@@ -523,12 +484,11 @@ public:
         f32 decayFactor,
         bool graphEntryStatesOwned = false
     );
-    // Hybrid mode folds software transparent transmittance onto hardware opaque visibility. The shared deferred graph can supply the traversal entry states; direct compatibility callers retain their native setup.
+    // Software visibility includes opaque shadows and transparent transmittance. Graph callers supply traversal entry states; direct callers retain their native setup.
     [[nodiscard]] bool renderGpuBvhShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        bool multiplyOntoOpaque = false,
         bool graphEntryStatesOwned = false,
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
@@ -828,7 +788,6 @@ public:
     // The graph schedules the small diagnostic copy as a late Transfer-preferred tail and publishes its token.
     [[nodiscard]] bool shouldCaptureSurfelCountReadback()const noexcept;
     void markSurfelCountReadbackScheduled()noexcept;
-    [[nodiscard]] bool hybridTransparentShadowReady()const noexcept;
     [[nodiscard]] bool softTransparentShadowReady()const noexcept;
     // Commit soft-shadow history only after ordered submission accepts.
     void finalizeSoftShadowTemporalHistory(DeferredFrameTargets& targets);
@@ -890,9 +849,6 @@ private:
         ShadowMaterialSampledTextureCollector& collector
     );
     void clearPreparedShadowTraceMaterialSampledTextures()noexcept;
-    // A healthy hybrid preflight gathers the HW context before the final SW context replaces it. Retain that exact immutable HW payload so an optional SW-tail miss can restore opaque consumers without a recording-time renderer/material upload; stale sources reject the merged packet so its discard path requests fresh preflight.
-    [[nodiscard]] bool capturePreparedHybridHardwareMaterialContextFallback();
-    void clearPreparedHybridHardwareMaterialContextFallback()noexcept;
     [[nodiscard]] bool capturePreparedSceneBvh(
         bool staticScene,
         u64 staticSceneHash,
@@ -920,7 +876,7 @@ private:
         usize meshCount,
         u32 instanceCount
     );
-    // Preflight leaves the exact software descriptor tables populated for pure and hybrid recording. The frozen traversal validates those tables and their retained resource identities without republishing mutable state.
+    // Preflight leaves the exact software descriptor tables populated. The frozen traversal validates those tables and retained resource identities without republishing mutable state.
     [[nodiscard]] bool recordPreparedSceneSwBvhTraversal();
     void clearPreparedSceneSwBvhTraversal()noexcept;
     [[nodiscard]] bool capturePreparedSceneTlasBuild(
@@ -1042,6 +998,17 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
+
+    [[nodiscard]] bool prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets);
+    void releaseHardwareTransparentShadowResources();
+    [[nodiscard]] bool hardwareTransparentShadowReady()const noexcept;
+    void dispatchHardwareTransparentShadow(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
+        u32 frameIndex,
+        bool graphEntryStatesOwned
+    );
 
     // Resolve a contiguous shadow-slot range in one heap-selected dispatch.
     void dispatchSoftShadowResolve(
@@ -1258,26 +1225,6 @@ private:
     bool m_preparedShadowMaterialContextReady = false;
     bool m_preparedShadowMaterialContextUploadRequired = false;
     // The transient HW fallback is separate from the final SW graph upload. It retains only the material-context payload because the preceding Shadow Preparation work has already recorded the frozen HW TLAS/BLAS plan.
-    Vector<u8, Core::Alloc::GlobalArena> m_preparedHybridHardwareFallbackBytes;
-    Core::BufferHandle m_preparedHybridHardwareFallbackInstanceMaterialBuffer;
-    Core::BufferHandle m_preparedHybridHardwareFallbackInstanceBuffer;
-    Core::BufferHandle m_preparedHybridHardwareFallbackMaterialTypedBuffer;
-    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle;
-    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackInstanceHeapHandle;
-    Core::GpuDescriptorHandle m_preparedHybridHardwareFallbackMaterialTypedHeapHandle;
-    usize m_preparedHybridHardwareFallbackInstanceMaterialByteCount = 0u;
-    usize m_preparedHybridHardwareFallbackInstanceByteCount = 0u;
-    usize m_preparedHybridHardwareFallbackMaterialTypedByteCount = 0u;
-    usize m_preparedHybridHardwareFallbackInstanceMaterialCapacity = 0u;
-    usize m_preparedHybridHardwareFallbackInstanceCapacity = 0u;
-    usize m_preparedHybridHardwareFallbackMaterialTypedCapacity = 0u;
-    u64 m_preparedHybridHardwareFallbackMaterialContextHash = 0u;
-    u64 m_preparedHybridHardwareFallbackRendererMutationVersion = 0u;
-    u64 m_preparedHybridHardwareFallbackTransformMutationVersion = 0u;
-    u64 m_preparedHybridHardwareFallbackMaterialMutationVersion = 0u;
-    bool m_preparedHybridHardwareFallbackStatic = false;
-    bool m_preparedHybridHardwareFallbackReady = false;
-    bool m_preparedHybridHardwareFallbackRecorded = false;
     // A fresh CPU-built software scene BVH retains node and leaf-instance bytes together because each node's leaf range indexes that exact instance stream. An accepted static-cache reuse retains only the same immutable storage identity and hash; it remains traversal-ready without manufacturing another graph upload.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
@@ -1293,7 +1240,7 @@ private:
     bool m_preparedSceneBvhStatic = false;
     bool m_preparedSceneBvhReady = false;
     bool m_preparedSceneBvhUploadRequired = false;
-    // Fresh graph uploads and accepted static-cache reuse both freeze the matching traversal table so healthy hybrid recording never rebuilds CPU scene data. ECS mutation versions reject stale frozen plans.
+    // Fresh graph uploads and accepted static-cache reuse both freeze the matching traversal table. Recording never rebuilds CPU scene data; ECS mutation versions reject stale frozen plans.
     PreparedSceneSwBvhMeshVector m_preparedSceneSwBvhMeshes;
     u32 m_preparedSceneSwBvhInstanceCount = 0u;
     u64 m_preparedSceneSwBvhRendererMutationVersion = 0u;
@@ -1327,9 +1274,7 @@ private:
     bool m_shadowVisibilityHardwareSupported = false;
     // Recording may only touch allocations selected before the shared graph is compiled. These flags distinguish a usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
     bool m_shadowVisibilityTraceResourcesPreflighted = false;
-    bool m_shadowVisibilityHybridResourcesPreflighted = false;
     bool m_shadowVisibilityBackendPipelinePreflighted = false;
-    bool m_shadowVisibilityHybridPipelinePreflighted = false;
 };
 
 

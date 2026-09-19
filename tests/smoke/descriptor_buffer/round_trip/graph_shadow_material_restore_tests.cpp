@@ -22,12 +22,11 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Test-owned analogue of the hybrid shadow tail's three-buffer restore transaction. The payload contains both the
-// graph-owned source blobs and an independently copied declaration-time snapshot, so every stream is validated
-// before the first task-owned transition or write. Compiler-owned prologue barriers may establish the task's
-// declared state before this callback. This keeps failure injection out of renderer production code while exercising
-// the same immutable-blob, packet-discard, final-state, and acceptance machinery.
-struct GraphOwnedHybridHardwareMaterialContextRestoreTask{
+// Test-owned three-buffer upload transaction. Each graph-owned source blob is checked against an independent
+// declaration-time snapshot before the first task-owned transition or write. Compiler-owned prologue barriers may
+// establish the declared state before this callback. This exercises immutable uploads, packet discard, final-state
+// handoff, and acceptance without a renderer-specific failure control.
+struct GraphOwnedBufferUploadSnapshotTask{
     static constexpr usize s_StreamCount = 3u;
     static constexpr usize s_WordCount = 4u;
 
@@ -376,21 +375,20 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
 }
 
 
-// A healthy hybrid tail may overwrite its software material context with three independently retained hardware
-// streams. This test-owned packet proves the immutable triple records as one acceptance unit, restores exact bytes,
-// and leaves every destination shader-readable without exposing a renderer-only test control.
-TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWritesCompleteImmutableTriple){
+// Three independently retained upload streams record as one acceptance unit. Mutating the original CPU storage
+// after declaration must preserve the copied bytes, and acceptance leaves every destination shader-readable.
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadSnapshotWritesCompleteImmutableTriple){
     auto& device = DescriptorBufferRoundTripTest::device();
-    static constexpr u32 s_ExpectedWords[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount]
-        [GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount] = {
+    static constexpr u32 s_ExpectedWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
+        [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {
         { 0x13c0ffeeu, 0x4a7b12d3u, 0x9e3779b9u, 0xfeedfaceu },
         { 0x0badf00du, 0x7f4a7c15u, 0x6d2b79f5u, 0xd1cebeefu },
         { 0x58c4a931u, 0xa17ef20du, 0x349bc862u, 0xc001d00du },
     };
-    u32 sourceWords[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount]
-        [GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount] = {};
+    u32 sourceWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
+        [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {};
     NWB_MEMCPY(sourceWords, sizeof(sourceWords), s_ExpectedWords, sizeof(s_ExpectedWords));
-    BufferHandle destinations[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount];
+    BufferHandle destinations[GraphOwnedBufferUploadSnapshotTask::s_StreamCount];
     for(BufferHandle& destination : destinations){
         destination = device.createBuffer(
             BufferDesc()
@@ -411,19 +409,19 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     u32 discardedCount = 0u;
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const Name resourceIdentities[] = {
-        Name("tests/descriptor_buffer/hybrid_restore_instance_materials"),
-        Name("tests/descriptor_buffer/hybrid_restore_instances"),
-        Name("tests/descriptor_buffer/hybrid_restore_material_typed"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_stream_0"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_stream_1"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_stream_2"),
     };
     const AStringView resourceMarkers[] = {
-        "Hybrid Restore Instance Materials",
-        "Hybrid Restore Instances",
-        "Hybrid Restore Typed Materials",
+        "Buffer Upload Snapshot Stream 0",
+        "Buffer Upload Snapshot Stream 1",
+        "Buffer Upload Snapshot Stream 2",
     };
-    GpuGraphResourceId destinationResources[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount];
-    GpuUploadBlobId sourceBlobs[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount];
-    GpuTaskResourceUse restoreUses[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount] = {};
-    GraphOwnedHybridHardwareMaterialContextRestoreTask::Payload restorePayload;
+    GpuGraphResourceId destinationResources[GraphOwnedBufferUploadSnapshotTask::s_StreamCount];
+    GpuUploadBlobId sourceBlobs[GraphOwnedBufferUploadSnapshotTask::s_StreamCount];
+    GpuTaskResourceUse uploadUses[GraphOwnedBufferUploadSnapshotTask::s_StreamCount] = {};
+    GraphOwnedBufferUploadSnapshotTask::Payload uploadPayload;
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         destinationResources[streamIndex] = graph.importBuffer(
             destinations[streamIndex],
@@ -440,17 +438,17 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
         );
         ASSERT_TRUE(destinationResources[streamIndex].valid());
         ASSERT_TRUE(sourceBlobs[streamIndex].valid());
-        restoreUses[streamIndex] = GpuTaskResourceUse{
+        uploadUses[streamIndex] = GpuTaskResourceUse{
             .resource = destinationResources[streamIndex],
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Write,
         };
-        restorePayload.streams[streamIndex].destination = destinationResources[streamIndex];
-        restorePayload.streams[streamIndex].source = sourceBlobs[streamIndex];
+        uploadPayload.streams[streamIndex].destination = destinationResources[streamIndex];
+        uploadPayload.streams[streamIndex].source = sourceBlobs[streamIndex];
         NWB_MEMCPY(
-            restorePayload.streams[streamIndex].expectedWords,
-            sizeof(restorePayload.streams[streamIndex].expectedWords),
+            uploadPayload.streams[streamIndex].expectedWords,
+            sizeof(uploadPayload.streams[streamIndex].expectedWords),
             sourceWords[streamIndex],
             sizeof(sourceWords[streamIndex])
         );
@@ -458,25 +456,25 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     {
         const GpuTaskGraph::DeclarationReadView declarations(graph);
 
-        ASSERT_EQ(declarations.uploadBlobCount(), GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount);
+        ASSERT_EQ(declarations.uploadBlobCount(), GraphOwnedBufferUploadSnapshotTask::s_StreamCount);
     }
 
-    restorePayload.recordAttempted = &recordAttempted;
-    restorePayload.allBlobsMatched = &allBlobsMatched;
-    restorePayload.matchedBlobCount = &matchedBlobCount;
-    restorePayload.transitionAttemptCount = &transitionAttemptCount;
-    restorePayload.writeAttemptCount = &writeAttemptCount;
-    restorePayload.acceptedToken = &acceptedToken;
-    restorePayload.discardedCount = &discardedCount;
+    uploadPayload.recordAttempted = &recordAttempted;
+    uploadPayload.allBlobsMatched = &allBlobsMatched;
+    uploadPayload.matchedBlobCount = &matchedBlobCount;
+    uploadPayload.transitionAttemptCount = &transitionAttemptCount;
+    uploadPayload.writeAttemptCount = &writeAttemptCount;
+    uploadPayload.acceptedToken = &acceptedToken;
+    uploadPayload.discardedCount = &discardedCount;
 
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Medium;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    GpuTaskDesc restoreDesc;
-    restoreDesc
-        .setIdentity(Name("tests/descriptor_buffer/hybrid_hardware_material_context_restore"))
-        .setMarkerLabel("Hybrid Hardware Material Context Restore")
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/descriptor_buffer/buffer_upload_snapshot"))
+        .setMarkerLabel("Buffer Upload Snapshot")
         .setQueue(GpuQueueRequest{
             static_cast<GpuQueueCapability::Mask>(
                 static_cast<u8>(GpuQueueCapability::Graphics)
@@ -487,13 +485,13 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
             false,
         })
         .setScheduling(scheduling)
-        .setResourceUses(restoreUses, LengthOf(restoreUses))
+        .setResourceUses(uploadUses, LengthOf(uploadUses))
     ;
-    const GpuTaskId restoreTask = graph.addTask<GraphOwnedHybridHardwareMaterialContextRestoreTask>(
-        restoreDesc,
-        Move(restorePayload)
+    const GpuTaskId uploadTask = graph.addTask<GraphOwnedBufferUploadSnapshotTask>(
+        uploadDesc,
+        Move(uploadPayload)
     );
-    ASSERT_TRUE(restoreTask.valid());
+    ASSERT_TRUE(uploadTask.valid());
     NWB_MEMSET(sourceWords, 0, sizeof(sourceWords));
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
@@ -502,14 +500,14 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
     GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/hybrid_restore_success_scratch"));
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/buffer_upload_snapshot_success_scratch"));
     const GpuTaskGraphCompiler compiler;
     const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
     ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    const GpuSubmissionPacketId packet = views.compiled.packetForTask(restoreTask);
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(uploadTask);
     ASSERT_TRUE(packet.valid());
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -522,15 +520,15 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     );
     EXPECT_TRUE(recordAttempted);
     EXPECT_TRUE(allBlobsMatched);
-    EXPECT_EQ(matchedBlobCount, GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount);
-    EXPECT_EQ(transitionAttemptCount, GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount * 2u);
-    EXPECT_EQ(writeAttemptCount, GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount);
+    EXPECT_EQ(matchedBlobCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount);
+    EXPECT_EQ(transitionAttemptCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount * 2u);
+    EXPECT_EQ(writeAttemptCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount);
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 0u);
     ASSERT_TRUE(recorded);
 
     CommandListResourceStateHandoff finalStateStorage(DescriptorBufferRoundTripTest::arena());
-    ASSERT_TRUE(recordedGraph.copyTaskFinalStateSeed(compiledGraph, views.compiled, restoreTask, finalStateStorage));
+    ASSERT_TRUE(recordedGraph.copyTaskFinalStateSeed(compiledGraph, views.compiled, uploadTask, finalStateStorage));
     const CommandListResourceStateHandoff* const finalState = &finalStateStorage;
     const CommandListHandle stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
@@ -565,13 +563,13 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
     ASSERT_TRUE(device.waitForIdle());
 
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
-        const u32* const restoredWords = static_cast<const u32*>(
+        const u32* const uploadedWords = static_cast<const u32*>(
             device.mapBuffer(*destinations[streamIndex], CpuAccessMode::Read)
         );
-        ASSERT_NE(restoredWords, nullptr);
+        ASSERT_NE(uploadedWords, nullptr);
         EXPECT_EQ(
             NWB_MEMCMP(
-                restoredWords,
+                uploadedWords,
                 s_ExpectedWords[streamIndex],
                 sizeof(s_ExpectedWords[streamIndex])
             ),
@@ -583,27 +581,27 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreWrites
 
 
 // A same-sized mutation in only the third retained stream must reject before any task-owned transition or write. The
-// packet discard publishes no token or final-state handoff, and all three prior software values remain byte-for-byte
+// packet discard publishes no token or final-state handoff, and all three prior destination values remain byte-for-byte
 // intact on the device.
-TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreRejectsMismatchedThirdBlobBeforeWrites){
+TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadSnapshotRejectsMismatchedThirdBlobBeforeWrites){
     auto& device = DescriptorBufferRoundTripTest::device();
-    static constexpr u32 s_SoftwareWords[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount]
-        [GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount] = {
+    static constexpr u32 s_InitialWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
+        [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {
         { 0x510f7a31u, 0x82d4c6e9u, 0x17b39f02u, 0xea6c45d8u },
         { 0x6ab2d143u, 0x934ef807u, 0x25c719beu, 0xf10d68a4u },
         { 0x7ce34195u, 0xa82f0db6u, 0x39d574e1u, 0xc60ab827u },
     };
-    static constexpr u32 s_HardwareWords[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount]
-        [GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount] = {
+    static constexpr u32 s_ExpectedWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
+        [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {
         { 0x13c0ffeeu, 0x4a7b12d3u, 0x9e3779b9u, 0xfeedfaceu },
         { 0x0badf00du, 0x7f4a7c15u, 0x6d2b79f5u, 0xd1cebeefu },
         { 0x58c4a931u, 0xa17ef20du, 0x349bc862u, 0xc001d00du },
     };
-    BufferHandle destinations[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount];
+    BufferHandle destinations[GraphOwnedBufferUploadSnapshotTask::s_StreamCount];
     for(BufferHandle& destination : destinations){
         destination = device.createBuffer(
             BufferDesc()
-                .setByteSize(sizeof(s_SoftwareWords[0u]))
+                .setByteSize(sizeof(s_InitialWords[0u]))
                 .setInitialState(ResourceStates::Common)
                 .setQueueSharing(ResourceQueueSharing::Exclusive)
                 .setCpuAccess(CpuAccessMode::Read)
@@ -620,8 +618,8 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         ASSERT_TRUE(seedCommandList->tryWriteBuffer(
             *destinations[streamIndex],
-            s_SoftwareWords[streamIndex],
-            sizeof(s_SoftwareWords[streamIndex])
+            s_InitialWords[streamIndex],
+            sizeof(s_InitialWords[streamIndex])
         ));
     }
     for(const BufferHandle& destination : destinations)
@@ -638,10 +636,10 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     ASSERT_TRUE(seedToken.valid());
     ASSERT_TRUE(device.waitForIdle());
 
-    u32 sourceWords[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount]
-        [GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount] = {};
-    NWB_MEMCPY(sourceWords, sizeof(sourceWords), s_HardwareWords, sizeof(s_HardwareWords));
-    sourceWords[2u][GraphOwnedHybridHardwareMaterialContextRestoreTask::s_WordCount - 1u] ^= 0xffffffffu;
+    u32 sourceWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
+        [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {};
+    NWB_MEMCPY(sourceWords, sizeof(sourceWords), s_ExpectedWords, sizeof(s_ExpectedWords));
+    sourceWords[2u][GraphOwnedBufferUploadSnapshotTask::s_WordCount - 1u] ^= 0xffffffffu;
 
     bool recordAttempted = false;
     bool allBlobsMatched = false;
@@ -652,17 +650,17 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     u32 discardedCount = 0u;
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const Name resourceIdentities[] = {
-        Name("tests/descriptor_buffer/hybrid_restore_rejected_instance_materials"),
-        Name("tests/descriptor_buffer/hybrid_restore_rejected_instances"),
-        Name("tests/descriptor_buffer/hybrid_restore_rejected_material_typed"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_rejected_stream_0"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_rejected_stream_1"),
+        Name("tests/descriptor_buffer/buffer_upload_snapshot_rejected_stream_2"),
     };
     const AStringView resourceMarkers[] = {
-        "Rejected Hybrid Restore Instance Materials",
-        "Rejected Hybrid Restore Instances",
-        "Rejected Hybrid Restore Typed Materials",
+        "Rejected Buffer Upload Snapshot Stream 0",
+        "Rejected Buffer Upload Snapshot Stream 1",
+        "Rejected Buffer Upload Snapshot Stream 2",
     };
-    GpuTaskResourceUse restoreUses[GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount] = {};
-    GraphOwnedHybridHardwareMaterialContextRestoreTask::Payload restorePayload;
+    GpuTaskResourceUse uploadUses[GraphOwnedBufferUploadSnapshotTask::s_StreamCount] = {};
+    GraphOwnedBufferUploadSnapshotTask::Payload uploadPayload;
     for(usize streamIndex = 0u; streamIndex < LengthOf(destinations); ++streamIndex){
         const GpuGraphResourceId destinationResource = graph.importBuffer(
             destinations[streamIndex],
@@ -679,38 +677,38 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
         );
         ASSERT_TRUE(destinationResource.valid());
         ASSERT_TRUE(sourceBlob.valid());
-        restoreUses[streamIndex] = GpuTaskResourceUse{
+        uploadUses[streamIndex] = GpuTaskResourceUse{
             .resource = destinationResource,
             .range = {},
             .requiredState = ResourceStates::ShaderResource,
             .access = GpuTaskResourceAccess::Write,
         };
-        restorePayload.streams[streamIndex].destination = destinationResource;
-        restorePayload.streams[streamIndex].source = sourceBlob;
+        uploadPayload.streams[streamIndex].destination = destinationResource;
+        uploadPayload.streams[streamIndex].source = sourceBlob;
         NWB_MEMCPY(
-            restorePayload.streams[streamIndex].expectedWords,
-            sizeof(restorePayload.streams[streamIndex].expectedWords),
-            s_HardwareWords[streamIndex],
-            sizeof(s_HardwareWords[streamIndex])
+            uploadPayload.streams[streamIndex].expectedWords,
+            sizeof(uploadPayload.streams[streamIndex].expectedWords),
+            s_ExpectedWords[streamIndex],
+            sizeof(s_ExpectedWords[streamIndex])
         );
     }
 
-    restorePayload.recordAttempted = &recordAttempted;
-    restorePayload.allBlobsMatched = &allBlobsMatched;
-    restorePayload.matchedBlobCount = &matchedBlobCount;
-    restorePayload.transitionAttemptCount = &transitionAttemptCount;
-    restorePayload.writeAttemptCount = &writeAttemptCount;
-    restorePayload.acceptedToken = &acceptedToken;
-    restorePayload.discardedCount = &discardedCount;
+    uploadPayload.recordAttempted = &recordAttempted;
+    uploadPayload.allBlobsMatched = &allBlobsMatched;
+    uploadPayload.matchedBlobCount = &matchedBlobCount;
+    uploadPayload.transitionAttemptCount = &transitionAttemptCount;
+    uploadPayload.writeAttemptCount = &writeAttemptCount;
+    uploadPayload.acceptedToken = &acceptedToken;
+    uploadPayload.discardedCount = &discardedCount;
 
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Medium;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    GpuTaskDesc restoreDesc;
-    restoreDesc
-        .setIdentity(Name("tests/descriptor_buffer/hybrid_hardware_material_context_restore_rejected"))
-        .setMarkerLabel("Rejected Hybrid Hardware Material Context Restore")
+    GpuTaskDesc uploadDesc;
+    uploadDesc
+        .setIdentity(Name("tests/descriptor_buffer/buffer_upload_snapshot_rejected"))
+        .setMarkerLabel("Rejected Buffer Upload Snapshot")
         .setQueue(GpuQueueRequest{
             static_cast<GpuQueueCapability::Mask>(
                 static_cast<u8>(GpuQueueCapability::Graphics)
@@ -721,13 +719,13 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
             false,
         })
         .setScheduling(scheduling)
-        .setResourceUses(restoreUses, LengthOf(restoreUses))
+        .setResourceUses(uploadUses, LengthOf(uploadUses))
     ;
-    const GpuTaskId restoreTask = graph.addTask<GraphOwnedHybridHardwareMaterialContextRestoreTask>(
-        restoreDesc,
-        Move(restorePayload)
+    const GpuTaskId uploadTask = graph.addTask<GraphOwnedBufferUploadSnapshotTask>(
+        uploadDesc,
+        Move(uploadPayload)
     );
-    ASSERT_TRUE(restoreTask.valid());
+    ASSERT_TRUE(uploadTask.valid());
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     ASSERT_NE(topology.queues, nullptr);
@@ -735,14 +733,14 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     GpuTaskGraphAnalysis analysis(DescriptorBufferRoundTripTest::arena());
     GpuTaskGraphQueueAssignments assignments(DescriptorBufferRoundTripTest::arena());
     GpuCompiledGraph compiledGraph(DescriptorBufferRoundTripTest::arena());
-    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/hybrid_restore_rejected_scratch"));
+    Alloc::ScratchArena scratchArena(Name("tests/descriptor_buffer/buffer_upload_snapshot_rejected_scratch"));
     const GpuTaskGraphCompiler compiler;
     const GpuTaskGraph::DeclarationReadView compilationDeclarations(graph);
     ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    const GpuSubmissionPacketId packet = views.compiled.packetForTask(restoreTask);
+    const GpuSubmissionPacketId packet = views.compiled.packetForTask(uploadTask);
     ASSERT_TRUE(packet.valid());
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -755,13 +753,13 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
     ));
     EXPECT_TRUE(recordAttempted);
     EXPECT_FALSE(allBlobsMatched);
-    EXPECT_EQ(matchedBlobCount, GraphOwnedHybridHardwareMaterialContextRestoreTask::s_StreamCount - 1u);
+    EXPECT_EQ(matchedBlobCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount - 1u);
     EXPECT_EQ(transitionAttemptCount, 0u);
     EXPECT_EQ(writeAttemptCount, 0u);
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 1u);
     EXPECT_FALSE(recordedGraph.packetSnapshot(packet).has_value());
-    EXPECT_FALSE(recordedGraph.hasTaskFinalStateSeed(compiledGraph, views.compiled, restoreTask));
+    EXPECT_FALSE(recordedGraph.hasTaskFinalStateSeed(compiledGraph, views.compiled, uploadTask));
     const u64 failedRecordingAttemptGeneration = recordedGraph.recordingAttemptGeneration();
     EXPECT_NE(failedRecordingAttemptGeneration, 0u);
 
@@ -782,7 +780,7 @@ TEST_F(DescriptorBufferRoundTripTest, HybridHardwareMaterialContextRestoreReject
         );
         ASSERT_NE(retainedWords, nullptr);
         EXPECT_EQ(
-            NWB_MEMCMP(retainedWords, s_SoftwareWords[streamIndex], sizeof(s_SoftwareWords[streamIndex])),
+            NWB_MEMCMP(retainedWords, s_InitialWords[streamIndex], sizeof(s_InitialWords[streamIndex])),
             0
         );
         device.unmapBuffer(*destinations[streamIndex]);

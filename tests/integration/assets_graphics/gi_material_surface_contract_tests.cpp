@@ -166,6 +166,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     AString rayTracingSystemHeader;
     AString swBvhSource;
     AString swShadowTraceSource;
+    AString hwShadowTraceSource;
     AString swCausticSource;
     AString hwCausticSource;
     AString swGiTraceSource;
@@ -180,6 +181,9 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingSystemHeader));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "sw_shadow_traverse.slangi", swShadowTraceSource));
+    ASSERT_TRUE(ReadTextFile(
+        repoRoot / "impl" / "assets" / "graphics" / "shadow" / "hardware_transparent_evaluate.slangi", hwShadowTraceSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_sw_cs.slang", swCausticSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "caustic" / "caustic_photon_hw_chit.slang", hwCausticSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "gi" / "gi_sw_trace.slangi", swGiTraceSource));
@@ -200,6 +204,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     const AStringView rayTracingSystemHeaderView(rayTracingSystemHeader.data(), rayTracingSystemHeader.size());
     const AStringView swBvh(swBvhSource.data(), swBvhSource.size());
     const AStringView swShadowTrace(swShadowTraceSource.data(), swShadowTraceSource.size());
+    const AStringView hwShadowTrace(hwShadowTraceSource.data(), hwShadowTraceSource.size());
     const AStringView swCaustic(swCausticSource.data(), swCausticSource.size());
     const AStringView hwCaustic(hwCausticSource.data(), hwCausticSource.size());
     const AStringView swGiTrace(swGiTraceSource.data(), swGiTraceSource.size());
@@ -211,6 +216,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(swBvh, "materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max"));
 
     EXPECT_TRUE(ContainsText(swShadowTrace, "nwbShadowDispatchSurface"));
+    EXPECT_TRUE(ContainsText(hwShadowTrace, "nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(swCaustic, "nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(hwCaustic, "nwbShadowDispatchSurface"));
     EXPECT_TRUE(ContainsText(swGiTrace, "nwbShadowDispatchSurface"));
@@ -252,10 +258,13 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
         "return;"
     ));
     EXPECT_TRUE(ContainsText(
-        rayTracingSystem,
-        "frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet"
+        swBvh,
+        "HW shadow material context changed after graph preflight; rejecting frozen upload batch"
     ));
-    EXPECT_FALSE(ContainsText(rayTracingSystem, "hybrid hardware material-context fallback retried directly"));
+    EXPECT_TRUE(ContainsText(
+        swBvh,
+        "SW shadow material context changed after graph preflight; rejecting frozen upload batch"
+    ));
 }
 
 

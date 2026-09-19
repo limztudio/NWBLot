@@ -1,0 +1,115 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "hardware_transparent_binding_slots.h"
+#include "shadow_heap_resources.slangi"
+#include "../raytrace/optical_scene_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbHardwareTransparentPushConstants{
+    uint width;
+    uint height;
+    uint frameIndex;
+    uint lightSlot;
+    uint sampleIndex;
+    uint sampleCount;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint crossingsHeapSlot;
+    uint overflowListHeapSlot;
+    uint overflowArgsHeapSlot;
+    uint outputStorageSlot;
+};
+
+struct NwbHardwareTransparentCrossing{
+    float distance;
+    uint instance;
+    uint primitive;
+    float2 barycentrics;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[vk::push_constant]]
+ConstantBuffer<NwbHardwareTransparentPushConstants> g_NwbHardwareTransparentPush;
+
+#define g_NwbHardwareTransparentContext NwbHeapShadowMaterialContextSlots(g_NwbHardwareTransparentPush.materialContextSlotsHeapSlot)
+#define g_NwbHardwareTransparentCrossings NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.crossingsHeapSlot)
+#define g_NwbHardwareTransparentOverflowList NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowListHeapSlot)
+#define g_NwbHardwareTransparentOverflowArgs NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowArgsHeapSlot)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Each word occupies a complete pixel plane, so neighboring invocations write consecutive words.
+uint nwbHwShadowCrossingAddress(const uint pixel, const uint rayCount, const uint slot, const uint word){
+    return (1u + slot * NWB_HW_TRANSPARENT_CROSSING_WORDS + word) * rayCount + pixel;
+}
+
+void nwbHwShadowStoreCrossing(
+    const uint pixel,
+    const uint rayCount,
+    const uint slot,
+    const NwbHardwareTransparentCrossing crossing){
+    const uint base = nwbHwShadowCrossingAddress(pixel, rayCount, slot, 0u);
+    g_NwbHardwareTransparentCrossings[base] = asuint(crossing.distance);
+    g_NwbHardwareTransparentCrossings[base + rayCount] = crossing.instance;
+    g_NwbHardwareTransparentCrossings[base + rayCount * 2u] = crossing.primitive;
+    g_NwbHardwareTransparentCrossings[base + rayCount * 3u] = asuint(crossing.barycentrics.x);
+    g_NwbHardwareTransparentCrossings[base + rayCount * 4u] = asuint(crossing.barycentrics.y);
+}
+
+NwbHardwareTransparentCrossing nwbHwShadowLoadCrossing(const uint pixel, const uint rayCount, const uint slot){
+    const uint base = nwbHwShadowCrossingAddress(pixel, rayCount, slot, 0u);
+    NwbHardwareTransparentCrossing crossing;
+    crossing.distance = asfloat(g_NwbHardwareTransparentCrossings[base]);
+    crossing.instance = g_NwbHardwareTransparentCrossings[base + rayCount];
+    crossing.primitive = g_NwbHardwareTransparentCrossings[base + rayCount * 2u];
+    crossing.barycentrics = asfloat(uint2(
+        g_NwbHardwareTransparentCrossings[base + rayCount * 3u],
+        g_NwbHardwareTransparentCrossings[base + rayCount * 4u]
+    ));
+    return crossing;
+}
+
+bool nwbHwShadowCrossingBefore(const NwbHardwareTransparentCrossing lhs, const NwbHardwareTransparentCrossing rhs){
+    if(lhs.instance != rhs.instance)
+        return lhs.instance < rhs.instance;
+    if(lhs.distance != rhs.distance)
+        return lhs.distance < rhs.distance;
+    return lhs.primitive < rhs.primitive;
+}
+
+void nwbHwShadowAppendOverflow(const uint pixel){
+    uint index;
+    InterlockedAdd(g_NwbHardwareTransparentOverflowArgs[NWB_HW_TRANSPARENT_OVERFLOW_ARGS_COUNT], 1u, index);
+    g_NwbHardwareTransparentOverflowList[index] = pixel;
+    if((index % NWB_HW_TRANSPARENT_OVERFLOW_GROUP_SIZE) == 0u){
+        uint previousGroups;
+        InterlockedAdd(g_NwbHardwareTransparentOverflowArgs[NWB_HW_TRANSPARENT_OVERFLOW_ARGS_GROUPS_X], 1u, previousGroups);
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

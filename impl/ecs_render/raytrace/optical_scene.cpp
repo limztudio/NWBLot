@@ -85,22 +85,6 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpticalInstanceOrderMatches(
-    const u8* const leftBytes,
-    const usize leftCount,
-    const RayTracingOpticalInstanceGpu* const right,
-    const usize rightCount)noexcept{
-    if(leftCount != rightCount || ((!leftBytes || !right) && leftCount != 0u))
-        return false;
-    for(usize index = 0u; index < leftCount; ++index){
-        u32 entityId = 0u;
-        NWB_MEMCPY(&entityId, sizeof(entityId), leftBytes + index * NWB_RT_OPTICAL_INSTANCE_BYTES, sizeof(entityId));
-        if(entityId != right[index].entityId)
-            return false;
-    }
-    return true;
-}
-
 bool ComputeOpticalWorldBounds(
     const Float34U& objectToWorld,
     const Float3U& localMin,

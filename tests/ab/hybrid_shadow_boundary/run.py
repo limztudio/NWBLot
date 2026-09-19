@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
-"""Measure the natural hybrid HW+SW shadow route against an opaque hardware-only baseline.
+"""Measure hardware transparent shadows against an opaque hardware-only baseline.
 
 The same benchmark binary renders two fixed-yaw, ten-character animated stress scenes. The healthy arm records
-the normal hybrid transparent-shadow tail. The baseline arm uses a test-owned environment flag to make every
+the normal hardware transparent-shadow tail. The baseline arm uses a test-owned environment flag to make every
 character opaque, naturally selecting hardware shadows without mutating renderer behavior. Their images are
 diagnostic artifacts, not a pixel-parity gate: the material classes intentionally differ between arms.
 
 The runner collects renderer GPU timestamp envelopes, verifies the arm-specific diagnostic markers,
 captures both native windows, and writes a device-local report. ``--self-test`` exercises parsing
 and report evaluation without a Vulkan device or visible window.
+
+Legacy hybrid executable, CLI, and report identifiers remain stable for existing automation; both current arms
+use hardware ray traversal, and only the healthy arm includes transparent volume shadows.
 """
 
 from __future__ import annotations
@@ -72,21 +75,22 @@ OPTIONAL_COMPARISON_SCOPES = (
     "render.sw_bvh_sort",
 )
 KNOWN_TIMING_SCOPES = (FRAME_SCOPE, *OPTIONAL_COMPARISON_SCOPES)
-CAPABILITY_SKIP_LOG = "StressTestSmokeProject: hybrid shadow boundary skipped because RayQuery-capable hardware is unavailable"
+CAPABILITY_SKIP_LOG = "StressTestSmokeProject: hardware shadow boundary skipped because RayQuery-capable hardware is unavailable"
 DEFAULT_FORBIDDEN_LOGS = (
     *STRICT_LOG_FAILURE_MESSAGES,
     "cannot safely continue after an unresolved frame recovery submission",
 )
 HEALTHY_REQUIRED_LOGS = (
-    "StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark",
-    "StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available",
-    "RendererSystem: dispatched software shadow traversal",
+    "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark",
+    "StressTestSmokeProject: RayQuery-capable hardware shadow route available",
+    "RendererSystem: dispatched hardware transparent shadow traversal",
 )
 BASELINE_REQUIRED_LOGS = (
     "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline",
-    "StressTestSmokeProject: RayQuery-capable hybrid shadow hardware available",
+    "StressTestSmokeProject: RayQuery-capable hardware shadow route available",
 )
-HYBRID_FAILURE_LOGS = (
+SHADOW_FAILURE_LOGS = (
+    "RendererSystem: hardware transparent shadow resource preparation failed; colored shadows unavailable this frame",
     "RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility",
     "RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility",
     "RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility",
@@ -97,36 +101,18 @@ HYBRID_FAILURE_LOGS = (
     "RendererSystem: split transparent soft-shadow resolve failed; preserving opaque visibility",
     "RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility",
     "RendererSystem: ray-traced shadow visibility pass failed",
-    "RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback",
-    "RendererSystem: could not declare hybrid software shadow-preparation tail",
     "RendererSystem: changed HW shadow material context has no graph-owned upload batch",
-    "RendererSystem: could not retain frozen hybrid hardware material fallback",
-    "RendererSystem: changed software scene BVH has no graph-owned upload pair",
-    "RendererSystem: changed SW shadow material context has no graph-owned upload batch",
-    "RendererSystem: could not freeze hybrid transparent software BVH build plan",
-    "RendererSystem: frozen hybrid hardware material fallback could not retain graph uploads",
-    "RendererSystem: hybrid transparent shadow software BVH resource preparation failed",
-    "RendererSystem: hybrid transparent software shadow preparation failed; transparent shadows absent this frame",
-    "RendererSystem: hybrid transparent shadow per-mesh software BVH build failed",
-    "RendererSystem: hybrid transparent software shadow pass failed",
-    "RendererSystem: hybrid transparent software shadow recording failed; transparent shadows absent this frame",
-    "RendererSystem: hybrid hardware fallback inputs changed after graph preflight",
-    "RendererSystem: frozen hybrid hardware material-context restore failed; rejecting shadow preparation packet",
 )
 HEALTHY_FORBIDDEN_LOGS = (
+    "RendererSystem: dispatched software shadow traversal",
     "StressTestSmokeProject: enabled natural opaque hardware-shadow baseline",
-    "RendererSystem: restored frozen hybrid hardware material context",
-    "RendererSystem: test forced hybrid software traversal fallback",
-    *HYBRID_FAILURE_LOGS,
+    *SHADOW_FAILURE_LOGS,
 )
 BASELINE_FORBIDDEN_LOGS = (
-    "StressTestSmokeProject: enabled healthy hybrid transparent-shadow benchmark",
+    "RendererSystem: dispatched hardware transparent shadow traversal",
+    "StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark",
     "RendererSystem: dispatched software shadow traversal",
-    "RendererSystem: restored frozen hybrid hardware material context",
-    "RendererSystem: test forced hybrid software traversal fallback",
-    "RendererSystem: test hybrid software traversal recovered",
-    "RendererSystem: hybrid hardware material-context fallback failed",
-    *HYBRID_FAILURE_LOGS,
+    *SHADOW_FAILURE_LOGS,
 )
 
 
@@ -422,7 +408,7 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
             f"transparent resolve healthy={healthy_transparent_resolve.positive_sample_count}",
         ),
         gate(
-            "healthy hybrid arm",
+            "healthy hardware transparent arm",
             healthy_semantics_passed,
             "RayQuery plus accepted opaque and transparent GPU timing scopes were observed"
             if healthy_semantics_passed
@@ -431,7 +417,7 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
         gate(
             "natural opaque hardware-shadow baseline",
             baseline_semantics_passed,
-            "opaque trace timing was observed without positive transparent timing or software traversal diagnostics"
+            "opaque trace timing was observed without positive transparent timing or hardware transparent traversal diagnostics"
             if baseline_semantics_passed
             else f"missing={baseline.missing_required_log_messages}, unexpected_logs={baseline.semantic_forbidden_log_messages}, "
             f"unexpected_timing={baseline_unexpected_transparent_scopes}",
@@ -448,7 +434,7 @@ def evaluate_runs(args: argparse.Namespace, healthy: RunResult, baseline: RunRes
         threshold = args.maximum_hybrid_frame_regression_percent
         gates.append(
             gate(
-                "optional hybrid frame budget",
+                "optional hardware transparent frame budget",
                 frame_delta_percent <= threshold,
                 f"healthy {healthy_frame.median_ms:.4f} ms, baseline {baseline_frame.median_ms:.4f} ms, "
                 f"delta {frame_delta_percent:+.3f}% (limit +{threshold:.3f}%)",
@@ -502,11 +488,11 @@ def write_json(path: Path, payload: Mapping[str, object]) -> None:
 
 def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
     lines = [
-        "# Hybrid versus opaque shadow boundary",
+        "# Hardware transparent versus opaque shadows",
         "",
         f"Verdict: **{str(report['verdict']).upper()}**",
         "",
-        "The baseline arm uses opaque materials so it naturally omits the transparent software tail. "
+        "The baseline arm uses opaque materials so it naturally omits the transparent shadow tail. "
         "The captures are therefore diagnostic artifacts, not a pixel-parity comparison.",
         "",
     ]
@@ -534,7 +520,7 @@ def write_markdown_report(path: Path, report: Mapping[str, object]) -> None:
             "",
             "## GPU timestamp comparison",
             "",
-            "| Scope | Healthy hybrid | Opaque HW baseline | Hybrid delta vs opaque baseline |",
+            "| Scope | Hardware transparent | Opaque HW baseline | Transparent delta vs opaque baseline |",
             "| --- | ---: | ---: | ---: |",
         ))
         for scope, comparison in comparisons.items():
@@ -622,7 +608,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "--maximum-hybrid-frame-regression-percent",
         dest="maximum_hybrid_frame_regression_percent",
         type=float,
-        help="Optional maximum healthy-hybrid frame overhead versus the opaque baseline.",
+        help="Optional maximum hardware-transparent frame overhead versus the opaque baseline.",
     )
     parser.add_argument("--gpu-validation", action="store_true", help="Pass --gpudbg to both benchmark processes.")
     parser.add_argument("--reject-log", action="append", default=[], help="Additional log substring that fails either arm.")
@@ -825,7 +811,7 @@ def run_self_test() -> int:
         args.maximum_hybrid_frame_regression_percent = 5.0
         threshold_report = evaluate_runs(args, healthy, baseline)
         assert threshold_report["verdict"] == "fail"
-        assert threshold_report["gates"][-1]["name"] == "optional hybrid frame budget"
+        assert threshold_report["gates"][-1]["name"] == "optional hardware transparent frame budget"
 
         baseline_with_transparent_timing = RunResult(
             mode="baseline",
@@ -859,7 +845,7 @@ def run_self_test() -> int:
         except SmokeFailure as error:
             assert TRANSPARENT_RESOLVE_SCOPE in str(error)
         else:
-            raise AssertionError("healthy hybrid evidence must require transparent resolve timing")
+            raise AssertionError("hardware transparent evidence must require transparent resolve timing")
 
         try:
             require_positive_scope_samples(
@@ -872,7 +858,7 @@ def run_self_test() -> int:
         except SmokeFailure as error:
             assert "did not publish at least 2 positive intervals" in str(error)
         else:
-            raise AssertionError("zero-duration route timing must not satisfy hybrid evidence")
+            raise AssertionError("zero-duration route timing must not satisfy hardware transparent evidence")
         markdown = root / "report.md"
         write_markdown_report(markdown, report)
         assert "not a pixel-parity comparison" in markdown.read_text(encoding="utf-8")

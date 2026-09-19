@@ -51,7 +51,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
@@ -509,8 +508,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
 
-// Opaque and healthy hybrid hardware TLAS builds retain their preflight instance stream inside Shadow
-    // Preparation itself; first Graphics packet owns the native build.
+    // Hardware TLAS builds retain their preflight instance stream; the first Graphics packet owns the native build.
     const bool sceneTlasBuildGraphOwned = m_raytracingSystem.preparedSceneTlasBuildReady();
     if(sceneTlasBuildGraphOwned && !rayTracingShadowResources.sceneTlas){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen scene TLAS build has no imported acceleration structure"));
@@ -532,56 +530,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build plan has no operations"));
         return false;
     }
-    // Keep hybrid HW-to-SW tail in first packet with explicit boundary; pure routes untouched.
-    const bool hybridSoftwareTailGraphOwned =
-        m_raytracingSystem.hybridShadowVisibilityResourcesPreflighted()
-        && m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
-    ;
-    // Healthy hybrid retains HW context; declining tail restores frozen bytes from blobs.
-    Core::GpuUploadBlobId hybridHardwareFallbackInstanceMaterialBlob;
-    Core::GpuUploadBlobId hybridHardwareFallbackInstanceBlob;
-    Core::GpuUploadBlobId hybridHardwareFallbackMaterialTypedBlob;
-    if(hybridSoftwareTailGraphOwned){
-        const bool retainedHybridHardwareFallback =
-            m_raytracingSystem.retainPreparedHybridHardwareMaterialContextFallbackUploads(
-                m_deferredLightingTaskGraph,
-                hybridHardwareFallbackInstanceMaterialBlob,
-                hybridHardwareFallbackInstanceBlob,
-                hybridHardwareFallbackMaterialTypedBlob
-            )
-        ;
-        const bool hybridHardwareFallbackBlobBatchComplete =
-            hybridHardwareFallbackInstanceMaterialBlob.valid()
-            && hybridHardwareFallbackInstanceBlob.valid()
-            && hybridHardwareFallbackMaterialTypedBlob.valid()
-        ;
-        if(
-            !retainedHybridHardwareFallback
-            || !hybridHardwareFallbackBlobBatchComplete
-            || !shadowInstanceMaterials.valid()
-            || !shadowInstances.valid()
-            || !shadowMaterialTyped.valid()
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: healthy hybrid tail requires a complete graph-owned hardware material fallback"));
-            return false;
-        }
-    }
-    // Frozen hybrid packet lowers the BLAS -> SW-BVH handoff at its tail boundary.
-    const bool hybridSoftwareTailInputStatesCandidate =
-        hybridSoftwareTailGraphOwned
-        && meshBlasBuildsGraphOwned
-        && meshSwBvhBuildsGraphOwned
-    ;
-    // Tail-less hardware geometry enters graph-owned; hybrid only to its tail boundary.
     bool meshBlasGeometryBuildInputStatesGraphOwned =
         meshBlasBuildsGraphOwned
-        && (
-            hybridSoftwareTailInputStatesCandidate
-            || (!softwareTraceResourcesPrepared && !meshSwBvhBuildsGraphOwned)
-        )
+        && !softwareTraceResourcesPrepared
+        && !meshSwBvhBuildsGraphOwned
     ;
-    bool meshSwBvhInputStatesGraphOwned = hybridSoftwareTailInputStatesCandidate;
-    // Pure-software moves sentinel setup into built-ins; hybrid keeps conditional native path.
+    // Software preparation uses typed sentinel clears before each mesh build.
     const bool pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate =
         meshSwBvhBuildsGraphOwned
         && !m_raytracingSystem.shadowVisibilityHardwareSupported()
@@ -593,16 +547,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accelStructFinalizeResourceUses{ scratchArena };
     const ShadowPrepareGeometryInputs geometryInputs{
         .blasBuilds = preparedMeshBlasBuilds,
-        .softwareBuilds = preparedMeshSwBvhBuilds,
         .traceResources = shadowTraceGeometryResources,
         .traceResourceCount = shadowTraceGeometryResourceCount,
         .blasBuildsGraphOwned = meshBlasBuildsGraphOwned,
     };
     ShadowPrepareGeometryResources geometryResources(geometryInputs, scratchArena);
     const auto& meshBlasGeometryBuildInputResources = geometryResources.m_blasBuildInputs;
-    const auto& hybridSoftwareTailInputResources = geometryResources.m_softwareTailInputs;
     const auto& shadowPrepareTraceGeometryResources = geometryResources.m_remainingTraceGeometry;
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> hybridSoftwareTailResourceUses{ scratchArena };
     PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources{ scratchArena };
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
@@ -618,8 +569,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         + preparedMeshBlasBuilds.size()
     );
     resourceSetUses.reserve(3u);
-    geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned, meshSwBvhInputStatesGraphOwned);
-    hybridSoftwareTailResourceUses.reserve(preparedMeshSwBvhBuilds.size() * 2u + 3u);
+    geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
     pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
@@ -640,24 +590,10 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     if(sceneBvhInstances.valid())
         resourceUses.push_back(WriteUse(sceneBvhInstances, Core::ResourceStates::ShaderResource));
 
-    if(hybridSoftwareTailGraphOwned){
-        // Tail may restore HW bytes on SW failure; final state declared here.
-        hybridSoftwareTailResourceUses.push_back(
-            WriteUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource)
-        );
-        hybridSoftwareTailResourceUses.push_back(
-            WriteUse(shadowInstances, Core::ResourceStates::ShaderResource)
-        );
-        hybridSoftwareTailResourceUses.push_back(
-            WriteUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource)
-        );
-    }
-
     bool resourcesImported = true;
     geometryResources.gatherBuildInputs(
         m_deferredLightingTaskGraph,
-        meshBlasGeometryBuildInputStatesGraphOwned,
-        meshSwBvhInputStatesGraphOwned
+        meshBlasGeometryBuildInputStatesGraphOwned
     );
     if(meshBlasBuildsGraphOwned){
         for(const PreparedMeshBlasBuild& build : preparedMeshBlasBuilds){
@@ -704,26 +640,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     };
     if(meshBlasGeometryBuildInputSetGraphOwned)
         resourceSetUses.push_back(meshBlasGeometryBuildInputSetUse);
-    Core::GpuGraphResourceSetId hybridSoftwareTailInputSet;
-    if(meshSwBvhInputStatesGraphOwned && !hybridSoftwareTailInputResources.empty()){
-        hybridSoftwareTailInputSet = m_deferredLightingTaskGraph.importResourceSet(
-            Core::GpuGraphResourceSetDesc{}
-                .setIdentity(Name("render.shadow_prepare.hybrid_software_tail_inputs"))
-                .setMarkerLabel("Shadow Prepare Hybrid Software Tail Inputs")
-                .setMembers(hybridSoftwareTailInputResources.data(), hybridSoftwareTailInputResources.size())
-        );
-    }
-    const bool hybridSoftwareTailInputSetGraphOwned = hybridSoftwareTailInputSet.valid();
-    if(meshSwBvhInputStatesGraphOwned && !hybridSoftwareTailInputSetGraphOwned){
-        for(const Core::GpuGraphResourceId resource : hybridSoftwareTailInputResources)
-            hybridSoftwareTailResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
-    }
-    const Core::GpuTaskResourceSetUse hybridSoftwareTailInputSetUse{
-        .resourceSet = hybridSoftwareTailInputSet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
     if(!geometryResources.gatherRemainingTraceResources())
         return false;
 
@@ -1010,61 +926,12 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .meshBlasGeometryBuildInputStatesGraphOwned = meshBlasGeometryBuildInputStatesGraphOwned,
             .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
             .preparedMeshSwBvhBuildsRecordedByGraph = pureSoftwareMeshSwBvhBuildsGraphOwned,
-            .deferHybridSoftwareTail = hybridSoftwareTailGraphOwned,
         }
     );
     if(!m_deferredShadowPrepareTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared shadow-preparation task"));
         return false;
     }
-    Core::GpuTaskId shadowPrepareFinalizeDependency = m_deferredShadowPrepareTask;
-    if(hybridSoftwareTailGraphOwned){
-        Core::GpuTaskSchedulingHint hybridSoftwareTailScheduling;
-        hybridSoftwareTailScheduling.cost = Core::GpuTaskCostHint::Large;
-        hybridSoftwareTailScheduling.forceSubmissionBoundary = false;
-        hybridSoftwareTailScheduling.allowPacketMerge = true;
-        hybridSoftwareTailScheduling.mergeWithPrevious = true;
-        // Shadow Preparation already has direct later Compute consumers. The explicit immediate tail restores the
-        // monolithic packet's ordering: those consumers wait for the complete HW-to-SW fallback boundary.
-        hybridSoftwareTailScheduling.allowMergeAcrossConsumerFrontier = true;
-        Core::GpuTaskDesc hybridSoftwareTailDesc;
-        hybridSoftwareTailDesc
-            .setIdentity(Name("render.shadow_prepare.hybrid_software_tail"))
-            .setMarkerLabel("Shadow Preparation Hybrid Software Tail")
-            .setQueue(GraphicsComputeUploadQueueRequest())
-            .setScheduling(hybridSoftwareTailScheduling)
-            .setDependencies(&m_deferredShadowPrepareTask, 1u)
-            .setResourceUses(hybridSoftwareTailResourceUses.data(), hybridSoftwareTailResourceUses.size())
-            .setResourceSetUses(
-                hybridSoftwareTailInputSetGraphOwned ? &hybridSoftwareTailInputSetUse : nullptr,
-                hybridSoftwareTailInputSetGraphOwned ? 1u : 0u
-            )
-        ;
-        m_deferredShadowPrepareHybridSoftwareTailTask = m_deferredLightingTaskGraph.addTask<
-            ECSRenderDetail::ShadowPrepareHybridSoftwareTailGraphTask
-        >(
-            hybridSoftwareTailDesc,
-            ECSRenderDetail::ShadowPrepareHybridSoftwareTailGraphTask::Payload{
-                .raytracingSystem = &m_raytracingSystem,
-                .targets = &deferredTargets,
-                .hardwarePreparationReady = &m_shadowPreparationOutcome.ready,
-                .timingTicket = &timingTicket,
-                .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,
-                .sceneBvhBatchGraphOwned = sceneBvhBatchGraphOwned,
-                .meshSwBvhBuildsGraphOwned = meshSwBvhBuildsGraphOwned,
-                .meshSwBvhInputStatesGraphOwned = meshSwBvhInputStatesGraphOwned,
-                .hybridHardwareFallbackInstanceMaterialBlob = hybridHardwareFallbackInstanceMaterialBlob,
-                .hybridHardwareFallbackInstanceBlob = hybridHardwareFallbackInstanceBlob,
-                .hybridHardwareFallbackMaterialTypedBlob = hybridHardwareFallbackMaterialTypedBlob,
-            }
-        );
-        if(!m_deferredShadowPrepareHybridSoftwareTailTask.valid()){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hybrid software shadow-preparation tail"));
-            return false;
-        }
-        shadowPrepareFinalizeDependency = m_deferredShadowPrepareHybridSoftwareTailTask;
-    }
-
     const bool accelStructBuildStatesGraphOwned = sceneTlasBuildGraphOwned || meshBlasBuildsGraphOwned;
     if(accelStructBuildStatesGraphOwned){
         const usize expectedFinalizeResourceUseCount =
@@ -1112,7 +979,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setMarkerLabel("Shadow Preparation Accel-Struct Finalize")
             .setQueue(GraphicsQueueRequest())
             .setScheduling(accelStructFinalizeScheduling)
-            .setDependencies(&shadowPrepareFinalizeDependency, 1u)
+            .setDependencies(&m_deferredShadowPrepareTask, 1u)
             // The immutable typed final-state collection expands to the same compiler inputs. Retain the
             // individual declarations if a future compatibility route cannot form a complete unique set.
             .setResourceUses(

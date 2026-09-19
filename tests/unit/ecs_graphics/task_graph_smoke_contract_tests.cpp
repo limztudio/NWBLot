@@ -316,19 +316,19 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
         EXPECT_FALSE(ContainsText(smokeLauncher, target));
     }
 
-    static constexpr StringView s_NativeHybridMarker =
-        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware";
+    static constexpr StringView s_NativeHardwareMarker =
+        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware";
     static constexpr StringView s_NativeSoftwareMarker =
         "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable";
     static constexpr StringView s_NativeMeshMarker =
         "CsgVisibleSmokeProject: natural native mesh-shader route selected";
     static constexpr StringView s_NativeComputeMarker =
         "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable";
-    EXPECT_TRUE(ContainsText(smokeProjects, s_NativeHybridMarker));
+    EXPECT_TRUE(ContainsText(smokeProjects, s_NativeHardwareMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeSoftwareMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeMeshMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeComputeMarker));
-    EXPECT_EQ(CountText(smokeCmake, s_NativeHybridMarker), 2u);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeHardwareMarker), 2u);
     EXPECT_EQ(CountText(smokeCmake, s_NativeSoftwareMarker), 2u);
     EXPECT_EQ(CountText(smokeCmake, s_NativeMeshMarker), 2u);
     EXPECT_EQ(CountText(smokeCmake, s_NativeComputeMarker), 2u);

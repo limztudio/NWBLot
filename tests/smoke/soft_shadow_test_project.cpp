@@ -338,7 +338,7 @@ public:
             const bool hardwareAvailable = m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
                 && m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery);
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: natural shadow route {}")
-                , hardwareAvailable ? NWB_TEXT("hybrid") : NWB_TEXT("software")
+                , hardwareAvailable ? NWB_TEXT("hardware") : NWB_TEXT("software")
             );
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: caustic emission 0"));
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));

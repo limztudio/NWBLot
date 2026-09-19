@@ -141,7 +141,6 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_graphicsPrefixMeshViewSetupTask = {};
     m_graphicsPrefixSceneShadingSetupTask = {};
@@ -153,7 +152,6 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
-    m_deferredShadowPrepareHybridSoftwareTailTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     resetSharedDeferredFrameTaskState();
     m_deferredFrameRecoveryArmed = false;
@@ -209,6 +207,9 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_ShadowOpaqueTemporal, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowOpaqueResolve, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowTransparentTrace, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowTransparentGather, s_GpuTimingHighFrequencyScopeQueryBudget },
+        { &RendererGpuTimingScope::s_ShadowTransparentEvaluate, s_GpuTimingHighFrequencyScopeQueryBudget },
+        { &RendererGpuTimingScope::s_ShadowTransparentContinuation, s_GpuTimingHighFrequencyScopeQueryBudget },
         { &RendererGpuTimingScope::s_ShadowTransparentTemporal, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowTransparentResolve, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_SwBvhSort, s_GpuTimingQueriesPerTwoRangeScope },

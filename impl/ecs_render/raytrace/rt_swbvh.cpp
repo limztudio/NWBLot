@@ -373,7 +373,7 @@ template<typename RayTracingState>
     if(build.performRefit)
         buildFlags |= Core::RayTracingAccelStructBuildFlags::PerformUpdate;
 
-    // Direct/retry and incomplete hybrid callbacks immediately hand these shared streams to the software-BVH builder, so they retain the native bridge. Verified frozen graph routes establish this input state in their packet prologue instead.
+    // Direct and retry callbacks retain the native input-state bridge. Frozen graph routes establish this state in their packet prologue.
     if(!meshBlasGeometryBuildInputStatesGraphOwned){
         commandList.setBufferState(build.positionBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
         commandList.setBufferState(build.triangleIndexBuffer.get(), Core::ResourceStates::AccelStructBuildInput);
@@ -1055,7 +1055,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     m_rayTracingState.m_shadowMeshAttributeHandles.clear();
     m_rayTracingState.m_shadowMeshPositionHandles.clear();
     m_rayTracingState.m_shadowMeshCount = 0u;
-    // Gates hybrid software transparent-shadow work.
+    // Gates transparent-shadow resource preparation.
     m_rayTracingState.m_sceneHasTransparentOccluder = false;
     bool staticScene = true;
     bool contentComplete = true;
@@ -1325,68 +1325,74 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasHeapHandle = tlasHeapHandle;
     }
 
-    // A healthy hybrid packet publishes the software-compatible descriptor slots as the final shared material context. The HW TLAS itself never reads that buffer; its caustic/surfel consumers run after the retained software traversal table confirms the frozen graph context.
-    // Do not overwrite or validate it as a HW-only snapshot here. If that optional tail misses, its declared callback restores the immutable HW fallback triple.
-    const bool hybridSoftwareMaterialContextGraphOwned =
+    // Preserve a valid typed buffer and hash the descriptor-slot representation.
+    if(shadowMaterialTypedBytes.empty())
+        shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
+    usize materialTypedUploadBytes = 0u;
+    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
+        return false;
+    if(
         commandList
-        && shadowMaterialContextBatchGraphOwned
-        && m_shadowVisibilityHybridPipelinePreflighted
-        && m_preparedShadowMaterialContextReady
-        && m_preparedShadowMaterialContextRoute == PreparedShadowMaterialContextRoute::Software
+        && !HasPreparedShadowMaterialContextBuffers(
+            m_rayTracingState,
+            instanceMaterials.size(),
+            shadowInstanceData.size(),
+            materialTypedUploadBytes
+        )
+    ){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after preflight; skipping recording-time replacement"));
+        return false;
+    }
+    const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
+        instanceMaterials,
+        shadowInstanceData,
+        shadowMaterialTypedBytes
+    );
+    u64 gatheredMaterialContentHash = hwMaterialContextHash;
+    const bool canReuseHwMaterialContext =
+        staticScene
+        && !m_rayTracingState.m_sceneHasTransparentOccluder
+        && m_rayTracingState.m_hwShadowMaterialContextHashValid
+        && m_rayTracingState.m_hwShadowMaterialContextHash == hwMaterialContextHash
+        && HasPreparedShadowMaterialContextBuffers(
+            m_rayTracingState,
+            instanceMaterials.size(),
+            shadowInstanceData.size(),
+            materialTypedUploadBytes
+        )
     ;
-    u64 gatheredMaterialContentHash = 0u;
-    if(!hybridSoftwareMaterialContextGraphOwned){
-        // Preserve a valid typed buffer and hash the descriptor-slot representation.
-        if(shadowMaterialTypedBytes.empty())
-            shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
-        usize materialTypedUploadBytes = 0u;
-        if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
-            return false;
-        if(
-            commandList
-            && !HasPreparedShadowMaterialContextBuffers(
-                m_rayTracingState,
-                instanceMaterials.size(),
-                shadowInstanceData.size(),
-                materialTypedUploadBytes
-            )
-        ){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after preflight; skipping recording-time replacement"));
-            return false;
-        }
-        const u64 hwMaterialContextHash = ComputeShadowMaterialContextHash(
-            instanceMaterials,
-            shadowInstanceData,
-            shadowMaterialTypedBytes
-        );
-        gatheredMaterialContentHash = hwMaterialContextHash;
-        const bool canReuseHwMaterialContext =
-            staticScene
-            && !m_rayTracingState.m_sceneHasTransparentOccluder
-            && m_rayTracingState.m_hwShadowMaterialContextHashValid
-            && m_rayTracingState.m_hwShadowMaterialContextHash == hwMaterialContextHash
-            && HasPreparedShadowMaterialContextBuffers(
-                m_rayTracingState,
-                instanceMaterials.size(),
-                shadowInstanceData.size(),
-                materialTypedUploadBytes
-            )
-        ;
-        if(!canReuseHwMaterialContext){
-            if(!commandList){
-                if(
-                    !ensureShadowInstanceMaterialBuffer(instances.size())
-                    || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
-                    || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
-                    || !HasPreparedShadowMaterialContextBuffers(
-                        m_rayTracingState,
-                        instanceMaterials.size(),
-                        shadowInstanceData.size(),
-                        materialTypedUploadBytes
-                    )
+    if(!canReuseHwMaterialContext){
+        if(!commandList){
+            if(
+                !ensureShadowInstanceMaterialBuffer(instances.size())
+                || !ensureShadowInstanceContextBuffer(shadowInstanceData.size())
+                || !ensureShadowMaterialTypedBuffer(materialTypedUploadBytes)
+                || !HasPreparedShadowMaterialContextBuffers(
+                    m_rayTracingState,
+                    instanceMaterials.size(),
+                    shadowInstanceData.size(),
+                    materialTypedUploadBytes
                 )
-                    return false;
-                if(!capturePreparedShadowMaterialContext(
+            )
+                return false;
+            if(!capturePreparedShadowMaterialContext(
+                PreparedShadowMaterialContextRoute::Hardware,
+                staticScene,
+                hwMaterialContextHash,
+                instanceMaterials.data(),
+                instanceMaterials.size(),
+                instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
+                shadowInstanceData.data(),
+                shadowInstanceData.size(),
+                shadowInstanceData.size() * sizeof(InstanceGpuData),
+                shadowMaterialTypedBytes.data(),
+                materialTypedUploadBytes
+            ))
+                return false;
+        }
+        if(commandList){
+            if(shadowMaterialContextBatchGraphOwned){
+                if(!matchesPreparedShadowMaterialContext(
                     PreparedShadowMaterialContextRoute::Hardware,
                     staticScene,
                     hwMaterialContextHash,
@@ -1398,41 +1404,23 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                     shadowInstanceData.size() * sizeof(InstanceGpuData),
                     shadowMaterialTypedBytes.data(),
                     materialTypedUploadBytes
-                ))
-                    return false;
-            }
-            if(commandList){
-                if(shadowMaterialContextBatchGraphOwned){
-                    if(!matchesPreparedShadowMaterialContext(
-                        PreparedShadowMaterialContextRoute::Hardware,
-                        staticScene,
-                        hwMaterialContextHash,
-                        instanceMaterials.data(),
-                        instanceMaterials.size(),
-                        instanceMaterials.size() * sizeof(NwbRtInstanceMaterialGpu),
-                        shadowInstanceData.data(),
-                        shadowInstanceData.size(),
-                        shadowInstanceData.size() * sizeof(InstanceGpuData),
-                        shadowMaterialTypedBytes.data(),
-                        materialTypedUploadBytes
-                    )){
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
-                        return false;
-                    }
-                }
-                else{
-                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed HW shadow material context has no graph-owned upload batch"));
+                )){
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW shadow material context changed after graph preflight; rejecting frozen upload batch"));
                     return false;
                 }
             }
-        }
-        else if(commandList && shadowMaterialContextBatchGraphOwned){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
-            return false;
+            else{
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: changed HW shadow material context has no graph-owned upload batch"));
+                return false;
+            }
         }
     }
+    else if(commandList && shadowMaterialContextBatchGraphOwned){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned HW shadow material context unexpectedly reused a native cache"));
+        return false;
+    }
 
-    // Freeze the selected hardware instance stream for opaque and hybrid frames. Hybrid recording keeps a direct retry boundary: if the frozen plan loses its generation or BLAS identity, it rebuilds the current TLAS and retains the valid opaque result before the optional software tail decides whether transparent tracing runs.
+    // Freeze the selected hardware instance stream before recording; accepted preparation publishes its cache identity.
     if(!commandList && !canReuseTlas){
         if(!capturePreparedSceneTlasBuild(
             staticScene,
@@ -1444,8 +1432,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not freeze opaque scene TLAS build after preflight"));
                 return false;
             }
-            // A hybrid capture miss remains a direct compatibility fallback. The software material/scene snapshots may still be graph-owned independently, so do not discard the whole preflight transaction here.
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze hybrid scene TLAS build; retaining direct retry fallback"));
+            // A capture miss retains the direct TLAS recorder against the same preflighted material context.
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze scene TLAS build; retaining direct retry fallback"));
         }
     }
 
@@ -1481,108 +1469,6 @@ bool RendererRayTracingSystem::buildSceneSwBvh(
         sceneBvhBatchGraphOwned,
         meshSwBvhBuildsGraphOwned
     );
-}
-
-bool RendererRayTracingSystem::recordPreparedHybridHardwareMaterialContextFallback(
-    Core::CommandList& commandList,
-    const void* const instanceMaterialData,
-    const usize sourceInstanceMaterialByteCount,
-    const void* const instanceData,
-    const usize sourceInstanceByteCount,
-    const void* const materialTypedData,
-    const usize sourceMaterialTypedByteCount
-){
-    m_preparedHybridHardwareFallbackRecorded = false;
-    const auto isStorageHandle = [](const Core::GpuDescriptorHandle handle){
-        return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
-    };
-    const auto& state = m_rayTracingState;
-    const usize instanceMaterialByteCount = m_preparedHybridHardwareFallbackInstanceMaterialByteCount;
-    const usize instanceByteCount = m_preparedHybridHardwareFallbackInstanceByteCount;
-    const usize materialTypedByteCount = m_preparedHybridHardwareFallbackMaterialTypedByteCount;
-    if(
-        !m_preparedHybridHardwareFallbackReady
-        || !instanceMaterialData
-        || !instanceData
-        || !materialTypedData
-        || instanceMaterialByteCount == 0u
-        || instanceByteCount == 0u
-        || materialTypedByteCount == 0u
-        || sourceInstanceMaterialByteCount != instanceMaterialByteCount
-        || sourceInstanceByteCount != instanceByteCount
-        || sourceMaterialTypedByteCount != materialTypedByteCount
-        || instanceMaterialByteCount % sizeof(NwbRtInstanceMaterialGpu) != 0u
-        || instanceByteCount % sizeof(InstanceGpuData) != 0u
-        || instanceMaterialByteCount > Limit<usize>::s_Max - instanceByteCount
-        || instanceMaterialByteCount + instanceByteCount > Limit<usize>::s_Max - materialTypedByteCount
-        || m_preparedHybridHardwareFallbackBytes.size() != instanceMaterialByteCount + instanceByteCount + materialTypedByteCount
-        || state.m_shadowInstanceMaterialBuffer.get() != m_preparedHybridHardwareFallbackInstanceMaterialBuffer.get()
-        || state.m_shadowInstanceBuffer.get() != m_preparedHybridHardwareFallbackInstanceBuffer.get()
-        || state.m_shadowMaterialTypedBuffer.get() != m_preparedHybridHardwareFallbackMaterialTypedBuffer.get()
-        || state.m_shadowInstanceMaterialCapacity != m_preparedHybridHardwareFallbackInstanceMaterialCapacity
-        || state.m_shadowInstanceCapacity != m_preparedHybridHardwareFallbackInstanceCapacity
-        || state.m_shadowMaterialTypedCapacity != m_preparedHybridHardwareFallbackMaterialTypedCapacity
-        || state.m_shadowInstanceMaterialHeapHandle != m_preparedHybridHardwareFallbackInstanceMaterialHeapHandle
-        || state.m_shadowInstanceHeapHandle != m_preparedHybridHardwareFallbackInstanceHeapHandle
-        || state.m_shadowMaterialTypedHeapHandle != m_preparedHybridHardwareFallbackMaterialTypedHeapHandle
-        || !isStorageHandle(state.m_shadowInstanceMaterialHeapHandle)
-        || !isStorageHandle(state.m_shadowInstanceHeapHandle)
-        || !isStorageHandle(state.m_shadowMaterialTypedHeapHandle)
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen hybrid hardware material context no longer matches preflight storage"));
-        return false;
-    }
-    if(
-        m_world.componentMutationVersion<RendererComponent>() != m_preparedHybridHardwareFallbackRendererMutationVersion
-        || m_world.componentMutationVersion<NWB::Impl::Scene::TransformComponent>() != m_preparedHybridHardwareFallbackTransformMutationVersion
-        || m_world.componentMutationVersion<MaterialInstanceComponent>() != m_preparedHybridHardwareFallbackMaterialMutationVersion
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid hardware fallback inputs changed after graph preflight"));
-        return false;
-    }
-
-    // A graph-owned caller provides immutable declaration-time blobs. Verify they still equal the retained preflight snapshot before recording, so a caller-side replacement cannot restore a context the compiled task did not declare.
-    if(
-        NWB_MEMCMP(
-            m_preparedHybridHardwareFallbackBytes.data(),
-            instanceMaterialData,
-            instanceMaterialByteCount
-        ) != 0
-        || NWB_MEMCMP(
-            m_preparedHybridHardwareFallbackBytes.data() + instanceMaterialByteCount,
-            instanceData,
-            instanceByteCount
-        ) != 0
-        || NWB_MEMCMP(
-            m_preparedHybridHardwareFallbackBytes.data() + instanceMaterialByteCount + instanceByteCount,
-            materialTypedData,
-            materialTypedByteCount
-        ) != 0
-    ){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: graph-owned hybrid hardware fallback bytes differ from preflight"));
-        return false;
-    }
-
-    Core::Buffer* const instanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer.get();
-    Core::Buffer* const instanceBuffer = state.m_shadowInstanceBuffer.get();
-    Core::Buffer* const materialTypedBuffer = state.m_shadowMaterialTypedBuffer.get();
-    commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(instanceBuffer, Core::ResourceStates::CopyDest);
-    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::CopyDest);
-    commandList.commitBarriers();
-    if(
-        !commandList.tryWriteBuffer(*instanceMaterialBuffer, instanceMaterialData, instanceMaterialByteCount)
-        || !commandList.tryWriteBuffer(*instanceBuffer, instanceData, instanceByteCount)
-        || !commandList.tryWriteBuffer(*materialTypedBuffer, materialTypedData, materialTypedByteCount)
-    )
-        return false;
-    commandList.setBufferState(instanceMaterialBuffer, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(instanceBuffer, Core::ResourceStates::ShaderResource);
-    commandList.setBufferState(materialTypedBuffer, Core::ResourceStates::ShaderResource);
-    commandList.commitBarriers();
-    m_preparedHybridHardwareFallbackRecorded = true;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: restored frozen hybrid hardware material context"));
-    return true;
 }
 
 bool RendererRayTracingSystem::buildSceneSwBvhImpl(
@@ -1861,11 +1747,6 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         shadowInstanceData.push_back(shadowInstance);
     }
 
-    if(!commandList && m_shadowVisibilityHardwareSupported && !m_hardwareOpticalScene.matchesInstanceOrder(opticalScene)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hybrid optical/material instance order differs from the hardware scene"));
-        return false;
-    }
-
     if(m_rayTracingState.m_swShadowMeshCount > m_rayTracingState.m_swShadowMeshHeapHighWater){
         m_rayTracingState.m_swShadowMeshHeapHighWater = m_rayTracingState.m_swShadowMeshCount;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
@@ -2025,13 +1906,8 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
         shadowInstanceData,
         shadowMaterialTypedBytes
     );
-    const bool hybridSoftwareMaterialContextCaptureRequired =
-        m_shadowVisibilityHardwareSupported
-        && m_rayTracingState.m_sceneHasTransparentOccluder
-    ;
     const bool canReuseSwMaterialContext =
-        !hybridSoftwareMaterialContextCaptureRequired
-        && staticScene
+        staticScene
         && m_rayTracingState.m_swShadowMaterialContextHashValid
         && m_rayTracingState.m_swShadowMaterialContextHash == swMaterialContextHash
         && HasPreparedShadowMaterialContextBuffers(
@@ -2066,18 +1942,6 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 )
             )
                 return false;
-            // This replaces the hardware snapshot gathered before the hybrid software path. Retain that exact immutable context first, so an optional SW-tail miss can restore opaque consumers without regathering renderer/material data while Shadow Preparation is recording.
-            if(
-                hybridSoftwareMaterialContextCaptureRequired
-                && (
-                    !m_preparedShadowMaterialContextReady
-                    || m_preparedShadowMaterialContextRoute != PreparedShadowMaterialContextRoute::Hardware
-                    || !capturePreparedHybridHardwareMaterialContextFallback()
-                )
-            ){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain frozen hybrid hardware material fallback"));
-                return false;
-            }
             if(!capturePreparedShadowMaterialContext(
                 PreparedShadowMaterialContextRoute::Software,
                 staticScene,
@@ -2141,8 +2005,6 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                 instanceCount
             )){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
-                if(hybridSoftwareMaterialContextCaptureRequired)
-                    return true;
                 clearPreparedSceneBvh();
                 clearPreparedShadowMaterialContext();
                 return false;
@@ -2794,7 +2656,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     StoreFloat(VectorSetW(aabbMin, 0.0f), pushConstants.aabbMin);
     StoreFloat(VectorSetW(aabbMax, 0.0f), pushConstants.aabbMax);
 
-    // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct and hybrid compatibility routes preserve their established native sentinel setup here.
+    // The graph-split pure-software route lowers these typed CopyDest clears as adjacent built-in tasks. Direct compatibility routes preserve their established native sentinel setup here.
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::CopyDest);
         commandList.setBufferState(meshParentBuffer, Core::ResourceStates::CopyDest);
@@ -2830,7 +2692,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
         commandList.dispatch(groupCount, 1u, 1u);
     };
 
-    // The pure-software graph callback declares every input/output state. It owns the first boundary after its typed clears; direct and hybrid callers retain the standalone native transition/UAV fence.
+    // The pure-software graph callback declares every input/output state. It owns the first boundary after its typed clears; direct callers retain the standalone native transition/UAV fence.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
 
@@ -2851,7 +2713,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     }
 
     dispatchBuildKernel(m_rayTracingState.m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
-    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV handoffs for graph callers. Keep the direct/hybrid close fence for compatibility recorders.
+    // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV handoffs for graph callers. Keep the direct close fence for compatibility recorders.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
     return true;
@@ -2895,7 +2757,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
-    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback; hybrid and direct routes retain the native compatibility primitive.
+    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback; direct routes retain the native compatibility primitive.
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
@@ -2907,7 +2769,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Fit declares all scratch views, so direct/hybrid callers retain its native entry UAV fence. The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
+    // Fit declares all scratch views, so direct callers retain its native entry UAV fence. The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
     if(!graphBoundaryStatesOwned){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);
@@ -2924,7 +2786,7 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     commandList.dispatch(DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)), 1u, 1u);
 
-    // The graph successor owns this final node state for pure software; direct and hybrid callers retain it.
+    // The graph successor owns this final node state for pure software; direct callers retain it.
     if(!graphBoundaryStatesOwned){
         commandList.setBufferState(meshNodeBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.commitBarriers();

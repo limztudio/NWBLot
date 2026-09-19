@@ -320,42 +320,47 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 m_graphics.getDevice(),
                 commandList
             );
-            // The normal deferred graph already supplies the transparent trace's heap-selected traversal and descriptor buffers. Direct compatibility callers retain the native static bridge. A split graph tail additionally owns the opaque-resolve-to-transparent-trace image/UAV boundary in its prologue.
-            if(!graphEntryStatesOwned){
-                transitionSwShadowTraversalResources(commandList);
-                commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
-                commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
-                commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
+            if(hardwareTransparentShadowReady()){
+                dispatchHardwareTransparentShadow(commandList, targets, deferredLightingResources, frameIndex, graphEntryStatesOwned);
             }
-            if(!graphOwnsOpaqueToTransparentBoundary){
-                commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-                commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            }
-            commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
-            if(!graphOwnsOpaqueToTransparentBoundary || !graphEntryStatesOwned)
-                commandList.commitBarriers();
+            else{
+                // The software route is retained for devices without hardware ray queries.
+                if(!graphEntryStatesOwned){
+                    transitionSwShadowTraversalResources(commandList);
+                    commandList.setBufferState(m_rayTracingState.m_shadowInstanceBuffer.get(), Core::ResourceStates::ShaderResource);
+                    commandList.setBufferState(targets.bindless.slotsBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                    commandList.setBufferState(deferredLightingResources.sceneShadingBuffer.get(), Core::ResourceStates::ConstantBuffer);
+                    commandList.setBufferState(deferredLightingResources.lightBuffer.get(), Core::ResourceStates::ShaderResource);
+                }
+                if(!graphOwnsOpaqueToTransparentBoundary){
+                    commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                    commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
+                }
+                commandList.setEnableUavBarriersForTexture(targets.transparentSoftHalf.get(), true);
+                if(!graphOwnsOpaqueToTransparentBoundary || !graphEntryStatesOwned)
+                    commandList.commitBarriers();
 
-            SwShadowHeapPushConstants tracePush;
-            tracePush.width = targets.width;
-            tracePush.height = targets.height;
-            tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
-            tracePush.frameIndex = frameIndex;
-            tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
-            tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-            tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-            tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
-            tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
-            tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
-            tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-            tracePush.edgeStatsStorageSlot = m_rayTracingState.m_swShadowEdgeStatsHeapHandle.slot();
-            tracePush.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
-            tracePush.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
-            tracePush.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
-            commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentSoftPipeline));
-            bindHeap(m_rayTracingState.m_swShadowTransparentSoftPipeline);
-            commandList.setPushConstants(&tracePush, sizeof(tracePush));
-            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+                SwShadowHeapPushConstants tracePush;
+                tracePush.width = targets.width;
+                tracePush.height = targets.height;
+                tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
+                tracePush.frameIndex = frameIndex;
+                tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
+                tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
+                tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
+                tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
+                tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
+                tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
+                tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
+                tracePush.edgeStatsStorageSlot = m_rayTracingState.m_swShadowEdgeStatsHeapHandle.slot();
+                tracePush.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
+                tracePush.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
+                tracePush.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
+                commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentSoftPipeline));
+                bindHeap(m_rayTracingState.m_swShadowTransparentSoftPipeline);
+                commandList.setPushConstants(&tracePush, sizeof(tracePush));
+                commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            }
         }
     }
 

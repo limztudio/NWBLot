@@ -146,23 +146,6 @@ TEST(OpticalScene, FrozenUploadOwnsBytesAfterGatherChanges){
     EXPECT_EQ(storedEntity, Core::ECS::EntityID(7u, 2u).id);
 }
 
-TEST(OpticalScene, HybridOrderComparisonUsesFullEntityGenerationAndLength){
-    RayTracingOpticalInstanceGpu first[] = {
-        { Core::ECS::EntityID(1u, 0u).id }, { Core::ECS::EntityID(2u, 3u).id },
-    };
-    RayTracingOpticalInstanceGpu second[] = { first[0], first[1] };
-    const auto* const bytes = reinterpret_cast<const u8*>(first);
-    EXPECT_TRUE(OpticalInstanceOrderMatches(bytes, LengthOf(first), second, LengthOf(second)));
-    second[1].entityId = Core::ECS::EntityID(2u, 4u).id;
-    EXPECT_FALSE(OpticalInstanceOrderMatches(bytes, LengthOf(first), second, LengthOf(second)));
-    second[1] = first[1];
-    Swap(second[0], second[1]);
-    EXPECT_FALSE(OpticalInstanceOrderMatches(bytes, LengthOf(first), second, LengthOf(second)));
-    EXPECT_FALSE(OpticalInstanceOrderMatches(bytes, LengthOf(first), second, 1u));
-    EXPECT_FALSE(OpticalInstanceOrderMatches(nullptr, 1u, second, 1u));
-    EXPECT_TRUE(OpticalInstanceOrderMatches(nullptr, 0u, nullptr, 0u));
-}
-
 TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslation){
     Float34U transform{};
     transform._11 = -2.f;

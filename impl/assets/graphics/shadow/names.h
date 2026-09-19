@@ -25,7 +25,7 @@ namespace AssetsGraphicsShadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Opaque RayQuery trace; software transparent shadows multiply onto this mask.
+// Opaque RayQuery trace; colored transparent shadows multiply onto this mask.
 inline constexpr Name s_RayQueryShaderName("engine/graphics/shadow/shadow_rayquery_cs");
 // Half-res soft opaque HW trace feeding the shared denoise chain.
 inline constexpr Name s_RayQuerySoftShaderName("engine/graphics/shadow/shadow_rayquery_soft_cs");
@@ -40,6 +40,9 @@ inline constexpr Name s_SwTransparentIndirectShaderName("engine/graphics/shadow/
 inline constexpr Name s_SwTransparentUniformShaderName("engine/graphics/shadow/sw_shadow_transparent_uniform_cs");
 // Colored analog of the soft trace, folded at the final upsample.
 inline constexpr Name s_SwTransparentSoftShaderName("engine/graphics/shadow/sw_shadow_transparent_soft_cs");
+inline constexpr Name s_HardwareTransparentGatherShaderName("engine/graphics/shadow/hardware_transparent_gather_cs");
+inline constexpr Name s_HardwareTransparentEvaluateShaderName("engine/graphics/shadow/hardware_transparent_evaluate_cs");
+inline constexpr Name s_HardwareTransparentOverflowShaderName("engine/graphics/shadow/hardware_transparent_overflow_cs");
 // Denoises half-res visibility into full-res visibility.
 inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/shadow/shadow_geometry_downsample_cs");
 inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");

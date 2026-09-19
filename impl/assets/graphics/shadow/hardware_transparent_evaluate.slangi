@@ -1,0 +1,267 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_EVALUATE_SLANGI
+#define NWB_GRAPHICS_SHADOW_HARDWARE_TRANSPARENT_EVALUATE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "hardware_transparent_resources.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){
+    return g_NwbHardwareTransparentContext.sceneSlots.w;
+}
+
+uint nwbMeshFrameInstanceHeapSlot(){
+    return g_NwbHardwareTransparentContext.materialSlots.x;
+}
+
+uint nwbMeshFrameViewHeapSlot(){
+    return 0u;
+}
+
+#include "../bindless/bindless_heap_mesh.slangi"
+#include "shadow_surface.slangi"
+#include "shadow/generated/transmittance_dispatch.slangi"
+#include "shadow_integrate.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbHardwareTransparentCrossingOptics{
+    float3 absorption;
+    float transmission;
+    uint facing;
+};
+
+struct NwbHardwareTransparentStream{
+    float3 opticalDepth;
+    float transmission;
+    float3 instanceAbsorption;
+    float instanceTransmission;
+    float chord;
+    float intervalStart;
+    float firstDistance;
+    float lastDistance;
+    float clusterDistance;
+    NwbHardwareTransparentCrossingOptics clusterOptics;
+    uint instance;
+    uint crossingCount;
+    uint boundaryMode;
+    bool hasInstance;
+    bool hasCluster;
+    bool inside;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+float3 nwbHwShadowScaleGeometryVector(const float3 value){
+    const float magnitude = max(abs(value.x), max(abs(value.y), abs(value.z)));
+    return magnitude > 0.0 && all(isfinite(value)) ? value / magnitude : float3(0.0);
+}
+
+float3 nwbHwShadowGeometricNormal(const NwbRtInstanceMaterial material, const uint primitive){
+    const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(
+        primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES
+    );
+    const float3 p0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 p1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 p2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    return nwbHwShadowScaleGeometryVector(cross(
+        nwbHwShadowScaleGeometryVector(p1 - p0),
+        nwbHwShadowScaleGeometryVector(p2 - p0)
+    ));
+}
+
+float3 nwbHwShadowObjectDirection(const NwbMeshInstanceData instance, const float3 direction){
+    return nwbRotateVectorByQuaternion(direction, float4(-instance.rotation.xyz, instance.rotation.w)) / instance.scale.xyz;
+}
+
+uint nwbHwShadowFacing(const float3 geometricNormal, const float3 objectDirection){
+    const float facing = dot(geometricNormal, nwbHwShadowScaleGeometryVector(objectDirection));
+    return facing < 0.0 ? 1u : (facing > 0.0 ? 2u : 0u);
+}
+
+uint nwbHwShadowCrossingFacing(const RayDesc ray, const NwbHardwareTransparentCrossing crossing){
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
+    const NwbMeshInstanceData instance = g_NwbMeshInstances[material.meshInstanceIndex];
+    return nwbHwShadowFacing(nwbHwShadowGeometricNormal(material, crossing.primitive), nwbHwShadowObjectDirection(instance, ray.Direction));
+}
+
+NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
+    const RayDesc ray,
+    const NwbHardwareTransparentCrossing crossing){
+    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
+    const NwbMeshInstanceData instance = g_NwbMeshInstances[material.meshInstanceIndex];
+    const uint corner = crossing.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(corner * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((corner + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((corner + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const float3 bary = float3(1.0 - crossing.barycentrics.x - crossing.barycentrics.y, crossing.barycentrics);
+    const float3 objectNormal = float3(a0.normal) * bary.x + float3(a1.normal) * bary.y + float3(a2.normal) * bary.z;
+    const float3 geometricNormal = nwbHwShadowGeometricNormal(material, crossing.primitive);
+    const float3 objectDirection = nwbHwShadowObjectDirection(instance, ray.Direction);
+
+    NwbShadowHit hit;
+    hit.meshInstanceIndex = material.meshInstanceIndex;
+    hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    hit.materialConstantByteOffset = material.materialConstantByteOffset;
+    hit.uv0 = a0.uv0 * bary.x + a1.uv0 * bary.y + a2.uv0 * bary.z;
+    // Inverse transpose preserves outward orientation under nonuniform and mirrored instance scales.
+    hit.worldNormal = nwbSafeNormalize(nwbRotateVectorByQuaternion(objectNormal / instance.scale.xyz, instance.rotation), float3(0.0, 0.0, 1.0));
+    hit.worldPosition = ray.Origin + ray.Direction * crossing.distance;
+    hit.rayDirection = ray.Direction;
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+    const float smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
+    const half cosine = half(lerp(
+        nwbShadowCosineToRay(geometricNormal, objectDirection),
+        nwbShadowCosineToRay(objectNormal, objectDirection),
+        smoothWeight
+    ));
+    NwbHardwareTransparentCrossingOptics optics;
+    optics.absorption = float3(nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint));
+    optics.transmission = float(nwbShadowFresnelTransmittedFraction(float(surface.refractionIor), cosine));
+    optics.facing = nwbHwShadowFacing(geometricNormal, objectDirection);
+    return optics;
+}
+
+uint nwbHwShadowBoundaryMode(const uint instance){
+    if(instance >= g_NwbHardwareTransparentContext.materialSlots.z)
+        return NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
+    return NwbHeapRawBuffer(g_NwbHardwareTransparentContext.materialSlots.y).Load(
+        NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET
+    );
+}
+
+NwbHardwareTransparentStream nwbHwShadowStreamBegin(){
+    NwbHardwareTransparentStream stream = (NwbHardwareTransparentStream)0;
+    stream.transmission = 1.0;
+    stream.instanceTransmission = 1.0;
+    return stream;
+}
+
+bool nwbHwShadowClosedBoundary(const uint mode){
+    return mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
+}
+
+void nwbHwShadowFinishCluster(inout NwbHardwareTransparentStream stream){
+    if(!stream.hasCluster)
+        return;
+    stream.hasCluster = false;
+    const bool closed = nwbHwShadowClosedBoundary(stream.boundaryMode);
+    // At a closed silhouette, adjacent faces can report both signs at the same distance without entering the volume.
+    if(closed && (stream.clusterOptics.facing == 3u || stream.clusterOptics.facing == 0u))
+        return;
+    const float distance = stream.clusterDistance;
+    if(stream.crossingCount == 0u){
+        stream.firstDistance = distance;
+        stream.instanceAbsorption = stream.clusterOptics.absorption;
+        if(closed && stream.clusterOptics.facing == 2u){
+            stream.inside = true;
+            stream.intervalStart = 0.0;
+        }
+    }
+    stream.lastDistance = distance;
+    stream.instanceTransmission *= stream.clusterOptics.transmission;
+    if(stream.inside)
+        stream.chord += max(distance - stream.intervalStart, 0.0);
+    else
+        stream.intervalStart = distance;
+    stream.inside = !stream.inside;
+    ++stream.crossingCount;
+}
+
+void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const RayDesc ray){
+    if(!stream.hasInstance || stream.crossingCount == 0u)
+        return;
+    float chord = stream.chord;
+    if(nwbHwShadowClosedBoundary(stream.boundaryMode)){
+        if(stream.inside)
+            chord += max(ray.TMax - stream.intervalStart, 0.0);
+    }
+    else if((stream.crossingCount & 1u) != 0u){
+        // Unspecified materials preserve the legacy singleton/odd-boundary behavior.
+        chord = stream.crossingCount > 1u ? stream.lastDistance - stream.firstDistance : 0.0;
+    }
+    stream.opticalDepth += stream.instanceAbsorption * chord;
+    stream.transmission *= lerp(1.0, stream.instanceTransmission, smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
+}
+
+void nwbHwShadowConsumeCrossing(
+    inout NwbHardwareTransparentStream stream,
+    const RayDesc ray,
+    const NwbHardwareTransparentCrossing crossing){
+    if(stream.hasCluster && stream.instance == crossing.instance && nwbShadowCrossingMatchesEndpoint(crossing.distance, stream.clusterDistance)){
+        stream.clusterOptics.facing |= nwbHwShadowCrossingFacing(ray, crossing);
+        return;
+    }
+    nwbHwShadowFinishCluster(stream);
+    if(!stream.hasInstance || stream.instance != crossing.instance){
+        nwbHwShadowFinishInstance(stream, ray);
+        stream.instance = crossing.instance;
+        stream.boundaryMode = nwbHwShadowBoundaryMode(crossing.instance);
+        stream.hasInstance = true;
+        stream.crossingCount = 0u;
+        stream.instanceTransmission = 1.0;
+        stream.chord = 0.0;
+        stream.inside = false;
+    }
+    stream.clusterDistance = crossing.distance;
+    stream.clusterOptics = nwbHwShadowShadeCrossing(ray, crossing);
+    stream.hasCluster = true;
+}
+
+float3 nwbHwShadowStreamFinish(inout NwbHardwareTransparentStream stream, const RayDesc ray){
+    nwbHwShadowFinishCluster(stream);
+    nwbHwShadowFinishInstance(stream, ray);
+    return saturate(stream.transmission * exp(-stream.opticalDepth));
+}
+
+float3 nwbHwShadowEvaluateGathered(const RayDesc ray, const uint pixel, const uint rayCount){
+    const uint count = g_NwbHardwareTransparentCrossings[pixel];
+    NwbHardwareTransparentStream stream = nwbHwShadowStreamBegin();
+    uint remaining = (1u << count) - 1u;
+    // Selection reads only the three ordering planes until the chosen record needs its full-precision barycentrics.
+    // Keeping records in scratch avoids a dynamically indexed private hit array in the material evaluator.
+    for(uint accepted = 0u; accepted < count; ++accepted){
+        bool found = false;
+        uint selected = 0u;
+        NwbHardwareTransparentCrossing next = (NwbHardwareTransparentCrossing)0;
+        for(uint slot = 0u; slot < count; ++slot){
+            if((remaining & (1u << slot)) == 0u)
+                continue;
+            const uint base = nwbHwShadowCrossingAddress(pixel, rayCount, slot, 0u);
+            NwbHardwareTransparentCrossing candidate = (NwbHardwareTransparentCrossing)0;
+            candidate.distance = asfloat(g_NwbHardwareTransparentCrossings[base]);
+            candidate.instance = g_NwbHardwareTransparentCrossings[base + rayCount];
+            candidate.primitive = g_NwbHardwareTransparentCrossings[base + rayCount * 2u];
+            if(!found || nwbHwShadowCrossingBefore(candidate, next)){
+                next = candidate;
+                selected = slot;
+                found = true;
+            }
+        }
+        remaining &= ~(1u << selected);
+        next = nwbHwShadowLoadCrossing(pixel, rayCount, selected);
+        nwbHwShadowConsumeCrossing(stream, ray, next);
+    }
+    return nwbHwShadowStreamFinish(stream, ray);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

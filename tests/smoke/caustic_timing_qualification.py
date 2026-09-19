@@ -78,7 +78,7 @@ def single_match(pattern, text, label):
     return matches[0]
 
 
-def validate_log(text, settings, capture=False):
+def validate_log(text, settings, capture=False, *, allow_legacy_shadow_route=False):
     text = text.replace("\r\n", "\n")
     lines = text.splitlines()
     preset = settings["NWB_CAUSTIC_SMOKE_CAMERA_PRESET"]
@@ -89,11 +89,19 @@ def validate_log(text, settings, capture=False):
         "AvboitTimingProbe: caustic in-flight ranges 32", "CausticSphereSmokeProject: reflection mode 0",
         "CausticSphereSmokeProject: camera refraction disabled",
         "CausticSphereSmokeProject: caustics " + ("enabled" if enabled else "disabled"),
-        "CausticTimingProbe: scene single-static-sphere-ground-v1", "TransparentMultiSmokeProject: shutdown",
-        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware")
+        "CausticTimingProbe: scene single-static-sphere-ground-v1", "TransparentMultiSmokeProject: shutdown")
     for marker in required:
         if lines.count(marker) != 1:
             raise SmokeFailure("missing or repeated caustic lifecycle/policy: " + marker)
+    route_messages = {
+        "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware": "hardware",
+        "TransparentMultiSmokeProject: natural hybrid shadow route selected on RayQuery-capable hardware": "hybrid",
+    }
+    routes = [route_messages[line] for line in lines if line in route_messages]
+    if len(routes) != 1 or (routes[0] != "hardware" and not allow_legacy_shadow_route):
+        raise SmokeFailure("one supported caustic shadow route is required")
+    if routes == ["hardware"]:
+        validate_expected_log_text(text, ["RendererSystem: dispatched hardware transparent shadow traversal"], ["RendererSystem: dispatched software shadow traversal"])
     # Reject contradictory values as well as requiring the selected value once.
     for prefix in ("AvboitTimingProbe: in-flight ranges ", "AvboitTimingProbe: render unfocused ",
         "AvboitTimingProbe: caustic in-flight ranges ", "CausticSphereSmokeProject: reflection mode ",
@@ -141,7 +149,7 @@ def validate_log(text, settings, capture=False):
     validate_expected_log_text(text, [], forbidden)
     result = {"camera_preset": preset, "camera_distance": actual[0], "camera_height": actual[1],
         "fixed_delta_seconds": actual[2], "yaw": actual[3], "sphere_scale": actual[4], "extent": [WIDTH, HEIGHT],
-        "shadow_route": "hybrid", "reflection_mode": "disabled", "camera_refraction": False,
+        "shadow_route": routes[0], "reflection_mode": "disabled", "camera_refraction": False,
         "caustics": enabled, "photon_schedule": list(map(int, phase)), "initial_producer": list(producers[0]) if producers else None,
         "timing_in_flight_ranges": 32, "directional_light": list(light), "vertical_fov_radians": fov}
     if capture:

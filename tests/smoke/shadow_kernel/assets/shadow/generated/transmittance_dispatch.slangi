@@ -6,11 +6,11 @@
 #define NWB_TESTS_SHADOW_TRAVERSAL_TRANSMITTANCE_DISPATCH_SLANGI
 
 
-// Fixed authored material for the traversal fixture; all traversal, boundary integration, and finalization stay live production code.
+// Fixed authored materials for native fixtures; traversal, boundary integration, and finalization stay live production code.
 NwbMeshSurface nwbShadowDispatchSurface(const uint modelId, const NwbShadowHit hit){
     NwbMeshSurface surface = nwbMakeMeshSurface(half3(1.0h, 1.0h, 1.0h), hit.worldNormal);
     surface.refractionIor = 1.5h;
-    surface.shadowAbsorptionTint = half3(0.5h, 0.75h, 1.0h);
+    surface.shadowAbsorptionTint = modelId == 1u ? half3(0.75h, 0.5h, 1.0h) : half3(0.5h, 0.75h, 1.0h);
     return surface;
 }
 

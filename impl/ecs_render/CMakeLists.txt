@@ -247,6 +247,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_swbvh.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_dispatch.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/hardware_transparent_shadow.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/hardware_transparent_shadow_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_pipelines.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_refraction.cpp"

@@ -238,7 +238,7 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     EXPECT_FALSE(ContainsText(opaqueResources, "shadowHistA"));
     EXPECT_FALSE(ContainsText(opaqueResources, "transparentSoftHalf"));
     EXPECT_TRUE(ContainsText(opaqueDesc, ".setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())"));
-    EXPECT_TRUE(ContainsText(opaqueDesc, "!hardwareShadowSupported && softwareTraceGeometryStatesGraphOwned"));
+    EXPECT_TRUE(ContainsText(opaqueDesc, "!hardwareShadowSupported && traceGeometryStatesGraphOwned"));
 
     EXPECT_TRUE(ContainsText(transparentTraceUses, "WriteUse(transparentSoftHalf, Core::ResourceStates::UnorderedAccess)"));
     EXPECT_FALSE(ContainsText(transparentTraceUses, "ReadWriteUse(shadowVisibility"));
@@ -419,6 +419,9 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     const AStringView acceptedShadow = system.substr(acceptedShadowOffset, temporalFinalizeOffset - acceptedShadowOffset);
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometry,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometryPrev,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentCrossingsBuffer,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowListBuffer,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedShadow, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));

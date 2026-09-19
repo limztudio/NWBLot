@@ -150,8 +150,11 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
             const bool rightMiss = (tRight >= NWB_SW_SHADOW_AABB_MISS);
 
             if(leftMiss && rightMiss){
-                if(stackPointer == 0u)
-                    return NwbShadowInstanceStatus::NoIntersection;
+                if(stackPointer == 0u){
+                    if(optics.crossingCount == 0u && optics.crossingOverflow == 0u)
+                        return NwbShadowInstanceStatus::NoIntersection;
+                    return NwbShadowInstanceStatus::Completed;
+                }
                 --stackPointer;
                 nodeIndex = stack[stackPointer];
                 continue;

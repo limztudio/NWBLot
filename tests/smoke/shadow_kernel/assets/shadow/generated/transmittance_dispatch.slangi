@@ -1,0 +1,22 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_TESTS_SHADOW_TRAVERSAL_TRANSMITTANCE_DISPATCH_SLANGI
+#define NWB_TESTS_SHADOW_TRAVERSAL_TRANSMITTANCE_DISPATCH_SLANGI
+
+
+// Fixed authored material for the traversal fixture; all traversal, boundary integration, and finalization stay live production code.
+NwbMeshSurface nwbShadowDispatchSurface(const uint modelId, const NwbShadowHit hit){
+    NwbMeshSurface surface = nwbMakeMeshSurface(half3(1.0h, 1.0h, 1.0h), hit.worldNormal);
+    surface.refractionIor = 1.5h;
+    surface.shadowAbsorptionTint = half3(0.5h, 0.75h, 1.0h);
+    return surface;
+}
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

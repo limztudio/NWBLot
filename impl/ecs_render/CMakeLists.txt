@@ -39,8 +39,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection/timing_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/optics/coincident_volumes.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/optics/coincident_volumes.h"
-    "${CMAKE_CURRENT_LIST_DIR}/optics/secondary_geometry_contract.h"
-    "${CMAKE_CURRENT_LIST_DIR}/optics/performance_profile.h"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/renderer_frame_pipeline_resources.cpp"

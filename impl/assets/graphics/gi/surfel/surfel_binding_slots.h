@@ -73,8 +73,6 @@
 // Converged surfels reuse history.
 #define NWB_SURFEL_CONVERGED_SAMPLE_COUNT 8u
 #define NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL 32u
-// Comparison path.
-#define NWB_SURFEL_USE_WAVE_REDUCE 0u
 #define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth per frame
 // Bounded running mean.
 #define NWB_SURFEL_MAX_ACCUM 64u

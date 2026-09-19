@@ -325,7 +325,7 @@ TEST(EcsGraphics, HybridSoftwareBvhInputsExposeRawViewsOnRayTracingHardware){
     const AStringView skinningRuntimeCache(skinningRuntimeCacheSource.data(), skinningRuntimeCacheSource.size());
     EXPECT_TRUE(ContainsText(
         meshResources,
-        "NWB_TEXT(\"position\"),\n"
+        "MakeNotNull(NWB_TEXT(\"position\")),\n"
         "        true,\n"
         "        rtSupported"
     ));

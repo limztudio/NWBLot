@@ -104,10 +104,6 @@ TEST(EcsGraphics, MaterialDrawSnapshotsRetainExactGraphResourceGenerations){
     EXPECT_FALSE(ContainsText(resourceSets, "findMeshResources("));
 
     EXPECT_EQ(CountText(plans, "const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;"), 6u);
-    // P4 versioned output contract: expanded stays the shipping layout; indexed draws require a validated descriptor.
-    EXPECT_TRUE(ContainsText(drawTypes, "GeneratedGeometryOutputVersion::ExpandedTriangleCorners"));
-    EXPECT_TRUE(ContainsText(drawTypes, "GeneratedGeometryOutputVersion::FixedRangeIndexed"));
-    EXPECT_TRUE(ContainsText(drawTypes, "validForCornerCount"));
     EXPECT_EQ(CountText(plans, "outputBuffers.push_back(mesh.emulationVertexBuffer);"), 4u);
     EXPECT_EQ(CountText(plans, "outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());"), 2u);
     EXPECT_TRUE(ContainsText(plans, "outputBuffer = mesh.emulationVertexBuffer;"));

@@ -331,30 +331,11 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     if(!setMaterialPassDrawPushConstants(context, drawItem, mesh))
         return;
 
-    // P4 indexed consumer: a validated FixedRangeIndexed descriptor draws the corner-index stream against the unique-vertex output; every other case keeps the expanded non-indexed draw. Bounds and overflow checks run before narrowing to GPU formats; a failed check falls back to expanded rather than issuing a bad draw.
-    const bool indexedOutput = mesh.generatedOutput.indexed()
-        && mesh.emulationIndexBuffer
-        && mesh.generatedOutput.validForCornerCount(mesh.meshletPrimitiveIndexCount)
-        && mesh.meshletLocalVertexCount > 0u
-        && mesh.meshletLocalVertexCount <= mesh.meshletPrimitiveIndexCount
-    ;
     Core::DrawArguments drawArgs;
-    if(indexedOutput){
-        Core::GraphicsState indexedState = graphicsState;
-        indexedState.setIndexBuffer(
-            Core::IndexBufferBinding()
-                .setBuffer(mesh.emulationIndexBuffer.get())
-                .setFormat(mesh.generatedOutput.indexByteWidth == 2u ? Core::Format::R16_UINT : Core::Format::R32_UINT)
-                .setOffset(0u)
-        );
-        context.commandList.setGraphicsState(indexedState);
-        drawArgs.setVertexCount(mesh.generatedOutput.cornerIndexCount);
+    drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
+    {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
-        context.commandList.drawIndexed(drawArgs);
-    }
-    else{
-        drawArgs.setVertexCount(mesh.meshletPrimitiveIndexCount);
-        Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
+
         context.commandList.draw(drawArgs);
     }
 }

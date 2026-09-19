@@ -100,6 +100,35 @@ Second-step validation:
 - The refraction fixture's `stacked` case passed framebuffer readback and log checks with two transformed instances of the same mesh, covering the shared-output fallback. All three native fallback captures used standalone logging.
 - All 31 changed C++ source/header files passed UTF-8, CRLF, exact EOF, separator and named-namespace checks; `git diff --check` passed.
 
+## Shadow block reconstruction correction
+
+The shared shadow upsample had a concrete source of screen-space blocks. It rounded each full-resolution location to a half-resolution texel and assigned equal spatial weight to its 3 x 3 neighborhood. With constant receiver guidance, adjacent full-resolution pixels sharing that rounded center therefore received identical values even when the half-resolution input was an affine ramp. Its coordinate mapping also assumed block-center samples, while both trace paths and the geometry cache sample full-resolution pixel index `factor * halfPixel`.
+
+The correction remains in the shadow resolve domain and applies to both scalar opaque visibility and RGB transparent transmission. It uses `fullPixel / factor` coordinates and separable quadratic B-spline spatial weights over the existing 3 x 3 support. All guidance/color moments and the invalid-normal fallback use consistent weighted normalization. Weights vanish at neighborhood transitions; clamped texture coordinates provide boundary extension. The kernel preserves constants and interior affine signals. Zero-weight taps are rejected before loading geometry.
+
+Ray counts, half-resolution tracing, temporal history, wavelet passes, resources, thickness integration and transparent traversal remain unchanged. This is a reconstruction correctness fix. It does not establish that the user's historical hardware-ray silhouette artifact has the same cause, and it does not enable hardware transparent-shadow tracing.
+
+Native resolve tests compile the production scalar/RGB Slang shaders and read back actual GPU output. The initial five tests cover ramp/edge interpolation, scalar overwrite, transparent multiplication into opaque visibility, invalid/incompatible guidance, and odd/tiny extents. Three of those tests failed against the unchanged shader and all five passed with this correction. An additional test covers a nonconstant distance field and an offset receiver against an analytic regularized linear fit, exercising nonzero guidance mean, variance and color covariance. The existing transparent-crossing test is retained.
+
+The existing transparent-multi scene was captured before and after at yaw 0.6, frozen after six rendered frames. Both captures pass the existing transparent-region checks. Visual inspection confirms overlapping colored and opaque ground shadows. These whole-scene checks do not quantify the original reported block artifact; the isolated GPU ramp/edge failures establish the reconstruction defect specifically.
+
+Two frozen-baseline runs from `81bacc004` and two corrected runs used the same all-features 1280 x 900, 10-body stress workload:
+
+| Native presentation measurement | Baseline | Corrected resolve |
+| --- | ---: | ---: |
+| Run 1 | 15.9293 FPS | 15.9100 FPS |
+| Run 2 | 16.0183 FPS | 15.8561 FPS |
+| Aggregate presentations / aggregate seconds | 15.9738 FPS | 15.8831 FPS |
+| Aggregate wall time per presentation | 62.602 ms | 62.960 ms |
+| Opaque resolve, mean per GPU range | 1.637 ms | 1.874 ms |
+| Transparent resolve, mean per GPU range | 2.249 ms | 2.508 ms |
+
+The observed end-to-end change is -0.57%, or +0.358 ms per presentation. The resolve scopes show a small additional cost, so this change must not be presented as a performance gain or a free fix. These short runs do not establish statistical significance or sustained thermal performance; the GPU scopes overlap and must not be added to wall frame time. Transparent traversal still costs approximately 38 ms per reported trace range.
+
+A recomputed-weight variant passed the same GPU tests and reduced the measured resolve scopes by about 0.04 ms each, but its one full-scene run measured 15.6383 FPS with a slower trace scope. It did not establish an end-to-end benefit and was not retained. The retained implementation computes and stores weights once per output pixel for reuse across light layers.
+
+All seven native shadow GPU tests passed, including the six resolve tests and the retained traversal regression. The production asset cook, ECS graphics suite, overlap capture and separate full stress run with Vulkan validation passed. Final source, stress executable and authored-volume identities match the qualified implementation after recooking. Local evidence is under `__artifacts/stress_60fps/shadow_upsample_81bacc004/`: `baseline_kernel.log` records the original failures; `baseline_run{1,2}` and `qualified_run{1,2}` contain the reported measurements and resource identities; `comparison.json` records the aggregation; and `validation` contains the separate validation run. The rejected simplification is retained only in ignored artifacts.
+
 ## Next architecture work
 
 1. **Measure the transparent-ray workload, then test separate gather, optical resolve and fallback dispatches.** Collect candidate-count distributions and fallback reasons. Keep authored material evaluation and full software traversal out of the hardware gather shader. A compact exceptional-ray queue can isolate fallback work. Preserve complete-ray replacement on failure so partial hardware attenuation is never multiplied by a complete software result. Bound intermediate storage: densely storing the maximum hit list for every ray can replace a compute problem with a bandwidth problem.

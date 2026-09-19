@@ -2,12 +2,13 @@ if(NOT TARGET nwb_assets_shader_cook OR NOT TARGET nwb_assets_csg_cook)
     return()
 endif()
 
-# Compile the live shadow traversal and execute analytic BVHs through the shared native smoke fixture.
+# Execute live shadow traversal and resolve shaders with analytic BVHs and synthetic textures in the native smoke fixture.
 nwb_declare_gtest_executable(nwb_shadow_kernel_tests)
 target_sources(nwb_shadow_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shadow_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/traversal_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/resolve_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/assets/shadow/generated/transmittance_dispatch.slangi"

@@ -112,6 +112,12 @@ static const half s_NwbShadowResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 1
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE (2 * NWB_SHADOW_RESOLVE_GUIDED_RADIUS + 1)
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT (NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)
 
+// Quadratic B-spline weights preserve affine signals and vanish as taps leave the rounded three-sample support.
+float3 nwbShadowResolveSpatialWeights(const float offset){
+    const float2 side = float2(0.5 - offset, 0.5 + offset);
+    return float3(0.5 * side.x * side.x, 0.75 - offset * offset, 0.5 * side.y * side.y);
+}
+
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
     // The normal-agreement weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
     const float3 tn = nwbOctDecodeNormal(float2(tapOct));
@@ -240,8 +246,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
-        const float2 src = (float2(pixel) + 0.5) / float(NWB_SW_SHADOW_SOFT_FACTOR) - 0.5;
+        // Trace and geometry samples lie at full pixel index factor*h, rather than the center of each block.
+        const float2 src = float2(pixel) / float(NWB_SW_SHADOW_SOFT_FACTOR);
         const int2 baseTexel = int2(round(src));
+        const float2 offset = src - float2(baseTexel);
+        const float3 weightsX = nwbShadowResolveSpatialWeights(offset.x);
+        const float3 weightsY = nwbShadowResolveSpatialWeights(offset.y);
 
         const half3 centerWorldSample = half3(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
         const half3 centerNormalSample = half3(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.normalSlot).Load(int3(fullTexel, 0)).xyz);
@@ -256,34 +266,40 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
         float guidedTapG[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
+        float spatialWeights[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
         float sumG = 0.0;
         float sumG2 = 0.0;
-        float guidedCount = 0.0;
-        float anyCount = 0.0;
+        float guidedWeightSum = 0.0;
+        float validWeightSum = 0.0;
         [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
             [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const uint tapBit = 1u << tapIndex;
+                const float spatialWeight = weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
+                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS];
+                spatialWeights[tapIndex] = spatialWeight;
+                if(spatialWeight <= 0.0)
+                    continue;
                 const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
                 const half4 tapGeom = nwbShadowResolveGeomAtHalf(tap);
                 if(tapGeom.w <= half(0.5h))
                     continue;
                 validTapMask |= tapBit;
-                anyCount += 1.0;
+                validWeightSum += spatialWeight;
                 if(dot(centerNormal, nwbOctDecodeNormal(float2(tapGeom.xy))) < NWB_SHADOW_RESOLVE_GUIDED_NORMAL_GATE)
                     continue;
                 const float g = float(tapGeom.z) - centerDist;
                 guidedTapMask |= tapBit;
                 guidedTapG[tapIndex] = g;
-                sumG += g;
-                sumG2 += g * g;
-                guidedCount += 1.0;
+                sumG += spatialWeight * g;
+                sumG2 += spatialWeight * g * g;
+                guidedWeightSum += spatialWeight;
             }
         }
-        const bool hasGuidedTaps = guidedCount > 0.0;
-        const float guidedInvCount = hasGuidedTaps ? (1.0 / guidedCount) : 0.0;
-        const float guidedMeanG = sumG * guidedInvCount;
-        const float guidedVarG = max(sumG2 * guidedInvCount - guidedMeanG * guidedMeanG, 0.0);
+        const bool hasGuidedTaps = guidedWeightSum > 0.0;
+        const float guidedInvWeightSum = hasGuidedTaps ? (1.0 / guidedWeightSum) : 0.0;
+        const float guidedMeanG = sumG * guidedInvWeightSum;
+        const float guidedVarG = max(sumG2 * guidedInvWeightSum - guidedMeanG * guidedMeanG, 0.0);
 
         for(uint slot = slotStart; slot < slotEnd; ++slot){
             NwbShadowResolveVisFVec result;
@@ -300,12 +316,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
                         const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                         const float g = guidedTapG[tapIndex];
-                        sumP += tapVis;
-                        sumGP += g * tapVis;
+                        const float spatialWeight = spatialWeights[tapIndex];
+                        sumP += spatialWeight * tapVis;
+                        sumGP += spatialWeight * g * tapVis;
                     }
                 }
-                const NwbShadowResolveVisFVec meanP = sumP * guidedInvCount;
-                const NwbShadowResolveVisFVec covGP = sumGP * guidedInvCount - guidedMeanG * meanP;
+                const NwbShadowResolveVisFVec meanP = sumP * guidedInvWeightSum;
+                const NwbShadowResolveVisFVec covGP = sumGP * guidedInvWeightSum - guidedMeanG * meanP;
                 const NwbShadowResolveVisFVec a = covGP / (guidedVarG + guidedEpsSq);
                 result = clamp(meanP - a * guidedMeanG, (NwbShadowResolveVisFVec)0.0, (NwbShadowResolveVisFVec)1.0);
             }
@@ -317,10 +334,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         if((validTapMask & (1u << tapIndex)) == 0u)
                             continue;
                         const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
-                        anySum += (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
+                        anySum += spatialWeights[tapIndex] * (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
                     }
                 }
-                result = (anyCount > 0.0) ? (anySum / anyCount) : (NwbShadowResolveVisFVec)1.0;
+                result = (validWeightSum > 0.0) ? (anySum / validWeightSum) : (NwbShadowResolveVisFVec)1.0;
             }
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
             if(fold == 0u){

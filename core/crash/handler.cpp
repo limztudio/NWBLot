@@ -5,7 +5,7 @@
 #include "handler.h"
 #include "package_internal.h"
 
-#include <global/diagnostics.h>
+#include <global/basic_string.h>
 
 #include <cstdlib>
 
@@ -46,7 +46,7 @@ template<typename CharT>
     if(!lhs || !rhs)
         return lhs == rhs;
 
-    return DiagnosticDetail::TextEquals(lhs, rhs);
+    return BasicStringView<CharT>(lhs) == BasicStringView<CharT>(rhs);
 }
 
 template<typename CharT>

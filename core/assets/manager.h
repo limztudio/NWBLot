@@ -97,7 +97,7 @@ public:
         const NotNull<const char*> assetKindText
     ){
         if(!assetRef.valid()){
-            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner.get(), assetKindText.get());
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: {} asset reference is empty"), owner.get(), StringConvert(assetKindText.get()));
             return false;
         }
         return !resource.valid();
@@ -116,7 +116,7 @@ public:
         if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName.get()
-                , assetKindText.get()
+                , StringConvert(assetKindText.get())
                 , StringConvert(virtualPath.c_str())
             );
             return nullptr;
@@ -126,7 +126,7 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
                 , ownerName.get()
                 , StringConvert(virtualPath.c_str())
-                , assetKindText.get()
+                , StringConvert(assetKindText.get())
             );
             return nullptr;
         }

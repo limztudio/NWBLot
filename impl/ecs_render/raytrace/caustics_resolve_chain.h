@@ -35,7 +35,7 @@ struct CausticsResolveStageUses{
 struct CausticsResolveStageNaming{
     Name identity;
     AStringView label;
-    AStringView warnText;
+    TStringView warnText;
 };
 
 struct CausticsResolveChainInputs{
@@ -114,3 +114,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

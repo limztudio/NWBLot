@@ -64,7 +64,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     ReleaseFn&& releaseResource
 ){
     if(!assetRef.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), emptyKindText.get());
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material {} asset reference is empty"), StringConvert(emptyKindText.get()));
         return nullptr;
     }
 

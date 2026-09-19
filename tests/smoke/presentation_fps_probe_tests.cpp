@@ -87,23 +87,75 @@ TEST(PresentationPacingRing, SteadyFramesReportMatchingPercentiles){
     EXPECT_EQ(summary.stallsOver50Ms, 0u);
 }
 
-TEST(PresentationPacingRing, IdleObservationsNeverBecomeSamplesButStallsStillCount){
+TEST(PresentationPacingRing, IdleObservationsPreserveFullGapAndCountOneStall){
     PresentationPacingRing ring;
     const Timer begin{};
     ring.record(10u, begin);
     for(i64 step = 1; step <= 3; ++step)
         ring.record(10u, TimerAddMS(begin, step * 60));
-    EXPECT_EQ(ring.sampleCount(), 0u);
     const PresentationPacingSummary idleSummary = ring.summarize();
     EXPECT_EQ(idleSummary.samples, 0u);
-    EXPECT_EQ(idleSummary.stallsOver50Ms, 3u);
+    EXPECT_EQ(idleSummary.stallsOver50Ms, 1u);
     ring.record(11u, TimerAddMS(begin, 280));
     const PresentationPacingSummary pacedSummary = ring.summarize();
     EXPECT_EQ(pacedSummary.samples, 1u);
-    EXPECT_DOUBLE_EQ(pacedSummary.maxMs, 100.0);
+    EXPECT_DOUBLE_EQ(pacedSummary.maxMs, 280.0);
+    EXPECT_EQ(pacedSummary.stallsOver50Ms, 1u);
 }
 
-TEST(PresentationPacingRing, RegressingCountOrClockResetsInsteadOfWrapping){
+TEST(PresentationPacingRing, FrequentIdlePollsCountEachPendingStallOnce){
+    PresentationPacingRing ring;
+    const Timer begin{};
+    ring.record(0u, begin);
+    for(i64 milliseconds = 10; milliseconds <= 90; milliseconds += 10)
+        ring.record(0u, TimerAddMS(begin, milliseconds));
+    EXPECT_EQ(ring.sampleCount(), 0u);
+    EXPECT_EQ(ring.stallCount(), 1u);
+    ring.record(1u, TimerAddMS(begin, 100));
+    ring.record(1u, TimerAddMS(begin, 150));
+    ring.record(1u, TimerAddMS(begin, 160));
+    EXPECT_EQ(ring.stallCount(), 2u);
+    ring.record(2u, TimerAddMS(begin, 200));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_DOUBLE_EQ(summary.p50Ms, 100.0);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 100.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 2u);
+}
+
+TEST(PresentationPacingRing, BatchedAdvanceAveragesTheWholeIntervalAfterIdlePolling){
+    PresentationPacingRing ring;
+    const Timer begin{};
+    ring.record(10u, begin);
+    ring.record(10u, TimerAddMS(begin, 25));
+    ring.record(14u, TimerAddMS(begin, 80));
+    ring.record(14u, TimerAddMS(begin, 88));
+    ring.record(15u, TimerAddMS(begin, 96));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 20.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 0u);
+}
+
+TEST(PresentationPacingRing, IdleClockRegressionResetsEvenAfterLastPresentationTime){
+    PresentationPacingRing ring;
+    const Timer begin{};
+    ring.record(10u, begin);
+    ring.record(11u, TimerAddMS(begin, 16));
+    ring.record(11u, TimerAddMS(begin, 80));
+    EXPECT_EQ(ring.stallCount(), 1u);
+    ring.record(11u, TimerAddMS(begin, 70));
+    EXPECT_EQ(ring.sampleCount(), 0u);
+    EXPECT_EQ(ring.stallCount(), 0u);
+    ring.record(11u, TimerAddMS(begin, 100));
+    ring.record(12u, TimerAddMS(begin, 116));
+    const PresentationPacingSummary summary = ring.summarize();
+    EXPECT_EQ(summary.samples, 1u);
+    EXPECT_DOUBLE_EQ(summary.maxMs, 16.0);
+    EXPECT_EQ(summary.stallsOver50Ms, 0u);
+}
+
+TEST(PresentationPacingRing, RegressingCountResetsInsteadOfWrapping){
     PresentationPacingRing ring;
     const Timer begin{};
     ring.record(100u, begin);

@@ -26,8 +26,8 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Low-overhead per-frame pacing trace for the stress timing mode. Timing runs keep expensive counters off; this ring stores one compact sample per observation that advances the accepted-presentation count, so p50/p95/max describe actual wall pacing instead of a handful of half-second FPS summaries.
-// Diagnostic builds may enlarge the capacity; timing claims always report the stored sample count alongside the percentiles.
+// Low-overhead pacing trace for the stress timing mode. Each advancing observation stores the entire interval since the previous advancement, averaged across the new presentations. Batch samples do not recover individual frame timings.
+// Idle observations preserve that interval and count each pending gap of at least 50 ms once. Timing claims report the stored observation count alongside the percentiles; the caller owns warmup exclusion.
 struct PresentationPacingSample{
     f64 wallMsPerPresentation = 0.0;
     u64 newPresentations = 0u;
@@ -53,8 +53,10 @@ public:
         m_count = 0u;
         m_head = 0u;
         m_previousCount = 0u;
-        m_previousTime = {};
+        m_previousObservationTime = {};
+        m_previousPresentationTime = {};
         m_started = false;
+        m_pendingStallCounted = false;
         m_stalls = 0u;
     }
 
@@ -62,32 +64,34 @@ public:
         if(!m_started){
             m_started = true;
             m_previousCount = successfulPresentations;
-            m_previousTime = now;
+            m_previousObservationTime = now;
+            m_previousPresentationTime = now;
             return;
         }
-        if(now < m_previousTime || successfulPresentations < m_previousCount){
-            m_started = false;
-            m_count = 0u;
-            m_head = 0u;
-            m_stalls = 0u;
+        if(now < m_previousObservationTime || successfulPresentations < m_previousCount){
+            reset();
             return;
         }
-        const f64 wallSeconds = DurationInSeconds<f64>(now, m_previousTime);
+        m_previousObservationTime = now;
+        const f64 wallSeconds = DurationInSeconds<f64>(now, m_previousPresentationTime);
         const u64 advanced = successfulPresentations - m_previousCount;
-        m_previousCount = successfulPresentations;
-        m_previousTime = now;
         if(advanced == 0u){
-            if(wallSeconds * s_MsPerSecond >= s_StallThresholdMs)
+            if(!m_pendingStallCounted && wallSeconds * s_MsPerSecond >= s_StallThresholdMs){
                 ++m_stalls;
+                m_pendingStallCounted = true;
+            }
             return;
         }
         const f64 wallMs = wallSeconds * s_MsPerSecond / static_cast<f64>(advanced);
-        if(wallMs >= s_StallThresholdMs)
+        if(!m_pendingStallCounted && wallMs >= s_StallThresholdMs)
             ++m_stalls;
         m_samples[m_head] = PresentationPacingSample{ wallMs, advanced };
         m_head = (m_head + 1u) % s_Capacity;
         if(m_count < s_Capacity)
             ++m_count;
+        m_previousCount = successfulPresentations;
+        m_previousPresentationTime = now;
+        m_pendingStallCounted = false;
     }
 
     [[nodiscard]] PresentationPacingSummary summarize()const{
@@ -115,8 +119,10 @@ private:
     usize m_count = 0u;
     usize m_head = 0u;
     u64 m_previousCount = 0u;
-    Timer m_previousTime = {};
+    Timer m_previousObservationTime = {};
+    Timer m_previousPresentationTime = {};
     bool m_started = false;
+    bool m_pendingStallCounted = false;
     u64 m_stalls = 0u;
 };
 

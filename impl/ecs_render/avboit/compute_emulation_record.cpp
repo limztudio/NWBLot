@@ -113,7 +113,8 @@ NWB_IMPL_BEGIN
         csgComputeEmulation && inputs.csgClipBufferStatesGraphOwned,
         inputs.materialFrameStatesGraphOwned,
         inputs.materialGeometryStatesGraphOwned,
-        true
+        true,
+        inputs.conservativeGeometryScissor
     };
     materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems.computeDrawItems);
     return true;
@@ -236,3 +237,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

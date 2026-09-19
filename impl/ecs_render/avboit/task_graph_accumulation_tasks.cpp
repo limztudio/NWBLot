@@ -99,7 +99,8 @@ namespace RendererTaskGraphDetail{
                 payload.accumulationMaterialGeometryStatesGraphOwned,
                 payload.accumulationComputeEmulationOutputStatesGraphOwned,
                 payload.accumulationComputeEmulationTiming,
-                payload.accumulationCsgComputeEmulationOutputStatesGraphOwned
+                payload.accumulationCsgComputeEmulationOutputStatesGraphOwned,
+                payload.generatedGeometryReused
             );
         }
     );

@@ -1,6 +1,6 @@
 # Stress renderer performance review — 2026-09-19
 
-This change removes unused rendering experiments and reuses accepted object-space geometry when a runtime mesh's pose has not changed. It does not reach the 60 FPS target. Transparent shadow transmission and repeated raster geometry generation remain the first architectural targets; surfel GI is a much smaller measured cost.
+The first step removes unused rendering experiments and reuses accepted object-space geometry when a runtime mesh's pose has not changed. The second step reuses generated geometry across compatible transparent passes. Neither reaches the 60 FPS target. Transparent shadow transmission remains the dominant measured cost; surfel GI is much smaller.
 
 ## Workload and measurement
 
@@ -67,10 +67,42 @@ Despite passing correctness tests, its first full-scene implementation measured 
 
 The measurements do not identify the hardware cause. Register pressure, private-memory spills, poor occupancy and executing software fallback in the same large shader are hypotheses. They do establish that simply switching this workload to inline ray queries is not a valid optimization on this device.
 
+## Completed second step: generated geometry reuse
+
+`AvboitGeneratedGeometryReuse` belongs to the AVBOIT domain and lasts for one frame-graph declaration. It captures complete regular, compute-only groups using the known `shared_ms/default/mesh_compute` program. It compares selected instance bytes, mesh-view bytes, all source buffer and descriptor identities, output identities, draw ordering/counts, and the originating culling inputs. An incompatible group clears the retained state. CSG, custom geometry, native mesh-shader draws, and aliased output buffers or descriptor slots retain their existing generation path.
+
+Refraction capture publishes a completion task only after declaring all actual generation/raster pairs. When capture is absent, occupancy can be the first producer. Subsequent matching occupancy, extinction and accumulation passes import the same output as vertex-buffer reads and depend on that producer while retaining their own material uploads, raster pipelines, viewport/scissor and timing. Reuse creates no dummy generator task. Failed fresh output import clears reuse and preserves local generation; failed consumer import rejects graph declaration.
+
+Reusable producers explicitly disable compute scissor culling because the transparent passes use different raster resolutions. Clip-plane and meshlet-frustum culling remain enabled. Every raster consumer retains its real viewport/scissor. This is a conservative generation policy, not a reduction in visual features or sample quality.
+
+The baseline executable/resources were frozen from `863840266`. Two baseline runs and two final candidate runs used the same 1280 × 900, fixed-yaw/fixed-simulation, all-features 10-body scene and native presentation harness described above:
+
+| Native presentation measurement | Baseline | Final candidate |
+| --- | ---: | ---: |
+| Run 1 | 14.8330 FPS | 15.9836 FPS |
+| Run 2 | 14.6806 FPS | 15.9149 FPS |
+| Aggregate presentations / aggregate seconds | 14.7567 FPS | 15.9492 FPS |
+| Aggregate wall time per presentation | 67.766 ms | 62.699 ms |
+
+The observed gain for this step is **8.08%**, saving **5.067 ms** per presentation. The candidate runs were repeated after the final fallback/style changes; earlier exploratory runs measured 15.9479 and 15.8710 FPS. These short runs do not establish a confidence interval or sustained thermal performance.
+
+The first baseline and final candidate GPU samples show mesh generation falling from **30 to 15 dispatches per observed frame**, and from **10.737 to 4.416 ms per observed frame**. The frame envelope changed from 67.342 to 62.302 ms. Transparent-shadow trace remained expensive at 37.195/38.455 ms, while the surfel-GI envelope measured 1.437/1.264 ms. These scopes overlap and have different asynchronous sample counts; they are not additive.
+
+Artifacts, final binary/resource identities, logs and captures are under `__artifacts/stress_60fps/geometry_reuse_863840266/`. `baseline_run{1,2}` and `qualified_run{1,2}` are the reported measurements. `comparison.json` records aggregate arithmetic; `gpu_summary.json` in each run records the selected scope samples.
+
+Second-step validation:
+
+- Native `opt` builds passed for the ECS tests, GPU graph tests, stress, transparent CSG and refraction smoke executables.
+- All **407 enabled ECS graphics tests** and **356 enabled GPU graph tests** passed. This includes 11 new reuse-key tests and two graph tests for capture-present/capture-absent reuse, cross-packet handoff and later aliased writes. The suites retain 61 and 27 existing disabled tests respectively.
+- The complete stress presentation harness passed separately with Vulkan validation enabled and a debug messenger installed. Its timing is excluded from the performance table.
+- Matching baseline/candidate stress captures froze after 360 rendered frames. Mean absolute RGB channel difference was **0.0713/255**, with 95% of channel differences at most 1/255. Visual inspection found no structural difference. This does not claim pixel identity or fix the pre-existing glass speckles.
+- The transparent CSG fixture with `NWB_TRANSPARENT_CSG_DISABLE_CUTTER=1` passed with both optical features disabled, exercising occupancy as the eligible first producer. Re-enabling the cutter passed the existing transparent-region and clipped-void/remaining-geometry image checks.
+- The refraction fixture's `stacked` case passed framebuffer readback and log checks with two transformed instances of the same mesh, covering the shared-output fallback. All three native fallback captures used standalone logging.
+- All 31 changed C++ source/header files passed UTF-8, CRLF, exact EOF, separator and named-namespace checks; `git diff --check` passed.
+
 ## Next architecture work
 
-1. **Reuse generated geometry within the transparent pass chain.** Produce compatible regular mesh output once and retain it for refraction capture, AVBOIT occupancy, extinction and accumulation. The material layer already separates generation and raster recording. Eligibility must compare actual geometry shader/variant, streams, deformation, instance/view inputs and culling, and must retain non-aliased output storage. Different pass resolutions/scissors need explicit handling. Custom geometry and CSG retain their current path until their dependencies are represented.
-2. **Measure the transparent-ray workload, then test separate gather, optical resolve and fallback dispatches.** Collect candidate-count distributions and fallback reasons. Keep authored material evaluation and full software traversal out of the hardware gather shader. A compact exceptional-ray queue can isolate fallback work. Preserve complete-ray replacement on failure so partial hardware attenuation is never multiplied by a complete software result. Bound intermediate storage: densely storing the maximum hit list for every ray can replace a compute problem with a bandwidth problem.
-3. **Use indexed generated vertices.** The current shader already evaluates each meshlet-local vertex once, then expands a 64-byte record per triangle corner. Index by full meshlet-local vertex identity to preserve normal, tangent and UV seams. This targets generated writes, raster fetches and repeated vertex work without changing materials.
+1. **Measure the transparent-ray workload, then test separate gather, optical resolve and fallback dispatches.** Collect candidate-count distributions and fallback reasons. Keep authored material evaluation and full software traversal out of the hardware gather shader. A compact exceptional-ray queue can isolate fallback work. Preserve complete-ray replacement on failure so partial hardware attenuation is never multiplied by a complete software result. Bound intermediate storage: densely storing the maximum hit list for every ray can replace a compute problem with a bandwidth problem.
+2. **Use indexed generated vertices.** The current shader already evaluates each meshlet-local vertex once, then expands a 64-byte record per triangle corner. Index by full meshlet-local vertex identity to preserve normal, tangent and UV seams. This targets generated writes, raster fetches and repeated vertex work without changing materials.
 
 60 FPS requires at most 16.67 ms per frame. Even eliminating the approximately 1.3 ms GI envelope would not close the gap. Re-measure after each architectural change before adjusting samples, resolution or temporal quality. None of the unimplemented directions above is a demonstrated guarantee of 60 FPS, particularly for the requested 20-body workload.

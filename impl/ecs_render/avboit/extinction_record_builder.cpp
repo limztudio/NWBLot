@@ -60,6 +60,19 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
         return false;
 
+    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
+    if(
+        (generatedGeometryReused || inputs.producesReusableGeometry)
+        && (
+            !inputs.regularComputeEmulationPlanCaptured
+            || inputs.csgComputeEmulationPlanCaptured
+            || inputs.sharedComputeEmulationPlanCaptured
+        )
+    )
+        return false;
+    extinctionPayload.generatedGeometryReused = generatedGeometryReused;
+    m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
+
     const bool extinctionCsgIntervalSampleImageStatesGraphOwned =
         inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
     ;
@@ -144,6 +157,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             "RendererSystem: could not declare graph-owned AVBOIT Extinction shared compute-emulation output"
         ));
     }
+    if(generatedGeometryReused && !extinctionComputeEmulationOutputStatesGraphOwned)
+        return false;
     extinctionPayload.extinctionComputeEmulationOutputStatesGraphOwned =
         inputs.regularComputeEmulationPlanCaptured
         && extinctionComputeEmulationOutputStatesGraphOwned
@@ -275,7 +290,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     if(inputs.streamsUploaded)
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
-    if(extinctionComputeEmulationOutputStatesGraphOwned){
+    if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
+        computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
         computeEmulationPayload.graphics = &m_graphics;
         computeEmulationPayload.materialSystem = &m_materialSystem;
         computeEmulationPayload.targets = inputs.targets;
@@ -578,13 +594,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         m_avboitSystem.taskGraphStage().m_extinctionTask = extinctionSharedComputeEmulationDependency;
     }
     else{
+    const Core::GpuTaskId rasterDependencies[] = { extinctionDependency, inputs.reusedGeometryProducer };
+    const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != extinctionDependency ? 2u : 1u;
     Core::GpuTaskDesc extinctionDesc;
     extinctionDesc
         .setIdentity(Name("render.avboit.extinction"))
         .setMarkerLabel("AVBOIT Extinction")
         .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitExtinctionScheduling)
-        .setDependencies(&extinctionDependency, 1u)
+        .setDependencies(rasterDependencies, rasterDependencyCount)
         .setResourceUses(extinctionResourceUses.data(), extinctionResourceUses.size())
         .setResourceSetUses(
             extinctionMaterialResourceSetUseCount != 0u ? extinctionMaterialResourceSetUses : nullptr,

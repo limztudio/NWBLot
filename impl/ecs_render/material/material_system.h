@@ -162,7 +162,9 @@ public:
         Optional<Core::GpuTimingMeasure>* emulationOutputTiming = nullptr,
         // AVBOIT may instead freeze a CSG-only alias-free producer. Keep this separate from the regular handoff so
         // a mixed CSG stream cannot accidentally suppress its required local dispatch/raster interleaving.
-        bool csgEmulationOutputEntryStateGraphOwned = false
+        bool csgEmulationOutputEntryStateGraphOwned = false,
+        // A matching earlier producer permits raster timing independent of this pass.
+        bool emulationOutputReused = false
     );
     [[nodiscard]] bool prepareMaterialPassResources(
         Core::Framebuffer* framebuffer,

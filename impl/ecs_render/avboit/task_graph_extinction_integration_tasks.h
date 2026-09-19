@@ -62,6 +62,7 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
+        bool conservativeGeometryScissor = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plan(arena)
@@ -134,6 +135,7 @@ struct AvboitExtinctionGraphTask{
         bool extinctionMaterialGeometryStatesGraphOwned = false;
         bool extinctionComputeEmulationOutputStatesGraphOwned = false;
         bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false;
+        bool generatedGeometryReused = false;
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 

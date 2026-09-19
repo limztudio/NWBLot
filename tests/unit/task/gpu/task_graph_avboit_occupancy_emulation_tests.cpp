@@ -1804,6 +1804,176 @@ TEST(GpuTaskGraph, KeepsUnsplitAvboitOccupancySharedOutputComputeEmulationQuintu
 }
 
 
+void ExpectGeneratedGeometryReuseAcrossAvboitPasses(const bool hasRefractionCapture){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId outputs[] = {
+        AddBufferMetadata(graph, Name("tests/task_graph/reused_avboit_output_a"), "Generated Vertex A"),
+        AddBufferMetadata(graph, Name("tests/task_graph/reused_avboit_output_b"), "Generated Vertex B"),
+    };
+    for(const Graphics::GpuGraphResourceId output : outputs)
+        ASSERT_TRUE(output.valid());
+    const Graphics::GpuGraphResourceSetId outputSet = graph.importResourceSet(
+        Graphics::GpuGraphResourceSetDesc{}
+            .setIdentity(Name("tests/task_graph/reused_avboit_outputs"))
+            .setMarkerLabel("Reusable Generated Vertices")
+            .setMembers(outputs, LengthOf(outputs))
+    );
+    ASSERT_TRUE(outputSet.valid());
+    const Graphics::GpuQueueRequest queueRequest{
+        QueueCapabilities(Graphics::GpuQueueCapability::Graphics, Graphics::GpuQueueCapability::Compute),
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    const Graphics::GpuTaskResourceSetUse generatedWrite{
+        .resourceSet = outputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::UnorderedAccess,
+        .access = Graphics::GpuTaskResourceAccess::Write,
+    };
+    const Graphics::GpuTaskResourceSetUse generatedRead{
+        .resourceSet = outputSet,
+        .range = {},
+        .requiredState = Graphics::ResourceStates::VertexBuffer,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Graphics::GpuTaskId producer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/reused_avboit_producer"))
+            .setMarkerLabel(hasRefractionCapture ? "Refraction Geometry Producer" : "Occupancy Geometry Producer")
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+            .setResourceSetUses(&generatedWrite, 1u)
+    );
+    ASSERT_TRUE(producer.valid());
+    const Name setupNames[] = {
+        Name("tests/task_graph/reused_refraction_setup"),
+        Name("tests/task_graph/reused_occupancy_setup"),
+        Name("tests/task_graph/reused_extinction_setup"),
+        Name("tests/task_graph/reused_accumulation_setup"),
+    };
+    const Name rasterNames[] = {
+        Name("tests/task_graph/reused_refraction_raster"),
+        Name("tests/task_graph/reused_occupancy_raster"),
+        Name("tests/task_graph/reused_extinction_raster"),
+        Name("tests/task_graph/reused_accumulation_raster"),
+    };
+    Graphics::GpuTaskId consumers[4u];
+    Graphics::GpuTaskId setups[4u];
+    Graphics::GpuTaskId previousPhase = producer;
+    const usize firstConsumer = hasRefractionCapture ? 0u : 1u;
+    for(usize consumerIndex = firstConsumer; consumerIndex < LengthOf(consumers); ++consumerIndex){
+        Graphics::GpuTaskSchedulingHint setupScheduling = scheduling;
+        // Later phases cross packet boundaries but must keep the original producer as their source.
+        setupScheduling.forceSubmissionBoundary = consumerIndex >= 2u;
+        setups[consumerIndex] = AddTaskWithQueue(
+            graph, setupNames[consumerIndex], "Phase Upload And Setup", queueRequest,
+            setupScheduling, {}, &previousPhase, 1u
+        );
+        ASSERT_TRUE(setups[consumerIndex].valid());
+        const Graphics::GpuTaskId dependencies[] = { setups[consumerIndex], producer };
+        consumers[consumerIndex] = graph.addTask(
+            Graphics::GpuTaskDesc{}
+                .setIdentity(rasterNames[consumerIndex])
+                .setMarkerLabel("Generated Geometry Raster Consumer")
+                .setQueue(queueRequest)
+                .setScheduling(scheduling)
+                .setDependencies(dependencies, LengthOf(dependencies))
+                .setResourceSetUses(&generatedRead, 1u)
+        );
+        ASSERT_TRUE(consumers[consumerIndex].valid());
+        previousPhase = consumers[consumerIndex];
+    }
+    // A later interleaved draw aliases these buffers; resource hazards must order its new generation after reuse.
+    const Graphics::GpuTaskId aliasedProducer = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/reused_avboit_aliased_producer"))
+            .setMarkerLabel("Later Aliased Geometry Producer")
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+            .setResourceSetUses(&generatedWrite, 1u)
+    );
+    ASSERT_TRUE(aliasedProducer.valid());
+    const Graphics::GpuTaskId aliasedRaster = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/reused_avboit_aliased_raster"))
+            .setMarkerLabel("Later Aliased Geometry Raster")
+            .setQueue(queueRequest)
+            .setScheduling(scheduling)
+            .setDependencies(&aliasedProducer, 1u)
+            .setResourceSetUses(&generatedRead, 1u)
+    );
+    ASSERT_TRUE(aliasedRaster.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = &queue,
+        .queueCount = 1u,
+    };
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
+    const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
+    EXPECT_EQ(analysis.topologicalOrder().size(), 3u + 2u * (LengthOf(consumers) - firstConsumer));
+    EXPECT_FALSE(plan.tasksSharePacket(producer, consumers[3u]));
+    for(usize consumerIndex = firstConsumer; consumerIndex < LengthOf(consumers); ++consumerIndex){
+        const Graphics::GpuTaskId consumer = consumers[consumerIndex];
+        EXPECT_TRUE(analysis.hasExplicitEdge(setups[consumerIndex], consumer));
+        EXPECT_TRUE(analysis.hasExplicitEdge(producer, consumer));
+        EXPECT_TRUE(plan.taskPrecedesOrSharesPacket(producer, consumer));
+        EXPECT_TRUE(plan.taskPrecedesOrSharesPacket(consumer, aliasedProducer));
+        for(const Graphics::GpuGraphResourceId output : outputs){
+            EXPECT_TRUE(HasInferredHazard(analysis, producer, consumer, output, Graphics::GpuTaskHazardType::ReadAfterWrite));
+            EXPECT_TRUE(HasInferredHazard(analysis, consumer, aliasedProducer, output, Graphics::GpuTaskHazardType::WriteAfterRead));
+        }
+    }
+    const auto transitionCount = [&](const Graphics::GpuTaskId task, const Graphics::GpuGraphResourceId output,
+        const Graphics::ResourceStates::Mask before, const Graphics::ResourceStates::Mask after){
+        usize count = 0u;
+        const auto taskView = plan.findTask(task);
+        if(!taskView.valid())
+            return count;
+        for(u32 barrierIndex = 0u; barrierIndex < taskView.plan->prologueBarrierCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = taskView.prologueBarriers[barrierIndex];
+            if(
+                barrier.type == Graphics::GpuCompiledBarrierType::BufferTransition
+                && barrier.resource == output
+                && barrier.before == before
+                && barrier.after == after
+            )
+                ++count;
+        }
+        return count;
+    };
+    for(const Graphics::GpuGraphResourceId output : outputs){
+        EXPECT_EQ(transitionCount(producer, output, Graphics::ResourceStates::Common, Graphics::ResourceStates::UnorderedAccess), 1u);
+        EXPECT_EQ(transitionCount(consumers[firstConsumer], output, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer), 1u);
+        for(usize consumerIndex = firstConsumer + 1u; consumerIndex < LengthOf(consumers); ++consumerIndex){
+            EXPECT_EQ(transitionCount(consumers[consumerIndex], output, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer), 0u);
+            EXPECT_EQ(transitionCount(consumers[consumerIndex], output, Graphics::ResourceStates::VertexBuffer, Graphics::ResourceStates::UnorderedAccess), 0u);
+        }
+        EXPECT_EQ(transitionCount(aliasedProducer, output, Graphics::ResourceStates::VertexBuffer, Graphics::ResourceStates::UnorderedAccess), 1u);
+        EXPECT_EQ(transitionCount(aliasedRaster, output, Graphics::ResourceStates::UnorderedAccess, Graphics::ResourceStates::VertexBuffer), 1u);
+    }
+}
+
+TEST(GpuTaskGraph, KeepsRefractionGeneratedGeometryAcrossAvboitPasses){
+    ExpectGeneratedGeometryReuseAcrossAvboitPasses(true);
+}
+
+TEST(GpuTaskGraph, KeepsOccupancyGeneratedGeometryAcrossLaterAvboitPasses){
+    ExpectGeneratedGeometryReuseAcrossAvboitPasses(false);
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

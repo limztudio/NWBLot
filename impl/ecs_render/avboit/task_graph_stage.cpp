@@ -24,6 +24,7 @@ void RendererAvboitTaskGraphStageState::reset()noexcept{
     m_csgIntervalCombineTask = {};
     m_occupancyStreamTask = {};
     m_occupancyComputeEmulationTask = {};
+    m_occupancyReusedGeometryProducer = {};
     for(Core::GpuTaskId& task : m_occupancySharedComputeEmulationTasks)
         task = {};
     m_occupancySharedComputeEmulationTaskCount = 0u;
@@ -31,6 +32,7 @@ void RendererAvboitTaskGraphStageState::reset()noexcept{
     m_depthWarpTask = {};
     m_extinctionStreamTask = {};
     m_extinctionComputeEmulationTask = {};
+    m_extinctionReusedGeometryProducer = {};
     for(Core::GpuTaskId& task : m_extinctionSharedComputeEmulationTasks)
         task = {};
     m_extinctionSharedComputeEmulationTaskCount = 0u;
@@ -38,6 +40,7 @@ void RendererAvboitTaskGraphStageState::reset()noexcept{
     m_integrationTask = {};
     m_accumulationStreamTask = {};
     m_accumulationComputeEmulationTask = {};
+    m_accumulationReusedGeometryProducer = {};
     for(Core::GpuTaskId& task : m_accumulationSharedComputeEmulationTasks)
         task = {};
     m_accumulationSharedComputeEmulationTaskCount = 0u;

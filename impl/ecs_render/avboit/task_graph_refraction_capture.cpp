@@ -4,6 +4,8 @@
 
 #include "task_graph_refraction_capture.h"
 
+#include "generated_geometry_reuse.h"
+
 #include <core/graphics/vulkan/backend.h>
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -92,6 +94,7 @@ struct CaptureDrawTask{
         bool csg = false;
         bool compute = false;
         bool generate = false;
+        bool conservativeGeometryScissor = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena) : drawItems(arena){}
     };
@@ -127,7 +130,8 @@ struct CaptureDrawTask{
             true,
             true,
             true,
-            true
+            true,
+            payload.conservativeGeometryScissor
         };
         if(payload.generate)
             payload.materialSystem->generateComputeMaterialPassDrawItems(drawContext, drawItems);
@@ -168,10 +172,12 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    AvboitGeneratedGeometryReuse& generatedGeometry,
     Core::GpuTaskId dependency,
     const bool enabled
 ){
     using namespace __hidden_refraction_capture;
+    generatedGeometry.reset();
     const Core::GpuGraphResourceId depth = ImportTexture(graph, targets.avboit.refractionDepth);
     const Core::GpuGraphResourceId normalIor = ImportTexture(graph, targets.avboit.refractionNormalIor);
     const Core::GpuGraphResourceId tintCoverage = ImportTexture(graph, targets.avboit.refractionTintCoverage);
@@ -256,6 +262,9 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     const usize setUseCount = sampledTextureSet.valid() ? 2u : 1u;
 
     materialSystem.prepareMaterialPassInstanceUploadData(instances, csgResources);
+    const bool producesReusableGeometry = generatedGeometry.capture(
+        drawItems, instances, frameBindings, meshViewState, MaterialPipelinePass::AvboitRefractionCapture
+    );
     const Core::GpuGraphResourceId materialInstances = ImportBuffer(graph, frameBindings.instanceBuffer);
     const Core::GpuGraphResourceId materialTyped = ImportBuffer(graph, frameBindings.materialTypedBuffer);
     const Core::GpuGraphResourceId meshView = ImportBuffer(graph, frameBindings.meshView.buffer);
@@ -356,6 +365,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         payload.csg = csg;
         payload.compute = compute;
         payload.generate = generate;
+        payload.conservativeGeometryScissor = generate && producesReusableGeometry;
         dependency = graph.addTask<CaptureDrawTask>(desc, Move(payload));
         return dependency.valid();
     };
@@ -374,7 +384,10 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
                 return {};
         }
     }
-    return finalize();
+    const Core::GpuTaskId completion = finalize();
+    if(producesReusableGeometry && !generatedGeometry.publishProducer(completion))
+        return {};
+    return completion;
 }
 
 

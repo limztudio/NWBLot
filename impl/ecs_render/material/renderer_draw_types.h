@@ -71,6 +71,7 @@ struct MaterialPassPipelineResourceSnapshot{
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
+    bool sharedGeometryComputeProgram = false;
 };
 
 template<typename BufferHandler>

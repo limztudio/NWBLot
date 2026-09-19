@@ -292,8 +292,7 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
     if(!frameHeapSlotsReady)
         return;
     frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();
-    ECSRenderDetail::SetShaderDrivenPushConstants(
-        context.commandList,
+    ECSRenderDetail::ShaderDrivenPushConstants pushConstants = ECSRenderDetail::BuildShaderDrivenPushConstants(
         mesh.meshletCount,
         drawItem.instanceIndex,
         drawItem.materialConstantByteOffset,
@@ -301,6 +300,11 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
         frameHeapSlots,
         materialPassDrawDispatchFlags(context, drawItem, mesh)
     );
+    if(context.conservativeGeometryScissor){
+        NWB_ASSERT(pipelineResources.sharedGeometryComputeProgram);
+        pushConstants.dispatchFlags &= ~ECSRenderDetail::s_MeshDispatchFlagScissorCull;
+    }
+    context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 

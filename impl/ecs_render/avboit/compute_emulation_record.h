@@ -62,6 +62,7 @@ struct AvboitComputeEmulationRecordInputs{
     bool csgClipBufferStatesGraphOwned = false;
     bool materialFrameStatesGraphOwned = false;
     bool materialGeometryStatesGraphOwned = false;
+    bool conservativeGeometryScissor = false;
 };
 
 
@@ -146,6 +147,7 @@ template<typename PayloadT>
         payload.csgClipBufferStatesGraphOwned,
         payload.materialFrameStatesGraphOwned,
         payload.materialGeometryStatesGraphOwned,
+        payload.conservativeGeometryScissor,
     };
     return RecordAvboitComputeEmulation(inputs, commandList, trait);
 }
@@ -169,7 +171,7 @@ template<typename PayloadT, typename DispatchFn>
         || !payload.targets
         || !payload.timingTicket
         || ((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember)
-            && !(payload.*timingMember))
+            && !payload.generatedGeometryReused && !(payload.*timingMember))
     )
         return false;
 

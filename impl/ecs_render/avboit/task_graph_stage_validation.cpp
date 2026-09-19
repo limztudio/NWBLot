@@ -42,6 +42,30 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             return compiledGraph.taskPrecedesInSamePacket(producerTask, consumerTask);
         return compiledGraph.taskPrecedesOrSharesPacket(producerTask, consumerTask);
     };
+    const auto reusedGeometryIsOrdered = [&](
+        const Core::GpuTaskId source,
+        const Core::GpuTaskId consumer,
+        const Core::GpuTaskId localProducer,
+        const usize sharedPhaseCount
+    ){
+        return !source.valid() || (
+            !localProducer.valid()
+            && sharedPhaseCount == 0u
+            && source != consumer
+            && taskIsCompiled(source)
+            && taskBoundaryIsOrdered(source, consumer)
+        );
+    };
+    const bool reusedGeometryValid = reusedGeometryIsOrdered(
+        taskGraphStage.m_occupancyReusedGeometryProducer, taskGraphStage.m_occupancyTask,
+        taskGraphStage.m_occupancyComputeEmulationTask, taskGraphStage.m_occupancySharedComputeEmulationTaskCount
+    ) && reusedGeometryIsOrdered(
+        taskGraphStage.m_extinctionReusedGeometryProducer, taskGraphStage.m_extinctionTask,
+        taskGraphStage.m_extinctionComputeEmulationTask, taskGraphStage.m_extinctionSharedComputeEmulationTaskCount
+    ) && reusedGeometryIsOrdered(
+        taskGraphStage.m_accumulationReusedGeometryProducer, taskGraphStage.m_accumulationTask,
+        taskGraphStage.m_accumulationComputeEmulationTask, taskGraphStage.m_accumulationSharedComputeEmulationTaskCount
+    );
     const bool avboitPrePacketContainsClear = !clearTargets || (
         taskGraphStage.m_clearFirstTask.valid()
         && taskGraphStage.m_clearTask.valid()
@@ -561,6 +585,7 @@ RendererAvboitTaskGraphValidation RendererAvboitSystem::validateTaskGraphStage(
             && taskGraphStage.m_preTask.valid()
             && taskGraphStage.m_occupancyTask.valid()
             && transparentTaskShapeValid
+            && reusedGeometryValid
             && stage.hasTransparentTasks == hasTransparentRenderers
             && taskIsCompiled(stage.firstTask)
             && taskIsCompiled(stage.completionTask)

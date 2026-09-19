@@ -160,7 +160,8 @@ namespace RendererTaskGraphDetail{
                 payload.occupancyMaterialGeometryStatesGraphOwned,
                 payload.occupancyComputeEmulationOutputStatesGraphOwned,
                 payload.occupancyComputeEmulationTiming,
-                payload.occupancyCsgComputeEmulationOutputStatesGraphOwned
+                payload.occupancyCsgComputeEmulationOutputStatesGraphOwned,
+                payload.generatedGeometryReused
             );
         }
     );

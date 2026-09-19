@@ -32,6 +32,7 @@ struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_csgIntervalCombineTask;
     Core::GpuTaskId m_occupancyStreamTask;
     Core::GpuTaskId m_occupancyComputeEmulationTask;
+    Core::GpuTaskId m_occupancyReusedGeometryProducer;
     Core::GpuTaskId m_occupancySharedComputeEmulationTasks[
         ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
     ] = {};
@@ -40,6 +41,7 @@ struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_depthWarpTask;
     Core::GpuTaskId m_extinctionStreamTask;
     Core::GpuTaskId m_extinctionComputeEmulationTask;
+    Core::GpuTaskId m_extinctionReusedGeometryProducer;
     Core::GpuTaskId m_extinctionSharedComputeEmulationTasks[
         ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
     ] = {};
@@ -48,6 +50,7 @@ struct RendererAvboitTaskGraphStageState{
     Core::GpuTaskId m_integrationTask;
     Core::GpuTaskId m_accumulationStreamTask;
     Core::GpuTaskId m_accumulationComputeEmulationTask;
+    Core::GpuTaskId m_accumulationReusedGeometryProducer;
     Core::GpuTaskId m_accumulationSharedComputeEmulationTasks[
         ECSRenderDetail::s_SharedComputeEmulationMaximumPhaseCount
     ] = {};

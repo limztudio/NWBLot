@@ -15,6 +15,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ecs_graphics_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/refraction_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_alias_plan_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/generated_geometry_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_output_resource_set_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_software_bvh_graph_resources_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_acceleration_update_tests.cpp"

@@ -16,6 +16,7 @@
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
+#include <impl/ecs_render/avboit/generated_geometry_reuse.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -1254,15 +1255,19 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     const bool refractionActive = m_preparedRefractionActive && opticalCaptureRequested;
     RayTracingRefractionGraphResources refractionResources = m_preparedRefractionResources;
+    Core::Alloc::ScratchArena generatedGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    AvboitGeneratedGeometryReuse generatedGeometry(generatedGeometryScratch);
     const Core::GpuTaskId refractionCaptureTask = DeclareAvboitRefractionCapture(
         m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
-        csgFrameState, csgResources, frameBindings, meshViewState, avboitIntervalCompletionTask,
+        csgFrameState, csgResources, frameBindings, meshViewState, generatedGeometry, avboitIntervalCompletionTask,
         refractionActive && refractionResources.valid());
     if(!refractionCaptureTask.valid())
         return;
     Core::GpuTaskId occupancyUploadTask = refractionCaptureTask;
     bool occupancyCsgStreamsUploaded = false;
     bool occupancyRegularComputeEmulationPlanCaptured = false;
+    Core::GpuTaskId occupancyReusedGeometryProducer;
+    bool occupancyProducesReusableGeometry = false;
     bool occupancyCsgComputeEmulationPlanCaptured = false;
     bool occupancySharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan occupancySharedComputeEmulationPlan;
@@ -1417,6 +1422,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             occupancySharedComputeEmulationPlan = occupancyComputeEmulationCaptureResult.sharedPlan;
             occupancySharedComputeEmulationInstanceCount = occupancyComputeEmulationCaptureResult.sharedInstanceCount;
             occupancySharedComputeEmulationMaterialTypedByteCount = occupancyComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
+            if(occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
+                occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy
+            ))
+                occupancyReusedGeometryProducer = generatedGeometry.producerTask();
+            else{
+                generatedGeometry.reset();
+                occupancyProducesReusableGeometry = occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
+                    occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy
+                );
+            }
         }
         else{
             // Graph phase stays authoritative for empty sets; retain snapshot to skip native re-gather.
@@ -1493,6 +1508,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitOccupancyRecordInputs.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
     avboitOccupancyRecordInputs.csgStreamsUploaded = occupancyCsgStreamsUploaded;
     avboitOccupancyRecordInputs.regularComputeEmulationPlanCaptured = occupancyRegularComputeEmulationPlanCaptured;
+    avboitOccupancyRecordInputs.reusedGeometryProducer = occupancyReusedGeometryProducer;
+    avboitOccupancyRecordInputs.producesReusableGeometry = occupancyProducesReusableGeometry;
     avboitOccupancyRecordInputs.csgComputeEmulationPlanCaptured = occupancyCsgComputeEmulationPlanCaptured;
     avboitOccupancyRecordInputs.sharedComputeEmulationPlanCaptured = occupancySharedComputeEmulationPlanCaptured;
     avboitOccupancyRecordInputs.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
@@ -1517,6 +1534,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
         return;
+    }
+    if(occupancyProducesReusableGeometry){
+        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask;
+        if(!producer.valid())
+            generatedGeometry.reset();
+        else if(!generatedGeometry.publishProducer(producer))
+            return;
     }
 
 
@@ -1561,6 +1585,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     bool extinctionStreamsUploaded = false;
     bool extinctionCsgStreamsUploaded = false;
     bool extinctionRegularComputeEmulationPlanCaptured = false;
+    Core::GpuTaskId extinctionReusedGeometryProducer;
+    bool extinctionProducesReusableGeometry = false;
     bool extinctionCsgComputeEmulationPlanCaptured = false;
     bool extinctionSharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan extinctionSharedComputeEmulationPlan;
@@ -1714,6 +1740,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             extinctionSharedComputeEmulationPlan = extinctionComputeEmulationCaptureResult.sharedPlan;
             extinctionSharedComputeEmulationInstanceCount = extinctionComputeEmulationCaptureResult.sharedInstanceCount;
             extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
+            if(extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
+                extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction
+            ))
+                extinctionReusedGeometryProducer = generatedGeometry.producerTask();
+            else{
+                generatedGeometry.reset();
+                extinctionProducesReusableGeometry = extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
+                    extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction
+                );
+            }
         }
         else{
             // Keep graph ownership for empty phases; skip native re-gather of mutable state.
@@ -1761,6 +1797,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitExtinctionRecordInputs.csgStreamsUploaded = extinctionCsgStreamsUploaded;
     avboitExtinctionRecordInputs.streamsUploaded = extinctionStreamsUploaded;
     avboitExtinctionRecordInputs.regularComputeEmulationPlanCaptured = extinctionRegularComputeEmulationPlanCaptured;
+    avboitExtinctionRecordInputs.reusedGeometryProducer = extinctionReusedGeometryProducer;
+    avboitExtinctionRecordInputs.producesReusableGeometry = extinctionProducesReusableGeometry;
     avboitExtinctionRecordInputs.csgComputeEmulationPlanCaptured = extinctionCsgComputeEmulationPlanCaptured;
     avboitExtinctionRecordInputs.sharedComputeEmulationPlanCaptured = extinctionSharedComputeEmulationPlanCaptured;
     avboitExtinctionRecordInputs.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
@@ -1785,6 +1823,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
         return;
+    }
+    if(extinctionProducesReusableGeometry){
+        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
+        if(!producer.valid())
+            generatedGeometry.reset();
+        else if(!generatedGeometry.publishProducer(producer))
+            return;
     }
 
     AvboitIntegrationStageResult avboitIntegrationStageResult;
@@ -1823,6 +1868,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     bool accumulationStreamsUploaded = false;
     bool accumulationCsgStreamsUploaded = false;
     bool accumulationRegularComputeEmulationPlanCaptured = false;
+    Core::GpuTaskId accumulationReusedGeometryProducer;
+    bool accumulationProducesReusableGeometry = false;
     bool accumulationCsgComputeEmulationPlanCaptured = false;
     bool accumulationSharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan accumulationSharedComputeEmulationPlan;
@@ -1977,6 +2024,16 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             accumulationSharedComputeEmulationPlan = accumulationComputeEmulationCaptureResult.sharedPlan;
             accumulationSharedComputeEmulationInstanceCount = accumulationComputeEmulationCaptureResult.sharedInstanceCount;
             accumulationSharedComputeEmulationMaterialTypedByteCount = accumulationComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
+            if(accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
+                accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate
+            ))
+                accumulationReusedGeometryProducer = generatedGeometry.producerTask();
+            else{
+                generatedGeometry.reset();
+                accumulationProducesReusableGeometry = accumulationRegularComputeEmulationPlanCaptured && generatedGeometry.capture(
+                    accumulationDrawItems, accumulationInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitAccumulate
+                );
+            }
             if(
                 accumulationRegularComputeEmulationPlanCaptured
                 || accumulationCsgComputeEmulationPlanCaptured
@@ -2036,6 +2093,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     avboitAccumulationRecordInputs.csgStreamsUploaded = accumulationCsgStreamsUploaded;
     avboitAccumulationRecordInputs.streamsUploaded = accumulationStreamsUploaded;
     avboitAccumulationRecordInputs.regularComputeEmulationPlanCaptured = accumulationRegularComputeEmulationPlanCaptured;
+    avboitAccumulationRecordInputs.reusedGeometryProducer = accumulationReusedGeometryProducer;
+    avboitAccumulationRecordInputs.producesReusableGeometry = accumulationProducesReusableGeometry;
     avboitAccumulationRecordInputs.csgComputeEmulationPlanCaptured = accumulationCsgComputeEmulationPlanCaptured;
     avboitAccumulationRecordInputs.sharedComputeEmulationPlanCaptured = accumulationSharedComputeEmulationPlanCaptured;
     avboitAccumulationRecordInputs.sharedComputeEmulationPlan = accumulationSharedComputeEmulationPlan;
@@ -2060,6 +2119,13 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     )){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT accumulation graph task"));
         return;
+    }
+    if(accumulationProducesReusableGeometry){
+        const Core::GpuTaskId producer = m_avboitSystem.taskGraphStage().m_accumulationComputeEmulationTask;
+        if(!producer.valid())
+            generatedGeometry.reset();
+        else if(!generatedGeometry.publishProducer(producer))
+            return;
     }
 
     }

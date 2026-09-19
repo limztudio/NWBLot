@@ -53,12 +53,14 @@ struct AvboitRecordInputsBase{
     Core::TextureSubresourceSet csgRemovedIntervalCountSubresources;
     Core::GpuGraphResourceId currentBindlessSlots;
     Core::GpuTaskId uploadTask;
+    Core::GpuTaskId reusedGeometryProducer;
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
     Core::BufferRange instanceRange;
     Core::BufferRange materialTypedRange;
     Core::BufferRange receiverRange;
     Core::BufferRange cutterRange;
+    bool producesReusableGeometry = false;
     bool intervalOutputsGraphOwned = false;
     bool csgStreamsUploaded = false;
     bool regularComputeEmulationPlanCaptured = false;

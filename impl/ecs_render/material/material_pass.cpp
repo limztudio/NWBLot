@@ -67,6 +67,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
         .emulationPipeline = pipelineResources.emulationPipeline,
         .meshletPipeline = pipelineResources.meshletPipeline,
         .computePipeline = pipelineResources.computePipeline,
+        .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
     };
 }
 
@@ -202,8 +203,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool materialGeometryStatesGraphOwned,
     const bool emulationOutputEntryStateGraphOwned,
     Optional<Core::GpuTimingMeasure>* const emulationOutputTiming,
-    const bool csgEmulationOutputEntryStateGraphOwned
-){
+    const bool csgEmulationOutputEntryStateGraphOwned,
+    const bool emulationOutputReused){
     const auto discardEmulationOutputTiming = [emulationOutputTiming](){
         if(!emulationOutputTiming || !emulationOutputTiming->has_value())
             return;
@@ -222,15 +223,15 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
 
     commandList.endRenderPass();
 
-    // Producer creates this measurement before dispatches; without it output is intentionally empty.
+    // Fresh producers open split timing. Reused regular output has a separate, already-validated graph producer.
     const bool emulationOutputStatesGraphOwned =
         emulationOutputEntryStateGraphOwned
         || csgEmulationOutputEntryStateGraphOwned
     ;
-    if(emulationOutputStatesGraphOwned && (
-        !emulationOutputTiming
-        || !emulationOutputTiming->has_value()
-    ))
+    if(emulationOutputReused && (!emulationOutputEntryStateGraphOwned || csgEmulationOutputEntryStateGraphOwned))
+        return;
+    const bool splitEmulationTiming = emulationOutputStatesGraphOwned && !emulationOutputReused;
+    if(splitEmulationTiming && (!emulationOutputTiming || !emulationOutputTiming->has_value()))
         return;
 
     // Declaration froze ordering and published bytes; keep this consumer side-effect free.
@@ -294,7 +295,7 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
         if(csgDrawResourcesReady)
             renderMaterialPassDrawItems(csgDrawContext, drawItems.csg);
     };
-    if(emulationOutputStatesGraphOwned){
+    if(splitEmulationTiming){
         recordPreparedDraws();
         emulationOutputTiming->value().finishTiming(commandList);
         emulationOutputTiming->reset();

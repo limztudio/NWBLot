@@ -62,6 +62,19 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         return false;
 
 
+    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
+    if(
+        (generatedGeometryReused || inputs.producesReusableGeometry)
+        && (
+            !inputs.regularComputeEmulationPlanCaptured
+            || inputs.csgComputeEmulationPlanCaptured
+            || inputs.sharedComputeEmulationPlanCaptured
+        )
+    )
+        return false;
+    accumulationPayload.generatedGeometryReused = generatedGeometryReused;
+    m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
+
     const bool accumulationCsgIntervalSampleImageStatesGraphOwned =
         inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
     ;
@@ -128,6 +141,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             "RendererSystem: could not declare graph-owned AVBOIT Accumulation compute-emulation output states"
         ));
     }
+    if(generatedGeometryReused && !accumulationComputeEmulationOutputStatesGraphOwned)
+        return false;
     accumulationPayload.accumulationComputeEmulationOutputStatesGraphOwned =
         inputs.regularComputeEmulationPlanCaptured
         && accumulationComputeEmulationOutputStatesGraphOwned
@@ -293,7 +308,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     if(inputs.streamsUploaded)
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = inputs.uploadTask;
-    if(accumulationComputeEmulationOutputStatesGraphOwned){
+    if(accumulationComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
+        computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
         computeEmulationPayload.graphics = &m_graphics;
         computeEmulationPayload.materialSystem = &m_materialSystem;
         computeEmulationPayload.targets = inputs.targets;
@@ -579,13 +595,15 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         m_avboitSystem.taskGraphStage().m_accumulationTask = accumulationSharedComputeEmulationDependency;
     }
     else{
+        const Core::GpuTaskId rasterDependencies[] = { accumulationDependency, inputs.reusedGeometryProducer };
+        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != accumulationDependency ? 2u : 1u;
         Core::GpuTaskDesc accumulationDesc;
         accumulationDesc
             .setIdentity(Name("render.avboit.accumulation"))
             .setMarkerLabel("AVBOIT Accumulation")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitAccumulationScheduling)
-            .setDependencies(&accumulationDependency, 1u)
+            .setDependencies(rasterDependencies, rasterDependencyCount)
             .setResourceUses(accumulationResourceUses.data(), accumulationResourceUses.size())
             .setResourceSetUses(
                 accumulationMaterialResourceSetUseCount != 0u ? accumulationMaterialResourceSetUses : nullptr,

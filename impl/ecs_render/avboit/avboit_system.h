@@ -162,7 +162,8 @@ public:
         bool occupancyComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate.
-        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false
+        bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false,
+        bool generatedGeometryReused = false
     );
     void renderAvboitExtinctionPass(
         Core::CommandList& commandList,
@@ -180,7 +181,8 @@ public:
         bool extinctionComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* extinctionComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false
+        bool extinctionCsgComputeEmulationOutputStatesGraphOwned = false,
+        bool generatedGeometryReused = false
     );
     void renderAvboitAccumulatePass(
         Core::CommandList& commandList,
@@ -201,7 +203,8 @@ public:
         bool accumulationComputeEmulationOutputStatesGraphOwned = false,
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr,
         // A frozen CSG-only producer may own this handoff; keep it separate from the regular flag.
-        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false
+        bool accumulationCsgComputeEmulationOutputStatesGraphOwned = false,
+        bool generatedGeometryReused = false
     );
     void dispatchAvboitDepthWarp(
         Core::CommandList& commandList,

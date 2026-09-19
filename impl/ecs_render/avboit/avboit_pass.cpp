@@ -459,8 +459,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
     const bool occupancyMaterialGeometryStatesGraphOwned,
     const bool occupancyComputeEmulationOutputStatesGraphOwned,
     Optional<Core::GpuTimingMeasure>* const occupancyComputeEmulationTiming,
-    const bool occupancyCsgComputeEmulationOutputStatesGraphOwned
-){
+    const bool occupancyCsgComputeEmulationOutputStatesGraphOwned,
+    const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
     NWB_ASSERT(m_avboitState.m_depthWarpPipeline);
@@ -511,7 +511,8 @@ void RendererAvboitSystem::renderAvboitOccupancyPass(
                 occupancyMaterialGeometryStatesGraphOwned,
                 occupancyComputeEmulationOutputStatesGraphOwned,
                 occupancyComputeEmulationTiming,
-                occupancyCsgComputeEmulationOutputStatesGraphOwned
+                occupancyCsgComputeEmulationOutputStatesGraphOwned,
+                generatedGeometryReused
             );
         }
     }
@@ -533,8 +534,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
     const bool extinctionMaterialGeometryStatesGraphOwned,
     const bool extinctionComputeEmulationOutputStatesGraphOwned,
     Optional<Core::GpuTimingMeasure>* const extinctionComputeEmulationTiming,
-    const bool extinctionCsgComputeEmulationOutputStatesGraphOwned
-){
+    const bool extinctionCsgComputeEmulationOutputStatesGraphOwned,
+    const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
@@ -573,7 +574,8 @@ void RendererAvboitSystem::renderAvboitExtinctionPass(
                 extinctionMaterialGeometryStatesGraphOwned,
                 extinctionComputeEmulationOutputStatesGraphOwned,
                 extinctionComputeEmulationTiming,
-                extinctionCsgComputeEmulationOutputStatesGraphOwned
+                extinctionCsgComputeEmulationOutputStatesGraphOwned,
+                generatedGeometryReused
             );
         }
     }
@@ -596,8 +598,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
     const bool accumulationMaterialGeometryStatesGraphOwned,
     const bool accumulationComputeEmulationOutputStatesGraphOwned,
     Optional<Core::GpuTimingMeasure>* const accumulationComputeEmulationTiming,
-    const bool accumulationCsgComputeEmulationOutputStatesGraphOwned
-){
+    const bool accumulationCsgComputeEmulationOutputStatesGraphOwned,
+    const bool generatedGeometryReused){
     AvboitFrameTargets& avboitTargets = targets.avboit;
     NWB_ASSERT(avboitTargets.valid());
 
@@ -636,7 +638,8 @@ void RendererAvboitSystem::renderAvboitAccumulatePass(
                 accumulationMaterialGeometryStatesGraphOwned,
                 accumulationComputeEmulationOutputStatesGraphOwned,
                 accumulationComputeEmulationTiming,
-                accumulationCsgComputeEmulationOutputStatesGraphOwned
+                accumulationCsgComputeEmulationOutputStatesGraphOwned,
+                generatedGeometryReused
             );
         }
     }

@@ -61,6 +61,19 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
         return false;
 
+    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
+    if(
+        (generatedGeometryReused || inputs.producesReusableGeometry)
+        && (
+            !inputs.regularComputeEmulationPlanCaptured
+            || inputs.csgComputeEmulationPlanCaptured
+            || inputs.sharedComputeEmulationPlanCaptured
+        )
+    )
+        return false;
+    occupancyPayload.generatedGeometryReused = generatedGeometryReused;
+    m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
+
     const bool occupancyCsgIntervalSampleImageStatesGraphOwned =
         inputs.intervalOutputsGraphOwned && inputs.csgStreamsUploaded
     ;
@@ -127,6 +140,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             "RendererSystem: could not declare graph-owned AVBOIT Occupancy compute-emulation output states"
         ));
     }
+    if(generatedGeometryReused && !occupancyComputeEmulationOutputStatesGraphOwned)
+        return false;
     occupancyPayload.occupancyComputeEmulationOutputStatesGraphOwned =
         inputs.regularComputeEmulationPlanCaptured
         && occupancyComputeEmulationOutputStatesGraphOwned
@@ -277,7 +292,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     avboitOccupancyScheduling.mergeWithPrevious = true;
     // Occupancy closes the serial AVBOIT Pre packet; keep timing across consumer frontiers.
     avboitOccupancyScheduling.allowMergeAcrossConsumerFrontier = true;
-    if(occupancyComputeEmulationOutputStatesGraphOwned){
+    if(occupancyComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
+        computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
         computeEmulationPayload.graphics = &m_graphics;
         computeEmulationPayload.materialSystem = &m_materialSystem;
         computeEmulationPayload.targets = inputs.targets;
@@ -585,13 +601,15 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         m_avboitSystem.taskGraphStage().m_occupancyTask = occupancySharedComputeEmulationDependency;
     }
     else{
+        const Core::GpuTaskId rasterDependencies[] = { occupancyDependency, inputs.reusedGeometryProducer };
+        const usize rasterDependencyCount = generatedGeometryReused && inputs.reusedGeometryProducer != occupancyDependency ? 2u : 1u;
         Core::GpuTaskDesc avboitOccupancyDesc;
         avboitOccupancyDesc
             .setIdentity(Name("render.avboit.pre"))
             .setMarkerLabel("AVBOIT Pre")
             .setQueue(GraphicsComputeQueueRequest())
             .setScheduling(avboitOccupancyScheduling)
-            .setDependencies(&occupancyDependency, 1u)
+            .setDependencies(rasterDependencies, rasterDependencyCount)
             .setResourceUses(avboitPreResourceUses.data(), avboitPreResourceUses.size())
             .setResourceSetUses(
                 occupancyMaterialResourceSetUseCount != 0u ? occupancyMaterialResourceSetUses : nullptr,

@@ -101,6 +101,7 @@ struct AvboitOccupancyComputeEmulationGraphTask{
         bool csgClipBufferStatesGraphOwned = false;
         bool materialFrameStatesGraphOwned = false;
         bool materialGeometryStatesGraphOwned = false;
+        bool conservativeGeometryScissor = false;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)
             : plan(arena)
@@ -176,6 +177,7 @@ struct AvboitOccupancyGraphTask{
         bool occupancyMaterialGeometryStatesGraphOwned = false;
         bool occupancyComputeEmulationOutputStatesGraphOwned = false;
         bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false;
+        bool generatedGeometryReused = false;
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)

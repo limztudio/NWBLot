@@ -438,6 +438,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
+        // Only the engine's unmodified mesh_compute program has the material-independent geometry contract.
+        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+            && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
+            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
+        ;
         return true;
     };
 

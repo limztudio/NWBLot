@@ -129,6 +129,8 @@ struct MaterialPassDrawContext{
     bool materialGeometryStatesGraphOwned = false;
     // Split pairs receive generated-vertex entry states from the graph; compat keeps native handoff.
     bool emulationOutputEntryStateGraphOwned = false;
+    // Shared generated output must retain triangles needed by every consuming viewport.
+    bool conservativeGeometryScissor = false;
 };
 
 

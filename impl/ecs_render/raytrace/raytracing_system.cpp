@@ -382,6 +382,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
             mesh.meshName == prepared.meshName
             && mesh.runtimeMesh == prepared.runtimeMesh
             && mesh.runtimeMeshVersion == prepared.runtimeMeshVersion
+            && mesh.runtimeGeometryContentRevision == prepared.geometryContentRevision
             && mesh.swBvhNodeBuffer.get() == prepared.nodeBuffer.get()
             && mesh.positionBuffer.get() == prepared.positionBuffer.get()
             && mesh.triangleIndexBuffer.get() == prepared.triangleIndexBuffer.get()

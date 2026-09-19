@@ -119,6 +119,8 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
     u64 version = 0u;
+    // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
+    u64 geometryContentRevision = 0u;
 
     [[nodiscard]] bool valid()const noexcept{
         return

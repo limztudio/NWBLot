@@ -45,6 +45,10 @@ void RendererMeshSystem::discardRayTracingBuildState()noexcept{
     for(auto meshIt = m_meshState.m_meshes.begin(); meshIt != m_meshState.m_meshes.end(); ++meshIt){
         MeshResources& mesh = meshIt.value();
         mesh.blasBackingStateHandoffPending = false;
+        mesh.blasBuildAccepted = false;
+        mesh.swBvhBuildAccepted = false;
+        mesh.blasGeometryContentRevision = 0u;
+        mesh.swBvhGeometryContentRevision = 0u;
         if(mesh.blas)
             mesh.blasBuildPending = true;
         if(mesh.swBvhNodeBuffer || mesh.swBvhParentBuffer){

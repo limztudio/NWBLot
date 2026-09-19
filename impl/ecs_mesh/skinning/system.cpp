@@ -38,23 +38,6 @@ namespace __hidden_system{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool HasPotentialSkinningWork(
-    const MeshSkinningRuntimeInstance& instance,
-    const SkeletonJointPaletteComponent* jointPalette,
-    const SkeletonPoseComponent* skeletonPose
-){
-    if((instance.dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
-        return true;
-
-    return
-        !instance.skin.empty()
-        && (
-            (jointPalette && !jointPalette->joints.empty())
-            || SkeletonRuntime::HasSkeletonPose(skeletonPose)
-        )
-    ;
-}
-
 static void ResolveSkeletonComponents(
     Core::ECS::World& world,
     const Core::ECS::EntityID fallbackEntity,
@@ -411,22 +394,18 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             const SkeletonPoseComponent* skeletonPose = nullptr;
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
-            const bool hadSkinningResources = foundResources != m_runtimeResources.end() && foundResources.value().usesSkinning();
-            if(!__hidden_system::HasPotentialSkinningWork(*instance, jointPalette, skeletonPose) && !hadSkinningResources)
-                return;
-
             RuntimeSkinPayloadScratch payload{ scratchArena };
             // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready
             // mesh from declaring its immutable packet plan.
-            if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload))
+            if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload)){
+                instance->deformationState.invalidateCurrent();
                 return;
+            }
 
             const bool hasActiveSkin = payload.hasActiveSkin();
             const bool skinningInputDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::SkinningInputDirty) != 0u;
             const bool meshletBoundsDirty = (instance->dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
-            const bool copiesRestStreams = !hasActiveSkin && (skinningInputDirty || hadSkinningResources);
-            const bool updatesMeshletBounds = hasActiveSkin || meshletBoundsDirty || copiesRestStreams;
-            if(!updatesMeshletBounds || instance->meshlets.empty())
+            if(instance->meshlets.empty())
                 return;
 
             if(foundResources == m_runtimeResources.end()){
@@ -435,6 +414,21 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 return;
             }
             const RuntimeResources& resources = foundResources.value();
+            const MeshSkinningDeformationInputs deformationInputs{
+                .resourceSlotsBuffer = resources.bindlessResourceSlotsBuffer,
+                .editRevision = instance->editRevision,
+                .skinningMode = payload.resolvedSkinningMode,
+            };
+            instance->deformationState.refreshCurrent(
+                deformationInputs,
+                payload.jointMatrices.data(),
+                payload.jointMatrices.size(),
+                skinningInputDirty || meshletBoundsDirty
+            );
+            const bool updatesMeshletBounds = instance->deformationState.contentRevision() == 0u;
+            if(!updatesMeshletBounds)
+                return;
+            const bool copiesRestStreams = !hasActiveSkin;
             if(
                 !resources.bindlessResourceSlotsBuffer
                 || !resources.bindlessHeapHandles.resourceSlots.valid()
@@ -764,6 +758,15 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 terminalTask = jointPaletteUploadTask;
             }
 
+            plan.deformationCandidate = instance->deformationState.stage(
+                deformationInputs,
+                payload.jointMatrices.data(),
+                payload.jointMatrices.size()
+            );
+            if(plan.deformationCandidate == 0u){
+                declarationFailed = true;
+                return;
+            }
             dispatchPlans.push_back(Move(plan));
         }
     );

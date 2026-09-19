@@ -40,6 +40,43 @@ namespace __hidden_mesh{
 static constexpr usize s_RayTracingReconstructionScratchPaddingBytes = 4096u;
 inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pruning");
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc){
+    return
+        mesh.runtimeMeshVersion == desc.version
+        && mesh.positionBuffer == desc.positionBuffer
+        && mesh.normalBuffer == desc.normalBuffer
+        && mesh.tangentBuffer == desc.tangentBuffer
+        && mesh.uv0Buffer == desc.uv0Buffer
+        && mesh.colorBuffer == desc.colorBuffer
+        && mesh.meshletDescBuffer == desc.meshletDescBuffer
+        && mesh.meshletBoundsBuffer == desc.meshletBoundsBuffer
+        && mesh.meshletPositionRefDeltaBuffer == desc.meshletPositionRefDeltaBuffer
+        && mesh.meshletAttributeRefDeltaBuffer == desc.meshletAttributeRefDeltaBuffer
+        && mesh.meshletLocalVertexRefBuffer == desc.meshletLocalVertexRefBuffer
+        && mesh.meshletPrimitiveIndexBuffer == desc.meshletPrimitiveIndexBuffer
+        && mesh.triangleIndexBuffer == desc.triangleIndexBuffer
+        && mesh.attributeBuffer == desc.attributeBuffer
+        && mesh.meshletCount == desc.meshletCount
+        && mesh.meshletPrimitiveIndexCount == desc.meshletPrimitiveIndexCount
+    ;
+}
+
+static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc& desc){
+    mesh.runtimeGeometryContentRevision = desc.geometryContentRevision;
+    mesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
+    mesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
+    mesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
+    mesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
+    mesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag;
+    if(desc.localBounds.finite())
+        mesh.csgLocalBounds.minBounds.w |= s_CsgBoundsFiniteFlag;
+    mesh.csgLocalBounds.maxBounds.w = 0;
+}
+
 [[nodiscard]] static bool ReportMeshBufferSetupFailure(
     const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure,
     const Name& meshName,
@@ -528,7 +565,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             );
             return false;
         }
-        if(foundMesh.value().runtimeMeshVersion != desc.version){
+        if(!__hidden_mesh::RuntimeMeshSourceMatches(foundMesh.value(), desc)){
             releaseMeshGeometryHeapHandles(foundMesh.value());
             m_meshState.m_meshes.erase(foundMesh);
         }
@@ -537,6 +574,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             if(!meshRenderBindingsReady(foundMesh.value()))
                 return false;
             outMesh = &foundMesh.value();
+            __hidden_mesh::RefreshRuntimeMeshContent(*outMesh, desc);
             NWB_ASSERT(outMesh->valid());
             return true;
         }
@@ -561,16 +599,9 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
     createdMesh.meshletCount = desc.meshletCount;
     createdMesh.meshletPrimitiveIndexCount = desc.meshletPrimitiveIndexCount;
     createdMesh.runtimeMesh = true;
-    createdMesh.dynamicMeshletBoundsFresh = desc.dynamicMeshletBoundsFresh;
-    createdMesh.dynamicMeshletConesFresh = desc.dynamicMeshletConesFresh;
     createdMesh.runtimeMeshVersion = desc.version;
     NWB_ASSERT(desc.localBounds.valid());
-    createdMesh.csgLocalBounds.minBounds = desc.localBounds.minBounds;
-    createdMesh.csgLocalBounds.maxBounds = desc.localBounds.maxBounds;
-    createdMesh.csgLocalBounds.minBounds.w = s_CsgBoundsValidFlag;
-    if(desc.localBounds.finite())
-        createdMesh.csgLocalBounds.minBounds.w |= s_CsgBoundsFiniteFlag;
-    createdMesh.csgLocalBounds.maxBounds.w = 0;
+    __hidden_mesh::RefreshRuntimeMeshContent(createdMesh, desc);
     if((createdMesh.meshletPrimitiveIndexCount % s_MeshletTriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' has {} primitive-index bytes, which cannot form triangles")
             , StringConvert(createdMesh.meshName.c_str())
@@ -606,13 +637,14 @@ bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, M
         return false;
 
     MeshResources& mesh = foundMesh.value();
-    if(!mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.version)
+    if(!mesh.runtimeMesh || !__hidden_mesh::RuntimeMeshSourceMatches(mesh, desc))
         return false;
 
     NWB_ASSERT(meshRenderBindingsReady(mesh));
     if(!meshRenderBindingsReady(mesh))
         return false;
 
+    __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
     outMesh = &mesh;
     NWB_ASSERT(outMesh->valid());
     return true;

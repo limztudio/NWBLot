@@ -76,6 +76,11 @@ namespace ECSRenderDetail{
         bool swBvhBuildPending = false;
         bool swBvhTopologyBuilt = false;
         u64 runtimeMeshVersion = 0u;
+        u64 runtimeGeometryContentRevision = 0u;
+        u64 blasGeometryContentRevision = 0u;
+        u64 swBvhGeometryContentRevision = 0u;
+        bool blasBuildAccepted = false;
+        bool swBvhBuildAccepted = false;
         CsgReceiverCpuBounds csgLocalBounds;
     };
     using MeshSoftwareBvhParentBuildStateVector = Vector<MeshSoftwareBvhParentBuildState, Core::Alloc::ScratchArena>;

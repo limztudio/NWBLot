@@ -37,6 +37,8 @@ struct PreparedMeshBlasBuild{
     Core::RayTracingAccelStructHandle blas;
     Core::BufferHandle blasBackingBuffer;
     u64 runtimeMeshVersion = 0u;
+    u64 geometryContentRevision = 0u;
+    u64 acceptedGeometryContentRevision = 0u;
     usize positionByteSize = 0u;
     u32 vertexStride = 0u;
     u32 vertexCount = 0u;
@@ -44,6 +46,7 @@ struct PreparedMeshBlasBuild{
     u32 refitsBeforeBuild = 0u;
     u32 refitsAfterBuild = 0u;
     bool runtimeMesh = false;
+    bool buildPending = false;
     bool firstBuild = false;
     bool backingFresh = false;
     bool performRefit = false;
@@ -77,6 +80,8 @@ struct PreparedMeshSwBvhBuild{
     Float3Int aabbMin;
     Float3Int aabbMax;
     u64 runtimeMeshVersion = 0u;
+    u64 geometryContentRevision = 0u;
+    u64 acceptedGeometryContentRevision = 0u;
     usize positionByteSize = 0u;
     usize indexByteSize = 0u;
     usize nodeByteSize = 0u;
@@ -112,6 +117,7 @@ struct PreparedSceneSwBvhMesh{
     Core::GpuDescriptorHandle triangleIndexHeapHandle;
     Core::GpuDescriptorHandle attributeHeapHandle;
     u64 runtimeMeshVersion = 0u;
+    u64 geometryContentRevision = 0u;
     usize nodeByteSize = 0u;
     usize positionByteSize = 0u;
     usize triangleIndexByteSize = 0u;

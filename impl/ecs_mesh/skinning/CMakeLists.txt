@@ -1,5 +1,7 @@
 nwb_declare_static_library(nwb_ecs_mesh_skinning)
 target_sources(nwb_ecs_mesh_skinning PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/deformation_state.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/deformation_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime_cache_source.cpp"

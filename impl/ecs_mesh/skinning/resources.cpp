@@ -235,6 +235,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     NWB_ASSERT(payload.skinInfluenceCount <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(payload.jointMatrices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
+    MeshSkinningResourceBuffers buffers = CaptureMeshSkinningResourceBuffers(instance);
     auto [it, inserted] = m_runtimeResources.try_emplace(instance.handle.value);
     RuntimeResources& resources = it.value();
     const u32 positionCount = instance.meshletPositionRefCount;
@@ -244,6 +245,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     const u32 jointCount = static_cast<u32>(payload.jointMatrices.size());
     const bool rebuild =
         inserted
+        || resources.buffers != buffers
         || resources.editRevision != instance.editRevision
         || resources.positionCount != positionCount
         || resources.attributeCount != attributeCount
@@ -261,6 +263,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
 
     RuntimeResources rebuilt;
     rebuilt.handle = instance.handle;
+    rebuilt.buffers = Move(buffers);
     rebuilt.editRevision = instance.editRevision;
     rebuilt.positionCount = positionCount;
     rebuilt.attributeCount = attributeCount;

@@ -104,6 +104,8 @@ struct BuildContext{
         build.aabbMin = Float3Int(-3.f, -2.f, -1.f, 19);
         build.aabbMax = Float3Int(1.f, 2.f, 3.f, 23);
         build.runtimeMeshVersion = 0x100000000ull + ordinal;
+        build.geometryContentRevision = 17u + ordinal;
+        build.acceptedGeometryContentRevision = 11u + ordinal;
         build.positionByteSize = 32u + ordinal;
         build.indexByteSize = 64u + ordinal;
         build.nodeByteSize = 96u + ordinal;
@@ -137,6 +139,8 @@ static void ExpectBuildSnapshot(const PreparedMeshSwBvhBuild& actual, const Prep
     EXPECT_EQ(actual.aabbMin, expected.aabbMin);
     EXPECT_EQ(actual.aabbMax, expected.aabbMax);
     EXPECT_EQ(actual.runtimeMeshVersion, expected.runtimeMeshVersion);
+    EXPECT_EQ(actual.geometryContentRevision, expected.geometryContentRevision);
+    EXPECT_EQ(actual.acceptedGeometryContentRevision, expected.acceptedGeometryContentRevision);
     EXPECT_EQ(actual.positionByteSize, expected.positionByteSize);
     EXPECT_EQ(actual.indexByteSize, expected.indexByteSize);
     EXPECT_EQ(actual.nodeByteSize, expected.nodeByteSize);

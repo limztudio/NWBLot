@@ -52,6 +52,7 @@ static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 16u, "M
 // Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
 struct MeshSkinningGraphDispatchPlan{
     RuntimeMeshHandle handle;
+    u64 deformationCandidate = 0u;
     Core::BufferHandle bindlessResourceSlotsBuffer;
     Core::GpuGraphResourceId bindlessResourceSlotsResource;
     Core::GpuGraphResourceId restPositionResource;
@@ -88,7 +89,7 @@ struct MeshSkinningGraphDispatchPlan{
     bool updatesMeshletBounds = false;
     bool repacksNormals = false;
 };
-static_assert(sizeof(MeshSkinningGraphDispatchPlan) == 448u, "Graph-owned skinning plans should stay compact");
+static_assert(sizeof(MeshSkinningGraphDispatchPlan) == 456u, "Graph-owned skinning plans should stay compact");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

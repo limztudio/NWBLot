@@ -90,6 +90,11 @@ struct MeshResources : public RuntimeMeshBuffers{
     bool swBvhBuildPending = false;     // static mesh awaiting its one-time software BVH build
     bool swBvhTopologyBuilt = false;    // a full software BVH build initialized the persistent topology
     u64 runtimeMeshVersion = 0u;
+    u64 runtimeGeometryContentRevision = 0u;
+    u64 blasGeometryContentRevision = 0u;
+    u64 swBvhGeometryContentRevision = 0u;
+    bool blasBuildAccepted = false;
+    bool swBvhBuildAccepted = false;
     CsgReceiverCpuBounds csgLocalBounds;
 
     [[nodiscard]] bool valid()const noexcept{

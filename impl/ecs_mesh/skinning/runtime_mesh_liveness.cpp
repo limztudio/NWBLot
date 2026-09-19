@@ -55,6 +55,7 @@ bool BuildSkinnedRuntimeMeshDesc(
         return false;
 
     outMesh.entity = entity;
+    outMesh.geometryContentRevision = instance->deformationState.contentRevision();
     outMesh.positionBuffer = instance->skinnedPositionBuffer;
     outMesh.normalBuffer = instance->skinnedNormalBuffer;
     outMesh.tangentBuffer = instance->skinnedTangentBuffer;

@@ -6,6 +6,8 @@
 
 #include "runtime_mesh_pruning.h"
 
+#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
+
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 
@@ -59,6 +61,11 @@ void CaptureRayTracingResourceSnapshot(
         .swBvhBuildPending = mesh.swBvhBuildPending,
         .swBvhTopologyBuilt = mesh.swBvhTopologyBuilt,
         .runtimeMeshVersion = mesh.runtimeMeshVersion,
+        .runtimeGeometryContentRevision = mesh.runtimeGeometryContentRevision,
+        .blasGeometryContentRevision = mesh.blasGeometryContentRevision,
+        .swBvhGeometryContentRevision = mesh.swBvhGeometryContentRevision,
+        .blasBuildAccepted = mesh.blasBuildAccepted,
+        .swBvhBuildAccepted = mesh.swBvhBuildAccepted,
         .csgLocalBounds = mesh.csgLocalBounds,
     };
 }
@@ -89,6 +96,11 @@ void CaptureRayTracingResourceSnapshot(
         && mesh.swBvhBuildPending == snapshot.swBvhBuildPending
         && mesh.swBvhTopologyBuilt == snapshot.swBvhTopologyBuilt
         && mesh.runtimeMeshVersion == snapshot.runtimeMeshVersion
+        && mesh.runtimeGeometryContentRevision == snapshot.runtimeGeometryContentRevision
+        && mesh.blasGeometryContentRevision == snapshot.blasGeometryContentRevision
+        && mesh.swBvhGeometryContentRevision == snapshot.swBvhGeometryContentRevision
+        && mesh.blasBuildAccepted == snapshot.blasBuildAccepted
+        && mesh.swBvhBuildAccepted == snapshot.swBvhBuildAccepted
         && mesh.csgLocalBounds.minBounds == snapshot.csgLocalBounds.minBounds
         && mesh.csgLocalBounds.maxBounds == snapshot.csgLocalBounds.maxBounds
     ;
@@ -108,6 +120,7 @@ void CaptureRayTracingResourceSnapshot(
         && lhs.meshletPrimitiveIndexCount == rhs.meshletPrimitiveIndexCount
         && lhs.runtimeMesh == rhs.runtimeMesh
         && lhs.runtimeMeshVersion == rhs.runtimeMeshVersion
+        && lhs.runtimeGeometryContentRevision == rhs.runtimeGeometryContentRevision
         && lhs.csgLocalBounds.minBounds == rhs.csgLocalBounds.minBounds
         && lhs.csgLocalBounds.maxBounds == rhs.csgLocalBounds.maxBounds
     ;
@@ -163,7 +176,14 @@ bool RendererMeshSystem::findRenderableRayTracingResourceSnapshot(
 
     const MeshResources& mesh = found.value();
     if(
-        (desc.runtime && (!mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.runtimeMesh.version))
+        (desc.runtime && (
+            !mesh.runtimeMesh || mesh.runtimeMeshVersion != desc.runtimeMesh.version
+            || mesh.runtimeGeometryContentRevision != desc.runtimeMesh.geometryContentRevision
+            || mesh.positionBuffer != desc.runtimeMesh.positionBuffer
+            || mesh.triangleIndexBuffer != desc.runtimeMesh.triangleIndexBuffer
+            || mesh.attributeBuffer != desc.runtimeMesh.attributeBuffer
+            || mesh.meshletPrimitiveIndexCount != desc.runtimeMesh.meshletPrimitiveIndexCount
+        ))
         || !meshRenderBindingsReady(mesh)
     )
         return false;
@@ -237,18 +257,25 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
         heap.free(expected.swBvhParentHeapHandle);
 
     MeshResources& mesh = found.value();
+    const bool blasReplaced = mesh.blas.get() != desired.blas.get();
+    const bool swBvhReplaced = mesh.swBvhNodeBuffer.get() != desired.swBvhNodeBuffer.get()
+        || mesh.swBvhParentBuffer.get() != desired.swBvhParentBuffer.get();
     mesh.blas = desired.blas;
     mesh.swBvhNodeBuffer = desired.swBvhNodeBuffer;
     mesh.swBvhParentBuffer = desired.swBvhParentBuffer;
     mesh.swBvhNodeHeapHandle = desired.swBvhNodeHeapHandle;
     mesh.swBvhParentHeapHandle = desired.swBvhParentHeapHandle;
-    mesh.blasRefitsSinceRebuild = desired.blasRefitsSinceRebuild;
-    mesh.swBvhRefitsSinceRebuild = desired.swBvhRefitsSinceRebuild;
-    mesh.blasBuildPending = desired.blasBuildPending;
+    mesh.blasRefitsSinceRebuild = blasReplaced ? 0u : desired.blasRefitsSinceRebuild;
+    mesh.swBvhRefitsSinceRebuild = swBvhReplaced ? 0u : desired.swBvhRefitsSinceRebuild;
+    mesh.blasBuildPending = blasReplaced || desired.blasBuildPending;
     mesh.blasBackingFresh = desired.blasBackingFresh;
     mesh.blasBackingStateHandoffPending = desired.blasBackingStateHandoffPending;
-    mesh.swBvhBuildPending = desired.swBvhBuildPending;
-    mesh.swBvhTopologyBuilt = desired.swBvhTopologyBuilt;
+    mesh.swBvhBuildPending = swBvhReplaced || desired.swBvhBuildPending;
+    mesh.swBvhTopologyBuilt = !swBvhReplaced && desired.swBvhTopologyBuilt;
+    mesh.blasBuildAccepted = !blasReplaced && desired.blasBuildAccepted;
+    mesh.swBvhBuildAccepted = !swBvhReplaced && desired.swBvhBuildAccepted;
+    mesh.blasGeometryContentRevision = mesh.blasBuildAccepted ? desired.blasGeometryContentRevision : 0u;
+    mesh.swBvhGeometryContentRevision = mesh.swBvhBuildAccepted ? desired.swBvhGeometryContentRevision : 0u;
     return true;
 }
 
@@ -312,11 +339,13 @@ void RendererMeshSystem::collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphSt
         const MeshResources& mesh = meshIt.value();
         if(!mesh.blas)
             continue;
+        ECSRenderDetail::MeshRayTracingResourceSnapshot snapshot;
+        __hidden_mesh_raytracing_snapshots::CaptureRayTracingResourceSnapshot(mesh, snapshot);
         outStates.push_back({
             .meshName = mesh.meshName,
             .blas = mesh.blas,
             .backingFresh = mesh.blasBackingFresh,
-            .nativeBuildsBlas = mesh.runtimeMesh || mesh.blasBuildPending,
+            .nativeBuildsBlas = RequiresMeshBlasUpdate(snapshot),
         });
     }
 }

@@ -33,6 +33,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose,
     Core::Alloc::ScratchArena& scratchArena){
+    instance.deformationState.invalidateCurrent();
     RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))
         return false;
@@ -42,8 +43,6 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     const bool meshletBoundsDirty = (instance.dirtyFlags & RuntimeMeshDirtyFlag::MeshletBoundsDirty) != 0u;
     const auto foundRuntimeResources = m_runtimeResources.find(instance.handle.value);
     const bool hadSkinningResources = foundRuntimeResources != m_runtimeResources.end() && foundRuntimeResources.value().usesSkinning();
-    if(!hasActiveSkin && !skinnedMeshInputDirty && !meshletBoundsDirty && !hadSkinningResources)
-        return true;
     if(instance.meshlets.empty())
         return true;
 
@@ -72,6 +71,18 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
             instance.dirtyFlags | RuntimeMeshDirtyFlag::SkinningInputDirty
         );
     }
+    const MeshSkinningDeformationInputs inputs{
+        .resourceSlotsBuffer = resources->bindlessResourceSlotsBuffer,
+        .editRevision = instance.editRevision,
+        .skinningMode = payload.resolvedSkinningMode,
+    };
+    // Changed inputs stay revision zero until the graph accepts their complete output.
+    instance.deformationState.refreshCurrent(
+        inputs,
+        payload.jointMatrices.data(),
+        payload.jointMatrices.size(),
+        skinnedMeshInputDirty || meshletBoundsDirty || resourcesRebuilt
+    );
     return true;
 }
 
@@ -242,6 +253,9 @@ void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGra
         || resources.bindlessHeapHandles.resourceSlots != plan.bindlessResourceSlotsDescriptor
         || resources.bindlessResourceSlots != plan.bindlessResourceSlotsPayload
     )
+        return;
+
+    if(!instance->deformationState.accept(plan.deformationCandidate))
         return;
 
     ApplyMeshSkinningSubmissionCommit(

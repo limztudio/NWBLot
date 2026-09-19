@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "deformation_state.h"
+
 #include <core/graphics/api.h>
 #include <core/mesh/classification.h>
 #include <impl/assets_mesh/payload_types.h>
@@ -55,6 +57,7 @@ struct MeshSkinningRuntimeInstance{
     AttributeSkinVector attributeSkins;
     SkinVector skin;
     JointVector inverseBindMatrices;
+    MeshSkinningDeformationState deformationState;
     Core::BufferHandle restPositionBuffer;
     Core::BufferHandle restNormalBuffer;
     Core::BufferHandle restTangentBuffer;
@@ -93,6 +96,7 @@ struct MeshSkinningRuntimeInstance{
         , attributeSkins(arena)
         , skin(arena)
         , inverseBindMatrices(arena)
+        , deformationState(arena)
     {}
 
     [[nodiscard]] bool valid()const{

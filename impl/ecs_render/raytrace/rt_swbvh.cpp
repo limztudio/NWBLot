@@ -6,6 +6,7 @@
 #include <impl/ecs_render/material/sampled_texture_collection.h>
 #include <impl/ecs_render/optics/coincident_volumes.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
+#include <impl/ecs_render/raytrace/mesh_acceleration_update.h>
 #include <impl/ecs_csg/components.h>
 
 #include <global/algorithm.h>
@@ -273,7 +274,7 @@ template<typename RayTracingState>
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
         return false;
 
-    const bool firstBuild = meshResources.blasBuildPending;
+    const bool firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild
@@ -285,6 +286,8 @@ template<typename RayTracingState>
     outBuild.blas = meshResources.blas;
     outBuild.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
     outBuild.runtimeMeshVersion = meshResources.runtimeMeshVersion;
+    outBuild.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
+    outBuild.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
     outBuild.positionByteSize = positionDesc.byteSize;
     outBuild.vertexStride = static_cast<u32>(positionDesc.structStride);
     outBuild.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
@@ -292,6 +295,7 @@ template<typename RayTracingState>
     outBuild.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
     outBuild.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
     outBuild.runtimeMesh = meshResources.runtimeMesh;
+    outBuild.buildPending = meshResources.blasBuildPending;
     outBuild.firstBuild = firstBuild;
     outBuild.backingFresh = meshResources.blasBackingFresh;
     outBuild.performRefit = performRefit;
@@ -306,13 +310,16 @@ template<typename RayTracingState>
         meshResources.meshName != build.meshName
         || meshResources.runtimeMesh != build.runtimeMesh
         || meshResources.runtimeMeshVersion != build.runtimeMeshVersion
+        || meshResources.runtimeGeometryContentRevision != build.geometryContentRevision
+        || meshResources.blasGeometryContentRevision != build.acceptedGeometryContentRevision
         || meshResources.positionBuffer.get() != build.positionBuffer.get()
         || meshResources.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
         || meshResources.blas.get() != build.blas.get()
         || !meshResources.blas
         || meshResources.blas->getBackingBufferHandle().get() != build.blasBackingBuffer.get()
         || meshResources.meshletPrimitiveIndexCount != build.indexCount
-        || meshResources.blasBuildPending != build.firstBuild
+        || meshResources.blasBuildPending != build.buildPending
+        || (meshResources.blasBuildPending || !meshResources.blasBuildAccepted) != build.firstBuild
         || meshResources.blasBackingFresh != build.backingFresh
         || meshResources.blasRefitsSinceRebuild != build.refitsBeforeBuild
     )
@@ -404,20 +411,7 @@ bool RendererRayTracingSystem::buildPendingMeshBlas(
     for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
 
-        if(meshResources.runtimeMesh){
-            if(!buildMeshBlas(commandList, meshResources)){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh BLAS build failed"));
-                return false;
-            }
-            meshResources.blasBuildPending = false;
-            if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-                m_rayTracingState.m_tlasStaticSceneHashValid = false;
-                return false;
-            }
-            continue;
-        }
-
-        if(!meshResources.blasBuildPending)
+        if(!RequiresMeshBlasUpdate(meshResources))
             continue;
         if(!buildMeshBlas(commandList, meshResources))
             return false;
@@ -438,7 +432,7 @@ bool RendererRayTracingSystem::preparePendingMeshBlasResources(Core::Alloc::Scra
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending)
+        if(!RequiresMeshBlasUpdate(meshResources))
             continue;
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
         if(!prepareMeshBlasResources(meshResources)){
@@ -466,9 +460,10 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        // Runtime geometry refits every hardware frame; static geometry enters only when the preflight marked it dirty. This deliberately includes off-screen meshes, matching the established native traversal.
-        if(!meshResources.runtimeMesh && !meshResources.blasBuildPending){
-            ++m_blasLedgerStaticSkipped;
+        // Reuse only accepted, unchanged object-space geometry, including off-screen mesh resources.
+        if(!RequiresMeshBlasUpdate(meshResources)){
+            if(!meshResources.runtimeMesh)
+                ++m_blasLedgerStaticSkipped;
             continue;
         }
 
@@ -545,6 +540,8 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         meshResources.blasBackingFresh = false;
         meshResources.blasBackingStateHandoffPending = false;
         meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
+        meshResources.blasBuildAccepted = true;
+        meshResources.blasGeometryContentRevision = build.geometryContentRevision;
         if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
             allPlansCurrent = false;
             continue;
@@ -588,22 +585,10 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(
     for(ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
 
-        if(meshResources.runtimeMesh){
-            if(!updateMeshSwBvh(commandList, meshResources)){
-                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: runtime mesh '{}' software BVH update failed"), StringConvert(meshResources.meshName.c_str()));
-                allBuildsReady = false;
-            }
-            else if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
-                m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
-                allBuildsReady = false;
-            }
-            continue;
-        }
-
-        if(!meshResources.swBvhBuildPending)
+        if(!RequiresMeshSwBvhUpdate(meshResources))
             continue;
         if(!updateMeshSwBvh(commandList, meshResources)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: static mesh '{}' software BVH build failed"), StringConvert(meshResources.meshName.c_str()));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh '{}' software BVH build failed"), StringConvert(meshResources.meshName.c_str()));
             allBuildsReady = false;
             continue;
         }
@@ -617,12 +602,12 @@ bool RendererRayTracingSystem::buildPendingMeshSwBvh(
 }
 
 bool RendererRayTracingSystem::preparePendingMeshSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
-    // Prepare resources before recording; runtime meshes prepare every frame.
+    // Prepare storage only for geometry requiring an acceleration update.
     bool allResourcesReady = true;
     ECSRenderDetail::MeshRayTracingResourceSnapshotVector meshes{ scratchArena };
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources : meshes){
-        if(!meshResources.runtimeMesh && !meshResources.swBvhBuildPending)
+        if(!RequiresMeshSwBvhUpdate(meshResources))
             continue;
 
         if(!meshResources.positionBuffer || !meshResources.triangleIndexBuffer){
@@ -673,12 +658,12 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
     m_meshSystem.collectRayTracingResourceSnapshots(meshes);
     bool hasCandidate = false;
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
-        if(mesh.runtimeMesh || mesh.swBvhBuildPending){
+        if(RequiresMeshSwBvhUpdate(mesh)){
             hasCandidate = true;
             break;
         }
     }
-    // A software-only frame can have no dirty/static or runtime mesh work. In that case the shared scratch has not necessarily been allocated, and an authoritative empty plan must retain the established no-op path.
+    // An unchanged scene can have no mesh work or allocated scratch; freeze an authoritative empty plan.
     if(!hasCandidate){
         m_preparedMeshSwBvhBuildPlanFrozen = true;
         return true;
@@ -697,8 +682,8 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
         return false;
 
     for(const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh : meshes){
-        // Runtime meshes update every software-only frame; static meshes enter exactly while their topology is pending. This mirrors the direct loop, including off-screen mesh resources.
-        if(!mesh.runtimeMesh && !mesh.swBvhBuildPending)
+        // Match the direct update policy, including off-screen mesh resources.
+        if(!RequiresMeshSwBvhUpdate(mesh))
             continue;
         if(
             !mesh.meshName
@@ -721,7 +706,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
         }
 
         const u32 primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
-        const bool firstBuild = !mesh.swBvhTopologyBuilt;
+        const bool firstBuild = !mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted;
         const bool performRefit =
             mesh.runtimeMesh
             && !firstBuild
@@ -753,6 +738,8 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             .aabbMin = mesh.csgLocalBounds.minBounds,
             .aabbMax = mesh.csgLocalBounds.maxBounds,
             .runtimeMeshVersion = mesh.runtimeMeshVersion,
+            .geometryContentRevision = mesh.runtimeGeometryContentRevision,
+            .acceptedGeometryContentRevision = mesh.swBvhGeometryContentRevision,
             .positionByteSize = positionDesc.byteSize,
             .indexByteSize = indexDesc.byteSize,
             .nodeByteSize = nodeDesc.byteSize,
@@ -784,6 +771,8 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
         mesh.meshName != build.meshName
         || mesh.runtimeMesh != build.runtimeMesh
         || mesh.runtimeMeshVersion != build.runtimeMeshVersion
+        || mesh.runtimeGeometryContentRevision != build.geometryContentRevision
+        || mesh.swBvhGeometryContentRevision != build.acceptedGeometryContentRevision
         || mesh.positionBuffer.get() != build.positionBuffer.get()
         || mesh.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
         || mesh.swBvhNodeBuffer.get() != build.nodeBuffer.get()
@@ -801,7 +790,7 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildMatchesCurrent(const Prepar
         || mesh.meshletPrimitiveIndexCount != build.primitiveCount * s_RayTracingTriangleIndexCount
         || mesh.swBvhRefitsSinceRebuild != build.refitsBeforeBuild
         || mesh.swBvhBuildPending != build.buildPending
-        || (!mesh.swBvhTopologyBuilt) != build.firstBuild
+        || (!mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted) != build.firstBuild
         || mesh.csgLocalBounds.minBounds != build.aabbMin
         || mesh.csgLocalBounds.maxBounds != build.aabbMax
         || !meshSwBvhResourcesReady(
@@ -927,21 +916,24 @@ void RendererRayTracingSystem::confirmPreparedMeshSwBvhBuilds(){
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, mesh)
             || mesh.runtimeMesh != build.runtimeMesh
             || mesh.runtimeMeshVersion != build.runtimeMeshVersion
+            || mesh.runtimeGeometryContentRevision != build.geometryContentRevision
+            || mesh.swBvhGeometryContentRevision != build.acceptedGeometryContentRevision
             || mesh.positionBuffer.get() != build.positionBuffer.get()
             || mesh.triangleIndexBuffer.get() != build.triangleIndexBuffer.get()
             || mesh.swBvhNodeBuffer.get() != build.nodeBuffer.get()
             || mesh.swBvhParentBuffer.get() != build.parentBuffer.get()
             || mesh.swBvhRefitsSinceRebuild != build.refitsBeforeBuild
             || mesh.swBvhBuildPending != build.buildPending
-            || (!mesh.swBvhTopologyBuilt) != build.firstBuild
+            || (!mesh.swBvhTopologyBuilt || !mesh.swBvhBuildAccepted) != build.firstBuild
         ){
             allPlansCurrent = false;
             continue;
         }
 
         const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = mesh;
-        if(!mesh.runtimeMesh)
-            mesh.swBvhBuildPending = false;
+        mesh.swBvhBuildPending = false;
+        mesh.swBvhBuildAccepted = true;
+        mesh.swBvhGeometryContentRevision = build.geometryContentRevision;
         if(!build.performRefit)
             mesh.swBvhTopologyBuilt = true;
         mesh.swBvhRefitsSinceRebuild = build.refitsAfterBuild;
@@ -972,6 +964,8 @@ bool RendererRayTracingSystem::preparedMeshSwBvhBuildProducesTopology(
             build.meshName == mesh.meshName
             && build.runtimeMesh == mesh.runtimeMesh
             && build.runtimeMeshVersion == mesh.runtimeMeshVersion
+            && build.geometryContentRevision == mesh.runtimeGeometryContentRevision
+            && build.acceptedGeometryContentRevision == mesh.swBvhGeometryContentRevision
             && build.positionBuffer.get() == mesh.positionBuffer.get()
             && build.triangleIndexBuffer.get() == mesh.triangleIndexBuffer.get()
             && build.nodeBuffer.get() == mesh.swBvhNodeBuffer.get()
@@ -1753,6 +1747,7 @@ bool RendererRayTracingSystem::buildSceneSwBvhImpl(
                     .triangleIndexHeapHandle = indexHandle,
                     .attributeHeapHandle = attributeHandle,
                     .runtimeMeshVersion = mesh.runtimeMeshVersion,
+                    .geometryContentRevision = mesh.runtimeGeometryContentRevision,
                     .nodeByteSize = nodeDesc.byteSize,
                     .positionByteSize = positionDesc.byteSize,
                     .triangleIndexByteSize = indexDesc.byteSize,
@@ -2210,6 +2205,9 @@ bool RendererRayTracingSystem::prepareMeshBlasResources(
         return false;
     }
     meshResources.blas = Move(blas);
+    meshResources.blasBuildPending = true;
+    meshResources.blasBuildAccepted = false;
+    meshResources.blasGeometryContentRevision = 0u;
     meshResources.blasBackingFresh = true;
     meshResources.blasBackingStateHandoffPending = false;
     meshResources.blasRefitsSinceRebuild = 0u;
@@ -2964,7 +2962,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(
     commandList.commitBarriers();
 
     // Runtime meshes refit until the adaptive budget; first build initializes topology.
-    const bool firstBuild = !meshResources.swBvhTopologyBuilt;
+    const bool firstBuild = !meshResources.swBvhTopologyBuilt || !meshResources.swBvhBuildAccepted;
     const bool performRefit =
         meshResources.runtimeMesh
         && !firstBuild

@@ -148,6 +148,7 @@ private:
 
     struct RuntimeResources{
         RuntimeMeshHandle handle;
+        MeshSkinningResourceBuffers buffers;
         u32 editRevision = 0;
         u32 positionCount = 0;
         u32 attributeCount = 0;

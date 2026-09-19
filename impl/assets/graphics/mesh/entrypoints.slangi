@@ -21,6 +21,12 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     if(meshletIndex >= nwbMeshletCount())
         return;
 
+#if NWB_MESH_EMULATION_INDEXED_OUTPUT
+    // One writer initializes the sentinel even when the first meshlet is culled.
+    if(meshletIndex == 0u && groupThreadID.x == 0u)
+        nwbMeshInitializeCulledVertex();
+#endif
+
     nwbMeshLoadGeometryHeapSlots(groupThreadID.x);
     const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(
         nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC)
@@ -36,7 +42,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             localPrimitiveIndex < primitiveCount;
             localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
         )
-            nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
+            nwbMeshStoreCulledEmulationPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
         return;
     }
 
@@ -48,7 +54,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             localPrimitiveIndex < primitiveCount;
             localPrimitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X
         )
-            nwbMeshStoreCulledPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
+            nwbMeshStoreCulledEmulationPrimitive(nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex));
         return;
     }
     nwbMeshSetMeshletRasterFlags(nwbMeshCsgRasterFlags(csgMeshletClass), groupThreadID.x);
@@ -58,22 +64,28 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     nwbMeshBuildMeshletPositions(meshlet, decodeInfo, instance, groupThreadID.x);
 
-    // P3: evaluate each meshlet-local vertex ONCE into groupshared staging, then gather per corner.
-    // The cache index is the full local-vertex reference (not the position index) so seams with shared positions but distinct UVs/normals/tangents keep their identity. Output format is unchanged: the primitive loop below writes the same expanded triangle-corner stream as before.
-    // All lanes reach the staging barrier uniformly: meshlet-level exits above return before this cooperative phase.
+    // Full local-reference identity preserves attribute seams and meshlet-specific raster flags.
+    // Meshlet-level exits precede this cooperative phase, so all remaining lanes reach the barrier.
     const uint localVertexCount = nwbMeshletVertexCount(meshlet);
     for(
         uint localVertexIndex = groupThreadID.x;
         localVertexIndex < localVertexCount;
         localVertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X
     ){
-        g_NwbMeshletStagedVertices[localVertexIndex] = nwbMeshBuildMeshletVertex(
+        const NwbMeshGeneratedVertex generatedVertex = nwbMeshBuildMeshletVertex(
             meshletIndex,
             meshlet,
             decodeInfo,
             localVertexIndex,
             instance
         );
+#if NWB_MESH_EMULATION_INDEXED_OUTPUT
+        const uint outputVertexIndex = NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset + localVertexIndex;
+        nwbMeshGeneratedVertices()[outputVertexIndex] = generatedVertex;
+        g_NwbMeshletStagedClipPositions[localVertexIndex] = generatedVertex.position;
+#else
+        g_NwbMeshletStagedVertices[localVertexIndex] = generatedVertex;
+#endif
     }
     GroupMemoryBarrierWithGroupSync();
 
@@ -84,17 +96,29 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     ){
         const uint primitiveBase = nwbMeshletPrimitiveBase(meshlet, localPrimitiveIndex);
         const uint3 localVertexIndices = nwbMeshLoadMeshletPrimitive(primitiveBase);
+#if NWB_MESH_EMULATION_INDEXED_OUTPUT
+        const float4 a = g_NwbMeshletStagedClipPositions[localVertexIndices.x];
+        const float4 b = g_NwbMeshletStagedClipPositions[localVertexIndices.y];
+        const float4 c = g_NwbMeshletStagedClipPositions[localVertexIndices.z];
+        const bool triangleCulled = nwbMeshAllOutsideClipPlane(a, b, c) || nwbMeshAllOutsideScissor(a, b, c);
+        const uint3 outputIndices = triangleCulled
+            ? uint3(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX)
+            : localVertexIndices + (NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset)
+        ;
+        nwbMeshStoreGeneratedIndices(primitiveBase, outputIndices);
+#else
         NwbMeshGeneratedVertex generatedVertices[NWB_MESHLET_TRIANGLE_INDEX_COUNT];
         for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
             generatedVertices[corner] = g_NwbMeshletStagedVertices[localVertexIndices[corner]];
 
         if(nwbMeshTriangleCulled(generatedVertices)){
-            nwbMeshStoreCulledPrimitive(primitiveBase);
+            nwbMeshStoreCulledEmulationPrimitive(primitiveBase);
             continue;
         }
 
         for(uint corner = 0u; corner < NWB_MESHLET_TRIANGLE_INDEX_COUNT; ++corner)
             nwbMeshGeneratedVertices()[primitiveBase + corner] = generatedVertices[corner];
+#endif
     }
 }
 

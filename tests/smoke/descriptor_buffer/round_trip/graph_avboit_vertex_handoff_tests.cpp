@@ -5,6 +5,8 @@
 #include "packet_recording_test_support.h"
 #include "round_trip_fixture.h"
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,7 +25,7 @@ namespace Tests{
 
 // AVBOIT Extinction may prepare multiple transparent compute-emulated materials ahead of raster only when their
 // generated-vertex buffers are distinct. Record that alias-free Graphics|Compute handoff on a real packet: both
-// producer writes must observe UAV, the Extinction raster must observe VertexBuffer, and no callback owns a bridge.
+// producer writes must observe UAV, the Extinction raster must observe vertex/index input, and no callback owns a bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGeneratedVertexHandoffMergesWithRaster){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createGeneratedVertex = [&device](const Name& debugName){
@@ -35,6 +37,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
                 .setCanHaveUAVs(true)
                 .setCanHaveRawViews(true)
                 .setIsVertexBuffer(true)
+                .setIsIndexBuffer(true)
                 .setInitialState(ResourceStates::Common)
                 .setQueueSharing(ResourceQueueSharing::Exclusive)
         );
@@ -134,7 +137,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
     const GpuTaskResourceSetUse outputVertexBufferSetUse{
         .resourceSet = generatedVertexOutputSet,
         .range = {},
-        .requiredState = ResourceStates::VertexBuffer,
+        .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = GpuTaskResourceAccess::Read,
     };
     bool rasterObservedStates = false;
@@ -149,9 +152,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &rasterObservedStates,
             .acceptedToken = &rasterAcceptedToken,
         }
@@ -231,7 +234,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
             rasterTask,
             output,
             ResourceStates::UnorderedAccess,
-            ResourceStates::VertexBuffer
+            Impl::ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
     }
 
@@ -253,8 +256,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), ResourceStates::VertexBuffer);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     const GpuTaskScheduler submitter(device);
@@ -289,7 +292,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
 
 // AVBOIT Accumulation may prepare multiple transparent compute-emulated materials ahead of raster only when their
 // generated-vertex buffers are distinct. Record that alias-free Graphics|Compute handoff on a real packet: both
-// producer writes must observe UAV, the Accumulation raster must observe VertexBuffer, and no callback owns a bridge.
+// producer writes must observe UAV, the Accumulation raster must observe vertex/index input, and no callback owns a bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGeneratedVertexHandoffMergesWithRaster){
     auto& device = DescriptorBufferRoundTripTest::device();
     const auto createGeneratedVertex = [&device](const Name& debugName){
@@ -301,6 +304,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
                 .setCanHaveUAVs(true)
                 .setCanHaveRawViews(true)
                 .setIsVertexBuffer(true)
+                .setIsIndexBuffer(true)
                 .setInitialState(ResourceStates::Common)
                 .setQueueSharing(ResourceQueueSharing::Exclusive)
         );
@@ -400,7 +404,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
     const GpuTaskResourceSetUse outputVertexBufferSetUse{
         .resourceSet = generatedVertexOutputSet,
         .range = {},
-        .requiredState = ResourceStates::VertexBuffer,
+        .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = GpuTaskResourceAccess::Read,
     };
     bool rasterObservedStates = false;
@@ -415,9 +419,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &rasterObservedStates,
             .acceptedToken = &rasterAcceptedToken,
         }
@@ -497,7 +501,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
             rasterTask,
             output,
             ResourceStates::UnorderedAccess,
-            ResourceStates::VertexBuffer
+            Impl::ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
     }
 
@@ -519,8 +523,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), ResourceStates::VertexBuffer);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     const GpuTaskScheduler submitter(device);

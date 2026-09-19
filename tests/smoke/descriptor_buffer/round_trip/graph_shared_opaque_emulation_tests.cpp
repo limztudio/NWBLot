@@ -4,6 +4,9 @@
 
 #include "packet_recording_test_support.h"
 #include "round_trip_fixture.h"
+#include "shaders_test_support.h"
+
+#include <impl/ecs_render/material/generated_geometry_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,23 +85,120 @@ struct NativePacketSharedOutputHandoffTask{
 };
 
 
+// Bind both regions of one graph-owned allocation without a callback-local state bridge.
+struct NativePacketUnifiedGeometryRasterTask{
+    struct Payload{
+        BufferHandle m_buffer;
+        GraphicsPipelineHandle m_pipeline;
+        FramebufferHandle m_framebuffer;
+        u32 m_indexByteOffset = 0u;
+        bool* m_recorded = nullptr;
+        QueueSubmissionToken* m_acceptedToken = nullptr;
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context){
+        static_cast<void>(context);
+        if(
+            !payload.m_buffer || !payload.m_pipeline || !payload.m_framebuffer
+            || commandList.getBufferState(payload.m_buffer.get()) != Impl::ECSRenderDetail::s_GeneratedGeometryRasterState
+        )
+            return false;
+        GraphicsState state;
+        state
+            .setPipeline(payload.m_pipeline.get())
+            .setFramebuffer(payload.m_framebuffer.get())
+            .setViewport(ViewportState().addViewportAndScissorRect(payload.m_framebuffer->getFramebufferInfo().getViewport()))
+            .addVertexBuffer(VertexBufferBinding().setBuffer(payload.m_buffer.get()))
+            .setIndexBuffer(
+                IndexBufferBinding().setBuffer(payload.m_buffer.get()).setFormat(Format::R32_UINT).setOffset(payload.m_indexByteOffset)
+            )
+        ;
+        commandList.setGraphicsState(state);
+        commandList.drawIndexed(DrawArguments().setVertexCount(3u));
+        commandList.endRenderPass();
+        const bool ready = !commandList.commandRecordingFailed();
+        if(payload.m_recorded)
+            *payload.m_recorded = ready;
+        return ready;
+    }
+
+    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+        if(payload.m_acceptedToken)
+            *payload.m_acceptedToken = token;
+    }
+};
+
+
 // Compute-emulated material work writes its generated vertex stream before the ordinary raster callback consumes
 // that exact stream. Both command capabilities must remain on primary Graphics, so the graph owns the direct
-// UAV -> VertexBuffer handoff inside one accepting packet rather than relying on a callback-local bridge.
+// UAV -> vertex/index handoff inside one accepting packet rather than relying on a callback-local bridge.
 TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexHandoffMergesWithRaster){
     auto& device = DescriptorBufferRoundTripTest::device();
+    constexpr u32 s_IndexByteOffset = 3u * 4u * sizeof(f32);
     auto generatedVertex = device.createBuffer(
         BufferDesc()
             .setDebugName(Name("tests/descriptor_buffer/compute_emulation_generated_vertex"))
-            .setByteSize(3u * 4u * sizeof(f32))
+            .setByteSize(s_IndexByteOffset + 3u * sizeof(u32))
             .setStructStride(4u * sizeof(f32))
             .setCanHaveUAVs(true)
             .setCanHaveRawViews(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
     ASSERT_NE(generatedVertex.get(), nullptr);
+
+    // The existing constant-position shaders isolate native binding/state correctness; geometry generation has separate tests.
+    ShaderDesc vertexDesc(DescriptorBufferRoundTripTest::arena());
+    vertexDesc.setShaderType(ShaderType::Vertex);
+    const ShaderHandle vertex = device.createShader(
+        vertexDesc, s_CommandBufferLifetimeVertexSpirv, sizeof(s_CommandBufferLifetimeVertexSpirv)
+    );
+    ShaderDesc fragmentDesc(DescriptorBufferRoundTripTest::arena());
+    fragmentDesc.setShaderType(ShaderType::Pixel);
+    const ShaderHandle fragment = device.createShader(
+        fragmentDesc, s_CommandBufferLifetimeFragmentSpirv, sizeof(s_CommandBufferLifetimeFragmentSpirv)
+    );
+    ASSERT_TRUE(vertex);
+    ASSERT_TRUE(fragment);
+    const TextureHandle color = device.createTexture(
+        TextureDesc().setWidth(4u).setHeight(4u).setFormat(Format::RGBA8_UNORM).setInRenderTarget(true)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(color);
+    const FramebufferDesc framebufferDesc = FramebufferDesc().addColorAttachment(color.get());
+    const FramebufferHandle framebuffer = device.createFramebuffer(framebufferDesc);
+    ASSERT_TRUE(framebuffer);
+    DepthStencilState depth;
+    depth.disableDepthTest().disableDepthWrite();
+    RenderState render;
+    render.setDepthStencilState(depth);
+    GraphicsPipelineDesc pipelineDesc;
+    pipelineDesc.setVertexShader(vertex).setPixelShader(fragment).setRenderState(render);
+    const GraphicsPipelineHandle pipeline = device.createGraphicsPipeline(pipelineDesc, FramebufferInfo(framebufferDesc));
+    ASSERT_TRUE(pipeline);
+
+    // Seed valid indices and establish the buffer and color image states declared by the graph.
+    const u32 contents[15u] = {};
+    const CommandListHandle initialize = device.createCommandList();
+    ASSERT_TRUE(initialize);
+    initialize->open();
+    ASSERT_TRUE(initialize->tryWriteBuffer(*generatedVertex, contents, sizeof(contents)));
+    initialize->setBufferState(generatedVertex.get(), ResourceStates::Common);
+    initialize->setTextureState(color.get(), s_AllSubresources, ResourceStates::Common);
+    initialize->commitBarriers();
+    initialize->close();
+    ASSERT_FALSE(initialize->commandRecordingFailed());
+    CommandList* const initializeLists[] = { initialize.get() };
+    const QueueSubmissionToken initializeToken = device.executeCommandLists(
+        initializeLists, LengthOf(initializeLists), CommandQueue::Graphics, QueueSubmissionDesc{}
+    );
+    ASSERT_TRUE(initializeToken.valid());
+    ASSERT_TRUE(device.waitForIdle());
 
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     const BufferDesc& generatedVertexDesc = generatedVertex->getDescription();
@@ -112,6 +212,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
             .setQueueSharing(generatedVertexDesc.queueSharing)
     );
     ASSERT_TRUE(generatedVertexResource.valid());
+    const GpuGraphResourceId colorResource = graph.importTexture(
+        color,
+        GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/descriptor_buffer/unified_geometry_color"))
+            .setMarkerLabel("Unified Generated Geometry Raster Target")
+            .setType(GpuGraphResourceType::Texture)
+            .setInitialState(ResourceStates::Common)
+    );
+    ASSERT_TRUE(colorResource.valid());
 
     const GpuQueueRequest graphicsComputeQueue{
         static_cast<GpuQueueCapability::Mask>(
@@ -169,13 +278,19 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
         GpuTaskResourceUse{
             .resource = generatedVertexResource,
             .range = {},
-            .requiredState = ResourceStates::VertexBuffer,
+            .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = GpuTaskResourceAccess::Read,
+        },
+        GpuTaskResourceUse{
+            .resource = colorResource,
+            .range = {},
+            .requiredState = ResourceStates::RenderTarget,
+            .access = GpuTaskResourceAccess::Write,
         },
     };
     bool rasterObservedVertexBuffer = false;
     QueueSubmissionToken rasterAcceptedToken;
-    const GpuTaskId rasterTask = graph.addTask<NativePacketPrefixTask>(
+    const GpuTaskId rasterTask = graph.addTask<NativePacketUnifiedGeometryRasterTask>(
         GpuTaskDesc{}
             .setIdentity(Name("tests/descriptor_buffer/compute_emulation_generated_vertex_raster"))
             .setMarkerLabel("Compute-Emulated Generated Vertex Raster Consume")
@@ -183,12 +298,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
             .setScheduling(rasterScheduling)
             .setDependencies(&producerTask, 1u)
             .setResourceUses(rasterUses, LengthOf(rasterUses)),
-        NativePacketPrefixTask::Payload{
-            // This callback likewise performs no native transition; packet lowering owns UAV -> VertexBuffer.
-            .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::VertexBuffer,
-            .recorded = &rasterObservedVertexBuffer,
-            .acceptedToken = &rasterAcceptedToken,
+        NativePacketUnifiedGeometryRasterTask::Payload{
+            .m_buffer = generatedVertex,
+            .m_pipeline = pipeline,
+            .m_framebuffer = framebuffer,
+            .m_indexByteOffset = s_IndexByteOffset,
+            .m_recorded = &rasterObservedVertexBuffer,
+            .m_acceptedToken = &rasterAcceptedToken,
         }
     );
     ASSERT_TRUE(rasterTask.valid());
@@ -244,9 +360,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     ASSERT_TRUE(compiledProducer.valid());
     ASSERT_TRUE(compiledRaster.valid());
     ASSERT_EQ(compiledProducer.plan->prologueBarrierCount, 1u);
-    ASSERT_EQ(compiledRaster.plan->prologueBarrierCount, 1u);
+    ASSERT_EQ(compiledRaster.plan->prologueBarrierCount, 2u);
     const GpuCompiledBarrier* const producerBarrier = views.compiled.findTask(producerTask).prologueBarriers;
-    const GpuCompiledBarrier* const rasterBarrier = views.compiled.findTask(rasterTask).prologueBarriers;
+    const GpuCompiledBarrier* const rasterBarriers = compiledRaster.prologueBarriers;
+    const GpuCompiledBarrier* rasterBarrier = nullptr;
+    for(usize index = 0u; index < compiledRaster.plan->prologueBarrierCount; ++index){
+        if(rasterBarriers[index].resource == generatedVertexResource)
+            rasterBarrier = &rasterBarriers[index];
+    }
     ASSERT_NE(producerBarrier, nullptr);
     ASSERT_NE(rasterBarrier, nullptr);
     EXPECT_EQ(producerBarrier[0u].type, GpuCompiledBarrierType::BufferTransition);
@@ -256,7 +377,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     EXPECT_EQ(rasterBarrier[0u].type, GpuCompiledBarrierType::BufferTransition);
     EXPECT_EQ(rasterBarrier[0u].resource, generatedVertexResource);
     EXPECT_EQ(rasterBarrier[0u].before, ResourceStates::UnorderedAccess);
-    EXPECT_EQ(rasterBarrier[0u].after, ResourceStates::VertexBuffer);
+    EXPECT_EQ(rasterBarrier[0u].after, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     EXPECT_EQ(rasterBarrier[0u].sourceQueue, primaryGraphicsQueue);
     EXPECT_EQ(rasterBarrier[0u].destinationQueue, primaryGraphicsQueue);
 
@@ -278,7 +399,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     const GpuTaskScheduler submitter(device);
@@ -340,6 +461,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
             .setCanHaveUAVs(true)
             .setCanHaveRawViews(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -392,7 +514,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
         GpuTaskResourceUse{
             .resource = generatedVertexResource,
             .range = {},
-            .requiredState = ResourceStates::VertexBuffer,
+            .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = GpuTaskResourceAccess::Read,
         },
     };
@@ -441,7 +563,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
             .setResourceUses(rasterUses, LengthOf(rasterUses)),
         NativePacketSharedOutputHandoffTask::Payload{
             .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recordOrdinal = &recordOrdinal,
             .expectedOrdinal = 1u,
             .device = &device,
@@ -487,7 +609,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
             .setResourceUses(rasterUses, LengthOf(rasterUses)),
         NativePacketSharedOutputHandoffTask::Payload{
             .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recordOrdinal = &recordOrdinal,
             .expectedOrdinal = 3u,
             .device = &device,
@@ -570,9 +692,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
         EXPECT_EQ(barrier.destinationQueue, primaryGraphicsQueue);
     };
     expectTransition(dispatchA, ResourceStates::Common, ResourceStates::UnorderedAccess);
-    expectTransition(rasterA, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(dispatchB, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(rasterB, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(rasterA, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(dispatchB, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(rasterB, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -595,7 +717,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     const GpuTaskGraphTaskTimingTicket timingTickets[] = {
@@ -682,6 +804,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
             .setCanHaveUAVs(true)
             .setCanHaveRawViews(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -737,7 +860,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         GpuTaskResourceUse{
             .resource = generatedVertexResource,
             .range = {},
-            .requiredState = ResourceStates::VertexBuffer,
+            .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = GpuTaskResourceAccess::Read,
         },
     };
@@ -790,7 +913,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
             desc,
             NativePacketSharedOutputHandoffTask::Payload{
                 .buffer = generatedVertex.get(),
-                .expectedState = isRaster ? ResourceStates::VertexBuffer : ResourceStates::UnorderedAccess,
+                .expectedState = isRaster ? Impl::ECSRenderDetail::s_GeneratedGeometryRasterState : ResourceStates::UnorderedAccess,
                 .recordOrdinal = &recordOrdinal,
                 .expectedOrdinal = static_cast<u32>(taskIndex),
                 .device = &device,
@@ -859,11 +982,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
         EXPECT_EQ(barrier.destinationQueue, primaryGraphicsQueue);
     };
     expectTransition(0u, ResourceStates::Common, ResourceStates::UnorderedAccess);
-    expectTransition(1u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(2u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(3u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(4u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(5u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(1u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(2u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(3u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(4u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(5u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -892,7 +1015,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     GpuTaskGraphTaskTimingTicket timingTickets[LengthOf(tasks)] = {};
@@ -1007,6 +1130,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
             .setCanHaveUAVs(true)
             .setCanHaveRawViews(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -1062,7 +1186,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
         GpuTaskResourceUse{
             .resource = generatedVertexResource,
             .range = {},
-            .requiredState = ResourceStates::VertexBuffer,
+            .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = GpuTaskResourceAccess::Read,
         },
     };
@@ -1110,7 +1234,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
             desc,
             NativePacketSharedOutputHandoffTask::Payload{
                 .buffer = generatedVertex.get(),
-                .expectedState = isRaster ? ResourceStates::VertexBuffer : ResourceStates::UnorderedAccess,
+                .expectedState = isRaster ? Impl::ECSRenderDetail::s_GeneratedGeometryRasterState : ResourceStates::UnorderedAccess,
                 .recordOrdinal = &recordOrdinal,
                 .expectedOrdinal = static_cast<u32>(taskIndex),
                 .device = &device,
@@ -1178,13 +1302,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
         EXPECT_EQ(barrier.destinationQueue, primaryGraphicsQueue);
     };
     expectTransition(0u, ResourceStates::Common, ResourceStates::UnorderedAccess);
-    expectTransition(1u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(2u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(3u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(4u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(5u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
-    expectTransition(6u, ResourceStates::VertexBuffer, ResourceStates::UnorderedAccess);
-    expectTransition(7u, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer);
+    expectTransition(1u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(2u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(3u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(4u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(5u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    expectTransition(6u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(7u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -1205,7 +1329,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     GpuTaskGraphTaskTimingTicket timingTickets[LengthOf(tasks)] = {};

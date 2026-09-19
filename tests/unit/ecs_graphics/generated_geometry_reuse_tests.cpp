@@ -135,6 +135,29 @@ TEST(AvboitGeneratedGeometryReuse, PublishedGroupServesAllEligiblePassesWithoutC
     }
 }
 
+TEST(AvboitGeneratedGeometryReuse, UnifiedOutputLayoutAndRepresentationMustMatchAcrossPasses){
+    ReuseContext fixture;
+    auto& draw = fixture.draws.regular.computeDrawItems[0u];
+    draw.meshResources.emulationIndexByteOffset = 256u;
+    draw.pipelineResources.indexedGeometryOutput = true;
+    ASSERT_TRUE(fixture.captureAndPublish());
+    EXPECT_TRUE(fixture.matches());
+
+    draw.meshResources.emulationIndexByteOffset = 512u;
+    EXPECT_FALSE(fixture.matches());
+    EXPECT_FALSE(fixture.plan.producerTask().valid());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    EXPECT_TRUE(fixture.matches());
+
+    draw.pipelineResources.indexedGeometryOutput = false;
+    EXPECT_FALSE(fixture.matches());
+    EXPECT_FALSE(fixture.plan.producerTask().valid());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    EXPECT_TRUE(fixture.matches());
+    draw.pipelineResources.indexedGeometryOutput = true;
+    EXPECT_FALSE(fixture.matches());
+}
+
 TEST(AvboitGeneratedGeometryReuse, StagedOrInvalidProducerCannotPublishReusableContents){
     ReuseContext fixture;
     ASSERT_TRUE(fixture.capture());

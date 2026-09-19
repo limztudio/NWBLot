@@ -4,6 +4,7 @@
 
 #include "mesh_system.h"
 
+#include <impl/ecs_render/mesh/compute_emulation_layout.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
@@ -46,6 +47,7 @@ bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const
             mesh.emulationVertexBuffer
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && mesh.emulationIndexByteOffset != 0u
         )
     ;
 }
@@ -54,6 +56,17 @@ bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
+        ECSRenderDetail::ComputeEmulationLayout layout;
+        if(!ECSRenderDetail::ResolveComputeEmulationLayout(
+            mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
+            mesh.meshletPrimitiveIndexCount,
+            layout
+        )){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'")
+                , StringConvert(mesh.meshName.c_str())
+            );
+            return false;
+        }
         const Name emulationVertexBufferName = DeriveName(mesh.meshName, AStringView(":emulation_vb"));
         if(!emulationVertexBufferName){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive compute-emulation vertex buffer name for mesh '{}'")
@@ -64,10 +77,12 @@ bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(static_cast<u64>(mesh.meshletPrimitiveIndexCount) * ECSRenderDetail::s_EmulatedVertexStride)
+            .setByteSize(layout.bufferByteSize)
             .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
+            .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(emulationVertexBufferName)
         ;
@@ -78,6 +93,7 @@ bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
             );
             return false;
         }
+        mesh.emulationIndexByteOffset = layout.indexByteOffset;
     }
 
     auto& device = m_graphics.getDevice();

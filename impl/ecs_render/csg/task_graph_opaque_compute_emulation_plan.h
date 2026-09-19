@@ -8,6 +8,7 @@
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/material/renderer_draw_types.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
+#include <impl/ecs_render/material/generated_geometry_state.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,6 +29,7 @@ namespace ECSRenderDetail{
 struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
@@ -35,7 +37,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     DrawItemVector drawItems;
     DrawItemVector regularDrawItems;
     BufferVector outputBuffers;
+    OutputLayoutVector outputLayouts;
     BufferVector regularOutputBuffers;
+    OutputLayoutVector regularOutputLayouts;
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
     CsgFrameWorkRegion workRegion;
@@ -46,7 +50,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         , drawItems(arena)
         , regularDrawItems(arena)
         , outputBuffers(arena)
+        , outputLayouts(arena)
         , regularOutputBuffers(arena)
+        , regularOutputLayouts(arena)
         , receiverRanges(arena)
         , cutters(arena)
     {}
@@ -56,7 +62,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         drawItems.clear();
         regularDrawItems.clear();
         outputBuffers.clear();
+        outputLayouts.clear();
         regularOutputBuffers.clear();
+        regularOutputLayouts.clear();
         receiverRanges.clear();
         cutters.clear();
         workRegion = {};
@@ -83,7 +91,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         );
         drawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
+        outputLayouts.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         regularOutputBuffers.reserve(regularDrawItems.size());
+        regularOutputLayouts.reserve(regularDrawItems.size());
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         for(const MaterialPassDrawItem& regularDrawItem : regularDrawItems){
             const MaterialPassMeshResourceSnapshot& regularMesh = regularDrawItem.meshResources;
@@ -95,6 +105,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 return false;
             }
             regularOutputBuffers.push_back(regularMesh.emulationVertexBuffer);
+            regularOutputLayouts.push_back({ regularMesh.emulationIndexByteOffset, regularDrawItem.pipelineResources.indexedGeometryOutput });
             outputs.include(regularMesh.emulationVertexBuffer.get());
         }
         for(const MaterialPassDrawItem& drawItem : receiverSurfaceDrawItems.computeDrawItems){
@@ -117,6 +128,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
             }
             drawItems.push_back(drawItem);
             outputBuffers.push_back(mesh.emulationVertexBuffer);
+            outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
         }
         receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
         cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
@@ -129,7 +141,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         if(
             !captured
             || outputBuffers.size() != drawItems.size()
+            || outputLayouts.size() != drawItems.size()
             || regularOutputBuffers.size() != regularDrawItems.size()
+            || regularOutputLayouts.size() != regularDrawItems.size()
         )
             return false;
         MaterialPassEmulationOutputIndex<Core::Buffer*> receiverOutputs(scratchArena);
@@ -139,6 +153,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 !mesh.emulationVertexBuffer
                 || !mesh.emulationVertexHeapHandle.valid()
                 || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+                || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
             )
                 return false;
             receiverOutputs.include(mesh.emulationVertexBuffer.get());
@@ -149,6 +164,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
                 !mesh.emulationVertexBuffer
                 || !mesh.emulationVertexHeapHandle.valid()
                 || mesh.emulationVertexBuffer.get() != regularOutputBuffers[drawIndex].get()
+                || !regularOutputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, regularDrawItems[drawIndex].pipelineResources.indexedGeometryOutput)
             )
                 return false;
             if(receiverOutputs.contains(mesh.emulationVertexBuffer.get()))
@@ -170,6 +186,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
+    using OutputLayoutVector = Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>;
     using HeapSlotVector = Vector<u32, Core::Alloc::GlobalArena>;
     using ReceiverRangeVector = Vector<CsgReceiverRangeGpuData, Core::Alloc::GlobalArena>;
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
@@ -177,6 +194,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     DrawItemVector meshDrawItems;
     DrawItemVector drawItems;
     BufferVector outputBuffers;
+    OutputLayoutVector outputLayouts;
     HeapSlotVector outputHeapSlots;
     ReceiverRangeVector receiverRanges;
     CutterVector cutters;
@@ -187,6 +205,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         : meshDrawItems(arena)
         , drawItems(arena)
         , outputBuffers(arena)
+        , outputLayouts(arena)
         , outputHeapSlots(arena)
         , receiverRanges(arena)
         , cutters(arena)
@@ -196,6 +215,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         meshDrawItems.clear();
         drawItems.clear();
         outputBuffers.clear();
+        outputLayouts.clear();
         outputHeapSlots.clear();
         receiverRanges.clear();
         cutters.clear();
@@ -215,6 +235,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
+        outputLayouts.reserve(sourceDrawItems.computeDrawItems.size());
         outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
@@ -237,6 +258,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
             }
             drawItems.push_back(drawItem);
             outputBuffers.push_back(mesh.emulationVertexBuffer);
+            outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
             outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
         }
         receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
@@ -252,6 +274,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         if(
             !captured
             || outputBuffers.size() != drawItems.size()
+            || outputLayouts.size() != drawItems.size()
             || outputHeapSlots.size() != drawItems.size()
         )
             return false;
@@ -261,6 +284,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
                 !mesh.emulationVertexBuffer
                 || !mesh.emulationVertexHeapHandle.valid()
                 || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
+                || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
                 || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
             )
                 return false;

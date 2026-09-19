@@ -52,6 +52,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
         snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
     snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
     snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
+    snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
     snapshot.meshletCount = mesh.meshletCount;
     snapshot.meshletPrimitiveIndexCount = mesh.meshletPrimitiveIndexCount;
     snapshot.runtimeMesh = mesh.runtimeMesh;
@@ -68,6 +69,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
         .meshletPipeline = pipelineResources.meshletPipeline,
         .computePipeline = pipelineResources.computePipeline,
         .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
+        .indexedGeometryOutput = pipelineResources.indexedGeometryOutput,
     };
 }
 

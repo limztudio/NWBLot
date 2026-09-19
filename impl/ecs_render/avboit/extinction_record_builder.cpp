@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/avboit/extinction_record_builder.h>
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 
 #include <core/graphics/vulkan/backend.h>
 
@@ -260,7 +262,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     const Core::GpuTaskResourceSetUse extinctionComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = extinctionComputeEmulationOutputSet,
         .range = {},
-        .requiredState = Core::ResourceStates::VertexBuffer,
+        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskResourceSetUse extinctionMaterialResourceSetUses[3u] = {};
@@ -443,7 +445,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         );
         extinctionSharedRasterResourceUses.push_back(ReadUse(
             extinctionSharedComputeEmulationOutput,
-            Core::ResourceStates::VertexBuffer
+            ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
         Core::GpuTaskSchedulingHint extinctionSharedComputeEmulationScheduling;

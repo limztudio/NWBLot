@@ -98,6 +98,8 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 || current.materialConstantByteOffset != expected.materialConstantByteOffset
                 || current.shadingModelId != expected.shadingModelId
                 || current.meshletConeCullScaleSafe != expected.meshletConeCullScaleSafe
+                || current.meshResources.emulationIndexByteOffset != expected.meshResources.emulationIndexByteOffset
+                || current.pipelineResources.indexedGeometryOutput != expected.pipelineResources.indexedGeometryOutput
             )
                 return false;
 

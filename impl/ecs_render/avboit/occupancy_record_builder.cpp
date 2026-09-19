@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/avboit/occupancy_record_builder.h>
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 
 #include <core/graphics/vulkan/backend.h>
 
@@ -256,7 +258,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     const Core::GpuTaskResourceSetUse occupancyComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = occupancyComputeEmulationOutputSet,
         .range = {},
-        .requiredState = Core::ResourceStates::VertexBuffer,
+        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskResourceSetUse occupancyMaterialResourceSetUses[3u] = {};
@@ -459,7 +461,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         );
         occupancySharedRasterResourceUses.push_back(ReadUse(
             occupancySharedComputeEmulationOutput,
-            Core::ResourceStates::VertexBuffer
+            ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
         Core::GpuTaskSchedulingHint occupancySharedComputeEmulationScheduling;

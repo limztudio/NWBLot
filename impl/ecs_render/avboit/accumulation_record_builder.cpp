@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/avboit/accumulation_record_builder.h>
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 
 #include <core/graphics/vulkan/backend.h>
 
@@ -275,7 +277,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     const Core::GpuTaskResourceSetUse accumulationComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = accumulationComputeEmulationOutputSet,
         .range = {},
-        .requiredState = Core::ResourceStates::VertexBuffer,
+        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskResourceSetUse accumulationMaterialResourceSetUses[3u] = {};
@@ -459,7 +461,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         );
         accumulationSharedRasterResourceUses.push_back(ReadUse(
             accumulationSharedComputeEmulationOutput,
-            Core::ResourceStates::VertexBuffer
+            ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
         Core::GpuTaskSchedulingHint accumulationSharedComputeEmulationScheduling;

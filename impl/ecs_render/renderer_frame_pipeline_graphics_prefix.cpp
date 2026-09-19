@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -788,7 +790,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskResourceSetUse opaqueComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = opaqueComputeEmulationOutputSet,
         .range = {},
-        .requiredState = Core::ResourceStates::VertexBuffer,
+        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputUavSetUse{
@@ -800,7 +802,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     const Core::GpuTaskResourceSetUse opaqueCsgReceiverComputeEmulationOutputVertexBufferSetUse{
         .resourceSet = opaqueCsgReceiverComputeEmulationOutputSet,
         .range = {},
-        .requiredState = Core::ResourceStates::VertexBuffer,
+        .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskResourceSetUse gbufferMaterialResourceSetUses[4u] = {};
@@ -982,7 +984,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferScheduling.mergeWithPrevious = true;
 
 
-// The producer is an explicit immediate predecessor. Preserve its compiler-owned UAV-to-VertexBuffer handoff
+// The producer is an explicit immediate predecessor. Preserve its compiler-owned UAV-to-vertex/index handoff
     // inside the existing primary-Graphics packet even when FrontierSafe sees an earlier cross-queue consumer.
     gbufferScheduling.allowMergeAcrossConsumerFrontier =
         opaqueComputeEmulationOutputStatesGraphOwned
@@ -1019,7 +1021,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
     if(opaqueSharedComputeEmulationOutputStatesGraphOwned){
         // These two through five draw items target exactly one imported buffer. Keep every state phase explicit
-        // so the compiler, not the material callback, owns Common -> UAV -> VertexBuffer -> ... -> VertexBuffer.
+        // so the compiler, not the material callback, owns Common -> UAV -> vertex/index -> ... -> vertex/index.
         // The immediate chain is also the semantic ordering contract for the retained persistent output alias.
         opaqueSharedComputeEmulationGenerateResourceUses.reserve(4u);
         opaqueSharedComputeEmulationGenerateResourceUses.push_back(
@@ -1046,7 +1048,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ReadBufferUse(materialTyped, materialTypedRange)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
-            ReadUse(opaqueSharedComputeEmulationOutput, Core::ResourceStates::VertexBuffer)
+            ReadUse(opaqueSharedComputeEmulationOutput, ECSRenderDetail::s_GeneratedGeometryRasterState)
         );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadWriteUse(albedo, Core::ResourceStates::RenderTarget)
@@ -1394,7 +1396,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         const Core::GpuTaskResourceSetUse opaqueCsgIntervalSampleComputeEmulationOutputVertexBufferSetUse{
             .resourceSet = opaqueCsgIntervalSampleComputeEmulationOutputSet,
             .range = {},
-            .requiredState = Core::ResourceStates::VertexBuffer,
+            .requiredState = ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = Core::GpuTaskResourceAccess::Read,
         };
         Core::GpuTaskResourceSetUse csgIntervalSampleMaterialResourceSetUses[3u] = {};

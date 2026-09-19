@@ -4,6 +4,8 @@
 
 #include "task_graph_refraction_capture.h"
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 #include "generated_geometry_reuse.h"
 
 #include <core/graphics/vulkan/backend.h>
@@ -341,7 +343,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());
         if(compute)
-            uses.push_back(generate ? WriteUse(output, Core::ResourceStates::UnorderedAccess) : ReadUse(output, Core::ResourceStates::VertexBuffer));
+            uses.push_back(generate ? WriteUse(output, Core::ResourceStates::UnorderedAccess) : ReadUse(output, ECSRenderDetail::s_GeneratedGeometryRasterState));
         if(!generate){
             uses.push_back(ReadUse(opaqueDepth));
             uses.push_back(ReadWriteUse(depth, Core::ResourceStates::DepthWrite));

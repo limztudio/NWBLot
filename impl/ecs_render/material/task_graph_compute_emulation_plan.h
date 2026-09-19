@@ -34,6 +34,8 @@ struct GeneratedGeometryEquivalenceKey{
     u32 shadingModelId = 0u;
     const Core::Buffer* outputBuffer = nullptr;
     u32 outputHeapSlot = 0u;
+    u32 emulationIndexByteOffset = 0u;
+    bool indexedGeometryOutput = false;
 
     [[nodiscard]] bool matches(const MaterialPassDrawItem& drawItem)const noexcept{
         return drawItem.meshKey == meshKey
@@ -46,6 +48,8 @@ struct GeneratedGeometryEquivalenceKey{
             && drawItem.meshResources.emulationVertexBuffer.get() == outputBuffer
             && drawItem.meshResources.emulationVertexHeapHandle.valid()
             && drawItem.meshResources.emulationVertexHeapHandle.slot() == outputHeapSlot
+            && drawItem.meshResources.emulationIndexByteOffset == emulationIndexByteOffset
+            && drawItem.pipelineResources.indexedGeometryOutput == indexedGeometryOutput
         ;
     }
 };
@@ -63,6 +67,8 @@ struct GeneratedGeometryEquivalenceKey{
         ? drawItem.meshResources.emulationVertexHeapHandle.slot()
         : 0u
     ;
+    key.emulationIndexByteOffset = drawItem.meshResources.emulationIndexByteOffset;
+    key.indexedGeometryOutput = drawItem.pipelineResources.indexedGeometryOutput;
     return key;
 }
 

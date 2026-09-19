@@ -19,9 +19,12 @@ NwbMeshGeneratedVertex nwbMeshBuildVertex(
 groupshared float3 g_NwbMeshletSourcePositions[NWB_MESH_SHADER_MAX_VERTICES];
 groupshared float3 g_NwbMeshletWorldPositions[NWB_MESH_SHADER_MAX_VERTICES];
 groupshared float4 g_NwbMeshletClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
-// P3 complete-vertex staging: one NwbMeshGeneratedVertex per meshlet-local vertex, evaluated once and gathered per triangle corner.
-// At 64 bytes per vertex this is 4 KiB at 64 vertices, plus the position arrays above; keep the sum against the selected device's groupshared limits before raising meshlet sizes or group counts.
+#if NWB_MESH_SHADER_EMULATION_COMPUTE && NWB_MESH_EMULATION_INDEXED_OUTPUT
+// Indexed output stores complete vertices directly; only clip positions are shared for triangle culling.
+groupshared float4 g_NwbMeshletStagedClipPositions[NWB_MESH_SHADER_MAX_VERTICES];
+#else
 groupshared NwbMeshGeneratedVertex g_NwbMeshletStagedVertices[NWB_MESH_SHADER_MAX_VERTICES];
+#endif
 
 uint nwbMeshletPrimitiveBase(const NwbMeshletDesc meshlet, const uint localPrimitiveIndex){
     return meshlet.primitiveOffset + localPrimitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;

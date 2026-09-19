@@ -92,19 +92,22 @@ bool MeshKernelTest::loadMeshKernel(
     const Impl::ShaderCook::ShaderMacroDefinition definitions[] = {
         { "NWB_MESH_SHADER_EMULATION_COMPUTE", "1" },
         { "NWB_CSG_ENABLED", "0" },
+        { "NWB_MESH_EMULATION_INDEXED_OUTPUT", "0" },
     };
     const Impl::ShaderCook::ShaderCompilerRequest request{
         .shaderName = "shared_ms",
         .stage = "cs",
         .targetProfile = entry.targetProfile.view(),
         .entryPoint = AStringView(entry.entryPoint.data(), entry.entryPoint.size()),
-        .variantName = "NWB_CSG_ENABLED=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1",
+        .variantName = candidate
+            ? "NWB_CSG_ENABLED=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1"
+            : "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1",
         .defines = definitions,
         .includeDirectories = includes,
         .dependencies = dependencies,
         .sourcePath = sourcePath,
         .outputPath = outputPath,
-        .defineCount = LengthOf(definitions),
+        .defineCount = static_cast<u32>(candidate ? LengthOf(definitions) - 1u : LengthOf(definitions)),
         .optimizationLevel = entry.optimizationLevel
     };
     Impl::ShaderCook::CookVector<u8> bytecode(memoryArena);
@@ -116,7 +119,8 @@ bool MeshKernelTest::loadMeshKernel(
     if(!shader)
         return false;
     BindingLayoutDesc layoutDesc(memoryArena);
-    layoutDesc.setVisibility(ShaderType::Compute).addItem(BindingLayoutItem::PushConstants(0u, NWB_MESH_PUSH_CONSTANT_BYTE_SIZE));
+    const u32 pushBytes = candidate ? NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE : NWB_MESH_PUSH_CONSTANT_BYTE_SIZE;
+    layoutDesc.setVisibility(ShaderType::Compute).addItem(BindingLayoutItem::PushConstants(0u, pushBytes));
     const BindingLayoutHandle layout = graphicsDevice.createBindingLayout(layoutDesc);
     if(!layout)
         return false;

@@ -140,11 +140,14 @@ void ExpectCleared(const Plan& plan){
     EXPECT_TRUE(plan.outputBuffers.empty());
     if constexpr(requires{ plan.meshDrawItems; })
         EXPECT_TRUE(plan.meshDrawItems.empty());
+    if constexpr(requires{ plan.outputLayouts; })
+        EXPECT_TRUE(plan.outputLayouts.empty());
     if constexpr(requires{ plan.outputHeapSlots; })
         EXPECT_TRUE(plan.outputHeapSlots.empty());
     if constexpr(requires{ plan.regularDrawItems; }){
         EXPECT_TRUE(plan.regularDrawItems.empty());
         EXPECT_TRUE(plan.regularOutputBuffers.empty());
+        EXPECT_TRUE(plan.regularOutputLayouts.empty());
     }
     if constexpr(requires{ plan.receiverRanges; }){
         EXPECT_TRUE(plan.receiverRanges.empty());
@@ -387,6 +390,52 @@ TEST(ComputeEmulationAliasPlan, ReceiverMatchesAllowsMirroredDuplicatesWithinEit
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
 }
 
+TEST(ComputeEmulationAliasPlan, RegularCaptureRejectsChangedUnifiedOutputLayoutAndRepresentation){
+    AliasPlanContext context(2u);
+    RegularPlan plan(context.m_planArena);
+    auto& draw = context.m_regular.computeDrawItems[1u];
+    draw.meshResources.emulationIndexByteOffset = 256u;
+    draw.pipelineResources.indexedGeometryOutput = true;
+    ASSERT_TRUE(CapturePlan(plan, context, context.m_operationArena));
+    EXPECT_TRUE(MatchesPlan(plan, context, context.m_operationArena));
+    draw.meshResources.emulationIndexByteOffset = 512u;
+    EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
+    draw.meshResources.emulationIndexByteOffset = 256u;
+    EXPECT_TRUE(MatchesPlan(plan, context, context.m_operationArena));
+    draw.pipelineResources.indexedGeometryOutput = false;
+    EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
+}
+
+TEST(ComputeEmulationAliasPlan, AvboitAndCsgSnapshotsRejectChangedUnifiedOutputLayout){
+    AliasPlanContext context(2u);
+    AvboitPlan avboit(context.m_planArena);
+    IntervalPlan interval(context.m_planArena);
+    ReceiverPlan receiver(context.m_planArena);
+    const auto verify = [&](auto& plan){
+        ASSERT_TRUE(CapturePlan(plan, context, context.m_operationArena));
+        EXPECT_TRUE(MatchesPlan(plan, context, context.m_operationArena));
+        auto& draw = plan.drawItems.back();
+        const u32 offset = draw.meshResources.emulationIndexByteOffset;
+        draw.meshResources.emulationIndexByteOffset += 64u;
+        EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
+        draw.meshResources.emulationIndexByteOffset = offset;
+        EXPECT_TRUE(MatchesPlan(plan, context, context.m_operationArena));
+        draw.pipelineResources.indexedGeometryOutput = !draw.pipelineResources.indexedGeometryOutput;
+        EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
+    };
+    ASSERT_NO_FATAL_FAILURE(verify(avboit));
+    ASSERT_NO_FATAL_FAILURE(verify(interval));
+    ASSERT_NO_FATAL_FAILURE(verify(receiver));
+    ASSERT_TRUE(CapturePlan(receiver, context, context.m_operationArena));
+    auto& regular = receiver.regularDrawItems.back();
+    regular.meshResources.emulationIndexByteOffset += 64u;
+    EXPECT_FALSE(MatchesPlan(receiver, context, context.m_operationArena));
+    regular.meshResources.emulationIndexByteOffset -= 64u;
+    EXPECT_TRUE(MatchesPlan(receiver, context, context.m_operationArena));
+    regular.pipelineResources.indexedGeometryOutput = !regular.pipelineResources.indexedGeometryOutput;
+    EXPECT_FALSE(MatchesPlan(receiver, context, context.m_operationArena));
+}
+
 TEST(ComputeEmulationAliasPlan, SharedPlanRejectsChangedDrawMetadataAndOutput){
     AliasPlanContext context(5u);
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
@@ -402,6 +451,14 @@ TEST(ComputeEmulationAliasPlan, SharedPlanRejectsChangedDrawMetadataAndOutput){
     ASSERT_TRUE(plan.capture(context.m_regular, 5u));
     EXPECT_TRUE(plan.captured);
     EXPECT_EQ(plan.drawCount, 5u);
+    EXPECT_TRUE(plan.matches(0u));
+    plan.drawItems[0u].meshResources.emulationIndexByteOffset = 256u;
+    EXPECT_FALSE(plan.matches(0u));
+    plan.drawItems[0u].meshResources.emulationIndexByteOffset = 0u;
+    EXPECT_TRUE(plan.matches(0u));
+    plan.drawItems[0u].pipelineResources.indexedGeometryOutput = true;
+    EXPECT_FALSE(plan.matches(0u));
+    plan.drawItems[0u].pipelineResources.indexedGeometryOutput = false;
     EXPECT_TRUE(plan.matches(0u));
     // Mutating a frozen generation input (instance payload) invalidates the lease at record time.
     ++context.m_regular.computeDrawItems[2u].instanceIndex;

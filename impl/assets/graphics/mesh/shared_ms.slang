@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_MESH_EMULATION_INDEXED_OUTPUT
+#define NWB_MESH_EMULATION_INDEXED_OUTPUT (!NWB_CSG_ENABLED)
+#endif
+
 // The single engine-owned mesh shader, shared by every material. It is pure geometry: meshlet decode,
 // skinning/transform, culling, raster emit -- none of which is material-specific. It outputs the mesh's own
 // source vertex color verbatim; a material's color/albedo is applied per-pixel in its surface hook (which

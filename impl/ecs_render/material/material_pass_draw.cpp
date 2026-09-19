@@ -6,7 +6,9 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/kernel/timing_names.h>
+#include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
+#include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -148,6 +150,7 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
             || !pipelineResources.emulationPipeline
             || !mesh.emulationVertexHeapHandle.valid()
             || !mesh.emulationVertexBuffer
+            || (pipelineResources.indexedGeometryOutput && mesh.emulationIndexByteOffset == 0u)
         )
             return false;
     }
@@ -278,7 +281,7 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
 ){
     Core::ComputeState computeState;
     computeState.setPipeline(pipelineResources.computePipeline.get());
-    // Set 0 contains the shared push range only; every resource, including this mesh's graph-provided writable generated-vertex buffer, is selected through the global descriptor heap.
+    // Set 0 contains only the compute push range; the unified generated vertex/index UAV uses one global heap selector.
 
     context.commandList.setComputeState(computeState);
     m_graphics.getDevice().getDescriptorHeap().bindCompute(context.commandList, *pipelineResources.computePipeline.get());
@@ -304,7 +307,16 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
         NWB_ASSERT(pipelineResources.sharedGeometryComputeProgram);
         pushConstants.dispatchFlags &= ~ECSRenderDetail::s_MeshDispatchFlagScissorCull;
     }
-    context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
+    if(pipelineResources.indexedGeometryOutput){
+        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        const ECSRenderDetail::MeshComputePushConstants computePush{
+            .mesh = pushConstants,
+            .generatedIndexByteOffset = mesh.emulationIndexByteOffset,
+        };
+        context.commandList.setPushConstants(&computePush, sizeof(computePush));
+    }
+    else
+        context.commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_MeshDispatch, m_graphics.getDevice(), context.commandList);
 
@@ -328,6 +340,15 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
             .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
             .setOffset(0)
     );
+    if(pipelineResources.indexedGeometryOutput){
+        NWB_ASSERT(mesh.emulationIndexByteOffset != 0u);
+        graphicsState.setIndexBuffer(
+            Core::IndexBufferBinding()
+                .setBuffer(mesh.emulationVertexBuffer.get())
+                .setFormat(Core::Format::R32_UINT)
+                .setOffset(mesh.emulationIndexByteOffset)
+        );
+    }
 
     context.commandList.setGraphicsState(graphicsState);
     m_graphics.getDevice().getDescriptorHeap().bindGraphics(context.commandList, *pipelineResources.emulationPipeline.get());
@@ -340,7 +361,10 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_Raster, m_graphics.getDevice(), context.commandList);
 
-        context.commandList.draw(drawArgs);
+        if(pipelineResources.indexedGeometryOutput)
+            context.commandList.drawIndexed(drawArgs);
+        else
+            context.commandList.draw(drawArgs);
     }
 }
 
@@ -413,7 +437,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItemsRasterOnly(
 ){
     if(drawItems.empty())
         return;
-    // This half deliberately has no local output transition. A graph consumer must have declared every selected generated-vertex buffer as a VertexBuffer before recording it.
+    // This half has no local output transition. The graph declares each unified generated buffer for vertex and index reads.
     NWB_ASSERT(context.emulationOutputEntryStateGraphOwned);
     NWB_ASSERT(context.frameBindings.meshView.buffer);
 
@@ -451,7 +475,7 @@ void RendererMaterialSystem::renderComputeMaterialPassDrawItems(
         // Compute-emulation runs the same heap-backed mesh runtime before the generated vertex buffer reaches the ordinary graphics raster stage.
         dispatchComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
 
-        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), Core::ResourceStates::VertexBuffer);
+        context.commandList.setBufferState(mesh.emulationVertexBuffer.get(), ECSRenderDetail::s_GeneratedGeometryRasterState);
         drawComputeMaterialPassDrawItem(context, drawItem, mesh, pipelineResources);
     }
 }

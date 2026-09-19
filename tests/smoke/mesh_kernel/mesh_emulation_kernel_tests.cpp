@@ -9,6 +9,7 @@
 #include <impl/assets_mesh/meshlet_payload_packing.h>
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 
+#include <global/algorithm.h>
 #include <global/math/convert.h>
 #include <global/scope_exit.h>
 
@@ -38,6 +39,11 @@ constexpr u32 s_MeshletCapacity = 2u;
 constexpr u32 s_VertexCapacity = NWB_MESH_SHADER_MAX_VERTICES;
 constexpr u32 s_PrimitiveCapacity = NWB_MESH_SHADER_MAX_TRIANGLES;
 constexpr u32 s_OutputVertexCapacity = s_MeshletCapacity * (s_PrimitiveCapacity * 3u + 3u) + 7u;
+constexpr u32 s_CompactVertexCapacity = NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + s_MeshletCapacity * s_VertexCapacity;
+constexpr u32 s_IndexByteStride = sizeof(u32);
+constexpr u32 s_OutputIndexBytes = s_OutputVertexCapacity * s_IndexByteStride;
+constexpr u32 s_IndexedOutputBytes = s_CompactVertexCapacity * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE + s_OutputIndexBytes;
+constexpr u32 s_IndexedOutputByteCapacity = AlignUp(s_IndexedOutputBytes, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
 constexpr u32 s_PositionCapacity = 2u + s_MeshletCapacity * s_VertexCapacity;
 constexpr u32 s_AttributeCapacity = 3u + s_MeshletCapacity * s_VertexCapacity;
 constexpr u32 s_ReferenceBytes = 8u + s_MeshletCapacity * s_VertexCapacity * 4u * 4u;
@@ -93,6 +99,11 @@ struct PushConstants{
     u32 frameHeapSlots[4];
 };
 
+struct ComputePushConstants{
+    PushConstants mesh;
+    u32 emulationOutput[4];
+};
+
 struct Inputs{
     Float3U positions[s_PositionCapacity]{};
     Half4 normals[s_AttributeCapacity]{};
@@ -130,6 +141,9 @@ static_assert(sizeof(Float3U) == 12u);
 static_assert(sizeof(Float2U) == 8u);
 static_assert(sizeof(ViewData) == NWB_MESH_VIEW_FLOAT_COUNT * sizeof(f32));
 static_assert(sizeof(PushConstants) == NWB_MESH_PUSH_CONSTANT_BYTE_SIZE);
+static_assert(sizeof(ComputePushConstants) == NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE);
+static_assert(offsetof(ComputePushConstants, emulationOutput) == NWB_MESH_COMPUTE_INDEX_BYTE_OFFSET);
+static_assert(s_IndexedOutputByteCapacity <= s_OutputVertexCapacity * sizeof(GeneratedVertex));
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,11 +330,19 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         );
     }
     GeneratedVertex sentinels[s_OutputVertexCapacity];
+    const u32 compactVertexCount = NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + testCase.meshletCount * testCase.vertexCount;
+    const u32 indexByteOffset = compactVertexCount * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE;
+    const u32 indexedByteSize = AlignUp(indexByteOffset + s_OutputIndexBytes, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
+    ASSERT_LE(indexedByteSize, s_IndexedOutputByteCapacity);
+    const usize outputByteSizes[] = { sizeof(sentinels), indexedByteSize };
     ComputePipeline* const pipelines[] = { &reference, &candidate };
     for(u32 arm = 0u; arm < 2u; ++arm){
         BufferDesc outputDesc;
         outputDesc
-            .setByteSize(sizeof(sentinels))
+            .setByteSize(outputByteSizes[arm])
+            .setStructStride(NWB_MESH_EMULATION_VERTEX_BYTE_SIZE)
+            .setIsVertexBuffer(true)
+            .setIsIndexBuffer(arm == 1u)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setCpuAccess(CpuAccessMode::Read)
@@ -333,7 +355,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         ASSERT_TRUE(descriptors[bufferCount + arm].valid());
         ASSERT_TRUE(heap.write(descriptors[bufferCount + arm], DescriptorWriteItem::RawBuffer_UAV(0u, outputs[arm].get())));
         NWB_MEMSET(sentinels, arm == 0u ? 0x5a : 0xa5, sizeof(sentinels));
-        ASSERT_TRUE(commandList->tryWriteBuffer(*outputs[arm], sentinels, sizeof(sentinels)));
+        ASSERT_TRUE(commandList->tryWriteBuffer(*outputs[arm], sentinels, outputByteSizes[arm]));
         commandList->setBufferState(outputs[arm].get(), ResourceStates::UnorderedAccess, true);
         commandList->commitBarriers();
         ComputeState state;
@@ -344,7 +366,12 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED] = descriptors[6].slot();
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW] = descriptors[viewBufferIndex].slot();
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + arm].slot();
-        commandList->setPushConstants(&inputs.push, sizeof(inputs.push));
+        if(arm == 0u)
+            commandList->setPushConstants(&inputs.push, sizeof(inputs.push));
+        else{
+            const ComputePushConstants computePush{ inputs.push, { indexByteOffset, 0u, 0u, 0u } };
+            commandList->setPushConstants(&computePush, sizeof(computePush));
+        }
         // Two excess workgroups exercise the uniform count guard; partial vertex/primitive lanes remain active cases.
         commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
     }
@@ -369,18 +396,44 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         ASSERT_NE(mapped[arm], nullptr);
     }
     bool written[s_OutputVertexCapacity]{};
+    bool indexedWritten[s_IndexedOutputByteCapacity]{};
+    const auto markIndexedBytes = [&](const u32 offset, const u32 byteCount){
+        for(u32 byte = 0u; byte < byteCount; ++byte)
+            indexedWritten[offset + byte] = true;
+    };
+    const u8* const indexedBytes = reinterpret_cast<const u8*>(mapped[1]);
+    const u32* const indices = reinterpret_cast<const u32*>(indexedBytes + indexByteOffset);
     const GeneratedVertex culled = CulledVertex();
+    if(testCase.meshletCount != 0u){
+        EXPECT_EQ(NWB_MEMCMP(&mapped[1][NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX], &culled, sizeof(culled)), 0);
+        markIndexedBytes(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
+    }
     for(u32 meshletIndex = 0u; meshletIndex < testCase.meshletCount; ++meshletIndex){
         const auto& meshlet = inputs.meshlets[meshletIndex];
         const bool expectCulled = (testCase.cull >= Cull::Frustum && testCase.cull <= Cull::Scissor)
             || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
+        const bool meshletCulled = testCase.cull == Cull::Frustum || testCase.cull == Cull::Cone
+            || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
+        if(!meshletCulled){
+            markIndexedBytes(
+                (NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset) * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE,
+                testCase.vertexCount * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE
+            );
+        }
         for(u32 cornerIndex = 0u; cornerIndex < testCase.primitiveCount * 3u; ++cornerIndex){
             const u32 outputIndex = meshlet.primitiveOffset + cornerIndex;
             written[outputIndex] = true;
-            // Every field, including packed halves and raster flags, must match exactly; no radiometric tolerance.
-            EXPECT_EQ(NWB_MEMCMP(&mapped[0][outputIndex], &mapped[1][outputIndex], sizeof(GeneratedVertex)), 0) << outputIndex;
+            const u32 vertexIndex = indices[outputIndex];
+            ASSERT_LT(vertexIndex, compactVertexCount) << outputIndex;
+            const u32 expectedIndex = expectCulled ? NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX
+                : NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset + inputs.primitiveIndices[outputIndex];
+            EXPECT_EQ(vertexIndex, expectedIndex) << outputIndex;
+            markIndexedBytes(indexByteOffset + outputIndex * s_IndexByteStride, s_IndexByteStride);
+            const GeneratedVertex* const triangleVertices[] = { &mapped[0][outputIndex], &mapped[1][vertexIndex] };
+            // Expand the actual GPU indices, then compare every legacy vertex byte, including packed halves and raster flags.
+            EXPECT_EQ(NWB_MEMCMP(triangleVertices[0], triangleVertices[1], sizeof(GeneratedVertex)), 0) << outputIndex;
             for(u32 arm = 0u; arm < 2u; ++arm){
-                const auto& vertex = mapped[arm][outputIndex];
+                const auto& vertex = *triangleVertices[arm];
                 if(expectCulled){
                     EXPECT_EQ(NWB_MEMCMP(&vertex, &culled, sizeof(vertex)), 0) << outputIndex;
                     continue;
@@ -415,14 +468,16 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             }
         }
     }
-    // Different initial patterns make missing writes fail the paired oracle and distinguish guard preservation.
-    for(u32 arm = 0u; arm < 2u; ++arm){
-        GeneratedVertex sentinel;
-        NWB_MEMSET(&sentinel, arm == 0u ? 0x5a : 0xa5, sizeof(sentinel));
-        for(u32 index = 0u; index < s_OutputVertexCapacity; ++index){
-            if(!written[index])
-                EXPECT_EQ(NWB_MEMCMP(&mapped[arm][index], &sentinel, sizeof(sentinel)), 0) << index;
-        }
+    // Different initial patterns expose missing writes; gaps, culled meshlet vertices, and both tails remain untouched.
+    GeneratedVertex sentinel;
+    NWB_MEMSET(&sentinel, 0x5a, sizeof(sentinel));
+    for(u32 index = 0u; index < s_OutputVertexCapacity; ++index){
+        if(!written[index])
+            EXPECT_EQ(NWB_MEMCMP(&mapped[0][index], &sentinel, sizeof(sentinel)), 0) << index;
+    }
+    for(u32 byte = 0u; byte < indexedByteSize; ++byte){
+        if(!indexedWritten[byte])
+            EXPECT_EQ(indexedBytes[byte], 0xa5u) << byte;
     }
 }
 

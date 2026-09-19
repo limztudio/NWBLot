@@ -1,0 +1,59 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_EMULATION_OUTPUT_SLANGI
+#define NWB_GRAPHICS_MESH_EMULATION_OUTPUT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_MESH_SHADER_EMULATION_COMPUTE
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_MESH_EMULATION_INDEXED_OUTPUT
+void nwbMeshStoreGeneratedIndices(const uint primitiveBase, const uint3 indices){
+    const uint byteOffset = g_NwbMeshPushConstants.emulationOutput.x + primitiveBase * 4u;
+    g_NwbHeapStorageBuffers[nwbMeshFrameGeneratedVertexHeapSlot()].Store3(byteOffset, indices);
+}
+
+void nwbMeshInitializeCulledVertex(){
+    nwbMeshGeneratedVertices()[NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX] = nwbMeshBuildGeneratedVertexWithRasterFlags(
+        float4(2.0, 2.0, 0.0, 1.0),
+        float3(0.0, 0.0, 1.0),
+        float4(1.0, 0.0, 0.0, 1.0),
+        float2(0.0),
+        half4(0.0h, 0.0h, 0.0h, 0.0h),
+        float3(0.0),
+        0u
+    );
+}
+#endif
+
+void nwbMeshStoreCulledEmulationPrimitive(const uint primitiveBase){
+#if NWB_MESH_EMULATION_INDEXED_OUTPUT
+    nwbMeshStoreGeneratedIndices(primitiveBase, uint3(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX));
+#else
+    nwbMeshStoreCulledPrimitive(primitiveBase);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

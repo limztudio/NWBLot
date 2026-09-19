@@ -155,7 +155,7 @@ public:
         // The graph can also retain the per-mesh source buffer batch selected by the prepared draw stream.
         bool materialGeometryStatesGraphOwned = false,
         // An immediately preceding graph task generated every regular emulation output. Consume those buffers as
-        // VertexBuffer inputs instead of replaying the local UAV-to-VertexBuffer bridge.
+        // Combined vertex/index inputs instead of replaying the local UAV-to-vertex/index bridge.
         bool emulationOutputEntryStateGraphOwned = false,
         // The producer opens this established pass measure before its dispatches; the prepared raster closes it.
         // A missing measure means the producer intentionally no-op'd, so this consumer must not raster stale data.
@@ -291,10 +291,10 @@ public:
     // Graph-only producer half. The graph must provide each generated-vertex output in UAV state; this method
     // records the compute state, descriptor heap, push constants, and dispatches without an output transition.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only raster half. The graph must provide each generated-vertex output in VertexBuffer state; this
+    // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this
     // method records the graphics state, descriptor heap, push constants, and draws without an output transition.
     void renderComputeMaterialPassDrawItemsRasterOnly(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Compatibility combined producer/raster path. It retains the native per-item UAV-to-VertexBuffer handoff.
+    // Compatibility combined producer/raster path. It retains the native per-item UAV-to-vertex/index handoff.
     void renderComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool reserveInstanceBufferCapacity(usize instanceCount);
     [[nodiscard]] bool reserveMaterialTypedBufferCapacity(usize byteCount);

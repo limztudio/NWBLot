@@ -443,6 +443,7 @@ bool RendererMaterialSystem::createRendererPipeline(
             && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
             && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
         ;
+        resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
     };
 

@@ -24,8 +24,10 @@ NWB_IMPL_BEGIN
 struct MaterialPassMeshResourceSnapshot{
     RuntimeMeshBuffers sourceBuffers;
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
+    // Retains the same unified generated buffer for both vertex and index consumption.
     Core::BufferHandle emulationVertexBuffer;
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0u;
     u32 meshletPrimitiveIndexCount = 0u;
     bool runtimeMesh = false;
@@ -72,6 +74,7 @@ struct MaterialPassPipelineResourceSnapshot{
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
     bool sharedGeometryComputeProgram = false;
+    bool indexedGeometryOutput = false;
 };
 
 template<typename BufferHandler>

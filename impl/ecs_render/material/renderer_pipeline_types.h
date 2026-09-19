@@ -216,6 +216,7 @@ struct MaterialPipelineResources{
     Core::ShaderHandle computeShader;
     RenderPath::Enum renderPath = RenderPath::MeshShader;
     bool sharedGeometryComputeProgram = false;
+    bool indexedGeometryOutput = false;
 };
 
 

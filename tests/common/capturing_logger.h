@@ -88,6 +88,16 @@ public:
             NWB_TCERR << error.c_str() << '\n';
     }
 
+    // Vulkan's debug callback reports its own severity inside Warning messages, so error-only output cannot reveal them.
+    void emitMessagesContainingToStderr(const TStringView text)const{
+        ScopedLock lock(m_mutex);
+
+        for(const LogString& message : m_messages){
+            if(message.find(text) != LogString::npos)
+                NWB_TCERR << message.c_str() << '\n';
+        }
+    }
+
 private:
     void record(const TStringView str, const Core::Common::LogType::Enum type){
         ScopedLock lock(m_mutex);

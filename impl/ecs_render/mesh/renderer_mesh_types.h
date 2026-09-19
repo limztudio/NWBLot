@@ -59,11 +59,12 @@ using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>
 
 struct MeshResources : public RuntimeMeshBuffers{
     Name meshName = NAME_NONE;
+    // Unified generated geometry: legacy expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
-    // Emulation output selected via fourth mesh push lane.
+    // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
     // One heap handle per ABI slot; retired before runtime meshes are replaced.
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
@@ -75,6 +76,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     // Build and traversal share these descriptors; build via push constants.
     Core::GpuDescriptorHandle swBvhNodeHeapHandle;
     Core::GpuDescriptorHandle swBvhParentHeapHandle;
+    u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0;
     u32 meshletPrimitiveIndexCount = 0;
     u32 blasRefitsSinceRebuild = 0u;    // refit count since the last full BLAS rebuild (runtime meshes)

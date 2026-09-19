@@ -85,6 +85,8 @@ namespace __hidden_generated_geometry_reuse{
         || leftMesh.dynamicMeshletConesFresh != rightMesh.dynamicMeshletConesFresh
         || leftMesh.emulationVertexBuffer != rightMesh.emulationVertexBuffer
         || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
+        || leftMesh.emulationIndexByteOffset != rightMesh.emulationIndexByteOffset
+        || left.pipelineResources.indexedGeometryOutput != right.pipelineResources.indexedGeometryOutput
         || !SourceBuffersMatch(leftMesh.sourceBuffers, rightMesh.sourceBuffers)
     )
         return false;

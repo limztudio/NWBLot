@@ -5,6 +5,7 @@
 #include "material_system.h"
 
 #include <impl/ecs_render/csg/csg_system.h>
+#include <impl/ecs_render/mesh/mesh_compute_push_constants.h>
 #include <impl/ecs_render/material/material_pass_csg_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
@@ -52,8 +53,8 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
     if(!m_materialState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
-        // Generated-vertex UAV is a global heap entry via the fourth push lane; keep push range only.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
+        // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::MeshComputePushConstants)));
 
         auto& device = m_graphics.getDevice();
         m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
@@ -170,6 +171,7 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
             && mesh.emulationVertexBuffer
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+            && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
         ;
     }
     return ready;

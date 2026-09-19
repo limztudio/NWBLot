@@ -101,7 +101,11 @@ protected:
         // Keep unavailable GPU/layer configurations as intentional skips, but a successfully initialized
         // validation-backed runtime must not emit an error while tests or device teardown run.
         if(s_validationBackedDeviceInitialized && s_logger.has_value()){
-            EXPECT_FALSE(s_logger->sawMessageContaining(NWB_TEXT("Vulkan debug: [severity=error")))
+            const TStringView validationErrorPrefix = NWB_TEXT("Vulkan debug: [severity=error");
+            const bool validationFailed = s_logger->sawMessageContaining(validationErrorPrefix);
+            if(validationFailed)
+                s_logger->emitMessagesContainingToStderr(validationErrorPrefix);
+            EXPECT_FALSE(validationFailed)
                 << "validation-enabled descriptor-buffer smoke emitted a Vulkan severity=error message";
         }
         s_loggerGuard.reset();

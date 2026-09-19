@@ -5,6 +5,8 @@
 #include "packet_recording_test_support.h"
 #include "round_trip_fixture.h"
 
+#include <impl/ecs_render/material/generated_geometry_state.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +54,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setCanHaveUAVs(true)
             .setCanHaveRawViews(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setInitialState(ResourceStates::Common)
             .setQueueSharing(ResourceQueueSharing::Exclusive)
     );
@@ -169,7 +172,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
         GpuTaskResourceUse{
             .resource = generatedVertexResource,
             .range = {},
-            .requiredState = ResourceStates::VertexBuffer,
+            .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .access = GpuTaskResourceAccess::Read,
         },
     };
@@ -185,7 +188,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setResourceUses(gbufferUses, LengthOf(gbufferUses)),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &gbufferObservedVertexBuffer,
             .acceptedToken = &gbufferAcceptedToken,
         }
@@ -261,7 +264,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
     EXPECT_TRUE(hasTransition(producerTask, csgClipContextResource, ResourceStates::Common, ResourceStates::ConstantBuffer));
     EXPECT_TRUE(hasTransition(producerTask, generatedVertexResource, ResourceStates::Common, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasTransition(gbufferTask, receiverEventResource, ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasTransition(gbufferTask, generatedVertexResource, ResourceStates::UnorderedAccess, ResourceStates::VertexBuffer));
+    EXPECT_TRUE(hasTransition(gbufferTask, generatedVertexResource, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState));
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
@@ -283,7 +286,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
     EXPECT_EQ(stateProbe->getBufferState(receiverEvent.get()), ResourceStates::UnorderedAccess);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertex.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     stateProbe->close();
 
     const GpuTaskScheduler submitter(device);
@@ -337,6 +340,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
                 .setCanHaveUAVs(true)
                 .setCanHaveRawViews(true)
                 .setIsVertexBuffer(true)
+                .setIsIndexBuffer(true)
                 .setInitialState(ResourceStates::Common)
                 .setQueueSharing(ResourceQueueSharing::Exclusive)
         );
@@ -453,7 +457,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
     const GpuTaskResourceSetUse outputVertexBufferSetUse{
         .resourceSet = generatedVertexOutputSet,
         .range = {},
-        .requiredState = ResourceStates::VertexBuffer,
+        .requiredState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         .access = GpuTaskResourceAccess::Read,
     };
 
@@ -533,9 +537,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::VertexBuffer,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .texture = removedInterval.get(),
             .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &sampleObservedStates,
@@ -649,7 +653,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             sampleTask,
             output,
             ResourceStates::UnorderedAccess,
-            ResourceStates::VertexBuffer
+            Impl::ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
     }
 
@@ -672,8 +676,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
     auto stateProbe = device.createCommandList();
     ASSERT_NE(stateProbe.get(), nullptr);
     stateProbe->open(finalState);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), ResourceStates::VertexBuffer);
-    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), ResourceStates::VertexBuffer);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexA.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
+    EXPECT_EQ(stateProbe->getBufferState(generatedVertexB.get()), Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     EXPECT_EQ(
         stateProbe->getTextureSubresourceState(removedInterval.get(), 0u, 0u),
         ResourceStates::UnorderedAccess

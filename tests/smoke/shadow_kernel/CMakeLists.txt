@@ -9,6 +9,8 @@ target_sources(nwb_shadow_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shadow_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/traversal_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resolve_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/resolve_guided_fit_cases.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/resolve_guided_fit_cases.h"
     "${CMAKE_CURRENT_LIST_DIR}/hardware_transmission_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.nwb"

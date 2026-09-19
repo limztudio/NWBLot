@@ -3,6 +3,7 @@
 
 
 #include "shadow_kernel_fixture.h"
+#include "resolve_guided_fit_cases.h"
 
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 #include <impl/assets/graphics/shadow/sw_binding_slots.h>
@@ -90,6 +91,7 @@ struct ResolveCase{
     u32 stage = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE;
     u32 stepWidth = 1u;
     bool momentsValid = false;
+    const ShadowResolveGuidedFit::Case* guidedFit = nullptr;
 };
 
 using HalfPixels = Vector<HalfPixel, Alloc::ScratchArena>;
@@ -152,6 +154,7 @@ void RunResolveCase(
     const u32 halfHeight = DivideUp(testCase.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
     const usize fullCount = static_cast<usize>(testCase.width) * testCase.height;
     const usize halfCount = static_cast<usize>(halfWidth) * halfHeight;
+    const u32 layerCount = testCase.guidedFit ? ShadowResolveGuidedFit::s_LayerCount : 1u;
     const bool wavelet = testCase.stage == NWB_SHADOW_RESOLVE_STAGE_WAVELET;
     const u32 outputWidth = wavelet ? halfWidth : testCase.width;
     const u32 outputHeight = wavelet ? halfHeight : testCase.height;
@@ -162,13 +165,13 @@ void RunResolveCase(
     HalfPixels world(scratchArena);
     HalfPixels normals(scratchArena);
     HalfPixels prior(scratchArena);
-    colors.reserve(halfCount);
+    colors.reserve(halfCount * layerCount);
     geometry.reserve(halfCount);
-    moments.reserve(halfCount);
+    moments.reserve(halfCount * layerCount);
     depth.reserve(fullCount);
     world.reserve(fullCount);
     normals.reserve(fullCount);
-    prior.reserve(fullCount);
+    prior.reserve(fullCount * layerCount);
     for(u32 y = 0u; y < halfHeight; ++y){
         for(u32 x = 0u; x < halfWidth; ++x){
             Float4U color = Ramp(static_cast<f32>(x), static_cast<f32>(y));
@@ -190,9 +193,21 @@ void RunResolveCase(
                 if(testCase.guidance == Guidance::MixedNormals)
                     color = { 1.0f, 0.0f, 1.0f, 1.0f };
             }
+            if(testCase.guidedFit){
+                color = ShadowResolveGuidedFit::Color(*testCase.guidedFit, x, y, 0u);
+                guide = ShadowResolveGuidedFit::Geometry(*testCase.guidedFit, x, y);
+            }
             colors.push_back(ToHalfPixel(color));
             geometry.push_back(ToHalfPixel(guide));
             moments.push_back(ToHalfPixel({ 0.5f, 0.5f, 8.0f, 1.0f }));
+        }
+    }
+    for(u32 layer = 1u; layer < layerCount; ++layer){
+        for(u32 y = 0u; y < halfHeight; ++y){
+            for(u32 x = 0u; x < halfWidth; ++x){
+                colors.push_back(ToHalfPixel(ShadowResolveGuidedFit::Color(*testCase.guidedFit, x, y, layer)));
+                moments.push_back(ToHalfPixel({ 0.5f, 0.5f, 8.0f, 1.0f }));
+            }
         }
     }
     for(u32 y = 0u; y < testCase.height; ++y){
@@ -203,9 +218,20 @@ void RunResolveCase(
             Float4U position{ 0.0f, 0.0f, 10.0f, 1.0f };
             if(testCase.guidance == Guidance::LinearDistanceOffset)
                 position.z += static_cast<f32>(x) * 0.5f + s_LinearGuidanceOffset;
+            if(testCase.guidedFit)
+                position.z = ShadowResolveGuidedFit::ReceiverDistance(*testCase.guidedFit, x);
             world.push_back(ToHalfPixel(position));
             normals.push_back(ToHalfPixel({ 0.5f, 0.5f, 1.0f, 1.0f }));
-            prior.push_back(ToHalfPixel(PriorVisibility(y, testCase.height)));
+            const Float4U initial = testCase.guidedFit
+                ? ShadowResolveGuidedFit::Prior(y, testCase.height, 0u) : PriorVisibility(y, testCase.height);
+            prior.push_back(ToHalfPixel(initial));
+        }
+    }
+
+    for(u32 layer = 1u; layer < layerCount; ++layer){
+        for(u32 y = 0u; y < testCase.height; ++y){
+            for(u32 x = 0u; x < testCase.width; ++x)
+                prior.push_back(ToHalfPixel(ShadowResolveGuidedFit::Prior(y, testCase.height, layer)));
         }
     }
 
@@ -220,7 +246,7 @@ void RunResolveCase(
     TextureDesc halfDesc = fullDesc;
     halfDesc.setWidth(halfWidth).setHeight(halfHeight);
     TextureDesc colorDesc = halfDesc;
-    colorDesc.setDimension(TextureDimension::Texture2DArray).setArraySize(1u);
+    colorDesc.setDimension(TextureDimension::Texture2DArray).setArraySize(layerCount);
     const TextureHandle sources[] = {
         graphicsDevice.createTexture(colorDesc), graphicsDevice.createTexture(halfDesc),
         graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc), graphicsDevice.createTexture(fullDesc),
@@ -232,7 +258,7 @@ void RunResolveCase(
         .setWidth(outputWidth)
         .setHeight(outputHeight)
         .setDimension(TextureDimension::Texture2DArray)
-        .setArraySize(1u)
+        .setArraySize(layerCount)
         .setInUAV(true)
     ;
     const TextureHandle output = graphicsDevice.createTexture(outputDesc);
@@ -269,13 +295,16 @@ void RunResolveCase(
     commandList->open();
     for(u32 index = 0u; index < LengthOf(sources); ++index){
         const usize pitch = (index < 2u || index == 5u ? halfWidth : testCase.width) * sizeof(HalfPixel);
-        ASSERT_TRUE(commandList->tryWriteTexture(*sources[index], 0u, 0u, data[index]->data(), pitch));
+        const u32 sourceLayers = (index == 0u || index == 5u) ? layerCount : 1u;
+        for(u32 layer = 0u; layer < sourceLayers; ++layer)
+            ASSERT_TRUE(commandList->tryWriteTexture(*sources[index], layer, 0u, data[index]->data() + layer * halfCount, pitch));
         commandList->setTextureState(sources[index].get(), s_AllSubresources, ResourceStates::ShaderResource);
     }
     const Float4U cameraPosition{ 0.0f, 0.0f, 0.0f, 1.0f };
     ASSERT_TRUE(commandList->tryWriteBuffer(*scene, &cameraPosition, sizeof(cameraPosition)));
     commandList->setBufferState(scene.get(), ResourceStates::ConstantBuffer);
-    ASSERT_TRUE(commandList->tryWriteTexture(*output, 0u, 0u, prior.data(), testCase.width * sizeof(HalfPixel)));
+    for(u32 layer = 0u; layer < layerCount; ++layer)
+        ASSERT_TRUE(commandList->tryWriteTexture(*output, layer, 0u, prior.data() + layer * fullCount, testCase.width * sizeof(HalfPixel)));
     commandList->setTextureState(output.get(), s_AllSubresources, ResourceStates::UnorderedAccess, true);
     commandList->commitBarriers();
     ComputeState state;
@@ -284,7 +313,9 @@ void RunResolveCase(
     heap.bindCompute(*commandList, pipeline);
     const ResolvePushConstants push{
         testCase.width, testCase.height, halfWidth, halfHeight, testCase.stepWidth, testCase.stage,
-        0u, 1u, testCase.momentsValid ? 1u : 0u, testCase.multiply ? 1u : 0u,
+        testCase.guidedFit ? ShadowResolveGuidedFit::s_ActiveStart : 0u,
+        testCase.guidedFit ? ShadowResolveGuidedFit::s_ActiveCount : 1u,
+        testCase.momentsValid ? 1u : 0u, testCase.multiply ? 1u : 0u,
         descriptors[1].slot(), descriptors[2].slot(), descriptors[3].slot(), descriptors[4].slot(),
         descriptors[0].slot(), descriptors[0].slot(), descriptors[5].slot(), descriptors[6].slot(),
         descriptors[6].slot(), descriptors[7].slot(), 0u
@@ -294,7 +325,8 @@ void RunResolveCase(
         DivideUp(outputWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)),
         DivideUp(outputHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE)), 1u
     );
-    commandList->copyTexture(*readback, TextureSlice{}, *output, TextureSlice{});
+    for(u32 layer = 0u; layer < layerCount; ++layer)
+        commandList->copyTexture(*readback, TextureSlice{}.setArraySlice(layer), *output, TextureSlice{}.setArraySlice(layer));
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
     ASSERT_FALSE(commandList->commandRecordingFailed());
@@ -304,22 +336,24 @@ void RunResolveCase(
     );
     ASSERT_TRUE(token.valid());
     ASSERT_TRUE(graphicsDevice.waitForIdle());
-    usize rowPitch = 0u;
-    const u8* const mapped = static_cast<const u8*>(
-        graphicsDevice.mapStagingTexture(*readback, TextureSlice{}, CpuAccessMode::Read, &rowPitch)
-    );
-    ASSERT_NE(mapped, nullptr);
-    ScopeExit unmap([&]()noexcept{ graphicsDevice.unmapStagingTexture(*readback); });
-    ASSERT_GE(rowPitch, outputWidth * sizeof(HalfPixel));
     actual.clear();
-    actual.reserve(static_cast<usize>(outputWidth) * outputHeight);
-    for(u32 y = 0u; y < outputHeight; ++y){
-        for(u32 x = 0u; x < outputWidth; ++x){
-            HalfPixel pixel;
-            NWB_MEMCPY(&pixel, sizeof(pixel), mapped + y * rowPitch + x * sizeof(pixel), sizeof(pixel));
-            actual.push_back({
-                ConvertHalfToFloat(pixel.r), ConvertHalfToFloat(pixel.g), ConvertHalfToFloat(pixel.b), ConvertHalfToFloat(pixel.a)
-            });
+    actual.reserve(static_cast<usize>(outputWidth) * outputHeight * layerCount);
+    for(u32 layer = 0u; layer < layerCount; ++layer){
+        usize rowPitch = 0u;
+        const u8* const mapped = static_cast<const u8*>(
+            graphicsDevice.mapStagingTexture(*readback, TextureSlice{}.setArraySlice(layer), CpuAccessMode::Read, &rowPitch)
+        );
+        ASSERT_NE(mapped, nullptr);
+        ScopeExit unmap([&]()noexcept{ graphicsDevice.unmapStagingTexture(*readback); });
+        ASSERT_GE(rowPitch, outputWidth * sizeof(HalfPixel));
+        for(u32 y = 0u; y < outputHeight; ++y){
+            for(u32 x = 0u; x < outputWidth; ++x){
+                HalfPixel pixel;
+                NWB_MEMCPY(&pixel, sizeof(pixel), mapped + y * rowPitch + x * sizeof(pixel), sizeof(pixel));
+                actual.push_back({
+                    ConvertHalfToFloat(pixel.r), ConvertHalfToFloat(pixel.g), ConvertHalfToFloat(pixel.b), ConvertHalfToFloat(pixel.a)
+                });
+            }
         }
     }
 }
@@ -674,6 +708,70 @@ TEST_F(ShadowResolveKernelTest, OddAndTinyExtentsKeepNormalizedFiniteBoundaryVal
                     EXPECT_GE(pixel.x + 0.001f, actual[index - 1u].x);
                 if(y > 0u)
                     EXPECT_GE(pixel.y + 0.001f, actual[index - testCase.width].y);
+            }
+        }
+    }
+}
+
+
+TEST_F(ShadowResolveKernelTest, GuidedFitPreservesSignedExtrapolationAndOriginalMomentsAcrossLightLayers){
+    using namespace __hidden_shadow_resolve_kernel_tests;
+    namespace Fit = ShadowResolveGuidedFit;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/shadow_kernel/resolve_guided_fit"));
+    const Fit::Case cases[] = {
+        {},
+        { 0.03125f, 0.0078125f, 0.015625f },
+        { 8192.0f, 8.0f, 64.0f },
+        { 10.0f, 0.001f, 0.5f },
+        { 10.0f, 0.0f, 2.0f },
+        { 10.0f, 0.5f, 128.0f },
+        { 10.0f, 1.0f, 2.0f, Fit::Mask::Mixed },
+        { 10.0f, 1.0f, 2.0f, Fit::Mask::AllInvalid },
+        { 10.0f, 1.0f, 2.0f, Fit::Mask::AllOpposite },
+        { 10.0f, 1.0f, 2.0f, Fit::Mask::SingleGuided },
+        { 10.0f, 0.5f, 128.0f, Fit::Mask::None, true },
+    };
+    Pixels actual(scratchArena);
+    for(const bool rgb : { false, true }){
+        SCOPED_TRACE(rgb);
+        ComputePipelineHandle pipeline;
+        ASSERT_TRUE(loadResolveKernel(scratchArena, pipeline, rgb));
+        for(usize caseIndex = 0u; caseIndex < LengthOf(cases); ++caseIndex){
+            SCOPED_TRACE(caseIndex);
+            for(const bool multiply : { false, true }){
+                if(multiply && !rgb)
+                    continue;
+                SCOPED_TRACE(multiply);
+                const ResolveCase testCase{
+                    .width = 17u, .height = 13u, .multiply = multiply, .backgroundBorder = true,
+                    .guidedFit = &cases[caseIndex]
+                };
+                ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
+                const usize layerPixels = static_cast<usize>(testCase.width) * testCase.height;
+                ASSERT_EQ(actual.size(), layerPixels * Fit::s_LayerCount);
+                for(u32 layer = 0u; layer < Fit::s_LayerCount; ++layer){
+                    SCOPED_TRACE(layer);
+                    for(u32 y = 0u; y < testCase.height; ++y){
+                        for(u32 x = 0u; x < testCase.width; ++x){
+                            SCOPED_TRACE(x);
+                            SCOPED_TRACE(y);
+                            const Float4U expected = Fit::Reference(cases[caseIndex], testCase.width, testCase.height, x, y, layer, rgb, multiply);
+                            ExpectPixelNear(actual[layer * layerPixels + y * testCase.width + x], expected);
+                        }
+                    }
+                }
+                if(caseIndex == 0u && !multiply){
+                    // At (6,4), the original fit overshoots R above one and G below zero before final clamping.
+                    const usize index = Fit::s_ActiveStart * layerPixels + 4u * testCase.width + 6u;
+                    EXPECT_FLOAT_EQ(actual[index].x, 1.0f);
+                    if(rgb){
+                        EXPECT_FLOAT_EQ(actual[index].y, 0.0f);
+                        const f32 expectedBlue = 0.375f + 0.0625f * (2.0f * 0.25f / (0.25f + 0.3f * 0.3f));
+                        EXPECT_NEAR(actual[index].z, expectedBlue, 0.001f);
+                    }
+                    // The next layer rotates G into scalar/R; layer identity must not collapse to the first layer.
+                    EXPECT_FLOAT_EQ(actual[index + layerPixels].x, 0.0f);
+                }
             }
         }
     }

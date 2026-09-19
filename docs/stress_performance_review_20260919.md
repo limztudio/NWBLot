@@ -258,8 +258,29 @@ The separate complete stress scene passed with `VK_LAYER_KHRONOS_validation` and
 
 Local evidence is under `__artifacts/stress_60fps/indexed_mesh_6c03537fb/`: `baseline_run{1,2}`, `indexed_run{1,2}`, `comparison_final.json`, `compiled_mesh_audit.json`, `native_mesh.log`, `ecs_tests.log`, `native_graph_qualified.log` and `validation` contain the accepted measurements and checks. Captures are `baseline_stress.bmp`, `indexed_stress.bmp`, `csg_late.bmp` and `async_lighting.bmp`; `capture_comparison.json` records the numerical stress-image comparison. Earlier graph logs preserve the fixture failures; only `native_graph_qualified.log` is the final clean graph qualification.
 
+## Rejected guided-fit coefficient factoring, 2026-09-20
+
+A bounded experiment factored the original FP32 guided upsample regression into signed per-tap coefficients, computed once before the light-layer loop. It retained the same guidance, tap masks/order, negative extrapolation, precision, fallback, final clamp and transparent multiplication. The coefficient for a valid tap was `w_i / W * (1 - meanG / (varianceG + epsilonSquared) * (g_i - meanG))`. This is equivalent over real numbers but reassociates FP32 arithmetic. The coefficient array was explicitly initialized to satisfy Slang's definite-assignment analysis; the initial uninitialized version did not compile and was never measured.
+
+The frozen baseline is `76139ecf8`. The same all-features 1280 x 900, ten-body scene used five-second warmup and thirty-second native presentation intervals, in baseline/candidate/candidate/baseline order:
+
+| Measurement | Original regression | Factored coefficients |
+| --- | ---: | ---: |
+| Run 1 | 42.5243 FPS | 42.4105 FPS |
+| Run 2 | 42.4842 FPS | 42.4692 FPS |
+| Aggregate presentations / aggregate seconds | 42.5043 FPS | 42.4398 FPS |
+| Aggregate wall time per presentation | 23.5271 ms | 23.5628 ms |
+| Opaque resolve, first run mean per GPU range | 1.4406 ms | 1.4634 ms |
+| Transparent resolve, first run mean per GPU range | 1.7172 ms | 1.7361 ms |
+
+The candidate did not establish an improvement: aggregate FPS changed by **-0.15%**, adding **0.0357 ms per presentation**. Both candidate runs showed modestly higher resolve times while unaffected controls were approximately stable. These short measurements do not establish statistical significance, but provide no reason to retain the rewrite. The original production shader was restored byte-for-byte from the frozen baseline. The rejected source, build logs, all four runs, GPU summaries and `comparison.json` remain under `__artifacts/stress_60fps/guided_fit_76139ecf8/`.
+
+The numerical regression coverage is retained. A new native test runs **33 dispatches** across eleven profiles and scalar overwrite, RGB overwrite and RGB folding. It checks all 17 x 13 x 8 output texels, including distinct active layers 2 through 4 and untouched sentinels in the other layers. Its CPU oracle retains the original weighted moments/covariance equations over half-quantized inputs; analytic assertions also require signed extrapolation, both final clamp endpoints and the expected unclamped affine channel. Profiles cover near/far receivers, low/zero guidance variance, large offsets, constant signals, mixed invalid/normal-rejected taps, a single guided tap, boundaries, background and partial workgroups. Helper declarations and implementation are split within the native shadow-test domain. All **thirteen native shadow tests** pass on both the rejected candidate and the restored production shader, recorded in `native_factored.log` and `native_restored.log`.
+
 ## Next architecture work
 
-**Factor repeated guided-fit arithmetic.** A future resolve experiment can compute one FP32 guidance coefficient per tap and reuse it across light layers. Keep negative coefficients, current precision and final clamping; algebraic reassociation needs numerical and image qualification before acceptance.
+1. **Measure refraction independently.** The existing recorder lacks a dedicated dispatch timing scope. Add a reserved scope using the existing graph task identity before selecting a substantial refraction rewrite.
+2. **Specialize provably exterior reflection rays.** The optical reflection kernel is selected globally when transparent instances exist. A conservative ray-segment test against the existing transparent union could route proven misses through an exterior specialization, preserving the original admitted ray set, direction/range arithmetic and full optical handling for uncertain or intersecting rays. Measure eligible-ray counts before implementing queues; the global union may be too broad for a useful split.
+3. **Defer surfel SH loads for zero-weight candidates.** The shared gather currently reconstructs directional lighting for alive, sampled candidates even when their existing FP16 distance/normal/confidence weight is exactly zero. Preserve every cell, list walk and positive-contribution order while deferring SH loads and reconstruction. Confirm compiled loads and end-to-end benefit before acceptance.
 
-60 FPS requires at most 16.67 ms per frame. The current result still needs approximately **6.86 ms** removed per presentation. Re-measure each change before adjusting samples, resolution or temporal quality. The remaining unimplemented direction does not guarantee 60 FPS, particularly for the requested twenty-body workload.
+60 FPS requires at most 16.67 ms per frame. The accepted renderer remains approximately 42.50 FPS and still needs **6.86 ms** removed per presentation in the ten-body workload. These remaining directions are unimplemented hypotheses, not promised speedups or qualification of the original twenty-body target.

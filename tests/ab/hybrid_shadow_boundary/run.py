@@ -230,6 +230,7 @@ def run_single_arm(
     environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment["NWB_STRESS_TEST_SPIN_ANGLE"] = f"{args.frozen_yaw:.8g}"
+    environment["NWB_STRESS_CHARACTERS_PER_CLASS"] = "5"
     environment["NWB_HYBRID_SHADOW_BOUNDARY_OPAQUE_BASELINE"] = "1" if mode == "baseline" else "0"
 
     logserver_process = None

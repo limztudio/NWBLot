@@ -1042,7 +1042,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--reject-log-message" "failed to resolve shader"
         )
 
-        # Load-time STRESS scene: TEN spinning skinned `body` characters (5 transparent + 5 opaque) inside a coloured
+        # Load-time STRESS scene: twenty spinning skinned `body` characters (10 transparent + 10 opaque) inside a coloured
         # open-front GI box, under a directional + a point light. Reuses the benchmark's cooked assets (body model +
         # transparent_multi glass/ground materials); exercises per-frame scene updates and hardware opaque/transparent shadows across two
         # shadowed lights.

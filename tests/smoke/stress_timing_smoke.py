@@ -270,10 +270,12 @@ def launch_environment(base, args, output):
     result = {key: value for key, value in base.items() if not key.startswith("NWB_")}
     if platform.system() == "Linux":
         result["NWB_LINUX_BACKEND"] = "x11"
-    result.update(NWB_STRESS_SMOKE_TIMING="1", NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
+    result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
-        NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
+    if not args.animate:
+        result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
+            NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds))
     if args.reflection_diagnostics:
         result["NWB_STRESS_REFLECTION_DIAGNOSTICS"] = "1"
     return result
@@ -336,6 +338,10 @@ def acquire(args, output):
         (output / "runtime.log").write_text(text, encoding="utf-8")
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
         result["runtime_signature"] = ab.device_material_signature(text)
+        result["motion"] = {"mode": "rotating" if args.animate else "fixed",
+            "simulation_clock": "wall" if args.animate else "fixed_step",
+            "spin_angle": None if args.animate else args.spin_angle,
+            "fixed_delta_seconds": None if args.animate else args.fixed_delta_seconds}
         after = identities(args, helpers)
         if before != after:
             raise SmokeFailure("renderer, resources, logger, interpreter or helper identity changed during acquisition")
@@ -379,8 +385,11 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
-    parser.add_argument("--spin-angle", type=float, default=0.6)
-    parser.add_argument("--fixed-delta-seconds", type=float, default=0.016666667)
+    motion = parser.add_mutually_exclusive_group()
+    motion.add_argument("--spin-angle", type=float, default=0.6)
+    motion.add_argument("--animate", action="store_true",
+        help="Continuously rotate the bodies using wall-time simulation; excludes fixed yaw and fixed simulation delta.")
+    parser.add_argument("--fixed-delta-seconds", type=float)
     parser.add_argument("--application-arg", action="append", default=[])
     parser.add_argument("--reflection-diagnostics", action="store_true",
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
@@ -396,7 +405,11 @@ def parse_args(argv=None):
         parser.error("timeout must be finite and greater than 35 through 100 seconds")
     if not math.isfinite(args.spin_angle) or not 0 <= args.spin_angle < math.tau:
         parser.error("spin angle must be finite in [0, 2pi)")
-    if not math.isfinite(args.fixed_delta_seconds) or not 0 < args.fixed_delta_seconds <= .25:
+    if args.animate and args.fixed_delta_seconds is not None:
+        parser.error("--animate cannot be combined with --fixed-delta-seconds")
+    if args.fixed_delta_seconds is None and not args.animate:
+        args.fixed_delta_seconds = .016666667
+    if args.fixed_delta_seconds is not None and (not math.isfinite(args.fixed_delta_seconds) or not 0 < args.fixed_delta_seconds <= .25):
         parser.error("fixed simulation delta must be finite in (0, .25]")
     args.software_vulkan = "off"
     return args

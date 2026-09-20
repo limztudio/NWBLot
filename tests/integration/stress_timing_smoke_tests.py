@@ -220,6 +220,36 @@ class StressWorkloadTests(unittest.TestCase):
                     smoke.parse_args(argv + ["--characters-per-class", value])
 
 
+class StressMotionTests(unittest.TestCase):
+    def test_rotating_launch_removes_inherited_freezes_and_fixed_simulation_time(self):
+        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=None, reflection_diagnostics=False,
+            characters_per_class=10, animate=True)
+        inherited = {"NWB_STRESS_TEST_SPIN_ANGLE": "1.25", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": ".25",
+            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "120", "NWB_STRESS_CHARACTERS_PER_CLASS": "5"}
+        env = smoke.launch_environment(inherited, args, Path("moving"))
+        self.assertNotIn("NWB_STRESS_TEST_SPIN_ANGLE", env)
+        self.assertNotIn("NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", env)
+        self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", env)
+        self.assertEqual(env["NWB_STRESS_CHARACTERS_PER_CLASS"], "10")
+        self.assertEqual(env["NWB_STRESS_SMOKE_TIMING"], "1")
+
+    def test_rotating_cli_rejects_conflicting_yaw_and_simulation_controls(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / "renderer.exe"
+            executable.write_bytes(b"fixture")
+            argv = ["--executable", str(executable), "--working-directory", str(root), "--no-logserver"]
+            fixed = smoke.parse_args(argv)
+            self.assertFalse(fixed.animate)
+            self.assertEqual(fixed.fixed_delta_seconds, .016666667)
+            moving = smoke.parse_args(argv + ["--animate"])
+            self.assertTrue(moving.animate)
+            self.assertIsNone(moving.fixed_delta_seconds)
+            for extra in (["--spin-angle", ".6"], ["--fixed-delta-seconds", ".016666667"]):
+                with self.subTest(extra=extra), patch("sys.stderr"), self.assertRaises(SystemExit):
+                    smoke.parse_args(argv + ["--animate"] + extra)
+
+
 class StressMeasurementTests(unittest.TestCase):
     def test_complete_rate_uses_presentations_and_wall_not_fixed_delta_or_queries(self):
         result = smoke.parse_measurement(valid_log())
@@ -288,7 +318,7 @@ class StressMeasurementTests(unittest.TestCase):
                 smoke.parse_measurement(valid_log() + marker)
 
     def test_environment_replaces_inherited_capture_controls(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10)
+        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False)
         env = smoke.launch_environment({"NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "96",
             "NWB_STRESS_TEST_SPIN_ANGLE": "2", "NWB_OTHER": "bad",
             "NWB_STRESS_REFLECTION_DIAGNOSTICS": "1", "NWB_STRESS_CHARACTERS_PER_CLASS": "5", "PATH": "kept"}, args, Path("trial"))
@@ -325,7 +355,7 @@ class StressMeasurementTests(unittest.TestCase):
             output = Path(temporary)
             args = SimpleNamespace(executable=output / "app.exe", working_directory=output,
                 no_logserver=True, logserver_executable=None, application_arg=[], timeout=90,
-                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10)
+                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False)
             process = Mock()
             process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
             with patch.object(smoke, "identities", return_value={}), \

@@ -5,6 +5,7 @@
 #include <impl/ecs_render/avboit/occupancy_record_builder.h>
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 
 
 #include <core/graphics/vulkan/backend.h>
@@ -46,6 +47,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
 [[nodiscard]] bool AvboitOccupancyRecordBuilder::declare(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    ObjectGeometryCacheGraph& objectGeometry,
     AvboitOccupancyRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -286,6 +288,13 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     if(occupancyPayload.occupancyStreamsUploaded)
         m_avboitSystem.taskGraphStage().m_occupancyStreamTask = occupancyStreamTask;
     Core::GpuTaskId occupancyDependency = inputs.clearTask;
+    if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
+        occupancyPayload.occupancySnapshot.regularComputeDrawItems.data(),
+        occupancyPayload.occupancySnapshot.regularComputeDrawItems.size(),
+        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
+    ))
+        return false;
+
 
     Core::GpuTaskSchedulingHint avboitOccupancyScheduling;
     avboitOccupancyScheduling.cost = Core::GpuTaskCostHint::Large;

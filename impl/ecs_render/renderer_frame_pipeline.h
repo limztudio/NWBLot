@@ -67,6 +67,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ObjectGeometryCacheGraph;
 class Shader;
 class Mesh;
 struct GraphClearTimingRecordState;
@@ -213,6 +214,7 @@ private:
     );
     [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
         DeferredFrameTargets& deferredTargets,
+        ObjectGeometryCacheGraph& objectGeometry,
         Core::GpuTaskId shadowPrepareTask,
         const CsgFrameState& csgFrameState,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,

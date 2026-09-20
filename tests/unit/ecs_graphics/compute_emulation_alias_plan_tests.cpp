@@ -406,6 +406,27 @@ TEST(ComputeEmulationAliasPlan, RegularCaptureRejectsChangedUnifiedOutputLayoutA
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
 }
 
+TEST(ComputeEmulationAliasPlan, FrozenRegularAndAvboitPlansRejectChangedObjectCacheContents){
+    AliasPlanContext context(2u);
+    RegularPlan regular(context.m_planArena);
+    AvboitPlan avboit(context.m_planArena);
+    auto& source = context.m_regular.computeDrawItems.back();
+    source.meshResources.objectGeometryCache.buffer = context.m_buffers.front();
+    source.meshResources.objectGeometryCache.sourceRevision = 7u;
+    ASSERT_TRUE(CapturePlan(regular, context, context.m_operationArena));
+    ASSERT_TRUE(CapturePlan(avboit, context, context.m_operationArena));
+    EXPECT_TRUE(MatchesPlan(regular, context, context.m_operationArena));
+    EXPECT_TRUE(MatchesPlan(avboit, context, context.m_operationArena));
+    source.meshResources.objectGeometryCache.sourceRevision = 8u;
+    EXPECT_FALSE(MatchesPlan(regular, context, context.m_operationArena));
+    avboit.drawItems.back().meshResources.objectGeometryCache.sourceRevision = 8u;
+    EXPECT_FALSE(MatchesPlan(avboit, context, context.m_operationArena));
+    avboit.drawItems.back().meshResources.objectGeometryCache.sourceRevision = 7u;
+    EXPECT_TRUE(MatchesPlan(avboit, context, context.m_operationArena));
+    avboit.drawItems.back().meshResources.objectGeometryCache.buffer = context.m_buffers.back();
+    EXPECT_FALSE(MatchesPlan(avboit, context, context.m_operationArena));
+}
+
 TEST(ComputeEmulationAliasPlan, AvboitAndCsgSnapshotsRejectChangedUnifiedOutputLayout){
     AliasPlanContext context(2u);
     AvboitPlan avboit(context.m_planArena);

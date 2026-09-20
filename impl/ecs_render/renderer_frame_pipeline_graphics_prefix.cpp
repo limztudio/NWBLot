@@ -5,6 +5,7 @@
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 
@@ -51,6 +52,7 @@ NWB_IMPL_BEGIN
 
 bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
+    ObjectGeometryCacheGraph& objectGeometry,
     const Core::GpuTaskId shadowPrepareTask,
     const CsgFrameState& csgFrameState,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
@@ -821,6 +823,15 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
 
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{gbufferResourceScratch};
+    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
+        opaqueDrawItems.regular.computeDrawItems.data(), opaqueDrawItems.regular.computeDrawItems.size(),
+        frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
+        nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
+    ))
+        return false;
+    gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
+
     if(opaqueComputeEmulationOutputStatesGraphOwned){
         opaqueComputeEmulationPayload.materialSystem = &m_materialSystem;
         opaqueComputeEmulationPayload.targets = &deferredTargets;
@@ -1038,6 +1049,9 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
 
         opaqueSharedComputeEmulationRasterResourceUses.reserve(9u);
+        opaqueSharedComputeEmulationRasterResourceUses.insert(
+            opaqueSharedComputeEmulationRasterResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end()
+        );
         opaqueSharedComputeEmulationRasterResourceUses.push_back(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );

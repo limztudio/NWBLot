@@ -2,7 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "mesh_kernel_fixture.h"
+#include "object_geometry_kernel_fixture.h"
+
+#include <impl/assets/graphics/mesh/object_geometry_constants.h>
 
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -86,6 +88,14 @@ struct GeneratedVertex{
     f32 worldPosition[4];
 };
 
+struct ObjectVertex{
+    f32 position[4];
+    Half4 normal;
+    Half4 tangent;
+    f32 uv0[2];
+    Half4 color;
+};
+
 struct ViewData{
     f32 worldToClip[16];
     f32 clipToWorld[16];
@@ -131,6 +141,7 @@ struct Case{
     Cull::Enum cull;
 };
 
+static_assert(sizeof(ObjectVertex) == NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
 static_assert(sizeof(Half4) == 8u);
 static_assert(sizeof(GeneratedVertex) == NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
 static_assert(offsetof(GeneratedVertex, normal) == NWB_MESH_EMULATION_VERTEX_NORMAL_BYTE_OFFSET);
@@ -267,7 +278,7 @@ void BuildInputs(const Case& testCase, Inputs& inputs){
     return result;
 }
 
-void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, ComputePipeline& candidate, const Case& testCase){
+void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, ComputePipeline& candidate, const Case& testCase, const ObjectGeometryKernels* objectKernels = nullptr){
     SCOPED_TRACE(testCase.vertexCount);
     SCOPED_TRACE(testCase.primitiveCount);
     SCOPED_TRACE(testCase.meshletCount);
@@ -293,7 +304,8 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     };
     BufferHandle buffers[bufferCount];
     BufferHandle outputs[2];
-    GpuDescriptorHandle descriptors[bufferCount + 2u]{};
+    BufferHandle objectCache;
+    GpuDescriptorHandle descriptors[bufferCount + 3u]{};
     ScopeExit releaseDescriptors([&]()noexcept{
         for(const GpuDescriptorHandle descriptor : descriptors){
             if(descriptor.valid())
@@ -335,6 +347,21 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     const u32 indexByteOffset = compactVertexCount * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE;
     const u32 indexedByteSize = AlignUp(indexByteOffset + s_OutputIndexBytes, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
     ASSERT_LE(indexedByteSize, s_IndexedOutputByteCapacity);
+    const u32 cacheByteSize = (compactVertexCount + 2u) * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    if(objectKernels != nullptr){
+        BufferDesc desc;
+        desc.setByteSize(cacheByteSize).setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setIsVertexBuffer(true)
+            .setCanHaveRawViews(true).setCanHaveUAVs(true).setCpuAccess(CpuAccessMode::Read)
+            .setInitialState(ResourceStates::Common).setKeepInitialState(true);
+        objectCache = device.createBuffer(desc);
+        ASSERT_TRUE(objectCache);
+        descriptors[bufferCount + 2u] = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        ASSERT_TRUE(descriptors[bufferCount + 2u].valid());
+        ASSERT_TRUE(heap.write(descriptors[bufferCount + 2u], DescriptorWriteItem::RawBuffer_UAV(0u, objectCache.get())));
+        NWB_MEMSET(sentinels, 0x39, sizeof(sentinels));
+        ASSERT_LE(cacheByteSize, sizeof(sentinels));
+        ASSERT_TRUE(commandList->tryWriteBuffer(*objectCache, sentinels, cacheByteSize));
+    }
     const usize outputByteSizes[] = { sizeof(sentinels), indexedByteSize };
     ComputePipeline* const pipelines[] = { &reference, &candidate };
     for(u32 arm = 0u; arm < 2u; ++arm){
@@ -367,6 +394,38 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED] = descriptors[6].slot();
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_VIEW] = descriptors[viewBufferIndex].slot();
         inputs.push.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + arm].slot();
+        if(arm == 1u && objectKernels != nullptr){
+            // Decode under a different pose and view, then retain those bytes for the current draw's transforms.
+            const Impl::InstanceGpuData currentInstance = inputs.instances[1];
+            const ViewData currentView = inputs.view;
+            inputs.instances[1].translation.x += 64.0f;
+            inputs.instances[1].scale = Float4(-2.0f, 3.0f, 0.25f, 0.0f);
+            inputs.view.worldToClip[0] = 17.0f;
+            ASSERT_TRUE(commandList->tryWriteBuffer(*buffers[instanceBufferIndex], inputs.instances, sizeof(inputs.instances)));
+            ASSERT_TRUE(commandList->tryWriteBuffer(*buffers[viewBufferIndex], &inputs.view, sizeof(inputs.view)));
+            commandList->setBufferState(buffers[instanceBufferIndex].get(), ResourceStates::ShaderResource);
+            commandList->setBufferState(buffers[viewBufferIndex].get(), ResourceStates::ConstantBuffer);
+            commandList->setBufferState(objectCache.get(), ResourceStates::UnorderedAccess, true);
+            commandList->commitBarriers();
+            ComputeState decodeState;
+            decodeState.setPipeline(objectKernels->decode.get());
+            commandList->setComputeState(decodeState);
+            heap.bindCompute(*commandList, *objectKernels->decode);
+            PushConstants decodePush = inputs.push;
+            decodePush.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + 2u].slot();
+            commandList->setPushConstants(&decodePush, sizeof(decodePush));
+            commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
+            commandList->setBufferState(objectCache.get(), ResourceStates::ShaderResource);
+            inputs.instances[1] = currentInstance;
+            inputs.view = currentView;
+            ASSERT_TRUE(commandList->tryWriteBuffer(*buffers[instanceBufferIndex], inputs.instances, sizeof(inputs.instances)));
+            ASSERT_TRUE(commandList->tryWriteBuffer(*buffers[viewBufferIndex], &inputs.view, sizeof(inputs.view)));
+            commandList->setBufferState(buffers[instanceBufferIndex].get(), ResourceStates::ShaderResource);
+            commandList->setBufferState(buffers[viewBufferIndex].get(), ResourceStates::ConstantBuffer);
+            commandList->commitBarriers();
+            commandList->setComputeState(state);
+            heap.bindCompute(*commandList, *pipelines[arm]);
+        }
         if(arm == 0u)
             commandList->setPushConstants(&inputs.push, sizeof(inputs.push));
         else{
@@ -375,6 +434,19 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
         }
         // Two excess workgroups exercise the uniform count guard; partial vertex/primitive lanes remain active cases.
         commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
+        if(arm == 1u && objectKernels != nullptr){
+            commandList->setBufferState(outputs[arm].get(), ResourceStates::UnorderedAccess, true);
+            commandList->commitBarriers();
+            ComputeState transformState;
+            transformState.setPipeline(objectKernels->transform.get());
+            commandList->setComputeState(transformState);
+            heap.bindCompute(*commandList, *objectKernels->transform);
+            ComputePushConstants transformPush{ inputs.push, { indexByteOffset, 0u, 0u, 0u } };
+            transformPush.mesh.dispatch[2] = compactVertexCount;
+            transformPush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED] = descriptors[bufferCount + 2u].slot();
+            commandList->setPushConstants(&transformPush, sizeof(transformPush));
+            commandList->dispatch((compactVertexCount + 63u) / 64u + 1u, 1u, 1u);
+        }
     }
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
@@ -386,7 +458,10 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     ASSERT_TRUE(token.valid());
     ASSERT_TRUE(device.waitForIdle());
     const GeneratedVertex* mapped[2]{};
+    const ObjectVertex* mappedCache = nullptr;
     ScopeExit unmap([&]()noexcept{
+        if(mappedCache != nullptr)
+            device.unmapBuffer(*objectCache);
         for(u32 arm = 0u; arm < 2u; ++arm){
             if(mapped[arm] != nullptr)
                 device.unmapBuffer(*outputs[arm]);
@@ -395,6 +470,29 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     for(u32 arm = 0u; arm < 2u; ++arm){
         mapped[arm] = static_cast<const GeneratedVertex*>(device.mapBuffer(*outputs[arm], CpuAccessMode::Read));
         ASSERT_NE(mapped[arm], nullptr);
+    }
+    if(objectKernels != nullptr){
+        mappedCache = static_cast<const ObjectVertex*>(device.mapBuffer(*objectCache, CpuAccessMode::Read));
+        ASSERT_NE(mappedCache, nullptr);
+        const ObjectVertex sentinel{};
+        EXPECT_EQ(NWB_MEMCMP(&mappedCache[0], &sentinel, sizeof(sentinel)), 0);
+        for(u32 meshletIndex = 0u; meshletIndex < testCase.meshletCount; ++meshletIndex){
+            const auto& meshlet = inputs.meshlets[meshletIndex];
+            for(u32 localIndex = 0u; localIndex < testCase.vertexCount; ++localIndex){
+                const u32 outputIndex = NWB_MESH_OBJECT_FIRST_VERTEX_INDEX + meshlet.localVertexOffset + localIndex;
+                const auto& local = inputs.localRefs[meshlet.localVertexOffset + localIndex];
+                const auto& position = inputs.positions[meshlet.positionBase + local.localDeformedPosition];
+                const u32 attribute = meshlet.normalBase + local.localAttribute;
+                ObjectVertex expected{
+                    { position.x, position.y, position.z, 1.0f }, inputs.normals[attribute], inputs.tangents[attribute],
+                    { inputs.uv0[attribute].x, inputs.uv0[attribute].y }, inputs.colors[attribute]
+                };
+                EXPECT_EQ(NWB_MEMCMP(&mappedCache[outputIndex], &expected, sizeof(expected)), 0) << outputIndex;
+            }
+        }
+        const u8* const cacheBytes = reinterpret_cast<const u8*>(mappedCache);
+        for(u32 byte = compactVertexCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE; byte < cacheByteSize; ++byte)
+            EXPECT_EQ(cacheBytes[byte], 0x39u) << byte;
     }
     bool written[s_OutputVertexCapacity]{};
     bool indexedWritten[s_IndexedOutputByteCapacity]{};
@@ -405,7 +503,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     const u8* const indexedBytes = reinterpret_cast<const u8*>(mapped[1]);
     const u32* const indices = reinterpret_cast<const u32*>(indexedBytes + indexByteOffset);
     const GeneratedVertex culled = CulledVertex();
-    if(testCase.meshletCount != 0u){
+    if(testCase.meshletCount != 0u || objectKernels != nullptr){
         EXPECT_EQ(NWB_MEMCMP(&mapped[1][NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX], &culled, sizeof(culled)), 0);
         markIndexedBytes(NWB_MESH_EMULATION_SENTINEL_VERTEX_INDEX * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
     }
@@ -415,7 +513,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             || testCase.cull == Cull::AuthoredClip || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
         const bool meshletCulled = testCase.cull == Cull::Frustum || testCase.cull == Cull::Cone
             || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
-        if(!meshletCulled){
+        if(!meshletCulled || objectKernels != nullptr){
             markIndexedBytes(
                 (NWB_MESH_EMULATION_FIRST_VERTEX_INDEX + meshlet.localVertexOffset) * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE,
                 testCase.vertexCount * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE
@@ -536,6 +634,43 @@ TEST_F(MeshKernelTest, ProductionEntrypointsPreserveCullWritesAndUniformGroupGua
     ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, empty));
 }
 
+
+TEST_F(MeshKernelTest, ObjectCachePreservesSeamsCullsAndCurrentTransforms){
+    using namespace __hidden_mesh_emulation_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/mesh_kernel/object_cache"));
+    ComputePipelineHandle reference;
+    ObjectGeometryKernels kernels;
+    const Common::LoggerRegistrationGuard diagnosticGuard(*s_logger, Common::LoggerBreakPolicy::BreakOnFatal);
+    const auto run = [&](){
+        ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference));
+        ASSERT_TRUE(LoadObjectGeometryKernels(device(), arena(), scratchArena, kernels));
+        for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
+            for(u32 pose = Pose::Identity; pose <= Pose::ResolvedDeformed; ++pose){
+                const Case testCase{
+                    96u, 126u, 2u, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), static_cast<Pose::Enum>(pose), Cull::None
+                };
+                ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, testCase, &kernels));
+            }
+        }
+        for(u32 cull = Cull::Frustum; cull <= Cull::FirstMeshletOnly; ++cull){
+            const Case testCase{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, static_cast<Cull::Enum>(cull) };
+            ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, testCase, &kernels));
+        }
+        const Case partial{ 6u, 2u, 1u, Impl::MeshletRefDeltaWidth::U8, Pose::Transformed, Cull::None };
+        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, partial, &kernels));
+        const Case empty{ 3u, 1u, 0u, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, Cull::None };
+        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, empty, &kernels));
+    };
+    run();
+    const TStringView validationPrefix = NWB_TEXT("Vulkan debug: [severity=error");
+    const bool validationFailed = s_logger->sawMessageContaining(validationPrefix);
+    if(HasFailure() || validationFailed || s_logger->errorCount() != 0u){
+        s_logger->emitErrorsToStderr();
+        s_logger->emitMessagesContainingToStderr(validationPrefix);
+    }
+    EXPECT_EQ(s_logger->errorCount(), 0u);
+    EXPECT_FALSE(validationFailed);
+}
 
 TEST_F(MeshKernelTest, AuthoredClipChangesRetainCompletedVertexCulling){
     using namespace __hidden_mesh_emulation_kernel_tests;

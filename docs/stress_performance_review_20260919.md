@@ -430,3 +430,26 @@ The first retained twenty-body baseline measures **37.9992 FPS / 26.3164 ms** af
 A smaller shared-mesh barrier/LDS experiment was rejected and its five production files restored exactly. On the ten-body profile it increased mesh preparation from 3.9137 to 4.4613 ms and lowered presentation rate to 46.6622 FPS despite the concurrent caustic saving. Its extra primitive-to-position reference loads did not pay for the synchronization savings on this device. The native custom-clip regression is retained, independently covering authored builders whose clip positions differ from source positions.
 
 Evidence: `__artifacts/stress_60fps/object_cache_baseline/` contains the frozen retained executable/resources, `run10`, `run20` and `scene20_frame120.bmp` with the validation capture log. `__artifacts/stress_60fps/reflection_active_6c9207d03/` retains `caustic_kernel_prestep.{log,xml}`, `mesh_kernel_restored.log`, `python_workload.log`, the rejected `combined10_run1`/`combined20_run1` measurements and `rejected_mesh_barriers/` source. The rejected twenty-body run is not the retained baseline.
+
+## Accepted object-space geometry cache, 2026-09-20
+
+The fixed engine shared-mesh program now decodes its object-space attributes into a retained 48-byte vertex buffer. Per-draw compute still performs the original meshlet and triangle culling and emits indices; the ordinary vertex stage applies the current instance and view transforms. Local vertex references remain distinct, preserving normal, UV, tangent and color seams. Authored mesh programs and CSG retain their original compute-emulation route. The cooker emits the auxiliary stages only for the exact engine program, with independent dependency checksums and no inherited material defines.
+
+The mesh domain owns allocation, descriptor retirement and accepted content revisions. The material graph owns one declaration-local producer registry spanning G-buffer, refraction capture and all three AVBOIT raster phases. Decoders depend on uploaded instance/source data, export VertexBuffer state and publish reusable content only after submission acceptance. Source replacement, decoder replacement and unknown runtime revisions invalidate reuse. Twelve CPU tests exercise size bounds and accepted publication, including replacement of every source stream and late writes to an older revision.
+
+The timing harness now supports `--animate`: wall-clock spinning with no frozen angle or fixed simulation delta. Its default remains the fixed yaw 0.6 comparison. Thirty Python tests cover the harness. Both modes retain the twenty-body workload, 1280 x 900 output, five-second warmup and thirty-second measurement, with validation and reflection diagnostics disabled during timing.
+
+| Measurement | Prior retained build | Object cache |
+| --- | ---: | ---: |
+| Fixed-view accepted presentations/s | 37.9992 | 38.2073 |
+| Fixed-view wall interval | 26.3164 ms | 26.1730 ms |
+| Rotating accepted presentations/s | 33.9224 | 36.3519 |
+| Rotating wall interval | 29.4791 ms | 27.5089 ms |
+| Fixed-view mesh dispatch total/frame | 7.6935 ms | 5.4377 ms |
+| Rotating mesh dispatch total/frame | 8.6083 ms | 6.2629 ms |
+
+A repeat of the unchanged fixed baseline measures 37.9319 FPS, confirming that the fixed-view overall gain is small. Its shadow envelope remains 7.1167 ms, compared with 9.1438 ms in the cache candidate; opaque and transparent tracing ranges also increase. The rotating shadow envelope changes from 9.1588 to 9.7111 ms. Caustic and reflection control ranges remain approximately stable. The cause of this redistribution is not established: extra vertex-stage work, GPU overlap and actual VS-stage floating-point lowering need separate evidence. The cache improves the rotating acquisition by about 7.16%, but **60 FPS remains unmet** and the fixed-view result must not be described as a large frame-time win.
+
+All 434 enabled ECS graphics tests and all 138 enabled asset integration tests pass, with 61 and 21 pre-existing disabled tests respectively. Four native mesh tests cover 107 cases, including seventeen new cache cases with exact decoded attributes, transformed vertex words, culling indices and guard checks. The transform comparison executes the production helper in a compute wrapper; actual full VS raster equivalence is a separate follow-up. The full twenty-body capture passes with GPU validation requested. Its image difference from the prior frame-120 capture averages 0.09663/255, maximum 27/255; repeating the unchanged baseline gives 0.08136/255 and maximum 25/255. This establishes close rendered agreement amid temporal variation, not bitwise image identity or corrected glass semantics.
+
+Evidence is under `__artifacts/stress_60fps/object_cache_candidate/` and `object_cache_baseline/`: frozen binaries/resources, fixed and rotating runs, baseline repeat, native/CPU/asset logs and XML, frame-120 captures and image-comparison JSON. The next substantial candidate is a persistent index buffer with a dedicated indexed raster route, removing view-dependent triangle-index generation for the fixed engine program.

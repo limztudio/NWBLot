@@ -28,6 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class ObjectGeometryCacheGraph;
 class RendererAvboitSystem;
 class RendererMaterialSystem;
 struct DeferredFrameTargets;
@@ -72,6 +73,7 @@ public:
     [[nodiscard]] bool declare(
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+        ObjectGeometryCacheGraph& objectGeometry,
         AvboitOccupancyRecordInputs& inputs,
         RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
         RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,

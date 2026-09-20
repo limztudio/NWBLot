@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 
 
 class AvboitGeneratedGeometryReuse;
+class ObjectGeometryCacheGraph;
 class RendererMaterialSystem;
 class RendererCsgSystem;
 struct DeferredFrameTargets;
@@ -65,6 +66,7 @@ namespace RendererTaskGraphDetail{
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry,
     Core::GpuTaskId dependency,
     bool enabled

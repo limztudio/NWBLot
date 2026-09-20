@@ -151,6 +151,8 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
             || !mesh.emulationVertexHeapHandle.valid()
             || !mesh.emulationVertexBuffer
             || (pipelineResources.indexedGeometryOutput && mesh.emulationIndexByteOffset == 0u)
+            || (pipelineResources.objectGeometryDecodePipeline && (!mesh.objectGeometryCache.valid()
+                || mesh.objectGeometryCache.decoderPipeline != pipelineResources.objectGeometryDecodePipeline))
         )
             return false;
     }
@@ -330,13 +332,15 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     const MaterialPassMeshResourceSnapshot& mesh,
     const MaterialPassPipelineResourceSnapshot& pipelineResources
 ){
+    NWB_ASSERT(!pipelineResources.objectGeometryDecodePipeline || context.materialGeometryStatesGraphOwned);
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
     graphicsState.setFramebuffer(context.framebuffer);
     graphicsState.setViewport(context.viewportState);
     graphicsState.addVertexBuffer(
         Core::VertexBufferBinding()
-            .setBuffer(mesh.emulationVertexBuffer.get())
+            .setBuffer(pipelineResources.objectGeometryDecodePipeline
+                ? mesh.objectGeometryCache.buffer.get() : mesh.emulationVertexBuffer.get())
             .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
             .setOffset(0)
     );

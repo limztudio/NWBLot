@@ -42,6 +42,12 @@ bool RendererShaderSystem::loadShader(
 }
 
 
+bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderName, const AStringView variantName, const Name& stageName)const{
+    Name virtualPath;
+    return m_shaderPathResolver(shaderName, variantName, stageName, virtualPath);
+}
+
+
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
     return loadShader(
         m_deferredCompositeVertexShader,

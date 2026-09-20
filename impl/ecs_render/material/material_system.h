@@ -129,6 +129,11 @@ public:
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
     [[nodiscard]] bool createComputeEmulationResources();
+    [[nodiscard]] bool createObjectGeometryPipelineResources(
+        const Name& meshShaderName,
+        AStringView variantName,
+        MaterialPipelineResources& resources
+    );
     // Graph-owned draw streams are already gathered, patched, and uploaded before native recording. This consumer
     // deliberately performs no mutable mesh-view or material/CSG buffer updates.
     void renderPreparedMaterialPass(
@@ -290,6 +295,8 @@ public:
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Graph-only producer half. The graph must provide each generated-vertex output in UAV state; this method
     // records the compute state, descriptor heap, push constants, and dispatches without an output transition.
+    // Records the fixed object-space decoder; the graph owns source reads and the cache UAV-to-vertex handoff.
+    [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this
     // method records the graphics state, descriptor heap, push constants, and draws without an output transition.

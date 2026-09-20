@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_key.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 #include <impl/ecs_render/material/generated_geometry_state.h>
 
@@ -34,6 +35,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     OutputLayoutVector outputLayouts;
+    Vector<ObjectGeometryEquivalenceKey, Core::Alloc::GlobalArena> objectGeometryKeys;
     HeapSlotVector outputHeapSlots;
     bool captured = false;
 
@@ -41,6 +43,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         : drawItems(arena)
         , outputBuffers(arena)
         , outputLayouts(arena)
+        , objectGeometryKeys(arena)
         , outputHeapSlots(arena)
     {}
 
@@ -48,6 +51,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         drawItems.clear();
         outputBuffers.clear();
         outputLayouts.clear();
+        objectGeometryKeys.clear();
         outputHeapSlots.clear();
         captured = false;
     }
@@ -60,6 +64,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         outputLayouts.reserve(sourceDrawItems.computeDrawItems.size());
+        objectGeometryKeys.reserve(sourceDrawItems.computeDrawItems.size());
         outputHeapSlots.reserve(sourceDrawItems.computeDrawItems.size());
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
         MaterialPassEmulationOutputIndex<u32> slots(scratchArena);
@@ -84,6 +89,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
             outputBuffers.push_back(mesh.emulationVertexBuffer);
             outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
             outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
+            objectGeometryKeys.push_back(MakeObjectGeometryEquivalenceKey(drawItem));
         }
         captured = drawItems.size() == outputBuffers.size()
             && outputBuffers.size() == outputHeapSlots.size()
@@ -97,6 +103,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
             !captured
             || outputBuffers.size() != drawItems.size()
             || outputLayouts.size() != drawItems.size()
+            || objectGeometryKeys.size() != drawItems.size()
             || outputHeapSlots.size() != drawItems.size()
         )
             return false;
@@ -108,6 +115,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
                 || mesh.emulationVertexBuffer.get() != outputBuffers[drawIndex].get()
                 || !outputLayouts[drawIndex].matches(mesh.emulationIndexByteOffset, drawItems[drawIndex].pipelineResources.indexedGeometryOutput)
                 || mesh.emulationVertexHeapHandle.slot() != outputHeapSlots[drawIndex]
+                || !objectGeometryKeys[drawIndex].matches(drawItems[drawIndex])
             )
                 return false;
         }

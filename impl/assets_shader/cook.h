@@ -135,6 +135,10 @@ public:
         CookString entryPoint;
         CookString source;
 
+        // Paired fixed-engine raster stages opt the shared mesh shader into the object-space cache contract.
+        CookString meshObjectCullSource;
+        CookString meshObjectVertexSource;
+
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
@@ -144,6 +148,8 @@ public:
             : name(memoryArena)
             , entryPoint("main", memoryArena)
             , source(memoryArena)
+            , meshObjectCullSource(memoryArena)
+            , meshObjectVertexSource(memoryArena)
             , includeRoots(memoryArena)
             , defineValues(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)
             , implicitDefines(0, Hasher<CookString>(), EqualTo<CookString>(), memoryArena)

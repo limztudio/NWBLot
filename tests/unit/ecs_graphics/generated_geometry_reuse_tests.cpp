@@ -158,6 +158,32 @@ TEST(AvboitGeneratedGeometryReuse, UnifiedOutputLayoutAndRepresentationMustMatch
     EXPECT_FALSE(fixture.matches());
 }
 
+TEST(AvboitGeneratedGeometryReuse, ObjectCacheGenerationAndBindingsMustMatchAcrossRasterPasses){
+    ReuseContext fixture;
+    auto& cache = fixture.draws.regular.computeDrawItems[0u].meshResources.objectGeometryCache;
+    cache.buffer = fixture.source;
+    cache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 45u);
+    cache.sourceRevision = 8u;
+    cache.initialized = true;
+    cache.requiresDecode = false;
+    ASSERT_TRUE(fixture.captureAndPublish());
+    EXPECT_TRUE(fixture.matches());
+    cache.sourceRevision = 9u;
+    EXPECT_FALSE(fixture.matches());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    cache.buffer = fixture.alternate;
+    EXPECT_FALSE(fixture.matches());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    cache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 46u);
+    EXPECT_FALSE(fixture.matches());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    cache.requiresDecode = true;
+    EXPECT_FALSE(fixture.matches());
+    ASSERT_TRUE(fixture.captureAndPublish());
+    cache.initialized = false;
+    EXPECT_FALSE(fixture.matches());
+}
+
 TEST(AvboitGeneratedGeometryReuse, StagedOrInvalidProducerCannotPublishReusableContents){
     ReuseContext fixture;
     ASSERT_TRUE(fixture.capture());

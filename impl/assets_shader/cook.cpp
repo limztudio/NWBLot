@@ -1191,7 +1191,7 @@ bool ShaderCook::parseShaderMeta(
         nwbFilePath,
         asset,
         "Shader meta",
-        { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow" }
+        { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow", "mesh_object_cull", "mesh_object_vertex" }
     ))
         return false;
     if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Meta", "stage", false, outEntry.stage))
@@ -1247,6 +1247,27 @@ bool ShaderCook::parseShaderMeta(
     }
     if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
         return false;
+
+    AStringView objectCullSource;
+    AStringView objectVertexSource;
+    bool objectCullPresent = false;
+    bool objectVertexPresent = false;
+    if(
+        !Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "mesh_object_cull", false, objectCullSource, &objectCullPresent)
+        || !Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "mesh_object_vertex", false, objectVertexSource, &objectVertexPresent)
+    )
+        return false;
+    if(objectCullPresent || objectVertexPresent){
+        if(
+            !objectCullPresent || !objectVertexPresent || objectCullSource.empty() || objectVertexSource.empty()
+            || outEntry.stage.view() != "mesh"
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': object geometry requires paired nonempty cull/vertex sources on a mesh shader"), PathToString<tchar>(nwbFilePath));
+            return false;
+        }
+        outEntry.meshObjectCullSource.assign(objectCullSource.data(), objectCullSource.size());
+        outEntry.meshObjectVertexSource.assign(objectVertexSource.data(), objectVertexSource.size());
+    }
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
         if(!includeRootsVal->copyStringList(outEntry.includeRoots)){

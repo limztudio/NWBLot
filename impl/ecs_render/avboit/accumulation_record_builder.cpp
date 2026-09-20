@@ -5,6 +5,7 @@
 #include <impl/ecs_render/avboit/accumulation_record_builder.h>
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 
 
 #include <core/graphics/vulkan/backend.h>
@@ -46,6 +47,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
 [[nodiscard]] bool AvboitAccumulationRecordBuilder::declare(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    ObjectGeometryCacheGraph& objectGeometry,
     AvboitAccumulationRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitAccumulationGraphTask::Payload& accumulationPayload,
     RendererTaskGraphDetail::AvboitAccumulationComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -310,6 +312,13 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     if(inputs.streamsUploaded)
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = inputs.uploadTask;
+    if(inputs.streamsUploaded && !objectGeometry.prepare(
+        accumulationPayload.accumulationSnapshot.regularComputeDrawItems.data(),
+        accumulationPayload.accumulationSnapshot.regularComputeDrawItems.size(),
+        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
+    ))
+        return false;
+
     if(accumulationComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
         computeEmulationPayload.graphics = &m_graphics;

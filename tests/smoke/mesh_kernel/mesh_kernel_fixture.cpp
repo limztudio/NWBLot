@@ -38,7 +38,7 @@ bool MeshKernelTest::loadMeshKernel(
     const Path graphicsRoot = sourceRoot / "impl/assets/graphics";
     const Path kernelRoot = graphicsRoot / "mesh";
     const Path overlayRoot = sourceRoot / "tests/smoke/mesh_kernel/reference";
-    // The reference retains the old entrypoint and disables shared-program traits; the candidate follows production.
+    // The reference retains the expanded entrypoint; the candidate follows production indexed output.
     const Path sourcePath = authoredClip
         ? sourceRoot / "tests/smoke/mesh_kernel/assets/custom_clip_ms.slang"
         : kernelRoot / "shared_ms.slang"
@@ -101,7 +101,6 @@ bool MeshKernelTest::loadMeshKernel(
         { "NWB_MESH_SHADER_EMULATION_COMPUTE", "1" },
         { "NWB_CSG_ENABLED", "0" },
         { "NWB_MESH_EMULATION_INDEXED_OUTPUT", candidate ? "1" : "0" },
-        { "NWB_MESH_SHARED_PROGRAM", "0" },
     };
     const Impl::ShaderCook::ShaderCompilerRequest request{
         .shaderName = "shared_ms",
@@ -112,13 +111,13 @@ bool MeshKernelTest::loadMeshKernel(
             ? (authoredClip
                 ? "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=1;NWB_MESH_SHADER_EMULATION_COMPUTE=1"
                 : "NWB_CSG_ENABLED=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1")
-            : "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1;NWB_MESH_SHARED_PROGRAM=0",
+            : "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1",
         .defines = definitions,
         .includeDirectories = includes,
         .dependencies = dependencies,
         .sourcePath = sourcePath,
         .outputPath = outputPath,
-        .defineCount = static_cast<u32>(candidate ? LengthOf(definitions) - (authoredClip ? 1u : 2u) : LengthOf(definitions)),
+        .defineCount = static_cast<u32>(candidate && !authoredClip ? LengthOf(definitions) - 1u : LengthOf(definitions)),
         .optimizationLevel = entry.optimizationLevel
     };
     Impl::ShaderCook::CookVector<u8> bytecode(memoryArena);

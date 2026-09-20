@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/csg/renderer_csg_types.h>
+#include <impl/ecs_render/mesh/object_geometry_cache.h>
 
 #include <core/graphics/api.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -61,6 +62,7 @@ struct MeshResources : public RuntimeMeshBuffers{
     Name meshName = NAME_NONE;
     // Unified generated geometry: legacy expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
+    ECSRenderDetail::ObjectGeometryCacheState objectGeometryCache;
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle runtimeLocalBoundsBuffer;
     Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();

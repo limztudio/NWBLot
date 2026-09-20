@@ -5,6 +5,7 @@
 #include <impl/ecs_render/avboit/extinction_record_builder.h>
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 
 
 #include <core/graphics/vulkan/backend.h>
@@ -45,6 +46,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
 [[nodiscard]] bool AvboitExtinctionRecordBuilder::declare(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
+    ObjectGeometryCacheGraph& objectGeometry,
     AvboitExtinctionRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload,
@@ -292,6 +294,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     if(inputs.streamsUploaded)
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
+    if(inputs.streamsUploaded && !objectGeometry.prepare(
+        extinctionPayload.extinctionSnapshot.regularComputeDrawItems.data(),
+        extinctionPayload.extinctionSnapshot.regularComputeDrawItems.size(),
+        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
+    ))
+        return false;
+
     if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
         computeEmulationPayload.graphics = &m_graphics;

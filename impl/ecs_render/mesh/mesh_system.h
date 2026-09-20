@@ -175,6 +175,14 @@ public:
     [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
+    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCacheSnapshot(const MeshResources& mesh);
+    [[nodiscard]] bool confirmObjectGeometryCache(
+        const Name& meshKey,
+        const RuntimeMeshBuffers& sourceBuffers,
+        const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected,
+        bool runtimeMesh
+    );
     void pruneRuntimeMeshResources();
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
     [[nodiscard]] bool findRayTracingResourceSnapshot(

@@ -393,7 +393,20 @@ bool RendererMaterialSystem::createRendererPipeline(
         NWB_ASSERT(m_materialState.m_computeBindingLayout);
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
-        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
+        const bool objectGeometry = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+            && m_shaderSystem.hasShaderArchiveStage(
+                materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectCullArchiveStageName
+            )
+            && m_shaderSystem.hasShaderArchiveStage(
+                materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
+            )
+        ;
+        if(objectGeometry && !createObjectGeometryPipelineResources(materialInfo.meshShader.name(), meshShaderVariant, resources))
+            return false;
+        const Name& meshComputeArchiveStageName = objectGeometry
+            ? MaterialShaderStageNames::s_MeshObjectCullArchiveStageName
+            : MaterialShaderStageNames::s_MeshComputeArchiveStageName
+        ;
         if(!m_shaderSystem.loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
@@ -421,8 +434,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(m_materialState.m_emulationInputLayout);
-        emulationDesc.setVertexShader(m_materialState.m_emulationVertexShader);
+        emulationDesc.setInputLayout(objectGeometry ? m_materialState.m_objectGeometryInputLayout : m_materialState.m_emulationInputLayout);
+        emulationDesc.setVertexShader(objectGeometry ? resources.objectGeometryVertexShader : m_materialState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         emulationDesc.addBindingLayout(materialPassBindingLayout);
@@ -438,10 +451,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
-        // Only the engine's unmodified mesh_compute program has the material-independent geometry contract.
-        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+        // Both fixed object-space lowering and the unchanged shared mesh_compute program are material-independent.
+        resources.sharedGeometryComputeProgram = objectGeometry || (pipelineKey.csgMode == MaterialPipelineCsgMode::None
             && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
-            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
+            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant)
         ;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
@@ -512,6 +525,9 @@ bool RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pip
 
 void RendererMaterialSystem::invalidateRendererPipelines(){
     m_materialState.m_pipelines.clear();
+    m_materialState.m_objectGeometryDecodeShader.reset();
+    m_materialState.m_objectGeometryDecodePipeline.reset();
+    m_materialState.m_objectGeometryInputLayout.reset();
 }
 
 void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialKey, const RenderPath::Enum renderPath, const bool meshSupported){

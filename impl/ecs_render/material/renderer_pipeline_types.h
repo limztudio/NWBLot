@@ -211,6 +211,8 @@ struct MaterialPipelineResources{
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
+    Core::ComputePipelineHandle objectGeometryDecodePipeline;
+    Core::ShaderHandle objectGeometryVertexShader;
     Core::ShaderHandle pixelShader;
     Core::ShaderHandle meshShader;
     Core::ShaderHandle computeShader;

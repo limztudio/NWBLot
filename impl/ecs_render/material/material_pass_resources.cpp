@@ -172,6 +172,8 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
             && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
+            && (!pipelineResources.objectGeometryDecodePipeline || (mesh.objectGeometryCache.valid()
+                && mesh.objectGeometryCache.decoderPipeline == pipelineResources.objectGeometryDecodePipeline))
         ;
     }
     return ready;

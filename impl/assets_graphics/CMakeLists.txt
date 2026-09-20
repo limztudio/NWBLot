@@ -23,6 +23,8 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/csg_shader_variants.h"
         "${CMAKE_CURRENT_LIST_DIR}/material_validation.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/material_validation.h"
+        "${CMAKE_CURRENT_LIST_DIR}/mesh_object_shader_plan.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/mesh_object_shader_plan.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook_plan.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/shader_cook_plan.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_stage_key.h"

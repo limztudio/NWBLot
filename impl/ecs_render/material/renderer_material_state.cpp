@@ -31,6 +31,9 @@ void RendererMaterialState::invalidateResources(){
     m_materialTypedBuffer.reset();
     m_emulationVertexShader.reset();
     m_emulationInputLayout.reset();
+    m_objectGeometryDecodeShader.reset();
+    m_objectGeometryDecodePipeline.reset();
+    m_objectGeometryInputLayout.reset();
     m_instanceMutableCache.clear();
     m_loggedMaterialPaths.clear();
     m_instanceBufferCapacity = 0u;

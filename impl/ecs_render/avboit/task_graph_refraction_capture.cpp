@@ -5,6 +5,7 @@
 #include "task_graph_refraction_capture.h"
 
 #include <impl/ecs_render/material/generated_geometry_state.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 
 #include "generated_geometry_reuse.h"
 
@@ -174,6 +175,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::MeshViewGpuData& meshViewState,
+    ObjectGeometryCacheGraph& objectGeometry,
     AvboitGeneratedGeometryReuse& generatedGeometry,
     Core::GpuTaskId dependency,
     const bool enabled
@@ -332,6 +334,12 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
             csgUses.push_back(ReadTextureUse(resource, Core::s_AllSubresources, Core::ResourceStates::UnorderedAccess));
         }
     }
+
+    if(!objectGeometry.prepare(
+        drawItems.regular.computeDrawItems.data(), drawItems.regular.computeDrawItems.size(),
+        frameBindings, targets, dependency, commonUses, scratch
+    ))
+        return {};
 
     usize drawTaskIndex = 0u;
     const auto appendDraw = [&](const MaterialPassDrawItem* items, const usize count, const bool csg,

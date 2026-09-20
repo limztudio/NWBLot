@@ -4,6 +4,8 @@
 
 #include "generated_geometry_reuse.h"
 
+#include <impl/ecs_render/material/task_graph_object_geometry_key.h>
+
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 #include <impl/ecs_render/mesh/mesh_view_private.h>
 
@@ -87,6 +89,7 @@ namespace __hidden_generated_geometry_reuse{
         || leftMesh.emulationVertexHeapHandle != rightMesh.emulationVertexHeapHandle
         || leftMesh.emulationIndexByteOffset != rightMesh.emulationIndexByteOffset
         || left.pipelineResources.indexedGeometryOutput != right.pipelineResources.indexedGeometryOutput
+        || !ECSRenderDetail::MakeObjectGeometryEquivalenceKey(left).matches(right)
         || !SourceBuffersMatch(leftMesh.sourceBuffers, rightMesh.sourceBuffers)
     )
         return false;

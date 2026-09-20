@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/reflection/scene_content_stamp.h>
 
 #include <global/hash_utils.h>
@@ -627,8 +628,11 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     ReflectionSceneContentStamp reflectionContentStamp;
     reflectionContentStamp.view = ComputeFnv64Bytes(&meshViewState, sizeof(meshViewState));
+    Core::Alloc::ScratchArena objectGeometryScratch(RendererArenaScope::s_TaskGraphArena);
+    ObjectGeometryCacheGraph objectGeometry(m_deferredLightingTaskGraph, m_materialSystem, m_meshSystem, objectGeometryScratch);
     if(!declareDeferredGraphicsPrefixTasks(
         deferredTargets,
+        objectGeometry,
         shadowPrepareHandoffTask,
         csgFrameState,
         frameBindings,
@@ -1268,7 +1272,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     AvboitGeneratedGeometryReuse generatedGeometry(generatedGeometryScratch);
     const Core::GpuTaskId refractionCaptureTask = DeclareAvboitRefractionCapture(
         m_deferredLightingTaskGraph, m_arena, m_materialSystem, m_csgSystem, deferredTargets,
-        csgFrameState, csgResources, frameBindings, meshViewState, generatedGeometry, avboitIntervalCompletionTask,
+        csgFrameState, csgResources, frameBindings, meshViewState, objectGeometry, generatedGeometry, avboitIntervalCompletionTask,
         refractionActive && refractionResources.valid());
     if(!refractionCaptureTask.valid())
         return;
@@ -1536,6 +1540,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!avboitOccupancyRecordBuilder.declare(
         frameBindings,
         csgResources,
+        objectGeometry,
         avboitOccupancyRecordInputs,
         avboitOccupancyPayload,
         avboitOccupancyComputeEmulationPayload,
@@ -1825,6 +1830,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!avboitExtinctionRecordBuilder.declare(
         frameBindings,
         csgResources,
+        objectGeometry,
         avboitExtinctionRecordInputs,
         avboitExtinctionPayload,
         avboitExtinctionComputeEmulationPayload,
@@ -2121,6 +2127,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(!avboitAccumulationRecordBuilder.declare(
         frameBindings,
         csgResources,
+        objectGeometry,
         avboitAccumulationRecordInputs,
         avboitAccumulationPayload,
         avboitAccumulationComputeEmulationPayload,

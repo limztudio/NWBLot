@@ -78,6 +78,9 @@ private:
     Core::BufferHandle m_materialTypedBuffer;
     Core::ShaderHandle m_emulationVertexShader;
     Core::InputLayoutHandle m_emulationInputLayout;
+    Core::ShaderHandle m_objectGeometryDecodeShader;
+    Core::ComputePipelineHandle m_objectGeometryDecodePipeline;
+    Core::InputLayoutHandle m_objectGeometryInputLayout;
     HashMap<Name, MaterialSurfaceInfo, Hasher<Name>, EqualTo<Name>, Core::Alloc::GlobalArena> m_surfaceInfos;
     RendererMaterialResourceState m_resourceState;
     RendererMaterialResourceFixtureState m_resourceFixtures;

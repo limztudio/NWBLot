@@ -1,0 +1,46 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_OBJECT_VERTEX_SLANGI
+#define NWB_GRAPHICS_MESH_OBJECT_VERTEX_SLANGI
+
+
+// This lowering is exclusively for shared_ms: its source clip position and zero raster flags are fixed contracts.
+NwbMeshGeneratedVertex nwbMeshTransformObjectVertex(
+    const float4 position,
+    const float3 normal,
+    const float4 tangent,
+    const float2 uv0,
+    const half4 color,
+    const NwbMeshInstanceData instance){
+    if(position.w == 0.0){
+        return nwbMeshBuildGeneratedVertexWithRasterFlags(
+            float4(2.0, 2.0, 0.0, 1.0),
+            float3(0.0, 0.0, 1.0),
+            float4(1.0, 0.0, 0.0, 1.0),
+            float2(0.0),
+            half4(0.0h, 0.0h, 0.0h, 0.0h),
+            float3(0.0),
+            0u
+        );
+    }
+
+    const float3 worldPosition = nwbMeshTransformPosition(position.xyz, instance);
+    return nwbMeshBuildGeneratedVertexWithRasterFlags(
+        nwbMeshTransformWorldToClip(worldPosition),
+        nwbMeshTransformDirection(normal, instance),
+        float4(nwbMeshTransformDirection(tangent.xyz, instance), tangent.w),
+        uv0,
+        color,
+        worldPosition,
+        0u
+    );
+}
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

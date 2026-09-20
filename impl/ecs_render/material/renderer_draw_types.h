@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
+#include <impl/ecs_render/mesh/object_geometry_cache.h>
 
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -26,6 +27,7 @@ struct MaterialPassMeshResourceSnapshot{
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     // Retains the same unified generated buffer for both vertex and index consumption.
     Core::BufferHandle emulationVertexBuffer;
+    ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCache;
     Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
     u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0u;
@@ -73,6 +75,7 @@ struct MaterialPassPipelineResourceSnapshot{
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
+    Core::ComputePipelineHandle objectGeometryDecodePipeline;
     bool sharedGeometryComputeProgram = false;
     bool indexedGeometryOutput = false;
 };

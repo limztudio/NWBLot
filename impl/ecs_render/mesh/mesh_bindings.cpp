@@ -389,12 +389,16 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
             heap.free(mesh.emulationVertexHeapHandle);
         if(mesh.runtimeLocalBoundsHeapHandle.valid())
             heap.free(mesh.runtimeLocalBoundsHeapHandle);
+        if(mesh.objectGeometryCache.heapHandle.valid())
+            heap.free(mesh.objectGeometryCache.heapHandle);
         mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.objectGeometryCache.acceptedContent = false;
         return;
     }
 
@@ -406,6 +410,8 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
     mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.objectGeometryCache.acceptedContent = false;
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

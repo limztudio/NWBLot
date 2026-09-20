@@ -74,6 +74,7 @@ public:
         const Name& debugName,
         const Name* archiveStageName = nullptr
     );
+    [[nodiscard]] bool hasShaderArchiveStage(const Name& shaderName, AStringView variantName, const Name& stageName)const;
     [[nodiscard]] bool loadDeferredCompositeVertexShader();
     [[nodiscard]] const Core::ShaderHandle& deferredCompositeVertexShader()const noexcept{
         return m_deferredCompositeVertexShader;

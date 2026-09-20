@@ -51,6 +51,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
     snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
+    snapshot.objectGeometryCache = RendererMeshSystem::objectGeometryCacheSnapshot(mesh);
     snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
     snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
     snapshot.meshletCount = mesh.meshletCount;
@@ -68,6 +69,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
         .emulationPipeline = pipelineResources.emulationPipeline,
         .meshletPipeline = pipelineResources.meshletPipeline,
         .computePipeline = pipelineResources.computePipeline,
+        .objectGeometryDecodePipeline = pipelineResources.objectGeometryDecodePipeline,
         .sharedGeometryComputeProgram = pipelineResources.sharedGeometryComputeProgram,
         .indexedGeometryOutput = pipelineResources.indexedGeometryOutput,
     };
@@ -560,6 +562,12 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(!pipelineReady)
             return false;
+        if(pipelineResources->objectGeometryDecodePipeline){
+            if(lookupMode == RendererResourceLookupMode::CreateMissing && !m_meshSystem.prepareObjectGeometryCache(mesh, pipelineResources->objectGeometryDecodePipeline))
+                return false;
+            if(!RendererMeshSystem::objectGeometryCacheSnapshot(mesh).valid())
+                return false;
+        }
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
         // Freeze primary handles first; sibling cache creation may invalidate this pointer.
         const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot =

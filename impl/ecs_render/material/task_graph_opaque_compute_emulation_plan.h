@@ -6,6 +6,7 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_key.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 
 
@@ -100,6 +101,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 || current.meshletConeCullScaleSafe != expected.meshletConeCullScaleSafe
                 || current.meshResources.emulationIndexByteOffset != expected.meshResources.emulationIndexByteOffset
                 || current.pipelineResources.indexedGeometryOutput != expected.pipelineResources.indexedGeometryOutput
+                || !MakeObjectGeometryEquivalenceKey(expected).matches(current)
             )
                 return false;
 

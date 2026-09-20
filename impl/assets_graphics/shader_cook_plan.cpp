@@ -11,6 +11,7 @@
 #include "shader_cook_plan.h"
 
 #include "csg_shader_variants.h"
+#include "mesh_object_shader_plan.h"
 
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
@@ -378,11 +379,11 @@ bool PrepareShaderEntriesForCook(
     ErrorCode errorCode;
 
     outPreparedPlan.preparedEntries.clear();
-    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 2u){
+    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 4u){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
         return false;
     }
-    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 2u);
+    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 4u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{
@@ -586,12 +587,15 @@ bool PrepareShaderEntriesForCook(
             return false;
 
         const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == "mesh" && preparedEntry.entry.emitMeshComputeShadow;
+        const usize meshEntryIndex = outPreparedPlan.preparedEntries.size();
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
+        if(!AppendMeshObjectShaderEntries(cookArena, shaderCook, resolvedPaths, outPreparedPlan.preparedEntries[meshEntryIndex], outPreparedPlan, scratchArena))
+            return false;
 
         if(!emitMeshComputeShadow)
             continue;
 
-        const PreparedShaderEntry& meshShaderEntry = outPreparedPlan.preparedEntries.back();
+        const PreparedShaderEntry& meshShaderEntry = outPreparedPlan.preparedEntries[meshEntryIndex];
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         if(!__hidden_shader_cook_plan::BuildMeshComputeShadowEntry(meshShaderEntry.entry, meshComputeShadowEntry.entry)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to build mesh-compute shadow entry for '{}'")

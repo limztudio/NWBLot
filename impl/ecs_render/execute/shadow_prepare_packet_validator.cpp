@@ -46,6 +46,15 @@ void ShadowPreparePacketValidator::validate(
                 )
             )
     ;
+    // The endpoint must never accept uploaded scene topology without its current-pose refit.
+    outResult.softwareSceneRefitMerged =
+        pipeline.m_deferredShadowPrepareSceneRefitTask.valid() == pipeline.m_sceneBvhRefitInputsUploadTask.valid()
+        && (!pipeline.m_deferredShadowPrepareSceneRefitTask.valid()
+            || (
+                compiledPlan.tasksSharePacket(pipeline.m_deferredShadowPrepareTask, pipeline.m_deferredShadowPrepareSceneRefitTask)
+                && compiledPlan.tasksSharePacket(pipeline.m_deferredShadowPrepareTask, pipeline.m_sceneBvhRefitInputsUploadTask)
+            ))
+    ;
     // Frozen transitions must share the build's submission for an atomic handoff.
     outResult.accelStructFinalizeMerged =
         !pipeline.m_deferredShadowPrepareAccelStructFinalizeTask.valid()

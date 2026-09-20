@@ -75,3 +75,20 @@ The scene captures establish startup, traversal-route and rendered-output
 coverage. Native kernel and descriptor/graph tests provide more focused
 numeric and resource-state coverage; a visually nonempty capture alone is not
 an exact optical equivalence test.
+
+## Animated scene bounds
+
+Runtime software scenes refit the scene BVH from the current GPU mesh roots
+after the per-mesh build/refit work. The CPU topology and instance order remain
+frozen for that frame. Static-only scenes retain their existing reuse path.
+
+`SceneRefitKernelTest.PosedRootsRefitSceneBoundsBeforeSoftwareTraversal` runs
+the production refit shader on an RT-disabled device. It checks an independent
+FP64 bounds oracle, exact topology preservation, and a moved triangle that
+misses the old scene bounds but is hit after refitting. Cases include more
+leaves than workgroup threads, mirrored/nonuniform transforms, invalid bounds,
+overflow, and subnormal input coordinates under large finite transforms.
+
+This verifies traversal bounds. Caustic photon emission-target domains remain a
+separate approximation based on CPU geometry bounds; these smoke scenes do not
+establish coverage for every possible skeletal deformation.

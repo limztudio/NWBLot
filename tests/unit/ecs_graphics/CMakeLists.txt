@@ -22,6 +22,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/generated_geometry_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_output_resource_set_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_software_bvh_graph_resources_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/software_scene_refit_graph_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_acceleration_update_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/opaque_csg_interval_clear_builder_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_runtime_statistics_tests.cpp"

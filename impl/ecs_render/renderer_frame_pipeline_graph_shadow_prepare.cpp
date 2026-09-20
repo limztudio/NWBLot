@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
+#include <impl/ecs_render/raytrace/task_graph_software_scene_refit.h>
+
 #include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
 #include <impl/ecs_render/raytrace/shadow_prepare_geometry_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
@@ -51,6 +53,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
+    m_deferredShadowPrepareSceneRefitTask = {};
+    m_sceneBvhRefitInputsUploadTask = {};
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
@@ -881,6 +885,23 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         shadowPrepareDependency = buildDependency;
     }
 
+    if(const auto& sceneRefit = m_raytracingSystem.preparedSceneSwBvhRefit(); sceneRefit){
+        // A refit cannot precede a mesh build deferred into the aggregate endpoint recorder.
+        if(
+            !m_raytracingSystem.preparedMeshSwBvhBuildPlanFrozen()
+            || (!preparedMeshSwBvhBuilds.empty() && !pureSoftwareMeshSwBvhBuildsGraphOwned)
+        )
+            return false;
+        const SoftwareSceneRefitGraphTasks refitTasks = DeclareSoftwareSceneRefit(
+            m_deferredLightingTaskGraph, sceneRefit, sceneBvhNodes, shadowPrepareDependency, scratchArena
+        );
+        m_deferredShadowPrepareSceneRefitTask = refitTasks.refit;
+        m_sceneBvhRefitInputsUploadTask = refitTasks.inputUpload;
+        if(!m_deferredShadowPrepareSceneRefitTask.valid() || !m_sceneBvhRefitInputsUploadTask.valid())
+            return false;
+        shadowPrepareDependency = m_deferredShadowPrepareSceneRefitTask;
+    }
+
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
     scheduling.forceSubmissionBoundary = false;
@@ -888,7 +909,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     scheduling.mergeWithPrevious = true;
     // A pure-software per-mesh chain is an explicit immediate predecessor of this semantic endpoint. Retain the
     // complete accepting packet even when later trace consumers form a FrontierSafe consumer frontier.
-    scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned;
+    scheduling.allowMergeAcrossConsumerFrontier = pureSoftwareMeshSwBvhBuildsGraphOwned || m_deferredShadowPrepareSceneRefitTask.valid();
     const Core::GpuTaskId* const dependencies = &shadowPrepareDependency;
     constexpr usize dependencyCount = 1u;
     const Core::GpuTaskExternalStateSource shadowPrepareStateSource{

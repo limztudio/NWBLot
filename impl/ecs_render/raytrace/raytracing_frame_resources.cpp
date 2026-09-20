@@ -25,6 +25,8 @@ void RendererRayTracingSystem::invalidateResources(){
     invalidatePreparedShadowTraceGeometryBuffers();
     m_hardwareOpticalScene.invalidate();
     m_softwareOpticalScene.invalidate();
+    m_preparedSceneSwBvhRefit.reset();
+    m_sceneSwBvhRefit.invalidate();
     releaseSceneTlasHeapHandle();
     releaseCausticEmissionTargetHeapHandle();
     releaseCausticResolveActivity();

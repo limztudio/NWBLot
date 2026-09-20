@@ -638,6 +638,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || !m_deferredShadowPrepareTask.valid()
         || !taskIsCompiled(m_deferredShadowPrepareTask)
         || !shadowPrepareSoftwareBvhBuildsMerged
+        || !shadowPreparePacket.softwareSceneRefitMerged
         || !shadowPrepareAccelStructFinalizeMerged
         || !deferredBindlessSlotsUploadMergedIntoShadowPreparePacket
         || !rayTraceMaterialContextSlotsUploadMergedIntoShadowPreparePacket

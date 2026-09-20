@@ -1476,6 +1476,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
+    Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::ScratchArena> sceneRefitInputs{ scratchArena };
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sceneRefitRoots{ scratchArena };
     Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
     // Parallel material records index scene-BVH leaves.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -1490,6 +1492,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         scratchArena
     );
     instances.reserve(candidateCount);
+    sceneRefitInputs.reserve(candidateCount);
+    sceneRefitRoots.reserve(candidateCount);
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
@@ -1704,6 +1708,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         ;
         opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
+        sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
+        sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
@@ -1782,6 +1788,13 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
         nodes.reserve(buildNodes.size());
         for(const SceneBvhNodeCalculation& buildNode : buildNodes){
+            const u32 nodeIndex = static_cast<u32>(nodes.size());
+            const bool leaf = (buildNode.leftChild & BvhNodeIndex::LeafFlag) != 0u;
+            if(
+                leaf ? ((buildNode.leftChild & ~BvhNodeIndex::LeafFlag) >= instanceCount || buildNode.rightChild != 1u)
+                    : (buildNode.leftChild <= nodeIndex || buildNode.rightChild <= nodeIndex || buildNode.leftChild >= buildNodes.size() || buildNode.rightChild >= buildNodes.size())
+            )
+                return false;
             NwbBvhNodeGpu node;
             StoreFloatInt(buildNode.aabbMin, buildNode.leftChild, node.aabbMinLeftChild);
             const u32 taggedRightChild = buildNode.rightChild
@@ -1801,6 +1814,15 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             instances.size(),
             instances.size() * sizeof(SceneSwBvhInstanceGpu)
         ))
+            return false;
+    }
+
+    if(!staticScene){
+        m_preparedSceneSwBvhRefit = m_sceneSwBvhRefit.prepare(
+            sceneRefitInputs.data(), sceneRefitRoots.data(), sceneRefitInputs.size(),
+            m_preparedSceneBvhNodeBuffer, m_preparedSceneBvhNodeHeapHandle, static_cast<u32>(requiredNodeCount), m_shaderSystem
+        );
+        if(!m_preparedSceneSwBvhRefit)
             return false;
     }
 
@@ -2751,7 +2773,7 @@ bool RendererRayTracingSystem::updateMeshSwBvh(
 }
 
 bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
-    // Binary scene BVH needs 2N-1 CPU-uploaded SRV nodes.
+    // Binary scene BVH keeps CPU topology; runtime scenes refit its bounds from live mesh roots.
     const usize requiredNodes = static_cast<usize>(instanceCount) * 2u - 1u;
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhNodeCapacity < requiredNodes){
         const usize capacity = ::NextGrowingCapacity(
@@ -2764,6 +2786,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         nodeBufferDesc
             .setByteSize(static_cast<u64>(sizeof(NwbBvhNodeGpu) * capacity))
             .setStructStride(sizeof(NwbBvhNodeGpu))
+            .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("scene_bvh_nodes"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)

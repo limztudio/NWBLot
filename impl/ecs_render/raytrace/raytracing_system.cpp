@@ -41,6 +41,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_opticalVolumes(opticalVolumes)
     , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
     , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
+    , m_sceneSwBvhRefit(arena, graphics)
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)
@@ -61,6 +62,7 @@ RendererRayTracingSystem::~RendererRayTracingSystem() = default;
 
 
 void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
+    m_preparedSceneSwBvhRefit.reset();
     clearPreparedSceneSwBvhTraversal();
     m_preparedSceneBvhNodeBytes.clear();
     m_preparedSceneBvhInstanceBytes.clear();

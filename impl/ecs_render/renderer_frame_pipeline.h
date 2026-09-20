@@ -427,6 +427,8 @@ private:
     // Pure-software prepared per-mesh builds lower their typed sentinel clears and native compute callbacks before Shadow Preparation's existing scene-build/acceptance endpoint. Both bounds must remain in that same packet.
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildFirstTask;
     Core::GpuTaskId m_deferredShadowPrepareSoftwareBvhBuildLastTask;
+    Core::GpuTaskId m_deferredShadowPrepareSceneRefitTask;
+    Core::GpuTaskId m_sceneBvhRefitInputsUploadTask;
     // Prepared TLAS/BLAS builds record in Shadow Preparation, while this adjacent state-only callback publishes their descriptor-visible AccelStructRead boundaries. It must remain in the same first Graphics packet.
     Core::GpuTaskId m_deferredShadowPrepareAccelStructFinalizeTask;
     Core::GpuTaskId m_graphicsPrefixMeshViewSetupTask;

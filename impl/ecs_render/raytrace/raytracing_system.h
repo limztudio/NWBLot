@@ -13,6 +13,7 @@
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 #include <impl/ecs_render/raytrace/prepared_builds.h>
+#include <impl/ecs_render/raytrace/software_scene_refit.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -314,6 +315,8 @@ public:
     [[nodiscard]] const PreparedMeshBlasBuildVector& preparedMeshBlasBuilds()const noexcept;
     void confirmPreparedMeshBlasBuilds();
     // Software frames freeze selected build/refit work against its shared scratch generation; scene and material snapshots remain independently graph-owned.
+    [[nodiscard]] const SoftwareSceneRefitHandle& preparedSceneSwBvhRefit()const noexcept{ return m_preparedSceneSwBvhRefit; }
+    [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
     // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence; any miss rejects the shared packet so the existing acceptance callback cannot publish partial topology.
@@ -1188,6 +1191,8 @@ private:
     const RendererOpticalVolumeSelection& m_opticalVolumes;
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
+    SoftwareSceneRefitResources m_sceneSwBvhRefit;
+    SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;
     PreparedShadowTraceMaterialSampledTextureVector m_preparedShadowTraceMaterialSampledTextures;

@@ -57,8 +57,8 @@ inline constexpr u32 s_UnpatchedSlot = Limit<u32>::s_Max;
         {Name("surface"), MaterialBlockClass::MaterialConstant, 0u, 2u, 8u},
     }};
     const Array<MaterialTypedLayoutField, 2u> fields = {{
-        {Name("image"), MaterialLayoutFieldType::SampledImage2D, 0u, {{s_UnpatchedSlot, 0u, 0u, 0u}}},
-        {Name("sampler"), MaterialLayoutFieldType::Sampler, 4u, {{s_UnpatchedSlot, 0u, 0u, 0u}}},
+        {Name("image"), MaterialLayoutFieldType::SampledImage2D, 0u, {{{s_UnpatchedSlot, 0u, 0u, 0u}}}},
+        {Name("sampler"), MaterialLayoutFieldType::Sampler, 4u, {{{s_UnpatchedSlot, 0u, 0u, 0u}}}},
     }};
     binary.clear();
     AppendPOD(binary, MaterialBinaryPayload::s_MaterialMagic);

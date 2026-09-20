@@ -43,6 +43,7 @@ RendererMaterialSystem::RendererMaterialSystem(
 
 void RendererMaterialSystem::invalidateResources(){
     releaseMaterialResourceReferences();
+    releaseMaterialResourceFixtures();
     m_materialState.invalidateResources();
 }
 

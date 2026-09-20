@@ -179,8 +179,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     // Rougher lobes tolerate more spatial variance reduction; the mirror limit continuously approaches one texel.
     const float sigma = float(radius) * float(roughness);
     const float spatialDenominator = max(2.0 * sigma * sigma, 1e-8);
-    half3 sum = half3(center.rgb);
-    half weightSum = half(1.0h);
+    float3 sum = float3(center.rgb);
+    float weightSum = 1.0;
     for(int y = -int(radius); y <= int(radius); ++y){
         for(int x = -int(radius); x <= int(radius); ++x){
             if(x == 0 && y == 0)
@@ -249,14 +249,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 -half(200.0h) * maxF0Difference * maxF0Difference
                 -half(50.0h) * roughnessDifference * roughnessDifference
             ));
-            // Radiance accumulation is half color math: storage is RGBA16F and radiance/weights stay bounded.
+            // Accumulate in FP32: weighted HDR sums can exceed FP16 range before normalization.
             // True zero samples participate normally. Rejecting black samples or clamping bright samples biases
             // energy, and filtered output must never be used as the next temporal-history bank.
-            sum += half3(neighbor.rgb) * weight;
-            weightSum += weight;
+            sum += neighbor.rgb * float(weight);
+            weightSum += float(weight);
         }
     }
-    NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(float3(sum) / float(weightSum), center.a);
+    NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(sum / weightSum, center.a);
 }
 
 

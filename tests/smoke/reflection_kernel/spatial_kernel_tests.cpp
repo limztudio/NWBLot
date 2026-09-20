@@ -74,6 +74,7 @@ namespace Pattern{
         Mirror,
         InvalidPosition,
         UnderflowGaussian,
+        HdrUniform,
         InvalidNeighborFallback,
         InvalidCenterFallback,
         FiniteNormalThresholds,
@@ -191,6 +192,14 @@ static void RunSpatialCase(
                 break;
             case Pattern::UnderflowGaussian:
                 specular.a = 0.0009765625f;
+                break;
+            case Pattern::HdrUniform:
+                // Exact powers of two define a finite constant result, but FP16 weighted sums overflow.
+                radiance.r = 32768.0f;
+                radiance.g = 16384.0f;
+                radiance.b = 8192.0f;
+                specular.a = 1.0f;
+                position = Pixel{ 0.0f, 0.0f, 2.0f, 0.0f };
                 break;
             case Pattern::InvalidNeighborFallback:
                 // The invalid middle sample must use +X for its left receiver and +Z for its right receiver.
@@ -433,11 +442,17 @@ static void RunSpatialCase(
                 EXPECT_EQ(candidate[channel], reference[channel]) << "pixel " << x << "," << y << " channel " << channel;
                 if(exactCopy)
                     EXPECT_EQ(candidate[channel], expectedCopy[channel]) << "copy pixel " << x << "," << y;
+                if(pattern == Pattern::HdrUniform && channel < 3u){
+                    // At most 49 positive FP32 terms have far less error than one FP16 step. Division lowering and
+                    // half storage can select an adjacent value even for power-of-two inputs; parity stays exact above.
+                    EXPECT_GE(candidate[channel], expectedCopy[channel] - 1u) << "HDR constant at " << x << "," << y;
+                    EXPECT_LE(candidate[channel], expectedCopy[channel] + 1u) << "HDR constant at " << x << "," << y;
+                }
             }
             EXPECT_EQ(candidate[3], expectedCopy[3]) << "source diagnostic alpha at " << x << "," << y;
-            if(pattern >= Pattern::InvalidNeighborFallback){
+            if(pattern == Pattern::HdrUniform || pattern >= Pattern::InvalidNeighborFallback){
                 for(u32 channel = 0u; channel < 3u; ++channel)
-                    EXPECT_NE(candidate[channel] & 0x7c00u, 0x7c00u) << "nonfinite filtered normal case at " << x << "," << y;
+                    EXPECT_NE(candidate[channel] & 0x7c00u, 0x7c00u) << "nonfinite filtered case at " << x << "," << y;
             }
             // All positions coincide and RGB is 0,1,3. A positive offset-one weight must mix each endpoint with 1.
             // The invalid center must copy 1 between +X/+Z, but mix toward 0 when the left receiver is +Y.
@@ -503,7 +518,7 @@ TEST_F(ReflectionKernelTest, CookedSpatialKernelMatchesFrozenProductionAcrossEli
             }
         }
     }
-    // Keep the original 160 scenarios; the expanded matrix adds 80 normal cases plus these 16 literal-width cases.
+    // Keep the original 160 scenarios; the expanded matrix adds 20 HDR and 80 normal cases plus 16 literal-width cases.
     for(u32 radius = 0u; radius <= NWB_REFLECTION_SPATIAL_MAX_RADIUS; ++radius){
         for(u32 pattern = Pattern::InvalidNeighborFallback; pattern < Pattern::kCount; ++pattern){
             RunSpatialCase(

@@ -7,6 +7,7 @@ target_sources(nwb_mesh_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh_emulation_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/custom_clip_ms.slang"
     "${CMAKE_CURRENT_LIST_DIR}/reference/mesh/authoring.slangi"
     "${CMAKE_CURRENT_LIST_DIR}/reference/mesh/entrypoints.slangi"
     "${CMAKE_CURRENT_LIST_DIR}/../descriptor_buffer/round_trip/round_trip_fixture.cpp"
@@ -30,6 +31,7 @@ target_link_libraries(nwb_mesh_kernel_tests PRIVATE
 )
 set_tests_properties(nwb_mesh_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/assets/custom_clip_ms.slang"
     "${CMAKE_CURRENT_LIST_DIR}/reference/mesh/authoring.slangi"
     "${CMAKE_CURRENT_LIST_DIR}/reference/mesh/entrypoints.slangi"
     PROPERTIES HEADER_FILE_ONLY TRUE

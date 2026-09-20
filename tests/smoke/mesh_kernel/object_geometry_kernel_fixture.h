@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "../descriptor_buffer/round_trip/round_trip_fixture.h"
+#include "mesh_kernel_fixture.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,14 +23,18 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class MeshKernelTest : public DescriptorBufferRoundTripTest{
-protected:
-    [[nodiscard]] bool loadMeshKernel(
-        bool candidate,
-        Core::Alloc::ScratchArena& scratchArena,
-        Core::ComputePipelineHandle& outPipeline,
-        bool authoredClip = false);
+struct ObjectGeometryKernels{
+    Core::ComputePipelineHandle decode;
+    Core::ComputePipelineHandle cull;
+    Core::ComputePipelineHandle transform;
+    Core::ShaderHandle vertex;
 };
+
+[[nodiscard]] bool LoadObjectGeometryKernels(
+    Core::GraphicsBackend::Device& device,
+    Core::Alloc::GlobalArena& arena,
+    Core::Alloc::ScratchArena& scratchArena,
+    ObjectGeometryKernels& kernels);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

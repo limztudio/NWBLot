@@ -65,6 +65,7 @@ namespace Cull{
         Scissor,
         KeptWithFlags,
         FirstMeshletOnly,
+        AuthoredClip,
     };
 };
 
@@ -411,7 +412,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     for(u32 meshletIndex = 0u; meshletIndex < testCase.meshletCount; ++meshletIndex){
         const auto& meshlet = inputs.meshlets[meshletIndex];
         const bool expectCulled = (testCase.cull >= Cull::Frustum && testCase.cull <= Cull::Scissor)
-            || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
+            || testCase.cull == Cull::AuthoredClip || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
         const bool meshletCulled = testCase.cull == Cull::Frustum || testCase.cull == Cull::Cone
             || (testCase.cull == Cull::FirstMeshletOnly && meshletIndex == 0u);
         if(!meshletCulled){
@@ -533,6 +534,25 @@ TEST_F(MeshKernelTest, ProductionEntrypointsPreserveCullWritesAndUniformGroupGua
     ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, mixed));
     const Case empty{ 3u, 1u, 0u, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, Cull::None };
     ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, empty));
+}
+
+
+TEST_F(MeshKernelTest, AuthoredClipChangesRetainCompletedVertexCulling){
+    using namespace __hidden_mesh_emulation_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/mesh_kernel/authored_clip"));
+    ComputePipelineHandle reference;
+    ComputePipelineHandle candidate;
+    ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference, true));
+    ASSERT_TRUE(loadMeshKernel(true, scratchArena, candidate, true));
+    for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
+        for(u32 meshlets = 1u; meshlets <= 2u; ++meshlets){
+            // Source positions are visible; only the authored vertex builder moves the triangles outside the clip volume.
+            const Case testCase{
+                96u, 126u, meshlets, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), Pose::Identity, Cull::AuthoredClip
+            };
+            ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, testCase));
+        }
+    }
 }
 
 

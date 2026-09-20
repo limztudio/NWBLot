@@ -29,7 +29,8 @@ namespace Tests{
 bool MeshKernelTest::loadMeshKernel(
     const bool candidate,
     Core::Alloc::ScratchArena& scratchArena,
-    Core::ComputePipelineHandle& outPipeline){
+    Core::ComputePipelineHandle& outPipeline,
+    const bool authoredClip){
     auto& graphicsDevice = device();
     auto& heap = graphicsDevice.getDescriptorHeap();
     auto& memoryArena = arena();
@@ -37,8 +38,11 @@ bool MeshKernelTest::loadMeshKernel(
     const Path graphicsRoot = sourceRoot / "impl/assets/graphics";
     const Path kernelRoot = graphicsRoot / "mesh";
     const Path overlayRoot = sourceRoot / "tests/smoke/mesh_kernel/reference";
-    // The reference retains the old entrypoint; the candidate always follows the current production source tree.
-    const Path sourcePath = kernelRoot / "shared_ms.slang";
+    // The reference retains the old entrypoint and disables shared-program traits; the candidate follows production.
+    const Path sourcePath = authoredClip
+        ? sourceRoot / "tests/smoke/mesh_kernel/assets/custom_clip_ms.slang"
+        : kernelRoot / "shared_ms.slang"
+    ;
     const Path metadataPath = kernelRoot / "shared_ms.nwb";
     const Path entrypointPath = candidate ? kernelRoot / "entrypoints.slangi" : overlayRoot / "mesh/entrypoints.slangi";
     const Path authoringPath = candidate ? kernelRoot / "authoring.slangi" : overlayRoot / "mesh/authoring.slangi";
@@ -47,7 +51,11 @@ bool MeshKernelTest::loadMeshKernel(
     ErrorCode directoryError;
     if(!CreateDirectories(outputRoot, directoryError) && directoryError)
         return false;
-    const Path outputPath = outputRoot / (candidate ? "mesh_candidate.spv" : "mesh_reference.spv");
+    const AStringView outputName = authoredClip
+        ? (candidate ? "custom_clip_candidate.spv" : "custom_clip_reference.spv")
+        : (candidate ? "mesh_candidate.spv" : "mesh_reference.spv")
+    ;
+    const Path outputPath = outputRoot / outputName;
     Impl::ShaderCook shaderCook(memoryArena);
     Impl::ShaderCook::ShaderEntry entry(memoryArena);
     if(!shaderCook.parseShaderMeta(metadataPath, entry, scratchArena))
@@ -92,7 +100,8 @@ bool MeshKernelTest::loadMeshKernel(
     const Impl::ShaderCook::ShaderMacroDefinition definitions[] = {
         { "NWB_MESH_SHADER_EMULATION_COMPUTE", "1" },
         { "NWB_CSG_ENABLED", "0" },
-        { "NWB_MESH_EMULATION_INDEXED_OUTPUT", "0" },
+        { "NWB_MESH_EMULATION_INDEXED_OUTPUT", candidate ? "1" : "0" },
+        { "NWB_MESH_SHARED_PROGRAM", "0" },
     };
     const Impl::ShaderCook::ShaderCompilerRequest request{
         .shaderName = "shared_ms",
@@ -100,14 +109,16 @@ bool MeshKernelTest::loadMeshKernel(
         .targetProfile = entry.targetProfile.view(),
         .entryPoint = AStringView(entry.entryPoint.data(), entry.entryPoint.size()),
         .variantName = candidate
-            ? "NWB_CSG_ENABLED=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1"
-            : "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1",
+            ? (authoredClip
+                ? "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=1;NWB_MESH_SHADER_EMULATION_COMPUTE=1"
+                : "NWB_CSG_ENABLED=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1")
+            : "NWB_CSG_ENABLED=0;NWB_MESH_EMULATION_INDEXED_OUTPUT=0;NWB_MESH_SHADER_EMULATION_COMPUTE=1;NWB_MESH_SHARED_PROGRAM=0",
         .defines = definitions,
         .includeDirectories = includes,
         .dependencies = dependencies,
         .sourcePath = sourcePath,
         .outputPath = outputPath,
-        .defineCount = static_cast<u32>(candidate ? LengthOf(definitions) - 1u : LengthOf(definitions)),
+        .defineCount = static_cast<u32>(candidate ? LengthOf(definitions) - (authoredClip ? 1u : 2u) : LengthOf(definitions)),
         .optimizationLevel = entry.optimizationLevel
     };
     Impl::ShaderCook::CookVector<u8> bytecode(memoryArena);

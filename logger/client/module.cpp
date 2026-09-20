@@ -27,9 +27,7 @@ static constexpr long s_RequestTimeoutMs = 2000L;
 static constexpr u32 s_RetrySleepMs = 100u;
 
 [[nodiscard]] static AString<LogArena> UrlWithEndpoint(LogArena& arena, const AStringView baseUrl, const AStringView endpoint){
-    AString<LogArena> output(arena);
-    output.assign(JoinUrlWithEndpoint<AString<LogArena>>(baseUrl, endpoint));
-    return output;
+    return JoinUrlWithEndpoint<char>(arena, baseUrl, endpoint);
 }
 
 

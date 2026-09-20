@@ -29,11 +29,11 @@
 
 
 [[nodiscard]] inline const char* CurrentAbiName()noexcept{
-    static constexpr char s_Arm64AbiName[] = "arm64";
-    static constexpr char s_ArmAbiName[] = "arm";
-    static constexpr char s_X86_64AbiName[] = "x86_64";
-    static constexpr char s_X86AbiName[] = "x86";
-    static constexpr char s_UnknownAbiName[] = "unknown";
+    [[maybe_unused]] static constexpr char s_Arm64AbiName[] = "arm64";
+    [[maybe_unused]] static constexpr char s_ArmAbiName[] = "arm";
+    [[maybe_unused]] static constexpr char s_X86_64AbiName[] = "x86_64";
+    [[maybe_unused]] static constexpr char s_X86AbiName[] = "x86";
+    [[maybe_unused]] static constexpr char s_UnknownAbiName[] = "unknown";
 #if defined(__aarch64__) || defined(_M_ARM64)
     return s_Arm64AbiName;
 #elif defined(__arm__) || defined(_M_ARM)

@@ -146,8 +146,8 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
         .captureEpoch = m_profileEpoch,
         .workerIndex = workerIndex,
         .label = label,
-        .kind = kind,
         .affinity = affinity,
+        .kind = kind,
     };
 }
 

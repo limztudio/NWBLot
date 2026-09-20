@@ -245,8 +245,8 @@ bool GpuTaskGraphCompiler::assignQueues(
             .score = {},
             .queueClass = selectedQueue->queueClass,
             .reason = reason,
-            .modifiers = GpuTaskQueueAssignmentModifier::None,
             .dedicated = selectedQueue->dedicated,
+            .modifiers = GpuTaskQueueAssignmentModifier::None,
         });
         outAssignments.m_assignmentIndicesByTask[taskID.index] = assignmentIndex;
     }

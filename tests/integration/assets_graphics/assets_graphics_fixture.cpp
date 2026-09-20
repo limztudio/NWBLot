@@ -867,6 +867,60 @@ bool AssetsGraphicsFixture::EncodeTestMeshletRefs(
     );
 }
 
+bool AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(
+    const NWB::Core::Assets::AssetBytes& binary,
+    usize& outLayoutHashOffset,
+    usize& outBlockByteCountOffset
+){
+    outLayoutHashOffset = 0u;
+    outBlockByteCountOffset = 0u;
+
+    usize cursor = 0u;
+    u32 value32 = 0u;
+    if(!ReadPOD(binary, cursor, value32))
+        return false;
+
+    u32 shaderVariantByteCount = 0u;
+    if(!ReadPOD(binary, cursor, shaderVariantByteCount))
+        return false;
+    if(cursor > binary.size() || shaderVariantByteCount > binary.size() - cursor)
+        return false;
+    cursor += shaderVariantByteCount;
+
+    if(cursor > binary.size() || sizeof(NameHash) > binary.size() - cursor)
+        return false;
+    cursor += sizeof(NameHash);
+
+    outLayoutHashOffset = cursor;
+
+    u64 layoutHash = 0u;
+    u32 blockCount = 0u;
+    u32 fieldCount = 0u;
+    if(
+        !ReadPOD(binary, cursor, layoutHash)
+        || !ReadPOD(binary, cursor, blockCount)
+        || !ReadPOD(binary, cursor, fieldCount)
+    )
+        return false;
+
+    if(
+        cursor > binary.size()
+        || blockCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes
+    )
+        return false;
+    cursor += static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes;
+
+    if(
+        cursor > binary.size()
+        || fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes
+    )
+        return false;
+    cursor += static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
+
+    outBlockByteCountOffset = cursor;
+    return true;
+}
+
 bool AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
     const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& records,
     const Name shaderName,

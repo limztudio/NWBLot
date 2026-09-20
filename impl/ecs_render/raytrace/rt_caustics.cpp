@@ -1729,7 +1729,10 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         pushConstants.photonCount = photonCount;
         pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
         pushConstants.gridSide = s_CausticSwPhotonGridSide;
-        pushConstants.frameIndex = m_rayTracingState.m_swCausticFrameIndex;
+        // The photon temporal phase rides the graphics frame index, not the dispatch count: early-frame
+        // producer skips (pipeline warmup) would otherwise shift every later phase and make captures
+        // run-varying. The graphics frame is capture-anchored, so identical frames emit identical photons.
+        pushConstants.frameIndex = static_cast<u32>(m_graphics.getFrameIndex());
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
@@ -2309,7 +2312,9 @@ bool RendererRayTracingSystem::renderHwCaustics(
         pushConstants.photonCount = photonCount;
         pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
         pushConstants.gridSide = s_CausticHwPhotonGridSide;
-        pushConstants.frameIndex = m_rayTracingState.m_hwCausticFrameIndex;
+        // Same deterministic phase clock as the software producer above: the graphics frame index is
+        // capture-anchored, while the dispatch count shifts with pipeline-warmup skips.
+        pushConstants.frameIndex = static_cast<u32>(m_graphics.getFrameIndex());
         pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
         pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();

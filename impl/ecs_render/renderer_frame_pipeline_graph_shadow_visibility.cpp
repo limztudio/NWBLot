@@ -910,7 +910,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         traceDesc
             .setIdentity(Name("render.shadow_visibility.soft_transparent_trace"))
             .setMarkerLabel("Shadow Transparent Soft Trace")
-            .setQueue(ComputeQueueRequest())
+            .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(traceDependencies, LengthOf(traceDependencies))
             .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)

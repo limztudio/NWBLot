@@ -343,10 +343,10 @@ class ReflectionCompletedStatisticsTests(unittest.TestCase):
         validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
         with self.assertRaisesRegex(SmokeFailure, "partition"):
             validate_statistics([sample], "rough", "hardware")
-        sample["hardware_rays"] = 599
+        sample.update(hardware_rays=0, hardware_hits=0)
         with self.assertRaisesRegex(SmokeFailure, "bounded candidate queue"):
             validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
-        sample.update(hardware_rays=600, fallback_pixels=701)
+        sample.update(hardware_rays=600, hardware_hits=300, fallback_pixels=701)
         with self.assertRaisesRegex(SmokeFailure, "partition"):
             validate_statistics([sample], "rough", "hardware", allow_zero_samples=True)
 

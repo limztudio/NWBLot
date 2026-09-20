@@ -2,6 +2,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_REFLECTION_SPATIAL_RADIUS
+#define NWB_REFLECTION_SPATIAL_RADIUS 0
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #include "spatial_constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../common/math.slangi"
@@ -32,15 +40,26 @@ ConstantBuffer<NwbReflectionSpatialView, Std140DataLayout> g_NwbHeapReflectionSp
 #define g_NwbReflectionSpatialResources g_NwbHeapDeferredBindlessResources[g_NwbReflectionSpatial.deferredResourcesSlot]
 #define g_NwbReflectionSpatialView g_NwbHeapReflectionSpatialViews[g_NwbReflectionSpatial.viewSlot]
 
-#define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_MAX_RADIUS)
+#if NWB_REFLECTION_SPATIAL_RADIUS < 0 || NWB_REFLECTION_SPATIAL_RADIUS > NWB_REFLECTION_SPATIAL_MAX_RADIUS
+#error Unsupported reflection spatial radius specialization.
+#endif
+#if NWB_REFLECTION_SPATIAL_RADIUS == 0
+#define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_MAX_RADIUS
+#else
+#define NWB_REFLECTION_SPATIAL_CACHE_RADIUS NWB_REFLECTION_SPATIAL_RADIUS
+#endif
+#define NWB_REFLECTION_SPATIAL_TILE_WIDTH (NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * NWB_REFLECTION_SPATIAL_CACHE_RADIUS)
 #define NWB_REFLECTION_SPATIAL_TILE_TEXELS (NWB_REFLECTION_SPATIAL_TILE_WIDTH * NWB_REFLECTION_SPATIAL_TILE_WIDTH)
 
-// Four float4 arrays occupy 196 * 64 = 12,544 bytes at the maximum radius. Depth shares the unused position lane;
-// the runtime radius reduces cooperative loads to the actual tile plus halo while storage remains fixed.
-groupshared float4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
-groupshared float4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
+// Two color caches (radiance/specular) are half4: every input/output is RGBA16F, so FP16 matches the
+// storage precision and halves the tile to 3,200/4,608/6,272 bytes. Geometry caches stay float4 for
+// plane/edge arithmetic below. Depth shares the unused position lane; specialization changes storage
+// extent without changing the tile's writers.
+groupshared half4 g_NwbReflectionSpatialRadiance[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
+groupshared half4 g_NwbReflectionSpatialSpecular[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialPositionDepth[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
 groupshared float4 g_NwbReflectionSpatialNormal[NWB_REFLECTION_SPATIAL_TILE_TEXELS];
+groupshared uint g_NwbReflectionSpatialTileEligible;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,15 +67,69 @@ groupshared float4 g_NwbReflectionSpatialNormal[NWB_REFLECTION_SPATIAL_TILE_TEXE
 
 [numthreads(NWB_REFLECTION_SPATIAL_GROUP_SIZE, NWB_REFLECTION_SPATIAL_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex){
+    const uint2 pixel = dispatchThreadId.xy;
+    const bool insideImage = pixel.x < g_NwbReflectionSpatial.width && pixel.y < g_NwbReflectionSpatial.height;
+#if NWB_REFLECTION_SPATIAL_RADIUS == 0
     const uint radius = min(g_NwbReflectionSpatial.radius, NWB_REFLECTION_SPATIAL_MAX_RADIUS);
+#else
+    const uint radius = NWB_REFLECTION_SPATIAL_RADIUS;
+#endif
+    half4 center = half4(0.0h);
+    half4 specular = half4(0.0h);
+    float depth = 1.0;
+    if(insideImage){
+        const int3 sourceTexel = int3(pixel, 0);
+        center = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
+        if(radius != 0u){
+            specular = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
+            depth = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
+        }
+    }
+    const bool filterEligible = insideImage && !(
+        radius == 0u || center.a <= half(0.0h) || !isfinite(depth) || depth < 0.0 || depth >= 1.0
+        || !all(isfinite(float4(specular))) || specular.a <= half(0.0h) || !any(specular.rgb > half3(0.0h))
+    );
+    if(groupIndex == 0u)
+        g_NwbReflectionSpatialTileEligible = 0u;
+    GroupMemoryBarrierWithGroupSync();
+    if(filterEligible)
+        InterlockedOr(g_NwbReflectionSpatialTileEligible, 1u);
+    GroupMemoryBarrierWithGroupSync();
+    // The tile decision is uniform after both barriers. Ineligible tiles only copy their current samples;
+    // they cannot consume neighbors, so no halo, position or normal fetch is needed.
+    if(g_NwbReflectionSpatialTileEligible == 0u){
+        if(insideImage)
+            NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
+        return;
+    }
+
     const uint tileWidth = NWB_REFLECTION_SPATIAL_GROUP_SIZE + 2u * radius;
     const uint tileTexels = tileWidth * tileWidth;
+    const uint2 groupPixel = pixel - groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE;
+    const uint2 tilePixel = groupPixel + radius;
+    const uint centerIndex = tilePixel.y * tileWidth + tilePixel.x;
+    float4 centerPositionDepth = float4(0.0, 0.0, 0.0, depth);
+    float4 centerNormal = float4(0.0);
+    if(insideImage){
+        const int3 sourceTexel = int3(pixel, 0);
+        centerPositionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
+        centerNormal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
+    }
+    // Reuse each lane's eligibility inputs; every center entry has one writer, including partial-image tails.
+    g_NwbReflectionSpatialRadiance[centerIndex] = center;
+    g_NwbReflectionSpatialSpecular[centerIndex] = specular;
+    g_NwbReflectionSpatialPositionDepth[centerIndex] = centerPositionDepth;
+    g_NwbReflectionSpatialNormal[centerIndex] = centerNormal;
+
     const int2 tileOrigin = int2(groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE) - int2(radius);
     const uint groupThreads = NWB_REFLECTION_SPATIAL_GROUP_SIZE * NWB_REFLECTION_SPATIAL_GROUP_SIZE;
     for(uint tileIndex = groupIndex; tileIndex < tileTexels; tileIndex += groupThreads){
-        const int2 sourcePixel = tileOrigin + int2(tileIndex % tileWidth, tileIndex / tileWidth);
-        float4 radiance = float4(0.0);
-        float4 specular = float4(0.0);
+        const uint2 haloPixel = uint2(tileIndex % tileWidth, tileIndex / tileWidth);
+        if(all(haloPixel >= radius) && all(haloPixel < radius + NWB_REFLECTION_SPATIAL_GROUP_SIZE))
+            continue;
+        const int2 sourcePixel = tileOrigin + int2(haloPixel);
+        half4 radiance = half4(0.0h);
+        half4 neighborSpecular = half4(0.0h);
         float4 positionDepth = float4(0.0, 0.0, 0.0, 1.0);
         float4 normal = float4(0.0);
         if(
@@ -64,34 +137,24 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             && sourcePixel.y < int(g_NwbReflectionSpatial.height)
         ){
             const int3 sourceTexel = int3(sourcePixel, 0);
-            radiance = NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel);
-            specular = NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel);
+            radiance = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
+            neighborSpecular = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
             positionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
             positionDepth.w = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
             normal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
         }
         g_NwbReflectionSpatialRadiance[tileIndex] = radiance;
-        g_NwbReflectionSpatialSpecular[tileIndex] = specular;
+        g_NwbReflectionSpatialSpecular[tileIndex] = neighborSpecular;
         g_NwbReflectionSpatialPositionDepth[tileIndex] = positionDepth;
         g_NwbReflectionSpatialNormal[tileIndex] = normal;
     }
-    // Keep the barrier in main and before every return. Partial image tails, mirror pixels and radius zero all
-    // participate, and every cache entry a surviving lane can read has exactly one cooperative writer.
+    // No lane in an active tile returns before the cache barrier. Center and halo writers are disjoint,
+    // and every cache entry a surviving lane can read has exactly one cooperative writer.
     GroupMemoryBarrierWithGroupSync();
-
-    const uint2 pixel = dispatchThreadId.xy;
-    if(pixel.x >= g_NwbReflectionSpatial.width || pixel.y >= g_NwbReflectionSpatial.height)
+    if(!insideImage)
         return;
-    const uint2 tilePixel = pixel - groupId.xy * NWB_REFLECTION_SPATIAL_GROUP_SIZE + radius;
-    const uint centerIndex = tilePixel.y * tileWidth + tilePixel.x;
-    const float4 center = g_NwbReflectionSpatialRadiance[centerIndex];
-    const float4 specular = g_NwbReflectionSpatialSpecular[centerIndex];
-    const float depth = g_NwbReflectionSpatialPositionDepth[centerIndex].w;
-    if(
-        radius == 0u || center.a <= 0.0 || !isfinite(depth) || depth < 0.0 || depth >= 1.0
-        || !all(isfinite(specular)) || specular.a <= 0.0 || !any(specular.rgb > 0.0)
-    ){
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = center;
+    if(!filterEligible){
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
         return;
     }
 
@@ -101,7 +164,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     );
     const float4 clip = mul(g_NwbReflectionSpatialView.worldToClip, float4(position, 1.0));
     if(!all(isfinite(position)) || !all(isfinite(clip))){
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = center;
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
         return;
     }
     const float focalX = length(g_NwbReflectionSpatialView.worldToClip[0].xyz);
@@ -112,12 +175,12 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     );
     const float3 viewDirection = nwbSafeNormalize(g_NwbReflectionSpatialView.cameraPosition.xyz - position, normal);
     const float tangentFootprint = pixelFootprint / max(abs(dot(normal, viewDirection)), 0.05);
-    const float roughness = saturate(specular.a);
+    const half roughness = half(saturate(float(specular.a)));
     // Rougher lobes tolerate more spatial variance reduction; the mirror limit continuously approaches one texel.
-    const float sigma = float(radius) * roughness;
+    const float sigma = float(radius) * float(roughness);
     const float spatialDenominator = max(2.0 * sigma * sigma, 1e-8);
-    float3 sum = center.rgb;
-    float weightSum = 1.0;
+    half3 sum = half3(center.rgb);
+    half weightSum = half(1.0h);
     for(int y = -int(radius); y <= int(radius); ++y){
         for(int x = -int(radius); x <= int(radius); ++x){
             if(x == 0 && y == 0)
@@ -137,14 +200,15 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const int2 neighborTilePixel = int2(tilePixel) + int2(x, y);
             const uint neighborIndex = uint(neighborTilePixel.y) * tileWidth + uint(neighborTilePixel.x);
             const float neighborDepth = g_NwbReflectionSpatialPositionDepth[neighborIndex].w;
-            const float4 neighborSpecular = g_NwbReflectionSpatialSpecular[neighborIndex];
+            const half4 neighborSpecularH = g_NwbReflectionSpatialSpecular[neighborIndex];
+            const float4 neighborSpecular = float4(neighborSpecularH);
             if(
                 !isfinite(neighborDepth) || neighborDepth < 0.0 || neighborDepth >= 1.0 || !all(isfinite(neighborSpecular))
                 || neighborSpecular.a <= 0.0 || !any(neighborSpecular.rgb > 0.0)
             )
                 continue;
             const half roughnessDifference = half(abs(neighborSpecular.a - roughness));
-            const half3 f0Difference = half3(abs(neighborSpecular.rgb - specular.rgb));
+            const half3 f0Difference = half3(abs(half3(neighborSpecular.rgb) - half3(specular.rgb)));
             const half maxF0Difference = max(max(f0Difference.x, f0Difference.y), f0Difference.z);
             if(roughnessDifference > half(0.1h) || maxF0Difference > half(0.05h))
                 continue;
@@ -172,7 +236,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 || length(displacement) > tangentFootprint * (length(float2(x, y)) + 1.5) + length(positionUncertainty)
             )
                 continue;
-            const float4 neighbor = g_NwbReflectionSpatialRadiance[neighborIndex];
+            const half4 neighborH = g_NwbReflectionSpatialRadiance[neighborIndex];
+            const float4 neighbor = float4(neighborH);
             if(neighbor.a <= 0.0 || !all(isfinite(neighbor.rgb)))
                 continue;
             // The combined bilateral weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
@@ -184,13 +249,14 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
                 -half(200.0h) * maxF0Difference * maxF0Difference
                 -half(50.0h) * roughnessDifference * roughnessDifference
             ));
+            // Radiance accumulation is half color math: storage is RGBA16F and radiance/weights stay bounded.
             // True zero samples participate normally. Rejecting black samples or clamping bright samples biases
             // energy, and filtered output must never be used as the next temporal-history bank.
-            sum += neighbor.rgb * weight;
+            sum += half3(neighbor.rgb) * weight;
             weightSum += weight;
         }
     }
-    NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(sum / weightSum, center.a);
+    NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(float3(sum) / float(weightSum), center.a);
 }
 
 

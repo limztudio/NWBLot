@@ -60,7 +60,7 @@ TEST(EcsGraphics, LinearSceneTransportDefersDisplayMappingUntilPresentation){
     const AStringView presentation(presentationSource.data(), presentationSource.size());
     EXPECT_FALSE(ContainsText(lighting, "clamp(resolvedColor"));
     EXPECT_TRUE(ContainsText(presentation, "exposedColor / (exposedColor + half(g_NwbDeferredCompositePushConstants.shoulder))"));
-    EXPECT_TRUE(ContainsText(presentation, "nwbHdr10EncodeScene(float3(exposedColor))"));
+    EXPECT_TRUE(ContainsText(presentation, "half3(nwbHdr10EncodeScene(float3(exposedColor)))"));
 }
 
 

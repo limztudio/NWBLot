@@ -122,6 +122,7 @@ def analyze_frames(frames):
     results = {}
     for variant in VARIANTS[1:]:
         sphere_changed, ground_changed, sphere_absolute, outside_absolute, outside_channels, ground_gain = 0, 0, 0, 0, 0, 0
+        ground_cells = {}
         for y in range(height):
             for x in range(width):
                 a, b = rows[y][x], frames[variant][2][y][x]
@@ -135,14 +136,26 @@ def analyze_frames(frames):
                     outside_channels += 3
                 if not in_sphere and y > height * 0.78 and width * 0.15 < x < width * 0.85:
                     ground_changed += delta > 9
-                    ground_gain += sum(a) - sum(b)
+                    gain = sum(a) - sum(b)
+                    ground_gain += gain
+                    if gain > 0:
+                        # 8x8 focus cells over the ground strip: a sphere-lens caustic converges into a
+                        # smooth crescent, so its positive photon gain must concentrate in a few cells
+                        # instead of spreading uniformly like run-to-run quantization noise.
+                        key = (x // (width // 8 + 1), y // (height // 8 + 1))
+                        ground_cells[key] = ground_cells.get(key, 0) + gain
         if variant == "reflection_disabled":
             if sphere_changed < max(100, math.pi * radius * radius * 0.005):
                 raise SmokeFailure("reflection toggle produced no visible reflected contribution on the glass sphere")
             if outside_absolute / max(outside_channels, 1) > 0.6:
                 raise SmokeFailure("reflection toggle changed the nonreflective ground/caustic control")
         elif variant == "caustics_disabled":
-            if ground_changed < 100 or ground_gain < 1500:
+            positive_gain = sum(ground_cells.values())
+            ordered_cells = sorted(ground_cells.values(), reverse=True)
+            focus_share = sum(ordered_cells[:3]) / positive_gain if positive_gain > 0 else 0.0
+            # The tonemapped bright ground compresses the focused crescent to a few LSBs per
+            # pixel, so per-pixel delta counts cannot see it; the concentrated positive gain can.
+            if ground_gain < 1500 or focus_share < 0.4:
                 raise SmokeFailure("caustic toggle produced no visible positive photon contribution on the ground")
         elif sphere_changed < max(100, math.pi * radius * radius * 0.005):
             raise SmokeFailure("camera refraction toggle produced no visible sphere transmission change")

@@ -117,13 +117,16 @@ template<typename StringT>
 }
 
 
-template<typename StringT, typename ViewT>
-[[nodiscard]] inline StringT JoinUrlWithEndpoint(const ViewT baseUrl, const ViewT endpoint){
-    StringT output(baseUrl.data(), baseUrl.size());
+template<typename CharT, typename ArenaT>
+[[nodiscard]] inline BasicString<CharT, ArenaT> JoinUrlWithEndpoint(
+    ArenaT& arena,
+    const BasicStringView<CharT> baseUrl,
+    const BasicStringView<CharT> endpoint
+){
+    BasicString<CharT, ArenaT> output(BasicStringView<CharT>(baseUrl.data(), baseUrl.size()), arena);
     if(output.empty() || endpoint.empty())
         return output;
 
-    using CharT = typename StringT::value_type;
     const bool baseHasSlash = output.back() == static_cast<CharT>('/');
     const bool endpointHasSlash = endpoint.front() == static_cast<CharT>('/');
     if(baseHasSlash && endpointHasSlash)

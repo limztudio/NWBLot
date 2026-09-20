@@ -6,6 +6,7 @@
 
 
 #include "registry.h"
+
 #include <core/common/module.h>
 
 

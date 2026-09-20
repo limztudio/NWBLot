@@ -68,6 +68,8 @@ namespace Pattern{
         IndependentEdges,
         MixedGuidance,
         Invalid,
+        ObliqueGuidance,
+        GrazingGuidance,
     };
 };
 
@@ -96,6 +98,25 @@ static_assert(sizeof(HalfPixel) == 8u);
 
 [[nodiscard]] HalfPixel Pixel(const f32 r, const f32 g, const f32 b, const f32 a){
     return { ConvertFloatToHalf(r), ConvertFloatToHalf(g), ConvertFloatToHalf(b), ConvertFloatToHalf(a) };
+}
+
+// Quantize the authored oct coordinates through the real RGBA16 input path before either shader decodes them.
+[[nodiscard]] HalfPixel NormalGuidance(const Pattern::Enum pattern, const u32 x, const u32 y, const f32 distance){
+    constexpr f32 oblique[][2] = {
+        { 0.1731f, 0.2817f }, { -0.2643f, 0.4129f }, { 0.7183f, 0.5961f }, { -0.6847f, 0.5293f },
+        { 0.3159f, -0.2241f }, { -0.4137f, -0.7283f }, { 0.7591f, -0.5319f }, { -0.1123f, -0.2971f },
+    };
+    // The base direction (2,1,1) is perpendicular to (-1,2,0) and (1,0,-2); perturb their oct inputs around the grazing boundary.
+    constexpr f32 grazing[][2] = {
+        { 0.5f, 0.25f }, { -1.0f / 3.0f, 2.0f / 3.0f },
+        { -1.0f / 3.0f, 2.0f / 3.0f + 1.0f / 2048.0f }, { -1.0f / 3.0f, 2.0f / 3.0f - 1.0f / 2048.0f },
+        { 1.0f, 2.0f / 3.0f }, { 1.0f, 2.0f / 3.0f + 1.0f / 2048.0f },
+        { 1.0f, 2.0f / 3.0f - 1.0f / 2048.0f }, { 0.1731f, 0.2817f },
+    };
+    static_assert(LengthOf(oblique) == LengthOf(grazing));
+    const u32 index = (x + 3u * y) % static_cast<u32>(LengthOf(oblique));
+    const f32* const oct = pattern == Pattern::ObliqueGuidance ? oblique[index] : grazing[index];
+    return Pixel(oct[0], oct[1], distance, 1.0f);
 }
 
 // Uniform data cancels in real arithmetic, but the original filter rounds its denominator in half and its numerator in float.
@@ -164,6 +185,8 @@ void RunCase(
                             testCase.distance + static_cast<f32>((x + y) % 4u) * 0.125f,
                             (x + 2u * y) % 5u == 0u ? 0.0f : 1.0f);
                     }
+                    else if(testCase.pattern == Pattern::ObliqueGuidance || testCase.pattern == Pattern::GrazingGuidance)
+                        guide = NormalGuidance(testCase.pattern, x, y, testCase.distance);
                     geometry.push_back(guide);
                 }
             }
@@ -462,6 +485,18 @@ TEST_F(CombinedShadowWaveletKernelTest, FusedChannelsMatchFrozenIndependentWavel
         };
         for(const auto& testCase : additional)
             ASSERT_NO_FATAL_FAILURE(RunCase(device(), pipelines, testCase, scratchArena));
+        // Supplement the original 68 cases without replacing their scalar/RGB bit-exact comparisons.
+        const u32 normalExtents[][2] = { { 7u, 9u }, { 17u, 19u } };
+        for(const auto& extent : normalExtents){
+            for(const Pattern::Enum pattern : { Pattern::ObliqueGuidance, Pattern::GrazingGuidance }){
+                for(u32 moments = 0u; moments < 4u; ++moments){
+                    const Case testCase{
+                        .width = extent[0], .height = extent[1], .pattern = pattern, .momentsMask = moments,
+                    };
+                    ASSERT_NO_FATAL_FAILURE(RunCase(device(), pipelines, testCase, scratchArena));
+                }
+            }
+        }
     };
     run();
     const TStringView validationPrefix = NWB_TEXT("Vulkan debug: [severity=error");

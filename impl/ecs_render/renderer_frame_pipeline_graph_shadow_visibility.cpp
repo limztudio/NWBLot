@@ -748,6 +748,11 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             ? transparentMomentsB
             : transparentMomentsA
         ;
+        if(!rayTracingPlan.hardwareTransparentTrace && graphOwnsTransparentTemporalMergeEntryStates && softShadowHistoryReadable){
+            transparentTraceResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
+        }
         if(graphOwnsTransparentTemporalMergeEntryStates){
             // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes
             // the opposite pair, which the following wavelet receives as graph-owned sampled inputs.

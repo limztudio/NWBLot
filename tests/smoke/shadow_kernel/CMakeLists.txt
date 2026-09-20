@@ -7,6 +7,9 @@ nwb_declare_gtest_executable(nwb_shadow_kernel_tests)
 target_sources(nwb_shadow_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shadow_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow_kernel_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/software_transparent_sampling_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/software_transparent_sampling_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/software_transparent_sampling_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/traversal_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/streaming_traversal_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scene_refit_kernel_tests.cpp"
@@ -54,6 +57,8 @@ target_link_libraries(nwb_shadow_kernel_tests PRIVATE
 set_tests_properties(nwb_shadow_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/assets/software_transparent_sampling_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/software_transparent_sampling_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_before_wavelet_fusion.slang"
     "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_rgb_before_wavelet_fusion.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.slang"

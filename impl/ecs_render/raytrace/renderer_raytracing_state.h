@@ -10,6 +10,7 @@
 #include <impl/ecs_render/raytrace/caustic_resolve_state.h>
 #include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
 #include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
+#include <impl/ecs_render/raytrace/software_transparent_sampling.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
@@ -166,8 +167,7 @@ struct RtShadowState{
     Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
     Core::ShaderHandle m_swShadowTransparentUniformShader;
     Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
-    Core::ShaderHandle m_swShadowTransparentSoftShader;
-    Core::ComputePipelineHandle m_swShadowTransparentSoftPipeline;
+    SoftwareTransparentSamplingState m_softwareTransparentSampling;
     // Periodic async-safe edge-stat readback.
     Core::BufferHandle m_swShadowEdgeStatsBuffer;
     Core::BufferHandle m_swShadowEdgeStatsReadback;

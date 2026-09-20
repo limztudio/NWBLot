@@ -343,6 +343,10 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
         NWB_MEMCPY(&m_rayTracingState.m_prevWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip), &acceptedWorldToClip, sizeof(m_rayTracingState.m_prevWorldToClip));
         m_rayTracingState.m_prevWorldToClipValid = true;
     }
+    if(m_rayTracingState.m_softTransparentTemporalReady && !hardwareTransparentShadowReady())
+        m_rayTracingState.m_softwareTransparentSampling.m_history.accept();
+    else
+        m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     m_rayTracingState.m_softShadowTemporalSeeded = true;
     Swap(targets.shadowSoftGeometry, targets.shadowSoftGeometryPrev);
     Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);

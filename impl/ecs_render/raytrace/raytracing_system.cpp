@@ -709,6 +709,7 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noe
 }
 
 void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
+    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     m_preparedShadowTraceGeometryBuffers.clear();
     clearPreparedShadowTraceMaterialSampledTextures();
     m_preparedCausticEmissionTargetBytes.clear();
@@ -746,6 +747,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     DeferredFrameTargets& targets,
     Core::Alloc::ScratchArena& scratchArena
 ){
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
     // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.  Full
     // invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
     m_shadowVisibilityPreparedTargets = nullptr;

@@ -174,8 +174,7 @@ void RendererRayTracingState::invalidateResources(){
     // Drop pinned handle caches so teardown leaves no dangling handles.
     m_hwMeshHeapHandleCache.clear();
     m_swMeshHeapHandleCache.clear();
-    m_swShadowTransparentSoftShader.reset();
-    m_swShadowTransparentSoftPipeline.reset();
+    m_softwareTransparentSampling = SoftwareTransparentSamplingState{};
     m_swShadowEdgeStatsBuffer.reset();
     m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_swShadowEdgeStatsReadback.reset();

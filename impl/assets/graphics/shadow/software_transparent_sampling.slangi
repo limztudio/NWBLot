@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_SOFTWARE_TRANSPARENT_SAMPLING_SLANGI
+#define NWB_GRAPHICS_SHADOW_SOFTWARE_TRANSPARENT_SAMPLING_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "shadow_reproject_merge_binding_slots.h"
+#include "../common/math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Budget decisions use only accepted previous-frame data, never the current random visibility sample.
+#define NWB_SW_TRANSPARENT_STABLE_HISTORY 8.0
+#define NWB_SW_TRANSPARENT_STABLE_VARIANCE 0.0001
+#define NWB_SW_TRANSPARENT_MAX_REPROJECTION_MOTION 0.25
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbSwTransparentSamplingReproject(
+    const uint2 pixel, const uint2 fullExtent, const float3 world, const float4x4 previousWorldToClip,
+    const bool historyValid, out int2 previousPixel){
+    previousPixel = int2(0);
+    if(!historyValid || any(fullExtent == uint2(0u)) || !all(isfinite(world)))
+        return false;
+    const float4 clip = mul(previousWorldToClip, float4(world, 1.0));
+    if(!all(isfinite(clip)) || clip.w <= 0.0)
+        return false;
+    const float3 ndc = clip.xyz / clip.w;
+    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if(!all(isfinite(ndc)) || any(uv < 0.0) || any(uv > 1.0) || ndc.z < 0.0 || ndc.z > 1.0)
+        return false;
+    const uint2 extent = (fullExtent + 1u) / 2u;
+    const float2 projected = uv * float2(extent) - 0.5;
+    // The trace uses the top-left full-resolution pixel center, including odd-sized targets.
+    const float2 current = (float2(pixel) * 2.0 + 0.5) / float2(fullExtent) * float2(extent) - 0.5;
+    if(any(abs(projected - current) > NWB_SW_TRANSPARENT_MAX_REPROJECTION_MOTION))
+        return false;
+    previousPixel = clamp(int2(round(projected)), int2(0), int2(extent) - 1);
+    return true;
+}
+
+bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 previous){
+    if(!all(isfinite(float4(current))) || !all(isfinite(float4(previous))) || current.w <= 0.5h || previous.w <= 0.5h)
+        return false;
+    const float spacing = max(float(current.z) * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
+    return current.z >= 0.0h && previous.z >= 0.0h
+        && abs(float(current.z) - float(previous.z)) < NWB_SHADOW_TEMPORAL_PLANE_K * spacing
+        && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
+}
+
+uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 previousMoments, const uint maximumSamples){
+    const float3 moments = float3(previousMoments);
+    const float variance = moments.y - moments.x * moments.x;
+    // Half moments may round a small nonnegative variance slightly below zero.
+    const bool settled = geometryAccepted && all(isfinite(moments))
+        && moments.x >= 0.0 && moments.x <= 1.0 && moments.y >= 0.0 && moments.y <= 1.0
+        && moments.z >= NWB_SW_TRANSPARENT_STABLE_HISTORY && moments.z <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
+        && variance >= -0.002 && variance <= NWB_SW_TRANSPARENT_STABLE_VARIANCE;
+    return settled ? 1u : maximumSamples;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

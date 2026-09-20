@@ -976,6 +976,7 @@ private:
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
     [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
+    [[nodiscard]] bool ensureSoftwareTransparentSamplingPipeline();
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();

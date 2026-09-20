@@ -1,7 +1,5 @@
 shader asset;
-
 asset.stage = "cs";
 asset.target_profile = "spirv_1_5";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];
-asset.defines = { "NWB_SW_TRANSPARENT_ADAPTIVE": ["0", "1"], };

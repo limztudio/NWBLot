@@ -15,8 +15,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One 84-byte push ABI serves every software-shadow kernel. It carries shared G-buffer/context selectors and each
-// pass's width/trace-control fields, keeping sources independent of a set-0 resource block.
+// The default 84-byte push ABI serves opaque and coarse software-shadow kernels. The soft transparent entry
+// supplies its dedicated history-aware push before including these shared traversal resources.
+#ifndef NWB_SW_SHADOW_PUSH_DECLARED
 struct NwbSwShadowHeapPushConstants{
     uint width;
     uint height;
@@ -43,6 +44,7 @@ struct NwbSwShadowHeapPushConstants{
 
 [[vk::push_constant]]
 ConstantBuffer<NwbSwShadowHeapPushConstants> g_NwbSwShadowPush;
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

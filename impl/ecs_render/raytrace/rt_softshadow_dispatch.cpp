@@ -345,7 +345,17 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 if(!graphOwnsOpaqueToTransparentBoundary || !graphEntryStatesOwned)
                     commandList.commitBarriers();
 
-                SwShadowHeapPushConstants tracePush;
+                const bool samplingHistoryUsable = temporalHistoryReadable && m_rayTracingState.m_softTransparentTemporalReady
+                    && m_rayTracingState.m_softwareTransparentSampling.m_history.usable();
+                if(samplingHistoryUsable && (!graphEntryStatesOwned || !graphOwnsOpaqueToTransparentBoundary)){
+                    // These reads also belong to the split trace task; direct/unsplit callers retain local transitions.
+                    commandList.setTextureState(targets.shadowSoftGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(targets.shadowSoftGeometryPrev.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
+                    commandList.setTextureState(frontIsA ? targets.transparentMomentsA.get() : targets.transparentMomentsB.get(),
+                        ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::ShaderResource);
+                    commandList.commitBarriers();
+                }
+                SoftwareTransparentSamplingPush tracePush;
                 tracePush.width = targets.width;
                 tracePush.height = targets.height;
                 tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
@@ -353,16 +363,15 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
                 tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
                 tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-                tracePush.visibilityStorageSlot = targets.bindless.shadowVisibilityStorage.slot();
-                tracePush.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
-                tracePush.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
                 tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-                tracePush.edgeStatsStorageSlot = m_rayTracingState.m_swShadowEdgeStatsHeapHandle.slot();
-                tracePush.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
-                tracePush.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
-                tracePush.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
-                commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentSoftPipeline));
-                bindHeap(m_rayTracingState.m_swShadowTransparentSoftPipeline);
+                tracePush.historyValid = samplingHistoryUsable ? 1u : 0u;
+                tracePush.geometryCurrSlot = targets.bindless.shadowSoftGeometry.slot();
+                tracePush.geometryPrevSlot = targets.bindless.shadowSoftGeometryPrev.slot();
+                tracePush.momentsInSlot = frontIsA ? targets.bindless.transparentMomentsA.slot() : targets.bindless.transparentMomentsB.slot();
+                tracePush.prevWorldToClip = m_rayTracingState.m_prevWorldToClip;
+                const auto& pipeline = m_rayTracingState.m_softwareTransparentSampling.m_pipelines[samplingHistoryUsable ? 1u : 0u];
+                commandList.setComputeState(passState(pipeline));
+                bindHeap(pipeline);
                 commandList.setPushConstants(&tracePush, sizeof(tracePush));
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
             }

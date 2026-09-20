@@ -1070,6 +1070,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create soft shadow previous-frame geometry cache target"));
         return false;
     }
+    m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     m_rayTracingState.m_softShadowTemporalSeeded = false;
     m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
     m_rayTracingState.m_prevWorldToClipValid = false;
@@ -2520,7 +2521,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, "ECSRender_SwShadowTransparentBuildArgs")
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, "ECSRender_SwShadowTransparentIndirect")
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentUniformShader, m_rayTracingState.m_swShadowTransparentUniformPipeline, AssetsGraphicsShadow::s_SwTransparentUniformShaderName, "ECSRender_SwShadowTransparentUniform")
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentSoftShader, m_rayTracingState.m_swShadowTransparentSoftPipeline, AssetsGraphicsShadow::s_SwTransparentSoftShaderName, "ECSRender_SwShadowTransparentSoft")
+        && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){
         m_rayTracingState.m_swShadowPipelineFailed = true;

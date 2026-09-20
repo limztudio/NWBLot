@@ -1523,6 +1523,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
     m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
+    bool samplingSceneTrusted = true;
     bool contentComplete = true;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
@@ -1531,6 +1532,9 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
+        if(m_world.tryGetComponent<StaticCsgMeshComponent>(entity) || m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
+            || m_world.tryGetComponent<CsgReceiverComponent>(entity))
+            samplingSceneTrusted = false;
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
@@ -1912,6 +1916,10 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     u64 opticalMaterialContentHash = swMaterialContextHash;
     Fnv64AppendValue(opticalMaterialContentHash, opticalScene.contentHash());
     m_preparedSceneContentStamp = { sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete };
+    RayTracingSceneContentStamp samplingStamp = m_preparedSceneContentStamp;
+    // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
+    samplingStamp.trusted = samplingStamp.trusted && samplingSceneTrusted;
+    m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(samplingStamp);
     return true;
 }
 

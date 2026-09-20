@@ -2,20 +2,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SOFT TRANSPARENT half-res trace (all light types). The COLORED
-// (Beer-Lambert / Fresnel) analog of sw_shadow_soft_opaque_cs: one thread per HALF-res pixel casts NWB_SW_SHADOW_TRANSPARENT_SPP
-// cone-jittered occlusion rays inside the cone the light's physical source subtends and writes the AVERAGED single-frame
-// COLORED transmittance (RGB, not a binary) into the parallel half-res soft transparent buffer. Byte-identical to the
-// opaque soft trace EXCEPT: (a) the occluder class is TRANSPARENT (below) so nwbSwShadowLightVisible skips opaque blockers
-// and integrates only the colored crossings (glass tints), keeping the RGB Beer-Lambert/Fresnel product instead of a
-// binary mask; (b) the cone-jitter low-discrepancy sample index is offset by a decorrelation SALT so this estimator
-// samples the source at points INDEPENDENT of the opaque soft trace -- the two signals are separately temporally
-// denoised (opaque binary Bernoulli vs colored chord-variance RGB product; denoise(A)*denoise(B) != denoise(A*B)), so
-// their per-frame noise must not be correlated, and they are folded (multiplied) only at the final full-res upsample.
-// The SAME cone jitter (directional angularRadius params2.x / punctual asin(sourceRadius/dist)) means the colored
-// penumbra softens for FREE -- the physics is reused verbatim; only the class + the kept-RGB differ. The separate
-// shadow_resolve pipeline (RGB variant) then temporally-merges + a-trous-denoises + fold-multiply-upsamples the result.
+// Software-only adaptive trace: converged static receivers use one independent sample; all other pixels retain three.
 
+#if !defined(NWB_SW_TRANSPARENT_ADAPTIVE) || (NWB_SW_TRANSPARENT_ADAPTIVE != 0 && NWB_SW_TRANSPARENT_ADAPTIVE != 1)
+#error "software transparent sampling requires an explicit fixed or adaptive variant"
+#endif
+
+#define NWB_SW_SHADOW_PUSH_DECLARED 1
+struct NwbSoftwareTransparentSamplingPush{
+    uint width;
+    uint height;
+    uint instanceCount;
+    uint frameIndex;
+    uint deferredResourcesHeapSlot;
+    uint materialContextSlotsHeapSlot;
+    uint transparentSoftHalfStorageSlot;
+    uint softSampleCount;
+    uint historyValid;
+    uint geometryCurrSlot;
+    uint geometryPrevSlot;
+    uint momentsInSlot;
+    row_major float4x4 prevWorldToClip;
+};
+[[vk::push_constant]] ConstantBuffer<NwbSoftwareTransparentSamplingPush> g_NwbSwShadowPush;
 
 #include "sw_binding_slots.h"
 
@@ -30,6 +39,29 @@
 
 // sw_shadow_ray.slangi pulls shadow_sampling.slangi (nwbShadowLowDiscrepancy2D + the cone jitter) transitively.
 #include "sw_shadow_ray.slangi"
+#if NWB_SW_TRANSPARENT_ADAPTIVE
+#include "software_transparent_sampling.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const uint maximumSamples, const float3 world){
+    if(g_NwbSwShadowPush.historyValid == 0u)
+        return maximumSamples;
+    const uint2 extent = uint2(g_NwbSwShadowPush.width, g_NwbSwShadowPush.height);
+    int2 previousPixel;
+    if(!nwbSwTransparentSamplingReproject(pixel, extent, world,
+        g_NwbSwShadowPush.prevWorldToClip, g_NwbSwShadowPush.historyValid != 0u, previousPixel))
+        return maximumSamples;
+    const half4 current = half4(NwbHeapSampledImage2D(g_NwbSwShadowPush.geometryCurrSlot).Load(int3(pixel, 0)));
+    const half4 previous = half4(NwbHeapSampledImage2D(g_NwbSwShadowPush.geometryPrevSlot).Load(int3(previousPixel, 0)));
+    if(!nwbSwTransparentSamplingGeometryMatches(current, previous))
+        return maximumSamples;
+    const half3 moments = half3(NwbHeapSampledImage2DArray(g_NwbSwShadowPush.momentsInSlot).Load(int4(previousPixel, lightSlot, 0)).xyz);
+    return nwbSwTransparentSamplingBudget(true, moments, maximumSamples);
+}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +75,13 @@
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowTransparentSoftHalf
 #define NWB_SW_SHADOW_SOFT_TRACE_SPP NWB_SW_SHADOW_TRANSPARENT_SPP
 #define NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT
+#if NWB_SW_TRANSPARENT_ADAPTIVE
+#define NWB_SW_SHADOW_SOFT_TRACE_SAMPLE_COUNT(pixel, slot, maximum, world) nwbSwTransparentSampleCount(pixel, slot, maximum, world)
+#endif
 #include "sw_shadow_soft_trace.slangi"
+#if NWB_SW_TRANSPARENT_ADAPTIVE
+#undef NWB_SW_SHADOW_SOFT_TRACE_SAMPLE_COUNT
+#endif
 #undef NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT
 #undef NWB_SW_SHADOW_SOFT_TRACE_SPP
 #undef NWB_SW_SHADOW_SOFT_TRACE_OUTPUT

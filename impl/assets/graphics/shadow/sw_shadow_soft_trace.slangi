@@ -27,7 +27,7 @@ void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
     const uint2 base = halfPixel << NWB_SW_SHADOW_SOFT_SHIFT;
     const int3 texel = int3(int2(min(base.x, g_NwbSwShadowPush.width - 1u), min(base.y, g_NwbSwShadowPush.height - 1u)), 0);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
-    const uint sampleCount = min(max(g_NwbSwShadowPush.softSampleCount, 1u), NWB_SW_SHADOW_SOFT_TRACE_SPP);
+    const uint maximumSamples = min(max(g_NwbSwShadowPush.softSampleCount, 1u), NWB_SW_SHADOW_SOFT_TRACE_SPP);
 
     // Background is the multiplicative identity for both the opaque and colored resolve paths.
     if(nwbSwShadowIsBackground(texel)){
@@ -47,6 +47,11 @@ void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
         if(slot < 0.0)
             continue;
 
+#ifdef NWB_SW_SHADOW_SOFT_TRACE_SAMPLE_COUNT
+        const uint sampleCount = NWB_SW_SHADOW_SOFT_TRACE_SAMPLE_COUNT(halfPixel, uint(slot), maximumSamples, worldPosition);
+#else
+        const uint sampleCount = maximumSamples;
+#endif
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(

@@ -245,11 +245,9 @@ TEST_F(CausticKernelTest, PhotonEnergySurvivesBudgetsBeyondFiniteHalfRange){
             const u16 expectedHalf = ConvertFloatToHalf(static_cast<f32>(exact));
             const u16 actualHalf = ConvertFloatToHalf(flux[channel]);
             EXPECT_TRUE(IsFinite(flux[channel]));
-            // The fixture stores float(half(flux)); the float readback carries half quantization.
-            // Require the same half code rather than float identity with its half expansion.
+            // The fixture stores float(half(flux)); the float readback carries half quantization. Require the same half code rather than float identity with its half expansion.
             EXPECT_EQ(actualHalf, ConvertFloatToHalf(ConvertHalfToFloat(actualHalf)));
-            // The oracle uses FP64 energy normalization and only final half quantization. One adjacent half
-            // permits FP32 arithmetic at a rounding midpoint; it cannot hide the original zero-flux failure.
+            // The oracle uses FP64 energy normalization and only final half quantization. One adjacent half permits FP32 arithmetic at a rounding midpoint; it cannot hide the original zero-flux failure.
             EXPECT_LE(Abs(static_cast<i32>(actualHalf) - static_cast<i32>(expectedHalf)), 1);
             if(exact > 0.0){
                 EXPECT_GT(flux[channel], 0.0f);

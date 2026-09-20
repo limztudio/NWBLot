@@ -1,0 +1,44 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_TEST_REFRACTION_HIT_TRANSMITTANCE_DISPATCH_SLANGI
+#define NWB_TEST_REFRACTION_HIT_TRANSMITTANCE_DISPATCH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshSurface nwbShadowDispatchSurface(const uint modelId, const NwbShadowHit hit){
+    uint previous;
+    g_NwbHeapStorageBuffers[g_NwbRefractionHitPush.outputSlot].InterlockedAdd(
+        g_NwbRefractionHitPush.outputOffset + 128u, 1u, previous
+    );
+    NwbMeshSurface surface = nwbMakeMeshSurface(
+        half3(float3(hit.uv0.x, hit.uv0.y, 0.25 + 0.125 * float(hit.meshInstanceIndex))), hit.worldNormal
+    );
+    surface.param0 = half(hit.worldPosition.z * 0.125);
+    surface.param1 = half(hit.rayDirection.z * 0.25);
+    surface.refractionIor = half(1.5h);
+    surface.renderCoverage = modelId == 1u ? half(0.25h) : (modelId == 2u ? half(0.0h) : half(1.0h));
+    surface.shadowAbsorptionTint = half3(0.5h, 0.75h, 1.0h);
+    surface.specularF0 = half3(0.0625h, 0.125h, 0.25h);
+    surface.perceptualRoughness = half(0.5h);
+    if(modelId == 3u)
+        surface.refractionIor = half(1.0h);
+    if(modelId == 4u)
+        surface.refractionIor = half(asfloat(0x7fc00000u));
+    if(modelId == 5u)
+        surface.refractionIor = half(asfloat(0x7f800000u));
+    return surface;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

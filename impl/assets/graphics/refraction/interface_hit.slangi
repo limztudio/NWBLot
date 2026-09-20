@@ -1,0 +1,52 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_REFRACTION_INTERFACE_HIT_SLANGI
+#define NWB_GRAPHICS_REFRACTION_INTERFACE_HIT_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../raytrace/surface_hit.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Refraction admits the same nearest geometric boundary as before. Rejected faces/instances do not need a material.
+NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(
+    const uint instanceMaterialHeapSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minDistance,
+    const float maxDistance){
+    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
+    if(!geometry.hit || !geometry.frontFace)
+        return (NwbRayTraceSurfaceHit)0;
+    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+}
+
+NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(
+    const uint instanceMaterialHeapSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minDistance,
+    const float maxDistance,
+    const uint primaryInstance){
+    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
+    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace)
+        return (NwbRayTraceSurfaceHit)0;
+    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

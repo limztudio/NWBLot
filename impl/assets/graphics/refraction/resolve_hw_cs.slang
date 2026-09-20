@@ -24,7 +24,7 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbRefractionPush.viewHeapSlot; }
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbRefractionResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbRefractionResources.avboitSlots.w
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
-#include "../raytrace/surface_hit.slangi"
+#include "interface_hit.slangi"
 #include "../scene/lighting.slangi"
 
 
@@ -76,11 +76,11 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
     const float entryDistance = length(entry.position - camera);
     const float associationTolerance = max(entry.bias * 8.0, entryDistance * 0.0002);
-    const NwbRayTraceSurfaceHit entryHit = nwbRayTraceClosestSurfaceHit(
+    const NwbRayTraceSurfaceHit entryHit = nwbRefractionClosestEntryInterface(
         g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident,
         max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance
     );
-    if(!entryHit.hit || !entryHit.frontFace || float(entryHit.surface.refractionIor) <= 1.001
+    if(!entryHit.hit || float(entryHit.surface.refractionIor) <= 1.001
         || abs(float(entryHit.surface.refractionIor) - entry.ior) > 0.02)
         return nwbRefractionResolveScreen(pixel, entry);
 
@@ -95,13 +95,13 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel
     // reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
     for(uint internalBounce = 0u; internalBounce <= 2u; ++internalBounce){
-        exitHit = nwbRayTraceClosestSurfaceHit(
+        exitHit = nwbRefractionClosestExitInterface(
             g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias,
-            internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE
+            internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance
         );
         // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and
         // pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
-        if(!exitHit.hit || exitHit.instance != entryHit.instance || exitHit.frontFace)
+        if(!exitHit.hit)
             return nwbRefractionResolveScreen(pixel, entry);
         pathLength += length(exitHit.position - internalOrigin);
         float3 exitNormal = nwbSafeNormalize(exitHit.surface.normal, exitHit.geometricNormal);

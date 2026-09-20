@@ -23,17 +23,6 @@
 // The caller supplies mesh-frame material accessors for its frozen ray material context. The explicit instance
 // material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path
 // decisions belong in this geometric hit reconstruction helper.
-// Closest geometric identity is independent of material reconstruction and caller admission policy.
-struct NwbRayTraceGeometryHit{
-    bool hit;
-    bool frontFace;
-    uint instance;
-    uint primitive;
-    float distance;
-    float2 barycentrics;
-    float3x4 worldToObject;
-};
-
 struct NwbRayTraceSurfaceHit{
     bool hit;
     bool frontFace;
@@ -182,7 +171,8 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     return hit;
 }
 
-NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
+NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
+    const uint instanceMaterialHeapSlot,
     const float3 origin,
     const float3 direction,
     const float minDistance,
@@ -193,45 +183,18 @@ NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
     ray.TMin = minDistance;
     ray.TMax = maxDistance;
     // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering
-    // can skip a closer boundary; the caller applies its policy to the unchanged closest geometric identity.
+    // can skip a closer boundary; the caller decides how to handle that boundary after reconstruction.
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     while(query.Proceed()){}
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
-        return (NwbRayTraceGeometryHit)0;
-
-    NwbRayTraceGeometryHit hit;
-    hit.hit = true;
-    hit.frontFace = query.CommittedTriangleFrontFace();
-    hit.instance = query.CommittedInstanceID();
-    hit.primitive = query.CommittedPrimitiveIndex();
-    hit.distance = query.CommittedRayT();
-    hit.barycentrics = query.CommittedTriangleBarycentrics();
-    hit.worldToObject = query.CommittedWorldToObject3x4();
-    return hit;
-}
-
-NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
-    const uint instanceMaterialHeapSlot,
-    const float3 origin,
-    const float3 direction,
-    const NwbRayTraceGeometryHit geometry){
-    if(!geometry.hit)
         return (NwbRayTraceSurfaceHit)0;
-    return nwbRayTraceReconstructSurfaceHit(
-        instanceMaterialHeapSlot, origin, direction, geometry.distance, geometry.instance, geometry.primitive,
-        geometry.barycentrics, geometry.worldToObject, geometry.frontFace
-    );
-}
 
-NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
-    const uint instanceMaterialHeapSlot,
-    const float3 origin,
-    const float3 direction,
-    const float minDistance,
-    const float maxDistance){
-    const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
-    return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
+    return nwbRayTraceReconstructSurfaceHit(
+        instanceMaterialHeapSlot, origin, direction, query.CommittedRayT(), query.CommittedInstanceID(),
+        query.CommittedPrimitiveIndex(), query.CommittedTriangleBarycentrics(), query.CommittedWorldToObject3x4(),
+        query.CommittedTriangleFrontFace()
+    );
 }
 
 

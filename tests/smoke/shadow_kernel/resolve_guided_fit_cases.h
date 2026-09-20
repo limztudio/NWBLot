@@ -47,6 +47,14 @@ inline constexpr u32 s_LayerCount = 8u;
 inline constexpr u32 s_ActiveStart = 2u;
 inline constexpr u32 s_ActiveCount = 3u;
 
+struct ReferenceInput{
+    u32 layerOffset = 0u;
+    f32 scale = 1.0f;
+    f32 bias = 0.0f;
+    u32 slotStart = s_ActiveStart;
+    u32 slotCount = s_ActiveCount;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -56,7 +64,7 @@ inline constexpr u32 s_ActiveCount = 3u;
 [[nodiscard]] f32 ReceiverDistance(const Case& testCase, u32 x);
 [[nodiscard]] Float4U Color(const Case& testCase, u32 x, u32 y, u32 layer);
 [[nodiscard]] Float4U Prior(u32 y, u32 height, u32 layer);
-[[nodiscard]] Float4U Reference(const Case& testCase, u32 width, u32 height, u32 x, u32 y, u32 layer, bool rgb, bool multiply);
+[[nodiscard]] Float4U Reference(const Case& testCase, u32 width, u32 height, u32 x, u32 y, u32 layer, bool rgb, bool multiply, const ReferenceInput& input = {});
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

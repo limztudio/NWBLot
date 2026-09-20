@@ -389,7 +389,8 @@ public:
         const u32* opaqueFrameIndex,
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false,
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false,
+        bool deferUpsample = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueResolveTailTask(
         Core::GpuTaskGraph& graph,
@@ -446,7 +447,8 @@ public:
         const bool* opaqueProduced,
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        bool combinedUpsample = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTraceTask(
         Core::GpuTaskGraph& graph,
@@ -999,6 +1001,14 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
+    [[nodiscard]] bool ensureSoftCombinedUpsamplePipeline();
+    [[nodiscard]] bool renderSoftShadowTerminalUpsample(
+        Core::CommandList& commandList,
+        DeferredFrameTargets& targets,
+        const DeferredLightingGraphResources& deferredLightingResources,
+        bool transparentReady,
+        bool graphEntryStatesOwned
+    );
 
     [[nodiscard]] bool prepareHardwareTransparentShadowResources(DeferredFrameTargets& targets);
     void releaseHardwareTransparentShadowResources();

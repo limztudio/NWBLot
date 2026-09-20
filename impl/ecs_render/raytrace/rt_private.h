@@ -306,9 +306,11 @@ struct ShadowResolvePushConstants{
     u32 outputStorageSlot = 0u;
     u32 visibilityStorageSlot = 0u;
     u32 sceneShadingSlot = 0u;
-    u32 pad0 = 0u;
+    u32 opaqueInputColorSlot = 0u;
 };
 static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowResolvePushConstants must match the shader push-constant layout");
+
+static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 20u);
 
 // Shader-mirrored shadow resolve stages.
 namespace ShadowResolveStage{

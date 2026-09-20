@@ -891,6 +891,11 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(m_rayTracingState.m_softTransparentReady && m_rayTracingState.m_softShadowTemporalReady && !m_rayTracingState.m_softTransparentTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft transparent shadow temporal resource preparation failed; no colored temporal accumulation this frame"));
 
+        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softTransparentReady){
+            if(!ensureSoftCombinedUpsamplePipeline())
+                m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
+        }
+
         // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry +
         // material context). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op),
         // mirroring the SW-branch prepareGpuBvhCausticResources call below.

@@ -72,9 +72,10 @@ namespace ShadowResolveGuidedFit{
     const u32 y,
     const u32 layer,
     const bool rgb,
-    const bool multiply){
+    const bool multiply,
+    const ReferenceInput& input){
     const Float4U prior = Prior(y, height, layer);
-    if(layer < s_ActiveStart || layer >= s_ActiveStart + s_ActiveCount)
+    if(layer < input.slotStart || layer >= Min(input.slotStart + input.slotCount, s_LayerCount))
         return prior;
     if(x == 0u || y == 0u)
         return rgb && multiply ? prior : Float4U{ 1.0f, 1.0f, 1.0f, 1.0f };
@@ -105,10 +106,10 @@ namespace ShadowResolveGuidedFit{
             const Float4U geometry = Geometry(testCase, tapX, tapY);
             if(geometry.w <= 0.5f)
                 continue;
-            const Float4U color = Color(testCase, tapX, tapY, layer);
+            const Float4U color = Color(testCase, tapX, tapY, layer + input.layerOffset);
             validWeight += weight;
             for(u32 channel = 0u; channel < 3u; ++channel)
-                anySum[channel] += weight * Quantize(color.raw[rgb ? channel : 0u]);
+                anySum[channel] += weight * Quantize(input.scale * color.raw[rgb ? channel : 0u] + input.bias);
             // The fixture encodes precisely +Z or -Z normals; only +Z passes the production normal gate.
             if(geometry.x == 1.0f)
                 continue;
@@ -117,7 +118,7 @@ namespace ShadowResolveGuidedFit{
             sumG += weight * g;
             sumG2 += weight * g * g;
             for(u32 channel = 0u; channel < 3u; ++channel){
-                const f32 p = Quantize(color.raw[rgb ? channel : 0u]);
+                const f32 p = Quantize(input.scale * color.raw[rgb ? channel : 0u] + input.bias);
                 sumP[channel] += weight * p;
                 sumGP[channel] += weight * g * p;
             }

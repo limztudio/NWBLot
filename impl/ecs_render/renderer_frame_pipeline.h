@@ -457,6 +457,7 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueFirstWaveletTask;
     Core::GpuTaskId m_deferredShadowVisibilityOpaqueResolveTask;
+    bool m_deferredShadowCombinedUpsample = false;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;

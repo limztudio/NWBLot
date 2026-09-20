@@ -22,12 +22,18 @@
 #error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select the wavelet or upsample stage.
 #endif
 
-// Scalar opaque and RGB transparent variants share this resolve.
+// Scalar opaque, RGB transparent, and combined upsample variants share the same filtering equations.
 #ifndef NWB_SHADOW_RESOLVE_CHANNELS
 #define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_SCALAR
 #endif
 
-#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
+    #if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
+        #error Combined visibility is an upsample-only stage.
+    #endif
+    typedef half4 NwbShadowResolveVisVec;
+    typedef float4 NwbShadowResolveVisFVec;
+#elif NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     typedef half   NwbShadowResolveVis;
     typedef half3  NwbShadowResolveVisVec;
     typedef float3 NwbShadowResolveVisFVec;
@@ -73,7 +79,7 @@ struct NwbShadowResolvePushConstants{
     uint outputStorageSlot;
     uint visibilityStorageSlot;
     uint sceneShadingSlot;
-    uint _pad0;
+    uint opaqueInputColorSlot; // Combined upsample reads the opaque half-resolution input from this slot.
 };
 
 [[vk::push_constant]]
@@ -83,6 +89,7 @@ ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
 #define g_NwbShadowResolveVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbShadowResolvePushConstants.visibilityStorageSlot)
 #define g_NwbShadowResolveSceneShading g_NwbHeapShadowResolveSceneShadings[g_NwbShadowResolvePushConstants.sceneShadingSlot]
 
+#if NWB_SHADOW_RESOLVE_COMPILED_STAGE == NWB_SHADOW_RESOLVE_STAGE_WAVELET
 // Groupshared tile for small-dilation wavelet passes.
 groupshared NwbShadowResolveVisVec s_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half2  s_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
@@ -90,6 +97,7 @@ groupshared half2  s_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 // for the Gaussian distance term so this tile does not spend twice the shared memory on already-quantized data.
 groupshared half   s_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,14 +169,20 @@ half nwbShadowResolveLuma(const half3 c){
     return nwbLuminance(c);
 }
 
+#if NWB_SHADOW_RESOLVE_CHANNELS != NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
 half nwbShadowResolveValueWeightVec(const NwbShadowResolveVisFVec centerVis, const NwbShadowResolveVisFVec tapVis, const float sigmaLum){
     // The value-similarity weight is a (0, 1) bounded filter factor: run the luma delta in half, matching RGBA16F storage.
     return half(exp(-abs(half(nwbShadowResolveLuma(tapVis)) - half(nwbShadowResolveLuma(centerVis))) / half(sigmaLum)));
 }
 
+#endif
+
 NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot){
     const half4 s = half4(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.inputColorSlot).Load(int4(tap, (int)slot, 0)));
-#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
+    const half opaque = half(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.opaqueInputColorSlot).Load(int4(tap, (int)slot, 0)).r);
+    return half4(opaque, s.rgb);
+#elif NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     return NwbShadowResolveVisVec(s.rgb);
 #else
     return NwbShadowResolveVisVec(s.r);
@@ -176,7 +190,10 @@ NwbShadowResolveVisVec nwbShadowResolveLoadInput(const int2 tap, const uint slot
 }
 
 float4 nwbShadowResolveStore(const NwbShadowResolveVisFVec v){
-#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
+#if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
+    // Retain opaque half precision before multiplication; image-store rounding may select an adjacent half value.
+    return float4(float(half(v.x)) * v.yzw, 1.0);
+#elif NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
     return float4(v, 1.0);
 #else
     return float4(v, v, v, 1.0);
@@ -363,6 +380,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         return;
     }
 
+#if NWB_SHADOW_RESOLVE_COMPILED_STAGE == NWB_SHADOW_RESOLVE_STAGE_WAVELET
     const uint2 pixel = dispatchThreadID.xy;
     const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
     const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
@@ -498,6 +516,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const NwbShadowResolveVisFVec vis = (weightSum > half(0.0h)) ? (sum / weightSum) : (NwbShadowResolveVisFVec)1.0;
         g_NwbShadowResolveOutput[uint3(pixel, slot)] = nwbShadowResolveStore(vis);
     }
+#endif
 }
 
 

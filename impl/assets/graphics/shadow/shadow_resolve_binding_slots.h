@@ -50,6 +50,7 @@
 // Opaque and transparent variants share the source.
 #define NWB_SHADOW_RESOLVE_CHANNELS_SCALAR 1
 #define NWB_SHADOW_RESOLVE_CHANNELS_RGB    3
+#define NWB_SHADOW_RESOLVE_CHANNELS_COMBINED 4
 
 // Keep odd so the upsample input is final.
 #define NWB_SHADOW_RESOLVE_PASS_COUNT 1

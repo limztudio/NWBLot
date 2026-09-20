@@ -26,6 +26,24 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Prepared shadow callbacks share one acceptance endpoint. Fusion omits only the opaque upsample tail.
+struct PreparedShadowVisibilityTasks{
+    Core::GpuTaskId terminal;
+    Core::GpuTaskId opaque;
+    Core::GpuTaskId opaqueFirstWavelet;
+    Core::GpuTaskId opaqueResolve;
+    Core::GpuTaskId transparentTrace;
+    Core::GpuTaskId transparentTemporalMerge;
+    Core::GpuTaskId transparentFirstWavelet;
+    bool combinedUpsample = false;
+};
+
+[[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(
+    const Core::GpuCompiledGraph::ReadView& compiledPlan,
+    const PreparedShadowVisibilityTasks& tasks
+);
+
+
 // Shadow-visibility merge validation owns packet-merge checks for visibility tasks.
 struct ShadowVisibilityMergeValidationResult{
     bool preparedTasksMerged = false;

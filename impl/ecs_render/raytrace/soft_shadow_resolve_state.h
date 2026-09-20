@@ -34,6 +34,8 @@ struct SoftShadowResolveState{
     Core::BindingLayoutHandle m_bindingLayout;
     SoftShadowResolveChannelState m_scalar;
     SoftShadowResolveChannelState m_rgb;
+    SoftShadowResolveStageState m_combinedUpsample;
+    bool m_combinedUpsampleFailed = false;
 };
 
 

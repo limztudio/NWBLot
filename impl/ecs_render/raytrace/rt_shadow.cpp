@@ -178,6 +178,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
+        bool deferUpsample = false;
     };
 
     [[nodiscard]] static bool record(
@@ -222,6 +223,11 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             payload.graphEntryStatesOwned,
             payload.graphOwnsOpaqueTemporalMergeEntryStates
         )){
+            if(payload.deferUpsample){
+                payload.opaqueResolveTiming->value().finishTiming(commandList);
+                payload.opaqueResolveTiming->reset();
+                return true;
+            }
             return Core::FinishSplitGpuTimingMarker(payload.opaqueResolveTiming);
         }
 
@@ -577,6 +583,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         bool* transparentTraceProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
         bool graphEntryStatesOwned = false;
+        bool combinedUpsample = false;
     };
 
     [[nodiscard]] static bool record(
@@ -613,13 +620,16 @@ struct ShadowTransparentSoftFoldGraphTask{
         if(*payload.transparentTraceProduced){
             if(!payload.transparentResolveTiming->has_value())
                 return false;
-            if(payload.raytracingSystem->renderSoftTransparentShadowFold(
-                commandList,
-                *payload.targets,
-                payload.deferredLightingResources,
-                *payload.opaqueFrameIndex,
-                payload.graphEntryStatesOwned
-            )){
+            const bool resolved = payload.combinedUpsample
+                ? payload.raytracingSystem->renderSoftShadowTerminalUpsample(
+                    commandList, *payload.targets, payload.deferredLightingResources, true, payload.graphEntryStatesOwned
+                )
+                : payload.raytracingSystem->renderSoftTransparentShadowFold(
+                    commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
+                    payload.graphEntryStatesOwned
+                )
+            ;
+            if(resolved){
                 payload.transparentResolveTiming->value().finishTiming(commandList);
                 payload.transparentResolveTiming->reset();
             }
@@ -635,6 +645,14 @@ struct ShadowTransparentSoftFoldGraphTask{
                 payload.transparentResolveTiming->reset();
             }
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace or first wavelet failed; preserving opaque visibility"));
+        }
+
+        // Fusion deferred the opaque upsample, so a failed transparent phase must still publish opaque visibility.
+        if(payload.combinedUpsample && !*payload.transparentTraceProduced){
+            if(!payload.raytracingSystem->renderSoftShadowTerminalUpsample(
+                commandList, *payload.targets, payload.deferredLightingResources, false, payload.graphEntryStatesOwned
+            ))
+                return false;
         }
 
         payload.shadowVisibilityTiming->value().finishTiming(commandList);
@@ -1333,8 +1351,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     const u32* const opaqueFrameIndex,
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
-){
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const bool deferUpsample){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
@@ -1351,6 +1369,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
             .hardwareShadowSupported = hardwareShadowSupported,
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
+            .deferUpsample = deferUpsample,
         }
     );
 }
@@ -1766,8 +1785,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     const bool* const opaqueProduced,
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
-    const bool graphEntryStatesOwned
-){
+    const bool graphEntryStatesOwned,
+    const bool combinedUpsample){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask::Payload{
@@ -1782,6 +1801,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
             .transparentTraceProduced = transparentTraceProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .combinedUpsample = combinedUpsample,
         }
     );
 }

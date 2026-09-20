@@ -196,6 +196,9 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         .adaptivePlan = adaptivePlan,
         .hardwareTransparentTrace = hardwareTransparentTrace,
         .softTransparentFoldReady = softTransparentFoldReady,
+        .combinedSoftUpsample = hardwareTransparentTrace && softTransparentFoldReady
+            && state.m_softShadowResolve.m_combinedUpsample.m_pipeline
+            && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u,
         .softShadowHistoryReadable =
             state.m_softShadowTemporalReady
             && state.m_prevWorldToClipValid

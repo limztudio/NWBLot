@@ -56,32 +56,26 @@ bool nwbSurfelGatherField(
     half totalWeight = half(0.0h);
     const int3 baseCell = nwbSurfelCellCoord(biasedPosition, cellSize);
     for(int dz = -NWB_SURFEL_GATHER_CELL_EXTENT; dz <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dz)
-    for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy){
-        // These immutable heads are independent of each list walk; consume them in the original dx order.
-        uint rowHeads[2 * NWB_SURFEL_GATHER_CELL_EXTENT + 1];
-        [unroll] for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
-            const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
-            rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT] = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
-        }
-        for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
-            uint id = rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT];
-            uint walk = 0u;
-            [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
-                const NwbSurfel surfel = NWB_SURFEL_GATHER_FIELD_POOL[id];
-                if(surfel.alive != 0u && surfel.sampleCount != 0u){
-                    const float dist = length(biasedPosition - surfel.position);
-                    const half normalWeight = half(saturate(dot(normal, surfel.normal)));
-                    const half distanceWeight = half(saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN)));
-                    const half confidence = half(saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
-                    const half weight = normalWeight * distanceWeight * confidence;
-                    // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
-                    // gates leakage while the SH reconstruction retains the surfel's directional response.
-                    irradianceSum += nwbSurfelShReconstruct(half4(surfel.shR), half4(surfel.shG), half4(surfel.shB), normal) * weight;
-                    totalWeight += weight;
-                }
-                id = surfel.nextInCell;
-                ++walk;
+    for(int dy = -NWB_SURFEL_GATHER_CELL_EXTENT; dy <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dy)
+    for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
+        const uint bucket = nwbSurfelHashCell(baseCell + int3(dx, dy, dz), cellCount);
+        uint id = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
+        uint walk = 0u;
+        [loop] while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
+            const NwbSurfel surfel = NWB_SURFEL_GATHER_FIELD_POOL[id];
+            if(surfel.alive != 0u && surfel.sampleCount != 0u){
+                const float dist = length(biasedPosition - surfel.position);
+                const half normalWeight = half(saturate(dot(normal, surfel.normal)));
+                const half distanceWeight = half(saturate(1.0 - dist / max(surfel.radius, NWB_SURFEL_RADIUS_MIN)));
+                const half confidence = half(saturate(float(surfel.sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
+                const half weight = normalWeight * distanceWeight * confidence;
+                // Reconstruct the surfel's directional irradiance at the query normal. Normal/distance similarity
+                // gates leakage while the SH reconstruction retains the surfel's directional response.
+                irradianceSum += nwbSurfelShReconstruct(half4(surfel.shR), half4(surfel.shG), half4(surfel.shB), normal) * weight;
+                totalWeight += weight;
             }
+            id = surfel.nextInCell;
+            ++walk;
         }
     }
 

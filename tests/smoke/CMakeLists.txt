@@ -8,6 +8,7 @@ if(TARGET nwb_frame AND TARGET nwb_graphics)
     add_subdirectory(caustic_kernel)
     add_subdirectory(mesh_kernel)
     add_subdirectory(shadow_kernel)
+    add_subdirectory(surfel_kernel)
 
     nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
     target_sources(nwb_presentation_fps_probe_tests PRIVATE

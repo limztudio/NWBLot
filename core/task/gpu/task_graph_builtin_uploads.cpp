@@ -34,7 +34,6 @@ struct UploadBufferPayload{
 };
 
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         CommandList& commandList,
@@ -67,7 +66,6 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
         }
         return true;
     }
-
 };
 
 struct UploadTexturePayload{
@@ -83,7 +81,6 @@ struct UploadTexturePayload{
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         CommandList& commandList,
@@ -125,7 +122,6 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         }
         return true;
     }
-
 };
 
 [[nodiscard]] static bool UploadTextureTaskCanMaterializeRetainedState(
@@ -145,9 +141,7 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         )
     )
         return false;
-    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState, so an
-    // explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source
-    // requirement above.
+    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState, so an explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source requirement above.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

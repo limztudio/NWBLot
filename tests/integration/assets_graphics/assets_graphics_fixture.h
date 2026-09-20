@@ -1183,7 +1183,7 @@ public:
     }
     static NWB::Core::Assets::AssetBytes MakeAssetBytes(TestArena& testArena);
     static void AppendTestMeta(AString& inOutMeta, const AStringView text);
-    #if defined(NWB_FINAL)
+#if defined(NWB_FINAL)
     static AString BuildTriangleMeta(
         const AStringView assetHeader,
         const AStringView normalField,
@@ -1196,7 +1196,7 @@ public:
         const AStringView tangentField,
         const AStringView vertexRefsField
     );
-    #endif
+#endif
     static bool PrepareCleanDirectory(const Path& directory);
     static bool WriteTextFile(const Path& filePath, const AStringView text);
     static const char* AssetsGraphicsTestConfigurationName();
@@ -1413,7 +1413,6 @@ public:
 
 
 public:
-
     static bool CookAndLoadMinimalAsset(
         TestArena& testArena,
         const AStringView metaText,
@@ -1541,8 +1540,6 @@ public:
         EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary, loadedAsset));
         EXPECT_FALSE(loadedAsset);
     }
-
-
 };
 
 

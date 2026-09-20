@@ -116,7 +116,6 @@ struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTask
         }
         return true;
     }
-
 };
 
 [[nodiscard]] static bool ResolveTextureContractValid(

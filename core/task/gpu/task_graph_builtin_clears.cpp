@@ -36,7 +36,6 @@ struct ClearBufferPayload{
 };
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
-
     [[nodiscard]] static bool record(
         const Payload& payload,
         CommandList& commandList,
@@ -59,7 +58,6 @@ struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBas
         commandList.clearBufferUInt(*payload.destination, payload.clearValue);
         return true;
     }
-
 };
 
 struct ClearTextureTask{

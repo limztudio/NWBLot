@@ -21,6 +21,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_caustic_resolve_stage_tests{
 
 
@@ -275,8 +280,7 @@ void RunStageCase(
                     }
                 }
                 const f32 expected = (static_cast<f32>(sum) / 1048576.0f) / area * 0.75f;
-                // GPU float-to-half conversion may round a midpoint one half code away from the CPU oracle;
-                // keep the one-adjacent-half tolerance already used for the uniform pattern below.
+                // GPU float-to-half conversion may round a midpoint one half code away from the CPU oracle; keep the one-adjacent-half tolerance already used for the uniform pattern below.
                 EXPECT_GE(candidate.r, ConvertFloatToHalf(expected) - 1u);
                 EXPECT_LE(candidate.r, ConvertFloatToHalf(expected) + 1u);
                 EXPECT_GE(candidate.g, ConvertFloatToHalf(expected * 2.0f) - 1u);

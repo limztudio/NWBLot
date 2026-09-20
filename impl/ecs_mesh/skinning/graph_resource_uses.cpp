@@ -142,6 +142,7 @@ bool BuildMeshSkinningGraphResourceUses(
 
     outUses.deformation.clear();
     outUses.postDispatch.clear();
+    outUses.localBounds.clear();
     outUses.finalizer.clear();
     if(planCount == 0u)
         return true;
@@ -151,8 +152,9 @@ bool BuildMeshSkinningGraphResourceUses(
     }
 
     ResourceUseCollector<13u> deformation(scratchArena);
-    ResourceUseCollector<10u> postDispatch(scratchArena);
-    ResourceUseCollector<5u> finalizer(scratchArena);
+    ResourceUseCollector<11u> postDispatch(scratchArena);
+    ResourceUseCollector<3u> localBounds(scratchArena);
+    ResourceUseCollector<6u> finalizer(scratchArena);
     for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
         const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
         if(!plan.hasActiveSkin)
@@ -195,6 +197,9 @@ bool BuildMeshSkinningGraphResourceUses(
             || !postDispatch.add(plan.meshletLocalVertexRefResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletPrimitiveIndexResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !postDispatch.add(plan.meshletBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
+            || (plan.updatesMeshletBounds && !postDispatch.add(
+                plan.meshletLocalBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write
+            ))
             || (plan.repacksNormals && (
                 !postDispatch.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !postDispatch.add(plan.meshletAttributeRefDeltaResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
@@ -208,13 +213,30 @@ bool BuildMeshSkinningGraphResourceUses(
 
     for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
         const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
+        if(!plan.updatesMeshletBounds)
+            continue;
+        if(
+            !localBounds.add(plan.bindlessResourceSlotsResource, Core::ResourceStates::ConstantBuffer, Core::GpuTaskResourceAccess::Read)
+            || !localBounds.add(plan.meshletLocalBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+            || !localBounds.add(plan.localBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare local bounds reduction resources"));
+            return false;
+        }
+    }
+
+    for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
+        const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
         if(
             ((plan.hasActiveSkin || plan.copiedRestStreams) && (
                 !finalizer.add(plan.skinnedPositionResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !finalizer.add(plan.skinnedNormalResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
                 || !finalizer.add(plan.skinnedTangentResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             ))
-            || (plan.updatesMeshletBounds && !finalizer.add(plan.meshletBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read))
+            || (plan.updatesMeshletBounds && (
+                !finalizer.add(plan.meshletBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+                || !finalizer.add(plan.localBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
+            ))
             || (plan.repacksNormals && !finalizer.add(plan.attributeResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read))
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
@@ -228,6 +250,7 @@ bool BuildMeshSkinningGraphResourceUses(
 
     deformation.writeTo(outUses.deformation);
     postDispatch.writeTo(outUses.postDispatch);
+    localBounds.writeTo(outUses.localBounds);
     finalizer.writeTo(outUses.finalizer);
     return true;
 }

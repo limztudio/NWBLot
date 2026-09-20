@@ -37,7 +37,8 @@ struct RayTracingSceneGraphReads{
 [[nodiscard]] RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
     Core::GpuTaskGraph& graph,
     const RayTracingSceneGraphResources& resources,
-    Core::ResourceStates::Mask tlasInitialState
+    Core::ResourceStates::Mask tlasInitialState,
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 

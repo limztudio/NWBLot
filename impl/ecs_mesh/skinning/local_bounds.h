@@ -1,0 +1,82 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../../global.h"
+
+#include <core/alloc/general.h>
+#include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/types.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class GraphicsRuntime;
+struct GpuTaskRecordContext;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct MeshSkinningRuntimeInstance;
+
+// Replacement is atomic; no uninitialized bounds become visible through the runtime mesh provider.
+[[nodiscard]] bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshSkinningRuntimeInstance& instance);
+
+// Graph declarations retain resources; this snapshot keeps only the reduction dispatch contract.
+struct MeshSkinningLocalBoundsDispatch{
+    Core::GpuGraphResourceId bindlessResourceSlotsResource;
+    Core::GpuGraphResourceId meshletLocalBoundsResource;
+    Core::GpuGraphResourceId localBoundsResource;
+    Core::GpuGraphPipelineId localBoundsPipeline;
+    u32 meshletCount = 0u;
+    u32 bindlessResourceSlots = 0u;
+};
+
+struct MeshSkinningLocalBoundsTask{
+    struct Payload{
+        Core::GraphicsRuntime& graphics;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Vector<MeshSkinningLocalBoundsDispatch, Core::Alloc::GlobalArena> dispatches;
+
+        Payload(Core::Alloc::GlobalArena& arena, Core::GraphicsRuntime& graphics, Core::GpuTimingSubmissionTicket& timingTicket);
+    };
+
+    [[nodiscard]] static bool record(
+        const Payload& payload,
+        Core::CommandList& commandList,
+        const Core::GpuTaskRecordContext& context
+    );
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

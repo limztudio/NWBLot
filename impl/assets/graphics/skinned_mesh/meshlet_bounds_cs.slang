@@ -5,12 +5,13 @@
 #include "binding_slots.h"
 #include "bindless_resources.slangi"
 #include "constants.h"
+#include "../mesh/runtime_bounds_constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823e+38;
+static const float NWB_SKINNED_MESH_BOUNDS_FLOAT_MAX = 3.402823466e+38;
 static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 
 
@@ -113,6 +114,15 @@ bool nwbSkinnedMeshBoundsFaceNormal(
 
     outFaceNormal = cross(p1 - p0, p2 - p0);
     return nwbValidFrameDirection(outFaceNormal);
+}
+
+void nwbSkinnedMeshBoundsStoreLocalPartial(const uint meshletIndex, const float3 minimum, const float3 maximum, const bool valid){
+    const uint byteOffset = meshletIndex * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
+    RWByteAddressBuffer output = nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots4.x);
+    output.Store3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET, asuint(valid ? minimum : float3(0.0)));
+    output.Store(byteOffset + NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET, valid ? NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID : 0u);
+    output.Store3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET, asuint(valid ? maximum : float3(0.0)));
+    output.Store(byteOffset + NWB_RUNTIME_MESH_BOUNDS_RESERVED_OFFSET, 0u);
 }
 
 void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, const uint conePacked){
@@ -316,8 +326,10 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint positionCount = nwbMeshletPositionCount(meshlet);
     const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
     if(positionCount == 0u || primitiveCount == 0u){
-        if(groupThreadIndex == 0u)
+        if(groupThreadIndex == 0u){
             nwbSkinnedMeshBoundsStore(meshletIndex, float4(0.0, 0.0, 0.0, 0.0), 0u);
+            nwbSkinnedMeshBoundsStoreLocalPartial(meshletIndex, float3(0.0), float3(0.0), false);
+        }
         return;
     }
 
@@ -338,6 +350,14 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     g_NwbSkinnedMeshBoundsValidPositionCount[groupThreadIndex] = localValidPositionCount;
     nwbSkinnedMeshBoundsReduceMinMax(groupThreadIndex);
     nwbSkinnedMeshBoundsReduceValidPositionCount(groupThreadIndex);
+
+    // Bounds proof cannot discard a nonfinite position even though sphere/cone reconstruction keeps its existing policy.
+    if(groupThreadIndex == 0u){
+        nwbSkinnedMeshBoundsStoreLocalPartial(
+            meshletIndex, g_NwbSkinnedMeshBoundsMin[0u], g_NwbSkinnedMeshBoundsMax[0u],
+            g_NwbSkinnedMeshBoundsValidPositionCount[0u] == positionCount
+        );
+    }
 
     if(g_NwbSkinnedMeshBoundsValidPositionCount[0u] == 0u){
         if(groupThreadIndex == 0u)

@@ -294,7 +294,7 @@ TEST(OpticalSceneUpload, UnacceptedReservationDestructionReleasesOnlyItsOwnAttem
 TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteStates){
     UploadContext context;
     const auto upload = context.makeUpload(1u);
-    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload));
+    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload), context.scratch);
     ASSERT_TRUE(result.valid());
     EXPECT_FALSE(result.reused);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
@@ -336,7 +336,7 @@ TEST(OpticalSceneUpload, AcceptedGraphHitKeepsExactProducerAvailabilityWithoutUp
     UploadContext context;
     const auto upload = context.makeUpload(1u);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, upload, 21u));
-    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload));
+    const auto result = ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload), context.scratch);
     ASSERT_TRUE(result.valid());
     EXPECT_TRUE(result.reused);
     EXPECT_FALSE(result.uploadTask.valid());
@@ -362,12 +362,12 @@ TEST(OpticalSceneUpload, RealGraphResetDiscardsTheProductionUploadReservation){
     const auto first = context.makeUpload(1u);
     const auto second = context.makeUpload(2u);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 3u));
-    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(second)).valid());
+    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(second), context.scratch).valid());
     EXPECT_FALSE(context.control->plan(first).valid());
     context.graph.reset();
     EXPECT_TRUE(context.control->plan(first).reused);
     EXPECT_FALSE(context.control->plan(second).reused);
-    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(second)).valid());
+    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(second), context.scratch).valid());
 }
 
 TEST(OpticalSceneUpload, ConflictingGraphImportReleasesTheAttemptWithoutPublishingResidency){
@@ -379,7 +379,7 @@ TEST(OpticalSceneUpload, ConflictingGraphImportReleasesTheAttemptWithoutPublishi
         .setType(Core::GpuGraphResourceType::Buffer)
         .setInitialState(Core::ResourceStates::CopyDest);
     ASSERT_TRUE(context.graph.importBuffer(context.buffer, conflict).valid());
-    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload)).valid());
+    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(upload), context.scratch).valid());
     const auto retry = context.control->plan(upload);
     EXPECT_TRUE(retry.valid());
     EXPECT_FALSE(retry.reused);
@@ -393,7 +393,7 @@ TEST(OpticalSceneUpload, ProductionPayloadRetainsTheControlAfterSnapshotAndOwner
     const auto upload = context.makeUpload(1u);
     auto snapshot = context.snapshot(upload);
     RayTracingOpticalUploadState* const retained = snapshot.uploadState.get();
-    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot).valid());
+    ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot, context.scratch).valid());
     snapshot = {};
     context.control = nullptr;
     EXPECT_FALSE(retained->plan(upload).valid());
@@ -406,9 +406,9 @@ TEST(OpticalSceneUpload, UnknownRetainedStateAndMismatchedBufferControlFailBefor
     const auto upload = context.makeUpload(1u);
     auto snapshot = context.snapshot(upload);
     snapshot.buffer = context.makeBuffer(Name("tests/optical_upload/unknown"), false);
-    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot).valid());
+    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot, context.scratch).valid());
     snapshot.buffer = context.makeBuffer(Name("tests/optical_upload/different"));
-    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot).valid());
+    EXPECT_FALSE(ImportRayTracingOpticalSceneBuffer(context.graph, snapshot, context.scratch).valid());
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     EXPECT_EQ(view.resourceCount(), 0u);
     EXPECT_EQ(view.taskCount(), 0u);

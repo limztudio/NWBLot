@@ -75,6 +75,8 @@ struct MeshSkinningRuntimeInstance{
     Core::BufferHandle attributeSkinBuffer;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only per-corner trace attributes (bind-pose); null without RT
+    Core::BufferHandle meshletLocalBoundsBuffer;
+    Core::BufferHandle localBoundsBuffer;
     u32 skeletonJointCount = 0;
     u32 meshletPositionRefCount = 0u;
     u32 meshletAttributeRefCount = 0u;
@@ -137,6 +139,8 @@ struct MeshSkinningRuntimeInstance{
             && meshletLocalVertexRefBuffer != nullptr
             && meshletPrimitiveIndexBuffer != nullptr
             && attributeSkinBuffer != nullptr
+            && meshletLocalBoundsBuffer != nullptr
+            && localBoundsBuffer != nullptr
         ;
     }
 };

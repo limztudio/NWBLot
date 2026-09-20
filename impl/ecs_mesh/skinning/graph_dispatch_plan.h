@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mirrors bindless resources: four uint4 lanes; handles are StorageBuffer registrations.
+// Mirrors bindless resources: five uint4 lanes; handles are StorageBuffer registrations.
 struct MeshSkinningBindlessResourceSlots{
     u32 restPosition = 0u;
     u32 skinnedPosition = 0u;
@@ -44,9 +44,14 @@ struct MeshSkinningBindlessResourceSlots{
     u32 meshletBounds = 0u;
     u32 attributeBuffer = 0u;
 
+    u32 meshletLocalBounds = 0u;
+    u32 localBounds = 0u;
+    u32 reserved0 = 0u;
+    u32 reserved1 = 0u;
+
     [[nodiscard]] constexpr bool operator==(const MeshSkinningBindlessResourceSlots&)const = default;
 };
-static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 16u, "MeshSkinning bindless resource slots must stay four uint4 lanes");
+static_assert(sizeof(MeshSkinningBindlessResourceSlots) == sizeof(u32) * 20u, "MeshSkinning bindless resource slots must stay five uint4 lanes");
 
 
 // Graph tasks retain immutable dispatch inputs; publish commits only after packet accepts.
@@ -71,9 +76,12 @@ struct MeshSkinningGraphDispatchPlan{
     Core::GpuGraphResourceId skinResource;
     Core::GpuGraphResourceId jointPaletteResource;
     Core::GpuGraphResourceId attributeResource;
+    Core::GpuGraphResourceId meshletLocalBoundsResource;
+    Core::GpuGraphResourceId localBoundsResource;
     Core::GpuGraphPipelineId skinningPipeline;
     Core::GpuGraphPipelineId boundsPipeline;
     Core::GpuGraphPipelineId repackPipeline;
+    Core::GpuGraphPipelineId localBoundsPipeline;
     u32 meshletCount = 0u;
     u32 skinCount = 0u;
     u32 jointCount = 0u;
@@ -89,7 +97,7 @@ struct MeshSkinningGraphDispatchPlan{
     bool updatesMeshletBounds = false;
     bool repacksNormals = false;
 };
-static_assert(sizeof(MeshSkinningGraphDispatchPlan) == 456u, "Graph-owned skinning plans should stay compact");
+static_assert(sizeof(MeshSkinningGraphDispatchPlan) == 520u, "Graph-owned skinning plans should stay compact");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

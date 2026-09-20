@@ -51,6 +51,8 @@ inline constexpr Core::BufferHandle MeshSkinningRuntimeInstance::* s_InstanceBuf
     &MeshSkinningRuntimeInstance::attributeSkinBuffer,
     &MeshSkinningRuntimeInstance::triangleIndexBuffer,
     &MeshSkinningRuntimeInstance::attributeBuffer,
+    &MeshSkinningRuntimeInstance::meshletLocalBoundsBuffer,
+    &MeshSkinningRuntimeInstance::localBoundsBuffer,
 };
 
 struct RuntimePayload{

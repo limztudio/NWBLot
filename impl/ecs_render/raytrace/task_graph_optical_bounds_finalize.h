@@ -5,9 +5,7 @@
 #pragma once
 
 
-#include "optical_scene_resources.h"
-
-#include <core/task/gpu/task_graph.h>
+#include "task_graph_optical_scene_upload.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -19,19 +17,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct RayTracingOpticalSceneGraphBuffer{
-    Core::GpuGraphResourceId resource;
-    Core::GpuTaskId uploadTask;
-    bool reused = false;
-
-    [[nodiscard]] bool valid()const noexcept{ return resource.valid() && (reused || uploadTask.valid()); }
-};
-
-// Declare once in the serial renderer frame graph; terminal presentation/recovery joins async readers before replacement.
-// Returned reads retain Common at packet close and carry the latest accepted writer's availability completion.
-[[nodiscard]] RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
+// Rewritten on primary Graphics after accepted skinning, then retained by all optical readers in this graph.
+// Frame admission is serial; the terminal graphics join also orders preceding asynchronous optical readers.
+[[nodiscard]] RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
     Core::GpuTaskGraph& graph,
     const RayTracingOpticalSceneSnapshot& resources,
+    Core::GpuGraphResourceId source,
     Core::Alloc::ScratchArena& scratchArena
 );
 

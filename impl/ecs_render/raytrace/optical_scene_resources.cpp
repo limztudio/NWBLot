@@ -24,9 +24,12 @@ RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(
     : m_arena(arena)
     , m_graphics(graphics)
     , m_identity(identity)
+    , m_runtimeBounds(arena, graphics)
 {}
 
 void RayTracingOpticalSceneResources::invalidate(){
+    m_runtimeBoundsSnapshot.reset();
+    m_runtimeBounds.invalidate();
     if(m_resources.uploadState)
         m_resources.uploadState->invalidate();
     auto& device = m_graphics.getDevice();
@@ -39,10 +42,13 @@ void RayTracingOpticalSceneResources::invalidate(){
     m_resources = {};
     m_capacity = 0u;
     m_prepared = false;
+    m_runtimeBoundsRequired = false;
 }
 
 bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather& gather){
     m_prepared = false;
+    m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
+    m_runtimeBoundsSnapshot.reset();
     if(gather.instances.size() > (Limit<u32>::s_Max - sizeof(gather.header)) / sizeof(RayTracingOpticalInstanceGpu)){
         NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: instance table exceeds the shader address range"));
         return false;
@@ -118,8 +124,36 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     return m_prepared;
 }
 
+bool RayTracingOpticalSceneResources::prepareRuntimeBounds(
+    const RayTracingOpticalSceneGather& gather,
+    RendererShaderSystem& shaderSystem){
+    if(!m_prepared)
+        return false;
+    m_runtimeBoundsSnapshot.reset();
+    if(m_runtimeBoundsRequired != !gather.runtimeBounds.empty()){
+        m_prepared = false;
+        return false;
+    }
+    if(gather.runtimeBounds.empty())
+        return true;
+    m_runtimeBoundsSnapshot = m_runtimeBounds.prepare(gather, m_resources.descriptor, shaderSystem);
+    m_prepared = static_cast<bool>(m_runtimeBoundsSnapshot);
+    return m_prepared;
+}
+
 RayTracingOpticalSceneSnapshot RayTracingOpticalSceneResources::snapshot()const{
-    return m_prepared ? m_resources : RayTracingOpticalSceneSnapshot{};
+    if(!m_prepared || (m_runtimeBoundsRequired && !m_runtimeBoundsSnapshot))
+        return {};
+    RayTracingOpticalSceneSnapshot result = m_resources;
+    if(m_runtimeBoundsSnapshot){
+        result.uploadBuffer = result.buffer;
+        result.finalize = m_runtimeBoundsSnapshot;
+        result.buffer = m_runtimeBoundsSnapshot->outputBuffer;
+        result.descriptor = m_runtimeBoundsSnapshot->outputDescriptor;
+        // CPU readiness is distinct from the validity computed from the accepted GPU position stream.
+        result.boundsComplete = false;
+    }
+    return result;
 }
 
 

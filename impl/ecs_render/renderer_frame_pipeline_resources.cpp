@@ -216,6 +216,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_CausticPhotons, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_CausticResolve, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_RefractionResolve, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_OpticalBoundsFinalize, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_DeferredLighting, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_DeferredComposite, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_DeferredPresent, s_GpuTimingQueriesPerRange },

@@ -690,7 +690,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     RayTracingSceneGraphReads sceneReads;
     if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace){
         sceneReads = ImportRayTracingSceneGraphReads(
-            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
+            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena
         );
         if(!sceneReads.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware transparent shadow scene reads"));
@@ -2200,7 +2200,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))
     ){
         sceneReads = ImportRayTracingSceneGraphReads(
-            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState()
+            m_deferredLightingTaskGraph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena
         );
         if(!sceneReads.valid())
             return;

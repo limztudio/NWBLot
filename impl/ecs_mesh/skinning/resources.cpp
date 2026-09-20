@@ -121,6 +121,9 @@ void MeshSkinningSystem::releaseRuntimeResourceBindlessHeapHandles(RuntimeResour
         release(resources.bindlessHeapHandles.localVertexRefs);
         release(resources.bindlessHeapHandles.primitiveIndices);
         release(resources.bindlessHeapHandles.meshletBounds);
+        release(resources.bindlessHeapHandles.attributeBuffer);
+        release(resources.bindlessHeapHandles.meshletLocalBounds);
+        release(resources.bindlessHeapHandles.localBounds);
     }
     resources.bindlessHeapHandles = RuntimeBindlessHeapHandles{};
     resources.bindlessResourceSlots = MeshSkinningBindlessResourceSlots{};
@@ -152,6 +155,7 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         || !instance.meshletAttributeRefDeltaBuffer || !instance.attributeSkinBuffer
         || !instance.meshletLocalVertexRefBuffer || !instance.meshletPrimitiveIndexBuffer
         || !instance.meshletBoundsBuffer
+        || !instance.meshletLocalBoundsBuffer || !instance.localBoundsBuffer
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete persistent compute buffers"), instance.handle.value);
         return false;
@@ -171,6 +175,8 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.meshletLocalVertexRefBuffer.get()))
         || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletPrimitiveIndexBuffer.get()))
         || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.meshletBoundsBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletLocalBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.meshletLocalBoundsBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.localBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.localBoundsBuffer.get()))
     )
         return fail();
 
@@ -215,6 +221,8 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     slots.localVertexRefs = resources.bindlessHeapHandles.localVertexRefs.slot();
     slots.primitiveIndices = resources.bindlessHeapHandles.primitiveIndices.slot();
     slots.meshletBounds = resources.bindlessHeapHandles.meshletBounds.slot();
+    slots.meshletLocalBounds = resources.bindlessHeapHandles.meshletLocalBounds.slot();
+    slots.localBounds = resources.bindlessHeapHandles.localBounds.slot();
     if(instance.attributeBuffer)
         slots.attributeBuffer = resources.bindlessHeapHandles.attributeBuffer.slot();
     return true;

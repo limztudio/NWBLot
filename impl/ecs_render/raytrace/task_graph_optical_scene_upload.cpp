@@ -3,6 +3,7 @@
 
 
 #include "task_graph_optical_scene_upload.h"
+#include "task_graph_optical_bounds_finalize.h"
 
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
@@ -70,28 +71,23 @@ struct OpticalUploadTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
+RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     Core::GpuTaskGraph& graph,
     const RayTracingOpticalSceneSnapshot& resources){
     if(!resources.valid())
         return {};
-    const Core::BufferDesc& bufferDesc = resources.buffer->getCreationDescription();
+    const Core::BufferHandle& uploadBuffer = resources.uploadBuffer ? resources.uploadBuffer : resources.buffer;
+    const Core::BufferDesc& bufferDesc = uploadBuffer->getCreationDescription();
     const usize byteSize = resources.upload->bytes.size();
     if(
         !bufferDesc.debugName || byteSize == 0u || byteSize > bufferDesc.byteSize || (byteSize % sizeof(u32)) != 0u
         || bufferDesc.isVolatile || !bufferDesc.keepInitialState || bufferDesc.initialState != Core::ResourceStates::Common
-        || resources.buffer->resolveTaskGraphImportInitialState() != Core::ResourceStates::Common
+        || uploadBuffer->resolveTaskGraphImportInitialState() != Core::ResourceStates::Common
     )
         return {};
 
     const RayTracingOpticalUploadPlan plan = resources.uploadState->plan(resources.upload);
-    if(!plan.valid() || plan.buffer.get() != resources.buffer.get())
+    if(!plan.valid() || plan.buffer.get() != uploadBuffer.get())
         return {};
     RayTracingOpticalUploadReservation reservation(resources.uploadState, plan);
     if(!plan.reused && !reservation.valid())
@@ -111,7 +107,7 @@ RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
         resourceDesc.setInitialAvailabilityCompletion(ready);
     }
     RayTracingOpticalSceneGraphBuffer result;
-    result.resource = graph.importBuffer(resources.buffer, resourceDesc);
+    result.resource = graph.importBuffer(uploadBuffer, resourceDesc);
     if(!result.resource.valid())
         return {};
     result.reused = plan.reused;
@@ -152,10 +148,30 @@ RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
     result.uploadTask = graph.addTask<__hidden_task_graph_optical_scene_upload::OpticalUploadTask>(
         desc,
         __hidden_task_graph_optical_scene_upload::OpticalUploadTask::Payload{
-            resources.buffer, blob, resources.upload, Move(reservation), plan.queue,
+            uploadBuffer, blob, resources.upload, Move(reservation), plan.queue,
         }
     );
     return result.valid() ? result : RayTracingOpticalSceneGraphBuffer{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
+    Core::GpuTaskGraph& graph,
+    const RayTracingOpticalSceneSnapshot& resources,
+    Core::Alloc::ScratchArena& scratchArena){
+    const RayTracingOpticalSceneGraphBuffer uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(graph, resources);
+    if(!uploaded.valid() || !resources.finalize)
+        return uploaded;
+    return DeclareRayTracingOpticalBoundsFinalize(graph, resources, uploaded.resource, scratchArena);
 }
 
 

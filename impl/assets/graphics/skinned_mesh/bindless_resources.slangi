@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is four std140
+// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is five std140
 // uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
 
 
@@ -39,6 +39,7 @@ struct NwbSkinnedMeshBindlessResources{
     uint4 streamSlots1; // rest tangent, skinned tangent, meshlet desc, position-ref deltas
     uint4 streamSlots2; // attribute-ref deltas, attribute skins, skin influences, joint palette
     uint4 streamSlots3; // local vertex refs, primitive indices, meshlet bounds, RT attribute buffer
+    uint4 streamSlots4; // per-meshlet local AABB partials, complete local AABB, reserved, reserved
 };
 
 // Each runtime mesh owns one small stream-slot payload. It is registered as a global UniformBuffer descriptor and

@@ -43,6 +43,8 @@ inline constexpr Core::BufferHandle MeshSkinningRuntimeInstance::* s_InstanceBuf
     &MeshSkinningRuntimeInstance::attributeSkinBuffer,
     &MeshSkinningRuntimeInstance::triangleIndexBuffer,
     &MeshSkinningRuntimeInstance::attributeBuffer,
+    &MeshSkinningRuntimeInstance::meshletLocalBoundsBuffer,
+    &MeshSkinningRuntimeInstance::localBoundsBuffer,
 };
 inline constexpr usize s_BuffersPerInstance = LengthOf(s_InstanceBuffers) + 3u;
 
@@ -103,9 +105,9 @@ struct LiveStateContext{
         const usize firstBuffer = sharedBuffers ? 0u : index * s_BuffersPerInstance;
         return {
             .editRevision = 7u,
-            .skinBuffer = &buffers[firstBuffer + 17u],
-            .jointPaletteBuffer = &buffers[firstBuffer + 18u],
-            .bindlessResourceSlotsBuffer = &buffers[firstBuffer + 19u],
+            .skinBuffer = &buffers[firstBuffer + LengthOf(s_InstanceBuffers)],
+            .jointPaletteBuffer = &buffers[firstBuffer + LengthOf(s_InstanceBuffers) + 1u],
+            .bindlessResourceSlotsBuffer = &buffers[firstBuffer + LengthOf(s_InstanceBuffers) + 2u],
         };
     }
 
@@ -116,7 +118,7 @@ struct LiveStateContext{
     }
 };
 
-TEST(SkinningLiveStateBuffers, PreservesAllTwentyRolesFirstOccurrenceAndOwningHandles){
+TEST(SkinningLiveStateBuffers, PreservesEveryRoleFirstOccurrenceAndOwningHandles){
     LiveStateContext context;
     context.initialize(2u);
     Core::Alloc::GlobalArena outputArena(Name("tests/skinning_live_state/output"));
@@ -131,7 +133,7 @@ TEST(SkinningLiveStateBuffers, PreservesAllTwentyRolesFirstOccurrenceAndOwningHa
         collector.collect(&context.instances[0u], context.resources(0u));
         collector.collect(&context.instances[1u], context.resources(1u));
     }
-    ASSERT_EQ(output.size(), 40u);
+    ASSERT_EQ(output.size(), s_BuffersPerInstance * 2u);
     for(usize index = 0u; index < s_BuffersPerInstance; ++index){
         EXPECT_EQ(output[index].get(), context.buffers[index + s_BuffersPerInstance].get());
         EXPECT_EQ(output[index + s_BuffersPerInstance].get(), context.buffers[index].get());
@@ -186,7 +188,7 @@ TEST(SkinningLiveStateBuffers, FiltersMissingInstancesInvalidHandlesAndIncomplet
     EXPECT_TRUE(output.empty());
     instance.restTangents.resize(1u);
     context.collect(scratch, output);
-    EXPECT_EQ(output.size(), 20u);
+    EXPECT_EQ(output.size(), s_BuffersPerInstance);
 }
 
 TEST(SkinningLiveStateBuffers, RechecksResourceRevisionOptionalRolesAndBufferReplacementEveryCollection){
@@ -201,7 +203,7 @@ TEST(SkinningLiveStateBuffers, RechecksResourceRevisionOptionalRolesAndBufferRep
         MeshSkinningStateBufferCollector collector(scratch, output);
         collector.collect(&instance, resources);
     }
-    EXPECT_EQ(output.size(), 17u);
+    EXPECT_EQ(output.size(), LengthOf(s_InstanceBuffers));
     resources = context.resources(0u);
     instance.triangleIndexBuffer = nullptr;
     instance.attributeBuffer = nullptr;
@@ -209,15 +211,15 @@ TEST(SkinningLiveStateBuffers, RechecksResourceRevisionOptionalRolesAndBufferRep
         MeshSkinningStateBufferCollector collector(scratch, output);
         collector.collect(&instance, resources);
     }
-    ASSERT_EQ(output.size(), 18u);
-    EXPECT_EQ(output[15u].get(), resources.skinBuffer->get());
-    instance.restPositionBuffer = context.buffers[20u];
+    ASSERT_EQ(output.size(), s_BuffersPerInstance - 2u);
+    EXPECT_EQ(output[LengthOf(s_InstanceBuffers) - 2u].get(), resources.skinBuffer->get());
+    instance.restPositionBuffer = context.buffers[s_BuffersPerInstance];
     {
         MeshSkinningStateBufferCollector collector(scratch, output);
         collector.collect(&instance, {});
     }
-    ASSERT_EQ(output.size(), 15u);
-    EXPECT_EQ(output[0u].get(), context.buffers[20u].get());
+    ASSERT_EQ(output.size(), LengthOf(s_InstanceBuffers) - 2u);
+    EXPECT_EQ(output[0u].get(), context.buffers[s_BuffersPerInstance].get());
     for(const Core::BufferHandle& buffer : output)
         EXPECT_NE(buffer.get(), context.buffers[0u].get());
     {
@@ -232,12 +234,12 @@ TEST(SkinningLiveStateBuffers, DeduplicatesSharedResourcesAcrossManyLiveInstance
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_live_state/shared_scratch"));
     BufferVector output(context.arena);
     context.collect(scratch, output);
-    ASSERT_EQ(output.size(), 20u);
-    for(usize index = 0u; index < 20u; ++index)
+    ASSERT_EQ(output.size(), s_BuffersPerInstance);
+    for(usize index = 0u; index < s_BuffersPerInstance; ++index)
         EXPECT_EQ(output[index].get(), context.buffers[index].get());
     Swap(context.instances[32u].restNormalBuffer, context.instances[32u].restTangentBuffer);
     context.collect(scratch, output);
-    ASSERT_EQ(output.size(), 20u);
+    ASSERT_EQ(output.size(), s_BuffersPerInstance);
     EXPECT_EQ(output[1u].get(), context.buffers[1u].get());
     EXPECT_EQ(output[2u].get(), context.buffers[2u].get());
 }

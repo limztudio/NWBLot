@@ -5,6 +5,7 @@
 #include "runtime_cache.h"
 
 #include "arena_names.h"
+#include "local_bounds.h"
 #include "resource_names.h"
 
 #include <core/alloc/scratch.h>
@@ -359,7 +360,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Software and hybrid tails read raw position/index buffers; keep views even with HWRT.
 
-    bool uploaded = true;
+    bool uploaded = CreateMeshSkinningLocalBoundsBuffers(m_graphics, instance);
     uploaded = __hidden_runtime_cache_resources::AssignRuntimeBuffer<Float3U>(
         m_graphics,
         instance,

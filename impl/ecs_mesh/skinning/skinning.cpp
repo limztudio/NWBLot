@@ -48,7 +48,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
 
     if(hasActiveSkin && !ensureSkinningPipeline())
         return false;
-    if(!ensureBoundsPipeline())
+    if(!ensureBoundsPipeline() || !ensureLocalBoundsPipeline())
         return false;
     // RT attribute buffer exists only with ray tracing; build repack pipeline only then.
     if(instance.attributeBuffer && !ensureRepackPipeline())
@@ -178,6 +178,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
     Core::Buffer* const meshletLocalVertexRefs = resolveBuffer(plan.meshletLocalVertexRefResource);
     Core::Buffer* const meshletPrimitiveIndices = resolveBuffer(plan.meshletPrimitiveIndexResource);
     Core::Buffer* const meshletBounds = resolveBuffer(plan.meshletBoundsResource);
+    Core::Buffer* const meshletLocalBounds = resolveBuffer(plan.meshletLocalBoundsResource);
     Core::ComputePipeline* const boundsPipeline = context.declarations.computePipelineFor(plan.boundsPipeline);
     if(
         !bindlessResourceSlots
@@ -187,6 +188,7 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch(
         || !meshletLocalVertexRefs
         || !meshletPrimitiveIndices
         || !meshletBounds
+        || !meshletLocalBounds
         || !boundsPipeline
     )
         return false;
@@ -248,7 +250,9 @@ void MeshSkinningSystem::confirmGraphOwnedSkinningDispatch(const MeshSkinningGra
         return;
     RuntimeResources& resources = foundResources.value();
     if(
-        resources.editRevision != plan.submissionCommit.editRevision
+        !plan.updatesMeshletBounds || !plan.localBoundsResource.valid() || !plan.meshletLocalBoundsResource.valid()
+        || resources.editRevision != plan.submissionCommit.editRevision
+        || resources.buffers != CaptureMeshSkinningResourceBuffers(*instance)
         || resources.bindlessResourceSlotsBuffer.get() != plan.bindlessResourceSlotsBuffer.get()
         || resources.bindlessHeapHandles.resourceSlots != plan.bindlessResourceSlotsDescriptor
         || resources.bindlessResourceSlots != plan.bindlessResourceSlotsPayload

@@ -6,6 +6,9 @@
 
 #include <impl/ecs_render/raytrace/task_graph_optical_scene_upload.h>
 #include <impl/ecs_render/components.h>
+#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
+
+#include <global/scope_exit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -99,6 +102,7 @@ public:
 };
 
 struct CopyContext{
+    Alloc::ScratchArena& scratchArena;
     Impl::RayTracingOpticalSceneSnapshot optical;
     BufferHandle readback;
     usize taskCount = 0u;
@@ -126,7 +130,7 @@ struct CopyContext{
     auto& context = *static_cast<CopyContext*>(rawContext);
     if(!context.readback)
         return {};
-    const auto optical = Impl::ImportRayTracingOpticalSceneBuffer(graph, context.optical);
+    const auto optical = Impl::ImportRayTracingOpticalSceneBuffer(graph, context.optical, context.scratchArena);
     if(!optical.valid())
         return {};
     context.reused = optical.reused;
@@ -175,6 +179,7 @@ struct CopyContext{
 
 void SubmitAndVerify(
     GraphicsRuntime& graphics,
+    Alloc::ScratchArena& scratch,
     const Impl::RayTracingOpticalSceneSnapshot& optical,
     const BufferHandle& readback,
     const bool expectedReuse){
@@ -182,7 +187,7 @@ void SubmitAndVerify(
     const auto before = optical.uploadState->plan(optical.upload);
     ASSERT_TRUE(before.valid());
     EXPECT_EQ(before.reused, expectedReuse);
-    CopyContext context{.optical = optical, .readback = readback};
+    CopyContext context{.scratchArena = scratch, .optical = optical, .readback = readback};
     QueueSubmissionToken terminal;
     ASSERT_TRUE(graphics.submitStandaloneTaskGraph(
         &context, &DeclareOpticalReadback, terminal, device.getPrimaryPhysicalQueue(CommandQueue::Graphics)
@@ -244,21 +249,21 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalMetadataReuseTracksActualAcceptedGp
     ASSERT_TRUE(readback);
     {
         SCOPED_TRACE("initial A");
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(first), readback, false));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(first), readback, false));
     }
     {
         SCOPED_TRACE("unchanged accepted A has no upload");
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(first), readback, true));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(first), readback, true));
     }
     {
         SCOPED_TRACE("changed B replaces accepted A");
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(second), readback, false));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(second), readback, false));
     }
     const auto beforeRejected = storage.snapshot(second).uploadState->plan(second);
     ASSERT_TRUE(beforeRejected.reused);
     {
         SCOPED_TRACE("native submission rejects replacement C");
-        CopyContext context{.optical = storage.snapshot(rejected), .readback = readback};
+        CopyContext context{.scratchArena = scratch, .optical = storage.snapshot(rejected), .readback = readback};
         const auto primary = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         const VkQueue nativeQueue = static_cast<VkQueue>(device.getNativeQueue(GraphicsBackend::ObjectTypes::VK_Queue, primary).pointer());
         ASSERT_NE(nativeQueue, VK_NULL_HANDLE);
@@ -281,11 +286,11 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalMetadataReuseTracksActualAcceptedGp
         EXPECT_TRUE(afterRejected.reused);
         EXPECT_EQ(afterRejected.acceptedToken.value, beforeRejected.acceptedToken.value);
         EXPECT_FALSE(storage.snapshot(rejected).uploadState->plan(rejected).reused);
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(second), readback, true));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(second), readback, true));
     }
     {
         SCOPED_TRACE("A reversion must replace B, despite retained A CPU identity");
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(first), readback, false));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(first), readback, false));
     }
     {
         SCOPED_TRACE("new physical buffer cannot inherit old A residency");
@@ -293,8 +298,8 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalMetadataReuseTracksActualAcceptedGp
         ASSERT_TRUE(storage.create(first->bytes.size()));
         EXPECT_NE(storage.snapshot(first).buffer.get(), old.buffer.get());
         EXPECT_FALSE(old.uploadState->plan(first).valid());
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(first), readback, false));
-        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, storage.snapshot(first), readback, true));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(first), readback, false));
+        ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, storage.snapshot(first), readback, true));
     }
 }
 
@@ -319,7 +324,7 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
             .enableAutomaticStateTracking(ResourceStates::Common)
     );
     ASSERT_TRUE(readback);
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, initial, readback, false));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, initial, readback, false));
 
     // A new gather allocation with byte-identical metadata must preserve the CPU payload identity.
     Impl::RayTracingOpticalSceneGather identicalGather(scratch, 1u);
@@ -331,7 +336,7 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
     const auto identical = owner.resources.snapshot();
     EXPECT_EQ(identical.buffer.get(), initial.buffer.get());
     EXPECT_EQ(identical.upload.get(), initial.upload.get());
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, identical, readback, true));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, identical, readback, true));
 
     renderer.opticalMediumPriority = -20;
     Impl::RayTracingOpticalSceneGather changedGather(scratch, 1u);
@@ -340,7 +345,7 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
     const auto changed = owner.resources.snapshot();
     EXPECT_EQ(changed.buffer.get(), initial.buffer.get());
     EXPECT_NE(changed.upload.get(), initial.upload.get());
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, changed, readback, false));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, changed, readback, false));
 
     // A header-only completeness change is a byte change even though instance order and priority are unchanged.
     changedGather.markIncomplete();
@@ -353,7 +358,7 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
         changed.upload->bytes.data() + NWB_RT_OPTICAL_SCENE_HEADER_BYTES,
         incomplete.upload->bytes.size() - NWB_RT_OPTICAL_SCENE_HEADER_BYTES
     ), 0);
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, incomplete, readback, false));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, incomplete, readback, false));
 
     ASSERT_TRUE(owner.resources.prepare(firstGather));
     const auto reverted = owner.resources.snapshot();
@@ -361,10 +366,10 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
     EXPECT_NE(reverted.upload.get(), incomplete.upload.get());
     EXPECT_EQ(reverted.upload->bytes.size(), initial.upload->bytes.size());
     EXPECT_EQ(NWB_MEMCMP(reverted.upload->bytes.data(), initial.upload->bytes.data(), initial.upload->bytes.size()), 0);
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, reverted, readback, false));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, reverted, readback, false));
     ASSERT_TRUE(owner.resources.prepare(identicalGather));
     EXPECT_EQ(owner.resources.snapshot().upload.get(), reverted.upload.get());
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, owner.resources.snapshot(), readback, true));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, owner.resources.snapshot(), readback, true));
 
     owner.resources.invalidate();
     ASSERT_TRUE(owner.resources.prepare(firstGather));
@@ -372,8 +377,46 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerComparesActualGatherBytes
     EXPECT_NE(recreated.buffer.get(), initial.buffer.get());
     EXPECT_NE(recreated.uploadState.get(), initial.uploadState.get());
     EXPECT_FALSE(initial.uploadState->plan(initial.upload).valid());
-    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, recreated, readback, false));
+    ASSERT_NO_FATAL_FAILURE(SubmitAndVerify(graphics, scratch, recreated, readback, false));
 }
+
+TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerWithholdsRuntimeSnapshotUntilFinalizePreparation){
+    using namespace __hidden_optical_scene_upload_reuse_tests;
+    auto& graphics = s_scope->graphics();
+    auto& device = graphics.getDevice();
+    auto& heap = device.getDescriptorHeap();
+    Alloc::ScratchArena scratch(Name("tests.optical_upload.runtime_preparation"));
+    OpticalSceneOwner owner(arena(), graphics);
+    const auto bounds = device.createBuffer(
+        BufferDesc{}.setByteSize(NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE).setCanHaveRawViews(true)
+    );
+    ASSERT_TRUE(bounds);
+    const auto descriptor = heap.allocate(GpuDescriptorClass::StorageBuffer);
+    ASSERT_TRUE(descriptor.valid());
+    ScopeExit retire([&]()noexcept{ heap.free(descriptor); });
+    ASSERT_TRUE(heap.write(descriptor, DescriptorWriteItem::RawBuffer_SRV(0u, bounds.get())));
+    Impl::RendererComponent renderer;
+    Impl::RayTracingOpticalSceneGather runtimeGather(scratch, 1u);
+    runtimeGather.appendRuntime(ECS::EntityID(1u, 0u), renderer, bounds, descriptor, {});
+    ASSERT_TRUE(owner.resources.prepare(runtimeGather));
+    EXPECT_FALSE(owner.resources.snapshot().valid());
+    owner.resources.resetPrepared();
+    EXPECT_FALSE(owner.resources.snapshot().valid());
+    ASSERT_TRUE(owner.resources.prepare(runtimeGather));
+    EXPECT_FALSE(owner.resources.snapshot().valid());
+
+    Impl::RayTracingOpticalSceneGather staticGather(scratch, 1u);
+    staticGather.append(ECS::EntityID(2u, 0u), renderer, true, {-1.f, -2.f, -3.f}, {1.f, 2.f, 3.f}, true);
+    ASSERT_TRUE(owner.resources.prepare(staticGather));
+    const auto restored = owner.resources.snapshot();
+    ASSERT_TRUE(restored.valid());
+    EXPECT_FALSE(restored.uploadBuffer);
+    EXPECT_FALSE(restored.finalize);
+    EXPECT_TRUE(restored.boundsComplete);
+    owner.resources.invalidate();
+    EXPECT_FALSE(owner.resources.snapshot().valid());
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

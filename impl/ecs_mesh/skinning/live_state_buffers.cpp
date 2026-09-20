@@ -50,6 +50,8 @@ void MeshSkinningStateBufferCollector::collect(
     retainBuffer(instance->attributeSkinBuffer);
     retainBuffer(instance->triangleIndexBuffer);
     retainBuffer(instance->attributeBuffer);
+    retainBuffer(instance->meshletLocalBoundsBuffer);
+    retainBuffer(instance->localBoundsBuffer);
 
     if(resources.editRevision == instance->editRevision){
         if(resources.skinBuffer)

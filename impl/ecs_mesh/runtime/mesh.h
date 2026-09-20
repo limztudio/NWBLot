@@ -109,6 +109,8 @@ static_assert(IsTriviallyCopyable_V<RuntimeMeshLocalBounds>, "RuntimeMeshLocalBo
 
 struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     RuntimeMeshLocalBounds localBounds;
+    // Optional 32-byte runtime_bounds_constants.h GPU record for this accepted geometryContentRevision; null while pending.
+    Core::BufferHandle localBoundsBuffer;
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     u32 meshletCount = 0u;
     // Logical corner count; backing buffer is word-padded, never use its byte size.

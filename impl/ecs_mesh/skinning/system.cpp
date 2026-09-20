@@ -7,6 +7,7 @@
 #include "arena_names.h"
 #include "graph_resource_uses.h"
 #include "live_state_buffers.h"
+#include "local_bounds.h"
 #include "resource_names.h"
 #include "runtime_mesh_liveness.h"
 #include "skin_payload.h"
@@ -135,7 +136,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 };
 
 
-// Bounds/repack consume deformation and publish UAV outputs; accepted callback commits.
+// Bounds/repack consume deformation and publish UAV outputs for the local-bounds reduction.
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
     struct Payload{
         explicit Payload(Core::Alloc::GlobalArena& arena)
@@ -162,25 +163,19 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
         }
         return true;
     }
-
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(!payload.system || !token.valid())
-            return;
-
-        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
-            payload.system->confirmGraphOwnedSkinningDispatch(plan);
-    }
 };
 
 
-// Outputs end in ShaderResource state; finalizer owns tail-only finalization.
+// Outputs end in ShaderResource state; only complete accepted bounds/repack/reduction publish a geometry generation.
 struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
     struct Payload{
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : plans(arena)
-        {}
-
+        MeshSkinningSystem& system;
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+
+        Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& system)
+            : system(system)
+            , plans(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(
@@ -208,7 +203,12 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
             }
             if(plan.updatesMeshletBounds){
                 Core::Buffer* const meshletBounds = context.declarations.bufferForResource(plan.meshletBoundsResource);
-                if(!meshletBounds || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource)
+                Core::Buffer* const localBounds = context.declarations.bufferForResource(plan.localBoundsResource);
+                if(
+                    !meshletBounds || !localBounds
+                    || commandList.getBufferState(meshletBounds) != Core::ResourceStates::ShaderResource
+                    || commandList.getBufferState(localBounds) != Core::ResourceStates::ShaderResource
+                )
                     return false;
             }
             if(plan.repacksNormals){
@@ -218,6 +218,13 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
             }
         }
         return true;
+    }
+
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+        if(!token.valid())
+            return;
+        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
+            payload.system.confirmGraphOwnedSkinningDispatch(plan);
     }
 };
 
@@ -273,6 +280,7 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     const bool timingReady =
         m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_Skinning.identity, device, s_PerRuntimeMeshTimingQueries)
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_MeshletBounds.identity, device, s_PerRuntimeMeshTimingQueries)
+        && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_LocalBounds.identity, device, s_PerRuntimeMeshTimingQueries)
         && m_graphics.gpuTiming().prepareScopeQueries(MeshSkinningGpuTimingScope::s_RepackNormals.identity, device, s_PerRuntimeMeshTimingQueries)
     ;
     if(!timingReady)
@@ -433,7 +441,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 !resources.bindlessResourceSlotsBuffer
                 || !resources.bindlessHeapHandles.resourceSlots.valid()
                 || resources.bindlessHeapHandles.resourceSlots.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-                || !m_boundsComputePipeline
+                || !m_boundsComputePipeline || !m_localBoundsComputePipeline
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' has incomplete graph-owned dispatch state"), instance->handle.value);
                 declarationFailed = true;
@@ -506,6 +514,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 plan.meshletLocalVertexRefResource = importBuffer(instance->meshletLocalVertexRefBuffer, "Runtime Meshlet Local Vertex Refs");
                 plan.meshletPrimitiveIndexResource = importBuffer(instance->meshletPrimitiveIndexBuffer, "Runtime Meshlet Primitive Indices");
                 plan.meshletBoundsResource = importBuffer(instance->meshletBoundsBuffer, "Runtime Meshlet Bounds");
+                plan.meshletLocalBoundsResource = importBuffer(instance->meshletLocalBoundsBuffer, "Runtime Meshlet Local Bounds");
+                plan.localBoundsResource = importBuffer(instance->localBoundsBuffer, "Runtime Local Bounds");
             }
             if(hasActiveSkin){
                 plan.meshletAttributeRefDeltaResource = importBuffer(instance->meshletAttributeRefDeltaBuffer, "Runtime Meshlet Attribute Deltas");
@@ -532,6 +542,11 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 Name("mesh_skinning.graph_bounds_pipeline"),
                 "Skinning Bounds Pipeline"
             );
+            plan.localBoundsPipeline = importComputePipeline(
+                m_localBoundsComputePipeline,
+                Name("mesh_skinning.graph_local_bounds_pipeline"),
+                "Skinning Local Bounds Pipeline"
+            );
             if(hasActiveSkin){
                 plan.skinningPipeline = importComputePipeline(
                     m_skinningComputePipeline,
@@ -556,6 +571,9 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 && plan.meshletPrimitiveIndexResource.valid()
                 && plan.meshletBoundsResource.valid()
                 && plan.boundsPipeline.valid()
+                && plan.meshletLocalBoundsResource.valid()
+                && plan.localBoundsResource.valid()
+                && plan.localBoundsPipeline.valid()
                 && (!hasActiveSkin || (
                     plan.restPositionResource.valid()
                     && plan.restNormalResource.valid()
@@ -792,12 +810,25 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     ;
 
     Core::GpuTimingSubmissionTicket timingTicket(m_graphics.gpuTiming());
-    // Payload plan lists reuse member storage; only capacity growth may allocate, never per-frame creation.
-    TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena);
+    // Each graph payload owns the dispatch data it needs until submission acceptance.
+    TaskGraphSkinningFinalizerTask::Payload finalizerPayload(m_arena, *this);
     finalizerPayload.plans.clear();
     finalizerPayload.plans.reserve(dispatchPlans.size());
-    for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans)
+    MeshSkinningLocalBoundsTask::Payload localBoundsPayload(m_arena, m_graphics, timingTicket);
+    localBoundsPayload.dispatches.reserve(dispatchPlans.size());
+    for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
         finalizerPayload.plans.push_back(plan);
+        if(plan.updatesMeshletBounds){
+            localBoundsPayload.dispatches.push_back({
+                .bindlessResourceSlotsResource = plan.bindlessResourceSlotsResource,
+                .meshletLocalBoundsResource = plan.meshletLocalBoundsResource,
+                .localBoundsResource = plan.localBoundsResource,
+                .localBoundsPipeline = plan.localBoundsPipeline,
+                .meshletCount = plan.meshletCount,
+                .bindlessResourceSlots = plan.bindlessResourceSlots,
+            });
+        }
+    }
     Core::GpuTaskId postDispatchDependency = terminalTask;
     if(!resourceUses.deformation.empty()){
         TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena);
@@ -858,12 +889,29 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
+    Core::GpuTaskDesc localBoundsDesc;
+    localBoundsDesc
+        .setIdentity(Name("mesh_skinning.frame_local_bounds"))
+        .setMarkerLabel("Runtime Skinning Local Bounds")
+        .setQueue(__hidden_system::SkinningDispatchQueueRequest())
+        .setScheduling(__hidden_system::SkinningDispatchScheduling())
+        .setDependencies(&postDispatchTask, 1u)
+        .setResourceUses(resourceUses.localBounds.data(), resourceUses.localBounds.size())
+    ;
+    if(previousFrameStateSourceCount != 0u)
+        localBoundsDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
+    const Core::GpuTaskId localBoundsTask = graph.addTask<MeshSkinningLocalBoundsTask>(localBoundsDesc, Move(localBoundsPayload));
+    if(!localBoundsTask.valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned local bounds reduction"));
+        return false;
+    }
+
     const Core::GpuTaskDesc finalizerDesc = Core::GpuTaskDesc{}
         .setIdentity(Name("mesh_skinning.frame_finalize_states"))
         .setMarkerLabel("Runtime Skinning Finalize States")
         .setQueue(__hidden_system::SkinningDispatchQueueRequest())
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
-        .setDependencies(&postDispatchTask, 1u)
+        .setDependencies(&localBoundsTask, 1u)
         .setResourceUses(resourceUses.finalizer.data(), resourceUses.finalizer.size())
     ;
     const Core::GpuTaskId finalizerTask = graph.addTask<TaskGraphSkinningFinalizerTask>(
@@ -1067,6 +1115,8 @@ void MeshSkinningSystem::invalidateResources(){
     m_boundsBindingLayout.reset();
     m_boundsComputeShader.reset();
     m_boundsComputePipeline.reset();
+    m_localBoundsComputeShader.reset();
+    m_localBoundsComputePipeline.reset();
     m_repackBindingLayout.reset();
     m_repackComputeShader.reset();
     m_repackComputePipeline.reset();

@@ -22,11 +22,13 @@ NWB_IMPL_BEGIN
 struct MeshSkinningGraphResourceUses{
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> deformation;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> postDispatch;
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> localBounds;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> finalizer;
 
     explicit MeshSkinningGraphResourceUses(Core::Alloc::ScratchArena& scratchArena)
         : deformation(scratchArena)
         , postDispatch(scratchArena)
+        , localBounds(scratchArena)
         , finalizer(scratchArena)
     {}
 };

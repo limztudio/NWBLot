@@ -22,7 +22,8 @@ NWB_IMPL_BEGIN
 RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
     Core::GpuTaskGraph& graph,
     const RayTracingSceneGraphResources& resources,
-    const Core::ResourceStates::Mask tlasInitialState){
+    const Core::ResourceStates::Mask tlasInitialState,
+    Core::Alloc::ScratchArena& scratchArena){
     if(!resources.valid())
         return {};
 
@@ -63,7 +64,7 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
     if(!tlas.valid())
         return {};
 
-    const RayTracingOpticalSceneGraphBuffer optical = ImportRayTracingOpticalSceneBuffer(graph, resources.opticalScene);
+    const RayTracingOpticalSceneGraphBuffer optical = ImportRayTracingOpticalSceneBuffer(graph, resources.opticalScene, scratchArena);
     if(!optical.valid())
         return {};
 

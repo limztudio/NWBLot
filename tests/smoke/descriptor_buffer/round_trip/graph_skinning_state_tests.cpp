@@ -114,7 +114,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
         0x85a308d3u,
         0x13198a2eu,
         0x03707344u,
+        0x9216a4d3u,
+        0x730fc85eu,
+        0x18b26749u,
+        0x4df09a65u,
     };
+    static_assert(sizeof(s_SelectorWords) == 80u);
     auto selectorBuffer = device.createBuffer(
         BufferDesc()
             .setDebugName(Name("tests/descriptor_buffer/skinning_bindless_selector"))

@@ -162,6 +162,36 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
     return false;
 }
 
+bool MeshSkinningSystem::ensureLocalBoundsPipeline(){
+    if(m_localBoundsComputePipeline)
+        return true;
+    if(!ensureBoundsPipeline())
+        return false;
+    if(!__hidden_pipeline::LoadComputeShader(
+        m_graphics,
+        m_assetManager,
+        m_shaderPathResolver,
+        m_localBoundsComputeShader,
+        AssetsGraphicsSkinnedMesh::s_LocalBoundsComputeShaderName,
+        Name("ECSMeshSkinning_LocalBoundsCS")
+    ))
+        return false;
+    auto& device = m_graphics.getDevice();
+    Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+    Core::ComputePipelineDesc pipelineDesc;
+    pipelineDesc
+        .setComputeShader(m_localBoundsComputeShader)
+        .addBindingLayout(m_boundsBindingLayout)
+        .addBindingLayout(heap.getResourceLayout())
+        .addBindingLayout(heap.getSamplerLayout())
+    ;
+    m_localBoundsComputePipeline = device.createComputePipeline(pipelineDesc);
+    if(m_localBoundsComputePipeline)
+        return true;
+    NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create local bounds compute pipeline"));
+    return false;
+}
+
 bool MeshSkinningSystem::ensureRepackPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();

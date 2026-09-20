@@ -1,6 +1,6 @@
 # Stress renderer performance review — 2026-09-19
 
-**Qualification correction, 2026-09-20:** the later optical-path audit below found that this stress scene rejects every admitted optical reflection path before issuing a hardware query. Earlier references to an "all-features" scene mean that the settings and passes were enabled, not that optical reflection transport succeeded. The recorded presentation rates and A/B improvements remain measurements of that effective workload; they do not qualify complete optical reflection or the original twenty-body target. Primary refraction and transparent shadows use separate traversal policies and are not shown to fail by these reflection counters.
+**Qualification correction, 2026-09-20:** the optical-path audit of `c9e594cfe` and its predecessors found that this stress scene rejected every admitted optical reflection path before issuing a hardware query. The current-pose bounds step at the end of this report removes that global rejection, with updated timing and remaining optical limitations reported separately. Earlier references to an "all-features" scene mean that the settings and passes were enabled, not that optical reflection transport succeeded. The recorded presentation rates and A/B improvements remain measurements of that effective workload; they do not qualify complete optical reflection or the original twenty-body target. Primary refraction and transparent shadows use separate traversal policies and are not shown to fail by these reflection counters.
 
 The first step removes unused rendering experiments and reuses accepted object-space geometry when a runtime mesh's pose has not changed. The second step reuses generated geometry across compatible transparent passes. Neither reaches the 60 FPS target. Transparent shadow transmission remains the dominant measured cost; surfel GI is much smaller.
 
@@ -337,7 +337,7 @@ Two frozen-baseline runs measured 42.5482 and 42.6975 FPS, aggregating to **42.6
 
 A separate complete stress run passed with the Khronos validation layer and debug messenger enabled, with no reported validation errors. Its 1,516 accepted diagnostic samples report `all_rejected`, unsupported ratio 1.0, exterior-eligible ratio 0.0 and queries per admitted ray 0.0. Its timing is excluded from the performance comparison. The harness's presentation PASS is explicitly separate from the optical status; it does not certify optical correctness. Evidence is in `final_run{1,2}`, `baseline_run{1,2}`, `comparison_final.json` and `validation_final`, alongside the final native/CPU/Python test logs.
 
-## Next architecture work
+## Architecture plan recorded before the current-pose bounds step
 
 1. **Publish conservative current-pose optical bounds.** Skinning already computes per-meshlet position extrema. Emit finite-valid AABB partials there and reduce them into a skinning-owned bounds resource tied to accepted deformation identity. Expose it through the runtime mesh contract. Raytracing must transform those bounds with the exact TLAS snapshot and build its own GPU-resolved optical metadata, preserving the existing immutable upload and accepted-submission lifetimes. Unchanged accepted poses can reuse local bounds; changed transforms still require a new world union. Avoid CPU readback and do not substitute bind-pose bounds for arbitrary deformation.
 2. **Establish an explicit supported optical model for the stress geometry.** Solid glass requires appropriately closed authored geometry and a validated volume contract. Open surfaces need an explicit thin-surface model. This is an authoring/optical-policy decision, not a bounds optimization; the current body remains unchanged pending that choice.
@@ -348,3 +348,44 @@ A separate complete stress run passed with the Khronos validation layer and debu
 The 60 FPS budget is 16.67 ms. Current approximately 42 FPS measurements still exceed that budget and underrepresent the intended optical workload. The corrected optical scene must be qualified before an honest remaining frame-budget estimate can be made.
 
 Local evidence is under `__artifacts/stress_60fps/reflection_exterior_ef31f0b88/`: the frozen `baseline`, `eligibility_enabled`, `eligibility_summary.json`, `body_topology_audit.json`, standalone `audit_body_topology.py`, `dynamic_optical_bounds_plan.md`, `native_final.log`, `ecs_final.log` and `python_final.log`. The earlier `eligibility` run did not forward the diagnostic environment switch and contains no eligibility evidence; it must not be used as such. Native failure logs are retained alongside the final passing run.
+
+## Completed current-pose optical bounds, 2026-09-20
+
+The hardware optical path now receives conservative bounds from the current accepted GPU deformation. Skinning emits a 32-byte AABB beside each existing meshlet sphere/cone and reduces those partials to one local bounds record. Empty or nonfinite contributions invalidate the complete record. Outward padding covers float rounding and subnormal flushing before arbitrary world transforms. The new reduction runs only when deformation output changes; unchanged accepted poses keep their existing bounds and skip the skinning work.
+
+The runtime mesh contract exposes that record only with a nonzero accepted geometry revision. Its two new source/output identities participate in deformation invalidation and live resource retention, bringing the tracked buffer count to 19. The terminal skinning finalizer publishes the generation after deformation, repacking, partial bounds and reduction have been accepted. New bounds resources preserve their final ShaderResource state rather than restoring Common on command-list close.
+
+Mesh resources own the renderer descriptor and include bounds identity in runtime cache/snapshot matching. The ray-tracing owner retains the exact emitted instance order, accepted bounds resources and frozen TLAS transforms. One primary-Graphics task transforms and unions the bounds, copying immutable CPU metadata into a separate GPU-resolved output. It preserves entities, boundary policy, priority and unrelated flags. A missing or invalid contributor leaves the scene union incomplete. This avoids CPU readback and preserves the immutable upload cache. Previous asynchronous optical readers join the presentation/recovery frontier before a subsequent overwrite. Static-only scenes retain the existing upload path; software shaders do not consume this metadata, so that route retains its original conservative metadata without an unused finalizer pipeline or allocation.
+
+### Measurement and optical qualification
+
+The baseline executable and resource volume were frozen from `c9e594cfe` before building this change. Each process used the existing ten-body scene at 1280 x 900, five seconds of warmup and thirty seconds of accepted native presentation counting. Validation and reflection diagnostics were disabled in performance runs. Executable and packed-volume identities were checked by the harness. This is a changed effective optical workload, so the comparison does not establish a same-quality optimization or regression.
+
+| Measurement | Frozen predecessor | Current bounds integration |
+| --- | ---: | ---: |
+| Presentation run 1 | 43.2657 FPS | 33.2451 FPS |
+| Presentation run 2 | Not repeated in this step | 33.0958 FPS |
+| Aggregate current presentation rate | — | **33.1704 FPS / 30.1473 ms** |
+| Hardware reflection dispatch, mean GPU range | 2.6817 ms | 9.3504–9.4878 ms |
+| Optical bounds finalize, mean GPU range | Absent | **0.00718–0.00724 ms** |
+| Surfel GI envelope, mean GPU range | 1.3610 ms | 1.3532–1.3934 ms |
+| Shadow visibility envelope, mean GPU range | 6.3601 ms | 6.3582–6.3907 ms |
+| AVBOIT refraction resolve, mean GPU range | 1.3474 ms | 1.4703–1.5280 ms |
+
+GPU ranges overlap and have different sample populations; the rows are not an additive frame budget. Scope selection excludes warmup, the timing ring delay and the terminal report. No steady-state skinning/reduction dispatch occurs in this fixed-pose stress run; animated poses do execute it.
+
+A separate stress run passed with the Khronos validation layer and debug messenger enabled. Across 1,056 accepted reflection diagnostic samples, it recorded 52,870,752 admitted rays, 91,791,744 hardware queries, 13,934,976 bootstrap events, 2,424,576 transparent paths and 16,359,552 unsupported paths. The unsupported share dropped from the predecessor's 100% with zero queries to **30.9425%**, with **1.73615 queries per admitted ray**. These samples include warmup. Query activity and absence of validation errors do not certify optical correctness. The 14,784 exterior-eligible rays are only **0.02796%** of admitted rays, so a queue split based on the existing whole-scene bounds proof still lacks a useful eligible population.
+
+The scene's open body mesh and its Unspecified refractive boundary policy remain unchanged. Bounds now permit tracing; they do not provide the missing solid-volume or thin-surface semantics. Remaining unsupported paths are consistent with that policy limitation, but the aggregate counter does not distinguish every rejection reason. No 60 FPS or complete optical-transport qualification is claimed. The requested twenty-body workload also remains unqualified.
+
+### Validation and next work
+
+- Native `opt` builds and production shader/asset cooking pass. First-build missing-include and handle-reset errors were corrected before test execution.
+- All **417 enabled ECS graphics tests** pass; 61 existing tests remain disabled. New gather coverage checks ordering, policy preservation, immutable metadata, missing bindings and invalid contributors. Extended deformation tests check accepted/pending/rejected publication and resource replacement.
+- Both new native GPU tests pass **35 scenarios** using production meshlet, local-bounds and optical-union shaders. They cover current-pose positions outside bind-pose bounds, 129 meshlets, 65 runtime contributors, invalid/empty/subnormal/near-overflow inputs, mirrored and nonuniform transforms, shear, cancellation, an independent FP64 eight-corner enclosure oracle, bounded outward error, and metadata/guard preservation.
+- All **three native optical upload/owner tests** and **five native skinning graph/layout tests** pass. Existing state fixtures now cover the 80-byte selector and four-stage/seven-buffer handoff, including acceptance only after submission.
+- Early and late animated skinned-caustic captures pass the strict capture harness with GPU validation requested. Visual inspection shows different deformed poses and corresponding shadow footprints. This confirms active animation and provides a visual smoke check; it does not certify the open body's glass semantics.
+
+The new bounds task is a negligible part of the measured frame. The next substantial work is to establish the intended optical model for the open character geometry, then profile and reduce the now-active reflection traversal cost. GI's roughly 1.35 ms envelope alone cannot explain the approximately 30.15 ms presentation interval. Any proposed reflection specialization must preserve required transport and demonstrate eligibility/cost savings on a supported workload before a full-scene 60 FPS claim.
+
+Evidence is under `__artifacts/stress_60fps/runtime_bounds_c9e594cfe/`: frozen `baseline`, `baseline_run1`, `candidate_run{1,2}`, per-run `gpu_summary.json`, `validation`, `cpu.xml`, `gpu_bounds.xml`, `raytrace.xml`, `gpu_graph.xml`, and `skinned_{early,late}.bmp` with capture logs. Build failure logs are retained alongside the passing build logs. These local binary/image/log artifacts are ignored by Git.

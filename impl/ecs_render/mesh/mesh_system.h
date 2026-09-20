@@ -59,6 +59,8 @@ namespace ECSRenderDetail{
         Core::BufferHandle positionBuffer;
         Core::BufferHandle triangleIndexBuffer;
         Core::BufferHandle attributeBuffer;
+        Core::BufferHandle runtimeLocalBoundsBuffer;
+        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
         Core::RayTracingAccelStructHandle blas;
         Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();

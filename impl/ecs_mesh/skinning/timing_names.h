@@ -27,6 +27,7 @@ namespace MeshSkinningGpuTimingScope{
 
 inline constexpr Core::GpuTimingScopeDefinition s_Skinning("mesh_skinning.skinning");
 inline constexpr Core::GpuTimingScopeDefinition s_MeshletBounds("mesh_skinning.meshlet_bounds");
+inline constexpr Core::GpuTimingScopeDefinition s_LocalBounds("mesh_skinning.local_bounds");
 inline constexpr Core::GpuTimingScopeDefinition s_RepackNormals("mesh_skinning.repack_normals");
 
 

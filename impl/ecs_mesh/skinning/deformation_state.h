@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 
 
 struct MeshSkinningRuntimeInstance;
-using MeshSkinningResourceBuffers = Array<Core::BufferHandle, 17u>;
+using MeshSkinningResourceBuffers = Array<Core::BufferHandle, 19u>;
 
 // Retains exact buffer identities so resource replacement cannot reuse old descriptor bindings.
 [[nodiscard]] MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance);

@@ -27,6 +27,7 @@ static_assert(OpticalBoundaryMode::ClosedPriority == NWB_RT_OPTICAL_BOUNDARY_CLO
 
 RayTracingOpticalSceneGather::RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, const usize capacity)
     : instances(arena)
+    , runtimeBounds(arena)
 {
     instances.reserve(capacity);
 }
@@ -73,11 +74,35 @@ void RayTracingOpticalSceneGather::append(
     instances.push_back(instance);
 }
 
+void RayTracingOpticalSceneGather::appendRuntime(
+    const Core::ECS::EntityID entity,
+    const RendererComponent& renderer,
+    const Core::BufferHandle& boundsBuffer,
+    const Core::GpuDescriptorHandle boundsDescriptor,
+    const Float34U& objectToWorld){
+    const bool staticComplete = boundsCompleteExceptRuntime;
+    const u32 instanceIndex = static_cast<u32>(instances.size());
+    append(entity, renderer, true, {}, {}, false);
+    // The CPU upload stays deliberately incomplete. Only the GPU finalizer can validate this contributor.
+    if(!boundsBuffer || !boundsDescriptor.valid() || boundsDescriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
+        return;
+    boundsCompleteExceptRuntime = staticComplete;
+    if(runtimeBounds.empty())
+        runtimeBounds.reserve(instances.capacity());
+    runtimeBounds.push_back({ boundsBuffer, boundsDescriptor, objectToWorld, instanceIndex });
+}
+
 u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
     u64 hash = FNV64_OFFSET_BASIS;
     Fnv64AppendValue(hash, header);
     for(const auto& instance : instances)
         Fnv64AppendValue(hash, instance);
+    if(!runtimeBounds.empty())
+        Fnv64AppendValue(hash, boundsCompleteExceptRuntime);
+    for(const auto& bounds : runtimeBounds){
+        Fnv64AppendValue(hash, bounds.objectToWorld);
+        Fnv64AppendValue(hash, bounds.instanceIndex);
+    }
     return hash;
 }
 

@@ -10,6 +10,8 @@
 
 #include <core/alloc/scratch.h>
 #include <core/ecs/entity_id.h>
+#include <core/graphics/rhi/gpu_descriptor_heap.h>
+#include <core/graphics/rhi/resource.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,12 +50,21 @@ static_assert(offsetof(RayTracingOpticalInstanceGpu, mediumPriority) == NWB_RT_O
 static_assert(offsetof(RayTracingOpticalInstanceGpu, boundaryMode) == NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
 static_assert(offsetof(RayTracingOpticalInstanceGpu, flags) == NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET);
 
+struct RayTracingOpticalRuntimeBounds{
+    Core::BufferHandle buffer;
+    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
+    Float34U objectToWorld = {};
+    u32 instanceIndex = 0u;
+};
+
 // Built in the existing RT gather, after duplicate suppression and with the exact emitted instance ordering.
 // Invalid or omitted geometry clears the air-shortcut proof, including when no known transparent instance remains.
 struct RayTracingOpticalSceneGather{
     RayTracingOpticalSceneHeaderGpu header;
     Vector<RayTracingOpticalInstanceGpu, Core::Alloc::ScratchArena> instances;
+    Vector<RayTracingOpticalRuntimeBounds, Core::Alloc::ScratchArena> runtimeBounds;
     bool hasBounds = false;
+    bool boundsCompleteExceptRuntime = true;
 
     explicit RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, usize capacity);
     void append(
@@ -64,7 +75,17 @@ struct RayTracingOpticalSceneGather{
         const Float3U& boundsMax,
         bool boundsValid
     );
-    void markIncomplete()noexcept{ header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID; }
+    void appendRuntime(
+        Core::ECS::EntityID entity,
+        const RendererComponent& renderer,
+        const Core::BufferHandle& boundsBuffer,
+        Core::GpuDescriptorHandle boundsDescriptor,
+        const Float34U& objectToWorld
+    );
+    void markIncomplete()noexcept{
+        header.flags &= ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID;
+        boundsCompleteExceptRuntime = false;
+    }
     [[nodiscard]] u64 contentHash()const noexcept;
 };
 

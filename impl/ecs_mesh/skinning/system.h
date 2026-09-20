@@ -144,6 +144,8 @@ private:
         Core::GpuDescriptorHandle primitiveIndices = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle meshletBounds = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle attributeBuffer = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle meshletLocalBounds = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle localBounds = Core::GpuDescriptorHandle::invalid();
     };
 
     struct RuntimeResources{
@@ -186,6 +188,8 @@ private:
                 && storageHandle(bindlessHeapHandles.localVertexRefs)
                 && storageHandle(bindlessHeapHandles.primitiveIndices)
                 && storageHandle(bindlessHeapHandles.meshletBounds)
+                && storageHandle(bindlessHeapHandles.meshletLocalBounds)
+                && storageHandle(bindlessHeapHandles.localBounds)
             ;
             return common
                 && (!hasActiveSkin || (storageHandle(bindlessHeapHandles.skinInfluences) && storageHandle(bindlessHeapHandles.jointPalette)))
@@ -241,6 +245,7 @@ public:
 private:
     [[nodiscard]] bool ensureSkinningPipeline();
     [[nodiscard]] bool ensureBoundsPipeline();
+    [[nodiscard]] bool ensureLocalBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] bool submitFrameSkinningGraph();
@@ -302,6 +307,8 @@ private:
     Core::BindingLayoutHandle m_boundsBindingLayout;
     Core::ShaderHandle m_boundsComputeShader;
     Core::ComputePipelineHandle m_boundsComputePipeline;
+    Core::ShaderHandle m_localBoundsComputeShader;
+    Core::ComputePipelineHandle m_localBoundsComputePipeline;
     Core::BindingLayoutHandle m_repackBindingLayout;
     Core::ShaderHandle m_repackComputeShader;
     Core::ComputePipelineHandle m_repackComputePipeline;

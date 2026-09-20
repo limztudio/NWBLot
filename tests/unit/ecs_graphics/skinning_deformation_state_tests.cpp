@@ -41,6 +41,8 @@ inline constexpr Core::BufferHandle MeshSkinningRuntimeInstance::* s_InstanceBuf
     &MeshSkinningRuntimeInstance::attributeSkinBuffer,
     &MeshSkinningRuntimeInstance::triangleIndexBuffer,
     &MeshSkinningRuntimeInstance::attributeBuffer,
+    &MeshSkinningRuntimeInstance::meshletLocalBoundsBuffer,
+    &MeshSkinningRuntimeInstance::localBoundsBuffer,
 };
 
 
@@ -229,12 +231,14 @@ TEST(SkinningDeformationState, RuntimeDescriptionPublishesPendingZeroWithoutChan
     RuntimeMeshDesc initial;
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, initial));
     EXPECT_EQ(initial.geometryContentRevision, 0u);
+    EXPECT_EQ(initial.localBoundsBuffer, nullptr);
     SkeletonJointMatrix joint = Float34Identity();
     const u64 candidate = state.stage(context.inputs, &joint, 1u);
     ASSERT_TRUE(state.accept(candidate));
     RuntimeMeshDesc accepted;
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, accepted));
     EXPECT_EQ(accepted.geometryContentRevision, 1u);
+    EXPECT_EQ(accepted.localBoundsBuffer, instance.localBoundsBuffer);
     EXPECT_EQ(accepted.meshKey, initial.meshKey);
     EXPECT_EQ(accepted.version, initial.version);
     joint.rows[2u].w = 1.0f;
@@ -242,9 +246,30 @@ TEST(SkinningDeformationState, RuntimeDescriptionPublishesPendingZeroWithoutChan
     RuntimeMeshDesc pending;
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, pending));
     EXPECT_EQ(pending.geometryContentRevision, 0u);
+    EXPECT_EQ(pending.localBoundsBuffer, nullptr);
     EXPECT_EQ(pending.meshKey, accepted.meshKey);
     EXPECT_EQ(pending.version, accepted.version);
     EXPECT_EQ(pending.positionBuffer, accepted.positionBuffer);
+
+    // An unaccepted new pose cannot borrow the previously accepted bounds, even with the same output allocation.
+    const u64 rejected = state.stage(context.inputs, &joint, 1u);
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, pending));
+    EXPECT_EQ(pending.localBoundsBuffer, nullptr);
+    state.refreshCurrent(context.inputs, &joint, 1u, false);
+    const u64 retry = state.stage(context.inputs, &joint, 1u);
+    EXPECT_FALSE(state.accept(rejected));
+    ASSERT_TRUE(state.accept(retry));
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, accepted));
+    EXPECT_EQ(accepted.localBoundsBuffer, instance.localBoundsBuffer);
+    EXPECT_EQ(accepted.geometryContentRevision, 2u);
+    state.refreshCurrent(context.inputs, &joint, 1u, false);
+    RuntimeMeshDesc unchanged;
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, unchanged));
+    EXPECT_EQ(unchanged.localBoundsBuffer, accepted.localBoundsBuffer);
+    EXPECT_EQ(unchanged.geometryContentRevision, accepted.geometryContentRevision);
+    state.refreshCurrent(context.inputs, &joint, 1u, true);
+    ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, pending));
+    EXPECT_EQ(pending.localBoundsBuffer, nullptr);
 }
 
 TEST(SkinningDeformationState, AcceptanceAndRepeatedUnchangedQueriesDoNotAllocate){

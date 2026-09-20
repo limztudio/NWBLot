@@ -44,6 +44,8 @@ void CaptureRayTracingResourceSnapshot(
         .positionBuffer = mesh.positionBuffer,
         .triangleIndexBuffer = mesh.triangleIndexBuffer,
         .attributeBuffer = mesh.attributeBuffer,
+        .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
+        .runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle,
         .blas = mesh.blas,
         .swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle,
         .swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
@@ -79,6 +81,8 @@ void CaptureRayTracingResourceSnapshot(
         && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
         && mesh.triangleIndexBuffer.get() == snapshot.triangleIndexBuffer.get()
         && mesh.attributeBuffer.get() == snapshot.attributeBuffer.get()
+        && mesh.runtimeLocalBoundsBuffer == snapshot.runtimeLocalBoundsBuffer
+        && mesh.runtimeLocalBoundsHeapHandle == snapshot.runtimeLocalBoundsHeapHandle
         && mesh.blas.get() == snapshot.blas.get()
         && mesh.swBvhPositionHeapHandle == snapshot.swBvhPositionHeapHandle
         && mesh.swBvhTriangleIndexHeapHandle == snapshot.swBvhTriangleIndexHeapHandle
@@ -115,6 +119,8 @@ void CaptureRayTracingResourceSnapshot(
         && lhs.positionBuffer.get() == rhs.positionBuffer.get()
         && lhs.triangleIndexBuffer.get() == rhs.triangleIndexBuffer.get()
         && lhs.attributeBuffer.get() == rhs.attributeBuffer.get()
+        && lhs.runtimeLocalBoundsBuffer == rhs.runtimeLocalBoundsBuffer
+        && lhs.runtimeLocalBoundsHeapHandle == rhs.runtimeLocalBoundsHeapHandle
         && lhs.swBvhPositionHeapHandle == rhs.swBvhPositionHeapHandle
         && lhs.swBvhTriangleIndexHeapHandle == rhs.swBvhTriangleIndexHeapHandle
         && lhs.meshletPrimitiveIndexCount == rhs.meshletPrimitiveIndexCount
@@ -182,6 +188,7 @@ bool RendererMeshSystem::findRenderableRayTracingResourceSnapshot(
             || mesh.positionBuffer != desc.runtimeMesh.positionBuffer
             || mesh.triangleIndexBuffer != desc.runtimeMesh.triangleIndexBuffer
             || mesh.attributeBuffer != desc.runtimeMesh.attributeBuffer
+            || mesh.runtimeLocalBoundsBuffer != desc.runtimeMesh.localBoundsBuffer
             || mesh.meshletPrimitiveIndexCount != desc.runtimeMesh.meshletPrimitiveIndexCount
         ))
         || !meshRenderBindingsReady(mesh)

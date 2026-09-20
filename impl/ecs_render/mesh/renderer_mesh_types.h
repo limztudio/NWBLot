@@ -62,6 +62,8 @@ struct MeshResources : public RuntimeMeshBuffers{
     // Unified generated geometry: legacy expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
     Core::BufferHandle triangleIndexBuffer;
+    Core::BufferHandle runtimeLocalBoundsBuffer;
+    Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
     // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.

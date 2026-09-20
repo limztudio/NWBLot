@@ -230,7 +230,7 @@ TEST_F(DescriptorBufferRoundTripTest, SwShadowTraceShapeBuildsAsDescriptorBuffer
 
 
 // Skinned-mesh compute resolves every persistent stream and its per-runtime selector payload through the global heap.
-// Its three local leaves therefore retain only their dispatch push blocks. Verify those push-only layouts and their
+// Its four local leaves therefore retain only their dispatch push blocks. Verify those push-only layouts and their
 // composition with the global resource/sampler heap layouts.
 TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorBuffer){
     auto& device = DescriptorBufferRoundTripTest::device();
@@ -247,6 +247,7 @@ TEST_F(DescriptorBufferRoundTripTest, SkinnedMeshComputeShapesBuildAsDescriptorB
     const ComputeShape shapes[] = {
         { "skinning", NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE },
         { "bounds", NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE },
+        { "local_bounds", NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE },
         { "repack", NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE },
     };
 

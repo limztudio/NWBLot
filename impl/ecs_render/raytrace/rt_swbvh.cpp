@@ -1203,7 +1203,17 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
             && ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax, opticalMin, opticalMax)
         ;
-        opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
+        const bool runtimeOpticalBounds =
+            transparent && (resolvedMesh.runtime || mesh.runtimeMesh) && mesh.runtimeLocalBoundsBuffer
+            && mesh.runtimeLocalBoundsHeapHandle.valid()
+            && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
+            && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
+        ;
+        if(runtimeOpticalBounds)
+            opticalScene.appendRuntime(entity, renderer, mesh.runtimeLocalBoundsBuffer, mesh.runtimeLocalBoundsHeapHandle, opticalWorld);
+        else
+            opticalScene.append(entity, renderer, transparent, opticalMin, opticalMax, opticalBoundsValid);
 
         instances.push_back(instanceDesc);
         instanceBlases.push_back(mesh.blas);
@@ -1443,7 +1453,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
     }
     // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
     if(!commandList){
-        if(!m_hardwareOpticalScene.prepare(opticalScene))
+        if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
             return false;
         Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
         m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };

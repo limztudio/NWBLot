@@ -23,9 +23,8 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The active-pose skinning path has three graph stages: deformation writes all skinned streams as UAVs, bounds and
-// repack consume the required streams as SRVs while producing their own UAV outputs, and a finalizer publishes every
-// generated stream. This probe is getter-only so packet-lowered barriers are the entire state contract.
+// Active-pose skinning deforms streams, produces meshlet bounds/attributes, reduces partial local bounds, then publishes
+// every generated stream. This probe is getter-only so packet-lowered barriers are the entire state contract.
 struct SkinningGraphStateProbeTask{
     struct Expectation{
         GpuGraphResourceId resource;
@@ -33,7 +32,7 @@ struct SkinningGraphStateProbeTask{
     };
 
     struct Payload{
-        Expectation expectations[5u] = {};
+        Expectation expectations[7u] = {};
         usize expectationCount = 0u;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;

@@ -37,6 +37,8 @@ MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinnin
         instance.attributeSkinBuffer,
         instance.triangleIndexBuffer,
         instance.attributeBuffer,
+        instance.meshletLocalBoundsBuffer,
+        instance.localBoundsBuffer,
     };
 }
 

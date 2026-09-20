@@ -4,6 +4,7 @@
 
 #include "mesh_system.h"
 
+#include <impl/assets/graphics/mesh/runtime_bounds_constants.h>
 #include <impl/ecs_render/mesh/compute_emulation_layout.h>
 #include <impl/ecs_render/mesh/renderer_mesh_state.h>
 #include <impl/ecs_render/shared/renderer_push_constants_private.h>
@@ -25,6 +26,26 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
     if(!createMeshGeometryHeapHandles(mesh))
         return false;
 
+    if(mesh.runtimeLocalBoundsBuffer && !mesh.runtimeLocalBoundsHeapHandle.valid()){
+        auto& device = m_graphics.getDevice();
+        Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
+        const Core::BufferDesc& desc = mesh.runtimeLocalBoundsBuffer->getCreationDescription();
+        if(!heap.isInitialized() || desc.byteSize < NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE || !desc.canHaveRawViews){
+            releaseMeshGeometryHeapHandles(mesh);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime local bounds require a complete raw GPU buffer"));
+            return false;
+        }
+        const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
+        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.runtimeLocalBoundsBuffer.get()))){
+            if(handle.valid())
+                heap.free(handle);
+            releaseMeshGeometryHeapHandles(mesh);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register runtime local bounds"));
+            return false;
+        }
+        mesh.runtimeLocalBoundsHeapHandle = handle;
+    }
+
     // Non-mesh-shader devices use emulation; establish its output with the mesh resource.
     if(
         !m_graphics.queryFeatureSupport(Core::Feature::Meshlets)
@@ -40,6 +61,13 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
 
 bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const{
     if(!mesh.valid() || !meshGeometryHeapHandlesReady(mesh))
+        return false;
+
+    if(
+        mesh.runtimeLocalBoundsBuffer
+        && (!mesh.runtimeLocalBoundsHeapHandle.valid()
+            || mesh.runtimeLocalBoundsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
+    )
         return false;
 
     return m_graphics.queryFeatureSupport(Core::Feature::Meshlets)
@@ -359,11 +387,14 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
             heap.free(mesh.swBvhParentHeapHandle);
         if(mesh.emulationVertexHeapHandle.valid())
             heap.free(mesh.emulationVertexHeapHandle);
+        if(mesh.runtimeLocalBoundsHeapHandle.valid())
+            heap.free(mesh.runtimeLocalBoundsHeapHandle);
         mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
         mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
         return;
     }
 
@@ -374,6 +405,7 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
     mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
 }
 
 void RendererMeshSystem::releaseAllMeshGeometryHeapHandles(){

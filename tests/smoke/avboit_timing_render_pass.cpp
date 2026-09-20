@@ -51,6 +51,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
         Impl::RendererGpuTimingScope::s_AvboitIntegration.identity,
         Impl::RendererGpuTimingScope::s_AvboitAccumulate.identity,
         Impl::RendererGpuTimingScope::s_RefractionResolve.identity,
+        Impl::RendererGpuTimingScope::s_OpticalBoundsFinalize.identity,
     };
     auto& graphics = getGraphics();
     auto& device = graphics.getDevice();

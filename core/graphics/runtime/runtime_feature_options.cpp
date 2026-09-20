@@ -26,6 +26,14 @@ bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
+bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy){
+    if(m_instanceCreated || !IsValidHardwareRayTracingPolicy(policy))
+        return false;
+
+    m_deviceCreationParams.hardwareRayTracingPolicy = policy;
+    return true;
+}
+
 bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled){
     if(m_instanceCreated)
         return false;

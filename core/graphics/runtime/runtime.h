@@ -170,6 +170,8 @@ public:
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
     bool setDebugRuntimeEnabled(bool enabled);
+    // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
+    bool setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy);
     // Selects the native mesh-shader path when the backend supports it. Disabled configurations use the renderer's
     // compute-emulation path. Must be configured before instance creation.
     bool setNativeMeshShadersEnabled(bool enabled);

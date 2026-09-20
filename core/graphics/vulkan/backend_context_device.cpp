@@ -92,7 +92,7 @@ bool BackendContext::createVulkanDevice(){
             enabledFeature = optIt.value();
         }
 
-        if(!enableExtension && m_deviceParams.enableRayTracingExtensions){
+        if(!enableExtension && m_deviceParams.hardwareRayTracingPolicy == HardwareRayTracingPolicy::Automatic){
             auto rtIt = m_rayTracingExtensions.find(name);
             if(rtIt != m_rayTracingExtensions.end()){
                 enableExtension = true;

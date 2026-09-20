@@ -1317,4 +1317,5 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         message(STATUS "Skipping skinning culling benchmark; missing tests/smoke/assets/characters/body.nwb.")
     endif()
     unset(_nwb_skinning_culling_model_nwb)
+    include("${CMAKE_CURRENT_LIST_DIR}/software_raytracing_smokes.cmake")
 endif()

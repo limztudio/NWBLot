@@ -160,7 +160,7 @@ GraphicsRuntime::GraphicsRuntime(
     , m_swapChainFramebuffers(m_allocator.getObjectArena())
     , m_windowTitle(m_allocator.getObjectArena())
 {
-    m_deviceCreationParams.enableRayTracingExtensions = true;
+    m_deviceCreationParams.hardwareRayTracingPolicy = HardwareRayTracingPolicy::Automatic;
     m_swapChainState.backBufferFormat = m_deviceCreationParams.swapChainFormat;
     if(m_cpuTiming)
         m_frameTimingScope = m_cpuTiming->registerScope(__hidden_graphics_lifecycle::s_GraphicsFrameCpuTimingScope);

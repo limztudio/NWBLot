@@ -40,6 +40,11 @@ bool BackendContext::createInstance(){
 }
 
 bool BackendContext::createDevice(){
+    if(!IsValidHardwareRayTracingPolicy(m_deviceParams.hardwareRayTracingPolicy)){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid hardware ray tracing device policy."));
+        return false;
+    }
+
     if(m_deviceParams.enableDebugRuntime)
         installDebugMessenger();
 
@@ -70,10 +75,18 @@ bool BackendContext::createDevice(){
             it.value() = feature;
     };
 
-    for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions)
+    for(const auto& name : m_deviceParams.requiredBackendDeviceExtensions){
+        if(ResolveDeviceExtensionRequest(m_deviceParams.hardwareRayTracingPolicy, name, true) == DeviceExtensionRequestAction::Reject){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required device extension '{}' conflicts with the disabled hardware ray tracing policy."), StringConvert(name));
+            return false;
+        }
         registerDeviceExtension(m_enabledExtensions.device, name, resolveDeviceExtensionFeature(name));
-    for(const auto& name : m_deviceParams.optionalBackendDeviceExtensions)
+    }
+    for(const auto& name : m_deviceParams.optionalBackendDeviceExtensions){
+        if(ResolveDeviceExtensionRequest(m_deviceParams.hardwareRayTracingPolicy, name, false) == DeviceExtensionRequestAction::Omit)
+            continue;
         registerDeviceExtension(m_optionalExtensions.device, name, resolveDeviceExtensionFeature(name));
+    }
     if(m_deviceParams.enableGpuCrashDiagnostics){
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
         m_optionalExtensions.device.emplace(GraphicsString(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME, m_arena), DeviceExtensionFeature::None);
@@ -269,6 +282,26 @@ bool BackendContext::createDevice(){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Required descriptor-buffer heap initialization failed."));
         m_rhiDevice = nullptr;
         return false;
+    }
+
+    if(m_deviceParams.hardwareRayTracingPolicy == HardwareRayTracingPolicy::Disabled){
+        const bool rayQuery = m_rhiDevice->queryFeatureSupport(Feature::RayQuery);
+        const bool rayTracingPipeline = m_rhiDevice->queryFeatureSupport(Feature::RayTracingPipeline);
+        const bool accelerationStructure = m_rhiDevice->queryFeatureSupport(Feature::RayTracingAccelStruct);
+        const GpuDescriptorHeapLifecycleStatistics heap = m_rhiDevice->getDescriptorHeap().lifecycleStatistics();
+        const bool accelerationStructureLayout = m_rhiDevice->getDescriptorHeap().hasAccelStructLayout();
+        if(rayQuery || rayTracingPipeline || accelerationStructure || heap.accelStructCapacity != 0u || accelerationStructureLayout){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Disabled hardware ray tracing policy produced incompatible device capabilities."));
+            m_rhiDevice = nullptr;
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Vulkan: hardware ray tracing policy=disabled; RayQuery={} RayTracingPipeline={} RayTracingAccelStruct={} AccelStructDescriptors={} AccelStructLayout={}")
+            , static_cast<u32>(rayQuery)
+            , static_cast<u32>(rayTracingPipeline)
+            , static_cast<u32>(accelerationStructure)
+            , heap.accelStructCapacity
+            , static_cast<u32>(accelerationStructureLayout)
+        );
     }
 
     return true;

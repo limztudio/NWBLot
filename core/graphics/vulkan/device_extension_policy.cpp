@@ -1,0 +1,40 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "device_extension_policy.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+DeviceExtensionRequestAction::Enum ResolveDeviceExtensionRequest(
+    const HardwareRayTracingPolicy::Enum policy, const AStringView extensionName, const bool required)noexcept{
+    if(!IsValidHardwareRayTracingPolicy(policy))
+        return DeviceExtensionRequestAction::Reject;
+    if(policy == HardwareRayTracingPolicy::Automatic)
+        return DeviceExtensionRequestAction::Enable;
+
+    // Generic dependency extensions remain available to non-RT callers that request them explicitly.
+    for(const DeviceExtensionEntry& entry : s_RayTracingDeviceExtensions){
+        if(entry.feature != DeviceExtensionFeature::None && extensionName == entry.name)
+            return required ? DeviceExtensionRequestAction::Reject : DeviceExtensionRequestAction::Omit;
+    }
+    return DeviceExtensionRequestAction::Enable;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_VULKAN_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

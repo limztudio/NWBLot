@@ -43,7 +43,7 @@ void BackendContext::initDefaultExtensions(){
             m_enabledExtensions.instance.emplace(GraphicsString(name, m_arena));
     }
 
-    for(const auto& e : s_RayTracingExts)
+    for(const auto& e : s_RayTracingDeviceExtensions)
         m_rayTracingExtensions.emplace(GraphicsString(e.name, m_arena), e.feature);
 }
 

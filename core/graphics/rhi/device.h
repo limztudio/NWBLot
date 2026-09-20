@@ -6,6 +6,7 @@
 
 
 #include "coopvec.h"
+#include "hardware_ray_tracing_policy.h"
 
 #include <core/task/cpu/scheduler.h>
 #include "gpu_descriptor_heap.h"
@@ -360,7 +361,8 @@ struct DeviceCreationParameters : public InstanceParameters{
     u32 swapChainSampleQuality = 0;
     u32 maxFramesInFlight = s_MaxFramesInFlight;
     bool enableNvrhiValidationLayer = false;
-    bool enableRayTracingExtensions = false;
+    // Low-level devices retain their conservative default; GraphicsRuntime selects Automatic unless overridden.
+    HardwareRayTracingPolicy::Enum hardwareRayTracingPolicy = HardwareRayTracingPolicy::Disabled;
     // Native mesh shaders are optional. Windows ARM64 defaults to the compute-emulation path because extension
     // advertisement alone does not qualify native mesh-output correctness; callers may explicitly opt in.
 #if defined(_WIN32) && (defined(__aarch64__) || defined(_M_ARM64))

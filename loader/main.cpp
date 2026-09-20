@@ -70,6 +70,7 @@ inline constexpr u16 s_StandaloneLoggerPort = 0u;
 inline constexpr char s_LoaderAppName[] = "loader";
 inline constexpr char s_CrashUploadTokenOption[] = "--crash-upload-token";
 inline constexpr char s_ForceSdrOutputFlag[] = "--sdr";
+inline constexpr char s_DisableHardwareRayTracingFlag[] = "--disable-hardware-ray-tracing";
 inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 
@@ -125,6 +126,7 @@ struct LoaderOptions{
     AString<NWB::Core::Alloc::GlobalArena> crashUploadToken;
     bool enableGpuDebug = false;
     bool forceSdrOutput = false;
+    bool disableHardwareRayTracing = false;
     bool useStandaloneLogger = false;
 
     explicit LoaderOptions(NWB::Core::Alloc::GlobalArena& arena)
@@ -207,6 +209,14 @@ void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
 }
 
 bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
+    if(options.disableHardwareRayTracing){
+        if(!graphics.setHardwareRayTracingPolicy(NWB::Core::HardwareRayTracingPolicy::Disabled)){
+            NWB_LOGGER_FATAL(NWB_TEXT("Loader: hardware ray tracing policy must be selected before graphics initialization"));
+            return false;
+        }
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: hardware ray tracing disabled before device creation"));
+    }
+
     if(options.forceSdrOutput){
         if(!graphics.setHDR10OutputEnabled(false)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: SDR output must be selected before graphics initialization"));
@@ -523,6 +533,7 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
     app.add_option(__hidden_loader::s_CrashUploadTokenOption, options.crashUploadToken, "Bearer token sent with crash uploads");
     app.add_flag(__hidden_loader::s_ForceSdrOutputFlag, options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
+    app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag, options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
     __hidden_loader::AddDebugCommandLineOptions(app, options);
 
     return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){

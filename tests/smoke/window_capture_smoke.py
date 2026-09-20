@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import ctypes
+import math
 from dataclasses import dataclass
 import os
 from pathlib import Path
@@ -479,7 +480,24 @@ def build_launch_environment(args):
             elif args.software_vulkan == "on":
                 raise SmokeSkip("Mesa lavapipe Vulkan ICD was requested but is not installed")
 
+    if getattr(args, "resize_client", None):
+        validate_resize_environment(env)
     return env
+
+
+def validate_resize_environment(environment):
+    if environment.get(FRAMEBUFFER_CAPTURE_PATH_ENV):
+        raise SmokeFailure("--resize-client cannot run with an application framebuffer capture request")
+    for name in ("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"):
+        value = environment.get(name)
+        if value is None:
+            continue
+        try:
+            frame = float(value)
+        except ValueError as error:
+            raise SmokeFailure(f"--resize-client requires {name} to be unset or a disabled numeric value") from error
+        if not math.isfinite(frame) or frame >= 1.0:
+            raise SmokeFailure(f"--resize-client cannot run with active or invalid {name}={value!r}")
 
 
 def application_capture_partial_path(output_path):
@@ -1073,6 +1091,8 @@ class LinuxX11Capture:
         self.x11.XKeysymToKeycode.restype = ctypes.c_uint
         self.x11.XStringToKeysym.argtypes = [ctypes.c_char_p]
         self.x11.XStringToKeysym.restype = ctypes.c_ulong
+        self.x11.XResizeWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_uint, ctypes.c_uint]
+        self.x11.XResizeWindow.restype = ctypes.c_int
         self.x11.XRaiseWindow.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
         self.x11.XRaiseWindow.restype = ctypes.c_int
         self.x11.XSetInputFocus.argtypes = [ctypes.c_void_p, ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -1256,6 +1276,14 @@ class LinuxX11Capture:
 
     def prepare_window(self, window):
         self.focus_window(window)
+
+    def client_size(self, window):
+        return self._validated_window_size(window)
+
+    def resize_client(self, window, width, height):
+        if not self.x11.XResizeWindow(self.display, window, width, height):
+            raise SmokeFailure(f"XResizeWindow failed for window 0x{window:x}")
+        self.x11.XFlush(self.display)
 
     def send_named_key(self, window, key_name):
         keysym = self.x11.XStringToKeysym(str(key_name).encode("ascii"))
@@ -1476,7 +1504,9 @@ class WindowsCapture:
     SW_RESTORE = 9
     SWP_NOSIZE = 0x0001
     SWP_NOMOVE = 0x0002
+    SWP_NOZORDER = 0x0004
     SWP_SHOWWINDOW = 0x0040
+    SWP_ASYNCWINDOWPOS = 0x4000
     VK_RETURN = 0x0D
     VIRTUAL_KEYS = {
         **{str(index): 0x30 + index for index in range(0, 10)},
@@ -1647,6 +1677,26 @@ class WindowsCapture:
 
     def prepare_window(self, hwnd):
         self._prepare_capture_window(hwnd)
+
+    def client_size(self, hwnd):
+        rect = self._client_rect(hwnd)
+        if not rect:
+            raise SmokeFailure(f"HWND 0x{hwnd:x} client rect is unavailable")
+        return rect.right - rect.left, rect.bottom - rect.top
+
+    def resize_client(self, hwnd, width, height):
+        client_width, client_height = self.client_size(hwnd)
+        window_width, window_height = self._window_size(hwnd)
+        # Preserve the current nonclient frame without guessing caption/border dimensions.
+        outer_width = width + window_width - client_width
+        outer_height = height + window_height - client_height
+        if outer_width < width or outer_height < height:
+            raise SmokeFailure("window/client rectangles disagree while calculating the requested resize")
+        if not self.user32.SetWindowPos(
+            ctypes.c_void_p(hwnd), None, 0, 0, outer_width, outer_height,
+            self.SWP_NOMOVE | self.SWP_NOZORDER | self.SWP_SHOWWINDOW | self.SWP_ASYNCWINDOWPOS,
+        ):
+            raise SmokeFailure(f"SetWindowPos failed while resizing HWND 0x{hwnd:x}")
 
     def send_named_key(self, hwnd, key_name):
         virtual_key = self.VIRTUAL_KEYS.get(str(key_name))
@@ -2079,6 +2129,46 @@ def capture_render_ready_window(args, backend, handle, process):
         time.sleep(min(RENDER_READY_POLL_SECONDS, remaining_seconds))
 
 
+def capture_resized_window(args, backend, handle, process, log_directory, log_baseline, log_pattern):
+    backend.prepare_window(handle)
+    before_args = SimpleNamespace(**vars(args))
+    before_args.output = args.output.with_name(args.output.stem + ".before-resize" + args.output.suffix)
+    before = capture_render_ready_window(before_args, backend, handle, process)
+    original_size = (before.width, before.height)
+    target_size = tuple(args.resize_client)
+    if original_size == target_size:
+        raise SmokeFailure("--resize-client must change the original client extent")
+    if backend.client_size(handle) != original_size:
+        raise SmokeFailure("original client and capture extents disagree before resize")
+    write_status(f"rendered original client {before.width}x{before.height}; settling {args.settle_seconds:g}s before resize")
+    time.sleep(args.settle_seconds)
+    ensure_process_running(process, "before client resize")
+    if backend.client_size(handle) != original_size:
+        raise SmokeFailure("client extent changed during the original-size settle interval")
+
+    backend.resize_client(handle, *target_size)
+    marker = f"GraphicsRuntime: Back buffer resized to {target_size[0]}x{target_size[1]}"
+    deadline = time.monotonic() + args.render_ready_timeout
+    while True:
+        ensure_process_running(process, "while waiting for client and framebuffer resize")
+        client_matches = backend.client_size(handle) == target_size
+        log_text = collect_log_delta(log_directory, log_baseline, log_pattern)
+        if client_matches and marker in log_text:
+            break
+        remaining_seconds = deadline - time.monotonic()
+        if remaining_seconds <= 0.0:
+            raise SmokeFailure(f"resize did not produce client extent {target_size} and runtime marker '{marker}'")
+        time.sleep(min(RENDER_READY_POLL_SECONDS, remaining_seconds))
+
+    write_status(f"confirmed resized client and framebuffer {target_size[0]}x{target_size[1]}; settling {args.resize_settle_seconds:g}s")
+    time.sleep(args.resize_settle_seconds)
+    ensure_process_running(process, "after resized-frame settle interval")
+    result = capture_render_ready_window(args, backend, handle, process)
+    if (result.width, result.height) != target_size or backend.client_size(handle) != target_size:
+        raise SmokeFailure(f"final client/capture extent does not match requested resize {target_size}")
+    return result
+
+
 def launch_and_capture(args, backend):
     executable = Path(args.executable).resolve()
     if not executable.exists():
@@ -2103,9 +2193,14 @@ def launch_and_capture(args, backend):
                 raise SmokeFailure(f"testbed exited before a window was visible (exit {exit_code})\n{tail}")
             raise SmokeFailure("timed out waiting for a visible testbed window")
 
-        time.sleep(args.settle_seconds)
-        ensure_process_running(testbed_process, "before checked capture")
-        result = capture_render_ready_window(args, backend, handle, testbed_process)
+        if getattr(args, "resize_client", None):
+            result = capture_resized_window(
+                args, backend, handle, testbed_process, log_directory, log_baseline, log_pattern,
+            )
+        else:
+            time.sleep(args.settle_seconds)
+            ensure_process_running(testbed_process, "before checked capture")
+            result = capture_render_ready_window(args, backend, handle, testbed_process)
         testbed_exit_code, testbed_exit_tail = terminate_process(testbed_process, "testbed", handle)
         testbed_process = None
         require_normal_process_exit(testbed_exit_code, testbed_exit_tail, "testbed")
@@ -2213,6 +2308,10 @@ def parse_args(argv):
     parser.add_argument("--window-title", default="", help="Expected window title when matching a launched testbed window.")
     parser.add_argument("--timeout", type=float, default=45.0, help="Seconds to wait for logserver and the testbed window.")
     parser.add_argument("--settle-seconds", type=float, default=2.0, help="Seconds to wait after the window becomes visible.")
+    parser.add_argument("--resize-client", nargs=2, type=int, metavar=("WIDTH", "HEIGHT"),
+        help="After rendering and settling at the original extent, resize the launched client once and verify its framebuffer extent.")
+    parser.add_argument("--resize-settle-seconds", type=float,
+        help="Seconds to render after the requested client/framebuffer resize is confirmed; defaults to 2, minimum 1.")
     parser.add_argument(
         "--render-ready-timeout",
         type=float,
@@ -2306,6 +2405,22 @@ def parse_args(argv):
         args.application_capture_frame_count,
     )
     require_non_negative_arg(parser, "--settle-seconds", args.settle_seconds)
+
+    if args.resize_client is not None:
+        if args.application_capture or args.window_handle is not None:
+            parser.error("--resize-client requires a launched desktop capture; application capture and existing handles are incompatible")
+        if any(dimension < 1 or dimension > 16384 for dimension in args.resize_client):
+            parser.error("--resize-client dimensions must be between 1 and 16384")
+        if not math.isfinite(args.settle_seconds) or args.settle_seconds < 1.0:
+            parser.error("--resize-client requires --settle-seconds to be finite and at least 1")
+        if args.resize_settle_seconds is None:
+            args.resize_settle_seconds = 2.0
+        if not math.isfinite(args.resize_settle_seconds) or args.resize_settle_seconds < 1.0:
+            parser.error("--resize-settle-seconds must be finite and at least 1")
+        if not math.isfinite(args.render_ready_timeout) or not math.isfinite(args.timeout):
+            parser.error("--resize-client requires finite --timeout and --render-ready-timeout")
+    elif args.resize_settle_seconds is not None:
+        parser.error("--resize-settle-seconds requires --resize-client")
 
     args.working_directory = args.working_directory.resolve()
     args.output = args.output.resolve()

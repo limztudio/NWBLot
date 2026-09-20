@@ -56,6 +56,8 @@ inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentResolve("rend
 inline constexpr Core::GpuTimingScopeDefinition s_SwBvhSort("render.sw_bvh_sort");
 inline constexpr Core::GpuTimingScopeDefinition s_CausticPhotons("render.caustic_photons");
 inline constexpr Core::GpuTimingScopeDefinition s_CausticResolve("render.caustic_resolve");
+// Match the graph task identity so detailed frame telemetry receives this dispatch timing.
+inline constexpr Core::GpuTimingScopeDefinition s_RefractionResolve("render.avboit.refraction_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredLighting("render.deferred_lighting");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredComposite("render.deferred_composite");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredPresent("render.deferred_present");

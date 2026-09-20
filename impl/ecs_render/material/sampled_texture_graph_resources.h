@@ -20,12 +20,12 @@ NWB_IMPL_BEGIN
 
 
 namespace SampledTextureImportResult{
-enum Enum : u8{
-    Success,
-    GraphUnavailable,
-    MissingIdentity,
-    ImportFailed
-};
+    enum Enum : u8{
+        Success,
+        GraphUnavailable,
+        MissingIdentity,
+        ImportFailed
+    };
 };
 
 // Append in texture order; retain the imported prefix on failure; views never escape.

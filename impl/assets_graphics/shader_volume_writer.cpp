@@ -47,11 +47,11 @@ struct VariantCachePaths{
 };
 
 namespace CacheReadStatus{
-enum Enum : u8{
-    Hit = 0,
-    Miss,
-    Error
-};
+    enum Enum : u8{
+        Hit = 0,
+        Miss,
+        Error
+    };
 };
 
 

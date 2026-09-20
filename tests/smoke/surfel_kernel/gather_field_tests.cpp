@@ -21,6 +21,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_surfel_gather_tests{
 
 
@@ -28,11 +33,11 @@ namespace __hidden_surfel_gather_tests{
 
 
 namespace Pattern{
-enum Enum : u8{
-    Empty, Dead, Unsampled, Opposed, Disoccluded, Constant, Directional, Weighted,
-    CapRejectsTail, CapIgnoresNonfiniteTail, Cycle, ZeroWeightNaN, ZeroWeightInfinity,
-    Infinity, HalfOverflow, Biased, TinyRadius, NearCoverageThreshold, BoundedHead, BoundedNext,
-};
+    enum Enum : u8{
+        Empty, Dead, Unsampled, Opposed, Disoccluded, Constant, Directional, Weighted,
+        CapRejectsTail, CapIgnoresNonfiniteTail, Cycle, ZeroWeightNaN, ZeroWeightInfinity,
+        Infinity, HalfOverflow, Biased, TinyRadius, NearCoverageThreshold, BoundedHead, BoundedNext,
+    };
 };
 
 struct Surfel{

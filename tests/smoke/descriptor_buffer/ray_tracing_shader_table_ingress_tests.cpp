@@ -143,14 +143,14 @@ static constexpr u32 s_ShaderTableCallableSpirv[] = {
 
 
 namespace ShaderTablePipelineShape{
-enum Enum : u8{
-    RayGenerationAndMiss,
-    Hit,
-    Callable,
-    AmbiguousRayGenerationAndMiss,
-    AmbiguousHit,
-    AmbiguousCallable,
-};
+    enum Enum : u8{
+        RayGenerationAndMiss,
+        Hit,
+        Callable,
+        AmbiguousRayGenerationAndMiss,
+        AmbiguousHit,
+        AmbiguousCallable,
+    };
 };
 
 

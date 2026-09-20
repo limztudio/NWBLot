@@ -20,6 +20,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_caustic_resolve_kernel_tests{
 
 
@@ -274,8 +279,7 @@ void RunResolveCase(
                 EXPECT_EQ(candidate.b, 0u);
             }
             if(pattern == Pattern::Uniform){
-                // Bound the auxiliary constant-color check by one adjacent half code after normalization.
-                // The production/reference comparison above remains exact for every RGBA component.
+                // Bound the auxiliary constant-color check by one adjacent half code after normalization. The production/reference comparison above remains exact for every RGBA component.
                 const HalfPixel expected = Pixel(1.0f, 0.5f, 0.25f, 1.0f);
                 EXPECT_GE(candidate.r, expected.r - 1u);
                 EXPECT_LE(candidate.r, expected.r + 1u);

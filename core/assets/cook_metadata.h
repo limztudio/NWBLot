@@ -107,11 +107,11 @@ template<typename T, typename... Args>
 
 
 namespace AssetMetadataParseResult{
-enum Enum : u8{
-    Unsupported,
-    Parsed,
-    Error
-};
+    enum Enum : u8{
+        Unsupported,
+        Parsed,
+        Error
+    };
 };
 
 struct AssetDocumentMetadataParseContext{
@@ -149,11 +149,11 @@ public:
 
 
 namespace AssetBunchExpandResult{
-enum Enum : u8{
-    Unsupported,
-    Parsed,
-    Error
-};
+    enum Enum : u8{
+        Unsupported,
+        Parsed,
+        Error
+    };
 };
 
 struct AssetBunchExpandContext{

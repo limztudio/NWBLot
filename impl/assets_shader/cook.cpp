@@ -242,7 +242,7 @@ private:
 };
 
 namespace IncludeDirectiveKind{
-enum Enum : u8;
+    enum Enum : u8;
 };
 
 static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, IncludeDirectiveKind::Enum& outKind);

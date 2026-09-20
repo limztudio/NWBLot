@@ -17,6 +17,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace LoggerServerCrash{
 
 
@@ -32,10 +37,10 @@ using CrashTestPath = ::Path<Core::Alloc::GlobalArena>;
 
 
 namespace ManifestEventField{
-enum Enum : u8{
-    Include,
-    Omit,
-};
+    enum Enum : u8{
+        Include,
+        Omit,
+    };
 };
 
 struct ManifestTriggerFields{
@@ -109,6 +114,11 @@ void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText
 
 
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

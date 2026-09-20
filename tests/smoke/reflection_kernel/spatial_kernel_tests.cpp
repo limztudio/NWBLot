@@ -22,6 +22,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_spatial_kernel_tests{
 
 
@@ -443,8 +448,7 @@ static void RunSpatialCase(
                 if(exactCopy)
                     EXPECT_EQ(candidate[channel], expectedCopy[channel]) << "copy pixel " << x << "," << y;
                 if(pattern == Pattern::HdrUniform && channel < 3u){
-                    // At most 49 positive FP32 terms have far less error than one FP16 step. Division lowering and
-                    // half storage can select an adjacent value even for power-of-two inputs; parity stays exact above.
+                    // At most 49 positive FP32 terms have far less error than one FP16 step. Division lowering and half storage can select an adjacent value even for power-of-two inputs; parity stays exact above.
                     EXPECT_GE(candidate[channel], expectedCopy[channel] - 1u) << "HDR constant at " << x << "," << y;
                     EXPECT_LE(candidate[channel], expectedCopy[channel] + 1u) << "HDR constant at " << x << "," << y;
                 }
@@ -454,8 +458,7 @@ static void RunSpatialCase(
                 for(u32 channel = 0u; channel < 3u; ++channel)
                     EXPECT_NE(candidate[channel] & 0x7c00u, 0x7c00u) << "nonfinite filtered case at " << x << "," << y;
             }
-            // All positions coincide and RGB is 0,1,3. A positive offset-one weight must mix each endpoint with 1.
-            // The invalid center must copy 1 between +X/+Z, but mix toward 0 when the left receiver is +Y.
+            // All positions coincide and RGB is 0,1,3. A positive offset-one weight must mix each endpoint with 1. The invalid center must copy 1 between +X/+Z, but mix toward 0 when the left receiver is +Y.
             if(width == 3u && height == 1u && radius != 0u
                 && (pattern == Pattern::InvalidNeighborFallback || pattern == Pattern::InvalidCenterFallback)){
                 if(x == 0u){

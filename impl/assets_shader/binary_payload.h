@@ -32,11 +32,11 @@ inline constexpr u32 s_AssetPayloadVersion = 1u;
 inline constexpr usize s_AssetPayloadHeaderBytes = sizeof(u32) * 2u;
 
 namespace BytecodeValidationFailure{
-enum Enum : u8{
-    None,
-    InvalidSize,
-    InvalidMagic,
-};
+    enum Enum : u8{
+        None,
+        InvalidSize,
+        InvalidMagic,
+    };
 };
 
 [[nodiscard]] inline bool IsValidBytecodeSize(const usize byteSize){
@@ -57,14 +57,14 @@ template<typename BinaryContainer>
 }
 
 namespace AssetPayloadFailure{
-enum Enum : u8{
-    None,
-    InvalidHeader,
-    UnsupportedVersion,
-    InvalidEntryPoint,
-    InvalidBytecode,
-    OutputSizeOverflow,
-};
+    enum Enum : u8{
+        None,
+        InvalidHeader,
+        UnsupportedVersion,
+        InvalidEntryPoint,
+        InvalidBytecode,
+        OutputSizeOverflow,
+    };
 };
 
 template<typename BytecodeContainer, typename PayloadContainer>

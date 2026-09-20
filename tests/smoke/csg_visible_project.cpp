@@ -61,13 +61,13 @@ static constexpr CsgVisibleMaterialRef s_SolidMaterial{"project/smoke/csg_visibl
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
 namespace CsgVisibleShapeSlot{
-enum Enum : usize{
-    Plane,
-    Box,
-    Sphere,
-    Capsule,
-    Count
-};
+    enum Enum : usize{
+        Plane,
+        Box,
+        Sphere,
+        Capsule,
+        Count
+    };
 };
 
 static_assert(CsgVisibleShapeSlot::Count == s_CsgVisibleShapeCount, "CSG visible shape table size must stay in sync");

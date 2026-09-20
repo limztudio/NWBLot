@@ -24,6 +24,11 @@ NWB_BEGIN
 
 
 namespace Tests{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_shadow_resolve_kernel_tests{
 
 
@@ -579,8 +584,7 @@ TEST_F(ShadowResolveKernelTest, VaryingDistanceGuidanceFitsRegularizedColorAtOff
     testCase.guidance = Guidance::LinearDistanceOffset;
     Pixels actual(scratchArena);
     ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
-    // An interior quadratic B-spline footprint has distance variance 1/4 at both integer and half-texel phases.
-    // The affine color fit therefore has a closed form; no shader tap enumeration is copied into this oracle.
+    // An interior quadratic B-spline footprint has distance variance 1/4 at both integer and half-texel phases. The affine color fit therefore has a closed form; no shader tap enumeration is copied into this oracle.
     constexpr f32 s_DistanceVariance = 0.25f;
     for(u32 y = 2u; y + 3u < testCase.height; ++y){
         for(u32 x = 2u; x + 3u < testCase.width; ++x){

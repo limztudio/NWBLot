@@ -627,9 +627,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
                     EXPECT_TRUE(IsFinite(actual));
                     EXPECT_GE(actual, 0.0f);
                     EXPECT_LE(actual, 1.0f);
-                    // The RGBA16_FLOAT map output carries half quantization; a fully lit receiver may
-                    // round one half code below 1.0 (0x3bff). Keep the analytic-path checks exact and allow
-                    // that single representable neighbor here.
+                    // The RGBA16_FLOAT map output carries half quantization; a fully lit receiver may round one half code below 1.0 (0x3bff). Keep the analytic-path checks exact and allow that single representable neighbor here.
                     if(receiverCase){
                         const f32 receiverExpected = testCase.receiverExpectation == ReceiverExpectation::Blocked ? 0.0f : 1.0f;
                         const u16 actualReceiverHalf = ConvertFloatToHalf(actual);

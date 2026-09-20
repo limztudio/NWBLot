@@ -140,6 +140,7 @@ void ReflectionStatisticsState::complete(
         m_latest = slot->metadata;
         m_latest.candidates = counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)];
         m_latest.hardwareRays = counters[NWB_REFLECTION_COUNTER_HARDWARE_RAYS / sizeof(u32)];
+        m_latest.exteriorEligibleRays = counters[NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS / sizeof(u32)];
         m_latest.hardwareHits = counters[NWB_REFLECTION_COUNTER_HARDWARE_HITS / sizeof(u32)];
         m_latest.opaquePixels = counters[NWB_REFLECTION_COUNTER_OPAQUE_PIXELS / sizeof(u32)];
         m_latest.glassPixels = counters[NWB_REFLECTION_COUNTER_GLASS_PIXELS / sizeof(u32)];

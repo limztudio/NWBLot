@@ -125,7 +125,7 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnly
     EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
     const u32 counters[] = {
         100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u,
-        123u, 25u, 70u, 2u, 17u, 3u, 6u, 0u,
+        123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u,
     };
     static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
     context.control->complete(key, Token(), counters);
@@ -167,6 +167,7 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnly
     EXPECT_EQ(statistics.feedbackProbeTiles, 2u);
     EXPECT_EQ(statistics.screenIterations, (static_cast<u64>(3u) << 32u) | 17u);
     EXPECT_EQ(statistics.screenLimitMisses, 6u);
+    EXPECT_EQ(statistics.exteriorEligibleRays, 19u);
 }
 
 TEST(ReflectionStatistics, FeedbackMetadataUsesTheFrozenAcceptedHardwareOutcome){

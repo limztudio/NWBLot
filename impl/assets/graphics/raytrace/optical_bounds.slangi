@@ -1,0 +1,102 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_RAYTRACE_OPTICAL_BOUNDS_SLANGI
+#define NWB_GRAPHICS_RAYTRACE_OPTICAL_BOUNDS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "optical_scene_constants.h"
+#include "../bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A separated coordinate interval proves the entire segment misses the transparent union. Overlapping intervals
+// are inconclusive: this deliberately accepts fewer rays than a slab test and needs neither division nor reciprocals.
+// Including t=0 also proves the origin is exterior; the trace's positive TMin must never hide an initial medium.
+bool nwbOpticalSegmentOutsideBounds(
+    const float3 origin,
+    const float3 normalizedDirection,
+    const float maxDistance,
+    const float3 boundsMin,
+    const float3 boundsMax){
+    if(
+        !all(isfinite(origin)) || !all(isfinite(normalizedDirection))
+        || !isfinite(maxDistance) || maxDistance <= 0.0
+        || !all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax)
+    )
+        return false;
+    const float directionLengthSquared = dot(normalizedDirection, normalizedDirection);
+    if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)
+        return false;
+
+    const float3 endpoint = origin + normalizedDirection * maxDistance;
+    const float3 magnitude = abs(origin) + abs(normalizedDirection) * maxDistance
+        + max(abs(boundsMin), abs(boundsMax)) + float3(1.0);
+    if(!all(isfinite(endpoint)) || !all(isfinite(magnitude)))
+        return false;
+    // Eight binary32 epsilons conservatively cover the endpoint product/add, magnitude rounding and outward
+    // interval arithmetic, with or without contraction. The unit floor also covers flushed subnormal operations.
+    // Include operand magnitudes so cancellation at an endpoint cannot erase its arithmetic uncertainty.
+    const float3 margin = magnitude * (8.0 * 1.1920928955078125e-7);
+    const float3 segmentMin = min(origin, endpoint) - margin;
+    const float3 segmentMax = max(origin, endpoint) + margin;
+    if(!all(isfinite(margin)) || !all(isfinite(segmentMin)) || !all(isfinite(segmentMax)))
+        return false;
+    // Strict separation keeps endpoints, tangencies and uncertainty-band contacts on the full optical path.
+    return any(segmentMax < boundsMin) || any(segmentMin > boundsMax);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// This proof reads the same frozen metadata as optical bootstrap but contains no material evaluation or ray query.
+// False means unknown, never occluded. Callers must retain the full optical path for every unproven segment.
+bool nwbOpticalSegmentProvenExterior(
+    const uint opticalSceneHeapSlot,
+    const float3 origin,
+    const float3 initialDirection,
+    const float minDistance,
+    const float maxDistance,
+    const uint maxQueries){
+    if(
+        opticalSceneHeapSlot == 0xffffffffu || maxQueries == 0u
+        || !all(isfinite(origin)) || !all(isfinite(initialDirection))
+        || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance
+    )
+        return false;
+    const float directionLengthSquared = dot(initialDirection, initialDirection);
+    if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)
+        return false;
+    // Match optical transport's actual trace direction, including its normalization of already normalized inputs.
+    const float3 direction = normalize(initialDirection);
+    const float normalizedLengthSquared = dot(direction, direction);
+    if(!all(isfinite(direction)) || !isfinite(normalizedLengthSquared) || normalizedLengthSquared <= 0.0)
+        return false;
+
+    const uint headerFlags = NwbHeapRawBuffer(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
+    if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u)
+        return false;
+    const uint transparentCount = NwbHeapRawBuffer(opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
+    if(transparentCount == 0u)
+        return true;
+    const float3 boundsMin = asfloat(NwbHeapRawBuffer(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
+    const float3 boundsMax = asfloat(NwbHeapRawBuffer(opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
+    return nwbOpticalSegmentOutsideBounds(origin, direction, maxDistance, boundsMin, boundsMax);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

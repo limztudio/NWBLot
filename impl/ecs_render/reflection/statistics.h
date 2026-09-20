@@ -61,6 +61,8 @@ struct ReflectionStatistics{
     u32 feedbackProbeIndex = 0u;
     u32 candidates = 0u;
     u32 hardwareRays = 0u;
+    // Admitted rays conservatively proven to need no optical continuation; diagnostic only.
+    u32 exteriorEligibleRays = 0u;
     u32 hardwareHits = 0u;
     u32 opaquePixels = 0u;
     u32 glassPixels = 0u;

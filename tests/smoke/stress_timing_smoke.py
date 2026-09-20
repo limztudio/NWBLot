@@ -32,6 +32,96 @@ REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
     "StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light")
 
 
+REFLECTION_ENABLED = "StressTestSmokeProject: reflection diagnostics enabled"
+REFLECTION_SAMPLE = "StressReflectionStatistics: "
+REFLECTION_FIELDS = ("sequence", "generation", "frame", "graphics_frame", "hardware_ready", "transport_enabled",
+    "candidates", "hardware_rays", "exterior_eligible_rays", "hardware_queries", "bootstrap_events",
+    "transparent_paths", "unsupported_paths")
+REFLECTION_COUNTERS = REFLECTION_FIELDS[6:]
+
+
+def parse_reflection_diagnostics(lines, requested):
+    records = [(index, line) for index, line in enumerate(lines) if line.startswith(REFLECTION_SAMPLE)]
+    if not requested:
+        if REFLECTION_ENABLED in lines or records:
+            raise SmokeFailure("unrequested reflection diagnostics invalidate the performance-only run")
+        return {"requested": False, "status": "not_measured"}
+    if lines.count(REFLECTION_ENABLED) != 1 or not records:
+        raise SmokeFailure("requested reflection diagnostics require one enable marker and accepted samples")
+    enabled_index = lines.index(REFLECTION_ENABLED)
+    shutdown_index = lines.index(SHUTDOWN)
+    pattern = re.escape(REFLECTION_SAMPLE) + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_FIELDS)
+    sums = dict.fromkeys(REFLECTION_COUNTERS, 0)
+    seen = set()
+    ranges = {}
+    previous = None
+    hardware_ready_samples = transport_enabled_samples = 0
+    for index, line in records:
+        if not enabled_index < index < shutdown_index:
+            raise SmokeFailure("reflection samples must follow enablement and precede shutdown")
+        match = re.fullmatch(pattern, line)
+        if not match:
+            raise SmokeFailure("malformed accepted reflection diagnostic sample")
+        row = dict(zip(REFLECTION_FIELDS, map(int, match.groups())))
+        for field, value in row.items():
+            bits = 64 if field in ("sequence", "generation", "graphics_frame") else 32
+            if value >= 2 ** bits or (field in ("sequence", "generation") and value == 0):
+                raise SmokeFailure("reflection diagnostic value exceeds its unsigned field bounds")
+        if row["hardware_ready"] not in (0, 1) or row["transport_enabled"] not in (0, 1):
+            raise SmokeFailure("reflection diagnostic flags must be zero or one")
+        if row["transport_enabled"] and not row["hardware_ready"]:
+            raise SmokeFailure("optical transport cannot be enabled without accepted hardware readiness")
+        rays = row["hardware_rays"]
+        if rays > row["candidates"] or any(row[field] > rays for field in
+                ("exterior_eligible_rays", "transparent_paths", "unsupported_paths")):
+            raise SmokeFailure("reflection path counters cannot exceed their admitted ray population")
+        if not row["hardware_ready"] and any(row[field] for field in REFLECTION_COUNTERS if field != "candidates"):
+            raise SmokeFailure("reflection work counters require accepted hardware readiness")
+        if not row["transport_enabled"] and any(row[field] for field in
+                ("exterior_eligible_rays", "bootstrap_events", "transparent_paths", "unsupported_paths")):
+            raise SmokeFailure("optical-only counters require optical transport")
+        if (rays == 0 and row["hardware_queries"] != 0) or (row["hardware_queries"] == 0
+                and (row["bootstrap_events"] != 0 or row["transparent_paths"] != 0)):
+            raise SmokeFailure("reflection query-dependent counters require admitted rays and actual queries")
+        key = row["generation"], row["sequence"]
+        if key in seen:
+            raise SmokeFailure("duplicate accepted reflection diagnostic sample")
+        seen.add(key)
+        if previous is not None and row["generation"] == previous["generation"]:
+            if row["sequence"] <= previous["sequence"] or row["graphics_frame"] <= previous["graphics_frame"]:
+                raise SmokeFailure("accepted reflection sequence and graphics frame must advance within a generation")
+        elif row["generation"] in ranges:
+            raise SmokeFailure("accepted reflection diagnostics cannot return to an earlier generation")
+        generation = ranges.setdefault(row["generation"], {"generation": row["generation"], "sample_count": 0,
+            "sequence_range": [row["sequence"], row["sequence"]], "frame_range": [row["frame"], row["frame"]],
+            "graphics_frame_range": [row["graphics_frame"], row["graphics_frame"]]})
+        generation["sample_count"] += 1
+        for field in ("sequence", "frame", "graphics_frame"):
+            bounds = generation[field + "_range"]
+            bounds[0], bounds[1] = min(bounds[0], row[field]), max(bounds[1], row[field])
+        for field in REFLECTION_COUNTERS:
+            sums[field] += row[field]
+        hardware_ready_samples += row["hardware_ready"]
+        transport_enabled_samples += row["transport_enabled"]
+        previous = row
+    rays = sums["hardware_rays"]
+    if rays > 0 and sums["unsupported_paths"] == rays and sums["hardware_queries"] == 0:
+        status = "all_rejected"
+    elif sums["unsupported_paths"] > 0:
+        status = "unsupported"
+    elif sums["hardware_queries"] > 0:
+        status = "queries_observed"
+    else:
+        status = "no_queries"
+    return {"requested": True, "status": status, "sample_count": len(records),
+        "sample_scope": "accepted_readbacks_including_warmup_not_presentation_counts",
+        "ranges_by_generation": list(ranges.values()), "hardware_ready_samples": hardware_ready_samples,
+        "transport_enabled_samples": transport_enabled_samples, "sums": sums,
+        "unsupported_ratio": sums["unsupported_paths"] / rays if rays else None,
+        "exterior_eligible_ratio": sums["exterior_eligible_rays"] / rays if rays else None,
+        "queries_per_hardware_ray": sums["hardware_queries"] / rays if rays else None}
+
+
 def parse_sample(line, prefix, rate_key, positive_count):
     match = re.fullmatch(re.escape(prefix) + re.escape(rate_key)
         + r"=(\S+) presentations=(\d+) seconds=(\S+) first=(\d+) last=(\d+)", line)
@@ -50,7 +140,7 @@ def parse_sample(line, prefix, rate_key, positive_count):
     return {"fps": fps, "presentations": frames, "seconds": seconds, "first": first, "last": last}
 
 
-def parse_runtime_log(text, exit_code, application_args=()):
+def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnostics=False):
     require_normal_process_exit(exit_code, "", "stress presentation timing")
     validate_expected_log_text(text, list(REQUIRED), list(STRICT_LOG_FAILURE_MESSAGES) + [
         "presentation measurement incomplete", "render submission suspended", "render pass skipped", "device recreation"])
@@ -109,7 +199,7 @@ def parse_runtime_log(text, exit_code, application_args=()):
     return {"measurement": total | {"frame_ms": 1000.0 * total["seconds"] / total["presentations"]},
         "intervals": intervals, "width": 1280, "height": 900, "warmup_seconds": 5,
         "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present",
-        "pacing": pacing_summary}
+        "pacing": pacing_summary, "optical_reflection": parse_reflection_diagnostics(lines, reflection_diagnostics)}
 
 
 def parse_measurement(log_text):
@@ -128,6 +218,8 @@ def launch_environment(base, args, output):
     result.update(NWB_STRESS_SMOKE_TIMING="1", NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
         NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
+    if args.reflection_diagnostics:
+        result["NWB_STRESS_REFLECTION_DIAGNOSTICS"] = "1"
     return result
 
 
@@ -186,7 +278,7 @@ def acquire(args, output):
         logserver = None
         collected = True
         (output / "runtime.log").write_text(text, encoding="utf-8")
-        result = parse_runtime_log(text, code, args.application_arg)
+        result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics)
         result["runtime_signature"] = ab.device_material_signature(text)
         after = identities(args, helpers)
         if before != after:
@@ -232,6 +324,8 @@ def parse_args(argv=None):
     parser.add_argument("--spin-angle", type=float, default=0.6)
     parser.add_argument("--fixed-delta-seconds", type=float, default=0.016666667)
     parser.add_argument("--application-arg", action="append", default=[])
+    parser.add_argument("--reflection-diagnostics", action="store_true",
+        help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
     for key in ("executable", "working_directory", "logserver_executable"):
         if getattr(args, key) is not None:
@@ -262,6 +356,11 @@ def main(argv=None):
         result = acquire(args, output)
         write_json(output / "result.json", result)
         write_status(f"PASS: {result['measurement']['fps']:.4f} accepted presentations/s over {result['measurement']['seconds']:.6f}s")
+        optical = result["optical_reflection"]
+        write_status(f"Optical reflection: {optical['status']} (query activity alone does not certify optical correctness)")
+        if optical["requested"]:
+            write_status(f"Reflection samples={optical['sample_count']} unsupported_ratio={optical['unsupported_ratio']} "
+                f"exterior_eligible_ratio={optical['exterior_eligible_ratio']} queries_per_hardware_ray={optical['queries_per_hardware_ray']}")
         return 0
     except SmokeSkip as error:
         if output is not None:

@@ -27,6 +27,119 @@ def valid_log():
     return "\n\n".join(lines) + "\n"
 
 
+def reflection_record(**changes):
+    row = dict(sequence=1, generation=1, frame=10, graphics_frame=10, hardware_ready=1, transport_enabled=1,
+        candidates=10, hardware_rays=10, exterior_eligible_rays=0, hardware_queries=0, bootstrap_events=0,
+        transparent_paths=0, unsupported_paths=10)
+    row.update(changes)
+    return ("StressReflectionStatistics: sequence={sequence} generation={generation} frame={frame} "
+        "graphics_frame={graphics_frame} hardware_ready={hardware_ready} transport_enabled={transport_enabled} "
+        "candidates={candidates} hardware_rays={hardware_rays} exterior_eligible_rays={exterior_eligible_rays} "
+        "hardware_queries={hardware_queries} bootstrap_events={bootstrap_events} "
+        "transparent_paths={transparent_paths} unsupported_paths={unsupported_paths}").format(**row)
+
+
+def reflection_log(*records):
+    return valid_log().replace(smoke.START, smoke.REFLECTION_ENABLED + "\n" + smoke.START).replace(
+        smoke.SHUTDOWN, "\n".join(records) + "\n" + smoke.SHUTDOWN)
+
+
+class StressReflectionDiagnosticTests(unittest.TestCase):
+    def test_default_run_explicitly_has_unmeasured_optical_support(self):
+        result = smoke.parse_runtime_log(valid_log(), 0)
+        self.assertEqual(result["optical_reflection"], {"requested": False, "status": "not_measured"})
+        with self.assertRaisesRegex(smoke.SmokeFailure, "unrequested reflection"):
+            smoke.parse_runtime_log(reflection_log(reflection_record()), 0)
+
+    def test_all_rejected_reflections_are_exposed_without_changing_presentation_result(self):
+        text = reflection_log(reflection_record(sequence=3, frame=11, graphics_frame=14),
+            reflection_record(sequence=7, frame=15, graphics_frame=18))
+        result = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)
+        optical = result["optical_reflection"]
+        self.assertEqual(result["measurement"]["fps"], 16.)
+        self.assertEqual(optical["status"], "all_rejected")
+        self.assertEqual(optical["sample_count"], 2)
+        self.assertEqual(optical["sums"]["hardware_rays"], 20)
+        self.assertEqual(optical["sums"]["unsupported_paths"], 20)
+        self.assertEqual(optical["unsupported_ratio"], 1.)
+        self.assertEqual(optical["queries_per_hardware_ray"], 0.)
+        self.assertEqual(optical["exterior_eligible_ratio"], 0.)
+        self.assertEqual(optical["ranges_by_generation"], [{"generation": 1, "sample_count": 2,
+            "sequence_range": [3, 7], "frame_range": [11, 15], "graphics_frame_range": [14, 18]}])
+
+    def test_partial_unsupported_ratios_are_weighted_by_admitted_rays(self):
+        text = reflection_log(reflection_record(candidates=1, hardware_rays=1, unsupported_paths=1),
+            reflection_record(sequence=2, frame=11, graphics_frame=11, candidates=9, hardware_rays=9,
+                hardware_queries=18, bootstrap_events=23, transparent_paths=3, exterior_eligible_rays=6,
+                unsupported_paths=0))
+        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)["optical_reflection"]
+        self.assertEqual(optical["status"], "unsupported")
+        self.assertAlmostEqual(optical["unsupported_ratio"], .1)
+        self.assertAlmostEqual(optical["exterior_eligible_ratio"], .6)
+        self.assertAlmostEqual(optical["queries_per_hardware_ray"], 1.8)
+        self.assertEqual(optical["sums"]["bootstrap_events"], 23)
+
+    def test_queries_are_observations_not_a_complete_optical_support_claim(self):
+        for unsupported, expected in ((0, "queries_observed"), (10, "unsupported")):
+            with self.subTest(unsupported=unsupported):
+                text = reflection_log(reflection_record(hardware_queries=20, bootstrap_events=4,
+                    transparent_paths=2, unsupported_paths=unsupported))
+                optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)["optical_reflection"]
+                self.assertEqual(optical["status"], expected)
+                self.assertEqual(optical["queries_per_hardware_ray"], 2.)
+
+    def test_zero_ray_samples_do_not_produce_false_support_or_zero_ratios(self):
+        text = reflection_log(reflection_record(hardware_ready=0, transport_enabled=0,
+            candidates=0, hardware_rays=0, unsupported_paths=0))
+        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)["optical_reflection"]
+        self.assertEqual(optical["status"], "no_queries")
+        self.assertIsNone(optical["unsupported_ratio"])
+        self.assertIsNone(optical["exterior_eligible_ratio"])
+        self.assertIsNone(optical["queries_per_hardware_ray"])
+        self.assertEqual(optical["hardware_ready_samples"], 0)
+
+    def test_requested_diagnostics_require_enablement_and_samples_before_shutdown(self):
+        valid = reflection_log(reflection_record())
+        variants = (valid_log(), reflection_log(), valid.replace(smoke.REFLECTION_ENABLED, ""),
+            valid + smoke.REFLECTION_ENABLED, valid.replace(reflection_record(), "") + reflection_record(),
+            reflection_record() + "\n" + valid.replace(reflection_record(), ""))
+        for text in variants:
+            with self.subTest(text=text[-140:]), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)
+
+    def test_duplicate_regressing_and_revisited_generations_are_rejected(self):
+        first = reflection_record()
+        variants = ((first, first), (reflection_record(sequence=4), reflection_record(sequence=3,
+            frame=11, graphics_frame=11)), (first, reflection_record(sequence=2)),
+            (first, reflection_record(generation=2), reflection_record(sequence=2, frame=11, graphics_frame=11)))
+        for rows in variants:
+            with self.subTest(rows=rows), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(reflection_log(*rows), 0, reflection_diagnostics=True)
+        optical = smoke.parse_runtime_log(reflection_log(first, reflection_record(generation=2)), 0,
+            reflection_diagnostics=True)["optical_reflection"]
+        self.assertEqual([row["generation"] for row in optical["ranges_by_generation"]], [1, 2])
+
+    def test_numeric_bounds_flags_and_impossible_counter_relationships_are_rejected(self):
+        variants = (dict(sequence=0), dict(generation=0), dict(sequence=2 ** 64), dict(frame=2 ** 32),
+            dict(graphics_frame=2 ** 64), dict(hardware_queries=2 ** 32), dict(hardware_ready=2),
+            dict(transport_enabled=2), dict(hardware_ready=0), dict(transport_enabled=0), dict(candidates=9),
+            dict(exterior_eligible_rays=11), dict(transparent_paths=11, hardware_queries=20),
+            dict(unsupported_paths=11), dict(bootstrap_events=1), dict(transparent_paths=1),
+            dict(hardware_rays=0, unsupported_paths=0, hardware_queries=1))
+        for change in variants:
+            with self.subTest(change=change), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(reflection_log(reflection_record(**change)), 0, reflection_diagnostics=True)
+
+    def test_missing_duplicate_extra_and_noninteger_fields_are_rejected(self):
+        valid = reflection_record()
+        variants = (valid.replace(" unsupported_paths=10", ""), valid + " unsupported_paths=10",
+            valid + " extra=0", valid.replace("hardware_queries=0", "hardware_queries=-1"),
+            valid.replace("hardware_queries=0", "hardware_queries=nan"))
+        for record in variants:
+            with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(reflection_log(record), 0, reflection_diagnostics=True)
+
+
 class StressMeasurementTests(unittest.TestCase):
     def test_complete_rate_uses_presentations_and_wall_not_fixed_delta_or_queries(self):
         result = smoke.parse_measurement(valid_log())
@@ -95,14 +208,19 @@ class StressMeasurementTests(unittest.TestCase):
                 smoke.parse_measurement(valid_log() + marker)
 
     def test_environment_replaces_inherited_capture_controls(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667)
+        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False)
         env = smoke.launch_environment({"NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "96",
-            "NWB_STRESS_TEST_SPIN_ANGLE": "2", "NWB_OTHER": "bad", "PATH": "kept"}, args, Path("trial"))
+            "NWB_STRESS_TEST_SPIN_ANGLE": "2", "NWB_OTHER": "bad",
+            "NWB_STRESS_REFLECTION_DIAGNOSTICS": "1", "PATH": "kept"}, args, Path("trial"))
         self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", env)
         self.assertNotIn("NWB_OTHER", env)
         self.assertEqual(env["NWB_STRESS_TEST_SPIN_ANGLE"], "0.6")
         self.assertEqual(env["NWB_STRESS_SMOKE_TIMING"], "1")
         self.assertEqual(env["PATH"], "kept")
+        self.assertNotIn("NWB_STRESS_REFLECTION_DIAGNOSTICS", env)
+        args.reflection_diagnostics = True
+        diagnostic_env = smoke.launch_environment({}, args, Path("diagnostic"))
+        self.assertEqual(diagnostic_env["NWB_STRESS_REFLECTION_DIAGNOSTICS"], "1")
 
     def test_output_guard_preserves_prior_evidence_and_rejects_input_overlap(self):
         with TemporaryDirectory() as temporary:
@@ -124,7 +242,7 @@ class StressMeasurementTests(unittest.TestCase):
             output = Path(temporary)
             args = SimpleNamespace(executable=output / "app.exe", working_directory=output,
                 no_logserver=True, logserver_executable=None, application_arg=[], timeout=90,
-                spin_angle=.6, fixed_delta_seconds=.016666667)
+                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False)
             process = Mock()
             process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
             with patch.object(smoke, "identities", return_value={}), \

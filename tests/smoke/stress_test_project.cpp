@@ -19,6 +19,7 @@
 #include <impl/ecs_model/module.h>
 #include <impl/ecs_model_renderer/model_renderer.h>
 #include <impl/ecs_render/material/material_instance.h>
+#include <impl/ecs_render/module.h>
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include <core/common/log.h>
@@ -290,6 +291,35 @@ private:
     }
 
 
+    void reportReflectionStatistics(){
+        if(!m_reflectionDiagnosticsEnabled)
+            return;
+        NWB::Impl::ReflectionStatistics statistics;
+        if(!m_renderer.tryGetLatestReflectionStatistics(statistics))
+            return;
+        if(statistics.sequence == m_reflectionStatisticsSequence && statistics.generation == m_reflectionStatisticsGeneration)
+            return;
+        m_reflectionStatisticsSequence = statistics.sequence;
+        m_reflectionStatisticsGeneration = statistics.generation;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
+            NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
+            NWB_TEXT(" hardware_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
+            , statistics.sequence
+            , statistics.generation
+            , statistics.frameIndex
+            , statistics.graphicsFrameIndex
+            , statistics.hardwareReady ? 1u : 0u
+            , statistics.opticalTransportEnabled ? 1u : 0u
+            , statistics.candidates
+            , statistics.hardwareRays
+            , statistics.exteriorEligibleRays
+            , statistics.hardwareQueries
+            , statistics.bootstrapEvents
+            , statistics.transparentPaths
+            , statistics.unsupportedPaths
+        );
+    }
+
     bool samplePresentationFps(){
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const Timer observationTime = TimerNow();
@@ -338,6 +368,11 @@ public:
     explicit StressTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(createWorldOrDie(context))
+        , m_renderer([this]() -> NWB::Impl::RendererSystem&{
+            auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+            NWB_FATAL_ASSERT(renderer);
+            return *renderer;
+        }())
         , m_characterOwners(context.objectArena)
     {}
 
@@ -350,6 +385,13 @@ public:
 
 public:
     virtual bool onStartup()override{
+        if(m_reflectionDiagnosticsEnabled){
+            NWB::Impl::ReflectionSettings settings;
+            settings.diagnosticsEnabled = true;
+            if(!m_renderer.setReflectionSettings(settings))
+                return false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
+        }
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
         if(m_timingEnabled){
@@ -511,6 +553,7 @@ public:
         spinCharacters();
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
         m_world->tick(safeDelta);
+        reportReflectionStatistics();
         ++m_m4RenderedFrameCount;
         return true;
     }
@@ -519,6 +562,7 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Impl::RendererSystem& m_renderer;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_characterOwners;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::ENTITY_ID_INVALID;
@@ -526,6 +570,9 @@ private:
     NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
     const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+    const bool m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
+    u64 m_reflectionStatisticsSequence = 0u;
+    u64 m_reflectionStatisticsGeneration = 0u;
     NWB::Tests::Smoke::AvboitTimingRenderPass m_timingRenderPass{ m_context.graphics };
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;

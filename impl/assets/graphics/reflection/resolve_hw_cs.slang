@@ -26,6 +26,7 @@ uint nwbMeshFrameViewHeapSlot(){ return g_NwbReflectionParameters.viewSlot; }
 #include "../raytrace/surface_hit.slangi"
 #include "../raytrace/surface_lighting.slangi"
 #if NWB_REFLECTION_OPTICAL_TRANSPORT
+#include "../raytrace/optical_bounds.slangi"
 #include "../raytrace/optical_transport.slangi"
 #endif
 
@@ -104,6 +105,13 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         surface.bias,
         g_NwbReflectionParameters.maxRayDistance,
     };
+    if(g_NwbReflectionParameters.diagnosticsEnabled != 0u){
+        const bool exterior = nwbOpticalSegmentProvenExterior(
+            config.opticalSceneHeapSlot, surface.position + surface.normal * surface.bias, surface.direction,
+            config.minDistance, config.maxDistance, config.maxQueries
+        );
+        nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS, exterior ? 1u : 0u);
+    }
     const NwbOpticalTraceResult result = nwbOpticalTrace(
         config, surface.position + surface.normal * surface.bias, surface.direction
     );

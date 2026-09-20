@@ -8,6 +8,9 @@ target_sources(nwb_reflection_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/depth_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/optical_bounds_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/spatial_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reference/spatial_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/../descriptor_buffer/round_trip/round_trip_fixture.cpp"
@@ -30,4 +33,9 @@ target_link_libraries(nwb_reflection_kernel_tests PRIVATE
 )
 set_tests_properties(nwb_reflection_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
-set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/reference/spatial_cs.slang" PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/reference/spatial_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.nwb"
+    PROPERTIES HEADER_FILE_ONLY TRUE
+)

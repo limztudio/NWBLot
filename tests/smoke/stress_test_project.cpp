@@ -63,8 +63,8 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// STRESS scene: TEN skinned `body` characters in a tight ZIGZAG inside a coloured open-front GI box -- alternating
-// TRANSPARENT (glass) and OPAQUE, staggered front/back so their shadows overlap -- lit by one directional + one point light.
+// STRESS scene: twenty skinned body characters in two staggered rows, ten glass and ten opaque, inside the GI box.
+// The explicit five-per-class comparison profile preserves the historical ten-character zigzag and camera.
 // Each character SPINS about its vertical axis
 // (no skeleton-pose animation; the bodies render in bind pose and the whole entity rotates), so its instance transform
 // changes every frame -- exercising scene TLAS updates and separate opaque/transparent hardware shadows across TWO
@@ -77,8 +77,9 @@ static constexpr StressMaterialRef s_GroundMaterial{"project/smoke/transparent_m
 static constexpr StressMeshRef s_GroundMesh{"project/meshes/shadow_plane"};
 static constexpr AStringView s_SmokeSurfaceMaterialInterface = "project/shaders/smoke_surface";
 
-static constexpr u32 s_CharactersPerClass = 5u;                       // 5 transparent + 5 opaque
-static constexpr u32 s_CharacterCount = s_CharactersPerClass * 2u;
+static constexpr u32 s_DefaultCharactersPerClass = 10u;
+static constexpr u32 s_ComparisonCharactersPerClass = 5u;
+static constexpr u32 s_CharacterTintCount = 5u;
 static constexpr f32 s_CharacterSpacingX = 0.72f;                     // tight so neighbours' shadows overlap
 static constexpr f32 s_TransparentRowZ = -0.55f;                      // even index -> front of the zigzag
 static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag
@@ -89,13 +90,16 @@ static constexpr f32 s_CharacterLift = 0.0f;
 // sits on -Z looking toward +Z, so the green BACK wall is at +Z (the far end, IN VIEW) and the box is OPEN on the -Z side
 // (behind the camera) -- all three wall colours + the ceiling are visible. Reuses the ground plane mesh + opaque material
 // + per-instance colour_tint (no new assets).
-static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);                    // x: side walls at +-4 (just outside the +-3.24 character spread); y: +Z back wall at +4.5; open -Z front at -4.5 (camera at -4.8 looks in)
+static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);                    // x: side walls at +-4 (just outside the +-3.24 character spread); y: +Z back wall at +4.5; open -Z front at -4.5 (camera looks in through the open front)
 static constexpr f32 s_BoxHeight = 4.0f;                   // wall height / ceiling y (point light at 2.6 stays inside)
 static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;    // floor spans the box depth (+-4.5) so it meets the side + back walls
 
-static constexpr f32 s_CameraDistance = 4.8f;
-static constexpr f32 s_CameraHeight = 1.8f;
-static constexpr f32 s_CameraPitch = 0.2f;                           // tilt down a touch more to read the ground shadows
+static constexpr f32 s_ComparisonCameraDistance = 4.8f;
+static constexpr f32 s_ComparisonCameraHeight = 1.8f;
+static constexpr f32 s_ComparisonCameraPitch = 0.2f;
+static constexpr f32 s_CameraDistance = 7.2f;
+static constexpr f32 s_CameraHeight = 2.7f;
+static constexpr f32 s_CameraPitch = 0.25f;                           // tilt down a touch more to read the ground shadows
 
 static constexpr f32 s_DirectionalLightPitch = 0.9f;
 static constexpr f32 s_DirectionalLightYaw = 0.65f;
@@ -114,24 +118,23 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;                  // clamp hu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Distinct per-character tint so the ten bodies read apart. Transparent rows carry a sub-1 alpha (glass), opaque rows
-// stay fully opaque.
+// Repeat the authored five-color palette across each material row; transparency and density remain unchanged.
 [[nodiscard]] static Float4 CharacterTint(const u32 classIndex, const bool transparent){
-    static const Float4 s_transparentTints[s_CharactersPerClass] = {
+    static const Float4 s_transparentTints[s_CharacterTintCount] = {
         Float4(0.72f, 0.86f, 1.00f, 0.42f),
         Float4(0.60f, 1.00f, 0.85f, 0.42f),
         Float4(1.00f, 0.82f, 0.88f, 0.44f),
         Float4(0.86f, 0.80f, 1.00f, 0.45f),
         Float4(0.70f, 0.96f, 1.00f, 0.40f),
     };
-    static const Float4 s_opaqueTints[s_CharactersPerClass] = {
+    static const Float4 s_opaqueTints[s_CharacterTintCount] = {
         Float4(0.90f, 0.52f, 0.42f, 1.0f),
         Float4(0.52f, 0.70f, 0.90f, 1.0f),
         Float4(0.62f, 0.82f, 0.52f, 1.0f),
         Float4(0.88f, 0.78f, 0.50f, 1.0f),
         Float4(0.74f, 0.62f, 0.84f, 1.0f),
     };
-    const u32 slot = classIndex % s_CharactersPerClass;
+    const u32 slot = classIndex % s_CharacterTintCount;
     return transparent ? s_transparentTints[slot] : s_opaqueTints[slot];
 }
 
@@ -178,6 +181,22 @@ private:
 #endif
     }
 
+    [[nodiscard]] static bool readCharactersPerClass(u32& count){
+        count = s_DefaultCharactersPerClass;
+        NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
+        NWB::Tests::Smoke::SmokeEnvironmentString value(arena);
+        if(!ReadEnvironmentVariable("NWB_STRESS_CHARACTERS_PER_CLASS", value))
+            return true;
+        const AStringView text(value.data(), value.size());
+        if(text == "5")
+            count = s_ComparisonCharactersPerClass;
+        else if(text != "10"){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: characters per class must be exactly 5 or 10"));
+            return false;
+        }
+        return true;
+    }
+
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
 
@@ -190,14 +209,17 @@ private:
     }
 
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
-        // Zigzag: alternate transparent / opaque along one tight line, staggering even indices to the front row and odd
-        // to the back. Neighbours are a transparent and an opaque character offset diagonally, so their (directional +
-        // point) shadows overlap on the ground -- the colored transparent shadow folds onto the hard opaque shadow and
-        // adjacent characters' shadows pile up, making the shadow duplication / combine easy to observe.
+        // Comparison coordinates stay byte-for-byte equivalent to the old zigzag. The full workload retains unit
+        // body scale, .72 spacing within each row and a half-column stagger between the glass and opaque rows.
         const bool transparentMaterialClass = (index % 2u) == 0u;
         const bool transparent = !hybridShadowOpaqueBaseline() && transparentMaterialClass;
-        const u32 classIndex = index / 2u; // 0..4 within each material class (tint palette)
-        const f32 x = (static_cast<f32>(index) - static_cast<f32>(s_CharacterCount - 1u) * 0.5f) * s_CharacterSpacingX;
+        const u32 classIndex = index / 2u;
+        const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
+        const f32 x = comparison
+            ? (static_cast<f32>(index) - static_cast<f32>(m_charactersPerClass * 2u - 1u) * 0.5f) * s_CharacterSpacingX
+            : (static_cast<f32>(classIndex) - static_cast<f32>(m_charactersPerClass - 1u) * 0.5f) * s_CharacterSpacingX
+                + (transparentMaterialClass ? -0.25f : 0.25f) * s_CharacterSpacingX
+        ;
         const f32 z = transparentMaterialClass ? s_TransparentRowZ : s_OpaqueRowZ;
 
         bool tintApplied = false;
@@ -285,7 +307,7 @@ private:
             if(!transform)
                 continue;
 
-            const f32 phase = static_cast<f32>(index) * (s_TwoPi / static_cast<f32>(s_CharacterCount));
+            const f32 phase = static_cast<f32>(index) * (s_TwoPi / static_cast<f32>(m_charactersPerClass * 2u));
             StoreFloat(QuaternionRotationRollPitchYaw(0.0f, yawBase + phase, 0.0f), transform->rotation);
         }
     }
@@ -385,6 +407,8 @@ public:
 
 public:
     virtual bool onStartup()override{
+        if(!readCharactersPerClass(m_charactersPerClass))
+            return false;
         if(m_reflectionDiagnosticsEnabled){
             NWB::Impl::ReflectionSettings settings;
             settings.diagnosticsEnabled = true;
@@ -418,7 +442,21 @@ public:
         // scrubber first crack at the arrow keys; it consumes only Left/Right.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 
-        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
+        const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
+        const f32 cameraHeight = comparison ? s_ComparisonCameraHeight : s_CameraHeight;
+        const f32 cameraDistance = comparison ? s_ComparisonCameraDistance : s_CameraDistance;
+        const f32 cameraPitch = comparison ? s_ComparisonCameraPitch : s_CameraPitch;
+        const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, cameraHeight, cameraDistance, cameraPitch);
+        const auto* const camera = m_world->tryGetComponent<NWB::Impl::Scene::CameraComponent>(activeCamera);
+        if(!camera){
+            NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: workload camera is unavailable"));
+            return false;
+        }
+
+        const f32 cameraVerticalFov = camera->verticalFovRadians();
+        const f32 cameraNearPlane = camera->nearPlane();
+        const f32 cameraFarPlane = camera->farPlane();
+        const f32 cameraAspectRatio = camera->aspectRatio();
 
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
@@ -454,13 +492,14 @@ public:
         m_wallPosZ = createWall(Float4(0.0f, s_BoxHeight * 0.5f, s_BoxHalf.y, 0.0f), Float4(0.10f, 0.72f, 0.14f, 1.0f), 180.0f, 2.0f * s_BoxHalf.x); // +Z green (far back wall, faces -Z toward the crowd)
         m_ceiling = createCeiling(Float4(0.90f, 0.86f, 0.72f, 1.0f));                                                                             // warm off-white ceiling
 
-        m_characterOwners.reserve(s_CharacterCount);
-        for(u32 index = 0u; index < s_CharacterCount; ++index)
+        const u32 characterCount = m_charactersPerClass * 2u;
+        m_characterOwners.reserve(characterCount);
+        for(u32 index = 0u; index < characterCount; ++index)
             m_characterOwners.push_back(createCharacter(index));
 
         SyncSmokeModelRuntimes(*m_world);
 
-        bool allCharactersValid = m_characterOwners.size() == s_CharacterCount;
+        bool allCharactersValid = m_characterOwners.size() == characterCount;
         for(const NWB::Core::ECS::EntityID owner : m_characterOwners)
             allCharactersValid = allCharactersValid && owner.valid();
 
@@ -490,12 +529,34 @@ public:
         }
 #endif
 
-        const u32 transparentCharacterCount = hybridShadowOpaqueBaseline() ? 0u : s_CharactersPerClass;
+        const u32 transparentCharacterCount = hybridShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
-            , s_CharacterCount
+            , m_characterOwners.size()
             , transparentCharacterCount
-            , s_CharacterCount - transparentCharacterCount
+            , characterCount - transparentCharacterCount
+        );
+        const TStringView layout = comparison ? NWB_TEXT("zigzag_v1") : NWB_TEXT("two_rows_v1");
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: workload characters_per_class={} total={} transparent={} opaque={}")
+            NWB_TEXT(" layout={} rows=2 columns={} row_spacing_x={} row_stagger_x={} front_z={} back_z={} body_scale=1")
+            NWB_TEXT(" camera_x=0 camera_y={} camera_z={} camera_pitch={} vertical_fov={} near_plane={} far_plane={} aspect={}")
+            , m_charactersPerClass
+            , m_characterOwners.size()
+            , transparentCharacterCount
+            , characterCount - transparentCharacterCount
+            , layout
+            , m_charactersPerClass
+            , s_CharacterSpacingX * (comparison ? 2.0f : 1.0f)
+            , s_CharacterSpacingX * (comparison ? 0.5f : 0.25f)
+            , s_TransparentRowZ
+            , s_OpaqueRowZ
+            , cameraHeight
+            , -cameraDistance
+            , cameraPitch
+            , cameraVerticalFov
+            , cameraNearPlane
+            , cameraFarPlane
+            , cameraAspectRatio
         );
         return true;
     }
@@ -569,6 +630,7 @@ private:
     NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_wallPosZ = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
+    u32 m_charactersPerClass = s_DefaultCharactersPerClass;
     const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
     const bool m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
     u64 m_reflectionStatisticsSequence = 0u;

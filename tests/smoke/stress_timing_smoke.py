@@ -28,8 +28,62 @@ SHUTDOWN = "StressTestSmokeProject: shutdown"
 GPU_DEBUG = ("Loader: GPU debug validation enabled", "validation layer enabled: yes",
     "Vulkan GPU debug: debug utils messenger installed.")
 REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
-    "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32",
-    "StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light")
+    "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32")
+
+
+WORKLOAD = "StressTestSmokeProject: workload "
+SPAWN = "StressTestSmokeProject: spawned "
+WORKLOAD_FIELDS = ("characters_per_class", "total", "transparent", "opaque", "layout", "rows", "columns",
+    "row_spacing_x", "row_stagger_x", "front_z", "back_z", "body_scale", "camera_x", "camera_y", "camera_z",
+    "camera_pitch", "vertical_fov", "near_plane", "far_plane", "aspect")
+WORKLOAD_INTEGERS = ("characters_per_class", "total", "transparent", "opaque", "rows", "columns")
+
+
+def parse_workload(lines, characters_per_class):
+    if characters_per_class not in (5, 10):
+        raise SmokeFailure("characters per class must select the five or ten character profile")
+    records = [line for line in lines if line.startswith(WORKLOAD)]
+    spawns = [line for line in lines if line.startswith(SPAWN)]
+    if len(records) != 1 or len(spawns) != 1:
+        raise SmokeFailure("exactly one workload signature and spawned-character record are required")
+    pattern = re.escape(WORKLOAD) + " ".join(re.escape(field) + r"=(\S+)" for field in WORKLOAD_FIELDS)
+    match = re.fullmatch(pattern, records[0])
+    if not match:
+        raise SmokeFailure("malformed stress workload signature")
+    row = dict(zip(WORKLOAD_FIELDS, match.groups()))
+    try:
+        for field in WORKLOAD_INTEGERS:
+            if not re.fullmatch(r"[0-9]{1,2}", row[field]):
+                raise ValueError("invalid integer")
+            row[field] = int(row[field])
+        for field in WORKLOAD_FIELDS:
+            if field not in WORKLOAD_INTEGERS and field != "layout":
+                row[field] = float(row[field])
+                if not math.isfinite(row[field]):
+                    raise ValueError("nonfinite workload value")
+    except ValueError as error:
+        raise SmokeFailure("invalid stress workload count or camera/layout number") from error
+    comparison = characters_per_class == 5
+    expected = dict(characters_per_class=characters_per_class, total=characters_per_class * 2,
+        transparent=characters_per_class, opaque=characters_per_class,
+        layout="zigzag_v1" if comparison else "two_rows_v1", rows=2, columns=characters_per_class,
+        row_spacing_x=1.44 if comparison else .72, row_stagger_x=.36 if comparison else .18,
+        front_z=-.55, back_z=.55, body_scale=1., camera_x=0., camera_y=1.8 if comparison else 2.7,
+        camera_z=-4.8 if comparison else -7.2, camera_pitch=.2 if comparison else .25,
+        vertical_fov=math.pi / 3., near_plane=.001, far_plane=10000., aspect=0.)
+    for field, value in expected.items():
+        matches = row[field] == value if field in WORKLOAD_INTEGERS or field == "layout" else math.isclose(
+            row[field], value, rel_tol=1e-6, abs_tol=1e-6)
+        if not matches:
+            raise SmokeFailure(f"requested stress workload profile disagrees with observed {field}")
+    expected_spawn = (SPAWN + f"{row['total']} spinning characters ({row['transparent']} transparent + "
+        f"{row['opaque']} opaque) over ground, directional + point light")
+    if spawns[0] != expected_spawn:
+        raise SmokeFailure("spawned characters disagree with the requested stress workload")
+    first_interval = next((index for index, line in enumerate(lines) if line.startswith(INTERVAL)), len(lines))
+    if not lines.index(START) < lines.index(spawns[0]) < lines.index(records[0]) < first_interval:
+        raise SmokeFailure("stress workload must be observed after startup and before measurement intervals")
+    return {"requested_characters_per_class": characters_per_class, "observed": row, "signature": records[0]}
 
 
 REFLECTION_ENABLED = "StressTestSmokeProject: reflection diagnostics enabled"
@@ -140,13 +194,14 @@ def parse_sample(line, prefix, rate_key, positive_count):
     return {"fps": fps, "presentations": frames, "seconds": seconds, "first": first, "last": last}
 
 
-def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnostics=False):
+def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnostics=False, characters_per_class=10):
     require_normal_process_exit(exit_code, "", "stress presentation timing")
     validate_expected_log_text(text, list(REQUIRED), list(STRICT_LOG_FAILURE_MESSAGES) + [
         "presentation measurement incomplete", "render submission suspended", "render pass skipped", "device recreation"])
     lines = [line.strip() for line in text.splitlines()]
     if any(lines.count(marker) != 1 for marker in REQUIRED):
         raise SmokeFailure("one exact startup, reservation, fixture and shutdown sequence is required")
+    workload = parse_workload(lines, characters_per_class)
     if sum(line.startswith("StressTestSmokeProject: presentation timing ") for line in lines) != 1:
         raise SmokeFailure("multiple or conflicting presentation timing configurations")
     if any(value == "--gpudbg" or value.startswith("--gpudbg=") for value in application_args):
@@ -199,12 +254,12 @@ def parse_runtime_log(text, exit_code, application_args=(), reflection_diagnosti
     return {"measurement": total | {"frame_ms": 1000.0 * total["seconds"] / total["presentations"]},
         "intervals": intervals, "width": 1280, "height": 900, "warmup_seconds": 5,
         "requested_measurement_seconds": 30, "clock": "steady", "count": "accepted_native_present",
-        "pacing": pacing_summary, "optical_reflection": parse_reflection_diagnostics(lines, reflection_diagnostics)}
+        "workload": workload, "pacing": pacing_summary, "optical_reflection": parse_reflection_diagnostics(lines, reflection_diagnostics)}
 
 
-def parse_measurement(log_text):
+def parse_measurement(log_text, characters_per_class=10):
     """Replay the complete raw measurement log without requiring a process launch."""
-    parsed = parse_runtime_log(log_text, 0)
+    parsed = parse_runtime_log(log_text, 0, characters_per_class=characters_per_class)
     return parsed["measurement"] | {"intervals": parsed["intervals"]}
 
 
@@ -216,6 +271,7 @@ def launch_environment(base, args, output):
     if platform.system() == "Linux":
         result["NWB_LINUX_BACKEND"] = "x11"
     result.update(NWB_STRESS_SMOKE_TIMING="1", NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
+        NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
         NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
     if args.reflection_diagnostics:
@@ -278,7 +334,7 @@ def acquire(args, output):
         logserver = None
         collected = True
         (output / "runtime.log").write_text(text, encoding="utf-8")
-        result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics)
+        result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
         result["runtime_signature"] = ab.device_material_signature(text)
         after = identities(args, helpers)
         if before != after:
@@ -321,6 +377,8 @@ def parse_args(argv=None):
     parser.add_argument("--no-logserver", action="store_true")
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
+        help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
     parser.add_argument("--spin-angle", type=float, default=0.6)
     parser.add_argument("--fixed-delta-seconds", type=float, default=0.016666667)
     parser.add_argument("--application-arg", action="append", default=[])
@@ -355,6 +413,7 @@ def main(argv=None):
         write_status(f"Stress presentation timing artifacts: {output}")
         result = acquire(args, output)
         write_json(output / "result.json", result)
+        write_status(result["workload"]["signature"])
         write_status(f"PASS: {result['measurement']['fps']:.4f} accepted presentations/s over {result['measurement']['seconds']:.6f}s")
         optical = result["optical_reflection"]
         write_status(f"Optical reflection: {optical['status']} (query activity alone does not certify optical correctness)")

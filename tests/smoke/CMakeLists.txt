@@ -1081,7 +1081,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "$<TARGET_FILE:nwb_stress_test_smoke>"
             "${_nwb_skinning_culling_runtime_root}"
             "NWB Stress Test Smoke"
-            "--expect-log-message" "StressTestSmokeProject: spawned 10 spinning characters (5 transparent + 5 opaque) over ground, directional + point light"
+            "--expect-log-message" "StressTestSmokeProject: spawned 20 spinning characters (10 transparent + 10 opaque) over ground, directional + point light"
             "--expect-log-message" "StressTestSmokeProject: shutdown"
         )
         set_tests_properties(nwb_stress_test_capture_smoke PROPERTIES

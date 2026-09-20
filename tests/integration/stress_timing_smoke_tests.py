@@ -13,10 +13,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
 
 
-def valid_log():
-    lines = list(smoke.REQUIRED[:-1])
-    lines.remove(smoke.SHUTDOWN)
-    lines.append(smoke.REQUIRED[-1])
+def workload_record(characters_per_class=10):
+    if characters_per_class == 5:
+        return (smoke.WORKLOAD + "characters_per_class=5 total=10 transparent=5 opaque=5 layout=zigzag_v1 "
+            "rows=2 columns=5 row_spacing_x=1.44 row_stagger_x=0.36 front_z=-0.55 back_z=0.55 body_scale=1 "
+            "camera_x=0 camera_y=1.8 camera_z=-4.8 camera_pitch=0.2 vertical_fov=1.0471976 "
+            "near_plane=0.001 far_plane=10000 aspect=0")
+    return (smoke.WORKLOAD + "characters_per_class=10 total=20 transparent=10 opaque=10 layout=two_rows_v1 "
+        "rows=2 columns=10 row_spacing_x=0.72 row_stagger_x=0.18 front_z=-0.55 back_z=0.55 body_scale=1 "
+        "camera_x=0 camera_y=2.7 camera_z=-7.2 camera_pitch=0.25 vertical_fov=1.0471976 "
+        "near_plane=0.001 far_plane=10000 aspect=0")
+
+
+def valid_log(characters_per_class=10):
+    lines = [marker for marker in smoke.REQUIRED if marker != smoke.SHUTDOWN]
+    lines.append(smoke.SPAWN + f"{characters_per_class * 2} spinning characters ({characters_per_class} transparent + "
+        f"{characters_per_class} opaque) over ground, directional + point light")
+    lines.append(workload_record(characters_per_class))
     lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
     # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
     lines.append("Fixture: fixed simulation delta 0.016666667")
@@ -140,6 +153,73 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
                 smoke.parse_runtime_log(reflection_log(record), 0, reflection_diagnostics=True)
 
 
+class StressWorkloadTests(unittest.TestCase):
+    def test_default_target_reports_twenty_bodies_and_full_camera_signature(self):
+        workload = smoke.parse_runtime_log(valid_log(), 0)["workload"]
+        self.assertEqual(workload["requested_characters_per_class"], 10)
+        self.assertEqual(workload["observed"]["total"], 20)
+        self.assertEqual(workload["observed"]["transparent"], 10)
+        self.assertEqual(workload["observed"]["opaque"], 10)
+        self.assertEqual(workload["observed"]["layout"], "two_rows_v1")
+        self.assertEqual(workload["observed"]["camera_z"], -7.2)
+        self.assertEqual(workload["signature"], workload_record())
+
+    def test_explicit_comparison_preserves_ten_body_layout_and_camera(self):
+        workload = smoke.parse_runtime_log(valid_log(5), 0, characters_per_class=5)["workload"]
+        self.assertEqual(workload["observed"]["total"], 10)
+        self.assertEqual(workload["observed"]["layout"], "zigzag_v1")
+        self.assertEqual(workload["observed"]["row_spacing_x"], 1.44)
+        self.assertEqual(workload["observed"]["camera_z"], -4.8)
+        self.assertEqual(smoke.parse_measurement(valid_log(5), 5)["fps"], 16.)
+
+    def test_requested_profile_and_actual_spawn_counts_must_match(self):
+        for observed, requested in ((5, 10), (10, 5), (10, 0), (10, 11)):
+            with self.subTest(observed=observed, requested=requested), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(valid_log(observed), 0, characters_per_class=requested)
+        with self.assertRaisesRegex(smoke.SmokeFailure, "spawned characters"):
+            smoke.parse_runtime_log(valid_log().replace("spawned 20", "spawned 18"), 0)
+
+    def test_layout_camera_counts_and_numeric_validity_are_load_bearing(self):
+        changes = (("total=20", "total=18"), ("transparent=10", "transparent=9"),
+            ("opaque=10", "opaque=11"), ("characters_per_class=10", "characters_per_class=10.0"),
+            ("total=20", "total=999"), ("columns=10", "columns=-1"), ("rows=2", "rows=1"),
+            ("layout=two_rows_v1", "layout=unknown"), ("row_spacing_x=0.72", "row_spacing_x=1.44"),
+            ("row_stagger_x=0.18", "row_stagger_x=0"), ("front_z=-0.55", "front_z=0.55"),
+            ("body_scale=1", "body_scale=0.5"), ("camera_z=-7.2", "camera_z=-4.8"),
+            ("camera_pitch=0.25", "camera_pitch=0.2"), ("camera_y=2.7", "camera_y=nan"),
+            ("vertical_fov=1.0471976", "vertical_fov=1.5"), ("near_plane=0.001", "near_plane=inf"),
+            ("aspect=0", "aspect=1.777"))
+        for old, new in changes:
+            with self.subTest(new=new), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(valid_log().replace(old, new), 0)
+        parsed = smoke.parse_runtime_log(valid_log().replace("row_spacing_x=0.72", "row_spacing_x=0.72000003"), 0)
+        self.assertEqual(parsed["workload"]["observed"]["total"], 20)
+
+    def test_fixture_records_must_be_unique_complete_and_before_measurement(self):
+        record = workload_record()
+        spawn = next(line for line in valid_log().splitlines() if line.startswith(smoke.SPAWN))
+        variants = (valid_log().replace(record, ""), valid_log() + record,
+            valid_log().replace(spawn, ""), valid_log() + spawn,
+            valid_log().replace(record, record + " unexpected=1"),
+            valid_log().replace(record, record.replace(" columns=10", "")),
+            valid_log().replace(record, "").replace(smoke.SHUTDOWN, record + "\n" + smoke.SHUTDOWN))
+        for text in variants:
+            with self.subTest(text=text[-100:]), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(text, 0)
+
+    def test_cli_defaults_to_target_and_only_accepts_fixed_profiles(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            executable = root / "renderer.exe"
+            executable.write_bytes(b"fixture")
+            argv = ["--executable", str(executable), "--working-directory", str(root), "--no-logserver"]
+            self.assertEqual(smoke.parse_args(argv).characters_per_class, 10)
+            self.assertEqual(smoke.parse_args(argv + ["--characters-per-class", "5"]).characters_per_class, 5)
+            for value in ("0", "6", "11", "5.5", "invalid"):
+                with self.subTest(value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
+                    smoke.parse_args(argv + ["--characters-per-class", value])
+
+
 class StressMeasurementTests(unittest.TestCase):
     def test_complete_rate_uses_presentations_and_wall_not_fixed_delta_or_queries(self):
         result = smoke.parse_measurement(valid_log())
@@ -208,14 +288,17 @@ class StressMeasurementTests(unittest.TestCase):
                 smoke.parse_measurement(valid_log() + marker)
 
     def test_environment_replaces_inherited_capture_controls(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False)
+        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10)
         env = smoke.launch_environment({"NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "96",
             "NWB_STRESS_TEST_SPIN_ANGLE": "2", "NWB_OTHER": "bad",
-            "NWB_STRESS_REFLECTION_DIAGNOSTICS": "1", "PATH": "kept"}, args, Path("trial"))
+            "NWB_STRESS_REFLECTION_DIAGNOSTICS": "1", "NWB_STRESS_CHARACTERS_PER_CLASS": "5", "PATH": "kept"}, args, Path("trial"))
         self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", env)
         self.assertNotIn("NWB_OTHER", env)
         self.assertEqual(env["NWB_STRESS_TEST_SPIN_ANGLE"], "0.6")
         self.assertEqual(env["NWB_STRESS_SMOKE_TIMING"], "1")
+        self.assertEqual(env["NWB_STRESS_CHARACTERS_PER_CLASS"], "10")
+        args.characters_per_class = 5
+        self.assertEqual(smoke.launch_environment({}, args, Path("comparison"))["NWB_STRESS_CHARACTERS_PER_CLASS"], "5")
         self.assertEqual(env["PATH"], "kept")
         self.assertNotIn("NWB_STRESS_REFLECTION_DIAGNOSTICS", env)
         args.reflection_diagnostics = True
@@ -242,7 +325,7 @@ class StressMeasurementTests(unittest.TestCase):
             output = Path(temporary)
             args = SimpleNamespace(executable=output / "app.exe", working_directory=output,
                 no_logserver=True, logserver_executable=None, application_arg=[], timeout=90,
-                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False)
+                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10)
             process = Mock()
             process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
             with patch.object(smoke, "identities", return_value={}), \

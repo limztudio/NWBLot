@@ -552,3 +552,24 @@ These acquisitions retain 20 bodies, all effects, 1280x900, five seconds warmup 
 The capture harness now has an opt-in client-resize mode, committed independently as 9f66472ce. All 70 Python behavior tests pass, including 11 new cases. Actual validated runs render at 1280x900, resize the sphere scene to 1001x701 and the 20-body stress scene to 1441x961, confirm both native client size and the renderer backbuffer acknowledgement, then render and capture at the new dimensions. Full-scene captures on this device use hardware caustics. Software graph handoffs are covered natively, but there is no full-scene force-software switch on this RT-capable device; full software-producer startup remains unqualified here.
 
 Evidence: `__artifacts/stress_60fps/caustic_activity_candidate/` retains the frozen stress executable/assets and corrected sources, native/CPU/graph results, fixed/moving timing, frame 120 and sphere images, before/after resize captures/logs and image comparison. `caustic_activity_prepare/` and `caustic_resize_prepare/` preserve the reviewed proposals and manifests.
+
+## Shared first-wavelet shadow filtering, 2026-09-20
+
+The hardware combined-upsample route now merges opaque and transparent history separately, then filters both in a dedicated first-wavelet dispatch. Geometry sampling, normal/distance weights and the tap loop are shared; channel-specific moments, variance, visibility weights, half denominators, float numerators and output images remain independent. This fixed step-one variant uses a 12x12 shared tile instead of the generic 24x24 allocation. Both original wavelets remain available for other routes and pass counts. No quality setting, ray count or resolution changes.
+
+The shadow domain owns the additional pipeline and 96-byte push layout, preserving the existing 84-byte prefix. Resource independence is validated once for both history selectors when targets are created. The graph publishes both newly merged histories/moments before the fused dispatch, and preserves terminal history acceptance/discard ownership. If transparent work or the combined dispatch cannot proceed, the fallback runs only the deferred opaque wavelet, avoiding a second temporal blend, then the existing scalar upsample. Six new CPU tests cover eligibility/topology and packet phase requirements.
+
+All 449 enabled renderer CPU tests pass (61 existing disabled), and all 15 native shadow tests pass. The new 68-case GPU fixture requires exact component equality for both outputs against frozen independent scalar/RGB shaders, plus guard, layer, alpha and invalid-geometry checks. Its initial supplemental uniform oracle incorrectly required real-number cancellation despite the original half denominator and float numerator. That assertion was corrected for both arms using a derived positive-sum rounding bound; every exact candidate/reference comparison is unchanged and passed before and after this test-only correction. Both native and production builds/cooking pass without new warnings; production cooking contains 236 assets.
+
+| Twenty-body measurement | Caustic activity baseline | Combined first wavelet |
+| --- | ---: | ---: |
+| Fixed accepted presentations/s | 61.4584 | 63.8370 |
+| Fixed wall interval | 16.2712 ms | 15.6649 ms |
+| Rotating accepted presentations/s | 58.0619 | 60.1121 |
+| Rotating wall interval | 17.2230 ms | 16.6356 ms |
+| Rotating shadow envelope | 7.1411 ms | 6.4862 ms |
+| Rotating caustic resolve | 0.8713 ms | 0.8724 ms |
+
+Both acquisitions retain twenty bodies, all effects and 1280x900, with five seconds warmup and thirty seconds measurement. The rotating average first exceeds sixty FPS, but its roughly half-second windows range from 54.37 to 63.29 FPS. This does not establish a sixty-FPS floor or sustained thermal qualification. More headroom and repeated measurements remain desirable. Fusion moves opaque wavelet work into the transparent resolve range; channel ranges are no longer independently comparable to the preceding implementation. Async ranges overlap and must not be summed.
+
+The full frame-120 capture and actual client resize from 1280x900 to 1001x701 pass GPU validation. Both images were inspected. Difference from the preceding fixed capture averages 0.09443/255, maximum 27/255; there is no structural visual change. Existing open-body glass artifacts remain. Evidence lives in `__artifacts/stress_60fps/shadow_wavelet_candidate/`: frozen runtime/assets and compiled sources, native/CPU logs and XML, fixed/moving timings and GPU summaries, validated captures and image comparison. `shadow_wavelet_prepare/` contains the reviewed manifests, original sources and uniform-oracle correction rationale.

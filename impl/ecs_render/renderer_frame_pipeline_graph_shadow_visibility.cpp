@@ -70,6 +70,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
     m_deferredShadowVisibilityOpaqueResolveTask = {};
     m_deferredShadowCombinedUpsample = false;
+    m_deferredShadowCombinedWavelet = false;
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
@@ -145,6 +146,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     const bool splitSoftTransparentFold = preparedSoftTransparentFoldCandidate;
     const bool combinedSoftUpsample = splitSoftTransparentFold && rayTracingPlan.combinedSoftUpsample;
     m_deferredShadowCombinedUpsample = combinedSoftUpsample;
+    const bool combinedSoftWavelet = CanCombineSoftShadowWavelets(
+        combinedSoftUpsample,
+        rayTracingPlan.combinedSoftWaveletReady,
+        rayTracingPlan.opaqueTemporalMergeReady,
+        rayTracingPlan.transparentTemporalMergeReady,
+        NWB_SHADOW_RESOLVE_PASS_COUNT,
+        NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT
+    );
+    m_deferredShadowCombinedWavelet = combinedSoftWavelet;
     // The adaptive fallback remains in the monolithic callback, but its raw buffer primitives and acceptance-time
     // diagnostic lifecycle are deterministic from this frozen route.  A frame with no clear/copy work still owns
     // its tick through the semantic task's accepted hook without gaining empty graph nodes.
@@ -651,7 +661,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         // The compiler lowers the opaque trace from UAV to the exact sampled state required by temporal merge or
         // the first wavelet. The first wavelet then publishes half-B for the resolve tail.
         opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
-        opaqueFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
+        if(!combinedSoftWavelet)
+            opaqueFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
         opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
         if(graphOwnsOpaqueTemporalMergeEntryStates){
             // The frozen selector permits exact selected input/output declarations for the opaque temporal merge.
@@ -752,7 +763,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             transparentTemporalMergeResourceUses.push_back(WriteUse(transparentHistoryOut, Core::ResourceStates::UnorderedAccess));
             transparentTemporalMergeResourceUses.push_back(WriteUse(transparentMomentsOut, Core::ResourceStates::UnorderedAccess));
 
-            transparentFirstWaveletResourceUses.reserve(4u);
+            transparentFirstWaveletResourceUses.reserve(combinedSoftWavelet ? 7u : 4u);
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentHistoryOut, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentMomentsOut, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
@@ -764,6 +775,16 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             transparentFirstWaveletResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
             transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
             transparentFirstWaveletResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
+        }
+        if(combinedSoftWavelet){
+            // Both temporal merges publish their selected output pair before the fused wavelet reads either pair.
+            transparentFirstWaveletResourceUses.push_back(ReadUse(
+                opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA, Core::ResourceStates::ShaderResource
+            ));
+            transparentFirstWaveletResourceUses.push_back(ReadUse(
+                opaqueHistoryFrontIsA ? opaqueMomentsB : opaqueMomentsA, Core::ResourceStates::ShaderResource
+            ));
+            transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
         }
         transparentFoldResourceUses.reserve(9u);
         if(combinedSoftUpsample)
@@ -843,8 +864,9 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         const Core::GpuTaskId opaqueFirstWaveletDependencies[] = { m_deferredShadowVisibilityOpaqueTask };
         Core::GpuTaskDesc opaqueFirstWaveletDesc;
         opaqueFirstWaveletDesc
-            .setIdentity(Name("render.shadow_visibility.opaque_first_wavelet"))
-            .setMarkerLabel("Shadow Opaque First Wavelet")
+            .setIdentity(combinedSoftWavelet
+                ? Name("render.shadow_visibility.opaque_temporal_merge") : Name("render.shadow_visibility.opaque_first_wavelet"))
+            .setMarkerLabel(combinedSoftWavelet ? "Shadow Opaque Temporal Merge" : "Shadow Opaque First Wavelet")
             .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(opaqueFirstWaveletDependencies, LengthOf(opaqueFirstWaveletDependencies))
@@ -865,7 +887,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             hardwareShadowSupported,
             true,
             graphOwnsOpaqueTemporalMergeEntryStates,
-            combinedSoftUpsample
+            combinedSoftUpsample,
+            combinedSoftWavelet
         );
         if(!m_deferredShadowVisibilityOpaqueFirstWaveletTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque soft-shadow first-wavelet graph task"));
@@ -979,8 +1002,9 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         const Core::GpuTaskId transparentFirstWaveletDependencies[] = { transparentFirstWaveletDependency };
         Core::GpuTaskDesc transparentFirstWaveletDesc;
         transparentFirstWaveletDesc
-            .setIdentity(Name("render.shadow_visibility.transparent_first_wavelet"))
-            .setMarkerLabel("Shadow Transparent First Wavelet")
+            .setIdentity(combinedSoftWavelet
+                ? Name("render.shadow_visibility.combined_first_wavelet") : Name("render.shadow_visibility.transparent_first_wavelet"))
+            .setMarkerLabel(combinedSoftWavelet ? "Shadow Combined First Wavelet" : "Shadow Transparent First Wavelet")
             .setQueue(ComputeQueueRequest())
             .setScheduling(tailScheduling)
             .setDependencies(transparentFirstWaveletDependencies, LengthOf(transparentFirstWaveletDependencies))
@@ -998,7 +1022,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueFrameIndex,
             true,
             true,
-            !graphOwnsTransparentTemporalMergeEntryStates
+            !graphOwnsTransparentTemporalMergeEntryStates,
+            combinedSoftWavelet
         );
         if(!m_deferredShadowVisibilityTransparentFirstWaveletTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow first-wavelet graph task"));

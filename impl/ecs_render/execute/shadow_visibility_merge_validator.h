@@ -36,6 +36,7 @@ struct PreparedShadowVisibilityTasks{
     Core::GpuTaskId transparentTemporalMerge;
     Core::GpuTaskId transparentFirstWavelet;
     bool combinedUpsample = false;
+    bool combinedWavelet = false;
 };
 
 [[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(

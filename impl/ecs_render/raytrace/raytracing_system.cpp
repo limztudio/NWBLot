@@ -894,6 +894,8 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softTransparentReady){
             if(!ensureSoftCombinedUpsamplePipeline())
                 m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
+            if(!ensureSoftCombinedWaveletPipeline())
+                m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
         }
 
         // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry +

@@ -161,7 +161,7 @@ struct ShadowVisibilityOpaqueGraphTask{
 
 
 // The opaque producer leaves the trace and current geometry scratch in their declared states. This adjacent task
-// owns their sampled entry before temporal merge and the first wavelet. Its tail retains dynamic ping-pong and
+// owns their sampled entry before temporal merge and, unless fused later, the first wavelet. Its tail retains dynamic ping-pong and
 // upsample work, while the terminal transparent fold remains the output/acceptance owner.
 struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
     struct Payload{
@@ -179,6 +179,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         bool graphEntryStatesOwned = false;
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
         bool deferUpsample = false;
+        bool deferWavelet = false;
     };
 
     [[nodiscard]] static bool record(
@@ -214,14 +215,15 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
             payload.graphics->getDevice(),
             commandList
         );
-        if(payload.raytracingSystem->renderSoftOpaqueShadowFirstWavelet(
+        if(payload.raytracingSystem->renderSoftOpaqueShadowResolvePhase(
             commandList,
             *payload.targets,
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.hardwareShadowSupported,
             payload.graphEntryStatesOwned,
-            payload.graphOwnsOpaqueTemporalMergeEntryStates
+            payload.graphOwnsOpaqueTemporalMergeEntryStates,
+            payload.deferWavelet ? SoftShadowOpaqueResolvePhase::TemporalOnly : SoftShadowOpaqueResolvePhase::TemporalAndWavelet
         )){
             if(payload.deferUpsample){
                 payload.opaqueResolveTiming->value().finishTiming(commandList);
@@ -498,6 +500,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         bool graphEntryStatesOwned = false;
         bool graphOwnsTransparentWaveletInputBoundary = false;
         bool startsTransparentResolveTiming = true;
+        bool combinedWavelet = false;
     };
 
     [[nodiscard]] static bool record(
@@ -518,7 +521,29 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
             || !payload.opaqueFrameIndex
         )
             return false;
-        if(!*payload.opaqueProduced || !*payload.transparentTraceProduced)
+        if(!*payload.opaqueProduced)
+            return true;
+        if(payload.combinedWavelet){
+            Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+            if(*payload.transparentTraceProduced && payload.transparentResolveTiming->has_value()){
+                if(payload.raytracingSystem->renderSoftShadowCombinedWavelet(commandList, *payload.targets))
+                    return true;
+            }
+            // Opaque temporal merge already completed. Recover only its first wavelet, without blending history twice.
+            *payload.transparentTraceProduced = false;
+            Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
+            return payload.raytracingSystem->renderSoftOpaqueShadowResolvePhase(
+                commandList,
+                *payload.targets,
+                payload.deferredLightingResources,
+                *payload.opaqueFrameIndex,
+                true,
+                payload.graphEntryStatesOwned,
+                true,
+                SoftShadowOpaqueResolvePhase::WaveletOnly
+            );
+        }
+        if(!*payload.transparentTraceProduced)
             return true;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
@@ -1087,6 +1112,24 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
 
+    // All resolve allocations belong to this target generation. Verify both history selectors once, before publication.
+    for(u32 selector = 0u; selector < 2u; ++selector){
+        const bool frontIsA = selector != 0u;
+        const SoftShadowCombinedWaveletInputs waveletInputs{
+            .opaqueHistory = frontIsA ? targets.shadowHistB.get() : targets.shadowHistA.get(),
+            .opaqueMoments = frontIsA ? targets.shadowMomentsB.get() : targets.shadowMomentsA.get(),
+            .transparentHistory = frontIsA ? targets.transparentHistB.get() : targets.transparentHistA.get(),
+            .transparentMoments = frontIsA ? targets.transparentMomentsB.get() : targets.transparentMomentsA.get(),
+            .geometry = targets.shadowSoftGeometry.get(),
+            .opaqueOutput = targets.shadowSoftHalfB.get(),
+            .transparentOutput = targets.shadowSoftHalfA.get(),
+        };
+        if(!waveletInputs.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: soft-shadow target allocation produced aliased resolve resources"));
+            return false;
+        }
+    }
+
     // Edge records are capped at one per pixel; overflow falls back to interpolation.
     const u32 edgeListCapacityRecords = targets.width * targets.height;
     Core::BufferDesc edgeListDesc;
@@ -1352,7 +1395,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const bool deferUpsample){
+    const bool deferUpsample,
+    const bool deferWavelet){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
@@ -1370,6 +1414,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsOpaqueTemporalMergeEntryStates = graphOwnsOpaqueTemporalMergeEntryStates,
             .deferUpsample = deferUpsample,
+            .deferWavelet = deferWavelet,
         }
     );
 }
@@ -1433,19 +1478,20 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
     );
 }
 
-bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
+bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool hardwareShadowSupported,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
-){
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const SoftShadowOpaqueResolvePhase::Enum phase){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
         || m_rayTracingState.m_softShadowSlotMask == 0u
+        || (phase != SoftShadowOpaqueResolvePhase::TemporalAndWavelet && !m_rayTracingState.m_softShadowTemporalReady)
     )
         return false;
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
@@ -1474,7 +1520,11 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowFirstWavelet(
         graphOwnsOpaqueTemporalMergeEntryStates,
         false,
         false,
-        true
+        true,
+        false,
+        false,
+        false,
+        phase
     );
     return true;
 }
@@ -1752,7 +1802,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     const u32* const opaqueFrameIndex,
     const bool graphEntryStatesOwned,
     const bool graphOwnsTransparentWaveletInputBoundary,
-    const bool startsTransparentResolveTiming
+    const bool startsTransparentResolveTiming,
+    const bool combinedWavelet
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask>(
         desc,
@@ -1769,6 +1820,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsTransparentWaveletInputBoundary = graphOwnsTransparentWaveletInputBoundary,
             .startsTransparentResolveTiming = startsTransparentResolveTiming,
+            .combinedWavelet = combinedWavelet,
         }
     );
 }

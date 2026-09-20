@@ -312,6 +312,18 @@ static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowRe
 
 static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 20u);
 
+// Only the fixed combined-wavelet program extends the existing 84-byte resolve ABI.
+struct ShadowCombinedWaveletPushConstants{
+    ShadowResolvePushConstants resolve;
+    u32 opaqueMomentsSlot = 0u;
+    u32 opaqueMomentsValid = 0u;
+    u32 opaqueOutputStorageSlot = 0u;
+};
+static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 96u);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == 84u);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == 88u);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == 92u);
+
 // Shader-mirrored shadow resolve stages.
 namespace ShadowResolveStage{
     enum Enum : u32{

@@ -3,7 +3,6 @@
 
 
 #include "shadow_resolve_binding_slots.h"
-#include "shadow_resolve_filter_constants.slangi"
 #include "constants.h"
 #include "sw_binding_slots.h"
 #include "shadow_heap_resources.slangi"
@@ -115,7 +114,13 @@ bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// 5x5 B-spline a-trous kernel.
+static const half s_NwbShadowResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
+
+#define NWB_SHADOW_RESOLVE_NORMAL_POWER 8.0
+
 #define NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC 0.02
+#define NWB_SHADOW_RESOLVE_WAVELET_DIST_FRAC 0.02
 
 // Guided upsample parameters.
 #define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
@@ -137,13 +142,14 @@ half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapO
 }
 
 // Use temporal variance only after enough history samples.
+#define NWB_SHADOW_RESOLVE_VARIANCE_MIN_HISTORY 4.0
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_RGB_SIGMA_SCALE
+    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE 0.20
 #else
-    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_SCALAR_SIGMA_SCALE
+    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE 1.0
 #endif
-#define NWB_SHADOW_RESOLVE_SIGMA_LUM (NWB_SHADOW_RESOLVE_SIGMA_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
-#define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (NWB_SHADOW_RESOLVE_SIGMA_EPS_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM (4.0 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (0.05 * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 
 half nwbShadowResolveValueWeight(const half centerVis, const half tapVis, const float sigmaLum){
     // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.

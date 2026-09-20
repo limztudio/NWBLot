@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/soft_shadow_wavelet.h>
 #include <impl/ecs_render/raytrace/caustic_resolve_activity.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
@@ -385,7 +386,8 @@ public:
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
-        bool deferUpsample = false
+        bool deferUpsample = false,
+        bool deferWavelet = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueResolveTailTask(
         Core::GpuTaskGraph& graph,
@@ -428,7 +430,8 @@ public:
         const u32* opaqueFrameIndex,
         bool graphEntryStatesOwned = false,
         bool graphOwnsTransparentWaveletInputBoundary = false,
-        bool startsTransparentResolveTiming = true
+        bool startsTransparentResolveTiming = true,
+        bool combinedWavelet = false
     );
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFoldTask(
         Core::GpuTaskGraph& graph,
@@ -998,6 +1001,8 @@ private:
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
     [[nodiscard]] bool ensureSoftCombinedUpsamplePipeline();
+    [[nodiscard]] bool ensureSoftCombinedWaveletPipeline();
+    [[nodiscard]] bool renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSoftShadowTerminalUpsample(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -1051,7 +1056,8 @@ private:
         bool graphOwnsOpaqueTraceToFirstWaveletBoundary = false,
         bool dispatchTransparentResolveTail = false,
         bool splitTransparentResolve = false,
-        bool dispatchTransparentTemporalMerge = false
+        bool dispatchTransparentTemporalMerge = false,
+        SoftShadowOpaqueResolvePhase::Enum opaquePhase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to the shared deferred graph.
     [[nodiscard]] bool renderShadowVisibilityOpaque(
@@ -1062,14 +1068,15 @@ private:
         bool graphEntryStatesOwned,
         bool graphOwnsOpaqueTemporalMergeEntryStates
     );
-    [[nodiscard]] bool renderSoftOpaqueShadowFirstWavelet(
+    [[nodiscard]] bool renderSoftOpaqueShadowResolvePhase(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned,
-        bool graphOwnsOpaqueTemporalMergeEntryStates
+        bool graphOwnsOpaqueTemporalMergeEntryStates,
+        SoftShadowOpaqueResolvePhase::Enum phase
     );
     [[nodiscard]] bool renderSoftOpaqueShadowResolveTail(
         Core::CommandList& commandList,

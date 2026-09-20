@@ -49,6 +49,7 @@ inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_res
 // RGB resolve variant (NWB_SHADOW_RESOLVE_CHANNELS=3).
 inline constexpr Name s_SoftResolveRgbShaderName("engine/graphics/shadow/shadow_resolve_rgb_cs");
 inline constexpr Name s_SoftResolveCombinedShaderName("engine/graphics/shadow/shadow_resolve_combined_cs");
+inline constexpr Name s_SoftResolveCombinedWaveletShaderName("engine/graphics/shadow/shadow_resolve_wavelet_combined_cs");
 // Temporal merge between the half-res trace and the resolve.
 inline constexpr Name s_SoftReprojectMergeShaderName("engine/graphics/shadow/shadow_reproject_merge_cs");
 

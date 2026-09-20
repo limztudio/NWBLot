@@ -10,6 +10,9 @@ target_sources(nwb_shadow_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/traversal_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resolve_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/combined_resolve_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/combined_wavelet_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_before_wavelet_fusion.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_rgb_before_wavelet_fusion.slang"
     "${CMAKE_CURRENT_LIST_DIR}/resolve_guided_fit_cases.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/resolve_guided_fit_cases.h"
     "${CMAKE_CURRENT_LIST_DIR}/hardware_transmission_kernel_tests.cpp"
@@ -43,6 +46,8 @@ target_link_libraries(nwb_shadow_kernel_tests PRIVATE
 set_tests_properties(nwb_shadow_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 set_source_files_properties(
+    "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_before_wavelet_fusion.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/shadow_resolve_rgb_before_wavelet_fusion.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/traversal_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/assets/hardware_transmission_collect_cs.slang"

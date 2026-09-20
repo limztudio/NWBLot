@@ -20,8 +20,10 @@ NWB_IMPL_BEGIN
 bool PreparedShadowVisibilityTasksSharePacket(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     const PreparedShadowVisibilityTasks& tasks){
+    if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
+        return false;
     if(!tasks.opaque.valid())
-        return !tasks.combinedUpsample;
+        return !tasks.combinedUpsample && !tasks.combinedWavelet;
     if(tasks.combinedUpsample ? tasks.opaqueResolve.valid() : !tasks.opaqueResolve.valid())
         return false;
     const Core::GpuTaskId required[] = {
@@ -65,6 +67,7 @@ void ShadowVisibilityMergeValidator::validate(
             .transparentTemporalMerge = pipeline.m_deferredShadowVisibilityTransparentTemporalMergeTask,
             .transparentFirstWavelet = pipeline.m_deferredShadowVisibilityTransparentFirstWaveletTask,
             .combinedUpsample = pipeline.m_deferredShadowCombinedUpsample,
+            .combinedWavelet = pipeline.m_deferredShadowCombinedWavelet,
         }
     );
     // Keep the all-lit clear in its packet; split-soft frames keep native clear.

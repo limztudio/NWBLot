@@ -465,3 +465,33 @@ Relative to the frozen object-cache candidate, the fixed twenty-body acquisition
 All 438 enabled ECS graphics tests pass, including four behavioral packet-validator tests that compile metadata graphs and reject missing stages, foreign task IDs and forced packet splits. Their initial fixture omitted required task marker labels; that declaration failure was fixed without changing production behavior. The full twenty-body validation capture passes at frame 120. Its difference from the cache-only image averages 0.08767/255, maximum 27/255, close to the repeated-baseline temporal variation. Early and late animated skinned-caustic captures also pass with GPU validation requested and show changing poses and shadow footprints. Existing open-body optical artifacts remain.
 
 Evidence: `__artifacts/stress_60fps/combined_upsample_candidate/` contains frozen binaries/resources, `run20`, `run20_moving`, GPU summaries, `ecs.{log,xml}`, frame-120 and skinned captures. `object_cache_baseline/` retains the original exact-comparison failure, rounding diagnostics and passing `shadow_bounded.{log,xml}`; `combined_upsample_host_prepare/` retains the staged host design and diagnostic archives.
+
+## Persistent indexed raster route, 2026-09-20
+
+The fixed engine mesh program now uses an explicit VertexIndexed route on devices without native mesh shaders. Its accepted cache retains the 48-byte object-space vertices and a trailing u32 index region. A single decoder writes both; ordinary instance/view changes require neither decoding nor triangle-index generation. Raster applies the current transforms and uses hardware clipping and culling. Primitive order, winding and local attribute seams remain intact. Custom authored geometry and CSG retain compute emulation, with legacy buffers and its vertex pipeline allocated only when needed.
+
+The mesh domain owns checked allocation/layout and acceptance. The material graph transports indexed draws separately through opaque rendering, refraction capture and all AVBOIT phases, declares combined VertexBuffer | IndexBuffer state, and creates no synthetic Ready task on steady cached frames. Mixed indexed/custom draw sets retain the ordinary raster callback when the AVBOIT shared-output replacement cannot represent them. Runtime source revisions refresh both vertices and indices, because the existing revision contract does not independently certify unchanged topology. The obsolete view-dependent object-cull shader, archive field and compute-cache reuse key are removed. The benchmark route signature now retains a deterministic set of observed routes per material, allowing legitimate indexed/CSG mixtures while still detecting differences between trials.
+
+The frozen preceding build is `37426cca0`. Both acquisitions retain twenty bodies (ten opaque and ten transparent), all effects, 1280 x 900, five seconds warmup and thirty seconds of accepted presentation counting. Validation and reflection diagnostics are disabled during timing.
+
+| Measurement | Combined-upsample baseline | Persistent indexed raster |
+| --- | ---: | ---: |
+| Fixed-view presentations/s | 39.5027 | 58.7279 |
+| Fixed-view wall interval | 25.3147 ms | 17.0277 ms |
+| Rotating presentations/s | 37.2742 | 55.4495 |
+| Rotating wall interval | 26.8282 ms | 18.0344 ms |
+| Fixed-view mesh dispatch total/frame | 5.4375 ms | No steady-state dispatches |
+| Rotating mesh dispatch total/frame | 6.2010 ms | No steady-state dispatches |
+| Fixed-view shadow envelope | 8.2872 ms | 6.2171 ms |
+| Rotating shadow envelope | 9.0690 ms | 7.1052 ms |
+| Rotating caustic resolve | 1.6309 ms | 1.6231 ms |
+
+Presentation rate improves about 49% in both acquisitions. Removing compute expansion also reduces the shadow ranges that regressed in the intermediate cache design, while the caustic control remains stable. These are short paired measurements, not sustained thermal qualification. Nested/asynchronous GPU timings overlap and must not be summed. **The twenty-body 60 FPS target is still unmet**, especially in motion; the next work targets avoidable transparent shadow traversal.
+
+All 440 enabled ECS graphics tests and 138 asset integration tests pass, with 61 and 21 existing disabled tests. Five native mesh suites pass 123 cases: the original ninety, twenty-one cache/guard cases and twelve actual raster comparisons. The new comparison renders the original expanded compute output through emulation_vs and the persistent cache through object_vs with a real indexed draw. It requires exact coverage and checks FP32 varyings within 2e-5 times max(1, abs(reference)); tests include near-plane crossing, tiny/zero/negative clip w, scissor, attribute seams, mirrored/nonuniform transforms and one/two-sided state. The initial fixture AlignUp type mismatch was corrected before execution. Sixty-one benchmark Python tests and thirty stress harness tests pass.
+
+The full twenty-body frame-120 capture passes GPU validation and logs the indexed route. The image difference from the preceding capture averages 0.08764/255, maximum 29/255, consistent with the earlier temporal comparison scale rather than pixel identity. Early and late skinned-caustic captures pass validation and visibly change pose and shadow footprint. The transparent CSG smoke simultaneously exercises indexed ordinary meshes and compute CSG, passes its strict cut/remaining-region checks and GPU validation. Existing open-body glass artifacts remain; activity, parity and performance checks do not certify those optical semantics.
+
+Evidence: `__artifacts/stress_60fps/vertex_indexed_candidate/` retains frozen binaries/packed assets and their identity, `run20`, `run20_moving`, GPU summaries, native/CPU/asset logs and XML, Python logs, frame-120 and skinned/CSG captures, and image comparison JSON. `combined_upsample_candidate/` is the unchanged preceding baseline.
+
+After pulling the independent helper-rules cleanup `b64479971`, the integrated build repeats all 440 renderer, 138 asset and five native mesh tests successfully. Its rotating acquisition measures 55.5322 FPS, consistent with the candidate above. Frozen integrated binaries/assets and that repeat live in `__artifacts/stress_60fps/vertex_indexed_integrated/`; the authored packed volume hash is unchanged.

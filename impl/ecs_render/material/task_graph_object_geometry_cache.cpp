@@ -39,7 +39,8 @@ using namespace RendererTaskGraphDetail;
         || left.meshResources.meshletCount != right.meshResources.meshletCount
         || leftCache.buffer != rightCache.buffer || leftCache.heapHandle != rightCache.heapHandle
         || leftCache.decoderPipeline != rightCache.decoderPipeline || leftCache.sourceRevision != rightCache.sourceRevision
-        || leftCache.requiresDecode != rightCache.requiresDecode || leftCache.initialized != rightCache.initialized)
+        || leftCache.requiresDecode != rightCache.requiresDecode || leftCache.initialized != rightCache.initialized
+        || leftCache.indexByteOffset != rightCache.indexByteOffset || leftCache.indexCount != rightCache.indexCount)
         return false;
     Core::Buffer* rightSources[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     usize sourceIndex = 0u;
@@ -94,17 +95,18 @@ struct DecodeTask{
         };
         if(!payload.materialSystem.recordObjectGeometryDecode(context, payload.draw))
             return false;
-        commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), Core::ResourceStates::VertexBuffer);
+        commandList.setBufferState(payload.draw.meshResources.objectGeometryCache.buffer.get(), ECSRenderDetail::s_ObjectGeometryRasterState);
         commandList.commitBarriers();
         return true;
     }
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken&){
         // A replaced generation may reject content publication after accepted work; its output state still belongs to the mesh owner.
-        static_cast<void>(payload.meshSystem.confirmObjectGeometryCache(
+        if(!payload.meshSystem.confirmObjectGeometryCache(
             payload.draw.meshKey, payload.draw.meshResources.sourceBuffers,
             payload.draw.meshResources.objectGeometryCache, payload.draw.meshResources.runtimeMesh
-        ));
+        ))
+            return;
     }
 };
 
@@ -154,8 +156,8 @@ bool ObjectGeometryCacheGraph::prepare(
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> producers{scratchArena};
     for(usize drawIndex = 0u; drawIndex < drawCount; ++drawIndex){
         const MaterialPassDrawItem& draw = draws[drawIndex];
-        if(!draw.pipelineResources.objectGeometryDecodePipeline)
-            continue;
+        if(!draw.pipelineResources.indexedPipeline || !draw.pipelineResources.objectGeometryDecodePipeline)
+            return false;
         const auto& cache = draw.meshResources.objectGeometryCache;
         if(!cache.valid() || draw.pipelineResources.objectGeometryDecodePipeline != cache.decoderPipeline
             || !frameBindings.bindingValid() || draw.instanceIndex >= frameBindings.instanceBufferCapacity)
@@ -173,8 +175,8 @@ bool ObjectGeometryCacheGraph::prepare(
             Core::GpuGraphResourceDesc bufferDesc = BufferResourceDesc(
                 cache.buffer->getCreationDescription().debugName, "Object Geometry Cache"
             );
-            bufferDesc.setInitialState(cache.initialized ? Core::ResourceStates::VertexBuffer : Core::ResourceStates::Common)
-                .setExternalFinalState(Core::ResourceStates::VertexBuffer);
+            bufferDesc.setInitialState(cache.initialized ? ECSRenderDetail::s_ObjectGeometryRasterState : Core::ResourceStates::Common)
+                .setExternalFinalState(ECSRenderDetail::s_ObjectGeometryRasterState);
             Entry entry{draw, m_graph.importBuffer(cache.buffer, bufferDesc), {}};
             if(!entry.resource.valid())
                 return false;
@@ -198,7 +200,7 @@ bool ObjectGeometryCacheGraph::prepare(
                     static_cast<u64>(draw.instanceIndex) * sizeof(InstanceGpuData), sizeof(InstanceGpuData)
                 )));
                 uses.push_back(WriteUse(entry.resource, Core::ResourceStates::UnorderedAccess));
-                uses.push_back(ReadUse(entry.resource, Core::ResourceStates::VertexBuffer));
+                uses.push_back(ReadUse(entry.resource, ECSRenderDetail::s_ObjectGeometryRasterState));
                 Core::GpuTaskDesc desc = TaskDesc(ToName(StringFormat(scratchArena,
                     "render.object_geometry.decode_{}", m_entries.size())), "Object Geometry Decode");
                 desc.setDependencies(&dependency, 1u).setResourceUses(uses.data(), uses.size());
@@ -216,12 +218,16 @@ bool ObjectGeometryCacheGraph::prepare(
         for(const Core::GpuTaskResourceUse& use : cacheReads)
             alreadyRead = alreadyRead || use.resource == retained->resource;
         if(!alreadyRead){
-            cacheReads.push_back(ReadUse(retained->resource, Core::ResourceStates::VertexBuffer));
+            cacheReads.push_back(ReadUse(retained->resource, ECSRenderDetail::s_ObjectGeometryRasterState));
             if(retained->producer.valid())
                 producers.push_back(retained->producer);
         }
     }
     if(cacheReads.empty())
+        return true;
+    rasterUses.insert(rasterUses.end(), cacheReads.begin(), cacheReads.end());
+    // Persistent read-only geometry needs no synthetic phase task when this frame produced no cache writes.
+    if(producers.empty())
         return true;
     if(!dependency.valid())
         return false;
@@ -236,7 +242,6 @@ bool ObjectGeometryCacheGraph::prepare(
     dependency = m_graph.addTask<ReadyTask>(ready, ReadyTask::Payload{});
     if(!dependency.valid())
         return false;
-    rasterUses.insert(rasterUses.end(), cacheReads.begin(), cacheReads.end());
     return true;
 }
 

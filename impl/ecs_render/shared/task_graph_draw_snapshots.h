@@ -30,6 +30,7 @@ struct OpaqueMaterialPassGraphSnapshot{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
     DrawItemVector regularMeshDrawItems;
+    DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
     DrawItemVector csgMeshDrawItems;
     DrawItemVector csgComputeDrawItems;
@@ -44,6 +45,7 @@ struct OpaqueMaterialPassGraphSnapshot{
 
     explicit OpaqueMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
         : regularMeshDrawItems(arena)
+        , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)
         , csgMeshDrawItems(arena)
         , csgComputeDrawItems(arena)
@@ -60,6 +62,7 @@ struct OpaqueMaterialPassGraphSnapshot{
         const usize inMaterialTypedByteCount
     ){
         regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
+        regularIndexedDrawItems.assign(drawItems.regular.indexedDrawItems.begin(), drawItems.regular.indexedDrawItems.end());
         regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
         csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
         csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
@@ -84,6 +87,7 @@ struct OpaqueMaterialPassGraphSnapshot{
         CsgFrameGpuData& outCsgFrameData
     )const{
         outDrawItems.regular.meshDrawItems.assign(regularMeshDrawItems.begin(), regularMeshDrawItems.end());
+        outDrawItems.regular.indexedDrawItems.assign(regularIndexedDrawItems.begin(), regularIndexedDrawItems.end());
         outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
         outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
         outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());
@@ -174,6 +178,7 @@ struct TransparentMaterialPassGraphSnapshot{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
     DrawItemVector regularMeshDrawItems;
+    DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
     DrawItemVector csgMeshDrawItems;
     DrawItemVector csgComputeDrawItems;
@@ -186,6 +191,7 @@ struct TransparentMaterialPassGraphSnapshot{
 
     explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)
         : regularMeshDrawItems(arena)
+        , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)
         , csgMeshDrawItems(arena)
         , csgComputeDrawItems(arena)
@@ -200,6 +206,7 @@ struct TransparentMaterialPassGraphSnapshot{
         const usize inMaterialTypedByteCount
     ){
         regularMeshDrawItems.assign(drawItems.regular.meshDrawItems.begin(), drawItems.regular.meshDrawItems.end());
+        regularIndexedDrawItems.assign(drawItems.regular.indexedDrawItems.begin(), drawItems.regular.indexedDrawItems.end());
         regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
         csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
         csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
@@ -216,6 +223,7 @@ struct TransparentMaterialPassGraphSnapshot{
         CsgFrameGpuData& outCsgFrameData
     )const{
         outDrawItems.regular.meshDrawItems.assign(regularMeshDrawItems.begin(), regularMeshDrawItems.end());
+        outDrawItems.regular.indexedDrawItems.assign(regularIndexedDrawItems.begin(), regularIndexedDrawItems.end());
         outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
         outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
         outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());

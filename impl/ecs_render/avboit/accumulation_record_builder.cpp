@@ -313,8 +313,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         m_avboitSystem.taskGraphStage().m_accumulationStreamTask = accumulationStreamTask;
     Core::GpuTaskId accumulationDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        accumulationPayload.accumulationSnapshot.regularComputeDrawItems.data(),
-        accumulationPayload.accumulationSnapshot.regularComputeDrawItems.size(),
+        accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.data(),
+        accumulationPayload.accumulationSnapshot.regularIndexedDrawItems.size(),
         frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
     ))
         return false;

@@ -26,7 +26,7 @@ class RendererMeshSystem;
 struct DeferredFrameTargets;
 
 
-// One declaration-local registry deduplicates immutable object vertices across every material raster phase.
+// One declaration-local registry deduplicates immutable object vertices and indices across every material raster phase.
 class ObjectGeometryCacheGraph final : NoCopy{
 public:
     ObjectGeometryCacheGraph(

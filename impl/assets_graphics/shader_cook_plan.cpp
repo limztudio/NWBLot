@@ -379,11 +379,11 @@ bool PrepareShaderEntriesForCook(
     ErrorCode errorCode;
 
     outPreparedPlan.preparedEntries.clear();
-    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 4u){
+    if(inOutShaderEntries.size() > Limit<usize>::s_Max / 3u){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
         return false;
     }
-    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 4u);
+    outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 3u);
     outPreparedPlan.plannedFileCount = 1; // shader archive index
 
     AssetsGraphicsCsgShaderVariants::ShaderStageKeySet materialClipShaderKeys{

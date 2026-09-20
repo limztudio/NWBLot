@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/material/task_graph_object_geometry_key.h>
 #include <impl/ecs_render/material/compute_emulation_output_index.h>
 
 
@@ -30,18 +29,21 @@ struct OpaqueRegularComputeEmulationGraphPlan{
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
 
     DrawItemVector meshDrawItems;
+    DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     bool captured = false;
 
     explicit OpaqueRegularComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
         : meshDrawItems(arena)
+        , indexedDrawItems(arena)
         , drawItems(arena)
         , outputBuffers(arena)
     {}
 
     void reset(){
         meshDrawItems.clear();
+        indexedDrawItems.clear();
         drawItems.clear();
         outputBuffers.clear();
         captured = false;
@@ -53,6 +55,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
             return false;
 
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
+        indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         MaterialPassEmulationOutputIndex<Core::Buffer*> outputs(scratchArena);
@@ -101,7 +104,6 @@ struct OpaqueRegularComputeEmulationGraphPlan{
                 || current.meshletConeCullScaleSafe != expected.meshletConeCullScaleSafe
                 || current.meshResources.emulationIndexByteOffset != expected.meshResources.emulationIndexByteOffset
                 || current.pipelineResources.indexedGeometryOutput != expected.pipelineResources.indexedGeometryOutput
-                || !MakeObjectGeometryEquivalenceKey(expected).matches(current)
             )
                 return false;
 
@@ -118,6 +120,7 @@ struct OpaqueRegularComputeEmulationGraphPlan{
 
     void materialize(MaterialPassDrawItems& outDrawItems)const{
         outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.indexedDrawItems.assign(indexedDrawItems.begin(), indexedDrawItems.end());
         outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
     }
 };

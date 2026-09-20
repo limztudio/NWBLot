@@ -59,6 +59,8 @@ struct Context{
         mesh.runtimeGeometryContentRevision = 7u;
         mesh.objectGeometryCache.buffer = makeBuffer();
         mesh.objectGeometryCache.decoderPipeline = makeDecoder();
+        mesh.objectGeometryCache.indexByteOffset = 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+        mesh.objectGeometryCache.indexCount = 3u;
         mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 8u);
         source = static_cast<const RuntimeMeshBuffers&>(mesh);
         snapshot = RendererMeshSystem::objectGeometryCacheSnapshot(mesh);
@@ -81,33 +83,48 @@ struct Context{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ObjectGeometryCacheTests, LayoutReservesOneSentinelWithoutAttributeSeamMerging){
-    u64 bytes = 0u;
-    ASSERT_TRUE(ResolveObjectGeometryCacheByteSize(3u * sizeof(MeshletLocalVertexRef), bytes));
-    EXPECT_EQ(bytes, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
-    ASSERT_TRUE(ResolveObjectGeometryCacheByteSize(96u * sizeof(MeshletLocalVertexRef), bytes));
-    EXPECT_EQ(bytes, 97u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+TEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesInDisjointRegions){
+    ObjectGeometryCacheLayout layout;
+    ASSERT_TRUE(ResolveObjectGeometryCacheLayout(3u * sizeof(MeshletLocalVertexRef), 3u, layout));
+    EXPECT_EQ(layout.indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    EXPECT_EQ(layout.indexCount, 3u);
+    EXPECT_EQ(layout.bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    ASSERT_TRUE(ResolveObjectGeometryCacheLayout(96u * sizeof(MeshletLocalVertexRef), 192u, layout));
+    EXPECT_EQ(layout.indexByteOffset, 97u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
+    EXPECT_EQ(layout.indexCount, 192u);
+    EXPECT_EQ(layout.bufferByteSize, layout.indexByteOffset + 192u * sizeof(u32));
 }
 
 TEST(ObjectGeometryCacheTests, LayoutRejectsEmptyMisalignedAndOverflowingInputs){
     const u64 sizes[] = { 0u, 1u, sizeof(MeshletLocalVertexRef) + 1u, Limit<u64>::s_Max - 3u };
     for(const u64 size : sizes){
-        u64 bytes = 123u;
-        EXPECT_FALSE(ResolveObjectGeometryCacheByteSize(size, bytes));
-        EXPECT_EQ(bytes, 0u);
+        ObjectGeometryCacheLayout layout{ 123u, 12u, 3u };
+        EXPECT_FALSE(ResolveObjectGeometryCacheLayout(size, 3u, layout));
+        EXPECT_EQ(layout.bufferByteSize, 0u);
+        EXPECT_EQ(layout.indexByteOffset, 0u);
+        EXPECT_EQ(layout.indexCount, 0u);
     }
+    ObjectGeometryCacheLayout layout;
+    EXPECT_FALSE(ResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), 0u, layout));
+    EXPECT_FALSE(ResolveObjectGeometryCacheLayout(sizeof(MeshletLocalVertexRef), Limit<u32>::s_Max, layout));
 }
 
-TEST(ObjectGeometryCacheTests, LayoutKeepsEveryCacheStoreInsideUintByteAddressing){
+TEST(ObjectGeometryCacheTests, LayoutChecksFinalStructuredPaddingWithinUintByteAddressing){
     constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
-    constexpr u64 s_MaximumVertices = s_AddressableBytes / NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
-    constexpr u64 s_LastValidRefBytes = (s_MaximumVertices - 1u) * sizeof(MeshletLocalVertexRef);
-    u64 bytes = 0u;
-    ASSERT_TRUE(ResolveObjectGeometryCacheByteSize(s_LastValidRefBytes, bytes));
-    EXPECT_LE(bytes, s_AddressableBytes);
-    EXPECT_EQ(bytes % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
-    EXPECT_FALSE(ResolveObjectGeometryCacheByteSize(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), bytes));
-    EXPECT_EQ(bytes, 0u);
+    constexpr u64 s_MaximumRecords = s_AddressableBytes / NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    // Reserve a full final structured record for the index region, including its view-alignment padding.
+    constexpr u64 s_LastValidRefBytes = (s_MaximumRecords - 2u) * sizeof(MeshletLocalVertexRef);
+    ObjectGeometryCacheLayout layout;
+    ASSERT_TRUE(ResolveObjectGeometryCacheLayout(s_LastValidRefBytes, 3u, layout));
+    EXPECT_LE(layout.bufferByteSize, s_AddressableBytes);
+    EXPECT_EQ(layout.bufferByteSize % NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, 0u);
+    EXPECT_EQ(layout.indexByteOffset + 3u * sizeof(u32), layout.bufferByteSize - 36u);
+    // The next raw index span still fits uint addressing; the required structured padding does not.
+    EXPECT_LE(s_MaximumRecords * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE + 3u * sizeof(u32), s_AddressableBytes);
+    EXPECT_FALSE(ResolveObjectGeometryCacheLayout(s_LastValidRefBytes + sizeof(MeshletLocalVertexRef), 3u, layout));
+    EXPECT_EQ(layout.bufferByteSize, 0u);
+    EXPECT_EQ(layout.indexByteOffset, 0u);
+    EXPECT_EQ(layout.indexCount, 0u);
 }
 
 TEST(ObjectGeometryCacheTests, RuntimeReuseRequiresAcceptedNonzeroCurrentContent){
@@ -180,7 +197,7 @@ TEST(ObjectGeometryCacheTests, EachSourceReplacementInvalidatesAnAcceptedDecode)
 }
 
 TEST(ObjectGeometryCacheTests, AcceptedOlderWritesInitializeTheSameBufferWithoutValidatingNewContent){
-    for(u32 mismatch = 0u; mismatch < 4u; ++mismatch){
+    for(u32 mismatch = 0u; mismatch < 6u; ++mismatch){
         SCOPED_TRACE(mismatch);
         Context fixture;
         auto& cache = fixture.mesh.objectGeometryCache;
@@ -189,6 +206,8 @@ TEST(ObjectGeometryCacheTests, AcceptedOlderWritesInitializeTheSameBufferWithout
         case 1u: cache.decoderPipeline = fixture.makeDecoder(); break;
         case 2u: cache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 9u); break;
         case 3u: fixture.mesh.runtimeMesh = false; break;
+        case 4u: cache.indexByteOffset += NWB_MESH_OBJECT_VERTEX_BYTE_SIZE; break;
+        case 5u: cache.indexCount += 3u; break;
         }
         EXPECT_FALSE(cache.initialized);
         EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
@@ -232,7 +251,7 @@ TEST(ObjectGeometryCacheTests, OldBufferAcceptanceCannotInitializeOrInvalidateAR
 }
 
 TEST(ObjectGeometryCacheTests, InvalidSnapshotsNeverPublishBufferInitialization){
-    for(u32 missing = 0u; missing < 4u; ++missing){
+    for(u32 missing = 0u; missing < 6u; ++missing){
         SCOPED_TRACE(missing);
         Context fixture;
         switch(missing){
@@ -240,6 +259,8 @@ TEST(ObjectGeometryCacheTests, InvalidSnapshotsNeverPublishBufferInitialization)
         case 1u: fixture.snapshot.decoderPipeline.reset(); break;
         case 2u: fixture.snapshot.heapHandle = Core::GpuDescriptorHandle::invalid(); break;
         case 3u: fixture.snapshot.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::UniformBuffer, 8u); break;
+        case 4u: fixture.snapshot.indexByteOffset = 0u; break;
+        case 5u: fixture.snapshot.indexCount = 0u; break;
         }
         EXPECT_FALSE(fixture.snapshot.valid());
         EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));

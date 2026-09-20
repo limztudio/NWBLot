@@ -117,12 +117,12 @@ def device_material_signature(text):
         raise SmokeFailure("one actual Vulkan device identity is required")
     material_routes = {}
     for material, route in re.findall(r"^RendererSystem: material '([^']+)' selected (.+)$", text, re.MULTILINE):
-        if material in material_routes and material_routes[material] != route:
-            raise SmokeFailure("a material changed its native/emulated route within a trial")
-        material_routes[material] = route
+        # A material can serve both indexed ordinary meshes and compute-emulated CSG meshes.
+        material_routes.setdefault(material, set()).add(route)
     if not material_routes:
         raise SmokeFailure("material execution-route evidence is missing")
-    return {"device": devices[0], "material_routes": material_routes}
+    return {"device": devices[0], "material_routes": {
+        material: sorted(routes) for material, routes in sorted(material_routes.items())}}
 
 
 def reflection_arguments(workload, require_hardware=False):

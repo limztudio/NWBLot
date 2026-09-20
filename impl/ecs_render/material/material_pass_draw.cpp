@@ -115,7 +115,9 @@ bool RendererMaterialSystem::materialPassDrawResourcesReady(
     const MaterialPassDrawItems& drawItems,
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 ){
-    return meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings)
+    return
+        meshMaterialPassDrawResourcesReady(drawItems.meshDrawItems, frameBindings)
+        && indexedMaterialPassDrawResourcesReady(drawItems.indexedDrawItems, frameBindings)
         && computeMaterialPassDrawResourcesReady(drawItems.computeDrawItems, frameBindings)
     ;
 }
@@ -151,8 +153,6 @@ bool RendererMaterialSystem::computeMaterialPassDrawResourcesReady(
             || !mesh.emulationVertexHeapHandle.valid()
             || !mesh.emulationVertexBuffer
             || (pipelineResources.indexedGeometryOutput && mesh.emulationIndexByteOffset == 0u)
-            || (pipelineResources.objectGeometryDecodePipeline && (!mesh.objectGeometryCache.valid()
-                || mesh.objectGeometryCache.decoderPipeline != pipelineResources.objectGeometryDecodePipeline))
         )
             return false;
     }
@@ -332,15 +332,13 @@ void RendererMaterialSystem::drawComputeMaterialPassDrawItem(
     const MaterialPassMeshResourceSnapshot& mesh,
     const MaterialPassPipelineResourceSnapshot& pipelineResources
 ){
-    NWB_ASSERT(!pipelineResources.objectGeometryDecodePipeline || context.materialGeometryStatesGraphOwned);
     Core::GraphicsState graphicsState;
     graphicsState.setPipeline(pipelineResources.emulationPipeline.get());
     graphicsState.setFramebuffer(context.framebuffer);
     graphicsState.setViewport(context.viewportState);
     graphicsState.addVertexBuffer(
         Core::VertexBufferBinding()
-            .setBuffer(pipelineResources.objectGeometryDecodePipeline
-                ? mesh.objectGeometryCache.buffer.get() : mesh.emulationVertexBuffer.get())
+            .setBuffer(mesh.emulationVertexBuffer.get())
             .setSlot(NWB_MESH_EMULATION_VERTEX_BUFFER_INDEX)
             .setOffset(0)
     );
@@ -377,6 +375,7 @@ void RendererMaterialSystem::renderMaterialPassDrawItems(
     const MaterialPassDrawItems& drawItems
 ){
     renderMeshMaterialPassDrawItems(context, drawItems.meshDrawItems);
+    renderIndexedMaterialPassDrawItems(context, drawItems.indexedDrawItems);
     if(context.emulationOutputEntryStateGraphOwned)
         renderComputeMaterialPassDrawItemsRasterOnly(context, drawItems.computeDrawItems);
     else

@@ -25,7 +25,6 @@ namespace Tests{
 
 struct ObjectGeometryKernels{
     Core::ComputePipelineHandle decode;
-    Core::ComputePipelineHandle cull;
     Core::ComputePipelineHandle transform;
     Core::ShaderHandle vertex;
 };

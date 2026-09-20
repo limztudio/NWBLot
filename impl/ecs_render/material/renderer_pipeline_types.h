@@ -45,6 +45,7 @@ namespace MaterialPipelinePass{
 namespace RenderPath{
     enum Enum : u8{
         MeshShader,
+        VertexIndexed,
         ComputeEmulation,
     };
 };
@@ -208,6 +209,7 @@ struct MaterialSurfaceInfo{
 };
 
 struct MaterialPipelineResources{
+    Core::GraphicsPipelineHandle indexedPipeline;
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;

@@ -40,6 +40,7 @@ namespace RendererTaskGraphDetail{
     if(drawItemSetCount != 0u && !drawItemSets)
         return false;
 
+    // Indexed raster reads its decoded cache; only mesh/compute stages and cache producers consume source streams.
     constexpr usize s_MaxDrawItemCount = Limit<usize>::s_Max / NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
     usize drawItemCount = 0u;
     for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){

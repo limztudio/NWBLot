@@ -163,6 +163,12 @@ bool RendererMaterialSystem::createRendererPipeline(
             return true;
         }
         break;
+    case RenderPath::VertexIndexed:
+        if(resources.indexedPipeline && resources.objectGeometryDecodePipeline){
+            outResources = &resources;
+            return true;
+        }
+        break;
     case RenderPath::ComputeEmulation:
         if(resources.computePipeline && resources.emulationPipeline){
             outResources = &resources;
@@ -389,24 +395,37 @@ bool RendererMaterialSystem::createRendererPipeline(
         return true;
     };
 
+    auto tryBuildIndexedPipeline = [&]() -> bool{
+        if(!createObjectGeometryPipelineResources(materialInfo.meshShader.name(), meshShaderVariant, resources))
+            return false;
+        if(!loadPassPixelShader())
+            return false;
+        Core::GraphicsPipelineDesc desc;
+        desc
+            .setInputLayout(m_materialState.m_objectGeometryInputLayout)
+            .setVertexShader(resources.objectGeometryVertexShader)
+            .setPixelShader(resources.pixelShader)
+            .setRenderState(renderState)
+            .addBindingLayout(materialPassBindingLayout)
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+        resources.indexedPipeline = device.createGraphicsPipeline(desc, framebuffer.getFramebufferInfo());
+        if(!resources.indexedPipeline){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create indexed object geometry pipeline for material '{}'"), StringConvert(materialKey.c_str()));
+            return false;
+        }
+        resources.renderPath = RenderPath::VertexIndexed;
+        return true;
+    };
+
     auto tryBuildComputePipeline = [&]() -> bool{
+        if(!createComputeEmulationResources())
+            return false;
         NWB_ASSERT(m_materialState.m_computeBindingLayout);
         NWB_ASSERT(m_materialState.m_emulationVertexShader);
         NWB_ASSERT(m_materialState.m_emulationInputLayout);
-        const bool objectGeometry = pipelineKey.csgMode == MaterialPipelineCsgMode::None
-            && m_shaderSystem.hasShaderArchiveStage(
-                materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectCullArchiveStageName
-            )
-            && m_shaderSystem.hasShaderArchiveStage(
-                materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
-            )
-        ;
-        if(objectGeometry && !createObjectGeometryPipelineResources(materialInfo.meshShader.name(), meshShaderVariant, resources))
-            return false;
-        const Name& meshComputeArchiveStageName = objectGeometry
-            ? MaterialShaderStageNames::s_MeshObjectCullArchiveStageName
-            : MaterialShaderStageNames::s_MeshComputeArchiveStageName
-        ;
+        const Name& meshComputeArchiveStageName = MaterialShaderStageNames::s_MeshComputeArchiveStageName;
         if(!m_shaderSystem.loadShader(
             resources.computeShader,
             materialInfo.meshShader.name(),
@@ -434,8 +453,8 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         Core::GraphicsPipelineDesc emulationDesc;
-        emulationDesc.setInputLayout(objectGeometry ? m_materialState.m_objectGeometryInputLayout : m_materialState.m_emulationInputLayout);
-        emulationDesc.setVertexShader(objectGeometry ? resources.objectGeometryVertexShader : m_materialState.m_emulationVertexShader);
+        emulationDesc.setInputLayout(m_materialState.m_emulationInputLayout);
+        emulationDesc.setVertexShader(m_materialState.m_emulationVertexShader);
         emulationDesc.setPixelShader(resources.pixelShader);
         emulationDesc.setRenderState(renderState);
         emulationDesc.addBindingLayout(materialPassBindingLayout);
@@ -451,10 +470,10 @@ bool RendererMaterialSystem::createRendererPipeline(
         }
 
         resources.renderPath = RenderPath::ComputeEmulation;
-        // Both fixed object-space lowering and the unchanged shared mesh_compute program are material-independent.
-        resources.sharedGeometryComputeProgram = objectGeometry || (pipelineKey.csgMode == MaterialPipelineCsgMode::None
+        // The unchanged shared mesh_compute program remains the material-independent generated-geometry fallback.
+        resources.sharedGeometryComputeProgram = pipelineKey.csgMode == MaterialPipelineCsgMode::None
             && materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
-            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant)
+            && meshShaderVariant == Core::ShaderArchive::s_DefaultVariant
         ;
         resources.indexedGeometryOutput = resources.sharedGeometryComputeProgram;
         return true;
@@ -486,7 +505,16 @@ bool RendererMaterialSystem::createRendererPipeline(
         return true;
     }
 
-    if(!tryBuildComputePipeline()){
+    const bool indexedAvailable = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+        && m_shaderSystem.hasShaderArchiveStage(
+            materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
+        )
+    ;
+    if(indexedAvailable){
+        if(!tryBuildIndexedPipeline())
+            return failMaterialPipeline();
+    }
+    else if(!tryBuildComputePipeline()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create compute-emulation rendering path for material '{}' from its mesh shader")
             , StringConvert(materialKey.c_str())
         );
@@ -509,6 +537,10 @@ bool RendererMaterialSystem::findRendererPipeline(const MaterialPipelineKey& pip
     switch(resources.renderPath){
     case RenderPath::MeshShader:
         if(!resources.meshletPipeline)
+            return false;
+        break;
+    case RenderPath::VertexIndexed:
+        if(!resources.indexedPipeline || !resources.objectGeometryDecodePipeline)
             return false;
         break;
     case RenderPath::ComputeEmulation:
@@ -544,6 +576,10 @@ void RendererMaterialSystem::logMaterialRenderPathDecision(const Name& materialK
             NWB_TEXT("RendererSystem: material '{}' selected MeshShader + PS on this device"),
             StringConvert(materialKey.c_str())
         );
+        break;
+    }
+    case RenderPath::VertexIndexed:{
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: material '{}' selected VertexIndexed + PS from persistent object-space geometry"), StringConvert(materialKey.c_str()));
         break;
     }
     case RenderPath::ComputeEmulation:{

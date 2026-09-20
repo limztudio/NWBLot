@@ -289,8 +289,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         m_avboitSystem.taskGraphStage().m_occupancyStreamTask = occupancyStreamTask;
     Core::GpuTaskId occupancyDependency = inputs.clearTask;
     if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
-        occupancyPayload.occupancySnapshot.regularComputeDrawItems.data(),
-        occupancyPayload.occupancySnapshot.regularComputeDrawItems.size(),
+        occupancyPayload.occupancySnapshot.regularIndexedDrawItems.data(),
+        occupancyPayload.occupancySnapshot.regularIndexedDrawItems.size(),
         frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
     ))
         return false;

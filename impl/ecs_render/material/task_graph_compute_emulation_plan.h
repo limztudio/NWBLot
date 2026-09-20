@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/material/renderer_draw_types.h>
-#include <impl/ecs_render/material/task_graph_object_geometry_key.h>
 #include <impl/ecs_render/shared/task_graph_stage.h>
 
 
@@ -37,7 +36,6 @@ struct GeneratedGeometryEquivalenceKey{
     u32 outputHeapSlot = 0u;
     u32 emulationIndexByteOffset = 0u;
     bool indexedGeometryOutput = false;
-    ObjectGeometryEquivalenceKey objectGeometry;
 
     [[nodiscard]] bool matches(const MaterialPassDrawItem& drawItem)const noexcept{
         return drawItem.meshKey == meshKey
@@ -52,7 +50,6 @@ struct GeneratedGeometryEquivalenceKey{
             && drawItem.meshResources.emulationVertexHeapHandle.slot() == outputHeapSlot
             && drawItem.meshResources.emulationIndexByteOffset == emulationIndexByteOffset
             && drawItem.pipelineResources.indexedGeometryOutput == indexedGeometryOutput
-            && objectGeometry.matches(drawItem)
         ;
     }
 };
@@ -72,7 +69,6 @@ struct GeneratedGeometryEquivalenceKey{
     ;
     key.emulationIndexByteOffset = drawItem.meshResources.emulationIndexByteOffset;
     key.indexedGeometryOutput = drawItem.pipelineResources.indexedGeometryOutput;
-    key.objectGeometry = MakeObjectGeometryEquivalenceKey(drawItem);
     return key;
 }
 

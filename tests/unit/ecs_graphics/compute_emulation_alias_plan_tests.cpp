@@ -5,7 +5,9 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
+#include <impl/ecs_render/avboit/compute_emulation_capture.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
+#include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
@@ -406,25 +408,103 @@ TEST(ComputeEmulationAliasPlan, RegularCaptureRejectsChangedUnifiedOutputLayoutA
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
 }
 
-TEST(ComputeEmulationAliasPlan, FrozenRegularAndAvboitPlansRejectChangedObjectCacheContents){
+TEST(ComputeEmulationAliasPlan, MixedIndexedDrawsKeepAvboitSharedOutputRasterCallback){
+    AliasPlanContext context(5u);
+    MaterialPassDrawItemPartitions draws(context.m_inputArena);
+    draws.regular.computeDrawItems.assign(context.m_regular.computeDrawItems.begin(), context.m_regular.computeDrawItems.end());
+    const auto sharedBuffer = draws.regular.computeDrawItems.front().meshResources.emulationVertexBuffer;
+    const auto sharedHandle = draws.regular.computeDrawItems.front().meshResources.emulationVertexHeapHandle;
+    for(auto& draw : draws.regular.computeDrawItems){
+        draw.meshResources.emulationVertexBuffer = sharedBuffer;
+        draw.meshResources.emulationVertexHeapHandle = sharedHandle;
+    }
+    AvboitPlan regular(context.m_planArena);
+    IntervalPlan csg(context.m_planArena);
+    AvboitComputeEmulationCapture capture;
+    AvboitComputeEmulationCaptureResult result;
+    const AvboitComputeEmulationCaptureInputs inputs{
+        .drawItems = &draws,
+        .csgFrameData = &context.m_csg,
+        .geometryOwned = true,
+        .sampledTexturesCollected = true,
+    };
+    ASSERT_TRUE(capture.capture(inputs, regular, csg, context.m_operationArena, 5u, 64u, result));
+    ASSERT_TRUE(result.sharedCaptured);
+    draws.regular.indexedDrawItems.push_back(context.m_regular.computeDrawItems.front());
+    ASSERT_TRUE(capture.capture(inputs, regular, csg, context.m_operationArena, 6u, 80u, result));
+    EXPECT_FALSE(result.sharedCaptured);
+    EXPECT_FALSE(result.regularCaptured);
+    EXPECT_FALSE(result.csgCaptured);
+    EXPECT_FALSE(result.sharedPlan.captured);
+}
+
+TEST(ComputeEmulationAliasPlan, OpaqueAndTransparentSnapshotsRetainAndReplaceIndexedDrawStreams){
+    AliasPlanContext context(1u);
+    MaterialPassDrawItemPartitions source(context.m_inputArena);
+    MaterialPassDrawItem indexed = context.m_regular.computeDrawItems.front();
+    indexed.meshKey = Name("tests/draw_snapshot/indexed");
+    indexed.meshResources.objectGeometryCache.buffer = context.m_buffers.front();
+    indexed.meshResources.objectGeometryCache.sourceRevision = 17u;
+    indexed.meshResources.objectGeometryCache.indexByteOffset = 192u;
+    indexed.meshResources.objectGeometryCache.indexCount = 6u;
+    source.regular.indexedDrawItems.push_back(indexed);
+    source.regular.computeDrawItems.push_back(context.m_regular.computeDrawItems.front());
+    ECSRenderDetail::OpaqueMaterialPassGraphSnapshot opaque(context.m_planArena);
+    ECSRenderDetail::TransparentMaterialPassGraphSnapshot transparent(context.m_planArena);
+    opaque.capture(source, context.m_csg, 2u, 64u);
+    transparent.capture(source, context.m_csg, 2u, 64u);
+    source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision = 18u;
+    source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.buffer.reset();
+    const auto verify = [&](auto& snapshot){
+        MaterialPassDrawItemPartitions replay(context.m_inputArena);
+        CsgFrameGpuData frame(context.m_inputArena);
+        snapshot.materialize(replay, frame);
+        ASSERT_EQ(replay.regular.indexedDrawItems.size(), 1u);
+        ASSERT_EQ(replay.regular.computeDrawItems.size(), 1u);
+        const auto& retained = replay.regular.indexedDrawItems.front();
+        EXPECT_EQ(retained.meshKey, indexed.meshKey);
+        EXPECT_EQ(retained.meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
+        EXPECT_EQ(retained.meshResources.objectGeometryCache.sourceRevision, 17u);
+        EXPECT_EQ(retained.meshResources.objectGeometryCache.indexByteOffset, 192u);
+        EXPECT_EQ(retained.meshResources.objectGeometryCache.indexCount, 6u);
+        EXPECT_EQ(snapshot.instanceCount, 2u);
+        EXPECT_EQ(snapshot.materialTypedByteCount, 64u);
+        source.regular.indexedDrawItems.clear();
+        snapshot.capture(source, context.m_csg, 1u, 32u);
+        snapshot.materialize(replay, frame);
+        EXPECT_TRUE(replay.regular.indexedDrawItems.empty());
+        EXPECT_EQ(replay.regular.computeDrawItems.size(), 1u);
+    };
+    ASSERT_NO_FATAL_FAILURE(verify(opaque));
+    ASSERT_NO_FATAL_FAILURE(verify(transparent));
+}
+
+TEST(ComputeEmulationAliasPlan, FrozenRegularPlanRetainsIndependentIndexedRasterDraws){
     AliasPlanContext context(2u);
     RegularPlan regular(context.m_planArena);
-    AvboitPlan avboit(context.m_planArena);
-    auto& source = context.m_regular.computeDrawItems.back();
-    source.meshResources.objectGeometryCache.buffer = context.m_buffers.front();
-    source.meshResources.objectGeometryCache.sourceRevision = 7u;
+    MaterialPassDrawItem indexed = context.m_regular.computeDrawItems.front();
+    indexed.meshKey = Name("tests/compute_emulation_alias/indexed");
+    indexed.meshResources.emulationVertexBuffer.reset();
+    indexed.meshResources.objectGeometryCache.buffer = context.m_buffers.front();
+    indexed.meshResources.objectGeometryCache.sourceRevision = 7u;
+    indexed.meshResources.objectGeometryCache.indexByteOffset = 144u;
+    indexed.meshResources.objectGeometryCache.indexCount = 3u;
+    context.m_regular.indexedDrawItems.push_back(indexed);
     ASSERT_TRUE(CapturePlan(regular, context, context.m_operationArena));
-    ASSERT_TRUE(CapturePlan(avboit, context, context.m_operationArena));
-    EXPECT_TRUE(MatchesPlan(regular, context, context.m_operationArena));
-    EXPECT_TRUE(MatchesPlan(avboit, context, context.m_operationArena));
-    source.meshResources.objectGeometryCache.sourceRevision = 8u;
-    EXPECT_FALSE(MatchesPlan(regular, context, context.m_operationArena));
-    avboit.drawItems.back().meshResources.objectGeometryCache.sourceRevision = 8u;
-    EXPECT_FALSE(MatchesPlan(avboit, context, context.m_operationArena));
-    avboit.drawItems.back().meshResources.objectGeometryCache.sourceRevision = 7u;
-    EXPECT_TRUE(MatchesPlan(avboit, context, context.m_operationArena));
-    avboit.drawItems.back().meshResources.objectGeometryCache.buffer = context.m_buffers.back();
-    EXPECT_FALSE(MatchesPlan(avboit, context, context.m_operationArena));
+    context.m_regular.indexedDrawItems.clear();
+    MaterialPassDrawItems materialized(context.m_inputArena);
+    regular.materialize(materialized);
+    ASSERT_EQ(materialized.indexedDrawItems.size(), 1u);
+    ASSERT_EQ(materialized.computeDrawItems.size(), 2u);
+    const auto& retained = materialized.indexedDrawItems.front();
+    EXPECT_EQ(retained.meshKey, indexed.meshKey);
+    EXPECT_EQ(retained.meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
+    EXPECT_EQ(retained.meshResources.objectGeometryCache.sourceRevision, 7u);
+    EXPECT_EQ(retained.meshResources.objectGeometryCache.indexByteOffset, 144u);
+    EXPECT_EQ(retained.meshResources.objectGeometryCache.indexCount, 3u);
+    EXPECT_FALSE(retained.meshResources.emulationVertexBuffer);
+    regular.reset();
+    EXPECT_TRUE(regular.indexedDrawItems.empty());
 }
 
 TEST(ComputeEmulationAliasPlan, AvboitAndCsgSnapshotsRejectChangedUnifiedOutputLayout){

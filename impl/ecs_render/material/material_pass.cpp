@@ -66,6 +66,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     const MaterialPipelineResources& pipelineResources
 ){
     return {
+        .indexedPipeline = pipelineResources.indexedPipeline,
         .emulationPipeline = pipelineResources.emulationPipeline,
         .meshletPipeline = pipelineResources.meshletPipeline,
         .computePipeline = pipelineResources.computePipeline,
@@ -562,12 +563,37 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         ;
         if(!pipelineReady)
             return false;
-        if(pipelineResources->objectGeometryDecodePipeline){
-            if(lookupMode == RendererResourceLookupMode::CreateMissing && !m_meshSystem.prepareObjectGeometryCache(mesh, pipelineResources->objectGeometryDecodePipeline))
+        const auto prepareGeometryResources = [&](const MaterialPipelineResources& resources){
+            switch(resources.renderPath){
+            case RenderPath::MeshShader:
+                return true;
+            case RenderPath::VertexIndexed:{
+                if(
+                    lookupMode == RendererResourceLookupMode::CreateMissing
+                    && !m_meshSystem.prepareObjectGeometryCache(mesh, resources.objectGeometryDecodePipeline)
+                )
+                    return false;
+                const auto cache = RendererMeshSystem::objectGeometryCacheSnapshot(mesh);
+                return cache.valid() && cache.decoderPipeline == resources.objectGeometryDecodePipeline;
+            }
+            case RenderPath::ComputeEmulation:
+                if(
+                    lookupMode == RendererResourceLookupMode::CreateMissing
+                    && !m_meshSystem.prepareComputeEmulationResources(mesh)
+                )
+                    return false;
+                return
+                    mesh.emulationVertexBuffer
+                    && mesh.emulationVertexHeapHandle.valid()
+                    && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+                    && (!resources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
+                ;
+            default:
                 return false;
-            if(!RendererMeshSystem::objectGeometryCacheSnapshot(mesh).valid())
-                return false;
-        }
+            }
+        };
+        if(!prepareGeometryResources(*pipelineResources))
+            return false;
         const RenderPath::Enum renderPath = pipelineResources->renderPath;
         // Freeze primary handles first; sibling cache creation may invalidate this pointer.
         const MaterialPassPipelineResourceSnapshot pipelineResourceSnapshot =
@@ -595,6 +621,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 if(!csgReceiverSurfacePipelineReady)
                     return false;
             }
+            if(!prepareGeometryResources(*csgReceiverSurfacePipelineResources))
+                return false;
             csgReceiverSurfaceRenderPath = csgReceiverSurfacePipelineResources->renderPath;
         }
 
@@ -606,6 +634,10 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             switch(renderPath){
             case RenderPath::MeshShader:{
                 targetDrawItems.meshDrawItems.push_back(drawItem);
+                break;
+            }
+            case RenderPath::VertexIndexed:{
+                targetDrawItems.indexedDrawItems.push_back(drawItem);
                 break;
             }
             case RenderPath::ComputeEmulation:{

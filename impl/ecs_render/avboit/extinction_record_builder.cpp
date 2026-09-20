@@ -295,8 +295,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         m_avboitSystem.taskGraphStage().m_extinctionStreamTask = extinctionStreamTask;
     Core::GpuTaskId extinctionDependency = inputs.uploadTask;
     if(inputs.streamsUploaded && !objectGeometry.prepare(
-        extinctionPayload.extinctionSnapshot.regularComputeDrawItems.data(),
-        extinctionPayload.extinctionSnapshot.regularComputeDrawItems.size(),
+        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.data(),
+        extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
         frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
     ))
         return false;

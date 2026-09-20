@@ -49,7 +49,7 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
 }
 
 
-bool RendererMaterialSystem::createComputeEmulationResources(){
+bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
     if(!m_materialState.m_computeBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
@@ -63,6 +63,13 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
             return false;
         }
     }
+
+    return true;
+}
+
+bool RendererMaterialSystem::createComputeEmulationResources(){
+    if(!prepareMeshComputeBindingLayout())
+        return false;
 
     if(!m_materialState.m_emulationVertexShader){
         if(!m_shaderSystem.loadShader(
@@ -130,7 +137,9 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
 }
 
 bool RendererMaterialSystem::prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems){
-    return prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
+    return
+        prepareMeshMaterialPassResourceBindings(drawItems.meshDrawItems)
+        && prepareIndexedMaterialPassResourceBindings(drawItems.indexedDrawItems)
         && prepareComputeMaterialPassResourceBindings(drawItems.computeDrawItems)
     ;
 }
@@ -172,8 +181,6 @@ bool RendererMaterialSystem::prepareMaterialPassResourceBindingsImpl(
             && mesh.emulationVertexHeapHandle.valid()
             && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
             && (!pipelineResources.indexedGeometryOutput || mesh.emulationIndexByteOffset != 0u)
-            && (!pipelineResources.objectGeometryDecodePipeline || (mesh.objectGeometryCache.valid()
-                && mesh.objectGeometryCache.decoderPipeline == pipelineResources.objectGeometryDecodePipeline))
         ;
     }
     return ready;

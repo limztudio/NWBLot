@@ -72,6 +72,7 @@ struct MaterialPassMeshResourceSnapshot{
 };
 
 struct MaterialPassPipelineResourceSnapshot{
+    Core::GraphicsPipelineHandle indexedPipeline;
     Core::GraphicsPipelineHandle emulationPipeline;
     Core::MeshletPipelineHandle meshletPipeline;
     Core::ComputePipelineHandle computePipeline;
@@ -137,16 +138,19 @@ using MaterialPassDrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::Scr
 
 struct MaterialPassDrawItems{
     MaterialPassDrawItemVector meshDrawItems;
+    MaterialPassDrawItemVector indexedDrawItems;
     MaterialPassDrawItemVector computeDrawItems;
 
     explicit MaterialPassDrawItems(Core::Alloc::ScratchArena& arena)
         : meshDrawItems(arena)
+        , indexedDrawItems(arena)
         , computeDrawItems(arena)
     {}
 
-    [[nodiscard]] bool empty()const noexcept{ return meshDrawItems.empty() && computeDrawItems.empty(); }
+    [[nodiscard]] bool empty()const noexcept{ return meshDrawItems.empty() && indexedDrawItems.empty() && computeDrawItems.empty(); }
     void reserve(const usize capacity){
         meshDrawItems.reserve(capacity);
+        indexedDrawItems.reserve(capacity);
         computeDrawItems.reserve(capacity);
     }
 };

@@ -28,7 +28,6 @@ namespace MaterialShaderStageNames{
 
 inline constexpr Name s_MeshComputeArchiveStageName("mesh_compute");
 inline constexpr Name s_MeshObjectVertexArchiveStageName("mesh_object_vertex");
-inline constexpr Name s_MeshObjectCullArchiveStageName("mesh_object_cull");
 
 
 inline AStringView MeshComputeArchiveStageText(){
@@ -43,11 +42,6 @@ inline AStringView MeshComputeImplicitDefineText(){
 
 inline AStringView MeshObjectVertexArchiveStageText(){
     static constexpr AStringView s_StageText = "mesh_object_vertex";
-    return s_StageText;
-}
-
-inline AStringView MeshObjectCullArchiveStageText(){
-    static constexpr AStringView s_StageText = "mesh_object_cull";
     return s_StageText;
 }
 

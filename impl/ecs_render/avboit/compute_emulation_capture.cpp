@@ -47,9 +47,10 @@ NWB_IMPL_BEGIN
             scratchArena
         )
     ;
-    // All-compute draws share one output only as an explicit D/R sequence; keep mesh/CSG out.
+    // All-compute draws share one output only as an explicit D/R sequence; mixed raster routes keep their main callback.
     outResult.sharedCaptured = !outResult.regularCaptured
         && drawItems.regular.meshDrawItems.empty()
+        && drawItems.regular.indexedDrawItems.empty()
         && drawItems.csg.empty()
         && inputs.geometryOwned
         && inputs.sampledTexturesCollected

@@ -175,6 +175,7 @@ public:
     [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
     [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCacheSnapshot(const MeshResources& mesh);
     [[nodiscard]] bool confirmObjectGeometryCache(
@@ -232,7 +233,6 @@ private:
     // Mesh descriptors are established at creation; draw paths only consume ready handles.
     [[nodiscard]] bool createMeshRenderBindings(MeshResources& mesh);
     [[nodiscard]] bool meshRenderBindingsReady(const MeshResources& mesh)const;
-    [[nodiscard]] bool createComputeEmulationHeapHandle(MeshResources& mesh);
     [[nodiscard]] bool createMeshGeometryHeapHandles(MeshResources& mesh);
     [[nodiscard]] bool ensureMeshSwBvhInputHeapHandles(MeshResources& mesh);
 

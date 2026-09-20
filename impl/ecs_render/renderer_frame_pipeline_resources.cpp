@@ -103,11 +103,6 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(!m_avboitSystem.createAvboitPipelines())
         return false;
 
-    if(!m_graphics.queryFeatureSupport(Core::Feature::Meshlets)){
-        if(!m_materialSystem.createComputeEmulationResources())
-            return false;
-    }
-
     if(!m_meshSystem.createMeshViewBuffer())
         return false;
 

@@ -93,6 +93,10 @@ bool GatherPreparedMaterialPassSampledTextures(
             if(!appendDrawItem(drawItem))
                 return false;
         }
+        for(const MaterialPassDrawItem& drawItem : drawItems->indexedDrawItems){
+            if(!appendDrawItem(drawItem))
+                return false;
+        }
         for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
             if(!appendDrawItem(drawItem))
                 return false;

@@ -34,11 +34,21 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr Core::ResourceStates::Mask s_ObjectGeometryRasterState = Core::ResourceStates::VertexBuffer | Core::ResourceStates::IndexBuffer;
+
+struct ObjectGeometryCacheLayout{
+    u64 bufferByteSize = 0u;
+    u32 indexByteOffset = 0u;
+    u32 indexCount = 0u;
+};
+
 struct ObjectGeometryCacheState{
     Core::BufferHandle buffer;
     Core::ComputePipelineHandle decoderPipeline;
     Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u64 acceptedContentRevision = 0u;
+    u32 indexByteOffset = 0u;
+    u32 indexCount = 0u;
     bool acceptedContent = false;
     bool initialized = false;
 };
@@ -49,13 +59,18 @@ struct ObjectGeometryCacheSnapshot{
     Core::ComputePipelineHandle decoderPipeline;
     Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u64 sourceRevision = 0u;
+    u32 indexByteOffset = 0u;
+    u32 indexCount = 0u;
     bool initialized = false;
     bool requiresDecode = true;
 
     [[nodiscard]] bool valid()const noexcept;
 };
 
-[[nodiscard]] bool ResolveObjectGeometryCacheByteSize(u64 localVertexRefByteSize, u64& outByteSize)noexcept;
+[[nodiscard]] bool ResolveObjectGeometryCacheLayout(
+    u64 localVertexRefByteSize,
+    u32 primitiveIndexCount,
+    ObjectGeometryCacheLayout& outLayout)noexcept;
 [[nodiscard]] bool AcceptObjectGeometryCacheWrite(
     MeshResources& mesh,
     const RuntimeMeshBuffers& sourceBuffers,

@@ -39,16 +39,15 @@ bool LoadObjectGeometryKernels(
         return false;
     const Path sources[] = {
         meshRoot / "object_decode_cs.slang",
-        meshRoot / "object_cull_cs.slang",
         sourceRoot / "tests/smoke/mesh_kernel/assets/object_transform_cs.slang",
         meshRoot / "object_vs.slang"
     };
-    constexpr AStringView names[] = { "object_decode", "object_cull", "object_transform", "object_vertex" };
+    constexpr AStringView names[] = { "object_decode", "object_transform", "object_vertex" };
     constexpr u32 pushBytes[] = {
-        NWB_MESH_PUSH_CONSTANT_BYTE_SIZE, NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE,
+        NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE,
         NWB_MESH_COMPUTE_PUSH_CONSTANT_BYTE_SIZE, NWB_MESH_PUSH_CONSTANT_BYTE_SIZE
     };
-    ComputePipelineHandle* const pipelines[] = { &kernels.decode, &kernels.cull, &kernels.transform };
+    ComputePipelineHandle* const pipelines[] = { &kernels.decode, &kernels.transform };
     Impl::ShaderCook shaderCook(arena);
     Impl::ShaderCook::CookVector<Path> includes(arena);
     includes.push_back(graphicsRoot);
@@ -59,7 +58,7 @@ bool LoadObjectGeometryKernels(
         if(!shaderCook.gatherShaderDependencies(sources[stage], includes, dependencies, scratchArena))
             return false;
         const Path output = outputRoot / names[stage];
-        const bool vertexStage = stage == 3u;
+        const bool vertexStage = stage == 2u;
         const Impl::ShaderCook::ShaderCompilerRequest request{
             .shaderName = names[stage],
             .stage = vertexStage ? "vs" : "cs",

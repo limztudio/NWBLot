@@ -55,6 +55,7 @@ namespace Pose{
         Identity,
         Transformed,
         ResolvedDeformed,
+        Mirrored,
     };
 };
 
@@ -139,6 +140,7 @@ struct Case{
     Impl::MeshletRefDeltaWidth::Enum width;
     Pose::Enum pose;
     Cull::Enum cull;
+    bool reverseWinding = false;
 };
 
 static_assert(sizeof(ObjectVertex) == NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
@@ -224,7 +226,8 @@ void BuildInputs(const Case& testCase, Inputs& inputs){
         }
         for(u32 primitive = 0u; primitive < testCase.primitiveCount; ++primitive){
             for(u32 corner = 0u; corner < 3u; ++corner){
-                const u32 localVertex = (primitive * 3u + corner) % testCase.vertexCount;
+                const u32 sourceCorner = testCase.reverseWinding && corner != 0u ? 3u - corner : corner;
+                const u32 localVertex = (primitive * 3u + sourceCorner) % testCase.vertexCount;
                 inputs.primitiveIndices[meshlet.primitiveOffset + primitive * 3u + corner] = static_cast<u8>(localVertex);
             }
         }
@@ -245,10 +248,10 @@ void BuildInputs(const Case& testCase, Inputs& inputs){
     inputs.view.frustumPlanes[0][0] = -1.0f;
     inputs.view.frustumPlanes[0][3] = testCase.cull == Cull::Frustum ? -2.0f : 1.0f;
     inputs.instances[0].translation.x = 10.0f;
-    if(testCase.pose == Pose::Transformed){
+    if(testCase.pose == Pose::Transformed || testCase.pose == Pose::Mirrored){
         inputs.instances[1].rotation = Float4(0.0f, 0.38268343f, 0.0f, 0.9238795f);
         inputs.instances[1].translation = Float3UInt(0.0625f, -0.0625f, 0.125f, 0u);
-        inputs.instances[1].scale = Float4(0.75f, 1.25f, 0.5f, 0.0f);
+        inputs.instances[1].scale = Float4(testCase.pose == Pose::Mirrored ? -0.75f : 0.75f, 1.25f, 0.5f, 0.0f);
     }
     inputs.push.dispatch[0] = testCase.meshletCount;
     inputs.push.dispatch[1] = 1u;
@@ -347,10 +350,13 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     const u32 indexByteOffset = compactVertexCount * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE;
     const u32 indexedByteSize = AlignUp(indexByteOffset + s_OutputIndexBytes, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
     ASSERT_LE(indexedByteSize, s_IndexedOutputByteCapacity);
-    const u32 cacheByteSize = (compactVertexCount + 2u) * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    const u32 cacheIndexByteOffset = compactVertexCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    const u32 cacheByteSize = AlignUp(
+        cacheIndexByteOffset + s_OutputIndexBytes + 2u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, NWB_MESH_OBJECT_VERTEX_BYTE_SIZE
+    );
     if(objectKernels != nullptr){
         BufferDesc desc;
-        desc.setByteSize(cacheByteSize).setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setIsVertexBuffer(true)
+        desc.setByteSize(cacheByteSize).setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE).setIsVertexBuffer(true).setIsIndexBuffer(true)
             .setCanHaveRawViews(true).setCanHaveUAVs(true).setCpuAccess(CpuAccessMode::Read)
             .setInitialState(ResourceStates::Common).setKeepInitialState(true);
         objectCache = device.createBuffer(desc);
@@ -411,8 +417,8 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             decodeState.setPipeline(objectKernels->decode.get());
             commandList->setComputeState(decodeState);
             heap.bindCompute(*commandList, *objectKernels->decode);
-            PushConstants decodePush = inputs.push;
-            decodePush.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + 2u].slot();
+            ComputePushConstants decodePush{ inputs.push, { cacheIndexByteOffset, 0u, 0u, 0u } };
+            decodePush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + 2u].slot();
             commandList->setPushConstants(&decodePush, sizeof(decodePush));
             commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
             commandList->setBufferState(objectCache.get(), ResourceStates::ShaderResource);
@@ -491,8 +497,25 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             }
         }
         const u8* const cacheBytes = reinterpret_cast<const u8*>(mappedCache);
-        for(u32 byte = compactVertexCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE; byte < cacheByteSize; ++byte)
-            EXPECT_EQ(cacheBytes[byte], 0x39u) << byte;
+        const u32* const persistentIndices = reinterpret_cast<const u32*>(cacheBytes + cacheIndexByteOffset);
+        bool indexWritten[s_OutputVertexCapacity]{};
+        for(u32 meshletIndex = 0u; meshletIndex < testCase.meshletCount; ++meshletIndex){
+            const auto& meshlet = inputs.meshlets[meshletIndex];
+            for(u32 corner = 0u; corner < testCase.primitiveCount * 3u; ++corner){
+                const u32 primitiveIndex = meshlet.primitiveOffset + corner;
+                const u32 expectedIndex = NWB_MESH_OBJECT_FIRST_VERTEX_INDEX + meshlet.localVertexOffset
+                    + inputs.primitiveIndices[primitiveIndex];
+                // The persistent stream retains every triangle, even when the current dynamic view culls its meshlet.
+                EXPECT_EQ(persistentIndices[primitiveIndex], expectedIndex) << primitiveIndex;
+                EXPECT_LT(persistentIndices[primitiveIndex], compactVertexCount);
+                indexWritten[primitiveIndex] = true;
+            }
+        }
+        for(u32 byte = cacheIndexByteOffset; byte < cacheByteSize; ++byte){
+            const u32 index = (byte - cacheIndexByteOffset) / s_IndexByteStride;
+            if(index >= s_OutputVertexCapacity || !indexWritten[index])
+                EXPECT_EQ(cacheBytes[byte], 0x39u) << byte;
+        }
     }
     bool written[s_OutputVertexCapacity]{};
     bool indexedWritten[s_IndexedOutputByteCapacity]{};
@@ -548,7 +571,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
                     EXPECT_TRUE(IsFinite(vertex.position[component]));
                     EXPECT_TRUE(IsFinite(vertex.worldPosition[component]));
                 }
-                if(testCase.pose != Pose::Transformed){
+                if(testCase.pose == Pose::Identity || testCase.pose == Pose::ResolvedDeformed){
                     const u32 localPosition = inputs.localRefs[meshlet.localVertexOffset + localVertex].localDeformedPosition;
                     const auto& sourcePosition = inputs.positions[meshlet.positionBase + localPosition];
                     EXPECT_EQ(vertex.position[0], sourcePosition.x);
@@ -640,26 +663,30 @@ TEST_F(MeshKernelTest, ObjectCachePreservesSeamsCullsAndCurrentTransforms){
     Alloc::ScratchArena scratchArena(Name("tests/smoke/mesh_kernel/object_cache"));
     ComputePipelineHandle reference;
     ObjectGeometryKernels kernels;
+    ComputePipelineHandle indexedReference;
     const Common::LoggerRegistrationGuard diagnosticGuard(*s_logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const auto run = [&](){
         ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference));
+        ASSERT_TRUE(loadMeshKernel(true, scratchArena, indexedReference));
         ASSERT_TRUE(LoadObjectGeometryKernels(device(), arena(), scratchArena, kernels));
         for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
-            for(u32 pose = Pose::Identity; pose <= Pose::ResolvedDeformed; ++pose){
+            for(u32 pose = Pose::Identity; pose <= Pose::Mirrored; ++pose){
                 const Case testCase{
                     96u, 126u, 2u, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), static_cast<Pose::Enum>(pose), Cull::None
                 };
-                ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, testCase, &kernels));
+                ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, testCase, &kernels));
             }
         }
         for(u32 cull = Cull::Frustum; cull <= Cull::FirstMeshletOnly; ++cull){
             const Case testCase{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, static_cast<Cull::Enum>(cull) };
-            ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, testCase, &kernels));
+            ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, testCase, &kernels));
         }
         const Case partial{ 6u, 2u, 1u, Impl::MeshletRefDeltaWidth::U8, Pose::Transformed, Cull::None };
-        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, partial, &kernels));
+        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, partial, &kernels));
+        const Case reversed{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U32, Pose::Mirrored, Cull::None, true };
+        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, reversed, &kernels));
         const Case empty{ 3u, 1u, 0u, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, Cull::None };
-        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *kernels.cull, empty, &kernels));
+        ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, empty, &kernels));
     };
     run();
     const TStringView validationPrefix = NWB_TEXT("Vulkan debug: [severity=error");

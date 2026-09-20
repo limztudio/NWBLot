@@ -181,7 +181,6 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/material/object_geometry_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_object_geometry_cache.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_object_geometry_cache.h"
-    "${CMAKE_CURRENT_LIST_DIR}/material/task_graph_object_geometry_key.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pass_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material/material_pass.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/object_geometry_cache.h"

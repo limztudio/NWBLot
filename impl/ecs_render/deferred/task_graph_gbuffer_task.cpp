@@ -89,6 +89,10 @@ namespace ECSRenderDetail{
             opaqueDrawItems.regular.meshDrawItems.begin(),
             opaqueDrawItems.regular.meshDrawItems.end()
         );
+        regularMeshDrawItems.indexedDrawItems.assign(
+            opaqueDrawItems.regular.indexedDrawItems.begin(),
+            opaqueDrawItems.regular.indexedDrawItems.end()
+        );
         regularDrawItemsForGbuffer = &regularMeshDrawItems;
     }
     const bool csgResourcesReady =

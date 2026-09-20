@@ -32,7 +32,7 @@ namespace Plan = Impl::AssetsGraphicsCookDetail;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsGraphics, ObjectGeometryMetadataRequiresPairedNonemptySourcesOnlyForMeshStages){
+TEST(AssetsGraphics, ObjectGeometryMetadataRequiresExplicitNonemptyVertexSourceOnlyForMeshStages){
     CapturingLogger logger;
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
@@ -48,17 +48,14 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRequiresPairedNonemptySourcesOnlyForM
         bool objectGeometry;
     };
     constexpr MetadataCase cases[] = {
-        { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\nasset.mesh_object_vertex = \"object_vs.slang\";\n", true, true },
+        { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", true, true },
         { "mesh", "", true, false },
         { "ps", "", true, false },
+        { "mesh", "asset.mesh_object_vertex = \"\";\n", false, false },
+        { "cs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
+        { "vs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
+        { "ps", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
         { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false, false },
-        { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "mesh", "asset.mesh_object_cull = \"\";\nasset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\nasset.mesh_object_vertex = \"\";\n", false, false },
-        { "mesh", "asset.mesh_object_cull = \"\";\nasset.mesh_object_vertex = \"\";\n", false, false },
-        { "cs", "asset.mesh_object_cull = \"object_cull_cs.slang\";\nasset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "vs", "asset.mesh_object_cull = \"object_cull_cs.slang\";\nasset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
-        { "ps", "asset.mesh_object_cull = \"object_cull_cs.slang\";\nasset.mesh_object_vertex = \"object_vs.slang\";\n", false, false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry entry(testArena.arena);
@@ -74,12 +71,10 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRequiresPairedNonemptySourcesOnlyForM
         EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
         if(testCase.accepted){
             EXPECT_EQ(logger.errorCount(), priorErrors);
-            EXPECT_EQ(entry.meshObjectCullSource, testCase.objectGeometry ? "object_cull_cs.slang" : "");
             EXPECT_EQ(entry.meshObjectVertexSource, testCase.objectGeometry ? "object_vs.slang" : "");
         }
         else{
             EXPECT_GT(logger.errorCount(), priorErrors);
-            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("requires paired nonempty cull/vertex sources on a mesh shader")));
         }
     }
     ErrorCode error;
@@ -96,7 +91,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     const Path meshRoot = root / "impl" / "assets" / "graphics" / "mesh";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint value = 1u;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_cull_cs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
     Plan::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
@@ -108,7 +102,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.entry.archiveStage = "mesh";
     mesh.entry.targetProfile = "spirv_1_6";
     mesh.entry.entryPoint = "authoredEntry";
-    mesh.entry.meshObjectCullSource = "object_cull_cs.slang";
     mesh.entry.meshObjectVertexSource = "object_vs.slang";
     mesh.entry.includeRoots.emplace_back("engine/graphics", testArena.arena);
     mesh.entry.implicitDefines.emplace(
@@ -126,15 +119,12 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     Plan::PreparedShaderPlan plan(testArena.arena);
     plan.plannedFileCount = mesh.variantCount;
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, plan, scratchArena));
-    ASSERT_EQ(plan.preparedEntries.size(), 2u);
-    EXPECT_EQ(plan.plannedFileCount, 4u);
-    constexpr AStringView stages[] = { "cs", "vs" };
-    const AStringView archiveStages[] = {
-        Impl::MaterialShaderStageNames::MeshObjectCullArchiveStageText(),
-        Impl::MaterialShaderStageNames::MeshObjectVertexArchiveStageText()
-    };
-    const Path expectedSources[] = { meshRoot / "object_cull_cs.slang", meshRoot / "object_vs.slang" };
-    for(u32 index = 0u; index < 2u; ++index){
+    ASSERT_EQ(plan.preparedEntries.size(), 1u);
+    EXPECT_EQ(plan.plannedFileCount, 3u);
+    constexpr AStringView stages[] = { "vs" };
+    const AStringView archiveStages[] = { Impl::MaterialShaderStageNames::MeshObjectVertexArchiveStageText() };
+    const Path expectedSources[] = { meshRoot / "object_vs.slang" };
+    for(u32 index = 0u; index < 1u; ++index){
         const auto& auxiliary = plan.preparedEntries[index];
         EXPECT_EQ(auxiliary.entry.name, mesh.entry.name);
         EXPECT_EQ(auxiliary.entry.stage.view(), stages[index]);
@@ -150,7 +140,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         ASSERT_TRUE(shaderCook.expandDefineCombinations(auxiliary.entry.defineValues, combinations, scratchArena));
         ASSERT_EQ(combinations.size(), 1u);
         EXPECT_EQ(shaderCook.buildVariantName(combinations[0], scratchArena), Core::ShaderArchive::s_DefaultVariant);
-        EXPECT_TRUE(auxiliary.entry.meshObjectCullSource.empty());
         EXPECT_TRUE(auxiliary.entry.meshObjectVertexSource.empty());
         EXPECT_FALSE(auxiliary.entry.emitMeshComputeShadow);
         EXPECT_FALSE(auxiliary.usesMaterialTypedBinding);
@@ -160,7 +149,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_GE(auxiliary.dependencies.size(), 2u);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    for(u32 mismatch = 0u; mismatch < 7u; ++mismatch){
+    for(u32 mismatch = 0u; mismatch < 6u; ++mismatch){
         SCOPED_TRACE(mismatch);
         Plan::PreparedShaderEntry rejected = mesh;
         switch(mismatch){
@@ -168,9 +157,8 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         case 1u: rejected.sourcePath = root / "project" / "shared_ms.slang"; break;
         case 2u: rejected.entry.archiveStage = "mesh_compute"; break;
         case 3u: rejected.entry.stage = "cs"; break;
-        case 4u: rejected.entry.meshObjectCullSource = "custom_cull_cs.slang"; break;
-        case 5u: rejected.entry.meshObjectVertexSource = "custom_vs.slang"; break;
-        case 6u: rejected.entry.emitMeshComputeShadow = false; break;
+        case 4u: rejected.entry.meshObjectVertexSource = "custom_vs.slang"; break;
+        case 5u: rejected.entry.emitMeshComputeShadow = false; break;
         }
         Plan::PreparedShaderPlan rejectedPlan(testArena.arena);
         rejectedPlan.plannedFileCount = 7u;
@@ -190,7 +178,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint value = 2u;\n"));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
-    ASSERT_EQ(changedPlan.preparedEntries.size(), 2u);
+    ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
     EXPECT_NE(changedPlan.preparedEntries[0].dependencyChecksum, oldChecksum);
     EXPECT_EQ(changedPlan.preparedEntries[0].variantCount, 1u);
     ErrorCode error;

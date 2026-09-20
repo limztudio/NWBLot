@@ -95,7 +95,7 @@ struct CaptureDrawTask{
         usize instanceCount = 0u;
         usize materialTypedByteCount = 0u;
         bool csg = false;
-        bool compute = false;
+        RenderPath::Enum renderPath = RenderPath::MeshShader;
         bool generate = false;
         bool conservativeGeometryScissor = false;
 
@@ -111,9 +111,21 @@ struct CaptureDrawTask{
         Core::Alloc::ScratchArena scratch(RendererArenaScope::s_RenderArena);
         MaterialPassDrawItemVector drawItems{scratch};
         drawItems.assign(payload.drawItems.begin(), payload.drawItems.end());
-        if(!(payload.compute
-            ? payload.materialSystem->computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)
-            : payload.materialSystem->meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings)))
+        bool resourcesReady = false;
+        switch(payload.renderPath){
+        case RenderPath::MeshShader:
+            resourcesReady = payload.materialSystem->meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            break;
+        case RenderPath::VertexIndexed:
+            resourcesReady = payload.materialSystem->indexedMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            break;
+        case RenderPath::ComputeEmulation:
+            resourcesReady = payload.materialSystem->computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            break;
+        default:
+            return false;
+        }
+        if(!resourcesReady || (payload.generate && payload.renderPath != RenderPath::ComputeEmulation))
             return false;
 
         commandList.endRenderPass();
@@ -138,8 +150,10 @@ struct CaptureDrawTask{
         };
         if(payload.generate)
             payload.materialSystem->generateComputeMaterialPassDrawItems(drawContext, drawItems);
-        else if(payload.compute)
+        else if(payload.renderPath == RenderPath::ComputeEmulation)
             payload.materialSystem->renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
+        else if(payload.renderPath == RenderPath::VertexIndexed)
+            payload.materialSystem->renderIndexedMaterialPassDrawItems(drawContext, drawItems);
         else
             payload.materialSystem->renderMeshMaterialPassDrawItems(drawContext, drawItems);
         commandList.endRenderPass();
@@ -336,21 +350,21 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     }
 
     if(!objectGeometry.prepare(
-        drawItems.regular.computeDrawItems.data(), drawItems.regular.computeDrawItems.size(),
+        drawItems.regular.indexedDrawItems.data(), drawItems.regular.indexedDrawItems.size(),
         frameBindings, targets, dependency, commonUses, scratch
     ))
         return {};
 
     usize drawTaskIndex = 0u;
     const auto appendDraw = [&](const MaterialPassDrawItem* items, const usize count, const bool csg,
-                                const bool compute, const bool generate, const Core::GpuGraphResourceId output){
+                                const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output){
         if(count == 0u)
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratch};
         uses.assign(commonUses.begin(), commonUses.end());
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());
-        if(compute)
+        if(renderPath == RenderPath::ComputeEmulation)
             uses.push_back(generate ? WriteUse(output, Core::ResourceStates::UnorderedAccess) : ReadUse(output, ECSRenderDetail::s_GeneratedGeometryRasterState));
         if(!generate){
             uses.push_back(ReadUse(opaqueDepth));
@@ -373,7 +387,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         payload.instanceCount = instances.size();
         payload.materialTypedByteCount = typedBytes.size();
         payload.csg = csg;
-        payload.compute = compute;
+        payload.renderPath = renderPath;
         payload.generate = generate;
         payload.conservativeGeometryScissor = generate && producesReusableGeometry;
         dependency = graph.addTask<CaptureDrawTask>(desc, Move(payload));
@@ -385,12 +399,14 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     for(usize setIndex = 0u; setIndex < LengthOf(orderedSets); ++setIndex){
         const MaterialPassDrawItems& items = *orderedSets[setIndex];
         const bool csg = setIndex != 0u;
-        if(!appendDraw(items.meshDrawItems.data(), items.meshDrawItems.size(), csg, false, false, {}))
+        if(!appendDraw(items.meshDrawItems.data(), items.meshDrawItems.size(), csg, RenderPath::MeshShader, false, {}))
+            return {};
+        if(!appendDraw(items.indexedDrawItems.data(), items.indexedDrawItems.size(), csg, RenderPath::VertexIndexed, false, {}))
             return {};
         for(const MaterialPassDrawItem& item : items.computeDrawItems){
             const Core::GpuGraphResourceId output = ImportBuffer(graph, item.meshResources.emulationVertexBuffer);
-            if(!output.valid() || !appendDraw(&item, 1u, csg, true, true, output)
-                || !appendDraw(&item, 1u, csg, true, false, output))
+            if(!output.valid() || !appendDraw(&item, 1u, csg, RenderPath::ComputeEmulation, true, output)
+                || !appendDraw(&item, 1u, csg, RenderPath::ComputeEmulation, false, output))
                 return {};
         }
     }

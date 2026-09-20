@@ -825,7 +825,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Core::GpuTaskId gbufferDependency = csgIntervalClearTask;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> objectGeometryReads{gbufferResourceScratch};
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
-        opaqueDrawItems.regular.computeDrawItems.data(), opaqueDrawItems.regular.computeDrawItems.size(),
+        opaqueDrawItems.regular.indexedDrawItems.data(), opaqueDrawItems.regular.indexedDrawItems.size(),
         frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
         nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
     ))

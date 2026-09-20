@@ -3,10 +3,11 @@
 
 
 #define NWB_MESH_SHADER_EMULATION_COMPUTE 1
-#define NWB_MESH_EMULATION_INDEXED_OUTPUT 0
+#define NWB_MESH_EMULATION_INDEXED_OUTPUT 1
 #define NWB_CSG_ENABLED 0
 
 #include "runtime.slangi"
+#include "emulation_output.slangi"
 #include "object_geometry_constants.h"
 
 
@@ -66,6 +67,19 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         output.color = nwbMeshPackGeneratedHalf4(source.color);
         const uint outputIndex = NWB_MESH_OBJECT_FIRST_VERTEX_INDEX + meshlet.localVertexOffset + vertexIndex;
         g_NwbHeapMeshObjectVertexBuffers[outputSlot][outputIndex] = output;
+    }
+
+    // Topology is invariant under instance/view changes. Preserve primitive offsets, winding, and local-reference seams.
+    const uint primitiveCount = nwbMeshletPrimitiveCount(meshlet);
+    for(uint primitiveIndex = groupThreadID.x; primitiveIndex < primitiveCount; primitiveIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
+        const uint primitiveBase = meshlet.primitiveOffset + primitiveIndex * NWB_MESHLET_TRIANGLE_INDEX_COUNT;
+        const uint3 localIndices = uint3(
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase),
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 1u),
+            nwbMeshLoadMeshletPrimitiveIndex(primitiveBase + 2u)
+        );
+        const uint3 indices = localIndices + (NWB_MESH_OBJECT_FIRST_VERTEX_INDEX + meshlet.localVertexOffset);
+        nwbMeshStoreGeneratedIndices(primitiveBase, indices);
     }
 }
 

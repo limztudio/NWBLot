@@ -159,6 +159,18 @@ class WorkloadPolicyTests(unittest.TestCase):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
 
+    def test_material_signature_preserves_mixed_routes_independent_of_creation_order(self):
+        indexed = "RendererSystem: material 'glass' selected VertexIndexed + PS from persistent object-space geometry"
+        compute = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
+        device = "Vulkan: created device 'Example GPU'"
+        mixed = benchmark.device_material_signature("\n".join((device, compute, indexed, compute)))
+        reordered = benchmark.device_material_signature("\n".join((device, indexed, compute)))
+        self.assertEqual(mixed, reordered)
+        self.assertEqual(mixed["material_routes"]["glass"], [compute.split(" selected ")[1], indexed.split(" selected ")[1]])
+        self.assertNotEqual(mixed, benchmark.device_material_signature("\n".join((device, indexed))))
+        with self.assertRaises(benchmark.SmokeFailure):
+            benchmark.device_material_signature(device)
+
     def test_current_hardware_route_requires_dispatch_and_preserves_frozen_hybrid_identity(self):
         workload = benchmark.workloads()["transparent-multi"]
         marker = "RendererSystem: dispatched hardware transparent shadow traversal"

@@ -158,30 +158,22 @@ TEST(AvboitGeneratedGeometryReuse, UnifiedOutputLayoutAndRepresentationMustMatch
     EXPECT_FALSE(fixture.matches());
 }
 
-TEST(AvboitGeneratedGeometryReuse, ObjectCacheGenerationAndBindingsMustMatchAcrossRasterPasses){
+TEST(AvboitGeneratedGeometryReuse, PersistentIndexedDrawsDoNotAlterGeneratedComputeContents){
     ReuseContext fixture;
-    auto& cache = fixture.draws.regular.computeDrawItems[0u].meshResources.objectGeometryCache;
-    cache.buffer = fixture.source;
-    cache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 45u);
-    cache.sourceRevision = 8u;
-    cache.initialized = true;
-    cache.requiresDecode = false;
+    MaterialPassDrawItem indexed = fixture.draws.regular.computeDrawItems.front();
+    indexed.meshKey = Name("tests/geometry_reuse/indexed");
+    indexed.meshResources.emulationVertexBuffer.reset();
+    indexed.meshResources.objectGeometryCache.buffer = fixture.source;
+    indexed.meshResources.objectGeometryCache.sourceRevision = 8u;
+    fixture.draws.regular.indexedDrawItems.push_back(indexed);
     ASSERT_TRUE(fixture.captureAndPublish());
     EXPECT_TRUE(fixture.matches());
+    auto& cache = fixture.draws.regular.indexedDrawItems.front().meshResources.objectGeometryCache;
     cache.sourceRevision = 9u;
-    EXPECT_FALSE(fixture.matches());
-    ASSERT_TRUE(fixture.captureAndPublish());
     cache.buffer = fixture.alternate;
-    EXPECT_FALSE(fixture.matches());
-    ASSERT_TRUE(fixture.captureAndPublish());
-    cache.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 46u);
-    EXPECT_FALSE(fixture.matches());
-    ASSERT_TRUE(fixture.captureAndPublish());
-    cache.requiresDecode = true;
-    EXPECT_FALSE(fixture.matches());
-    ASSERT_TRUE(fixture.captureAndPublish());
-    cache.initialized = false;
-    EXPECT_FALSE(fixture.matches());
+    EXPECT_TRUE(fixture.matches());
+    fixture.draws.regular.indexedDrawItems.clear();
+    EXPECT_TRUE(fixture.matches());
 }
 
 TEST(AvboitGeneratedGeometryReuse, StagedOrInvalidProducerCannotPublishReusableContents){

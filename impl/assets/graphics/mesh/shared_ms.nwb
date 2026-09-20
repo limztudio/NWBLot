@@ -4,5 +4,4 @@ asset.stage = "mesh";
 asset.target_profile = "spirv_1_5";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];
-asset.mesh_object_cull = "object_cull_cs.slang";
 asset.mesh_object_vertex = "object_vs.slang";

@@ -46,15 +46,6 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         mesh.runtimeLocalBoundsHeapHandle = handle;
     }
 
-    // Non-mesh-shader devices use emulation; establish its output with the mesh resource.
-    if(
-        !m_graphics.queryFeatureSupport(Core::Feature::Meshlets)
-        && !createComputeEmulationHeapHandle(mesh)
-    ){
-        releaseMeshGeometryHeapHandles(mesh);
-        return false;
-    }
-
     NWB_ASSERT(meshRenderBindingsReady(mesh));
     return true;
 }
@@ -70,17 +61,10 @@ bool RendererMeshSystem::meshRenderBindingsReady(const MeshResources& mesh)const
     )
         return false;
 
-    return m_graphics.queryFeatureSupport(Core::Feature::Meshlets)
-        || (
-            mesh.emulationVertexBuffer
-            && mesh.emulationVertexHeapHandle.valid()
-            && mesh.emulationVertexHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
-            && mesh.emulationIndexByteOffset != 0u
-        )
-    ;
+    return true;
 }
 
-bool RendererMeshSystem::createComputeEmulationHeapHandle(MeshResources& mesh){
+bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){

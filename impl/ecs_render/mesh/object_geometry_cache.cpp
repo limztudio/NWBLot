@@ -14,6 +14,8 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -31,18 +33,34 @@ namespace ECSRenderDetail{
 
 
 bool ObjectGeometryCacheSnapshot::valid()const noexcept{
-    return buffer && decoderPipeline && heapHandle.valid() && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;
+    return
+        buffer && decoderPipeline && heapHandle.valid()
+        && heapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer
+        && indexByteOffset != 0u && indexCount != 0u
+    ;
 }
 
-bool ResolveObjectGeometryCacheByteSize(const u64 localVertexRefByteSize, u64& outByteSize)noexcept{
-    outByteSize = 0u;
-    if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u)
+bool ResolveObjectGeometryCacheLayout(
+    const u64 localVertexRefByteSize,
+    const u32 primitiveIndexCount,
+    ObjectGeometryCacheLayout& outLayout)noexcept{
+    outLayout = {};
+    if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
         return false;
-    const u64 vertexCount = localVertexRefByteSize / sizeof(MeshletLocalVertexRef) + NWB_MESH_OBJECT_FIRST_VERTEX_INDEX;
+    constexpr u64 s_Stride = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
     constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
-    if(vertexCount > s_AddressableBytes / NWB_MESH_OBJECT_VERTEX_BYTE_SIZE)
+    const u64 vertexCount = localVertexRefByteSize / sizeof(MeshletLocalVertexRef) + NWB_MESH_OBJECT_FIRST_VERTEX_INDEX;
+    if(vertexCount > static_cast<u64>(Limit<u32>::s_Max) / s_Stride)
         return false;
-    outByteSize = vertexCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
+    const u64 indexByteOffset = vertexCount * s_Stride;
+    const u64 indexedByteSize = indexByteOffset + static_cast<u64>(primitiveIndexCount) * sizeof(u32);
+    if(indexedByteSize > s_AddressableBytes)
+        return false;
+    // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
+    const u64 bufferByteSize = AlignUp(indexedByteSize, s_Stride);
+    if(bufferByteSize > s_AddressableBytes)
+        return false;
+    outLayout = { bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
     return true;
 }
 
@@ -60,6 +78,8 @@ bool AcceptObjectGeometryCacheWrite(
     if(
         cache.decoderPipeline != expected.decoderPipeline
         || cache.heapHandle != expected.heapHandle
+        || cache.indexByteOffset != expected.indexByteOffset
+        || cache.indexCount != expected.indexCount
         || mesh.runtimeMesh != runtimeMesh
         || mesh.runtimeGeometryContentRevision != expected.sourceRevision
         || mesh.positionBuffer != sourceBuffers.positionBuffer
@@ -101,12 +121,13 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     if(cache.buffer && cache.heapHandle.valid())
         return true;
     if(!cache.buffer){
-        u64 byteSize = 0u;
+        ECSRenderDetail::ObjectGeometryCacheLayout layout;
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        if(!ECSRenderDetail::ResolveObjectGeometryCacheByteSize(
+        if(!ECSRenderDetail::ResolveObjectGeometryCacheLayout(
             mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
-            byteSize
+            mesh.meshletPrimitiveIndexCount,
+            layout
         ))
             return false;
         const Name bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
@@ -114,11 +135,12 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
             return false;
         Core::BufferDesc desc;
         desc
-            .setByteSize(byteSize)
+            .setByteSize(layout.bufferByteSize)
             .setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setIsVertexBuffer(true)
+            .setIsIndexBuffer(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(bufferName)
         ;
@@ -127,6 +149,8 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), StringConvert(mesh.meshName.c_str()));
             return false;
         }
+        cache.indexByteOffset = layout.indexByteOffset;
+        cache.indexCount = layout.indexCount;
         cache.acceptedContent = false;
         cache.initialized = false;
     }
@@ -150,6 +174,8 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::objectGeometryC
         .decoderPipeline = cache.decoderPipeline,
         .heapHandle = cache.heapHandle,
         .sourceRevision = mesh.runtimeGeometryContentRevision,
+        .indexByteOffset = cache.indexByteOffset,
+        .indexCount = cache.indexCount,
         .initialized = cache.initialized,
         .requiresDecode = !cache.acceptedContent || (mesh.runtimeMesh
             && (mesh.runtimeGeometryContentRevision == 0u || cache.acceptedContentRevision != mesh.runtimeGeometryContentRevision)),

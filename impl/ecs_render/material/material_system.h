@@ -128,6 +128,7 @@ public:
     void invalidateRendererPipelines();
     [[nodiscard]] bool hasTransparentRenderers(RendererResourceLookupMode::Enum lookupMode);
     void logMaterialRenderPathDecision(const Name& materialKey, RenderPath::Enum renderPath, bool meshSupported);
+    [[nodiscard]] bool prepareMeshComputeBindingLayout();
     [[nodiscard]] bool createComputeEmulationResources();
     [[nodiscard]] bool createObjectGeometryPipelineResources(
         const Name& meshShaderName,
@@ -250,6 +251,10 @@ public:
         const MaterialPassDrawItemVector& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     );
+    [[nodiscard]] bool indexedMaterialPassDrawResourcesReady(
+        const MaterialPassDrawItemVector& drawItems,
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+    );
     [[nodiscard]] bool computeMaterialPassDrawResourcesReady(
         const MaterialPassDrawItemVector& drawItems,
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
@@ -269,6 +274,7 @@ public:
     );
     [[nodiscard]] bool prepareMaterialPassResourceBindings(const MaterialPassDrawItems& drawItems);
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
+    [[nodiscard]] bool prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
@@ -292,11 +298,11 @@ public:
         const MaterialPassPipelineResourceSnapshot& pipelineResources
     );
     void renderMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItems& drawItems);
+    void renderIndexedMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     void renderMeshMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
-    // Graph-only producer half. The graph must provide each generated-vertex output in UAV state; this method
-    // records the compute state, descriptor heap, push constants, and dispatches without an output transition.
-    // Records the fixed object-space decoder; the graph owns source reads and the cache UAV-to-vertex handoff.
+    // Records the fixed object-space decoder; the graph owns source reads and the cache UAV-to-vertex/index handoff.
     [[nodiscard]] bool recordObjectGeometryDecode(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem);
+    // Graph-only producer half. The graph owns generated output UAV states; this method records only the dispatch.
     void generateComputeMaterialPassDrawItems(const MaterialPassDrawContext& context, const MaterialPassDrawItemVector& drawItems);
     // Graph-only raster half. The graph must provide each generated output in the combined vertex/index state; this
     // method records the graphics state, descriptor heap, push constants, and draws without an output transition.

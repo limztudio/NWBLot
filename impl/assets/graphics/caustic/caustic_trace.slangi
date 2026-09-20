@@ -253,13 +253,13 @@ NwbCausticPhoton nwbCausticCreatePhoton(
     const uint emissionTargetCount,
     const uint photonCount
 ){
-    // Area- and count-normalized flux keeps emitted energy invariant under photon-count and target-partition changes.
-    const half perPhoton = half(emission.domainArea) * half(emissionTargetCount) / half(max(photonCount, 1u));
+    // Photon budgets exceed the finite half range; normalize energy in float before quantizing the final flux.
+    const float perPhoton = emission.domainArea * float(emissionTargetCount) / float(max(photonCount, 1u));
 
     NwbCausticPhoton photon;
     photon.origin = emission.origin;
     photon.direction = emission.direction;
-    photon.flux = lightColor * perPhoton;
+    photon.flux = half3(float3(lightColor) * perPhoton);
     photon.inside = false;
     return photon;
 }

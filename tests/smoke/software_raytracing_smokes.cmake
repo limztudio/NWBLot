@@ -78,6 +78,21 @@ if(TARGET nwb_caustic_sphere_smoke)
     set_property(TEST nwb_software_raytracing_caustic_smoke APPEND PROPERTY
         ENVIRONMENT "NWB_REFRACTION_SMOKE_ENABLED=1;NWB_REFRACTION_SMOKE_HARDWARE=1;NWB_REFLECTION_SMOKE_MODE=hybrid;NWB_CAUSTIC_SMOKE_ENABLED=1"
     )
+    add_test(
+        NAME nwb_software_raytracing_optical_smoke
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_optical_smoke.py"
+            --software-ray-tracing
+            --executable "$<TARGET_FILE:nwb_caustic_sphere_smoke>"
+            --working-directory "${_nwb_sw_smoke_runtime}"
+            --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/software_optical"
+            --timeout 150
+    )
+    set_tests_properties(nwb_software_raytracing_optical_smoke PROPERTIES
+        LABELS "software_raytracing"
+        RESOURCE_LOCK nwb_display
+        SKIP_RETURN_CODE 77
+        TIMEOUT 1020
+    )
 endif()
 
 if(TARGET nwb_skinned_caustic_smoke)

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Independent physical identities and intentionally incorrect optical image/counter evidence."""
 
+import contextlib
+import io
 import math
 from pathlib import Path
 from types import SimpleNamespace
@@ -272,18 +274,20 @@ class CombinedCausticTests(unittest.TestCase):
             caustic.analyze_frames(frames)
 
     def test_capture_flags_clear_inherited_optical_state(self):
-        with patch.dict(caustic.os.environ, {"NWB_REFRACTION_SMOKE_CASE": "nested", "NWB_REFLECTION_SMOKE_TEMPORAL": "1"}):
+        with patch.dict(caustic.os.environ, {"NWB_REFRACTION_SMOKE_CASE": "nested", "NWB_REFLECTION_SMOKE_TEMPORAL": "1",
+            "NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP": "1"}):
             environment = caustic.capture_environment("reflection_disabled")
         self.assertNotIn("NWB_REFRACTION_SMOKE_CASE", environment)
         self.assertNotIn("NWB_REFLECTION_SMOKE_TEMPORAL", environment)
         self.assertEqual(environment["NWB_REFLECTION_SMOKE_MODE"], "disabled")
         self.assertEqual(environment["NWB_CAUSTIC_SMOKE_ENABLED"], "1")
+        self.assertNotIn("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP", environment)
 
     def test_caustic_capture_requires_hardware_traversal_when_missing_hardware_can_skip(self):
         for require_hardware in (False, True):
             args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
                 working_directory=Path("runtime"), logserver_executable=None, timeout=60,
-                require_hardware=require_hardware, application_arg=[])
+                require_hardware=require_hardware, software_ray_tracing=False, application_arg=[])
             with self.subTest(require_hardware=require_hardware), patch.object(caustic.subprocess, "run",
                 return_value=SimpleNamespace(returncode=77)) as run:
                 self.assertIsNone(caustic.capture(args, "combined"))
@@ -299,7 +303,7 @@ class CombinedCausticTests(unittest.TestCase):
     def test_disabled_refraction_retains_glass_reflection_composition_pass(self):
         args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
             working_directory=Path("runtime"), logserver_executable=None, timeout=60,
-            require_hardware=True, application_arg=[])
+            require_hardware=True, software_ray_tracing=False, application_arg=[])
         with patch.object(caustic.subprocess, "run", return_value=SimpleNamespace(returncode=77)) as run:
             self.assertIsNone(caustic.capture(args, "refraction_disabled"))
         command = run.call_args.args[0]
@@ -308,6 +312,94 @@ class CombinedCausticTests(unittest.TestCase):
         self.assertIn(("--expect-log-message", "AVBOIT refraction resolve: screen-space"), pairs)
         self.assertIn(("--reject-log-message", "AVBOIT refraction resolve: hardware"), pairs)
         self.assertNotIn(("--reject-log-message", "AVBOIT refraction resolve:"), pairs)
+
+
+    def test_software_contributions_keep_thresholds_and_exclude_hardware_radiometry(self):
+        with patch.object(caustic, "analyze_exterior_reflection") as exterior:
+            result = caustic.analyze_frames(self.frames(), software_ray_tracing=True)
+        exterior.assert_not_called()
+        self.assertEqual(result["reflection_disabled"]["changed_sphere_pixels"], 1500)
+        self.assertEqual(result["caustics_disabled"]["changed_ground_pixels"], 750)
+        self.assertFalse(result["reflection_disabled"]["exterior_environment"]["evaluated"])
+        for disabled in caustic.VARIANTS[1:]:
+            frames = self.frames()
+            frames[disabled] = frames["combined"]
+            with self.subTest(disabled=disabled), self.assertRaises(SmokeFailure):
+                caustic.analyze_frames(frames, software_ray_tracing=True)
+
+    def test_hardware_mode_keeps_exterior_radiometric_oracle(self):
+        with patch.object(caustic, "analyze_exterior_reflection", return_value={"proof": True}) as exterior:
+            result = caustic.analyze_frames(self.frames())
+        exterior.assert_called_once()
+        self.assertEqual(result["reflection_disabled"]["exterior_environment"], {"proof": True})
+
+    def test_capture_software_route_requires_real_disabled_device_for_every_toggle(self):
+        args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
+            working_directory=Path("runtime"), logserver_executable=None, timeout=150,
+            require_hardware=False, software_ray_tracing=True, application_arg=[])
+        for variant in caustic.VARIANTS:
+            with self.subTest(variant=variant), patch.object(caustic.subprocess, "run",
+                return_value=SimpleNamespace(returncode=77)) as run:
+                self.assertIsNone(caustic.capture(args, variant))
+            command = run.call_args.args[0]
+            pairs = set(zip(command, command[1:]))
+            self.assertIn("--application-arg=--disable-hardware-ray-tracing", command)
+            self.assertIn("--application-arg=--gpudbg", command)
+            self.assertNotIn("--skip-log-message", command)
+            self.assertIn(("--expect-log-message",
+                "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"), pairs)
+            for message in ("Loader: hardware ray tracing disabled before device creation",
+                "Vulkan: hardware ray tracing policy=disabled",
+                "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0",
+                "RendererSystem: dispatched software shadow traversal", "AVBOIT refraction resolve: screen-space"):
+                self.assertIn(("--expect-log-message", message), pairs)
+            reflection_route = "disabled" if variant == "reflection_disabled" else "screen-space"
+            self.assertIn(("--expect-log-message", "Reflection resolve: " + reflection_route), pairs)
+            for message in ("Reflection resolve: hardware", "AVBOIT refraction resolve: hardware",
+                "RendererSystem: dispatched hardware transparent shadow traversal",
+                "RendererSystem: dispatched hardware caustic producer",
+                "RendererSystem: created surfel HW trace compute pipeline",
+                "RendererSystem: created refraction resolve pipeline (hardware ray query)"):
+                self.assertIn(("--reject-log-message", message), pairs)
+                self.assertNotIn(("--expect-log-message", message), pairs)
+            if variant == "caustics_disabled":
+                self.assertIn(("--reject-log-message", "caustic producer ("), pairs)
+                self.assertNotIn(("--expect-log-message", "RendererSystem: dispatched software caustic producer"), pairs)
+            else:
+                self.assertIn(("--expect-log-message", "RendererSystem: dispatched software caustic producer"), pairs)
+            environment = run.call_args.kwargs["env"]
+            self.assertEqual(environment["NWB_REFLECTION_SMOKE_MODE"],
+                "disabled" if variant == "reflection_disabled" else "screen")
+            self.assertEqual(environment["NWB_REFRACTION_SMOKE_HARDWARE"], "1")
+            self.assertEqual(environment["NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP"], "1")
+            self.assertEqual(environment["NWB_REFRACTION_SMOKE_ENABLED"],
+                "0" if variant == "refraction_disabled" else "1")
+            self.assertEqual(environment["NWB_CAUSTIC_SMOKE_ENABLED"],
+                "0" if variant == "caustics_disabled" else "1")
+
+    def test_software_environment_drops_inherited_hardware_or_scene_override(self):
+        with patch.dict(caustic.os.environ, {"NWB_REFRACTION_SMOKE_CASE": "nested",
+            "NWB_REFLECTION_SMOKE_MODE": "hardware", "NWB_GPU_TIMING_FILE": "inherited.csv"}):
+            environment = caustic.capture_environment("combined", software_ray_tracing=True)
+        self.assertNotIn("NWB_REFRACTION_SMOKE_CASE", environment)
+        self.assertNotIn("NWB_GPU_TIMING_FILE", environment)
+        self.assertEqual(environment["NWB_REFLECTION_SMOKE_MODE"], "screen")
+        self.assertEqual(environment["NWB_REFRACTION_SMOKE_HARDWARE"], "1")
+
+    def test_device_policy_arguments_are_explicit_and_mutually_exclusive(self):
+        required = ["--executable", "app.exe", "--working-directory", "runtime", "--output-directory", "output"]
+        default = caustic.parse_args(required)
+        self.assertFalse(default.require_hardware)
+        self.assertFalse(default.software_ray_tracing)
+        software = caustic.parse_args(required + ["--software-ray-tracing"])
+        self.assertTrue(software.software_ray_tracing)
+        self.assertFalse(software.require_hardware)
+        hardware = caustic.parse_args(required + ["--require-hardware"])
+        self.assertTrue(hardware.require_hardware)
+        self.assertFalse(hardware.software_ray_tracing)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as error:
+            caustic.parse_args(required + ["--require-hardware", "--software-ray-tracing"])
+        self.assertEqual(error.exception.code, 2)
 
 
 class CausticExteriorTests(unittest.TestCase):

@@ -20,17 +20,19 @@ from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 VARIANTS = ("combined", "reflection_disabled", "caustics_disabled", "refraction_disabled")
 
 
-def capture_environment(variant):
+def capture_environment(variant, software_ray_tracing=False):
     environment = dict(os.environ)
     for key in tuple(environment):
         if key.startswith(("NWB_REFLECTION_SMOKE_", "NWB_REFRACTION_SMOKE_", "NWB_CAUSTIC_SMOKE_")) or key == "NWB_GPU_TIMING_FILE":
             environment.pop(key)
-    environment.update({"NWB_REFLECTION_SMOKE_MODE": "disabled" if variant == "reflection_disabled" else "hardware",
+    environment.update({"NWB_REFLECTION_SMOKE_MODE": "disabled" if variant == "reflection_disabled" else ("screen" if software_ray_tracing else "hardware"),
         "NWB_REFRACTION_SMOKE_ENABLED": "0" if variant == "refraction_disabled" else "1",
         "NWB_REFRACTION_SMOKE_HARDWARE": "1", "NWB_CAUSTIC_SMOKE_ENABLED": "0" if variant == "caustics_disabled" else "1",
         "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "1", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667",
         "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "0", "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0",
         "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0"})
+    if software_ray_tracing:
+        environment["NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP"] = "1"
     return environment
 
 
@@ -42,30 +44,54 @@ def capture(args, variant):
         "--timeout", str(args.timeout), "--log-output", str(output.with_suffix(".log")),
         "--expect-log-message", "TransparentMultiSmokeProject: shutdown"]
     enabled = variant != "reflection_disabled"
-    command += ["--expect-log-message", "CausticSphereSmokeProject: reflection mode " + ("2" if enabled else "0"),
-        "--expect-log-message", "Reflection resolve: " + ("hardware" if enabled else "disabled")]
+    command += ["--expect-log-message", "CausticSphereSmokeProject: reflection mode "
+        + (("1" if args.software_ray_tracing else "2") if enabled else "0"),
+        "--expect-log-message", "Reflection resolve: "
+        + (("screen-space" if args.software_ray_tracing else "hardware") if enabled else "disabled")]
     if not enabled:
         command += ["--reject-log-message", "Reflection resolve: hardware"]
     command += ["--expect-log-message", "CausticSphereSmokeProject: camera refraction "
         + ("disabled" if variant == "refraction_disabled" else "enabled")]
-    if variant == "refraction_disabled":
-        # Primary glass reflection still needs the AVBOIT optical composition pass, with camera transmission disabled.
+    if variant == "refraction_disabled" or args.software_ray_tracing:
+        # Glass reflection retains optical composition when transmission is disabled; a no-RT device also uses this screen-space route.
         command += ["--expect-log-message", "AVBOIT refraction resolve: screen-space",
             "--reject-log-message", "AVBOIT refraction resolve: hardware"]
     else:
         command += ["--expect-log-message", "AVBOIT refraction resolve:"]
     command += ["--expect-log-message" if variant != "caustics_disabled" else "--reject-log-message", "caustic producer ("]
-    command += ["--expect-log-message" if args.require_hardware else "--skip-log-message",
-        "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware
-        else "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"]
-    command += ["--expect-log-message", "RendererSystem: dispatched hardware transparent shadow traversal"]
+    if args.software_ray_tracing:
+        command += ["--application-arg=--disable-hardware-ray-tracing", "--application-arg=--gpudbg"]
+        for message in (
+            "Loader: hardware ray tracing disabled before device creation",
+            "Vulkan: hardware ray tracing policy=disabled",
+            "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0",
+            "natural software-only shadow route selected because RayQuery-capable hardware is unavailable",
+            "RendererSystem: dispatched software shadow traversal",
+            "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)",
+        ):
+            command += ["--expect-log-message", message]
+        if variant != "caustics_disabled":
+            command += ["--expect-log-message", "RendererSystem: dispatched software caustic producer"]
+        for message in (
+            "Reflection resolve: hardware",
+            "RendererSystem: dispatched hardware transparent shadow traversal",
+            "RendererSystem: dispatched hardware caustic producer",
+            "RendererSystem: created surfel HW trace compute pipeline",
+            "RendererSystem: created refraction resolve pipeline (hardware ray query)",
+        ):
+            command += ["--reject-log-message", message]
+    else:
+        command += ["--expect-log-message" if args.require_hardware else "--skip-log-message",
+            "natural hardware shadow route selected on RayQuery-capable hardware" if args.require_hardware
+            else "natural software-only shadow route selected because RayQuery-capable hardware is unavailable"]
+        command += ["--expect-log-message", "RendererSystem: dispatched hardware transparent shadow traversal"]
     if args.logserver_executable:
         command += ["--logserver-executable", str(args.logserver_executable)]
     else:
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print("Capturing combined caustic scene / " + variant + " at presentation360...", flush=True)
-    result = subprocess.run(command, env=capture_environment(variant), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing), check=False, timeout=args.timeout + 90)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
@@ -112,7 +138,7 @@ def analyze_exterior_reflection(combined, disabled):
         "rgb_byte_mae": mae, "rgb_byte_p99_error": errors[min(len(errors) - 1, int(len(errors) * 0.99))]}
 
 
-def analyze_frames(frames):
+def analyze_frames(frames, software_ray_tracing=False):
     combined = frames["combined"]
     width, height, rows = validate_frame(combined)
     if any(frame[:2] != combined[:2] for frame in frames.values()):
@@ -162,7 +188,13 @@ def analyze_frames(frames):
         results[variant] = {"changed_sphere_pixels": sphere_changed, "sphere_absolute_channel_delta": sphere_absolute,
             "changed_ground_pixels": ground_changed, "ground_channel_gain": ground_gain,
             "outside_sphere_byte_mae": outside_absolute / max(outside_channels, 1)}
-    results["reflection_disabled"]["exterior_environment"] = analyze_exterior_reflection(combined, frames["reflection_disabled"])
+    if software_ray_tracing:
+        results["reflection_disabled"]["exterior_environment"] = {
+            "evaluated": False,
+            "reason": "Hardware-only geometric ray-miss oracle; screen-space hits are projected approximations.",
+        }
+    else:
+        results["reflection_disabled"]["exterior_environment"] = analyze_exterior_reflection(combined, frames["reflection_disabled"])
     return results
 
 
@@ -173,8 +205,15 @@ def write_report(args, frames, metrics=None):
         (args.output_directory / (name + ".png")).write_bytes(png)
         cards.append(f'<article><h2>{name}</h2><a href="{name}.bmp">Raw BMP</a> / <a href="{name}.log">Launch log</a>'
             f'<img alt="Actual {name} caustic scene" src="data:image/png;base64,{base64.b64encode(png).decode("ascii")}"></article>')
-    note = "Actual frame360 readbacks from the same static camera, sphere, ground and light. Individual typed controls separate the visible reflection, camera refraction and caustic contributions. Ground F0 remains zero. Mesh-derived exterior rays that miss both sphere and ground require their predicted smooth Fresnel/environment contribution, including local patches. Reflection uses a fixed bright environment; secondary ray-hit shading does not claim to sample the primary-camera caustic cache."
+    note = "Actual frame360 readbacks from the same static camera, sphere, ground and light. Individual typed controls separate the visible reflection, camera refraction and caustic contributions. Ground F0 remains zero. Reflection uses a fixed bright environment. "
+    if args.software_ray_tracing:
+        note += "Hardware ray tracing is disabled at logical-device creation. Shadow and photon caustic tracing use software BVHs; camera refraction and reflection use screen-space approximations. A fixed unlit striped backdrop supplies opaque in-screen depth and visible refractive displacement for every software toggle. This validates separate visible contributions and localization. The hardware-only geometric ray-miss/Fresnel oracle is explicitly excluded; this is not proof of equivalent offscreen transport."
+    else:
+        note += "Mesh-derived exterior rays that miss both sphere and ground require their predicted smooth Fresnel/environment contribution, including local patches. Secondary ray-hit shading does not claim to sample the primary-camera caustic cache."
     metadata = {"frame_source": "actual application framebuffer readback", "presentation_frame": 360,
+        "logical_device_policy": "disabled" if args.software_ray_tracing else "automatic",
+        "background_fixture": "screen_refraction_stripes" if args.software_ray_tracing else "original",
+        "optical_validation": "software_contributions" if args.software_ray_tracing else "hardware_contributions_and_exterior_radiometry",
         "variants": list(frames), "metrics": metrics, "scope": note}
     (args.output_directory / "caustic_optical_manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     document = '<!doctype html><html lang="en"><meta charset="utf-8"><title>Combined optical caustic scene</title>'
@@ -184,18 +223,26 @@ def write_report(args, frames, metrics=None):
     (args.output_directory / "caustic_optical.html").write_text(document, encoding="utf-8")
 
 
-def main(argv):
+def parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--executable", type=Path, required=True)
     parser.add_argument("--working-directory", type=Path, required=True)
     parser.add_argument("--output-directory", type=Path, required=True)
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--timeout", type=float, default=60)
-    parser.add_argument("--require-hardware", action="store_true")
+    route = parser.add_mutually_exclusive_group()
+    route.add_argument("--require-hardware", action="store_true")
+    route.add_argument("--software-ray-tracing", action="store_true",
+        help="Disable logical-device hardware ray tracing and validate software/screen-space optical contributions.")
     parser.add_argument("--application-arg", action="append", default=[])
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("timeout must be positive")
+    return args
+
+
+def main(argv):
+    args = parse_args(argv)
     args.output_directory = args.output_directory.resolve()
     args.output_directory.mkdir(parents=True, exist_ok=True)
     frames = {}
@@ -206,7 +253,7 @@ def main(argv):
                 return SKIP_EXIT_CODE
             frames[variant] = frame
         write_report(args, frames)
-        metrics = analyze_frames(frames)
+        metrics = analyze_frames(frames, args.software_ray_tracing)
         write_report(args, frames, metrics)
         print("PASS: separate visible reflection, camera-refraction and caustic contributions\n" + json.dumps(metrics, indent=2), flush=True)
         return 0

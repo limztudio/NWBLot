@@ -143,6 +143,30 @@ public:
 };
 #endif
 
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+[[nodiscard]] static bool CreateCausticRefractionBackdrop(NWB::Core::ECS::World& world, NWB::Core::Alloc::GlobalArena& arena){
+    constexpr TransparentMaterialRef s_BackdropMaterial{"project/smoke/refraction/materials/opaque"};
+    // Screen refraction requires opaque depth and spatial color variation behind the retained glass entry. Reuse the unlit refraction fixture material, leaving the ground receiver and sphere unchanged.
+    for(u32 stripe = 0u; stripe < 24u; ++stripe){
+        const f32 value = (stripe & 1u) != 0u ? 0.92f : 0.04f;
+        const auto entity = CreateTintedStaticMeshEntity(
+            world, arena, s_ShadowPlaneMesh, s_BackdropMaterial, s_SmokeSurfaceMaterialInterface,
+            Float4(value, value, value, 1.f), Float4(-2.3f + static_cast<f32>(stripe) * 0.2f, s_CameraTargetY, 2.2f, 0.f),
+            Float4(0.1f, 1.f, 1.3f, 0.f)
+        );
+        if(!entity.valid()){
+            NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: failed to create screen refraction backdrop"));
+            return false;
+        }
+        auto& transform = world.entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
+        StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.f, 0.f), transform.rotation);
+    }
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)"));
+    return true;
+}
+#endif
+
+
 [[nodiscard]] static const tchar* TransparentMultiFpsLabel(){
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
     return NWB_TEXT("FrameLaggedAsyncLightingSmokeProject");
@@ -652,6 +676,13 @@ public:
             Float4(0.0f, -0.08f, 0.08f),
             Float4(1.75f, 1.0f, 1.55f)
         );
+#if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
+        if(
+            NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP")
+            && !CreateCausticRefractionBackdrop(*m_world, m_context.objectArena)
+        )
+            return false;
+#endif
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
         const auto cutterEntity = CreateTransparentCsgPlaneCutter(*m_world, m_context.objectArena);
         const bool csgEntitiesValid = cutterEntity.valid();

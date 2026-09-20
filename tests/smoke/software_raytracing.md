@@ -50,7 +50,7 @@ are cooked: `nwb_transparent_multi_smoke`, `nwb_transparent_csg_smoke`,
 ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-failure
 ```
 
-The seven tests cover overlapping transparent meshes, two clipped CSG poses,
+The seven scene tests cover overlapping transparent meshes, two clipped CSG poses,
 converged sphere caustics with refraction, animated skinned glass, the full
 20-body scene before/after an odd-sized resize, and the dedicated GI scene.
 They require the disabled device proof and software shadow dispatch, reject
@@ -62,6 +62,14 @@ These explicit-policy tests do not skip merely because the physical adapter
 supports RayQuery. The existing natural-capability software smoke remains
 available for adapters that lack RayQuery without an override. Captures are
 written under `<build-directory>/Testing/smoke/<configuration>`.
+
+An eighth test, `nwb_software_raytracing_optical_smoke`, compares four converged
+sphere captures with reflection, refraction and caustics independently disabled.
+A fixed striped opaque backdrop supplies screen-space depth and visible
+refractive displacement in all four captures. The test requires each optical
+contribution to be visible and the caustic gain to concentrate on the receiver. It explicitly excludes the hardware-only exterior
+ray-miss radiometric oracle: projected screen-space hits do not establish the
+same off-screen transport. Its report records that distinction.
 
 The scene captures establish startup, traversal-route and rendered-output
 coverage. Native kernel and descriptor/graph tests provide more focused

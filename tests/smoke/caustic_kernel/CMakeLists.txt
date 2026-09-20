@@ -8,7 +8,9 @@ target_sources(nwb_caustic_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/caustic_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/caustic_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/resolve_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/resolve_stage_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reference/caustic_resolve_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/caustic_resolve_stages_6c9207d03.slang"
     "${CMAKE_CURRENT_LIST_DIR}/../descriptor_buffer/round_trip/round_trip_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../descriptor_buffer/round_trip/round_trip_fixture.h"
 )
@@ -30,3 +32,4 @@ target_link_libraries(nwb_caustic_kernel_tests PRIVATE
 set_tests_properties(nwb_caustic_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/reference/caustic_resolve_cs.slang" PROPERTIES HEADER_FILE_ONLY TRUE)
+set_source_files_properties("${CMAKE_CURRENT_LIST_DIR}/reference/caustic_resolve_stages_6c9207d03.slang" PROPERTIES HEADER_FILE_ONLY TRUE)

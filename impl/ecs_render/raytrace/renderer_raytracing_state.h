@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/caustic_resolve_state.h>
 #include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
 #include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
@@ -297,9 +298,7 @@ struct RtCausticState{
     // Per-frame refractive-instance AABBs shared by caustic lights.
     Core::BufferHandle m_causticEmissionTargetBuffer;
     // Push-only a-trous caustic resolve.
-    Core::BindingLayoutHandle m_causticResolveBindingLayout;
-    Core::ShaderHandle m_causticResolveShader;
-    Core::ComputePipelineHandle m_causticResolvePipeline;
+    CausticResolveState m_causticResolve;
     // Half-resolution geometry cache for edge-aware caustic resolve.
     Core::BindingLayoutHandle m_causticGeometryDownsampleBindingLayout;
     Core::ShaderHandle m_causticGeometryDownsampleShader;
@@ -323,7 +322,6 @@ struct RtCausticState{
 
     bool m_causticEmissionGateLogged = false;
     bool m_causticGeometryDownsamplePipelineFailed = false;
-    bool m_causticResolvePipelineFailed = false;
     bool m_causticAccumulatorInitialized = false;
     bool m_causticAccumulatorDecayPipelineFailed = false;
 };

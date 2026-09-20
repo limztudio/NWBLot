@@ -294,7 +294,7 @@ void RunResolveCase(
         }
     }
     // Independent activity prevents matching zero writes or bypassed filtering from satisfying the paired oracle.
-    if(pattern == Pattern::Dense && width > 1u)
+    if(pattern == Pattern::Dense && (width > step || height > step))
         EXPECT_GT(brightenedZeroPixels, 0u);
     if(pattern == Pattern::InvalidRightFar){
         EXPECT_GT(observation.referenceCenterRed, 0.01f);
@@ -317,10 +317,10 @@ TEST_F(CausticKernelTest, CookedWaveletMatchesFrozenProductionAcrossTilesAndInva
     Alloc::ScratchArena scratchArena(Name("tests/smoke/caustic_kernel/wavelet"));
     ComputePipelineHandle candidate;
     ComputePipelineHandle reference;
-    ASSERT_TRUE(loadResolveKernel(false, scratchArena, candidate));
-    ASSERT_TRUE(loadResolveKernel(true, scratchArena, reference));
-    const u32 dimensions[][2] = { { 1u, 1u }, { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u } };
-    const u32 steps[] = { 1u, 2u, 4u };
+    ASSERT_TRUE(loadResolveKernel(false, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, candidate));
+    ASSERT_TRUE(loadResolveKernel(true, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, reference));
+    const u32 dimensions[][2] = { { 1u, 1u }, { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u }, { 35u, 33u } };
+    const u32 steps[] = { 1u, 2u, 4u, 8u, 16u };
     for(const auto& dimension : dimensions){
         for(const u32 step : steps){
             for(u32 pattern = Pattern::Uniform; pattern <= Pattern::AllInvalid; ++pattern){
@@ -339,12 +339,14 @@ TEST_F(CausticKernelTest, InvalidRightRawCoordinatesChangeActualSpacingWithoutJo
     Alloc::ScratchArena scratchArena(Name("tests/smoke/caustic_kernel/invalid_right"));
     ComputePipelineHandle candidate;
     ComputePipelineHandle reference;
-    ASSERT_TRUE(loadResolveKernel(false, scratchArena, candidate));
-    ASSERT_TRUE(loadResolveKernel(true, scratchArena, reference));
-    const u32 dimensions[][2] = { { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u } };
-    const u32 steps[] = { 1u, 2u, 4u };
+    ASSERT_TRUE(loadResolveKernel(false, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, candidate));
+    ASSERT_TRUE(loadResolveKernel(true, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, reference));
+    const u32 dimensions[][2] = { { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u }, { 35u, 33u } };
+    const u32 steps[] = { 1u, 2u, 4u, 8u, 16u };
     for(const auto& dimension : dimensions){
         for(const u32 step : steps){
+            if(dimension[0] < step + 2u)
+                continue;
             Observation nearResult;
             Observation farResult;
             RunResolveCase(device(), *reference, *candidate, dimension[0], dimension[1], step, Pattern::InvalidRightNear, scratchArena, nearResult);

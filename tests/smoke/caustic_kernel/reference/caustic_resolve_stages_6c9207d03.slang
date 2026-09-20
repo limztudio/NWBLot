@@ -14,16 +14,6 @@
 // Spatial-only filtering avoids reprojection ghosts from non-rigid caustic motion.
 // Half-resolution a-trous resolve: prepare, wavelet, then edge-aware upsample.
 
-// Compile wavelet and upsample separately; preparation retains the original dynamic program's rounding behavior.
-#ifndef NWB_CAUSTIC_RESOLVE_COMPILED_STAGE
-#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select a resolve stage.
-#endif
-#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC \
-    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_WAVELET \
-    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE
-#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select the dynamic program, wavelet or upsample stage.
-#endif
-
 struct NwbCausticResolvePushConstants{
     // Must match CausticResolvePushConstants in C++; heap slots select every stage resource.
     uint width;
@@ -91,11 +81,7 @@ static const half s_NwbCausticResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 
 
 [numthreads(NWB_CAUSTIC_RESOLVE_GROUP_SIZE, NWB_CAUSTIC_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
-#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC
     const uint stage = g_NwbCausticResolvePushConstants.stage;
-#else
-    const uint stage = NWB_CAUSTIC_RESOLVE_COMPILED_STAGE;
-#endif
 
     // Edge-aware upsample to the full-resolution irradiance buffer.
     if(stage == NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE){

@@ -1013,7 +1013,7 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     __hidden_caustics::DispatchCausticResolvePass(
         commandList,
         heap,
-        *m_rayTracingState.m_causticResolvePipeline.get(),
+        *m_rayTracingState.m_causticResolve.m_prepare.m_pipeline.get(),
         targets,
         graphEntryStatesOwned,
         graphOwnsPassEntryStates,
@@ -1064,7 +1064,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     __hidden_caustics::DispatchCausticResolvePass(
         commandList,
         heap,
-        *m_rayTracingState.m_causticResolvePipeline.get(),
+        *m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline.get(),
         targets,
         graphEntryStatesOwned,
         graphOwnsPassEntryStates,
@@ -1117,7 +1117,7 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
     __hidden_caustics::DispatchCausticResolvePass(
         commandList,
         heap,
-        *m_rayTracingState.m_causticResolvePipeline.get(),
+        *m_rayTracingState.m_causticResolve.m_upsample.m_pipeline.get(),
         targets,
         graphEntryStatesOwned,
         graphOwnsPassEntryStates,
@@ -1625,7 +1625,9 @@ void RendererRayTracingSystem::dispatchGraphCausticResolveFifthWavelet(
 
 bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameTargets& targets, const f32 temporalDecay)const{
     return
-        m_rayTracingState.m_causticResolvePipeline
+        m_rayTracingState.m_causticResolve.m_prepare.m_pipeline
+        && m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline
+        && m_rayTracingState.m_causticResolve.m_upsample.m_pipeline
         && m_rayTracingState.m_causticGeometryDownsamplePipeline
         && (temporalDecay <= 0.f || m_rayTracingState.m_causticAccumulatorDecayPipeline)
         && targets.causticAccumulator
@@ -1839,58 +1841,72 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
-    if(m_rayTracingState.m_causticResolvePipeline)
+    CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
+    if(resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline && resolve.m_upsample.m_pipeline)
         return true;
-    if(m_rayTracingState.m_causticResolvePipelineFailed)
+    if(resolve.m_failed)
         return false;
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic resolve requires the initialized global descriptor heap"));
-        m_rayTracingState.m_causticResolvePipelineFailed = true;
+        resolve.m_failed = true;
         return false;
     }
 
-    if(!m_rayTracingState.m_causticResolveBindingLayout){
+    if(!resolve.m_bindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Target-generation resources are selected through the push block.
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
 
-        m_rayTracingState.m_causticResolveBindingLayout = device.createBindingLayout(layoutDesc);
-        if(!m_rayTracingState.m_causticResolveBindingLayout){
+        resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
+        if(!resolve.m_bindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve binding layout"));
-            m_rayTracingState.m_causticResolvePipelineFailed = true;
+            resolve.m_failed = true;
             return false;
         }
     }
 
-    if(!m_shaderSystem.loadShader(
-        m_rayTracingState.m_causticResolveShader,
-        AssetsGraphicsCaustic::s_ResolveShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
-        "ECSRender_CausticResolve"
-    )){
-        m_rayTracingState.m_causticResolvePipelineFailed = true;
-        return false;
-    }
+    struct StageRequest{
+        AStringView m_variant;
+        CausticResolveStageState& m_state;
+    };
+    const StageRequest stages[] = {
+        { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3", resolve.m_prepare },
+        { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1", resolve.m_wavelet },
+        { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2", resolve.m_upsample },
+    };
+    static_assert(NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC == 3u);
+    static_assert(NWB_CAUSTIC_RESOLVE_STAGE_WAVELET == 1u && NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE == 2u);
+    for(const StageRequest& stage : stages){
+        if(stage.m_state.m_pipeline)
+            continue;
+        if(!m_shaderSystem.loadShader(
+            stage.m_state.m_shader,
+            AssetsGraphicsCaustic::s_ResolveShaderName,
+            stage.m_variant,
+            Core::ShaderType::Compute,
+            "ECSRender_CausticResolve"
+        )){
+            resolve.m_failed = true;
+            return false;
+        }
 
-    Core::ComputePipelineDesc pipelineDesc;
-    pipelineDesc
-        .setComputeShader(m_rayTracingState.m_causticResolveShader)
-        .addBindingLayout(m_rayTracingState.m_causticResolveBindingLayout)
-    ;
-    pipelineDesc
-        .addBindingLayout(heap.getResourceLayout())
-        .addBindingLayout(heap.getSamplerLayout())
-    ;
-    m_rayTracingState.m_causticResolvePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_causticResolvePipeline){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve compute pipeline"));
-        m_rayTracingState.m_causticResolvePipelineFailed = true;
-        return false;
+        Core::ComputePipelineDesc pipelineDesc;
+        pipelineDesc
+            .setComputeShader(stage.m_state.m_shader)
+            .addBindingLayout(resolve.m_bindingLayout)
+            .addBindingLayout(heap.getResourceLayout())
+            .addBindingLayout(heap.getSamplerLayout())
+        ;
+        stage.m_state.m_pipeline = device.createComputePipeline(pipelineDesc);
+        if(!stage.m_state.m_pipeline){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create specialized caustic resolve pipeline"));
+            resolve.m_failed = true;
+            return false;
+        }
     }
     return true;
 }

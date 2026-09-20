@@ -406,11 +406,15 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 109u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 106u);
     // Both channel families release their stage handles and clear failures through their feature owner.
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>"));
     EXPECT_EQ(CountText(compactStateHeader, "SoftShadowResolveStatem_softShadowResolve;"), 1u);
     EXPECT_EQ(CountText(compactStateSystem, "m_softShadowResolve=SoftShadowResolveState{};"), 1u);
+    // Caustic resolve releases every compiled stage and its shared layout through the same feature lifetime.
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/raytrace/caustic_resolve_state.h>"));
+    EXPECT_EQ(CountText(compactStateHeader, "CausticResolveStatem_causticResolve;"), 1u);
+    EXPECT_EQ(CountText(compactStateSystem, "m_causticResolve=CausticResolveState{};"), 1u);
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionBindingLayout.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionScreenShader.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_refractionHwShader.reset();"));

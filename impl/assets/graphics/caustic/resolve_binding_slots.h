@@ -17,6 +17,9 @@
 #define NWB_CAUSTIC_RESOLVE_STAGE_WAVELET 1u
 #define NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE 2u
 
+// Compilation selector only; the dynamic program still receives one of the stage values above.
+#define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC 3u
+
 // Accumulator layers, one per RGB channel.
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT 3u
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED 0u

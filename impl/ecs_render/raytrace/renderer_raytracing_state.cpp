@@ -218,9 +218,7 @@ void RendererRayTracingState::invalidateResources(){
     m_hwCausticBindingLayout.reset();
     m_hwCausticPipeline.reset();
     m_hwCausticShaderTable.reset();
-    m_causticResolveBindingLayout.reset();
-    m_causticResolveShader.reset();
-    m_causticResolvePipeline.reset();
+    m_causticResolve = CausticResolveState{};
     m_causticGeometryDownsampleBindingLayout.reset();
     m_causticGeometryDownsampleShader.reset();
     m_causticGeometryDownsamplePipeline.reset();
@@ -304,7 +302,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowPipelineFailed = false;
     m_swShadowDispatchLogged = false;
     m_swCausticPipelineFailed = false;
-    m_causticResolvePipelineFailed = false;
     m_swCausticDispatchLogged = false;
     m_hwCausticPipelineFailed = false;
     m_hwCausticDispatchLogged = false;

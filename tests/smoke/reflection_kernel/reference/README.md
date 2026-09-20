@@ -1,0 +1,11 @@
+# Frozen reflection kernel references
+
+`spatial_cs.slang` is the historical production shader frozen by commit `1a00f028e7a4300c70bdb936fc0f7cb0757fa47f` for native output comparisons. Its text exactly matches `impl/assets/graphics/reflection/spatial_cs.slang` immediately before that commit. The current production shader may change; this independent reference preserves the earlier behavior.
+
+Commit `b64479971609b7476aa8262158fcf4b569fe60ef` unintentionally rewrote this reference during a helper-rule cleanup, adding the newer tile/cache implementation and changing accumulation from float to half. Those are behavioral changes to the test oracle, not formatting changes. The reference was restored from its immediate predecessor, `37426cca0aaaf90902bb0eb61242f650c5a2517f`; that version is also identical to the original reference introduced by `1a00f028e7a4300c70bdb936fc0f7cb0757fa47f`.
+
+SHA256 of the restored historical text with LF line endings: `cad2d3a8af03ad004f8bac3e33dec09b6f05381f0e3af534eb0d89ca970a5f16`.
+
+SHA256 of the restored file with the repository's required CRLF line endings: `454dbef87df8f48b7a1d26ef7a3e84df29f93a237032195963e9fed4c740baeb`.
+
+Changes to a frozen reference require an explicit, independently justified change to the reference contract. Production optimization and style sweeps must retain its behavior. The paired native tests compare the current production pipeline against this file; they must not update both sides to the proposed implementation.

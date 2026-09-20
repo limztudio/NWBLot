@@ -156,6 +156,16 @@ bool RendererRayTracingSystem::ensureSoftTransparentResolvePipeline(){
     );
 }
 
+// Both trace backends publish the same independent channel textures and use the same optional resolve pipelines.
+void RendererRayTracingSystem::prepareSoftCombinedResolvePipelines(){
+    if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady)
+        return;
+    if(!ensureSoftCombinedUpsamplePipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
+    if(!ensureSoftCombinedWaveletPipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
+}
+
 void RendererRayTracingSystem::dispatchSoftShadowResolve(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,

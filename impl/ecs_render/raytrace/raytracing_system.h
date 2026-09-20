@@ -987,6 +987,7 @@ private:
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();
     [[nodiscard]] bool ensureSoftTransparentResolvePipeline();
+    void prepareSoftCombinedResolvePipelines();
     [[nodiscard]] bool ensureSoftCombinedUpsamplePipeline();
     [[nodiscard]] bool ensureSoftCombinedWaveletPipeline();
     [[nodiscard]] bool renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets);

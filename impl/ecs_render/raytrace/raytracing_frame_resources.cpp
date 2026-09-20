@@ -203,7 +203,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         .lightSpace = hardwareShadowSupported ? LightSpaceShadowSnapshot{} : lightSpaceShadowSnapshot(),
         .hardwareTransparentTrace = hardwareTransparentTrace,
         .softTransparentFoldReady = softTransparentFoldReady,
-        .combinedSoftUpsample = hardwareTransparentTrace && softTransparentFoldReady
+        .combinedSoftUpsample = softTransparentFoldReady
             && state.m_softShadowResolve.m_combinedUpsample.m_pipeline
             && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u,
         .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline

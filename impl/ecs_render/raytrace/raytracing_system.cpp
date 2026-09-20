@@ -856,12 +856,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             && m_rayTracingState.m_softShadowTemporalReady
         ;
 
-        if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softTransparentReady){
-            if(!ensureSoftCombinedUpsamplePipeline())
-                m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
-            if(!ensureSoftCombinedWaveletPipeline())
-                m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
-        }
+        prepareSoftCombinedResolvePipelines();
 
         // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry +
         // material context). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op),
@@ -956,6 +951,8 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_rayTracingState.m_softTransparentReady
         && m_rayTracingState.m_softShadowTemporalReady
     ;
+
+    prepareSoftCombinedResolvePipelines();
 
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
     // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).

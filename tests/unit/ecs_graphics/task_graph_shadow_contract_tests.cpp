@@ -18,6 +18,81 @@ using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
+// Fusion consumes common channel/history outputs, so its preparation and frozen eligibility must not require RayQuery.
+TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwnership){
+    TestArena testArena;
+    const TestPath repoRoot = RepoRoot(testArena);
+    AString systemSource;
+    AString pipelineSource;
+    AString frameSource;
+    AString graphSource;
+    AString recordSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", systemSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_pipelines.cpp", pipelineSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", graphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", recordSource));
+    const AStringView system(systemSource.data(), systemSource.size());
+    const AStringView pipelines(pipelineSource.data(), pipelineSource.size());
+    const AStringView frame(frameSource.data(), frameSource.size());
+    const AStringView graph(graphSource.data(), graphSource.size());
+    const AStringView record(recordSource.data(), recordSource.size());
+
+    const usize prepare = system.find("bool RendererRayTracingSystem::preflightShadowVisibilityResources(");
+    const usize hardware = system.find("if(m_shadowVisibilityHardwareSupported){", prepare);
+    const usize software = system.find("// No hardware ray tracing:", hardware);
+    const usize recording = system.find("bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(", software);
+    ASSERT_NE(prepare, AStringView::npos);
+    ASSERT_NE(hardware, AStringView::npos);
+    ASSERT_NE(software, AStringView::npos);
+    ASSERT_NE(recording, AStringView::npos);
+    ASSERT_LT(prepare, hardware);
+    ASSERT_LT(hardware, software);
+    ASSERT_LT(software, recording);
+    const AStringView backendPreflights[] = {
+        system.substr(hardware, software - hardware), system.substr(software, recording - software)
+    };
+    for(const AStringView backend : backendPreflights){
+        EXPECT_EQ(CountText(backend, "prepareSoftCombinedResolvePipelines();"), 1u);
+        const usize ready = backend.find("m_rayTracingState.m_softTransparentTemporalReady =");
+        const usize combined = backend.find("prepareSoftCombinedResolvePipelines();");
+        ASSERT_NE(ready, AStringView::npos);
+        ASSERT_NE(combined, AStringView::npos);
+        EXPECT_LT(ready, combined);
+    }
+    const usize commonPrepare = pipelines.find("void RendererRayTracingSystem::prepareSoftCombinedResolvePipelines(){");
+    const usize dispatch = pipelines.find("void RendererRayTracingSystem::dispatchSoftShadowResolve(", commonPrepare);
+    ASSERT_NE(commonPrepare, AStringView::npos);
+    ASSERT_NE(dispatch, AStringView::npos);
+    ASSERT_LT(commonPrepare, dispatch);
+    const AStringView common = pipelines.substr(commonPrepare, dispatch - commonPrepare);
+    EXPECT_TRUE(ContainsText(common, "if(!m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady)"));
+    EXPECT_TRUE(ContainsText(common, "if(!ensureSoftCombinedUpsamplePipeline())"));
+    EXPECT_TRUE(ContainsText(common, "if(!ensureSoftCombinedWaveletPipeline())"));
+    EXPECT_FALSE(ContainsText(common, "queryFeatureSupport"));
+    EXPECT_FALSE(ContainsText(common, "m_shadowVisibilityHardwareSupported"));
+
+    const usize upsample = frame.find(".combinedSoftUpsample =");
+    const usize wavelet = frame.find(".combinedSoftWaveletReady =", upsample);
+    ASSERT_NE(upsample, AStringView::npos);
+    ASSERT_NE(wavelet, AStringView::npos);
+    ASSERT_LT(upsample, wavelet);
+    const AStringView selection = frame.substr(upsample, wavelet - upsample);
+    EXPECT_TRUE(ContainsText(selection, ".combinedSoftUpsample = softTransparentFoldReady"));
+    EXPECT_TRUE(ContainsText(selection, "state.m_softShadowResolve.m_combinedUpsample.m_pipeline"));
+    EXPECT_TRUE(ContainsText(selection, "NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u"));
+    EXPECT_FALSE(ContainsText(selection, "hardwareTransparentTrace"));
+    EXPECT_TRUE(ContainsText(graph, "const bool combinedSoftUpsample = splitSoftTransparentFold && rayTracingPlan.combinedSoftUpsample;"));
+    EXPECT_TRUE(ContainsText(graph, "if(combinedSoftWavelet){"));
+    EXPECT_TRUE(ContainsText(graph, "opaqueHistoryFrontIsA ? opaqueHistoryB : opaqueHistoryA"));
+    EXPECT_TRUE(ContainsText(graph, "transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));"));
+    EXPECT_TRUE(ContainsText(graph, "transparentFoldResourceUses.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));"));
+    EXPECT_TRUE(ContainsText(graph, "? WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess)"));
+    EXPECT_TRUE(ContainsText(record, "if(payload.combinedUpsample && !*payload.transparentTraceProduced){"));
+    EXPECT_TRUE(ContainsText(record, "commandList, *payload.targets, payload.deferredLightingResources, false, payload.graphEntryStatesOwned"));
+}
+
+
 // The retained monolithic soft-shadow route must clear all-lit visibility on the selected Compute packet. Its
 // renderer-local callback retains typed command-IR capture while avoiding the generic clear helper's Graphics path.
 TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){

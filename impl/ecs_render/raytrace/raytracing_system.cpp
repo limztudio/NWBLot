@@ -368,9 +368,7 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         if(!m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName, mesh) || !matchesMesh(mesh, prepared)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'")
-                , StringConvert(prepared.meshName.c_str())
-            );
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.c_str()));
             return rejectPreparedTraversal();
         }
     }
@@ -566,8 +564,7 @@ bool RendererRayTracingSystem::recordPreparedSceneTlasBuild(
         }
     }
 
-    // Normal graph preparation declares Write before this callback and the adjacent state-only finalizer publishes
-    // Read afterwards. Direct and compatibility callers retain the historical native Write -> Read bridge.
+    // Normal graph preparation declares Write before this callback and the adjacent state-only finalizer publishes Read afterwards. Direct and compatibility callers retain the historical native Write -> Read bridge.
     if(!sceneTlasBuildStatesGraphOwned){
         commandList.setAccelStructState(m_preparedSceneTlas.get(), Core::ResourceStates::AccelStructWrite);
         commandList.commitBarriers();
@@ -619,8 +616,7 @@ void RendererRayTracingSystem::confirmPreparedSceneTlasBuild()noexcept{
     }
     else
         state.m_tlasStaticSceneHashValid = false;
-    // This callback follows the accepted persistent-state handoff. A later graph import must use that binding
-    // rather than reasserting Common for this backing generation.
+    // This callback follows the accepted persistent-state handoff. A later graph import must use that binding rather than reasserting Common for this backing generation.
     if(preparedTlasMatchesCurrent){
         state.m_tlasBackingFresh = false;
         state.m_tlasBackingStateHandoffPending = false;
@@ -729,9 +725,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_shadowVisibilityTraceResourcesPreflighted = false;
     m_shadowVisibilityBackendPipelinePreflighted = false;
 
-    // A rejected preparation packet may have selected newly grown storage but never uploaded its contents.  Keep
-    // the allocations, invalidate every semantic cache, and force both static and runtime meshes through a safe
-    // rebuild on the next preflight.
+    // A rejected preparation packet may have selected newly grown storage but never uploaded its contents.  Keep the allocations, invalidate every semantic cache, and force both static and runtime meshes through a safe rebuild on the next preflight.
     m_rayTracingState.m_tlasStaticSceneHashValid = false;
     m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;
     m_rayTracingState.m_hwShadowMaterialContextHashValid = false;
@@ -739,8 +733,7 @@ void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexce
     m_rayTracingState.m_surfelEnabled = false;
     m_rayTracingState.m_surfelUseHwTrace = false;
 
-    // Recording updates these flags optimistically.  If the shared packet never submits, make every retained
-    // acceleration structure rebuildable instead of allowing a later frame to consume its unrecorded contents.
+    // Recording updates these flags optimistically.  If the shared packet never submits, make every retained acceleration structure rebuildable instead of allowing a later frame to consume its unrecorded contents.
     m_meshSystem.discardRayTracingBuildState();
 }
 
@@ -753,8 +746,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_lightSpaceShadow.m_resourcesPrepared = false;
     m_lightSpaceShadow.m_sceneEligible = false;
     m_lightSpaceShadow.m_casters.clear();
-    // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.  Full
-    // invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
+    // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.  Full invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
     m_shadowVisibilityPreparedTargets = nullptr;
     m_preparedSceneContentStamp = {};
     m_hardwareOpticalScene.resetPrepared();
@@ -769,8 +761,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     clearPreparedSceneTlasBuild();
     clearPreparedMeshBlasBuilds();
     clearPreparedMeshSwBvhBuilds();
-    // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse
-    // the preceding frame's backend selection and dispatch against stale trace inputs.
+    // Surfel GI is a per-frame consumer of the scene selected below. Never let an empty or rejected preflight reuse the preceding frame's backend selection and dispatch against stale trace inputs.
     m_rayTracingState.m_hardwareTransparentShadow.m_ready = false;
     m_rayTracingState.m_softTransparentReady = false;
     m_rayTracingState.m_softTransparentTemporalReady = false;
@@ -778,13 +769,11 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     m_rayTracingState.m_surfelUseHwTrace = false;
     if(!targets.shadowVisibility)
         return false;
-    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering
-    // so the deferred graph imports the final backing handle rather than a recording-time replacement.
+    // The trace material-context selector is itself a global UniformBuffer heap entry. Establish it before gathering so the deferred graph imports the final backing handle rather than a recording-time replacement.
     if(!ensureRayTraceMaterialContextSlotsBuffer())
         return false;
 
-    // Caustic target storage is selected before graph compilation. Uploading the gathered payload remains in the
-    // graph-owned preparation packet.
+    // Caustic target storage is selected before graph compilation. Uploading the gathered payload remains in the graph-owned preparation packet.
     if(!prepareCausticEmissionTargetResources(scratchArena))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target gather failed"));
 
@@ -818,10 +807,8 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         const bool backendReady = ensureShadowPipeline();
         m_shadowVisibilityBackendPipelinePreflighted = backendReady;
 
-        // Route the HW opaque shadow through the same half-res soft denoise chain the SW path uses: half-res jittered trace
-        // -> temporal reproject-merge -> a-trous resolve -> upsample. The HW opaque-soft trace writes shadowSoftHalfA, then
-        // the shared soft block denoises it through the same m_softShadow* state as the SW branch. Non-fatal: a failure
-        // leaves m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
+        // Route the HW opaque shadow through the same half-res soft denoise chain the SW path uses: half-res jittered trace -> temporal reproject-merge -> a-trous resolve -> upsample. The HW opaque-soft trace writes shadowSoftHalfA, then the shared soft block denoises it through the same m_softShadow* state as the SW branch.
+        // Non-fatal: a failure leaves m_softShadowReady false and the HW render falls back to the full-res 1-spp trace.
         m_rayTracingState.m_softShadowReady =
             backendReady
             && ensureShadowSoftPipeline()
@@ -831,8 +818,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(backendReady && !m_rayTracingState.m_softShadowReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow resource preparation failed; HW shadows fall back to the full-res trace this frame"));
 
-        // Soft opaque shadow TEMPORAL accumulation (shared reproject-merge): same as the SW branch. Non-fatal: a failure
-        // leaves m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
+        // Soft opaque shadow TEMPORAL accumulation (shared reproject-merge): same as the SW branch. Non-fatal: a failure leaves m_softShadowTemporalReady false and the soft path feeds the raw trace straight into the a-trous.
         m_rayTracingState.m_softShadowTemporalReady =
             m_rayTracingState.m_softShadowReady
             && ensureShadowReprojectMergePipeline()
@@ -840,8 +826,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(m_rayTracingState.m_softShadowReady && !m_rayTracingState.m_softShadowTemporalReady)
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft opaque shadow temporal resource preparation failed; no temporal accumulation this frame"));
 
-        // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve.
-        // Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
+        // Hardware transparent tracing retains the same half-resolution denoise and multiplicative resolve. Its bounded gather and hardware overflow route never prepare a second software acceleration structure.
         m_rayTracingState.m_softTransparentReady =
             m_rayTracingState.m_softShadowReady
             && m_rayTracingState.m_sceneHasTransparentOccluder
@@ -858,17 +843,12 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 
         prepareSoftCombinedResolvePipelines();
 
-        // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry +
-        // material context). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op),
-        // mirroring the SW-branch prepareGpuBvhCausticResources call below.
+        // Build the hardware caustic producer resources alongside the shadow ones (same TLAS + per-mesh geometry + material context). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op), mirroring the SW-branch prepareGpuBvhCausticResources call below.
         if(!prepareHwCausticResources(targets))
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: hardware caustic producer resource preparation failed"));
 
-        // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh
-        // geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels
-        // run on real RT hardware. Gated on the HW shadow backend being ready (so the TLAS + material context are
-        // resident) + a non-empty TLAS. m_tlasInstanceCount (NOT m_sceneBvhInstanceCount, which the SW-only scene BVH
-        // sets) is the HW instance count. Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
+        // Enable surfel GI on the HW path: the HW RayQuery trace twin reuses the TLAS + the HW-resident per-mesh geometry + InstanceID-material record the shadow/caustic path already built -- this is the ONLY place surfels run on real RT hardware.
+        // Gated on the HW shadow backend being ready (so the TLAS + material context are resident) + a non-empty TLAS. m_tlasInstanceCount (NOT m_sceneBvhInstanceCount, which the SW-only scene BVH sets) is the HW instance count. Non-fatal: a failure leaves GI off this frame (the lighting uses hemiAmbient).
         if(backendReady && m_rayTracingState.m_tlasInstanceCount > 0u && m_rayTracingState.m_shadowMeshCount > 0u){
             m_rayTracingState.m_surfelEnabled = true;
             m_rayTracingState.m_surfelUseHwTrace = true;
@@ -883,8 +863,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         return true;
     }
 
-    // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then
-    // build the per-frame software scene/instance BVH over them before the render pass consumes it.
+    // No hardware ray tracing: build/refit the per-mesh software BVHs from the already skinned geometry, then build the per-frame software scene/instance BVH over them before the render pass consumes it.
     const bool meshResourcesReady = preparePendingMeshSwBvhResources(scratchArena);
     if(!meshResourcesReady)
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH resource preparation failed"));
@@ -894,10 +873,8 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
-    // Enable surfel GI on the SW path (the surfel trace reuses the SW scene BVH the SW shadow/caustic paths built) and
-    // create its resources in the prepare phase right after the scene BVH is resident. renderSurfelGi can then spawn,
-    // hash, and trace on the same frame surfels become active. The pool/hash/pipeline resources live on
-    // RendererRayTracingState so a resize does not reset convergence.
+    // Enable surfel GI on the SW path (the surfel trace reuses the SW scene BVH the SW shadow/caustic paths built) and create its resources in the prepare phase right after the scene BVH is resident. renderSurfelGi can then spawn, hash, and trace on the same frame surfels become active.
+    // The pool/hash/pipeline resources live on RendererRayTracingState so a resize does not reset convergence.
     if(m_rayTracingState.m_sceneBvhInstanceCount > 0u && m_rayTracingState.m_swShadowMeshCount > 0u){
         m_rayTracingState.m_surfelEnabled = true;
         m_rayTracingState.m_surfelUseHwTrace = false;   // SW branch: the surfel trace walks the SW scene BVH
@@ -912,9 +889,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
-    // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal
-    // hardware fallback. A capture miss keeps the established direct recorder for this frame rather than mixing a
-    // partially frozen operation with a live one.
+    // The software-only route can freeze every selected per-mesh build/refit because it has no later non-fatal hardware fallback. A capture miss keeps the established direct recorder for this frame rather than mixing a partially frozen operation with a live one.
     if(!capturePreparedMeshSwBvhBuilds(scratchArena))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software BVH mesh build plan"));
     m_shadowVisibilityTraceResourcesPreflighted = true;
@@ -954,8 +929,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 
     prepareSoftCombinedResolvePipelines();
 
-    // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
-    // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
+    // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH + per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).
     if(!prepareGpuBvhCausticResources(targets))
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software caustic producer resource preparation failed"));
 
@@ -985,8 +959,7 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_PrepareArena);
 
-    // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity
-    // growth while recording: the shared graph has already frozen its imported resource identities.
+    // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity growth while recording: the shared graph has already frozen its imported resource identities.
     if(!m_shadowVisibilityTraceResourcesPreflighted)
         return true;
 
@@ -1018,11 +991,8 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     }
 
     const bool meshSwBvhReady = meshSwBvhBuildsGraphOwned
-        // Pure software Shadow Preparation has no preceding hardware BLAS producer. Its frozen position/index
-        // inputs are declared as ShaderResource by the graph. When per-operation typed clears and compute tasks
-        // already recorded in this same accepting packet, retain only the existing scene-BVH/material tail here.
-        ? (preparedMeshSwBvhBuildsRecordedByGraph
-            || recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned))
+        // Pure software Shadow Preparation has no preceding hardware BLAS producer. Its frozen position/index inputs are declared as ShaderResource by the graph. When per-operation typed clears and compute tasks already recorded in this same accepting packet, retain only the existing scene-BVH/material tail here.
+        ? (preparedMeshSwBvhBuildsRecordedByGraph || recordPreparedMeshSwBvhBuilds(commandList, meshSwBvhBuildsGraphOwned))
         : buildPendingMeshSwBvh(commandList, scratchArena)
     ;
     if(!meshSwBvhReady){
@@ -1030,9 +1000,7 @@ bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
             return false;
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow BVH update failed"));
     }
-    // Pure software frames have no opaque-HW fallback. Fresh uploads and accepted cache reuse both retain their
-    // matching traversal snapshot, so recording validates that exact plan without regathering scene/material data.
-    // A missing or stale plan rejects the packet; discard invalidates the caches and the next preflight rebuilds it.
+    // Pure software frames have no opaque-HW fallback. Fresh uploads and accepted cache reuse both retain their matching traversal snapshot, so recording validates that exact plan without regathering scene/material data. A missing or stale plan rejects the packet; discard invalidates the caches and the next preflight rebuilds it.
     if(!m_preparedSceneSwBvhReady){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
         return false;

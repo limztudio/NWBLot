@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/shadow/light_space_shadow.h>
 
 #include <core/task/gpu/task_graph.h>
 
@@ -35,6 +36,7 @@ struct GraphOwnedAdaptiveShadowPlan{
 // topology. Resource handles remain in the dedicated resource snapshots below.
 struct RayTracingShadowVisibilityGraphPlanSnapshot{
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
+    LightSpaceShadowSnapshot lightSpace;
 
     bool hardwareTransparentTrace = false;
     bool softTransparentFoldReady = false;

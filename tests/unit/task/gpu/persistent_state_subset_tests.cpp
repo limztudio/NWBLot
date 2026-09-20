@@ -248,6 +248,96 @@ TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchin
     EXPECT_FALSE(cache.commit(candidate));
 }
 
+TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocationReplacement){
+    SubsetContext context;
+    context.addBuffers(3u);
+    context.addTextures(2u);
+    context.fillBufferStates();
+    for(auto& state : Access::stateHandoffBuffers(context.source)){
+        state.state = Core::ResourceStates::Common;
+        state.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
+        state.ownerQueue = {};
+        state.releaseDestinationQueue = {};
+    }
+    Access::stateHandoffTextures(context.source).push_back({
+        .texture = context.textures[0u].get(), .mipLevel = 0u, .arraySlice = 0u,
+        .state = Core::ResourceStates::Common,
+        .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+        .ownerQueue = {}, .releaseDestinationQueue = {},
+    });
+    Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/inactive_route"));
+    const Core::BufferHandle liveBuffers[] = { context.buffers[0u], context.buffers[1u] };
+    const Core::TextureHandle liveTextures[] = { context.textures[0u] };
+    Cache cache(context.arena);
+    ASSERT_TRUE(cache.replaceResourceSubset(
+        context.source, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
+    ));
+
+    // The inactive packet touches another scratch resource, but neither retained map allocation.
+    Handoff inactive(context.arena);
+    Core::Buffer* const unrelated[] = { context.buffers[1u].get() };
+    ASSERT_TRUE(inactive.buildResourceSubset(context.source, nullptr, 0u, unrelated, LengthOf(unrelated), scratch));
+    Access::stateHandoffBuffers(inactive)[0u].state = Core::ResourceStates::UnorderedAccess;
+    Cache::Candidate filtered(cache);
+    ASSERT_TRUE(cache.buildFilteredResourceSubset(
+        filtered, inactive, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
+    ));
+    EXPECT_TRUE(Access::stateHandoffTextures(*filtered.source()).empty());
+    ASSERT_EQ(Access::stateHandoffBuffers(*filtered.source()).size(), 1u);
+    EXPECT_EQ(Access::stateHandoffBuffers(*filtered.source())[0u].buffer, unrelated[0u]);
+    for(u32 frame = 0u; frame < 2u; ++frame){
+        Cache::Candidate accepted(cache);
+        ASSERT_TRUE(cache.buildMergedResourceSubset(
+            accepted, inactive, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
+        ));
+        ASSERT_TRUE(cache.commit(accepted));
+        ASSERT_EQ(Access::stateHandoffTextures(*cache.source()).size(), 1u);
+        EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].texture, liveTextures[0u].get());
+        EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
+        ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 2u);
+        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, liveBuffers[0u].get());
+        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
+        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[1u].state, Core::ResourceStates::UnorderedAccess);
+    }
+
+    Handoff reactivated(context.arena);
+    ASSERT_TRUE(reactivated.copyFrom(*cache.source()));
+    Access::stateHandoffTextures(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
+    Access::stateHandoffBuffers(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
+    {
+        Cache::Candidate rejected(cache);
+        ASSERT_TRUE(cache.buildMergedResourceSubset(
+            rejected, reactivated, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
+        ));
+        EXPECT_EQ(Access::stateHandoffTextures(*rejected.source())[0u].state, Core::ResourceStates::ShaderResource);
+    }
+    EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
+    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
+    {
+        Cache::Candidate accepted(cache);
+        ASSERT_TRUE(cache.buildMergedResourceSubset(
+            accepted, reactivated, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
+        ));
+        ASSERT_TRUE(cache.commit(accepted));
+    }
+    ExpectSameHandoff(*cache.source(), reactivated);
+
+    // Selection follows the owner generation: replacement cannot inherit state from an old allocation.
+    const Core::BufferHandle replacementBuffers[] = { context.buffers[2u], context.buffers[1u] };
+    const Core::TextureHandle replacementTextures[] = { context.textures[1u] };
+    Cache::Candidate replacement(cache);
+    ASSERT_TRUE(cache.buildMergedResourceSubset(
+        replacement, inactive, replacementTextures, LengthOf(replacementTextures),
+        replacementBuffers, LengthOf(replacementBuffers), scratch
+    ));
+    ASSERT_TRUE(cache.commit(replacement));
+    EXPECT_TRUE(Access::stateHandoffTextures(*cache.source()).empty());
+    ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 1u);
+    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, unrelated[0u]);
+    EXPECT_EQ(cache.retainedTextureCount(), 1u);
+    EXPECT_EQ(cache.retainedBufferCount(), 2u);
+}
+
 TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandidateDies){
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
     SubsetContext context;

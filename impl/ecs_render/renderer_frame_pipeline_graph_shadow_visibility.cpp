@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
+#include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
 
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
@@ -636,6 +637,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         opaqueResourceUses.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
         opaqueResourceUses.push_back(WriteUse(shadowVisibility, Core::ResourceStates::UnorderedAccess));
         opaqueResourceUses.push_back(ReadUse(sceneGeometryDomain));
+        // The map/fallback pair reads only values it has written inside this task; fresh graph entry stays write-only.
         opaqueResourceUses.push_back(WriteUse(shadowSoftHalfA, Core::ResourceStates::UnorderedAccess));
         opaqueResourceUses.push_back(WriteUse(shadowSoftGeometry, Core::ResourceStates::UnorderedAccess));
         opaqueResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
@@ -748,7 +750,10 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             ? transparentMomentsB
             : transparentMomentsA
         ;
-        if(!rayTracingPlan.hardwareTransparentTrace && graphOwnsTransparentTemporalMergeEntryStates && softShadowHistoryReadable){
+        if(
+            !rayTracingPlan.hardwareTransparentTrace && !rayTracingPlan.lightSpace.ready
+            && graphOwnsTransparentTemporalMergeEntryStates && softShadowHistoryReadable
+        ){
             transparentTraceResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
             transparentTraceResourceUses.push_back(ReadUse(shadowSoftGeometryPrevious, Core::ResourceStates::ShaderResource));
             transparentTraceResourceUses.push_back(ReadUse(transparentMomentsIn, Core::ResourceStates::ShaderResource));
@@ -813,6 +818,54 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         transparentFoldResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
     }
 
+    Core::GpuTaskId shadowTraceDependency = prefixTask;
+    if(splitSoftTransparentFold && rayTracingPlan.lightSpace.ready){
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
+        lightSpaceReads.reserve(9u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+        if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
+            rayTracingResources, importBuffer,
+            [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
+                lightSpaceReads.push_back(ReadUse(resource, state));
+            }
+        ))
+            return false;
+        lightSpaceReads.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+        lightSpaceReads.push_back(ReadUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
+        lightSpaceReads.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
+        lightSpaceReads.push_back(ReadUse(lights, Core::ResourceStates::ShaderResource));
+        if(!traceGeometryStatesGraphOwned){
+            for(usize index = 0u; index < traceGeometryResourceCount; ++index)
+                lightSpaceReads.push_back(ReadUse(traceGeometryResources[index], Core::ResourceStates::ShaderResource));
+        }
+        const LightSpaceShadowGraph maps = DeclareLightSpaceShadowMaps(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
+            .graphics = m_graphics,
+            .arena = m_arena,
+            .scratchArena = scratchArena,
+            .shadowPrepared = m_shadowPreparationOutcome.ready,
+            .snapshot = rayTracingPlan.lightSpace,
+            .dependency = prefixTask,
+            .sceneReads = lightSpaceReads.data(),
+            .sceneReadCount = lightSpaceReads.size(),
+            .sceneReadSets = traceResourceSetUses,
+            .sceneReadSetCount = traceResourceSetUseCount,
+            .stateSources = shadowVisibilityStateSourceData,
+            .stateSourceCount = shadowVisibilityStateSourceCount,
+        });
+        if(!maps.valid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare light-space shadow maps"));
+            return false;
+        }
+        const Core::GpuGraphResourceId mapBuffers[] = { maps.counts, maps.events, maps.views };
+        for(const auto resource : mapBuffers){
+            opaqueResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
+        const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, rayTracingPlan.lightSpace.plan.viewCount };
+        opaqueResourceUses.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
+        transparentTraceResourceUses.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
+        shadowTraceDependency = maps.shade;
+    }
+
     if(splitSoftTransparentFold){
         Core::GpuTaskSchedulingHint opaqueScheduling;
         opaqueScheduling.cost = Core::GpuTaskCostHint::Large;
@@ -827,7 +880,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setMarkerLabel("Shadow Visibility Opaque")
             .setQueue(ComputeTransferPacketQueueRequest())
             .setScheduling(opaqueScheduling)
-            .setDependencies(&prefixTask, 1u)
+            .setDependencies(&shadowTraceDependency, 1u)
             .setExternalDependencies(
                 laggedLightingHistoryWriterDrainDependencies,
                 laggedLightingHistoryWriterDrainDependencyCount
@@ -852,7 +905,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &opaqueFrameIndex,
             true,
-            graphOwnsOpaqueTemporalMergeEntryStates
+            graphOwnsOpaqueTemporalMergeEntryStates,
+            &rayTracingPlan.lightSpace
         );
         if(!m_deferredShadowVisibilityOpaqueTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred opaque shadow-visibility graph task"));
@@ -957,7 +1011,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             &opaqueProduced,
             &opaqueFrameIndex,
             &transparentTraceProduced,
-            true
+            true,
+            &rayTracingPlan.lightSpace
         );
         if(!m_deferredShadowVisibilityTransparentTraceTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred transparent soft-shadow trace graph task"));

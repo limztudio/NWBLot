@@ -400,7 +400,7 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_FALSE(ContainsText(shadowVisibility, "shadowVisibilityRunsOnCompute"));
 
     const usize acceptedShadowOffset = system.find("const Core::TextureHandle shadowVisibilityReturnTextures[]");
-    const usize scratchStateOffset = system.find("m_shadowComputePersistentState.buildFilteredResourceSubset(", acceptedShadowOffset);
+    const usize scratchStateOffset = system.find("m_shadowComputePersistentState.buildMergedResourceSubset(", acceptedShadowOffset);
     const usize acceptedCallbackOffset = system.find("const auto acceptShadowVisibilityTask = [](", scratchStateOffset);
     const usize returnCommitOffset = system.find("m_shadowVisibilityReturnState.commit(", acceptedCallbackOffset);
     const usize scratchCommitOffset = system.find("m_shadowComputePersistentState.commit(", returnCommitOffset);
@@ -420,9 +420,10 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometry,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "deferredTargets.shadowSoftGeometryPrev,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentCrossingsBuffer,"));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "lightSpaceShadowResources.events,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowListBuffer,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,"));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildFilteredResourceSubset("));
+    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildMergedResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedShadow, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowVisibilityReturnState.commit("));

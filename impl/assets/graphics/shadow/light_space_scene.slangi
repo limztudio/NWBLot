@@ -1,0 +1,47 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_SCENE_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_SCENE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "light_space_resources.slangi"
+#include "shadow_heap_resources.slangi"
+#define g_NwbSwShadowMaterialContextSlots NwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
+#include "sw_shadow_geometry.slangi"
+
+uint nwbMeshFrameMaterialTypedHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.sceneSlots.w; }
+uint nwbMeshFrameInstanceHeapSlot(){ return g_NwbSwShadowMaterialContextSlots.materialSlots.x; }
+uint nwbMeshFrameViewHeapSlot(){ return 0u; }
+#include "../bindless/bindless_heap_mesh.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbRtInstanceMaterial nwbLightSpaceMaterial(const uint instance){
+    return NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instance];
+}
+
+NwbSwBvhInstance nwbLightSpaceInstance(const uint instance){
+    return NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instance];
+}
+
+float3 nwbLightSpaceWorldPosition(const float3 local, const uint instance){
+    const NwbMeshInstanceData transform = NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[nwbLightSpaceMaterial(instance).meshInstanceIndex];
+    return nwbRotateVectorByQuaternion(local * transform.scale.xyz, transform.rotation) + transform.translation;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

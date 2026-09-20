@@ -14,6 +14,7 @@
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
 #include <impl/ecs_render/raytrace/prepared_builds.h>
 #include <impl/ecs_render/raytrace/software_scene_refit.h>
+#include <impl/ecs_render/shadow/light_space_shadow.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -227,6 +228,9 @@ public:
         const Core::QueueSubmissionToken& submissionToken
     );
 
+    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
+    [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
+
     void logCapabilityOnce();
 
     [[nodiscard]] bool prepareRefractionResources();
@@ -365,7 +369,8 @@ public:
         bool* opaqueProduced,
         u32* opaqueFrameIndex,
         bool graphEntryStatesOwned = false,
-        bool graphOwnsOpaqueTemporalMergeEntryStates = false
+        bool graphOwnsOpaqueTemporalMergeEntryStates = false,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     // The prepared opaque producer records the trace and geometry downsample first. This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet; its native tail retains dynamic ping-pong and upsample work while the terminal fold remains the accepted output owner.
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueFirstWaveletTask(
@@ -453,7 +458,8 @@ public:
         const bool* opaqueProduced,
         const u32* opaqueFrameIndex,
         bool* transparentTraceProduced,
-        bool graphEntryStatesOwned = false
+        bool graphEntryStatesOwned = false,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
     // Direct compatibility helper for the per-frame non-temporal accumulator reset. The normal deferred graph owns its typed clear and commits the matching CPU reset only after the containing producer packet accepts.
@@ -491,7 +497,8 @@ public:
         u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool splitOpaqueSoftResolve = false,
-        const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr
+        const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] bool prepareGpuBvhCausticResources(DeferredFrameTargets& targets);
     [[nodiscard]] Core::GpuTaskId declareSoftwareCausticsTask(
@@ -1072,7 +1079,8 @@ private:
         const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
         bool graphEntryStatesOwned,
-        bool graphOwnsOpaqueTemporalMergeEntryStates
+        bool graphOwnsOpaqueTemporalMergeEntryStates,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] bool renderSoftTransparentShadowTrace(
         Core::CommandList& commandList,
@@ -1080,7 +1088,8 @@ private:
         const DeferredLightingGraphResources& deferredLightingResources,
         u32 frameIndex,
         bool graphEntryStatesOwned,
-        bool graphOwnsOpaqueToTransparentBoundary
+        bool graphOwnsOpaqueToTransparentBoundary,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     void reportSoftwareShadowTraversal(const DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSoftTransparentShadowTemporalMerge(
@@ -1168,6 +1177,12 @@ private:
         Core::CommandList& commandList,
         ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
     );
+    void preflightLightSpaceShadowResources();
+    [[nodiscard]] bool buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, LightSpacePlan& plan)const;
+    void prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
+    [[nodiscard]] bool ensureLightSpaceShadowPipelines();
+    [[nodiscard]] bool ensureLightSpaceShadowStorage(const LightSpacePlan& plan);
+    void releaseLightSpaceShadowResources();
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
@@ -1193,6 +1208,7 @@ private:
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
+    LightSpaceShadowState m_lightSpaceShadow;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;

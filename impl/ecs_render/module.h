@@ -10,6 +10,7 @@
 #include <impl/ecs_render/reflection/settings.h>
 #include <impl/ecs_render/reflection/statistics.h>
 #include <impl/ecs_render/deferred/presentation_settings.h>
+#include <impl/ecs_render/shadow/light_space_settings.h>
 
 #include <core/alloc/general.h>
 #include <core/ecs/system.h>
@@ -82,6 +83,7 @@ public:
 
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
+    [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
     [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);

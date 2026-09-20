@@ -42,6 +42,14 @@ inline constexpr Core::GpuTimingScopeDefinition s_AsyncFinal("render.async_final
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredGraphQueueOverlap("render.deferred_graph.queue_overlap");
 inline constexpr Core::GpuTimingScopeDefinition s_DeferredClear("render.deferred_clear");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowVisibility("render.shadow_visibility");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowViews("render.shadow.light_space_views");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowOpaqueCapture("render.shadow.light_space_opaque_capture");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowTransparentCapture("render.shadow.light_space_transparent_capture");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowShade("render.shadow.light_space_shade");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowMapOpaque("render.shadow.light_space_map_opaque");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowMapTransparent("render.shadow.light_space_map_transparent");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowFallbackOpaque("render.shadow.light_space_fallback_opaque");
+inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowFallbackTransparent("render.shadow.light_space_fallback_transparent");
 // Keep the aggregate shadow envelope; publish expensive phases separately.
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTrace("render.shadow_opaque_trace");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("render.shadow_geometry_downsample");

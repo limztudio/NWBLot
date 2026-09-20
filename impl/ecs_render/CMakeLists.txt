@@ -11,6 +11,14 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_shadow.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_shadow.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_resources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_record.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/reflection/statistics.h"
@@ -248,6 +256,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/software_scene_refit.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_software_scene_refit.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_software_scene_refit.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/task_graph_light_space_shadow.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/task_graph_light_space_shadow.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/optical_bounds_finalize.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_optical_bounds_finalize.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/task_graph_optical_bounds_finalize.h"

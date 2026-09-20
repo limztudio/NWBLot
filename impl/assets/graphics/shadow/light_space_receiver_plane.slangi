@@ -1,0 +1,107 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RECEIVER_PLANE_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RECEIVER_PLANE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Image stores may truncate, so use a full binary16 spacing rather than a half-ULP round-to-nearest assumption.
+float3 nwbLightSpacePositionQuantization(const float3 position){
+    const uint3 exponent = (asuint(abs(position)) >> 23u) & 0xffu;
+    return asfloat((max(exponent, uint3(113u)) - 10u) << 23u);
+}
+
+// Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
+// Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
+bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
+    const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth){
+    projectedDepth = 0.0;
+    linearDepth = 0.0;
+    if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
+        return false;
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
+        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
+    float3 direction;
+    float3 relativeAnchor;
+    float footprint;
+    if(point){
+        direction = normalize(view.worldToClipRows[3].xyz
+            + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
+        relativeAnchor = view.originOrDirection.xyz - origin;
+        footprint = 0.0;
+    }
+    else{
+        const float3 xRow = view.worldToClipRows[0].xyz;
+        const float3 yRow = view.worldToClipRows[1].xyz;
+        const float xScale = dot(xRow, xRow);
+        const float yScale = dot(yRow, yRow);
+        if(xScale <= 0.0 || yScale <= 0.0 || !isfinite(xScale) || !isfinite(yScale))
+            return false;
+        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale)
+            + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
+        direction = -view.originOrDirection.xyz;
+        footprint = min(2.0 / (sqrt(xScale) * float(view.map.x)), 2.0 / (sqrt(yScale) * float(view.map.y)));
+    }
+    // Encoded unit normals have at most 2^-10 error per decoded component. Normalization increases its L2 bound.
+    const float rawNormalError = sqrt(3.0) / 1024.0;
+    const float normalError = 2.0 * rawNormalError / (1.0 - rawNormalError);
+    const float roundoff = 8.0 * 1.1920928955078125e-7;
+    const float denominator = dot(receiverNormal, direction);
+    const float denominatorError = normalError + roundoff;
+    if(!all(isfinite(direction)) || abs(denominator) <= denominatorError)
+        return false;
+    const float distance = -dot(receiverNormal, relativeAnchor) / denominator;
+    const float3 relativeHit = relativeAnchor + direction * distance;
+    const float3 hit = origin + relativeHit;
+    if(!isfinite(distance) || !all(isfinite(hit)) || (point && distance <= 0.0))
+        return false;
+    if(point)
+        footprint = 2.0 * distance / float(max(view.map.x, view.map.y));
+    const float3 storedPosition = origin - receiverNormal * NWB_SHADOW_RAY_MIN_DISTANCE;
+    const float3 positionError = nwbLightSpacePositionQuantization(storedPosition)
+        + abs(origin) * roundoff + normalError * NWB_SHADOW_RAY_MIN_DISTANCE;
+    const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit)
+        + roundoff * (length(relativeAnchor) + abs(distance));
+    const float depthError = planeError / (abs(denominator) - denominatorError);
+    // Never convert an unstable plane into an unbounded depth bias. A sub-texel uncertainty is the map's limit.
+    if(!isfinite(depthError) || !isfinite(footprint) || footprint <= 0.0 || depthError > footprint)
+        return false;
+    const float3 corrected = hit - direction * depthError;
+    const float4 clip = nwbLightSpaceProject(view, corrected);
+    if(!all(isfinite(clip)) || clip.w <= 0.0)
+        return false;
+    const float depth = clip.z / clip.w;
+    if(!isfinite(depth) || depth <= 0.0 || depth > 1.0)
+        return false;
+    // One full D32 spacing covers stored-depth quantization; keep its world-space effect inside the same bound.
+    projectedDepth = asfloat(asuint(depth) - 1u);
+    if(point){
+        const float scale = view.depthRange.x * view.depthRange.y;
+        const float span = view.depthRange.y - view.depthRange.x;
+        const float viewZ = scale / (view.depthRange.y - projectedDepth * span);
+        linearDepth = viewZ * sqrt(1.0 + dot(ndc, ndc));
+        if(!isfinite(linearDepth) || distance - linearDepth > footprint)
+            return false;
+    }
+    else{
+        linearDepth = projectedDepth * view.depthRange.y;
+        if(depthError + (depth - projectedDepth) * view.depthRange.y > footprint)
+            return false;
+    }
+    return isfinite(linearDepth) && linearDepth >= 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

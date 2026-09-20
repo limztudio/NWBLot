@@ -145,6 +145,10 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
     }
 }
 
+u64 Device::getMaxStorageBufferRange()const noexcept{
+    return static_cast<u64>(m_context.physicalDeviceProperties.limits.maxStorageBufferRange);
+}
+
 bool Device::canCreateSampledTextureFormat(const Format::Enum format)const{
     const VkFormat vkFormat = ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED)
@@ -197,7 +201,7 @@ FormatSupport::Mask Device::queryFormatSupportUncached(const Format::Enum format
     VkFormatFeatureFlags features = props.optimalTilingFeatures;
 
     if(features & VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT)
-        support |= FormatSupport::Texture;
+        support |= FormatSupport::Texture | FormatSupport::ShaderLoad;
     if(features & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
         support |= FormatSupport::DepthStencil;
     if(features & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT)
@@ -234,7 +238,7 @@ void Device::probeCompressedTextureFormats(){
             (support & FormatSupport::Texture) == FormatSupport::Texture
             && !canCreateSampledTextureFormat(format)
         ){
-            support &= ~requiredReadableSupport;
+            support &= ~(requiredReadableSupport | FormatSupport::ShaderLoad);
         }
         m_compressedFormatSupport[formatValue] = support;
 

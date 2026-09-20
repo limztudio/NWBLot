@@ -1730,6 +1730,16 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
 
     const u32 instanceCount = static_cast<u32>(instances.size());
+    m_lightSpaceShadow.m_sceneEligible = samplingSceneTrusted && contentComplete && instanceCount <= NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+    m_lightSpaceShadow.m_casters.clear();
+    m_lightSpaceShadow.m_casters.reserve(instanceCount);
+    for(u32 index = 0u; index < instanceCount; ++index){
+        const u64 vertexCount = static_cast<u64>(instances[index].primitiveCount) * 3u;
+        if(vertexCount == 0u || vertexCount > Limit<u32>::s_Max)
+            m_lightSpaceShadow.m_sceneEligible = false;
+        m_lightSpaceShadow.m_casters.push_back({ index, static_cast<u32>(vertexCount),
+            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u });
+    }
     if(instanceCount == 0u){
         m_rayTracingState.m_sceneBvhInstanceCount = 0u;
         m_rayTracingState.m_sceneSwBvhStaticSceneHashValid = false;

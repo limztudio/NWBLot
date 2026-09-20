@@ -34,6 +34,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
+        LightSpaceShadowSnapshot lightSpace;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
         Optional<Core::GpuTimingMeasure>* shadowVisibilityTiming = nullptr;
@@ -112,7 +113,8 @@ struct ShadowVisibilityOpaqueGraphTask{
                     payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
                     payload.graphEntryStatesOwned,
-                    payload.graphOwnsOpaqueTemporalMergeEntryStates
+                    payload.graphOwnsOpaqueTemporalMergeEntryStates,
+                    &payload.lightSpace
                 )
             ;
         }
@@ -358,6 +360,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
+        LightSpaceShadowSnapshot lightSpace;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* opaqueProduced = nullptr;
         const u32* opaqueFrameIndex = nullptr;
@@ -393,7 +396,8 @@ struct ShadowTransparentSoftTraceGraphTask{
             payload.deferredLightingResources,
             *payload.opaqueFrameIndex,
             payload.graphEntryStatesOwned,
-            true
+            true,
+            &payload.lightSpace
         )){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split transparent soft-shadow trace could not record; preserving opaque visibility"));
             return true;
@@ -1360,7 +1364,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     bool* const opaqueProduced,
     u32* const opaqueFrameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask>(
         desc,
@@ -1369,6 +1374,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
             .graphics = &m_graphics,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
+            .lightSpace = lightSpace ? *lightSpace : LightSpaceShadowSnapshot{},
             .timingTicket = &timingTicket,
             .asyncTiming = asyncTiming,
             .shadowVisibilityTiming = shadowVisibilityTiming,
@@ -1581,7 +1587,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueToTransparentBoundary
+    const bool graphOwnsOpaqueToTransparentBoundary,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     if(
         !m_rayTracingState.m_softShadowReady
@@ -1589,6 +1596,17 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
+    if(lightSpace && lightSpace->ready){
+        NWB_ASSERT(graphEntryStatesOwned && graphOwnsOpaqueToTransparentBoundary);
+        Core::GpuTimingMeasure timing(
+            m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
+        );
+
+        return RecordLightSpaceResolve(
+            commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(), *lightSpace, *targets.transparentSoftHalf,
+            frameIndex, NWB_SW_SHADOW_TRANSPARENT_SPP, targets.bindless.transparentSoftHalfStorage.slot(), true
+        );
+    }
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE));
@@ -1868,7 +1886,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     const bool* const opaqueProduced,
     const u32* const opaqueFrameIndex,
     bool* const transparentTraceProduced,
-    const bool graphEntryStatesOwned
+    const bool graphEntryStatesOwned,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask>(
         desc,
@@ -1876,6 +1895,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
             .raytracingSystem = this,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
+            .lightSpace = lightSpace ? *lightSpace : LightSpaceShadowSnapshot{},
             .timingTicket = &timingTicket,
             .opaqueProduced = opaqueProduced,
             .opaqueFrameIndex = opaqueFrameIndex,
@@ -1933,7 +1953,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
-    const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan
+    const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
@@ -2078,10 +2099,24 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             softTracePush.softSampleCount = softShadowTemporalHistoryUsable()
                 ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
                 : NWB_SW_SHADOW_SOFT_SPP;
-            commandList.setComputeState(passState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
-            bindPassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline);
-            commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
-            commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            if(lightSpace && lightSpace->ready){
+                NWB_ASSERT(graphEntryStatesOwned && splitSoftTransparentFold);
+                if(!RecordLightSpaceResolve(
+                    commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount,
+                    targets.bindless.shadowSoftHalfAStorage.slot(), false
+                ))
+                    return false;
+                if(!m_lightSpaceShadow.m_dispatchLogged){
+                    m_lightSpaceShadow.m_dispatchLogged = true;
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched light-space shadow maps"));
+                }
+            }
+            else{
+                commandList.setComputeState(passState(m_rayTracingState.m_swShadowSoftOpaquePipeline));
+                bindPassHeap(m_rayTracingState.m_swShadowSoftOpaquePipeline);
+                commandList.setPushConstants(&softTracePush, sizeof(softTracePush));
+                commandList.dispatch(softGroupsX, softGroupsY, 1u);
+            }
         }
 
         // The split resolver declares this same-UAV dependency, so its graph prologue owns the trace fence.
@@ -2259,7 +2294,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     outFrameIndex = 0u;
     if(
@@ -2276,7 +2312,9 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
         true,
         &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,
-        true
+        true,
+        nullptr,
+        lightSpace
     );
 }
 

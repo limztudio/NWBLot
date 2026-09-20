@@ -8,6 +8,7 @@
 #include <loader/project_entry.h>
 
 #include "smoke_environment.h"
+#include "software_shadow_settings.h"
 
 #include <core/assets/ref.h>
 #include <core/ecs/entity.h>
@@ -123,6 +124,7 @@ struct SmokeRenderSystems{
         context.assetManager,
         context.shaderPathResolver
     );
+    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid software shadow smoke settings"));
     return { meshSystem, rendererSystem };
 }
 

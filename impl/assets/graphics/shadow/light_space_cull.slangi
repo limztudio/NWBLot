@@ -1,0 +1,86 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_CULL_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_CULL_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Every clip inequality is affine in object position. Eight root corners enclose all current posed triangles.
+// Uncertain arithmetic retains the caster; only a common, strictly outside plane can remove its draw.
+bool nwbLightSpaceCasterOutside(const NwbLightSpaceView view, const uint instanceIndex){
+    if(view.depthRange.w == 0.0)
+        return false;
+    const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
+    const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[0u];
+    const NwbMeshInstanceData transform = NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
+    if(
+        !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)
+        || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation))
+    )
+        return false;
+    // A flushed subnormal endpoint need not preserve its order relative to an interior source position.
+    const uint3 minimumBits = asuint(root.aabbMin) & 0x7fffffffu;
+    const uint3 maximumBits = asuint(root.aabbMax) & 0x7fffffffu;
+    if(
+        any((minimumBits != 0u) & (minimumBits < 0x00800000u))
+        || any((maximumBits != 0u) & (maximumBits < 0x00800000u))
+    )
+        return false;
+    uint outside = 0x3fu;
+    const float roundoff = 32.0 * 1.1920928955078125e-7;
+    for(uint corner = 0u; corner < 8u; ++corner){
+        const float3 local = float3((corner & 1u) != 0u ? root.aabbMax.x : root.aabbMin.x,
+            (corner & 2u) != 0u ? root.aabbMax.y : root.aabbMin.y,
+            (corner & 4u) != 0u ? root.aabbMax.z : root.aabbMin.z);
+        const float3 scaled = local * transform.scale.xyz;
+        const float3 world = nwbRotateVectorByQuaternion(scaled, transform.rotation) + transform.translation;
+        const float3 q = abs(transform.rotation.xyz);
+        const float3 magnitude = abs(scaled);
+        const float3 twiceCross = 2.0 * (q.yzx * magnitude.zxy + q.zxy * magnitude.yzx);
+        // Bound the actual quaternion/TRS operation terms before the projection's own dot-product rounding.
+        const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross
+            + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(1.1754943508222875e-38);
+        const float4 clip = nwbLightSpaceProject(view, world);
+        float4 error;
+        for(uint row = 0u; row < 4u; ++row){
+            error[row] = dot(abs(view.worldToClipRows[row].xyz), worldError)
+                + roundoff * dot(abs(view.worldToClipRows[row]), abs(float4(world, 1.0)));
+        }
+        if(!all(isfinite(clip)) || !all(isfinite(error)))
+            return false;
+        uint mask = 0u;
+        mask |= clip.x + clip.w < -(error.x + error.w) ? 1u : 0u;
+        mask |= clip.w - clip.x < -(error.w + error.x) ? 2u : 0u;
+        mask |= clip.y + clip.w < -(error.y + error.w) ? 4u : 0u;
+        mask |= clip.w - clip.y < -(error.w + error.y) ? 8u : 0u;
+        mask |= clip.z < -error.z ? 16u : 0u;
+        mask |= clip.w - clip.z < -(error.w + error.z) ? 32u : 0u;
+        outside &= mask;
+        if(outside == 0u)
+            return false;
+    }
+    return outside != 0u;
+}
+
+void nwbLightSpaceWriteDrawArguments(const NwbLightSpaceView view, const uint viewIndex){
+    for(uint instanceIndex = 0u; instanceIndex < g_NwbLightSpacePush.instanceCount; ++instanceIndex){
+        const NwbSwBvhInstance instance = nwbLightSpaceInstance(instanceIndex);
+        const uint vertexCount = nwbLightSpaceCasterOutside(view, instanceIndex) ? 0u : instance.primitiveCount * 3u;
+        const uint address = (viewIndex * g_NwbLightSpacePush.instanceCount + instanceIndex) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store4(address, uint4(vertexCount, 1u, 0u, 0u));
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

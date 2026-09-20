@@ -34,6 +34,7 @@ void RendererRayTracingSystem::invalidateResources(){
     releaseSwBvhScratchHeapHandles();
     releaseSurfelGiHeapHandles();
     releaseHardwareTransparentShadowResources();
+    releaseLightSpaceShadowResources();
     m_rayTracingState.invalidateResources();
 }
 
@@ -60,6 +61,7 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
     m_rayTracingState.m_causticLightCount = classification.causticLightCount;
     m_rayTracingState.m_softShadowSlotMask = classification.softShadowSlotMask;
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareLighting(lights, lightCount);
+    prepareLightSpaceShadows(lights, lightCount);
 
     // Emit the selected caustic-light and refractive-target gate once from the domain that owns the gathered bounds
     // and diagnostic latch. A successful prefix publication leaves the latch set across optional graph-build retries;
@@ -198,6 +200,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
 
     return RayTracingShadowVisibilityGraphPlanSnapshot{
         .adaptivePlan = adaptivePlan,
+        .lightSpace = hardwareShadowSupported ? LightSpaceShadowSnapshot{} : lightSpaceShadowSnapshot(),
         .hardwareTransparentTrace = hardwareTransparentTrace,
         .softTransparentFoldReady = softTransparentFoldReady,
         .combinedSoftUpsample = hardwareTransparentTrace && softTransparentFoldReady

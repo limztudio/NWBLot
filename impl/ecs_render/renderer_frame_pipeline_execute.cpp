@@ -1076,7 +1076,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     const Core::TextureHandle shadowVisibilityReturnTextures[] = {
         deferredTargets.shadowVisibility,
     };
+    // Freeze the resource generation selected during graph declaration from preflight-owned light-space storage.
+    const LightSpaceShadowSnapshot lightSpaceShadowResources = m_raytracingSystem.lightSpaceShadowSnapshot();
     const Core::TextureHandle shadowComputeScratchTextures[] = {
+        lightSpaceShadowResources.depth,
         deferredTargets.shadowCoarseTransmittance,
         deferredTargets.shadowSoftHalfA,
         deferredTargets.shadowSoftHalfB,
@@ -1093,6 +1096,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         deferredTargets.transparentMomentsB,
     };
     const Core::BufferHandle shadowComputeScratchBuffers[] = {
+        lightSpaceShadowResources.counts,
+        lightSpaceShadowResources.events,
+        lightSpaceShadowResources.views,
+        lightSpaceShadowResources.drawArguments,
         rayTracingShadowResources.swShadowEdgeStatsBuffer,
         rayTracingShadowResources.swShadowEdgeStatsReadback,
         rayTracingShadowResources.swShadowEdgeCounterBuffer,
@@ -1152,7 +1159,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         )
             return false;
 
-        const bool scratchStateReady = context->renderer->m_shadowComputePersistentState.buildFilteredResourceSubset(
+        // An inactive route retains its live allocation and accepted native state until that route runs again.
+        const bool scratchStateReady = context->renderer->m_shadowComputePersistentState.buildMergedResourceSubset(
             *context->scratchStateCandidate,
             *finalState,
             context->scratchTextures,

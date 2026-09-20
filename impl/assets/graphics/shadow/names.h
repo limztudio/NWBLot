@@ -43,6 +43,12 @@ inline constexpr Name s_SwTransparentSoftShaderName("engine/graphics/shadow/sw_s
 inline constexpr Name s_HardwareTransparentGatherShaderName("engine/graphics/shadow/hardware_transparent_gather_cs");
 inline constexpr Name s_HardwareTransparentEvaluateShaderName("engine/graphics/shadow/hardware_transparent_evaluate_cs");
 inline constexpr Name s_HardwareTransparentOverflowShaderName("engine/graphics/shadow/hardware_transparent_overflow_cs");
+inline constexpr Name s_LightSpaceViewShaderName("engine/graphics/shadow/light_space_view_cs");
+inline constexpr Name s_LightSpaceCaptureVertexShaderName("engine/graphics/shadow/light_space_capture_vs");
+inline constexpr Name s_LightSpaceCapturePixelShaderName("engine/graphics/shadow/light_space_capture_ps");
+inline constexpr Name s_LightSpaceResolveShaderName("engine/graphics/shadow/light_space_resolve_cs");
+inline constexpr Name s_LightSpaceFallbackShaderName("engine/graphics/shadow/light_space_fallback_cs");
+inline constexpr Name s_LightSpaceShadeShaderName("engine/graphics/shadow/light_space_shade_cs");
 // Denoises half-res visibility into full-res visibility.
 inline constexpr Name s_GeometryDownsampleShaderName("engine/graphics/shadow/shadow_geometry_downsample_cs");
 inline constexpr Name s_SoftResolveShaderName("engine/graphics/shadow/shadow_resolve_cs");

@@ -3978,6 +3978,8 @@ public:
     bool waitForIdle();
     void runGarbageCollection();
     bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0);
+    // Maximum byte range represented by one storage-buffer descriptor; independent of allocation/VRAM budgets.
+    [[nodiscard]] u64 getMaxStorageBufferRange()const noexcept;
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);

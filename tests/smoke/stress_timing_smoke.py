@@ -31,6 +31,10 @@ REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
     "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32")
 
 
+SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
+SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
+
+
 WORKLOAD = "StressTestSmokeProject: workload "
 SPAWN = "StressTestSmokeProject: spawned "
 WORKLOAD_FIELDS = ("characters_per_class", "total", "transparent", "opaque", "layout", "rows", "columns",
@@ -263,6 +267,26 @@ def parse_measurement(log_text, characters_per_class=10):
     return parsed["measurement"] | {"intervals": parsed["intervals"]}
 
 
+def verify_software_shadow_settings(text, args):
+    """New acquisitions must prove the requested settings reached the application."""
+    records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_SETTINGS)]
+    if len(records) != 1:
+        raise SmokeFailure("exactly one SoftwareShadowSmoke requested-settings record is required")
+    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes")
+    pattern = re.escape(SOFTWARE_SHADOW_SETTINGS) + " ".join(re.escape(field) + r"=([0-9]+)" for field in fields)
+    match = re.fullmatch(pattern, records[0])
+    if not match:
+        raise SmokeFailure("malformed SoftwareShadowSmoke requested-settings record")
+    observed = dict(zip(fields, map(int, match.groups())))
+    requested = dict(backend=SOFTWARE_SHADOW_BACKENDS[args.software_shadow_backend],
+        directional_resolution=args.software_shadow_directional_resolution,
+        point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024)
+    if observed != requested:
+        raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
+    return {"backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
+        "requested": requested, "observed": observed, "verified": True}
+
+
 def launch_environment(base, args, output):
     for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
         if base.get(key, "").strip():
@@ -272,6 +296,10 @@ def launch_environment(base, args, output):
         result["NWB_LINUX_BACKEND"] = "x11"
     result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
+        NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
+        NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
+        NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
+        NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
     if not args.animate:
         result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
@@ -337,6 +365,7 @@ def acquire(args, output):
         collected = True
         (output / "runtime.log").write_text(text, encoding="utf-8")
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
+        result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result["runtime_signature"] = ab.device_material_signature(text)
         result["motion"] = {"mode": "rotating" if args.animate else "fixed",
             "simulation_clock": "wall" if args.animate else "fixed_step",
@@ -385,6 +414,11 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
+    parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
+    parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
+        help="Requested shadow-map storage budget in MiB (1 through 4095).")
+    parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)
+    parser.add_argument("--software-shadow-point-resolution", type=int, default=256)
     motion = parser.add_mutually_exclusive_group()
     motion.add_argument("--spin-angle", type=float, default=0.6)
     motion.add_argument("--animate", action="store_true",
@@ -411,6 +445,11 @@ def parse_args(argv=None):
         args.fixed_delta_seconds = .016666667
     if args.fixed_delta_seconds is not None and (not math.isfinite(args.fixed_delta_seconds) or not 0 < args.fixed_delta_seconds <= .25):
         parser.error("fixed simulation delta must be finite in (0, .25]")
+    if not 1 <= args.software_shadow_budget_mib <= 4095:
+        parser.error("software shadow budget must be from 1 through 4095 MiB")
+    for name in ("software_shadow_directional_resolution", "software_shadow_point_resolution"):
+        if not 32 <= getattr(args, name) <= 2048:
+            parser.error("software shadow resolutions must be from 32 through 2048")
     args.software_vulkan = "off"
     return args
 

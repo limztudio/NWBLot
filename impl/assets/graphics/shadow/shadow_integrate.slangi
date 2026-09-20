@@ -9,15 +9,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include "shadow_crossing.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Software occlusion rays finish each instance before visiting the next scene leaf. Only the summed optical depth,
 // interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
 // Include after shadow_surface.slangi for the shared Fresnel and Beer-Lambert helpers.
 
 
 #define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
-#define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
-#define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
-#define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
 
 struct NwbShadowVisibilityAccumulator{
     half3 transmittance;
@@ -118,14 +121,6 @@ float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
     if(crossingCount > 1u && (crossingCount & 1u) != 0u)
         chordLength = max(chordLength, max(optics.tMax - optics.tMin, 0.0));
     return chordLength;
-}
-
-float nwbShadowCrossingMergeEpsilon(const float t){
-    return max(NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON, abs(t) * NWB_SHADOW_CROSSING_MERGE_REL_EPSILON);
-}
-
-bool nwbShadowCrossingMatchesEndpoint(const float t, const float endpointT){
-    return abs(t - endpointT) <= nwbShadowCrossingMergeEpsilon(max(abs(t), abs(endpointT)));
 }
 
 float nwbShadowCosineToRay(const float3 normal, const float3 rayDirection){

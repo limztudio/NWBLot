@@ -1,0 +1,75 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "smoke_environment.h"
+
+#include <impl/ecs_render/module.h>
+#include <global/limit.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace NWB::Tests::Smoke{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] inline bool ApplySoftwareShadowSmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena){
+    Impl::SoftwareShadowSettings settings;
+    SmokeEnvironmentString value(arena);
+    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BACKEND", value)){
+        const AStringView mode(value.data(), value.size());
+        if(mode == "automatic")
+            settings.backend = Impl::SoftwareShadowBackend::Automatic;
+        else if(mode == "trace")
+            settings.backend = Impl::SoftwareShadowBackend::SoftwareTrace;
+        else if(mode == "light_space")
+            settings.backend = Impl::SoftwareShadowBackend::LightSpace;
+        else
+            return false;
+    }
+    struct ResolutionOverride{ const char* name; u32* destination; };
+    const ResolutionOverride overrides[] = {
+        { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", &settings.directionalResolution },
+        { "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION", &settings.pointResolution },
+    };
+    for(const auto& setting : overrides){
+        if(!ReadSmokeEnvironmentText(setting.name, value))
+            continue;
+        u64 parsed = 0u;
+        if(!ParseU64FromChars(value.data(), value.data() + value.size(), parsed) || parsed > Limit<u32>::s_Max)
+            return false;
+        *setting.destination = static_cast<u32>(parsed);
+    }
+    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BUDGET_MIB", value)){
+        u64 parsed = 0u;
+        if(!ParseU64FromChars(value.data(), value.data() + value.size(), parsed) || parsed > Limit<u32>::s_Max / (1024u * 1024u))
+            return false;
+        settings.memoryBudgetBytes = parsed * 1024u * 1024u;
+    }
+    if(!renderer.setSoftwareShadowSettings(settings))
+        return false;
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={}")
+        , static_cast<u32>(settings.backend)
+        , settings.directionalResolution
+        , settings.pointResolution
+        , settings.memoryBudgetBytes
+    );
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

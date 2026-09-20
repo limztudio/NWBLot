@@ -1,0 +1,291 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RESOLVE_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RESOLVE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "light_space_resources.slangi"
+#include "shadow_heap_resources.slangi"
+#include "sw_binding_slots.h"
+#include "../raytrace/optical_scene_constants.h"
+#if !defined(NWB_LIGHT_SPACE_OCCLUDER) || (NWB_LIGHT_SPACE_OCCLUDER != 0 && NWB_LIGHT_SPACE_OCCLUDER != 1)
+#error "light-space resolve requires the opaque or transparent compile-time class"
+#endif
+#define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
+#define g_NwbSwShadowPush g_NwbLightSpacePush
+#define g_NwbSwShadowMaterialContextSlots NwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
+#define NWB_LIGHT_SPACE_DEFERRED NwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
+#define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
+#include "../scene/buffer.slangi"
+#ifndef NWB_LIGHT_SPACE_MAP_ONLY
+#define NWB_LIGHT_SPACE_MAP_ONLY 0
+#endif
+#if !NWB_LIGHT_SPACE_MAP_ONLY
+#include "sw_shadow_ray.slangi"
+#else
+#include "shadow_crossing.slangi"
+#include "shadow_sampling.slangi"
+#include "shadow_ray_setup.slangi"
+#endif
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+#include "light_space_receiver_plane.slangi"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Face selection is repeated after each filter displacement; samples crossing an edge are never clamped to one face.
+bool nwbLightSpaceFindView(const uint lightIndex, const float3 world, out NwbLightSpaceView view){
+    view = (NwbLightSpaceView)0;
+    for(uint index = 0u; index < g_NwbLightSpacePush.viewCount; ++index){
+        const NwbLightSpaceView candidate = nwbLightSpaceLoadView(index);
+        if(candidate.light.x != lightIndex)
+            continue;
+        if((candidate.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
+            const float3 direction = world - candidate.originOrDirection.xyz;
+            const float3 magnitude = abs(direction);
+            const uint face = magnitude.x >= max(magnitude.y, magnitude.z)
+                ? (direction.x >= 0.0 ? 0u : 1u)
+                : (magnitude.y >= magnitude.z ? (direction.y >= 0.0 ? 2u : 3u) : (direction.z >= 0.0 ? 4u : 5u));
+            if(candidate.light.z != face)
+                continue;
+        }
+        view = candidate;
+        return view.depthRange.w != 0.0 && (view.light.w & NWB_LIGHT_SPACE_FLAG_ELIGIBLE) != 0u;
+    }
+    return false;
+}
+
+bool nwbLightSpaceTexel(const NwbLightSpaceView view, const float3 world, out uint2 pixel, out float projectedDepth){
+    pixel = uint2(0u);
+    projectedDepth = 0.0;
+    const float4 clip = nwbLightSpaceProject(view, world);
+    if(!all(isfinite(clip)) || clip.w <= 0.0)
+        return false;
+    const float3 ndc = clip.xyz / clip.w;
+    const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if(any(uv < 0.0) || any(uv >= 1.0) || ndc.z < 0.0 || ndc.z > 1.0)
+        return false;
+    pixel = min(uint2(uv * float2(view.map.xy)), view.map.xy - 1u);
+    projectedDepth = ndc.z;
+    return true;
+}
+
+float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
+    const float depth = NwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
+    if(depth >= 1.0)
+        return asfloat(0x7f7fffffu);
+    if((view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) == 0u)
+        return depth * view.depthRange.y;
+    const float viewZ = view.depthRange.x * view.depthRange.y /
+        (view.depthRange.y - depth * (view.depthRange.y - view.depthRange.x));
+    const float2 ndc = (float2(pixel) + 0.5) / float2(view.map.xy) * 2.0 - 1.0;
+    return viewZ * sqrt(1.0 + dot(ndc, ndc));
+}
+
+bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, out float blocker){
+    blocker = asfloat(0x7f7fffffu);
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+    const float depth = nwbLightSpaceOpaqueDepth(view, pixel);
+    if(depth < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE)
+        blocker = depth;
+#else
+    const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
+    const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
+        return false;
+    for(uint index = 0u; index < count; ++index){
+        const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, index);
+        if(!isfinite(event.depth) || (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) >= g_NwbLightSpacePush.instanceCount)
+            return false;
+        if(event.depth < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE)
+            blocker = min(blocker, event.depth);
+    }
+#endif
+    return true;
+}
+
+uint nwbLightSpaceBoundaryMode(const uint instance){
+    if(instance >= g_NwbSwShadowMaterialContextSlots.materialSlots.z)
+        return NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
+    return NwbHeapRawBuffer(g_NwbSwShadowMaterialContextSlots.materialSlots.y).Load(
+        NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
+}
+
+// Raw event count, including all distinct instances, is bounded before any load. Overflow asks the caller for SW traversal.
+bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth,
+    const float projectedDepth, out float3 visibility){
+    visibility = float3(1.0);
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+    const float depth = NwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
+    visibility = depth < projectedDepth ? float3(0.0) : float3(1.0);
+    return true;
+#else
+    const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
+    const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
+        return false;
+    // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.
+    for(uint record = 0u; record < count; ++record){
+        const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, record);
+        if(!isfinite(event.depth) || (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) >= g_NwbLightSpacePush.instanceCount)
+            return false;
+    }
+    float3 opticalDepth = float3(0.0);
+    float interfaceProduct = 1.0;
+    uint index = 0u;
+    while(index < count){
+        const NwbLightSpaceEvent firstEvent = nwbLightSpaceLoadEvent(pixelIndex, index);
+        if(firstEvent.depth >= receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE){
+            ++index;
+            continue;
+        }
+        const uint instance = firstEvent.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+        const uint mode = nwbLightSpaceBoundaryMode(instance);
+        const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
+        float3 absorption = float3(0.0);
+        float transmission = 1.0;
+        float chord = 0.0;
+        float start = 0.0;
+        float first = 0.0;
+        float last = 0.0;
+        uint crossings = 0u;
+        bool inside = false;
+        while(index < count){
+            const NwbLightSpaceEvent event = nwbLightSpaceLoadEvent(pixelIndex, index);
+            if((event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance)
+                break;
+            ++index;
+            const float distance = receiverDepth - event.depth;
+            uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+            while(index < count){
+                const NwbLightSpaceEvent next = nwbLightSpaceLoadEvent(pixelIndex, index);
+                if(
+                    (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance
+                    || !nwbShadowCrossingMatchesEndpoint(distance, receiverDepth - next.depth)
+                )
+                    break;
+                facing |= (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+                ++index;
+            }
+            if(closed && facing == 3u)
+                continue;
+            if(crossings == 0u){
+                absorption = float3(f16tof32(event.absorptionRG & 0xffffu), f16tof32(event.absorptionRG >> 16u),
+                    f16tof32(event.absorptionBInterface & 0xffffu));
+                first = distance;
+                if(closed && facing == 2u)
+                    inside = true;
+            }
+            last = distance;
+            transmission *= f16tof32(event.absorptionBInterface >> 16u);
+            if(inside)
+                chord += max(distance - start, 0.0);
+            else
+                start = distance;
+            inside = !inside;
+            ++crossings;
+        }
+        if(closed && inside)
+            chord += max(receiverDepth - start, 0.0);
+        else if(!closed && (crossings & 1u) != 0u)
+            chord = crossings > 1u ? max(last - first, 0.0) : 0.0;
+        opticalDepth += absorption * chord;
+        interfaceProduct *= lerp(1.0, transmission, smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
+    }
+    visibility = saturate(interfaceProduct * exp(-opticalDepth));
+    return all(isfinite(visibility));
+#endif
+}
+
+// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation,
+// while overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
+bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
+    const NwbLightSpaceView centerView, out float distance){
+    distance = 0.0;
+    const float receiverDepth = nwbLightSpaceLinearDepth(centerView, origin);
+    const bool point = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
+    const float radius = point
+        ? light.params2.y * max(receiverDepth - centerView.depthRange.z, 0.0) / max(centerView.depthRange.z, centerView.depthRange.x)
+        : tan(light.params2.x) * receiverDepth;
+    const float3 axis = point ? normalize(light.position.xyz - origin) : centerView.originOrDirection.xyz;
+    float3 tangent;
+    float3 bitangent;
+    nwbShadowBuildBasis(axis, tangent, bitangent);
+    float sum = 0.0;
+    uint found = 0u;
+    for(int y = -1; y <= 1; ++y){
+        for(int x = -1; x <= 1; ++x){
+            const float3 query = origin + radius * (float(x) * tangent + float(y) * bitangent);
+            NwbLightSpaceView view;
+            uint2 pixel;
+            float depth;
+            if(!nwbLightSpaceFindView(lightIndex, query, view) || !nwbLightSpaceTexel(view, query, pixel, depth))
+                return false;
+            float comparisonDepth = receiverDepth;
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+            if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
+                return false;
+#endif
+            float blocker;
+            if(!nwbLightSpaceNearestBlocker(view, pixel, comparisonDepth, blocker))
+                return false;
+            if(blocker < comparisonDepth){
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+                // Parallel receiver/blocker planes have the same depth ratio on every point-light ray; use the central ray's distance.
+                const float gap = comparisonDepth - blocker;
+                sum += point ? gap * receiverDepth / comparisonDepth : gap;
+#else
+                sum += blocker;
+#endif
+                ++found;
+            }
+        }
+    }
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+    distance = found == 0u ? 0.0 : max(sum / float(found), 0.0);
+#else
+    distance = found == 0u ? 0.0 : max(receiverDepth - sum / float(found), 0.0);
+#endif
+    return isfinite(distance);
+}
+
+bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction,
+    const float blockerDistance, out float3 visibility){
+    visibility = float3(1.0);
+    const float3 samplePosition = origin + direction * blockerDistance;
+    NwbLightSpaceView view;
+    uint2 pixel;
+    float projectedDepth;
+    if(!nwbLightSpaceFindView(lightIndex, samplePosition, view) || !nwbLightSpaceTexel(view, samplePosition, pixel, projectedDepth))
+        return false;
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+    float receiverDepth;
+    if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, projectedDepth, receiverDepth))
+        return false;
+    return nwbLightSpaceSample(view, pixel, receiverDepth, projectedDepth, visibility);
+#else
+    const float receiverDepth = nwbLightSpaceLinearDepth(view, origin);
+    const float4 receiverClip = nwbLightSpaceProject(view, origin);
+    if(!all(isfinite(receiverClip)) || receiverClip.w <= 0.0)
+        return false;
+    return nwbLightSpaceSample(view, pixel, receiverDepth, receiverClip.z / receiverClip.w, visibility);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

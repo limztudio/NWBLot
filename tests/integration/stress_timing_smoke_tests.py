@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Strict presentation measurement replay and acquisition failure retention; never launch a renderer."""
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -11,6 +12,16 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import stress_timing_smoke as smoke
+
+
+def shadow_defaults():
+    return dict(software_shadow_backend="automatic", software_shadow_budget_mib=256,
+        software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
+
+
+def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456):
+    return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
+        f"point_resolution={point_resolution} budget_bytes={budget_bytes}")
 
 
 def workload_record(characters_per_class=10):
@@ -55,6 +66,108 @@ def reflection_record(**changes):
 def reflection_log(*records):
     return valid_log().replace(smoke.START, smoke.REFLECTION_ENABLED + "\n" + smoke.START).replace(
         smoke.SHUTDOWN, "\n".join(records) + "\n" + smoke.SHUTDOWN)
+
+
+class StressSoftwareShadowSettingsTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.output = Path(self.temporary.name)
+        executable = self.output / "renderer.exe"
+        executable.write_bytes(b"fixture")
+        self.argv = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
+
+    def test_cli_defaults_and_explicit_modes_match_application_contract(self):
+        args = smoke.parse_args(self.argv)
+        for key, expected in shadow_defaults().items():
+            self.assertEqual(getattr(args, key), expected)
+        for backend in ("automatic", "trace", "light_space"):
+            with self.subTest(backend=backend):
+                args = smoke.parse_args(self.argv + ["--software-shadow-backend", backend,
+                    "--software-shadow-budget-mib", "256", "--software-shadow-directional-resolution", "1024",
+                    "--software-shadow-point-resolution", "512"])
+                self.assertEqual(args.software_shadow_backend, backend)
+                self.assertEqual(args.software_shadow_budget_mib, 256)
+                self.assertEqual(args.software_shadow_directional_resolution, 1024)
+                self.assertEqual(args.software_shadow_point_resolution, 512)
+
+    def test_cli_rejects_invalid_ranges_types_and_backend(self):
+        cases = (("--software-shadow-budget-mib", ("0", "4096", "-1", "1.5", "invalid")),
+            ("--software-shadow-directional-resolution", ("31", "2049", "-1", "32.5", "invalid")),
+            ("--software-shadow-point-resolution", ("31", "2049", "-1", "32.5", "invalid")),
+            ("--software-shadow-backend", ("hardware", "LIGHT_SPACE", "invalid")))
+        for option, values in cases:
+            for value in values:
+                with self.subTest(option=option, value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
+                    smoke.parse_args(self.argv + [option, value])
+        for budget in (1, 4095):
+            for resolution in (32, 2048):
+                args = smoke.parse_args(self.argv + ["--software-shadow-budget-mib", str(budget),
+                    "--software-shadow-directional-resolution", str(resolution),
+                    "--software-shadow-point-resolution", str(resolution)])
+                self.assertEqual(args.software_shadow_budget_mib, budget)
+                self.assertEqual(args.software_shadow_point_resolution, resolution)
+
+    def test_explicit_environment_overrides_inherited_settings_and_strips_other_controls(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-backend", "light_space",
+            "--software-shadow-budget-mib", "256", "--software-shadow-directional-resolution", "1024",
+            "--software-shadow-point-resolution", "512"])
+        inherited = {"NWB_SOFTWARE_SHADOW_BACKEND": "trace", "NWB_SOFTWARE_SHADOW_BUDGET_MIB": "1",
+            "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "32", "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION": "64",
+            "NWB_UNREQUESTED_SETTING": "bad", "PATH": "kept"}
+        env = smoke.launch_environment(inherited, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_BACKEND"], "light_space")
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_BUDGET_MIB"], "256")
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"], "1024")
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_POINT_RESOLUTION"], "512")
+        self.assertNotIn("NWB_UNREQUESTED_SETTING", env)
+        self.assertEqual(env["PATH"], "kept")
+        defaults = smoke.launch_environment(inherited, smoke.parse_args(self.argv), self.output)
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BACKEND"], "automatic")
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BUDGET_MIB"], "256")
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"], "512")
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_POINT_RESOLUTION"], "256")
+
+    def test_report_requires_one_complete_exact_application_record(self):
+        args = smoke.parse_args(self.argv)
+        report = smoke.verify_software_shadow_settings("  " + shadow_record() + "  ", args)
+        self.assertTrue(report["verified"])
+        self.assertEqual(report["requested"], report["observed"])
+        self.assertEqual(report["observed"]["budget_bytes"], 256 * 1024 * 1024)
+        for text in ("", shadow_record() + "\n" + shadow_record(), shadow_record().replace("budget_bytes=", "budget="),
+            shadow_record() + " unknown=1", shadow_record(budget_bytes=128 * 1024 * 1024),
+            shadow_record(backend=1), shadow_record(directional_resolution=1024), shadow_record(point_resolution=512)):
+            with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(text, args)
+        # Historical measurement logs remain replayable without the new acquisition evidence.
+        self.assertEqual(smoke.parse_measurement(valid_log())["fps"], 16.)
+
+    def acquire_log(self, args, text):
+        with patch.object(smoke, "identities", return_value={}), \
+            patch.object(smoke, "build_launch_environment", return_value={}), \
+            patch.object(smoke, "launch_logserver", return_value=(None, None, self.output, {}, "*.log")), \
+            patch.object(smoke, "launch_testbed", return_value=Mock()), \
+            patch.object(smoke, "terminate_process", return_value=(0, "")), \
+            patch.object(smoke, "shutdown_logserver_and_collect", return_value=text), \
+            patch.object(smoke.ab, "device_material_signature", return_value={}):
+            return smoke.acquire(args, self.output)
+
+    def test_acquisition_records_verified_settings_and_exact_launch_environment(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-budget-mib", "256"])
+        result = self.acquire_log(args, shadow_record(budget_bytes=256 * 1024 * 1024) + "\n" + valid_log())
+        report = result["software_shadow_settings"]
+        self.assertTrue(report["verified"])
+        self.assertEqual(report["budget_mib"], 256)
+        self.assertEqual(report["observed"]["budget_bytes"], 256 * 1024 * 1024)
+        launch = json.loads((self.output / "launch.json").read_text(encoding="utf-8"))
+        self.assertEqual(launch["environment"]["NWB_SOFTWARE_SHADOW_BUDGET_MIB"], "256")
+
+    def test_acquisition_rejects_smaller_budget_when_256_mib_was_requested_and_preserves_log(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-budget-mib", "256"])
+        text = shadow_record(budget_bytes=128 * 1024 * 1024) + "\n" + valid_log()
+        with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
+            self.acquire_log(args, text)
+        self.assertEqual((self.output / "runtime.log").read_text(encoding="utf-8"), text)
 
 
 class StressReflectionDiagnosticTests(unittest.TestCase):
@@ -223,7 +336,7 @@ class StressWorkloadTests(unittest.TestCase):
 class StressMotionTests(unittest.TestCase):
     def test_rotating_launch_removes_inherited_freezes_and_fixed_simulation_time(self):
         args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=None, reflection_diagnostics=False,
-            characters_per_class=10, animate=True)
+            characters_per_class=10, animate=True, **shadow_defaults())
         inherited = {"NWB_STRESS_TEST_SPIN_ANGLE": "1.25", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": ".25",
             "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "120", "NWB_STRESS_CHARACTERS_PER_CLASS": "5"}
         env = smoke.launch_environment(inherited, args, Path("moving"))
@@ -318,7 +431,7 @@ class StressMeasurementTests(unittest.TestCase):
                 smoke.parse_measurement(valid_log() + marker)
 
     def test_environment_replaces_inherited_capture_controls(self):
-        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False)
+        args = SimpleNamespace(spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False, **shadow_defaults())
         env = smoke.launch_environment({"NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "96",
             "NWB_STRESS_TEST_SPIN_ANGLE": "2", "NWB_OTHER": "bad",
             "NWB_STRESS_REFLECTION_DIAGNOSTICS": "1", "NWB_STRESS_CHARACTERS_PER_CLASS": "5", "PATH": "kept"}, args, Path("trial"))
@@ -355,7 +468,7 @@ class StressMeasurementTests(unittest.TestCase):
             output = Path(temporary)
             args = SimpleNamespace(executable=output / "app.exe", working_directory=output,
                 no_logserver=True, logserver_executable=None, application_arg=[], timeout=90,
-                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False)
+                spin_angle=.6, fixed_delta_seconds=.016666667, reflection_diagnostics=False, characters_per_class=10, animate=False, **shadow_defaults())
             process = Mock()
             process.wait.side_effect = subprocess.TimeoutExpired("app", 90)
             with patch.object(smoke, "identities", return_value={}), \

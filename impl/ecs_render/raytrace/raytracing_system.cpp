@@ -42,6 +42,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
     , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
     , m_sceneSwBvhRefit(arena, graphics)
+    , m_lightSpaceShadow(arena)
     , m_preparedShadowTraceGeometryBuffers(arena)
     , m_acceptedShadowTraceGeometryBuffers(arena)
     , m_preparedShadowTraceMaterialSampledTextures(arena)
@@ -748,6 +749,10 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     Core::Alloc::ScratchArena& scratchArena
 ){
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
+    m_lightSpaceShadow.m_snapshot.ready = false;
+    m_lightSpaceShadow.m_resourcesPrepared = false;
+    m_lightSpaceShadow.m_sceneEligible = false;
+    m_lightSpaceShadow.m_casters.clear();
     // A new frame replaces the previous preflight plan, but does not invalidate retained acceleration data.  Full
     // invalidation is reserved for a rejected packet or resource teardown, where recorded work may not submit.
     m_shadowVisibilityPreparedTargets = nullptr;
@@ -960,6 +965,7 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     if(!ensureRayTraceMaterialContextSlotsHeapHandle())
         return false;
     m_shadowVisibilityPreparedTargets = &targets;
+    preflightLightSpaceShadowResources();
     m_shadowVisibilityResourcesPreflighted = true;
     return true;
 }

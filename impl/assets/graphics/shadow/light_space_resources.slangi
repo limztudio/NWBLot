@@ -1,0 +1,109 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "light_space_constants.h"
+#include "../bindless/bindless_heap.slangi"
+#include "../deferred/bindless_resources.slangi"
+#include "../raytrace/material_context_slots.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbLightSpacePushConstants{
+    uint viewSlot;
+    uint viewIndex;
+    uint materialContextSlot;
+    uint countsSlot;
+    uint eventsSlot;
+    uint depthSlot;
+    uint instanceIndex;
+    uint instanceCount;
+    uint width;
+    uint height;
+    uint frameIndex;
+    uint sampleCount;
+    uint deferredResourcesSlot;
+    uint outputSlot;
+    uint sceneRootSlot;
+    uint viewCount;
+};
+[[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
+
+struct NwbLightSpaceView{
+    float4 worldToClipRows[4];
+    float4 originOrDirection;
+    float4 depthRange;
+    uint4 map;
+    uint4 light;
+};
+
+struct NwbLightSpaceEvent{
+    float depth;
+    uint instanceAndFacing;
+    uint primitive;
+    uint absorptionRG;
+    uint absorptionBInterface;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbLightSpaceView nwbLightSpaceLoadView(const uint index){
+    const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
+    NwbLightSpaceView view;
+    for(uint row = 0u; row < 4u; ++row)
+        view.worldToClipRows[row] = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * 16u));
+    view.originOrDirection = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u));
+    view.depthRange = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 80u));
+    view.map = NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 96u);
+    view.light = NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
+    return view;
+}
+
+float4 nwbLightSpaceProject(const NwbLightSpaceView view, const float3 world){
+    const float4 position = float4(world, 1.0);
+    return float4(dot(view.worldToClipRows[0], position), dot(view.worldToClipRows[1], position),
+        dot(view.worldToClipRows[2], position), dot(view.worldToClipRows[3], position));
+}
+
+float nwbLightSpaceLinearDepth(const NwbLightSpaceView view, const float3 world){
+    return (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
+        ? length(world - view.originOrDirection.xyz)
+        : dot(world, -view.originOrDirection.xyz) - view.depthRange.z;
+}
+
+uint nwbLightSpacePixelIndex(const NwbLightSpaceView view, const uint2 pixel){
+    return view.map.z + pixel.y * view.map.x + pixel.x;
+}
+
+NwbLightSpaceEvent nwbLightSpaceLoadEvent(const uint pixel, const uint eventIndex){
+    const uint address = (pixel * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + eventIndex) * NWB_LIGHT_SPACE_EVENT_BYTES;
+    const uint4 first = NwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load4(address);
+    NwbLightSpaceEvent event;
+    event.depth = asfloat(first.x);
+    event.instanceAndFacing = first.y;
+    event.primitive = first.z;
+    event.absorptionRG = first.w;
+    event.absorptionBInterface = NwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load(address + 16u);
+    return event;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

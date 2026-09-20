@@ -428,7 +428,8 @@ TEST(EcsGraphics, NativeRendererWritesRemainExplicitCompatibilityBoundaries){
     EXPECT_EQ(CountText(swBvh, "writeBuffer("), 0u);
     EXPECT_TRUE(ContainsText(swBvh, "if(shadowMaterialContextBatchGraphOwned){"));
     EXPECT_TRUE(ContainsText(swBvh, "graph-owned HW shadow material context unexpectedly reused a native cache"));
-    EXPECT_TRUE(ContainsText(swBvh, "graph-owned SW shadow material context unexpectedly reused a native cache"));
+    // Software preparation has no native recording fallback; its accepted cache and uploads belong to the graph.
+    EXPECT_FALSE(ContainsText(swBvh, "buildSceneSwBvh("));
 
     // Adaptive diagnostics are graph-owned on every prepared route. Frames without clear/copy work still freeze an enabled lifecycle plan so only acceptance advances the tick; compatibility calls disable diagnostics.
     EXPECT_EQ(CountText(shadow, "clearBufferUInt("), 0u);

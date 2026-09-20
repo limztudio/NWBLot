@@ -34,7 +34,6 @@
 #include <impl/assets/graphics/bvh/constants.h>
 #include <impl/assets/graphics/bvh/names.h>
 #include <impl/assets/graphics/gi/names.h>
-#include <impl/assets/graphics/gi/sw_binding_slots.h>
 #include <impl/assets/graphics/gi/surfel/surfel_binding_slots.h>
 #include <impl/assets/graphics/shadow/constants.h>
 
@@ -291,7 +290,7 @@ struct ShadowResolvePushConstants{
     u32 halfWidth = 0u;
     u32 halfHeight = 0u;
     u32 stepWidth = 1u;
-    u32 stage = NWB_SHADOW_RESOLVE_STAGE_PREPARE;
+    u32 stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET;
     u32 lightSlotStart = 0u;
     u32 lightSlotCount = 0u;
     u32 momentsValid = 0u;
@@ -327,7 +326,6 @@ static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSl
 // Shader-mirrored shadow resolve stages.
 namespace ShadowResolveStage{
     enum Enum : u32{
-        Prepare = NWB_SHADOW_RESOLVE_STAGE_PREPARE,
         Wavelet = NWB_SHADOW_RESOLVE_STAGE_WAVELET,
         Upsample = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE,
     };

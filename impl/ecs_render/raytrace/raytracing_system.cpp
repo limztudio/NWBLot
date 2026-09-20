@@ -180,48 +180,6 @@ bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(const u64 stati
     return true;
 }
 
-bool RendererRayTracingSystem::matchesPreparedSceneBvh(
-    const bool staticScene,
-    const u64 staticSceneHash,
-    const void* const nodeData,
-    const usize nodeCount,
-    const usize nodeByteCount,
-    const void* const instanceData,
-    const usize instanceCount,
-    const usize instanceByteCount
-)const{
-    const auto& state = m_rayTracingState;
-    if(
-        !m_preparedSceneBvhReady
-        || !m_preparedSceneBvhUploadRequired
-        || m_preparedSceneBvhStatic != staticScene
-        || m_preparedSceneBvhStaticSceneHash != staticSceneHash
-        || !nodeData
-        || !instanceData
-        || m_preparedSceneBvhNodeCount != nodeCount
-        || m_preparedSceneBvhInstanceCount != instanceCount
-        || m_preparedSceneBvhNodeBytes.size() != nodeByteCount
-        || m_preparedSceneBvhInstanceBytes.size() != instanceByteCount
-        || nodeByteCount != nodeCount * sizeof(NwbBvhNodeGpu)
-        || instanceByteCount != instanceCount * sizeof(SceneSwBvhInstanceGpu)
-        || state.m_sceneBvhNodeBuffer.get() != m_preparedSceneBvhNodeBuffer.get()
-        || state.m_sceneInstanceBuffer.get() != m_preparedSceneBvhInstanceBuffer.get()
-        || state.m_sceneBvhNodeCapacity != m_preparedSceneBvhNodeCapacity
-        || state.m_sceneInstanceCapacity != m_preparedSceneBvhInstanceCapacity
-        || state.m_sceneBvhNodeHeapHandle != m_preparedSceneBvhNodeHeapHandle
-        || state.m_sceneInstanceHeapHandle != m_preparedSceneBvhInstanceHeapHandle
-        || !state.m_sceneBvhNodeHeapHandle.valid()
-        || state.m_sceneBvhNodeHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-        || !state.m_sceneInstanceHeapHandle.valid()
-        || state.m_sceneInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    )
-        return false;
-    return
-        NWB_MEMCMP(m_preparedSceneBvhNodeBytes.data(), nodeData, nodeByteCount) == 0
-        && NWB_MEMCMP(m_preparedSceneBvhInstanceBytes.data(), instanceData, instanceByteCount) == 0
-    ;
-}
-
 void RendererRayTracingSystem::clearPreparedSceneSwBvhTraversal()noexcept{
     m_preparedSceneSwBvhMeshes.clear();
     m_preparedSceneSwBvhInstanceCount = 0u;
@@ -888,8 +846,6 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
             m_rayTracingState.m_softTransparentReady
             && m_rayTracingState.m_softShadowTemporalReady
         ;
-        if(m_rayTracingState.m_softTransparentReady && m_rayTracingState.m_softShadowTemporalReady && !m_rayTracingState.m_softTransparentTemporalReady)
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: HW soft transparent shadow temporal resource preparation failed; no colored temporal accumulation this frame"));
 
         if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_softTransparentReady){
             if(!ensureSoftCombinedUpsamplePipeline())
@@ -991,8 +947,6 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         m_rayTracingState.m_softTransparentReady
         && m_rayTracingState.m_softShadowTemporalReady
     ;
-    if(m_rayTracingState.m_softTransparentReady && m_rayTracingState.m_softShadowTemporalReady && !m_rayTracingState.m_softTransparentTemporalReady)
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: soft transparent shadow temporal resource preparation failed; no colored temporal accumulation this frame"));
 
     // Build the software caustic producer + resolve resources alongside the SW shadow resources (same SW scene BVH +
     // per-mesh geometry). Non-fatal to shadows: a failure leaves the caustic buffer black (the additive no-op).

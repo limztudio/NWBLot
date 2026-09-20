@@ -398,7 +398,6 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
             }
             heapSlot = fixtures.linearClampHeapHandle.slot();
             break;
-            break;
         default:
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has an invalid material resource kind"), StringConvert(materialInfo.materialName.c_str()));
             return false;

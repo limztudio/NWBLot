@@ -12,7 +12,8 @@
 // The producer's own shader supplies the OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
 
 
-#include "sw_binding_slots.h"
+#include "constants.h"
+#include "../shadow/sw_binding_slots.h"
 #include "../bvh/constants.h"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"

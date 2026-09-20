@@ -13,7 +13,7 @@
 // Shares NwbGiTraceHit + the Lambert shade with the SW path via gi_trace_common.slangi.
 
 
-#include "hw_binding_slots.h"
+#include "constants.h"
 #include "../bvh/constants.h"
 #include "../bvh/ray_vertex_attrib.slangi"
 #include "../raytrace/constants.h"

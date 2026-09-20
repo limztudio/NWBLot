@@ -271,13 +271,6 @@ public:
         Core::Alloc::ScratchArena& scratchArena,
         bool shadowMaterialContextBatchGraphOwned = false
     );
-    [[nodiscard]] bool buildSceneSwBvh(
-        Core::CommandList& commandList,
-        Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false,
-        bool meshSwBvhBuildsGraphOwned = false
-    );
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
@@ -805,13 +798,6 @@ private:
         Core::Alloc::ScratchArena& scratchArena,
         bool shadowMaterialContextBatchGraphOwned = false
     );
-    [[nodiscard]] bool buildSceneSwBvhImpl(
-        Core::CommandList* commandList,
-        Core::Alloc::ScratchArena& scratchArena,
-        bool shadowMaterialContextBatchGraphOwned = false,
-        bool sceneBvhBatchGraphOwned = false,
-        bool meshSwBvhBuildsGraphOwned = false
-    );
     [[nodiscard]] bool prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena);
     [[nodiscard]] bool capturePreparedShadowMaterialContext(
         PreparedShadowMaterialContextRoute route,
@@ -862,16 +848,6 @@ private:
         usize instanceByteCount
     );
     [[nodiscard]] bool capturePreparedSceneBvhCacheReuse(u64 staticSceneHash, u32 instanceCount);
-    [[nodiscard]] bool matchesPreparedSceneBvh(
-        bool staticScene,
-        u64 staticSceneHash,
-        const void* nodeData,
-        usize nodeCount,
-        usize nodeByteCount,
-        const void* instanceData,
-        usize instanceCount,
-        usize instanceByteCount
-    )const;
     void clearPreparedSceneBvh()noexcept;
     [[nodiscard]] bool capturePreparedSceneSwBvhTraversal(
         const PreparedSceneSwBvhMesh* meshes,

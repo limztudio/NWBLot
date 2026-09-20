@@ -107,15 +107,10 @@ groupshared uint   s_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 half4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
     return half4(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)));
 }
-bool nwbShadowResolveValidAtHalf(const int2 halfTexel){
-    return nwbShadowResolveGeomAtHalf(halfTexel).w > half(0.5h);
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-#define NWB_SHADOW_RESOLVE_UPSAMPLE_DIST_FRAC 0.02
 
 // Guided upsample parameters.
 #define NWB_SHADOW_RESOLVE_GUIDED_RADIUS 1
@@ -144,11 +139,6 @@ half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapO
 #endif
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM (NWB_SHADOW_RESOLVE_SIGMA_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (NWB_SHADOW_RESOLVE_SIGMA_EPS_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
-
-half nwbShadowResolveValueWeight(const half centerVis, const half tapVis, const float sigmaLum){
-    // The value-similarity weight is a (0, 1) bounded filter factor, so half arithmetic is sufficient here.
-    return half(exp(-abs(tapVis - centerVis) / half(sigmaLum)));
-}
 
 float nwbShadowResolveLuma(const float v){
     return v;
@@ -380,23 +370,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
     const int2 texel = int2(pixel);
     const bool inBounds = (pixel.x < g_NwbShadowResolvePushConstants.halfWidth && pixel.y < g_NwbShadowResolvePushConstants.halfHeight);
-
-    if(stage == NWB_SHADOW_RESOLVE_STAGE_PREPARE){
-        if(inBounds){
-            const bool valid = nwbShadowResolveValidAtHalf(texel);
-            for(uint slot = slotStart; slot < slotEnd; ++slot){
-                const half3 vis = valid
-                    ? half3(NwbHeapSampledImage2DArray(g_NwbShadowResolvePushConstants.softHalfSlot).Load(int4(texel, slot, 0)).rgb)
-                    : half3(1.0h, 1.0h, 1.0h)
-                ;
-                g_NwbShadowResolveOutput[uint3(pixel, slot)] = float4(float3(vis), 1.0);
-            }
-        }
-        return;
-    }
-
-    if(stage != NWB_SHADOW_RESOLVE_STAGE_WAVELET)
-        return;
 
     const int step = (int)max(g_NwbShadowResolvePushConstants.stepWidth, 1u);
 

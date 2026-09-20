@@ -97,7 +97,7 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     EXPECT_TRUE(ContainsText(swBvh, "&& !capturePreparedShadowMaterialContextCacheReuse("));
 
     const usize cacheCaptureOffset = rayTracing.find("bool RendererRayTracingSystem::capturePreparedSceneBvhCacheReuse(");
-    const usize cacheCaptureEndOffset = rayTracing.find("bool RendererRayTracingSystem::matchesPreparedSceneBvh(", cacheCaptureOffset);
+    const usize cacheCaptureEndOffset = rayTracing.find("void RendererRayTracingSystem::clearPreparedSceneSwBvhTraversal()", cacheCaptureOffset);
     ASSERT_NE(cacheCaptureOffset, AStringView::npos);
     ASSERT_NE(cacheCaptureEndOffset, AStringView::npos);
     const AStringView cacheCapture = rayTracing.substr(cacheCaptureOffset, cacheCaptureEndOffset - cacheCaptureOffset);

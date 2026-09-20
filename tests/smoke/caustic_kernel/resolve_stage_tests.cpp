@@ -275,9 +275,14 @@ void RunStageCase(
                     }
                 }
                 const f32 expected = (static_cast<f32>(sum) / 1048576.0f) / area * 0.75f;
-                EXPECT_EQ(candidate.r, ConvertFloatToHalf(expected));
-                EXPECT_EQ(candidate.g, ConvertFloatToHalf(expected * 2.0f));
-                EXPECT_EQ(candidate.b, ConvertFloatToHalf(expected * 4.0f));
+                // GPU float-to-half conversion may round a midpoint one half code away from the CPU oracle;
+                // keep the one-adjacent-half tolerance already used for the uniform pattern below.
+                EXPECT_GE(candidate.r, ConvertFloatToHalf(expected) - 1u);
+                EXPECT_LE(candidate.r, ConvertFloatToHalf(expected) + 1u);
+                EXPECT_GE(candidate.g, ConvertFloatToHalf(expected * 2.0f) - 1u);
+                EXPECT_LE(candidate.g, ConvertFloatToHalf(expected * 2.0f) + 1u);
+                EXPECT_GE(candidate.b, ConvertFloatToHalf(expected * 4.0f) - 1u);
+                EXPECT_LE(candidate.b, ConvertFloatToHalf(expected * 4.0f) + 1u);
             }
             else if(pattern == Pattern::Uniform){
                 const HalfPixel expected = Pixel(1.0f, 0.5f, 0.25f, 1.0f);

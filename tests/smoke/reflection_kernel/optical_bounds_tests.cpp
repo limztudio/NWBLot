@@ -80,7 +80,7 @@ static_assert(sizeof(PushConstants) == 12u);
 
 
 Case& AddCase(Cases& cases, const AStringView label, const i32 outside, const i32 exterior){
-    cases.push_back(Case{ .label = label, .expectedOutside = outside, .expectedExterior = exterior });
+    cases.push_back(Case{ .label = label, .ray = {}, .expectedOutside = outside, .expectedExterior = exterior });
     return cases.back();
 }
 

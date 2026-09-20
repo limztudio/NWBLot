@@ -125,7 +125,7 @@ static_assert(sizeof(Observation) == 48u);
 
 
 Case& AddCase(Cases& cases, const AStringView name){
-    cases.push_back(Case{ .name = name });
+    cases.push_back(Case{ .name = name, .ray = {}, .planes = {} });
     return cases.back();
 }
 

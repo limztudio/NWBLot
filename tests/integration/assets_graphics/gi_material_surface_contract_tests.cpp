@@ -261,9 +261,7 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
         swBvh,
         "HW shadow material context changed after graph preflight; rejecting frozen upload batch"
     ));
-    // The software scene-BVH path prepares its material context preflight-only; the recording-time
-    // frozen-batch rejection now guards the hardware path above, so assert the surviving fail-closed
-    // freeze behavior instead of the removed software recording-time replacement.
+    // The software scene-BVH path prepares its material context preflight-only; the recording-time frozen-batch rejection now guards the hardware path above, so assert the surviving fail-closed freeze behavior instead of the removed software recording-time replacement.
     EXPECT_TRUE(ContainsText(
         swBvh,
         "could not freeze software scene traversal"

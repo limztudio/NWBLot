@@ -27,6 +27,7 @@ void RendererRayTracingSystem::invalidateResources(){
     m_softwareOpticalScene.invalidate();
     releaseSceneTlasHeapHandle();
     releaseCausticEmissionTargetHeapHandle();
+    releaseCausticResolveActivity();
     releaseRayTraceMaterialContextHeapHandles();
     releaseSwBvhScratchHeapHandles();
     releaseSurfelGiHeapHandles();

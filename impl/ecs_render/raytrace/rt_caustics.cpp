@@ -389,6 +389,7 @@ struct CausticResolveThirdWaveletGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -398,6 +399,8 @@ struct CausticResolveThirdWaveletGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -418,6 +421,7 @@ struct CausticResolveFourthWaveletGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -427,6 +431,8 @@ struct CausticResolveFourthWaveletGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -447,6 +453,7 @@ struct CausticResolveFifthWaveletGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -456,6 +463,8 @@ struct CausticResolveFifthWaveletGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -554,11 +563,15 @@ static void DispatchCausticResolvePass(
     const u32 stepWidth,
     const CausticResolveStage::Enum stage,
     const u32 groupsX,
-    const u32 groupsY
+    const u32 groupsY,
+    const CausticResolveActivitySnapshot& activity = {}
 ){
     NWB_ASSERT(input.texture);
     NWB_ASSERT(output.texture);
     NWB_ASSERT(input.texture != output.texture);
+    const bool usesActivity = stage == CausticResolveStage::Wavelet && activity.valid();
+    const i32 activityInput = usesActivity ? (stepWidth == 8u ? 0 : (stepWidth == 16u ? 1 : -1)) : -1;
+    const i32 activityOutput = usesActivity ? (stepWidth == 4u ? 0 : (stepWidth == 8u ? 1 : -1)) : -1;
     if(!graphOwnsPassEntryStates){
         // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup, while later ping-pong passes explicitly establish their own dynamic input/output states.
         if(!graphEntryStatesOwned){
@@ -568,6 +581,12 @@ static void DispatchCausticResolvePass(
         commandList.setTextureState(input.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.causticResolveGeometry.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(output.texture, ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::UnorderedAccess);
+        if(activityInput >= 0)
+            commandList.setBufferState(activity.buffers[activityInput].get(), Core::ResourceStates::ShaderResource);
+        if(activityOutput >= 0){
+            commandList.setEnableUavBarriersForBuffer(activity.buffers[activityOutput].get(), true);
+            commandList.setBufferState(activity.buffers[activityOutput].get(), Core::ResourceStates::UnorderedAccess);
+        }
         commandList.commitBarriers();
     }
 
@@ -588,6 +607,10 @@ static void DispatchCausticResolvePass(
     resolvePush.geometrySlot = targets.bindless.causticResolveGeometry.slot();
     resolvePush.accumulatorSlot = targets.bindless.causticAccumulator.slot();
     resolvePush.outputStorageSlot = output.storageSlot;
+    if(activityInput >= 0)
+        resolvePush.activityInputSlot = activity.descriptors[activityInput].slot();
+    if(activityOutput >= 0)
+        resolvePush.activityOutputSlot = activity.descriptors[activityOutput].slot();
 
     Core::ComputeState computeState;
     computeState.setPipeline(&pipeline);
@@ -888,6 +911,8 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create caustic resolve geometry cache target"));
         return false;
     }
+    if(!prepareCausticResolveActivity(halfWidth, halfHeight))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic activity buffers unavailable; retaining full wavelet filtering"));
     return true;
 }
 
@@ -1080,7 +1105,8 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
         stepWidth,
         CausticResolveStage::Wavelet,
         halfGroupsX,
-        halfGroupsY
+        halfGroupsY,
+        causticResolveActivitySnapshot(targets)
     );
 }
 
@@ -1504,6 +1530,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveThirdWaveletTask(
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }
@@ -1523,6 +1550,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveFourthWaveletTask
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }
@@ -1542,6 +1570,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveFifthWaveletTask(
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }

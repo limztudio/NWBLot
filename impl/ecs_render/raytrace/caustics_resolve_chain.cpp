@@ -11,6 +11,8 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 
+#include <global/algorithm.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,7 +70,8 @@ struct ResolveStageDesc{
     const CausticsResolveChainNaming& naming,
     const Core::GpuQueueRequest& stageQueue,
     const Core::GpuQueueRequest& timingCloseQueue,
-    CausticsResolveChainResult& outResult
+    CausticsResolveChainResult& outResult,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace RendererTaskGraphDetail;
     outResult = CausticsResolveChainResult{};
@@ -81,6 +84,19 @@ struct ResolveStageDesc{
     )
         return false;
 
+    const CausticResolveActivitySnapshot activity = m_raytracingSystem.causticResolveActivitySnapshot(*inputs.targets);
+    Core::GpuGraphResourceId activityResources[2];
+    if(activity.valid()){
+        const Name names[] = { Name("caustic_resolve_activity_a"), Name("caustic_resolve_activity_b") };
+        for(u32 index = 0u; index < LengthOf(activityResources); ++index){
+            Core::GpuGraphResourceDesc desc = BufferResourceDesc(names[index], "caustic resolve activity");
+            desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
+            activityResources[index] = m_graph.importBuffer(activity.buffers[index], desc);
+            if(!activityResources[index].valid())
+                return false;
+        }
+    }
+
     const __hidden_caustics_resolve_chain::ResolveStageDesc stages[] = {
         {&naming.prepare, true, &inputs.prepare, &outResult.causticResolvePrepareTask, &RendererRayTracingSystem::declareCausticResolvePrepareTask},
         {&naming.wavelet, true, &inputs.wavelet, &outResult.causticResolveWaveletTask, &RendererRayTracingSystem::declareCausticResolveWaveletTask},
@@ -90,6 +106,13 @@ struct ResolveStageDesc{
         {&naming.fifthWavelet, false, &inputs.fifthWavelet, &outResult.causticResolveFifthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFifthWaveletTask},
         {&naming.upsample, false, &inputs.upsample, &outResult.causticResolveUpsampleTask, &RendererRayTracingSystem::declareCausticResolveUpsampleTask},
     };
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> activityUses{ scratchArena };
+    if(activity.valid()){
+        usize maximumUses = 0u;
+        for(const auto& stage : stages)
+            maximumUses = Max(maximumUses, static_cast<usize>(stage.stageUses->useCount));
+        activityUses.reserve(maximumUses + 2u);
+    }
     Core::GpuTaskSchedulingHint stageScheduling = inputs.baseScheduling;
     stageScheduling.mergeWithPrevious = true;
     Core::GpuTaskId previousTask = inputs.geometryTask;
@@ -104,6 +127,20 @@ struct ResolveStageDesc{
             .setDependencies(&previousTask, 1u)
             .setResourceUses(stage.stageUses->uses, stage.stageUses->useCount)
         ;
+        if(activity.valid() && stageIndex >= 3u && stageIndex <= 5u){
+            activityUses.clear();
+            for(usize useIndex = 0u; useIndex < stage.stageUses->useCount; ++useIndex)
+                activityUses.push_back(stage.stageUses->uses[useIndex]);
+            if(stageIndex == 3u)
+                activityUses.push_back(WriteUse(activityResources[0], Core::ResourceStates::UnorderedAccess));
+            else if(stageIndex == 4u){
+                activityUses.push_back(ReadUse(activityResources[0], Core::ResourceStates::ShaderResource));
+                activityUses.push_back(WriteUse(activityResources[1], Core::ResourceStates::UnorderedAccess));
+            }
+            else
+                activityUses.push_back(ReadUse(activityResources[1], Core::ResourceStates::ShaderResource));
+            stageDesc.setResourceUses(activityUses.data(), activityUses.size());
+        }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)
             stageDesc.setExternalStateSources(inputs.stateSources, inputs.stateSourceCount);
         *stage.outTask = (m_raytracingSystem.*(stage.declareTask))(
@@ -150,3 +187,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

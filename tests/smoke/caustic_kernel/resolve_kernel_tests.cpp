@@ -26,7 +26,7 @@ namespace __hidden_caustic_resolve_kernel_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This narrow native fixture mirrors only the production 56-byte selector ABI, not the wavelet implementation.
+// This narrow native fixture mirrors only the production 64-byte selector ABI, not the wavelet implementation.
 struct ResolvePushConstants{
     u32 width;
     u32 height;
@@ -42,6 +42,8 @@ struct ResolvePushConstants{
     u32 geometrySlot;
     u32 accumulatorSlot;
     u32 outputStorageSlot;
+    u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
+    u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
 };
 
 struct HalfPixel{
@@ -68,7 +70,7 @@ namespace Pattern{
     };
 };
 
-static_assert(sizeof(ResolvePushConstants) == 56u);
+static_assert(sizeof(ResolvePushConstants) == 64u);
 static_assert(offsetof(ResolvePushConstants, causticIntensity) == 16u);
 static_assert(offsetof(ResolvePushConstants, geometrySlot) == 44u);
 static_assert(offsetof(ResolvePushConstants, outputStorageSlot) == 52u);

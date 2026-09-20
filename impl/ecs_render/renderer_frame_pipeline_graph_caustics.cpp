@@ -706,7 +706,7 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     resolveChainInputs.timingTicket = &timingTicket;
     resolveChainInputs.resolveTiming = &causticResolveTiming;
     SoftwareCausticsResolveChainResult resolveChainResult;
-    if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult)){
+    if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, scratchArena)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));
         return false;
     }

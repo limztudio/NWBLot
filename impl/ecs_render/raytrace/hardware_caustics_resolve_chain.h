@@ -75,7 +75,8 @@ public:
 public:
     [[nodiscard]] bool declare(
         const HardwareCausticsResolveChainInputs& inputs,
-        HardwareCausticsResolveChainResult& outResult
+        HardwareCausticsResolveChainResult& outResult,
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 

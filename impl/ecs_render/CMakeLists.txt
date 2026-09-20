@@ -266,6 +266,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_upsample.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/soft_shadow_resolve_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/caustic_resolve_state.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/caustic_resolve_activity.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/caustic_resolve_activity.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_refraction.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/avboit/task_graph_refraction_capture.cpp"

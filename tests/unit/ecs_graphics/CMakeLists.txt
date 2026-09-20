@@ -17,6 +17,7 @@ target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/refraction_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_alias_plan_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_layout_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/caustic_resolve_activity_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/object_geometry_cache_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/generated_geometry_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compute_emulation_output_resource_set_tests.cpp"

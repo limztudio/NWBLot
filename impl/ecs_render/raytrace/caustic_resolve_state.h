@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "caustic_resolve_activity.h"
+
 #include <impl/global.h>
 
 #include <core/graphics/rhi/device.h>
@@ -26,6 +28,7 @@ struct CausticResolveStageState{
 
 struct CausticResolveState{
     Core::BindingLayoutHandle m_bindingLayout;
+    CausticResolveActivitySnapshot m_activity;
     CausticResolveStageState m_prepare;
     CausticResolveStageState m_wavelet;
     CausticResolveStageState m_waveletDirect;

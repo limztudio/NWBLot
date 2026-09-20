@@ -121,7 +121,7 @@ bool CausticKernelTest::loadResolveKernel(
     if(!shader)
         return false;
     BindingLayoutDesc layoutDesc(memoryArena);
-    layoutDesc.setVisibility(ShaderType::Compute).addItem(BindingLayoutItem::PushConstants(0u, 56u));
+    layoutDesc.setVisibility(ShaderType::Compute).addItem(BindingLayoutItem::PushConstants(0u, 64u));
     const BindingLayoutHandle layout = graphicsDevice.createBindingLayout(layoutDesc);
     if(!layout)
         return false;

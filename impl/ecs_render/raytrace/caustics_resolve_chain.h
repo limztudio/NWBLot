@@ -97,7 +97,8 @@ public:
         const CausticsResolveChainNaming& naming,
         const Core::GpuQueueRequest& stageQueue,
         const Core::GpuQueueRequest& timingCloseQueue,
-        CausticsResolveChainResult& outResult
+        CausticsResolveChainResult& outResult,
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 

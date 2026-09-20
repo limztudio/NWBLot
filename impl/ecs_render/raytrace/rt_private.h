@@ -382,8 +382,12 @@ struct CausticResolvePushConstants{
     u32 geometrySlot = 0u;
     u32 accumulatorSlot = 0u;
     u32 outputStorageSlot = 0u;
+    u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
+    u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
 };
-static_assert(sizeof(CausticResolvePushConstants) == sizeof(u32) * 13u + sizeof(f32), "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticResolvePushConstants) == 64u, "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == 56u);
+static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == 60u);
 
 // Heap-only selector ABI shared by every surfel GI pass.
 struct SurfelHeapPushConstants{

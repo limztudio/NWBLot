@@ -413,7 +413,7 @@ All 420 enabled ECS graphics tests pass (61 existing disabled). Five native refl
 
 Matched 1280 x 900 captures freeze after 120 submitted frames. The mean absolute channel difference between original and specialized images is 0.08436/255, maximum 11/255. Repeating the unchanged original gives 0.08213/255, maximum 12/255. Visual inspection finds no structural change; this is agreement within the observed temporal variation, not pixel identity. Existing glass artifacts remain. This ten-body comparison does not satisfy the user's confirmed twenty-body, at-least-60-FPS target.
 
-Evidence: `__artifacts/stress_60fps/reflection_active_6c9207d03/`, including `baseline_run1`, `specialized_run1`, `specialized_validation`, `reflection_kernel_final.{log,xml}`, `ecs_combined.{log,xml}`, the three `*frame120.bmp` captures and both image-comparison JSON files. The production shader and snapshot changes were frozen for the timing runs before subsequent geometry/caustic work.
+Evidence: `__artifacts/stress_60fps/reflection_active_6c9207d03/`, including `baseline_run1`, `specialized_run1`, `specialized_validation`, `reflection_kernel_final.{log,xml}`, `ecs_combined.{log,xml}`, the three `*frame 120.bmp` captures and both image-comparison JSON files. The production shader and snapshot changes were frozen for the timing runs before subsequent geometry/caustic work.
 
 ## Caustic stage specialization and twenty-body baseline, 2026-09-20
 
@@ -429,7 +429,7 @@ The first retained twenty-body baseline measures **37.9992 FPS / 26.3164 ms** af
 
 A smaller shared-mesh barrier/LDS experiment was rejected and its five production files restored exactly. On the ten-body profile it increased mesh preparation from 3.9137 to 4.4613 ms and lowered presentation rate to 46.6622 FPS despite the concurrent caustic saving. Its extra primitive-to-position reference loads did not pay for the synchronization savings on this device. The native custom-clip regression is retained, independently covering authored builders whose clip positions differ from source positions.
 
-Evidence: `__artifacts/stress_60fps/object_cache_baseline/` contains the frozen retained executable/resources, `run10`, `run20` and `scene20_frame120.bmp` with the validation capture log. `__artifacts/stress_60fps/reflection_active_6c9207d03/` retains `caustic_kernel_prestep.{log,xml}`, `mesh_kernel_restored.log`, `python_workload.log`, the rejected `combined10_run1`/`combined20_run1` measurements and `rejected_mesh_barriers/` source. The rejected twenty-body run is not the retained baseline.
+Evidence: `__artifacts/stress_60fps/object_cache_baseline/` contains the frozen retained executable/resources, `run10`, `run20` and `scene20_frame 120.bmp` with the validation capture log. `__artifacts/stress_60fps/reflection_active_6c9207d03/` retains `caustic_kernel_prestep.{log,xml}`, `mesh_kernel_restored.log`, `python_workload.log`, the rejected `combined10_run1`/`combined20_run1` measurements and `rejected_mesh_barriers/` source. The rejected twenty-body run is not the retained baseline.
 
 ## Accepted object-space geometry cache, 2026-09-20
 
@@ -529,3 +529,26 @@ The fixed twenty-body acquisition changes from 60.2347 to **60.3312 FPS**, or 16
 A separate algebraic shadow-upsampling experiment precomputed signed regression coefficients once per pixel for all light channels. It passed all fourteen native shadow suites at their existing tolerances after a definite-initialization fix, but moving performance was 57.4138 FPS and transparent resolve 1.7835 ms versus 1.7752 ms. Its sole production shader was restored exactly; it is not part of the retained refraction change.
 
 Evidence: `__artifacts/stress_60fps/refraction_hit_candidate/` contains frozen binaries/assets, corrected compiled fixture sources, native logs/XML, fixed/moving timings, GPU summaries and the validated frame-120 image/comparison. `shadow_fit_coefficients_candidate/` retains the rejected shader, native results and acquisition.
+
+## Exact activity maps for large caustic dilations, 2026-09-20
+
+Caustic filtering now publishes one activity word per 8x8 half-resolution output tile after dilation 4 and dilation 8. The next large-dilation pass checks exactly the 25 tiles containing its possible taps and skips filtering only when all their RGB values are zero. The published values are the actual widened half results: negative and nonfinite values remain active. Every producing group overwrites its word, including partial groups and invalid receivers. All five original dilations, filter equations, photon settings and temporal accumulation remain. Missing optional buffers retain full filtering.
+
+The caustic domain owns two checked raw buffers and their descriptor lifetimes, 18,240 bytes each at 1280x900. The push ABI preserves its 56-byte prefix and appends input/output slots at 56/60, for 64 bytes total. Both hardware and software resolve builders use the common chain's explicit dilation 4 writeA, dilation 8 readA/writeB and dilation 16 readB dependencies. The graph retains owning resource snapshots and rejects changed identities; compatibility recording establishes matching transitions. Buffers restore Common state. Existing indivisible-chain and frame/history execution dependencies protect reuse; resource layout snapshots are not treated as completion waits. Existing caller scratch arenas are passed through the builders.
+
+All 443 enabled renderer CPU tests pass (61 existing disabled), including three new checked-layout boundary cases. All five native caustic suites pass: the earlier 312 paired cases and 50 new reused-resource chains with every 4/8/16 intermediate image checked exactly against a frozen predecessor, independently reconstructed flags and guard checks. Eleven native caustic descriptor/graph-handoff tests also pass. Integration fixed one new include placed inside the implementation namespace; the header is now in the top-level include group and the pre-existing duplicate include is removed. The older refraction source-contract test was aligned with its new helper boundary in a separate commit, and an unrelated existing optical fixture initializer warning was corrected separately.
+
+| Twenty-body measurement | Refraction-admission baseline | Caustic activity maps |
+| --- | ---: | ---: |
+| Fixed accepted presentations/s | 60.3312 | 61.4584 |
+| Fixed wall interval | 16.5752 ms | 16.2712 ms |
+| Rotating accepted presentations/s | 57.7557 | 58.0619 |
+| Rotating wall interval | 17.3143 ms | 17.2230 ms |
+| Fixed caustic resolve | 1.0589 ms | 0.8725 ms |
+| Rotating caustic resolve | 1.0747 ms | 0.8713 ms |
+
+These acquisitions retain 20 bodies, all effects, 1280x900, five seconds warmup and 30 seconds measurement. Shadow/async ranges vary and overlap, so the local caustic saving must not be added to other ranges. **The rotating 60-FPS target remains unmet.** The frame 120 stress capture and caustic-sphere capture pass GPU validation. Stress image difference from the refraction baseline averages 0.08507/255, maximum 27/255, with no structural change; existing glass artifacts remain.
+
+The capture harness now has an opt-in client-resize mode, committed independently as 9f66472ce. All 70 Python behavior tests pass, including 11 new cases. Actual validated runs render at 1280x900, resize the sphere scene to 1001x701 and the 20-body stress scene to 1441x961, confirm both native client size and the renderer backbuffer acknowledgement, then render and capture at the new dimensions. Full-scene captures on this device use hardware caustics. Software graph handoffs are covered natively, but there is no full-scene force-software switch on this RT-capable device; full software-producer startup remains unqualified here.
+
+Evidence: `__artifacts/stress_60fps/caustic_activity_candidate/` retains the frozen stress executable/assets and corrected sources, native/CPU/graph results, fixed/moving timing, frame 120 and sphere images, before/after resize captures/logs and image comparison. `caustic_activity_prepare/` and `caustic_resize_prepare/` preserve the reviewed proposals and manifests.

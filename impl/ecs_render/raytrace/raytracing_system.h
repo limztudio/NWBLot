@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
+#include <impl/ecs_render/raytrace/caustic_resolve_activity.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
 #include <impl/ecs_render/raytrace/shadow_trace_geometry.h>
@@ -98,12 +99,6 @@ namespace RayTracingShadowVisibilityTaskDetail{
     struct ShadowTransparentSoftFirstWaveletGraphTask;
     struct ShadowTransparentSoftFoldGraphTask;
 }
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#include <impl/ecs_render/raytrace/graph_snapshots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -590,6 +585,7 @@ public:
         Optional<Core::GpuTimingMeasure>* causticResolveTiming,
         bool graphEntryStatesOwned = false
     );
+    [[nodiscard]] CausticResolveActivitySnapshot causticResolveActivitySnapshot(const DeferredFrameTargets& targets)const;
     [[nodiscard]] Core::GpuTaskId declareCausticResolveTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -1129,6 +1125,8 @@ private:
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticResolvePipeline();
+    [[nodiscard]] bool prepareCausticResolveActivity(u32 halfWidth, u32 halfHeight);
+    void releaseCausticResolveActivity();
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();

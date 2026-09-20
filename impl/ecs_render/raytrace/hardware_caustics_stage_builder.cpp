@@ -716,7 +716,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         resolveChainInputs.timingTicket = inputs.timingTicket;
         resolveChainInputs.resolveTiming = inputs.resolveTiming;
         HardwareCausticsResolveChainResult resolveChainResult;
-        if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult)){
+        if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, hardwareCausticsScratchArena)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));
             return false;
         }

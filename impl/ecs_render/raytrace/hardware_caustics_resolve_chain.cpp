@@ -35,7 +35,8 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
 
 [[nodiscard]] bool HardwareCausticsResolveChainBuilder::declare(
     const HardwareCausticsResolveChainInputs& inputs,
-    HardwareCausticsResolveChainResult& outResult
+    HardwareCausticsResolveChainResult& outResult,
+    Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace RendererTaskGraphDetail;
     CausticsResolveChainInputs sharedInputs;
@@ -64,7 +65,7 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
     CausticsResolveChainResult sharedResult;
-    if(!sharedBuilder.declare(sharedInputs, naming, GraphicsPreferredComputeQueueRequest(), GraphicsQueueRequest(), sharedResult))
+    if(!sharedBuilder.declare(sharedInputs, naming, GraphicsPreferredComputeQueueRequest(), GraphicsQueueRequest(), sharedResult, scratchArena))
         return false;
     outResult.causticResolvePrepareTask = sharedResult.causticResolvePrepareTask;
     outResult.causticResolveWaveletTask = sharedResult.causticResolveWaveletTask;
@@ -85,3 +86,4 @@ NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

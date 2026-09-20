@@ -42,6 +42,8 @@ struct ResolvePushConstants{
     u32 geometrySlot;
     u32 accumulatorSlot;
     u32 outputStorageSlot;
+    u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
+    u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
 };
 
 struct HalfPixel{
@@ -61,7 +63,7 @@ namespace Pattern{
     };
 };
 
-static_assert(sizeof(ResolvePushConstants) == 56u);
+static_assert(sizeof(ResolvePushConstants) == 64u);
 static_assert(offsetof(ResolvePushConstants, outputStorageSlot) == 52u);
 static_assert(sizeof(HalfPixel) == 8u);
 

@@ -28,9 +28,7 @@ namespace __hidden_gather_merge_registry{
 
 
 ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena>& QueryAutoMergeQueue(){
-    static ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena> queue(
-        AssetsArenaScope::s_GatherMergeQueueArena
-    );
+    static ::AutoRegistrationQueue<AssetGatherMergeFunction, AssetArena> queue(AssetsArenaScope::s_GatherMergeQueueArena);
     return queue;
 }
 

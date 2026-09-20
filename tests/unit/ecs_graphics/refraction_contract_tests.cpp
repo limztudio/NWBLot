@@ -57,7 +57,7 @@ TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialConte
     EXPECT_FALSE(ContainsText(helper, "RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH"));
     EXPECT_TRUE(ContainsText(helper, "RayQuery<RAY_FLAG_FORCE_OPAQUE> query"));
     EXPECT_TRUE(ContainsText(helper, "NwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[hit.instance]"));
-    const usize closestFunction = helper.find("NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(");
+    const usize closestFunction = helper.find("NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(");
     const usize reconstructFunction = helper.find("NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(");
     ASSERT_NE(closestFunction, AStringView::npos);
     ASSERT_NE(reconstructFunction, AStringView::npos);
@@ -78,8 +78,10 @@ TEST(EcsGraphics, RefractionUsesSharedNearestSurfaceHitWithExplicitMaterialConte
     EXPECT_TRUE(ContainsText(helper, "return nwbRayTraceNormalizeGeometryVector(worldNormal);"));
     EXPECT_TRUE(ContainsText(helper, "return hit;"));
     EXPECT_TRUE(ContainsText(helper, "nwbShadowDispatchSurface(material.shadowTransmittanceModelId, surfaceHit)"));
-    EXPECT_TRUE(ContainsText(resolver, "#include \"../raytrace/surface_hit.slangi\""));
-    EXPECT_EQ(CountText(resolver, "nwbRayTraceClosestSurfaceHit("), 3u);
+    EXPECT_TRUE(ContainsText(resolver, "#include \"interface_hit.slangi\""));
+    EXPECT_EQ(CountText(resolver, "nwbRayTraceClosestSurfaceHit("), 1u);
+    EXPECT_EQ(CountText(resolver, "nwbRefractionClosestEntryInterface("), 1u);
+    EXPECT_EQ(CountText(resolver, "nwbRefractionClosestExitInterface("), 1u);
     EXPECT_EQ(CountText(resolver, "g_NwbRefractionMaterialContext.sceneSlots.z,"), 3u);
     EXPECT_FALSE(ContainsText(resolver, "RayQuery<"));
 }

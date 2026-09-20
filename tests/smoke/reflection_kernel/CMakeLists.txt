@@ -8,6 +8,7 @@ target_sources(nwb_reflection_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/depth_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/screen_trace_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/classify_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/refraction_hit_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reference/classify_cs.slang"
@@ -64,3 +65,11 @@ set(refraction_hit_test_assets
 )
 target_sources(nwb_reflection_kernel_tests PRIVATE ${refraction_hit_test_assets})
 set_source_files_properties(${refraction_hit_test_assets} PROPERTIES HEADER_FILE_ONLY TRUE)
+
+set(screen_trace_test_assets
+    "${CMAKE_CURRENT_LIST_DIR}/assets/screen_trace_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/screen_trace_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/screen_trace.slangi"
+)
+target_sources(nwb_reflection_kernel_tests PRIVATE ${screen_trace_test_assets})
+set_source_files_properties(${screen_trace_test_assets} PROPERTIES HEADER_FILE_ONLY TRUE)

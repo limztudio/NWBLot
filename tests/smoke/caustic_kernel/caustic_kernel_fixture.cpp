@@ -28,24 +28,28 @@ bool CausticKernelTest::loadResolveKernel(
     const bool reference,
     const u32 stage,
     Core::Alloc::ScratchArena& scratchArena,
-    Core::ComputePipelineHandle& outPipeline){
+    Core::ComputePipelineHandle& outPipeline,
+    const bool directWavelet){
     auto& graphicsDevice = device();
     auto& heap = graphicsDevice.getDescriptorHeap();
     auto& memoryArena = arena();
     const Path sourceRoot(memoryArena, NWB_CAUSTIC_KERNEL_SOURCE_ROOT);
     const Path kernelRoot = sourceRoot / "impl/assets/graphics/caustic";
     const AStringView kernelName = "caustic_resolve_cs";
-    constexpr AStringView s_StageValues[] = { "3", "1", "2" };
+    constexpr AStringView s_StageValues[] = { "3", "1", "2", "4" };
     constexpr AStringView s_StageVariants[] = {
         "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3",
         "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1",
-        "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2"
+        "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2",
+        "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=4"
     };
     constexpr AStringView s_StageOutputs[] = {
-        "caustic_resolve_prepare.spv", "caustic_resolve_wavelet.spv", "caustic_resolve_upsample.spv"
+        "caustic_resolve_prepare.spv", "caustic_resolve_wavelet.spv", "caustic_resolve_upsample.spv",
+        "caustic_resolve_wavelet_direct.spv"
     };
-    if(stage >= LengthOf(s_StageValues))
+    if(stage > 2u || (directWavelet && (reference || stage != 1u)))
         return false;
+    const u32 variantIndex = directWavelet ? 3u : stage;
     const bool waveletReference = stage == 1u;
     const Path sourcePath = reference
         ? sourceRoot / (waveletReference
@@ -58,7 +62,7 @@ bool CausticKernelTest::loadResolveKernel(
     if(!CreateDirectories(outputRoot, directoryError) && directoryError)
         return false;
     const AStringView referenceOutput = waveletReference ? "caustic_resolve_reference.spv" : "caustic_resolve_stages_reference.spv";
-    const Path outputPath = outputRoot / (reference ? referenceOutput : s_StageOutputs[stage]);
+    const Path outputPath = outputRoot / (reference ? referenceOutput : s_StageOutputs[variantIndex]);
     Impl::ShaderCook shaderCook(memoryArena);
     Impl::ShaderCook::ShaderEntry entry(memoryArena);
     if(!shaderCook.parseShaderMeta(metadataPath, entry, scratchArena))
@@ -84,10 +88,10 @@ bool CausticKernelTest::loadResolveKernel(
         if(AStringView(value.data(), value.size()) != s_StageValues[index])
             return false;
     }
-    const AStringView variant = reference ? AStringView("default") : s_StageVariants[stage];
+    const AStringView variant = reference ? AStringView("default") : s_StageVariants[variantIndex];
     if(!reference && !shaderCook.validateVariantSignature(kernelName, variant, entry.defineValues, scratchArena))
         return false;
-    const Impl::ShaderCook::ShaderMacroDefinition definition{ "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE", s_StageValues[stage] };
+    const Impl::ShaderCook::ShaderMacroDefinition definition{ "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE", s_StageValues[variantIndex] };
     Impl::ShaderCook::CookVector<Path> includes(memoryArena);
     includes.push_back(sourceRoot / "impl/assets/graphics");
     includes.push_back(kernelRoot);

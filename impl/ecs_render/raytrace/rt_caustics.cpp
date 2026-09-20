@@ -1061,17 +1061,23 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
         targets.bindless.causticResolveHalf.slot(),
         targets.bindless.causticResolveHalfStorage.slot()
     };
+    const u32 stepWidth = 1u << passIndex;
+    const CausticResolveStageState& wavelet = stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP
+        ? m_rayTracingState.m_causticResolve.m_waveletDirect
+        : m_rayTracingState.m_causticResolve.m_wavelet
+    ;
+    NWB_ASSERT(wavelet.m_pipeline);
     __hidden_caustics::DispatchCausticResolvePass(
         commandList,
         heap,
-        *m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline.get(),
+        *wavelet.m_pipeline.get(),
         targets,
         graphEntryStatesOwned,
         graphOwnsPassEntryStates,
         inputIsHalfB ? halfB : halfA,
         inputIsHalfB ? halfA : halfB,
         effectiveIntensity,
-        1u << passIndex,
+        stepWidth,
         CausticResolveStage::Wavelet,
         halfGroupsX,
         halfGroupsY
@@ -1627,6 +1633,7 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
     return
         m_rayTracingState.m_causticResolve.m_prepare.m_pipeline
         && m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline
+        && m_rayTracingState.m_causticResolve.m_waveletDirect.m_pipeline
         && m_rayTracingState.m_causticResolve.m_upsample.m_pipeline
         && m_rayTracingState.m_causticGeometryDownsamplePipeline
         && (temporalDecay <= 0.f || m_rayTracingState.m_causticAccumulatorDecayPipeline)
@@ -1845,7 +1852,10 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
 
 bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
-    if(resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline && resolve.m_upsample.m_pipeline)
+    if(
+        resolve.m_prepare.m_pipeline && resolve.m_wavelet.m_pipeline
+        && resolve.m_waveletDirect.m_pipeline && resolve.m_upsample.m_pipeline
+    )
         return true;
     if(resolve.m_failed)
         return false;
@@ -1879,9 +1889,11 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     const StageRequest stages[] = {
         { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=3", resolve.m_prepare },
         { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=1", resolve.m_wavelet },
+        { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=4", resolve.m_waveletDirect },
         { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE=2", resolve.m_upsample },
     };
     static_assert(NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC == 3u);
+    static_assert(NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT == 4u);
     static_assert(NWB_CAUSTIC_RESOLVE_STAGE_WAVELET == 1u && NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE == 2u);
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)

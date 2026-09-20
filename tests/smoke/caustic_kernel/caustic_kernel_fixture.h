@@ -29,7 +29,8 @@ protected:
         bool reference,
         u32 stage,
         Core::Alloc::ScratchArena& scratchArena,
-        Core::ComputePipelineHandle& outPipeline
+        Core::ComputePipelineHandle& outPipeline,
+        bool directWavelet = false
     );
 };
 

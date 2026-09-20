@@ -4,4 +4,4 @@ asset.stage = "cs";
 asset.target_profile = "spirv_1_5";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];
-asset.defines = { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE": ["3", "1", "2"], };
+asset.defines = { "NWB_CAUSTIC_RESOLVE_COMPILED_STAGE": ["3", "1", "2", "4"], };

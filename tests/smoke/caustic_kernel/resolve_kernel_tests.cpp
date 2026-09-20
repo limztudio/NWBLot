@@ -334,6 +334,36 @@ TEST_F(CausticKernelTest, CookedWaveletMatchesFrozenProductionAcrossTilesAndInva
     }
 }
 
+TEST_F(CausticKernelTest, DirectWaveletVariantMatchesFrozenProductionAtBothLargeDilations){
+    using namespace __hidden_caustic_resolve_kernel_tests;
+    Alloc::ScratchArena scratchArena(Name("tests/smoke/caustic_kernel/direct_wavelet"));
+    ComputePipelineHandle candidate;
+    ComputePipelineHandle reference;
+    ASSERT_TRUE(loadResolveKernel(false, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, candidate, true));
+    ASSERT_TRUE(loadResolveKernel(true, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, reference));
+    const u32 dimensions[][2] = { { 1u, 1u }, { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u }, { 35u, 33u }, { 73u, 69u } };
+    const u32 steps[] = { 8u, 16u };
+    for(const auto& dimension : dimensions){
+        for(const u32 step : steps){
+            for(u32 pattern = Pattern::Uniform; pattern <= Pattern::AllInvalid; ++pattern){
+                Observation observation;
+                RunResolveCase(
+                    device(), *reference, *candidate, dimension[0], dimension[1], step,
+                    static_cast<Pattern::Enum>(pattern), scratchArena, observation
+                );
+            }
+            if(dimension[0] < step + 2u)
+                continue;
+            Observation nearResult;
+            Observation farResult;
+            RunResolveCase(device(), *reference, *candidate, dimension[0], dimension[1], step, Pattern::InvalidRightNear, scratchArena, nearResult);
+            RunResolveCase(device(), *reference, *candidate, dimension[0], dimension[1], step, Pattern::InvalidRightFar, scratchArena, farResult);
+            EXPECT_GT(farResult.referenceCenterRed - nearResult.referenceCenterRed, 0.01f);
+            EXPECT_GT(farResult.candidateCenterRed - nearResult.candidateCenterRed, 0.01f);
+        }
+    }
+}
+
 TEST_F(CausticKernelTest, InvalidRightRawCoordinatesChangeActualSpacingWithoutJoiningTheFilter){
     using namespace __hidden_caustic_resolve_kernel_tests;
     Alloc::ScratchArena scratchArena(Name("tests/smoke/caustic_kernel/invalid_right"));

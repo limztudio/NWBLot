@@ -28,6 +28,7 @@ struct CausticResolveState{
     Core::BindingLayoutHandle m_bindingLayout;
     CausticResolveStageState m_prepare;
     CausticResolveStageState m_wavelet;
+    CausticResolveStageState m_waveletDirect;
     CausticResolveStageState m_upsample;
     bool m_failed = false;
 };

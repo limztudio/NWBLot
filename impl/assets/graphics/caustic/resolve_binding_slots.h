@@ -19,6 +19,8 @@
 
 // Compilation selector only; the dynamic program still receives one of the stage values above.
 #define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC 3u
+// Direct wavelet compilation excludes the small-dilation shared-memory path; the logical stage remains wavelet.
+#define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT 4u
 
 // Accumulator layers, one per RGB channel.
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT 3u

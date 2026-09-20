@@ -15,13 +15,15 @@
 // Half-resolution a-trous resolve: prepare, wavelet, then edge-aware upsample.
 
 // Compile wavelet and upsample separately; preparation retains the original dynamic program's rounding behavior.
+// Large wavelet dilations use the direct variant without reserving the small-step shared-memory tile.
 #ifndef NWB_CAUSTIC_RESOLVE_COMPILED_STAGE
 #error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select a resolve stage.
 #endif
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC \
     && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_WAVELET \
-    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE
-#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select the dynamic program, wavelet or upsample stage.
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select the dynamic program, wavelet, direct wavelet or upsample stage.
 #endif
 
 struct NwbCausticResolvePushConstants{
@@ -47,6 +49,7 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 #define g_NwbCausticResolveOutput NwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
 
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 // The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop
@@ -54,6 +57,7 @@ groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS]
 groupshared half3  s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   s_NwbCausticResolveTileActive;
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,6 +97,8 @@ static const half s_NwbCausticResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC
     const uint stage = g_NwbCausticResolvePushConstants.stage;
+#elif NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+    const uint stage = NWB_CAUSTIC_RESOLVE_STAGE_WAVELET;
 #else
     const uint stage = NWB_CAUSTIC_RESOLVE_COMPILED_STAGE;
 #endif
@@ -192,6 +198,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
     const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
 
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
     // All threads must complete the cooperative load and barriers before any bounds-dependent return.
     if(step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP){
         const int tileW = NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * step;
@@ -260,6 +267,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         g_NwbCausticResolveOutput[pixel] = (weightSum > half(0.0h)) ? float4(float3(sum / weightSum), 1.0) : float4(0.0, 0.0, 0.0, 1.0);
         return;
     }
+#endif
 
     // Large dilations access textures directly.
     if(!inBounds)

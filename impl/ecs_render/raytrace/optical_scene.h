@@ -65,6 +65,8 @@ struct RayTracingOpticalSceneGather{
     Vector<RayTracingOpticalRuntimeBounds, Core::Alloc::ScratchArena> runtimeBounds;
     bool hasBounds = false;
     bool boundsCompleteExceptRuntime = true;
+    // Policy-only specialization; incomplete geometry and bounds still reject transport in the shader.
+    bool unspecifiedBoundariesOnly = true;
 
     explicit RayTracingOpticalSceneGather(Core::Alloc::ScratchArena& arena, usize capacity);
     void append(

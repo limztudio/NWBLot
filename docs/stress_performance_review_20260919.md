@@ -389,3 +389,28 @@ The scene's open body mesh and its Unspecified refractive boundary policy remain
 The new bounds task is a negligible part of the measured frame. The next substantial work is to establish the intended optical model for the open character geometry, then profile and reduce the now-active reflection traversal cost. GI's roughly 1.35 ms envelope alone cannot explain the approximately 30.15 ms presentation interval. Any proposed reflection specialization must preserve required transport and demonstrate eligibility/cost savings on a supported workload before a full-scene 60 FPS claim.
 
 Evidence is under `__artifacts/stress_60fps/runtime_bounds_c9e594cfe/`: frozen `baseline`, `baseline_run1`, `candidate_run{1,2}`, per-run `gpu_summary.json`, `validation`, `cpu.xml`, `gpu_bounds.xml`, `raytrace.xml`, `gpu_graph.xml`, and `skinned_{early,late}.bmp` with capture logs. Build failure logs are retained alongside the passing build logs. These local binary/image/log artifacts are ignored by Git.
+
+## Reflection specialization for Unspecified boundaries, 2026-09-20
+
+The optical gather now records whether every emitted transparent instance uses the Unspecified boundary policy. The frozen scene snapshot carries this qualifier to reflection pipeline selection. Such a scene cannot enter the closed-medium branch, so its specialized shader omits closed-medium stacks and bootstrap event sorting arrays. It retains the original ray queries, material reconstruction, alpha handling, unsupported-policy termination and query/event limits. Any transparent ClosedNested, ClosedPriority or unknown policy selects the general shader. Opaque instance policies do not restrict eligibility. Missing snapshots remain conservative.
+
+The original bootstrap has substantial private array storage even for the Unspecified case. Removing it is a compiler specialization, not an exterior-ray shortcut or reduction in admitted rays. Register/spill behavior has not been measured directly, so the source-level storage difference is an explanation to investigate, not a hardware occupancy measurement.
+
+The executable and resources from `6c9207d03` were frozen before implementation. Matching ten-body runs use 1280 x 900, yaw 0.6, five seconds of warmup and thirty seconds of accepted native presentation counting, without validation or reflection diagnostics:
+
+| Measurement | Original general shader | Unspecified specialization |
+| --- | ---: | ---: |
+| Accepted presentations per second | 33.1881 | 47.8182 |
+| Wall interval per presentation | 30.1313 ms | 20.9126 ms |
+| Hardware reflection, mean GPU range | 9.4376 ms | 0.6740 ms |
+| Shadow visibility envelope, mean GPU range | 6.3938 ms | 6.3759 ms |
+| Mesh generation over fifteen dispatches | 3.9151 ms | 3.9137 ms |
+| Opaque regular pass, mean GPU range | 2.3445 ms | 2.3359 ms |
+
+This single paired acquisition improves presentation rate by approximately 44%; it does not establish sustained thermal performance. Nested/asynchronous GPU scopes are not additive. A separate full stress run passes GPU validation. Its accepted diagnostic ratios remain unchanged: 1.73615355 queries per admitted ray, 0.30942537 unsupported paths, and 0.0002796253 exterior-eligible rays. The open body's unsupported optical semantics are preserved, not solved by specialization.
+
+All 420 enabled ECS graphics tests pass (61 existing disabled). Five native reflection tests pass, including 41 real-TLAS cases comparing all twelve result words between general and specialized production walkers, with separate analytic expectations. Cases cover alpha ordering/coverage, bootstrap/event/query limits, invalid metadata and IOR, mirrored instances, seams, ambiguity and preserved partial radiance. Fixture compile errors and an invalid zero-mask TLAS test instance were corrected before qualification; empty-query cases now use a valid instance beyond the ray range. No backend change was needed.
+
+Matched 1280 x 900 captures freeze after 120 submitted frames. The mean absolute channel difference between original and specialized images is 0.08436/255, maximum 11/255. Repeating the unchanged original gives 0.08213/255, maximum 12/255. Visual inspection finds no structural change; this is agreement within the observed temporal variation, not pixel identity. Existing glass artifacts remain. This ten-body comparison does not satisfy the user's confirmed twenty-body, at-least-60-FPS target.
+
+Evidence: `__artifacts/stress_60fps/reflection_active_6c9207d03/`, including `baseline_run1`, `specialized_run1`, `specialized_validation`, `reflection_kernel_final.{log,xml}`, `ecs_combined.{log,xml}`, the three `*frame120.bmp` captures and both image-comparison JSON files. The production shader and snapshot changes were frozen for the timing runs before subsequent geometry/caustic work.

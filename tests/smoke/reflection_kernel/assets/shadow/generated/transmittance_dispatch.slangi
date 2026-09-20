@@ -1,0 +1,44 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_TEST_OPTICAL_TRACE_TRANSMITTANCE_DISPATCH_SLANGI
+#define NWB_TEST_OPTICAL_TRACE_TRANSMITTANCE_DISPATCH_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshSurface nwbShadowDispatchSurface(const uint modelId, const NwbShadowHit hit){
+    NwbMeshSurface surface = nwbMakeMeshSurface(half3(1.0h), hit.worldNormal);
+    surface.refractionIor = half(1.0h);
+    surface.renderCoverage = modelId == 1u ? half(0.5h) : half(0.25h);
+    surface.shadowAbsorptionTint = half3(0.5h, 0.75h, 1.0h);
+    if(modelId == 2u)
+        surface.renderCoverage = half(1.0h);
+    if(modelId == 3u)
+        surface.renderCoverage = half(0.0h);
+    if(modelId == 4u)
+        surface.refractionIor = half(1.5h);
+    if(modelId == 5u)
+        surface.refractionIor = half(asfloat(0x7fc00000u));
+    if(modelId == 6u)
+        surface.renderCoverage = half(asfloat(0x7fc00000u));
+    if(modelId == 7u)
+        surface.shadowAbsorptionTint.x = half(asfloat(0x7fc00000u));
+    if(modelId == 8u)
+        surface.refractionIor = half(0.5h);
+    if(modelId == 9u)
+        surface.refractionIor = half(asfloat(0x7f800000u));
+    return surface;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

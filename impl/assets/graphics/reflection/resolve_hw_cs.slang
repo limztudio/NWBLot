@@ -2,6 +2,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Variant 2 retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
+#if NWB_REFLECTION_OPTICAL_TRANSPORT == 2
+#define NWB_OPTICAL_CLOSED_MEDIA 0
+#endif
+
 #include "common.slangi"
 #include "../raytrace/material_context_slots.slangi"
 

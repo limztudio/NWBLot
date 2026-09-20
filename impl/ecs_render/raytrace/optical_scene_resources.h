@@ -52,6 +52,7 @@ struct RayTracingOpticalSceneSnapshot{
     Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
     u32 transparentCount = 0u;
     bool boundsComplete = false;
+    bool unspecifiedBoundariesOnly = false;
 
     [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid() && upload && uploadState; }
 };

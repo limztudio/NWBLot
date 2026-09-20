@@ -67,8 +67,10 @@ bool nwbOpticalBootstrap(
         return false;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+#if NWB_OPTICAL_CLOSED_MEDIA
     NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
     uint eventCount = 0u;
+#endif
     bool complete = false;
     [loop]
     for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
@@ -103,6 +105,7 @@ bool nwbOpticalBootstrap(
             }
             continue;
         }
+#if NWB_OPTICAL_CLOSED_MEDIA
         if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
             query.Abort();
             result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -126,6 +129,12 @@ bool nwbOpticalBootstrap(
         event.entering = facing < 0.0 ? 1u : 0u;
         events[eventCount] = event;
         ++eventCount;
+#else
+        // Only an all-Unspecified frozen scene selects this specialization. Unknown policies still reject.
+        query.Abort();
+        result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+        return false;
+#endif
     }
     if(!complete){
         // Once all candidate slots are consumed, stopping is conservative even if this happened to be the final
@@ -135,6 +144,7 @@ bool nwbOpticalBootstrap(
         return false;
     }
 
+#if NWB_OPTICAL_CLOSED_MEDIA
     // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while
     // shifting that same array; every crossing keeps its original distance, primitive and orientation together.
     uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = {
@@ -264,6 +274,7 @@ bool nwbOpticalBootstrap(
             media.entries[index] = medium;
         }
     }
+#endif
     result.transparentPath = media.count != 0u;
     return true;
 }

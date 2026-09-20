@@ -1,4 +1,4 @@
-if(NOT TARGET nwb_assets_shader_cook)
+if(NOT TARGET nwb_assets_shader_cook OR NOT TARGET nwb_assets_csg_cook)
     return()
 endif()
 
@@ -9,6 +9,9 @@ target_sources(nwb_reflection_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/depth_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/optical_bounds_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/optical_trace_kernel_fixture.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/optical_trace_kernel_fixture.h"
+    "${CMAKE_CURRENT_LIST_DIR}/optical_trace_kernel_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.nwb"
     "${CMAKE_CURRENT_LIST_DIR}/spatial_kernel_tests.cpp"
@@ -29,6 +32,7 @@ target_link_libraries(nwb_reflection_kernel_tests PRIVATE
     nwb_common
     nwb_assets_graphics
     nwb_assets_shader_cook
+    nwb_assets_csg_cook
     nwb_ecs_ui
 )
 set_tests_properties(nwb_reflection_kernel_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
@@ -39,3 +43,11 @@ set_source_files_properties(
     "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.nwb"
     PROPERTIES HEADER_FILE_ONLY TRUE
 )
+
+set(optical_trace_test_assets
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_trace_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/optical_trace_cs.nwb"
+    "${CMAKE_CURRENT_LIST_DIR}/assets/shadow/generated/transmittance_dispatch.slangi"
+)
+target_sources(nwb_reflection_kernel_tests PRIVATE ${optical_trace_test_assets})
+set_source_files_properties(${optical_trace_test_assets} PROPERTIES HEADER_FILE_ONLY TRUE)

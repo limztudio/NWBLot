@@ -152,7 +152,9 @@ private:
     Core::ShaderHandle m_buildArgsShader;
     Core::ShaderHandle m_hardwareShader;
     Core::ShaderHandle m_plainHardwareShader;
+    Core::ShaderHandle m_unspecifiedHardwareShader;
     Core::ComputePipelineHandle m_plainHardwarePipeline;
+    Core::ComputePipelineHandle m_unspecifiedHardwarePipeline;
     Core::ShaderHandle m_depthShader;
     Core::GpuDescriptorHandle m_descriptors[8];
     Core::GpuDescriptorHandle m_depthSampledDescriptor;

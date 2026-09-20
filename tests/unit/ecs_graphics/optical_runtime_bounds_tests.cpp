@@ -70,6 +70,7 @@ TEST(OpticalRuntimeBounds, CurrentPoseBindingPreservesStaticUnionButRequiresGpuV
     EXPECT_EQ(context.gather.header.boundsMin.x, -8.f);
     EXPECT_EQ(context.gather.header.boundsMax.z, 7.f);
     EXPECT_TRUE(context.gather.boundsCompleteExceptRuntime);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
     ASSERT_EQ(context.gather.runtimeBounds.size(), 1u);
     EXPECT_EQ(context.gather.runtimeBounds[0].instanceIndex, 1u);
     EXPECT_EQ(context.gather.instances[1].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
@@ -97,6 +98,7 @@ TEST(OpticalRuntimeBounds, FrozenInputsRetainBufferTransformPolicyAndExactEmitte
     transform.m[0][3] = 999.f;
     renderer.opticalMediumPriority = 22;
 
+    EXPECT_FALSE(context.gather.unspecifiedBoundariesOnly);
     ASSERT_EQ(context.gather.runtimeBounds.size(), 2u);
     EXPECT_EQ(context.gather.runtimeBounds[0].buffer.get(), identity);
     EXPECT_EQ(context.gather.runtimeBounds[1].buffer.get(), identity);

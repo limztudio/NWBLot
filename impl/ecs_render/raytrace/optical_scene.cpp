@@ -44,6 +44,8 @@ void RayTracingOpticalSceneGather::append(
     instance.mediumPriority = renderer.opticalMediumPriority;
     instance.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
     if(transparent){
+        if(renderer.opticalBoundaryMode != OpticalBoundaryMode::Unspecified)
+            unspecifiedBoundariesOnly = false;
         instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
         ++header.transparentCount;
         const bool finiteBounds =

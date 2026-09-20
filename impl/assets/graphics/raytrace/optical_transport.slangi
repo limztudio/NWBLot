@@ -179,6 +179,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
             }
         }
         else{
+#if NWB_OPTICAL_CLOSED_MEDIA
             if(optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED && optical.mode != NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY){
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return result;
@@ -204,6 +205,10 @@ NwbOpticalTraceResult nwbOpticalTrace(
                 throughput *= half(boundary.radianceTransmission);
                 media = transmittedMedia;
             }
+#else
+            result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
+            return result;
+#endif
         }
         // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer
         // bias. Offset to the next geometric half-space and require progress on the next query. Near-coincident

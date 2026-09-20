@@ -46,6 +46,52 @@ TEST(OpticalScene, UnspecifiedTransparentBoundsParticipateInAirProof){
         NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT | NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID);
 }
 
+TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, false, {}, {}, false);
+    renderer.opticalBoundaryMode = static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max);
+    context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, false, {}, {}, false);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
+    context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, {}, {1.f, 1.f, 1.f}, true);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    EXPECT_EQ(context.gather.header.flags, NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID);
+}
+
+TEST(OpticalScene, ClosedAndUnknownTransparentPoliciesRequireGeneralTransport){
+    const OpticalBoundaryMode::Enum modes[] = {
+        OpticalBoundaryMode::ClosedNested, OpticalBoundaryMode::ClosedPriority,
+        static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max),
+    };
+    for(const auto mode : modes){
+        for(const bool boundsValid : {false, true}){
+            OpticalSceneContext context;
+            RendererComponent renderer;
+            context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, {}, {1.f, 1.f, 1.f}, true);
+            renderer.opticalBoundaryMode = mode;
+            context.gather.append(Core::ECS::EntityID(2u, 0u), renderer, true, {}, {1.f, 1.f, 1.f}, boundsValid);
+            renderer.opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
+            context.gather.append(Core::ECS::EntityID(3u, 0u), renderer, true, {}, {1.f, 1.f, 1.f}, true);
+            EXPECT_FALSE(context.gather.unspecifiedBoundariesOnly);
+            EXPECT_EQ(context.gather.header.flags, boundsValid ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
+        }
+    }
+}
+
+TEST(OpticalScene, IncompleteBoundsRemainRejectedWithUnspecifiedPolicySpecialization){
+    OpticalSceneContext context;
+    RendererComponent renderer;
+    context.gather.markIncomplete();
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, {}, {1.f, 1.f, 1.f}, false);
+    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
+    EXPECT_EQ(context.gather.header.flags, 0u);
+    EXPECT_EQ(context.gather.instances[0].flags, NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT);
+}
+
 TEST(OpticalScene, OpaqueInstancesPreserveOrderWithoutExpandingOpticalBounds){
     OpticalSceneContext context;
     RendererComponent renderer;

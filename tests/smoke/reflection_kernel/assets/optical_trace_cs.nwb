@@ -1,10 +1,6 @@
 shader asset;
-
 asset.stage = "cs";
 asset.target_profile = "spirv_1_5+spvRayQueryKHR";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];
-asset.defines = {
-    "NWB_BINDLESS_TLAS": ["1"],
-    "NWB_REFLECTION_OPTICAL_TRANSPORT": ["0", "1", "2"],
-};
+asset.defines = { "NWB_OPTICAL_CLOSED_MEDIA": ["0", "1"] };

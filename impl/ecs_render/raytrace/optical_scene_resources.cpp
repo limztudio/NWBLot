@@ -119,6 +119,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         );
     }
     m_resources.transparentCount = gather.header.transparentCount;
+    m_resources.unspecifiedBoundariesOnly = gather.unspecifiedBoundariesOnly;
     m_resources.boundsComplete = (gather.header.flags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) != 0u;
     m_prepared = m_resources.valid();
     return m_prepared;

@@ -8,6 +8,8 @@ target_sources(nwb_reflection_kernel_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/reflection_kernel_fixture.h"
     "${CMAKE_CURRENT_LIST_DIR}/depth_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/classify_kernel_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/classify_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/optical_bounds_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/optical_trace_kernel_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/optical_trace_kernel_fixture.h"
@@ -39,6 +41,7 @@ set_tests_properties(nwb_reflection_kernel_tests PROPERTIES RUN_SERIAL TRUE TIME
 
 set_source_files_properties(
     "${CMAKE_CURRENT_LIST_DIR}/reference/spatial_cs.slang"
+    "${CMAKE_CURRENT_LIST_DIR}/reference/classify_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.slang"
     "${CMAKE_CURRENT_LIST_DIR}/assets/optical_bounds_cs.nwb"
     PROPERTIES HEADER_FILE_ONLY TRUE

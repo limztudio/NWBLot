@@ -9,3 +9,5 @@ SHA256 of the restored historical text with LF line endings: `cad2d3a8af03ad004f
 SHA256 of the restored file with the repository's required CRLF line endings: `454dbef87df8f48b7a1d26ef7a3e84df29f93a237032195963e9fed4c740baeb`.
 
 Changes to a frozen reference require an explicit, independently justified change to the reference contract. Production optimization and style sweeps must retain its behavior. The paired native tests compare the current production pipeline against this file; they must not update both sides to the proposed implementation.
+
+`classify_cs.slang` is the production classifier frozen from `e3f8c9a39` before the surface-parallel and group-feedback experiments. The native fixture compares both surfaces, counters, feedback, queue budgets and canonical per-tile candidate order. Workgroup reservations may appear in different orders, as permitted by atomic scheduling. Preserve the reference behavior when changing the production classifier. Its CRLF SHA-256 is `27cffd1a03e54fe8115bcab5e6a26512e71be43bb0a4ed7a551ac5c09c37fb3f`.

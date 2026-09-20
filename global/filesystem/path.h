@@ -151,8 +151,7 @@ public:
 
         [[nodiscard]] bool operator!=(const Iterator& rhs)const noexcept{ return !(*this == rhs); }
 
-        // Requires a non-end iterator. The view borrows the source path and survives iterator advancement;
-        // mutating or destroying the source path invalidates it.
+        // Requires a non-end iterator. The view borrows the source path and survives iterator advancement; mutating or destroying the source path invalidates it.
         [[nodiscard]] native_string_view nativeComponent()const noexcept{
             NWB_ASSERT(m_path != nullptr && !m_atEnd);
             return native_string_view(m_path->m_text.data() + m_begin, m_end - m_begin);

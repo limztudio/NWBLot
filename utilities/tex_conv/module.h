@@ -58,8 +58,7 @@ struct MipLevel{
 struct TexturePayload{
     Vector<MipLevel> mips;
     Vector<u8> bytes;
-    // Present only for HDR textures using SeparateUastcLdr4x4. It is written
-    // immediately after bytes in the same .tex sidecar.
+    // Present only for HDR textures using SeparateUastcLdr4x4. It is written immediately after bytes in the same .tex sidecar.
     Vector<u8> alphaBytes;
 
     u32 width = 0u;

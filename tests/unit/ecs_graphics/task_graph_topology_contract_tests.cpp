@@ -573,8 +573,7 @@ TEST(EcsGraphics, AvboitTopologyUsesSemanticTaskAnchors){
 }
 
 
-// Lighting and Composite keep semantic state and timing bindings while the shared normal executor owns generated
-// packet coverage.
+// Lighting and Composite keep semantic state and timing bindings while the shared normal executor owns generated packet coverage.
 TEST(EcsGraphics, DeferredLightingCompositeTopologyUsesSemanticTaskAnchors){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

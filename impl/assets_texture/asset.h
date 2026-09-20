@@ -118,8 +118,7 @@ public:
     [[nodiscard]] u8 alphaConstantUnorm8()const{ return m_alphaConstantUnorm8; }
     [[nodiscard]] const MipLevelVector& mipLevels()const{ return m_mipLevels; }
     [[nodiscard]] const Core::Assets::AssetBytes& payloadBytes()const{ return m_payloadBytes; }
-    // Preserved for UASTC callers. HDR alpha data, when present, follows the
-    // RGB UASTC HDR stream in payloadBytes().
+    // Preserved for UASTC callers. HDR alpha data, when present, follows the RGB UASTC HDR stream in payloadBytes().
     [[nodiscard]] const Core::Assets::AssetBytes& uastcBlocks()const{ return m_payloadBytes; }
     [[nodiscard]] u64 primaryPayloadByteCount()const{
         if(m_mipLevels.empty())

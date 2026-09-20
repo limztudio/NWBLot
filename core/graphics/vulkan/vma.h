@@ -11,8 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// VMA looks for the Vulkan SDK umbrella header guard, while this project uses volk's
-// generated Vulkan declarations directly.
+// VMA looks for the Vulkan SDK umbrella header guard, while this project uses volk's generated Vulkan declarations directly.
 #ifndef VULKAN_H_
 #define VULKAN_H_
 #endif

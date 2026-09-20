@@ -101,8 +101,7 @@ struct GpuPhysicalQueueInfo{
     bool dedicated = false;
 };
 
-// Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at
-// reset/recompile.
+// Borrowed immutable topology view; its producer owns the storage. A compiled-graph view becomes invalid at reset/recompile.
 struct GpuPhysicalQueueTopology{
     const GpuPhysicalQueueInfo* queues = nullptr;
     usize queueCount = 0u;

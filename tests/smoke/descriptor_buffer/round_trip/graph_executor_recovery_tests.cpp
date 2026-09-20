@@ -531,8 +531,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     EXPECT_FALSE(failedPacket.valid());
     EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), 0u);
 
-    // The helper fails before beginning a recording attempt when semantic endpoints include the caller-owned
-    // recovery packet.
+    // The helper fails before beginning a recording attempt when semantic endpoints include the caller-owned recovery packet.
     EXPECT_FALSE(submitter.recordAndSubmitTaskRangeInReadyFrontiers(
         graph,
         compiledGraph,

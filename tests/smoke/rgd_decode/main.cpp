@@ -19,8 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A path that does not exist: ParseCrashDump must fail cleanly and return false (the rdf open throws; the
-// decoder contains it).
+// A path that does not exist: ParseCrashDump must fail cleanly and return false (the rdf open throws; the decoder contains it).
 TEST(RgdDecode, MissingFileFailsGracefully){
     AInteropString out;
     EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText("nwb_rgd_smoke_missing.rgd", out));

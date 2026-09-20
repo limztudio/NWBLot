@@ -77,8 +77,7 @@ protected:
         s_scope = MakeUnique<HeadlessGraphicsScope>();
         const bool initialized = s_scope->initialize();
 
-        // No usable validation-enabled Vulkan device on this host -> skip the whole suite. Reported as SKIPPED,
-        // not failed.
+        // No usable validation-enabled Vulkan device on this host -> skip the whole suite. Reported as SKIPPED, not failed.
         if(!initialized){
             GTEST_SKIP() << "Descriptor-buffer round-trip: no usable validation-enabled headless Vulkan device on this host; skipping suite.";
             return;

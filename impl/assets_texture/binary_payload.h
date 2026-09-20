@@ -39,8 +39,7 @@ static_assert(IsStandardLayout_V<HeaderPrefix>, "Texture header prefix must stay
 static_assert(IsTriviallyCopyable_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 
 #pragma pack(push, 1)
-// Existing cooked LDR assets use this layout. Keep it readable so that the V3
-// runtime can retain the established UASTC contract.
+// Existing cooked LDR assets use this layout. Keep it readable so that the V3 runtime can retain the established UASTC contract.
 struct HeaderBinaryV2{
     u32 magic = s_TextureMagic;
     u32 version = s_TextureVersionV2;

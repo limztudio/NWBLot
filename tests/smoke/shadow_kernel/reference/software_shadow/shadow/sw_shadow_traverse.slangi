@@ -178,6 +178,41 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
     }
 }
 
+// Legacy accumulator entry point: preserve the existing per-bin optical contract while the scene walk migrates.
+// Stores this instance's completed chord/absorption/interface directly into its bin exactly once; the finalize path below is unchanged, so reference captures stay comparable during the campaign. Opaque/overflow handling matches the pre-refactor traversal (opaque zeroes the gate; over-deep subtrees conservatively block light).
+void nwbSwShadowStoreCompletedInstance(inout NwbShadowVisibilityAccumulator acc, const uint instanceIndex, const NwbShadowInstanceOptics optics){
+    int slot = -1;
+    for(uint i = 0u; i < acc.binCount; ++i){
+        if(acc.bins[i].instanceId == instanceIndex){
+            slot = (int)i;
+            break;
+        }
+    }
+    if(slot < 0){
+        if(acc.binCount >= (uint)NWB_SHADOW_MAX_OCCLUDER_BINS)
+            return; // bin table full: drop this occluder's contribution (rare; a graceful slight lightening)
+        slot = (int)acc.binCount;
+        acc.bins[slot].instanceId = instanceIndex;
+        acc.bins[slot].crossingCount = 0u;
+        acc.bins[slot].crossingOverflow = 0u;
+        acc.bins[slot].absorptionCoeff = half3(optics.absorptionCoeff);
+        acc.bins[slot].interfaceTransmittance = half(optics.interfaceTransmittance);
+        acc.bins[slot].tMin = optics.tMin;
+        acc.bins[slot].tMax = optics.tMax;
+        acc.binCount += 1u;
+    }
+    // One completed instance fills its bin once: record the chord endpoints plus the overflow span fallback. Pairing in finalize reproduces the instance chord; singleton/overflow semantics match the legacy path.
+    const float chordLength = nwbShadowInstanceChordLength(optics);
+    if(chordLength <= 0.0 && optics.crossingOverflow == 0u)
+        return;
+    acc.bins[slot].crossingT[0u] = optics.tMin;
+    acc.bins[slot].crossingT[1u] = optics.tMin + chordLength;
+    acc.bins[slot].crossingCount = (optics.tMin + chordLength) != optics.tMin ? 2u : 1u;
+    acc.bins[slot].crossingOverflow = optics.crossingOverflow;
+    acc.bins[slot].tMin = optics.tMin;
+    acc.bins[slot].tMax = optics.tMin + chordLength;
+}
+
 void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowVisibilityAccumulator acc){
     NwbShadowInstanceOptics optics = nwbShadowInstanceOpticsBegin();
     const NwbShadowInstanceStatus status = nwbSwShadowInstanceOptics(instanceIndex, worldOrigin, worldDirection, tMin, tMax, optics);
@@ -187,7 +222,7 @@ void nwbSwShadowInstanceOccluded(const uint instanceIndex, const float3 worldOri
     }
     if(status != NwbShadowInstanceStatus::Completed)
         return;
-    nwbShadowAccumulateInstance(acc, optics);
+    nwbSwShadowStoreCompletedInstance(acc, instanceIndex, optics);
 }
 
 // Scene traversal refines candidate instances through mesh BVHs.

@@ -7,22 +7,39 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Occlusion-ray volume-path integration for the software traversal (sw_shadow_traverse.slangi, t = triangleHit.t, geometric normal from the loaded triangle positions + the object-space ray dir). The accumulator lives as a LOCAL variable, so its per-occluder bin array indexes safely.
+
+// Must be included AFTER the surface helpers (shadow_surface.slangi -> mesh/surface.slangi), which define nwbShadowFresnelTransmittedFraction / nwbShadowAbsorptionCoefficient.
 
 
-// Software occlusion rays finish each instance before visiting the next scene leaf. Only the summed optical depth,
-// interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
-// Include after shadow_surface.slangi for the shared Fresnel and Beer-Lambert helpers.
-
-
+// Max distinct occluders one shadow ray accumulates (the per-thread transparent accumulator's bin array). A ray crosses only the few refractors between it and the light; a further occluder beyond this drops its rare contribution gracefully rather than mis-binning.
+#define NWB_SHADOW_MAX_OCCLUDER_BINS 3
 #define NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER 4
 #define NWB_SHADOW_CROSSING_MERGE_MIN_EPSILON 1e-4
 #define NWB_SHADOW_CROSSING_MERGE_REL_EPSILON 1e-5
 #define NWB_SHADOW_INTERFACE_FADE_DISTANCE 2e-3
 
+// Per-occluder optical-depth bin. Each occluder's crossings are accumulated INDEPENDENTLY (binned by instance id) so one occluder's unbalanced crossing cannot corrupt the others.
+// For a closed volume the robust chord is the sum of sorted hit-distance pairs (t1-t0, t3-t2, ...), not a face-sign telescope: at hard triangle edges the ray query can report either adjacent face first and their geometric normals may disagree about entry/exit.
+// Pairing merged hit distances treats an edge hit as one physical boundary and avoids a real through-volume segment collapsing to zero.
+struct NwbShadowOccluderBin{
+    uint instanceId;         // the crossing's InstanceID() / scene-BVH instance index; unique per occluder
+    uint crossingCount;      // merged unique boundary hits for this occluder
+    uint crossingOverflow;   // set when crossingT[] is full; finalize uses the recorded first-to-last crossing span
+    half3 absorptionCoeff;   // the occluder's per-channel absorption coeff (constant per material; set on first hit)
+    half interfaceTransmittance; // product of accepted Fresnel transmissions, applied only when the bin has volume
+    float tMin;              // nearest recorded crossing distance for this occluder
+    float tMax;              // farthest recorded crossing distance for this occluder
+    float crossingT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER]; // unique boundary hit distances, sorted in finalize
+};
+
+// Running accumulators for one occlusion ray. Final visibility = transmittance * exp(-opticalDepth), where the optical depth is summed across the per-occluder bins (paired unique hit distances, or their recorded span after crossing-list overflow -- see nwbShadowFinalizeVisibility).
+//   transmittance -- opaque-hit gate (seed 1; opaque hit zeroes it). Transparent Fresnel is held per bin until finalize so singleton edge hits cannot darken a pixel without a real volume chord.
+//   bins/binCount -- the per-occluder optical-depth bins (see NwbShadowOccluderBin).
 struct NwbShadowVisibilityAccumulator{
     half3 transmittance;
-    half3 opticalDepth;
-    half interfaceTransmittance;
+    uint binCount;
+    NwbShadowOccluderBin bins[NWB_SHADOW_MAX_OCCLUDER_BINS];
 };
 
 // Temporary per-instance crossing state. Scoped to the single mesh traversal in nwbSwShadowInstanceOptics so its crossing list is finalized exactly once and never retained across the next instance.
@@ -45,12 +62,11 @@ enum class NwbShadowInstanceStatus : uint{
 };
 
 
-// Seed the opaque gate and completed-instance optical accumulation.
+// Seed a fully-lit accumulator (no occluders yet). Bins are written on first use; binCount gates every read.
 NwbShadowVisibilityAccumulator nwbShadowVisibilityBegin(){
     NwbShadowVisibilityAccumulator acc;
     acc.transmittance = half3(1.0h, 1.0h, 1.0h);
-    acc.opticalDepth = half3(0.0h, 0.0h, 0.0h);
-    acc.interfaceTransmittance = half(1.0h);
+    acc.binCount = 0u;
     return acc;
 }
 
@@ -94,7 +110,7 @@ void nwbShadowInstanceIntegrateCrossing(inout NwbShadowInstanceOptics optics, in
     }
 }
 
-// Pair one instance's merged boundary distances into inside intervals. Overflow or a trailing odd count beyond the first pair uses the first-to-last span; a singleton contributes no volume.
+// Pair one instance's merged boundary distances into its inside chord. Matches the legacy per-bin finalize: sorted unique distances pair into inside intervals, overflow (or a trailing odd count beyond the first pair) falls back to the recorded first-to-last span, and a singleton contributes no volume.
 float nwbShadowInstanceChordLength(const NwbShadowInstanceOptics optics){
     float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
     const uint crossingCount = min(optics.crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
@@ -137,19 +153,45 @@ float nwbShadowSmoothNormalWeight(const float3 n0, const float3 n1, const float3
     return smoothstep(1e-5, 2e-3, spread);
 }
 
-// Finish one instance once. Keep the existing endpoint reconstruction and half rounding, including sub-ULP chords.
-// Scene leaves have unique instance identities, so this fold needs neither an identity table nor a retained hit list.
-void nwbShadowAccumulateInstance(inout NwbShadowVisibilityAccumulator acc, const NwbShadowInstanceOptics optics){
-    const float pairedChord = nwbShadowInstanceChordLength(optics);
-    const float endpoint = optics.tMin + pairedChord;
-    const float chordLength = max(endpoint - optics.tMin, 0.0);
-    const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
-    acc.interfaceTransmittance *= lerp(half(1.0h), half(optics.interfaceTransmittance), interfaceWeight);
-    acc.opticalDepth += half3(optics.absorptionCoeff) * half(chordLength);
-}
-
+// Combine into the final per-channel visibility. Per occluder: sorted unique hit distances are paired into inside intervals. Overflow uses the recorded first-to-last crossing span; a singleton has no entry->exit volume path and therefore contributes neither absorption nor Fresnel loss.
 half3 nwbShadowFinalizeVisibility(const NwbShadowVisibilityAccumulator acc){
-    return half3(saturate(acc.transmittance * acc.interfaceTransmittance * exp(-max(acc.opticalDepth, half3(0.0h, 0.0h, 0.0h)))));
+    half3 opticalDepth = half3(0.0h, 0.0h, 0.0h);
+    // The interface weight and Fresnel product are (0, 1) bounded factors, so half arithmetic is sufficient here.
+    half interfaceTransmittance = half(1.0h);
+    for(uint i = 0u; i < acc.binCount; ++i){
+        float sortedT[NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER];
+        const uint crossingCount = min(acc.bins[i].crossingCount, (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER);
+        for(uint j = 0u; j < crossingCount; ++j)
+            sortedT[j] = acc.bins[i].crossingT[j];
+
+        for(uint j = 0u; j < crossingCount; ++j){
+            uint minIndex = j;
+            for(uint k = j + 1u; k < crossingCount; ++k){
+                if(sortedT[k] < sortedT[minIndex])
+                    minIndex = k;
+            }
+            const float tmp = sortedT[j];
+            sortedT[j] = sortedT[minIndex];
+            sortedT[minIndex] = tmp;
+        }
+
+        float chordLength = 0.0;
+        if(acc.bins[i].crossingOverflow != 0u){
+            chordLength = max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0);
+        }
+        else{
+            for(uint j = 0u; (j + 1u) < crossingCount; j += 2u)
+                chordLength += max(sortedT[j + 1u] - sortedT[j], 0.0);
+
+            if(crossingCount > 1u && (crossingCount & 1u) != 0u)
+                chordLength = max(chordLength, max(acc.bins[i].tMax - acc.bins[i].tMin, 0.0));
+        }
+
+        const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chordLength));
+        interfaceTransmittance *= lerp(half(1.0h), acc.bins[i].interfaceTransmittance, interfaceWeight);
+        opticalDepth += acc.bins[i].absorptionCoeff * half(chordLength);
+    }
+    return half3(saturate(acc.transmittance * interfaceTransmittance * exp(-max(opticalDepth, half3(0.0h, 0.0h, 0.0h)))));
 }
 
 

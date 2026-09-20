@@ -78,7 +78,7 @@ struct Observation{
     f32 chordLength;
     f32 transmission[3];
     u32 overflow;
-    u32 binCount;
+    f32 interfaceTransmittance;
 };
 
 static_assert(sizeof(Node) == 32u);
@@ -229,7 +229,7 @@ TEST_F(ShadowKernelTest, CompletedCrossingsSurviveTheLastInternalSubtreeMiss){
         EXPECT_EQ(actual[index].status, paired || singleton ? 0u : blocked ? 2u : 1u);
         EXPECT_EQ(actual[index].crossingCount, paired ? 2u : singleton ? 1u : 0u);
         EXPECT_EQ(actual[index].overflow, 0u);
-        EXPECT_EQ(actual[index].binCount, paired || singleton ? 1u : 0u);
+        EXPECT_NEAR(actual[index].interfaceTransmittance, paired ? 0.9216f : 1.0f, 0.001f);
         EXPECT_FLOAT_EQ(actual[index].chordLength, paired ? 1.0f : 0.0f);
         // One unit of absorption and two normal-incidence Fresnel boundaries: tint * (1 - 0.04)^2.
         constexpr f32 s_PairedTransmission[] = { 0.4608f, 0.6912f, 0.9216f };

@@ -53,7 +53,7 @@ void main(uint3 dispatchId : SV_DispatchThreadID){
     output[offset + 4u] = asuint(float(transmission.y));
     output[offset + 5u] = asuint(float(transmission.z));
     output[offset + 6u] = optics.crossingOverflow;
-    output[offset + 7u] = visibility.binCount;
+    output[offset + 7u] = asuint(float(visibility.interfaceTransmittance));
 }
 
 

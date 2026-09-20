@@ -65,6 +65,8 @@ struct UploadContext{
     [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot(const RayTracingOpticalSceneUploadHandle& upload){
         return RayTracingOpticalSceneSnapshot{
             .buffer = buffer,
+            .uploadBuffer = {},
+            .finalize = {},
             .upload = upload,
             .uploadState = control,
             .descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u),

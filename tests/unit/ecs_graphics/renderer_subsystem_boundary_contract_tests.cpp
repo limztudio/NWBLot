@@ -557,7 +557,7 @@ TEST(EcsGraphics, MaterialOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_instanceMutableCacheComponentMutationVersion=0u;"));
     EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "usizeMaterialPipelineKeyHasher::operator()(constMaterialPipelineKey&key)const{"));
     EXPECT_TRUE(ContainsText(compactPipelineTypesSystem, "boolMaterialPipelineKeyEqualTo::operator()(constMaterialPipelineKey&lhs,constMaterialPipelineKey&rhs)const{"));
-    EXPECT_TRUE(ContainsText(compactMaterialSystem, "releaseMaterialResourceReferences();m_materialState.invalidateResources();"));
+    EXPECT_TRUE(ContainsText(compactMaterialSystem, "releaseMaterialResourceReferences();releaseMaterialResourceFixtures();m_materialState.invalidateResources();"));
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/material/renderer_draw_types.h>"));
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <core/ecs/entity_id.h>"));
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <core/graphics/rhi/pipeline.h>"));

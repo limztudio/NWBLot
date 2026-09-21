@@ -387,19 +387,31 @@ bool FbxMeshBuild::AppendInstanceMesh(
             triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!::TriangleHasArea(
-            triangleCorners[0u].position,
-            triangleCorners[1u].position,
-            triangleCorners[2u].position,
+        if(!::StoredTriangleHasArea(
+            triangleCorners[0u].position.x,
+            triangleCorners[0u].position.y,
+            triangleCorners[0u].position.z,
+            triangleCorners[1u].position.x,
+            triangleCorners[1u].position.y,
+            triangleCorners[1u].position.z,
+            triangleCorners[2u].position.x,
+            triangleCorners[2u].position.y,
+            triangleCorners[2u].position.z,
             options.triangleAreaLengthSquaredEpsilon
         ))
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            const TriangleAreaNormal64 faceNormal64 = BuildTriangleAreaNormal64(
-                triangleCorners[0u].position,
-                triangleCorners[1u].position,
-                triangleCorners[2u].position
+            const TriangleAreaNormal64 faceNormal64 = BuildStoredTriangleAreaNormal64(
+                triangleCorners[0u].position.x,
+                triangleCorners[0u].position.y,
+                triangleCorners[0u].position.z,
+                triangleCorners[1u].position.x,
+                triangleCorners[1u].position.y,
+                triangleCorners[1u].position.z,
+                triangleCorners[2u].position.x,
+                triangleCorners[2u].position.y,
+                triangleCorners[2u].position.z
             );
             const SIMDVector faceNormal = VectorSet(
                 static_cast<f32>(faceNormal64.x),

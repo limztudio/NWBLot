@@ -196,6 +196,10 @@ template<typename ParameterT>
     return ValidBoundsVectors(outMinBounds, outMaxBounds, outFiniteBounds);
 }
 
+[[nodiscard]] bool PlaneBoundsCore(const SIMDVector normalDistance){
+    return ValidPlaneParameters(normalDistance);
+}
+
 [[nodiscard]] bool PlaneBounds(
     const SIMDMatrix& shapeToWorld,
     const u8* parameterBytes,
@@ -214,7 +218,11 @@ template<typename ParameterT>
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
 
-    return ValidPlaneParameters(LoadFloat(parameters.normalDistance));
+    return PlaneBoundsCore(LoadFloat(parameters.normalDistance));
+}
+
+[[nodiscard]] SIMDVector LoadBoxHalfExtents(const Float4& halfExtentsStorage){
+    return VectorSetW(LoadFloat(halfExtentsStorage), s_CsgShapeBoundsW);
 }
 
 [[nodiscard]] bool BoxBounds(
@@ -232,12 +240,16 @@ template<typename ParameterT>
     CsgBoxShapeParameters parameters;
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
-    const SIMDVector halfExtents = VectorSetW(LoadFloat(parameters.halfExtents), s_CsgShapeBoundsW);
+    const SIMDVector halfExtents = LoadBoxHalfExtents(parameters.halfExtents);
     if(!BuildBoxBounds(shapeToWorld, halfExtents, outMinBounds, outMaxBounds))
         return false;
 
     outFiniteBounds = true;
     return true;
+}
+
+[[nodiscard]] SIMDVector LoadSphereRadius(const Float4& radiusStorage){
+    return VectorSplatX(LoadFloat(radiusStorage));
 }
 
 [[nodiscard]] bool SphereBounds(
@@ -255,12 +267,16 @@ template<typename ParameterT>
     CsgSphereShapeParameters parameters;
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
-    const SIMDVector radius = VectorSplatX(LoadFloat(parameters.radius));
+    const SIMDVector radius = LoadSphereRadius(parameters.radius);
     if(!BuildSphereBounds(shapeToWorld, radius, outMinBounds, outMaxBounds))
         return false;
 
     outFiniteBounds = true;
     return true;
+}
+
+[[nodiscard]] SIMDVector LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage){
+    return LoadFloat(radiusHalfHeightStorage);
 }
 
 [[nodiscard]] bool CapsuleBounds(
@@ -278,7 +294,7 @@ template<typename ParameterT>
     CsgCapsuleShapeParameters parameters;
     if(!LoadShapeParameters(parameterBytes, parameterByteSize, parameters))
         return false;
-    const SIMDVector radiusHalfHeight = LoadFloat(parameters.radiusHalfHeight);
+    const SIMDVector radiusHalfHeight = LoadCapsuleRadiusHalfHeight(parameters.radiusHalfHeight);
     if(!BuildCapsuleBounds(shapeToWorld, radiusHalfHeight, outMinBounds, outMaxBounds))
         return false;
 

@@ -28,14 +28,8 @@ namespace TriangleAreaDetail{
 
 
 #if defined(__AVX2__) || defined(_M_AVX2)
-template<typename Vector3Like>
-[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const Vector3Like& value)noexcept{
-    return _mm256_set_pd(
-        0.0,
-        static_cast<f64>(value.z),
-        static_cast<f64>(value.y),
-        static_cast<f64>(value.x)
-    );
+[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const f64 x, const f64 y, const f64 z)noexcept{
+    return _mm256_set_pd(0.0, z, y, x);
 }
 
 [[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const SIMDVector value)noexcept{
@@ -103,25 +97,18 @@ template<typename Vector3Like>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename Vector3Like>
-[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
-    const Vector3Like& a,
-    const Vector3Like& b,
-    const Vector3Like& c
+[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildStoredTriangleAreaNormal64(
+    const f64 aX,
+    const f64 aY,
+    const f64 aZ,
+    const f64 bX,
+    const f64 bY,
+    const f64 bZ,
+    const f64 cX,
+    const f64 cY,
+    const f64 cZ
 )noexcept{
-#if defined(__AVX2__) || defined(_M_AVX2)
-    const __m256d ab = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(b), TriangleAreaDetail::MakeVector3F64(a));
-    const __m256d ac = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(c), TriangleAreaDetail::MakeVector3F64(a));
-    return TriangleAreaDetail::CrossVector3F64(ab, ac);
-#else
-    const f64 abX = static_cast<f64>(b.x) - static_cast<f64>(a.x);
-    const f64 abY = static_cast<f64>(b.y) - static_cast<f64>(a.y);
-    const f64 abZ = static_cast<f64>(b.z) - static_cast<f64>(a.z);
-    const f64 acX = static_cast<f64>(c.x) - static_cast<f64>(a.x);
-    const f64 acY = static_cast<f64>(c.y) - static_cast<f64>(a.y);
-    const f64 acZ = static_cast<f64>(c.z) - static_cast<f64>(a.z);
-    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(abX, abY, abZ, acX, acY, acZ);
-#endif
+    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(bX - aX, bY - aY, bZ - aZ, cX - aX, cY - aY, cZ - aZ);
 }
 
 [[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
@@ -164,14 +151,19 @@ template<typename Vector3Like>
 #endif
 }
 
-template<typename Vector3Like>
-[[nodiscard]] NWB_INLINE bool TriangleHasArea(
-    const Vector3Like& a,
-    const Vector3Like& b,
-    const Vector3Like& c,
+[[nodiscard]] NWB_INLINE bool StoredTriangleHasArea(
+    const f64 aX,
+    const f64 aY,
+    const f64 aZ,
+    const f64 bX,
+    const f64 bY,
+    const f64 bZ,
+    const f64 cX,
+    const f64 cY,
+    const f64 cZ,
     const f64 triangleAreaLengthSquaredEpsilon
 )noexcept{
-    return TriangleAreaNormalLengthSquared(BuildTriangleAreaNormal64(a, b, c)) > triangleAreaLengthSquaredEpsilon;
+    return TriangleAreaNormalLengthSquared(BuildStoredTriangleAreaNormal64(aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)) > triangleAreaLengthSquaredEpsilon;
 }
 
 [[nodiscard]] NWB_INLINE bool TriangleHasArea(

@@ -491,13 +491,13 @@ TEST(Global, TriangleAreaPrecisionHelpers){
     const Float3U a(1.0f, 1.0f, 1.0f);
     const Float3U b(4.0f, 1.0f, 1.0f);
     const Float3U c(1.0f, 5.0f, 1.0f);
-    const TriangleAreaNormal64 areaNormal = ::BuildTriangleAreaNormal64(a, b, c);
+    const TriangleAreaNormal64 areaNormal = ::BuildStoredTriangleAreaNormal64(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
     EXPECT_DOUBLE_EQ(areaNormal.x, 0.0);
     EXPECT_DOUBLE_EQ(areaNormal.y, 0.0);
     EXPECT_DOUBLE_EQ(areaNormal.z, 12.0);
     EXPECT_DOUBLE_EQ(::TriangleAreaNormalLengthSquared(areaNormal), 144.0);
-    EXPECT_TRUE(::TriangleHasArea(a, b, c, 143.0));
-    EXPECT_FALSE(::TriangleHasArea(a, b, c, 144.0));
+    EXPECT_TRUE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 143.0));
+    EXPECT_FALSE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 144.0));
 
     const TriangleAreaNormal64 simdAreaNormal = ::BuildTriangleAreaNormal64(
         VectorSet(1.0f, 1.0f, 1.0f, 0.0f),

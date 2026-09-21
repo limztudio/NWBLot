@@ -696,19 +696,9 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             continue;
 
         // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never emit a photon, so it leaves the work list before dispatch. Proven no-contribution work only; refractive classification and visibility gates above are unchanged.
-        {
-            Float4 storedMin{};
-            Float4 storedMax{};
-            StoreFloat(worldMin, storedMin);
-            StoreFloat(worldMax, storedMax);
-            if(
-                !IsFinite(storedMin.x) || !IsFinite(storedMin.y) || !IsFinite(storedMin.z)
-                || !IsFinite(storedMax.x) || !IsFinite(storedMax.y) || !IsFinite(storedMax.z)
-                || storedMax.x < storedMin.x || storedMax.y < storedMin.y || storedMax.z < storedMin.z
-            ){
-                ++m_causticDegenerateTargetSkips;
-                continue;
-            }
+        if(!Vector3IsFinite(worldMin) || !Vector3IsFinite(worldMax) || !Vector3LessOrEqual(worldMin, worldMax)){
+            ++m_causticDegenerateTargetSkips;
+            continue;
         }
 
         combinedMin = VectorMin(combinedMin, worldMin);

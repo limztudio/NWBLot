@@ -48,11 +48,13 @@ void RayTracingOpticalSceneGather::append(
             unspecifiedBoundariesOnly = false;
         instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT;
         ++header.transparentCount;
+        const SIMDVector boundsMinVector = LoadFloat(boundsMin);
+        const SIMDVector boundsMaxVector = LoadFloat(boundsMax);
         const bool finiteBounds =
             boundsValid
-            && IsFinite(boundsMin.x) && IsFinite(boundsMin.y) && IsFinite(boundsMin.z)
-            && IsFinite(boundsMax.x) && IsFinite(boundsMax.y) && IsFinite(boundsMax.z)
-            && boundsMin.x <= boundsMax.x && boundsMin.y <= boundsMax.y && boundsMin.z <= boundsMax.z
+            && Vector3IsFinite(boundsMinVector)
+            && Vector3IsFinite(boundsMaxVector)
+            && Vector3LessOrEqual(boundsMinVector, boundsMaxVector)
         ;
         if(finiteBounds){
             instance.flags |= NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
@@ -62,12 +64,8 @@ void RayTracingOpticalSceneGather::append(
                 hasBounds = true;
             }
             else{
-                header.boundsMin.x = Min(header.boundsMin.x, boundsMin.x);
-                header.boundsMin.y = Min(header.boundsMin.y, boundsMin.y);
-                header.boundsMin.z = Min(header.boundsMin.z, boundsMin.z);
-                header.boundsMax.x = Max(header.boundsMax.x, boundsMax.x);
-                header.boundsMax.y = Max(header.boundsMax.y, boundsMax.y);
-                header.boundsMax.z = Max(header.boundsMax.z, boundsMax.z);
+                StoreFloat(VectorMin(LoadFloat(header.boundsMin), boundsMinVector), header.boundsMin);
+                StoreFloat(VectorMax(LoadFloat(header.boundsMax), boundsMaxVector), header.boundsMax);
             }
         }
         else

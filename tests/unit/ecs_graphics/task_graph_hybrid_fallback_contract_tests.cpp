@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_hybrid_fallback_contract_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr AStringView s_TransparentMaterialClassText = "const bool transparentMaterialClass = (index % 2u) == 0u;";
 
 

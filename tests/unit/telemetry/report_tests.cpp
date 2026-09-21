@@ -15,13 +15,14 @@
 namespace __hidden_telemetry_report_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 constexpr u32 s_ThirdElementIndex = 2u;
 
 
-
 using namespace TelemetryTestDetail;
-
 
 
 TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){

@@ -30,8 +30,9 @@ class RuntimeMeshRequestSet;
 
 
 namespace RuntimeMeshDirtyFlag{
+    static constexpr u8 kRuntimeMeshDirtyFlagNoneBase = 0;
     enum Enum : u8{
-        None = 0,
+        None = kRuntimeMeshDirtyFlagNoneBase,
         TopologyDirty = 1u << 0u,
         AttributesDirty = 1u << 1u,
         SkinningInputDirty = 1u << 2u,

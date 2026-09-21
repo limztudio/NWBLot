@@ -23,8 +23,9 @@ inline constexpr u16 s_DiagnosticPayloadVersion = 1u;
 inline constexpr u32 s_DiagnosticPayloadMagic = 0x4E574447u; // NWDG
 
 namespace DiagnosticPayloadFlag{
+    static constexpr auto kDiagnosticPayloadFlagNoneBase = 0u;
     enum Mask : u16{
-        None = 0u,
+        None = kDiagnosticPayloadFlagNoneBase,
         TerminatesProcess = BitMask<u16>(0u),
     };
 };
@@ -43,8 +44,10 @@ struct EncodedDiagnosticPayloadHeader{
     u32 fileBytes = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedDiagnosticPayloadHeader) == 40u, "EncodedDiagnosticPayloadHeader wire layout drifted");
-static_assert(alignof(EncodedDiagnosticPayloadHeader) == 1u, "EncodedDiagnosticPayloadHeader must stay packed");
+static constexpr usize s_EncodedDiagnosticPayloadHeaderByteSize = 40u;
+static_assert(sizeof(EncodedDiagnosticPayloadHeader) == s_EncodedDiagnosticPayloadHeaderByteSize, "EncodedDiagnosticPayloadHeader wire layout drifted");
+static constexpr usize s_DiagnosticPackedAlignBytes = 1u;
+static_assert(alignof(EncodedDiagnosticPayloadHeader) == s_DiagnosticPackedAlignBytes, "EncodedDiagnosticPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedDiagnosticPayloadHeader>, "EncodedDiagnosticPayloadHeader must stay binary-serializable");
 

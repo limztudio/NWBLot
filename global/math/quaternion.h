@@ -373,15 +373,15 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationAxis(SIMDVector axis, f32 angle
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
 #if defined(NWB_HAS_SCALAR)
-    const f32 halfPitch = 0.5f * angles.f[0];
+    const f32 halfPitch = s_QuaternionHalfAngleScale * angles.f[0];
     const f32 cp = Cos(halfPitch);
     const f32 sp = Sin(halfPitch);
 
-    const f32 halfYaw = 0.5f * angles.f[1];
+    const f32 halfYaw = s_QuaternionHalfAngleScale * angles.f[1];
     const f32 cy = Cos(halfYaw);
     const f32 sy = Sin(halfYaw);
 
-    const f32 halfRoll = 0.5f * angles.f[2];
+    const f32 halfRoll = s_QuaternionHalfAngleScale * angles.f[2];
     const f32 cr = Cos(halfRoll);
     const f32 sr = Sin(halfRoll);
 
@@ -430,7 +430,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         const f32 omr22 = 1.0f - r22;
         if(dif10 <= 0.0f){
             const f32 fourXSqr = omr22 - dif10;
-            const f32 inv4x = 0.5f / Sqrt(fourXSqr);
+            const f32 inv4x = s_QuaternionHalfAngleScale / Sqrt(fourXSqr);
             x = fourXSqr * inv4x;
             y = (matrix.m[0][1] + matrix.m[1][0]) * inv4x;
             z = (matrix.m[0][2] + matrix.m[2][0]) * inv4x;
@@ -438,7 +438,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         }
         else{
             const f32 fourYSqr = omr22 + dif10;
-            const f32 inv4y = 0.5f / Sqrt(fourYSqr);
+            const f32 inv4y = s_QuaternionHalfAngleScale / Sqrt(fourYSqr);
             x = (matrix.m[0][1] + matrix.m[1][0]) * inv4y;
             y = fourYSqr * inv4y;
             z = (matrix.m[1][2] + matrix.m[2][1]) * inv4y;
@@ -450,7 +450,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         const f32 opr22 = 1.0f + r22;
         if(sum10 <= 0.0f){
             const f32 fourZSqr = opr22 - sum10;
-            const f32 inv4z = 0.5f / Sqrt(fourZSqr);
+            const f32 inv4z = s_QuaternionHalfAngleScale / Sqrt(fourZSqr);
             x = (matrix.m[0][2] + matrix.m[2][0]) * inv4z;
             y = (matrix.m[1][2] + matrix.m[2][1]) * inv4z;
             z = fourZSqr * inv4z;
@@ -458,7 +458,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
         }
         else{
             const f32 fourWSqr = opr22 + sum10;
-            const f32 inv4w = 0.5f / Sqrt(fourWSqr);
+            const f32 inv4w = s_QuaternionHalfAngleScale / Sqrt(fourWSqr);
             x = (matrix.m[2][1] - matrix.m[1][2]) * inv4w;
             y = (matrix.m[0][2] - matrix.m[2][0]) * inv4w;
             z = (matrix.m[1][0] - matrix.m[0][1]) * inv4w;

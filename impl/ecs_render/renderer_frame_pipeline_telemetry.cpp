@@ -11,6 +11,10 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/frame_graph_nodes.h>
 
+namespace __hidden_frame_telemetry{
+static constexpr char s_UnknownStageLabel[] = "Unknown";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -41,7 +45,7 @@ static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
     case Core::CommandQueue::Transfer:
         return "Transfer";
     default:
-        return "Unknown";
+        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
     }
 }
 
@@ -56,7 +60,7 @@ static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
     case Core::GpuOwnershipTransferRoute::ExternalExport:
         return "ExternalExport";
     default:
-        return "Unknown";
+        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
     }
 }
 
@@ -81,7 +85,7 @@ static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
     case Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer:
         return "GraphicsAsyncComputeAndTransfer";
     default:
-        return "Unknown";
+        return ::__hidden_frame_telemetry::s_UnknownStageLabel;
     }
 }
 

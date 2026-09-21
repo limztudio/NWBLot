@@ -97,7 +97,8 @@ struct MeshSkinningGraphDispatchPlan{
     bool updatesMeshletBounds = false;
     bool repacksNormals = false;
 };
-static_assert(sizeof(MeshSkinningGraphDispatchPlan) == 520u, "Graph-owned skinning plans should stay compact");
+static constexpr usize s_MeshSkinningGraphDispatchPlanByteSize = 520u;
+static_assert(sizeof(MeshSkinningGraphDispatchPlan) == s_MeshSkinningGraphDispatchPlanByteSize, "Graph-owned skinning plans should stay compact");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

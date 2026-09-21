@@ -577,7 +577,7 @@ NWB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
         VectorSplatW(matrix.v[2]),
         VectorZero()
     );
-    outDual = VectorScale(QuaternionMultiply(translation, outReal), 0.5f);
+    outDual = VectorScale(QuaternionMultiply(translation, outReal), SIMDMatrixDetail::s_MatrixHalf);
     return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);
 }
 

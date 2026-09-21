@@ -69,8 +69,9 @@ namespace CpuAccessMode{
 // Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes
 // concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
+    static constexpr u8 kResourceQueueSharingExclusiveBase = 0;
     enum Mask : u8{
-        Exclusive = 0,
+        Exclusive = kResourceQueueSharingExclusiveBase,
         Graphics = 1 << 0,
         AsyncCompute = 1 << 1,
         Transfer = 1 << 2,
@@ -115,8 +116,9 @@ struct ResourceQueueAdmissionSnapshot{
 };
 
 namespace ResourceStates{
+    static constexpr auto kResourceStatesUnknownBase = 0;
     enum Mask : u32{
-        Unknown = 0,
+        Unknown = kResourceStatesUnknownBase,
         Common = 1 << 0,
         ConstantBuffer = 1 << 1,
         VertexBuffer = 1 << 2,
@@ -234,9 +236,10 @@ struct TextureSlice{
 };
 
 namespace TextureSubresourceMipResolve{
+    static constexpr u8 kTextureSubresourceMipResolveRangeBase = 0u;
     enum Enum : u8{
-        Range = 0u,
-        Single = 1u,
+        Range = kTextureSubresourceMipResolveRangeBase,
+        Single,
     };
 };
 

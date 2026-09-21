@@ -13,6 +13,10 @@
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
+namespace __hidden_telemetry_report{
+static constexpr char s_UnknownReportField[] = "unknown";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -140,7 +144,7 @@ const char* EventKindText(const Telemetry::EventKind::Enum kind)noexcept{
         return "memoryFrame";
     case Telemetry::EventKind::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -152,7 +156,7 @@ const char* PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
         return "gpu";
     case Telemetry::PerfTimingSource::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 

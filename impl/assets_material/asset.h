@@ -58,25 +58,27 @@ class Texture;
 
 
 namespace MaterialParameterValueType{
+    static constexpr auto kMaterialParameterValueTypeNoneBase = 0;
     enum Enum : u32{
-        None = 0,
-        Bool = 1,
-        Char = 2,
-        UChar = 3,
-        Short = 4,
-        UShort = 5,
-        Int = 6,
-        UInt = 7,
-        Half = 8,
-        Float = 9,
+        None = kMaterialParameterValueTypeNoneBase,
+        Bool,
+        Char,
+        UChar,
+        Short,
+        UShort,
+        Int,
+        UInt,
+        Half,
+        Float,
     };
 };
 
 namespace MaterialBlockClass{
+    static constexpr auto kMaterialBlockClassNoneBase = 0;
     enum Enum : u32{
-        None = 0,
-        MaterialConstant = 1,
-        MaterialMutable = 2,
+        None = kMaterialBlockClassNoneBase,
+        MaterialConstant,
+        MaterialMutable,
     };
 };
 
@@ -86,10 +88,11 @@ namespace MaterialBlockClass{
 
 
 namespace MaterialResourceKind{
+    static constexpr auto kMaterialResourceKindNoneBase = 0;
     enum Enum : u32{
-        None = 0,
-        SampledImage2D = 1,
-        Sampler = 2,
+        None = kMaterialResourceKindNoneBase,
+        SampledImage2D,
+        Sampler,
     };
 };
 
@@ -100,9 +103,10 @@ namespace MaterialResourceKind{
 
 // Resource fields name an engine/project asset resolved to a heap slot at runtime.
 namespace MaterialResourceSource{
+    static constexpr auto kMaterialResourceSourceNoneBase = 0u;
     enum Enum : u32{
-        None = 0u,
-        Asset = 1u,
+        None = kMaterialResourceSourceNoneBase,
+        Asset,
     };
 };
 
@@ -215,47 +219,49 @@ namespace MaterialResourceFixture{
 
 
 namespace MaterialLayoutFieldType{
+    static constexpr auto kMaterialLayoutFieldTypeNoneBase = 0;
+    static constexpr auto kSampledImage2DBase = 37;
     enum Enum : u32{
-        None = 0,
-        Bool = 1,
-        Bool2 = 2,
-        Bool3 = 3,
-        Bool4 = 4,
-        Char = 5,
-        Char2 = 6,
-        Char3 = 7,
-        Char4 = 8,
-        UChar = 9,
-        UChar2 = 10,
-        UChar3 = 11,
-        UChar4 = 12,
-        Short = 13,
-        Short2 = 14,
-        Short3 = 15,
-        Short4 = 16,
-        UShort = 17,
-        UShort2 = 18,
-        UShort3 = 19,
-        UShort4 = 20,
-        Int = 21,
-        Int2 = 22,
-        Int3 = 23,
-        Int4 = 24,
-        UInt = 25,
-        UInt2 = 26,
-        UInt3 = 27,
-        UInt4 = 28,
-        Half = 29,
-        Half2 = 30,
-        Half3 = 31,
-        Half4 = 32,
-        Float = 33,
-        Float2 = 34,
-        Float3 = 35,
-        Float4 = 36,
+        None = kMaterialLayoutFieldTypeNoneBase,
+        Bool,
+        Bool2,
+        Bool3,
+        Bool4,
+        Char,
+        Char2,
+        Char3,
+        Char4,
+        UChar,
+        UChar2,
+        UChar3,
+        UChar4,
+        Short,
+        Short2,
+        Short3,
+        Short4,
+        UShort,
+        UShort2,
+        UShort3,
+        UShort4,
+        Int,
+        Int2,
+        Int3,
+        Int4,
+        UInt,
+        UInt2,
+        UInt3,
+        UInt4,
+        Half,
+        Half2,
+        Half3,
+        Half4,
+        Float,
+        Float2,
+        Float3,
+        Float4,
         // Resource fields occupy one patched uint heap slot in the typed-byte payload. They intentionally live after the contiguous numeric range so a resource can never be mistaken for an authored uint parameter.
-        SampledImage2D = 37,
-        Sampler = 38,
+        SampledImage2D = kSampledImage2DBase,
+        Sampler,
     };
 };
 

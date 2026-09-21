@@ -20,6 +20,13 @@
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
 
+namespace __hidden_shader_cook_checksum{
+static constexpr char s_NoneOptName[] = "none";
+static constexpr char s_DefaultOptName[] = "default";
+static constexpr char s_HighOptName[] = "high";
+static constexpr char s_MaximalOptName[] = "maximal";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -82,10 +89,10 @@ static Path NormalizeDependencyRootAliasPath(Path path){
     const ShaderOptimizationLevel::Enum optimizationLevel
 ){
     switch(optimizationLevel){
-    case ShaderOptimizationLevel::None: return "none";
-    case ShaderOptimizationLevel::Default: return "default";
-    case ShaderOptimizationLevel::High: return "high";
-    case ShaderOptimizationLevel::Maximal: return "maximal";
+    case ShaderOptimizationLevel::None: return __hidden_shader_cook_checksum::s_NoneOptName;
+    case ShaderOptimizationLevel::Default: return __hidden_shader_cook_checksum::s_DefaultOptName;
+    case ShaderOptimizationLevel::High: return __hidden_shader_cook_checksum::s_HighOptName;
+    case ShaderOptimizationLevel::Maximal: return __hidden_shader_cook_checksum::s_MaximalOptName;
     default: return {};
     }
 }

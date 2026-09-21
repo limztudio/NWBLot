@@ -46,6 +46,22 @@ inline constexpr u32 s_BC1TransparencyBitCount = 1u;
 inline constexpr u32 s_BC1TransparentColorIndices = Limit<u32>::s_Max;
 inline constexpr u32 s_D24ClearValueMask = 0x00ffffffu;
 inline constexpr f32 s_ClearFloatRoundingBias = 0.5f;
+inline constexpr u32 s_ClearChannelBits4444 = 4u;
+inline constexpr u32 s_ClearChannelBits565R = 5u;
+inline constexpr u32 s_ClearChannelBits565G = 6u;
+inline constexpr u32 s_ClearChannelBits555 = 5u;
+inline constexpr u32 s_ClearChannelBits101010 = 10u;
+inline constexpr u32 s_ClearChannelBits21030 = 2u;
+inline constexpr u32 s_ClearShift4 = 4u;
+inline constexpr u32 s_ClearShift5 = 5u;
+inline constexpr u32 s_ClearShift6 = 6u;
+inline constexpr u32 s_ClearShift8 = 8u;
+inline constexpr u32 s_ClearShift10 = 10u;
+inline constexpr u32 s_ClearShift11 = 11u;
+inline constexpr u32 s_ClearShift12 = 12u;
+inline constexpr u32 s_ClearShift20 = 20u;
+inline constexpr u32 s_ClearShift22 = 22u;
+inline constexpr u32 s_ClearShift30 = 30u;
 inline constexpr f32 s_SRGBClearLinearThreshold = 0.0031308f;
 inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
 inline constexpr f32 s_SRGBClearNonlinearScale = 1.055f;
@@ -469,10 +485,10 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm4BGRAComponents = [&](){
         const u16 packed = static_cast<u16>(
-            (FloatToUNormClearBits(values[2], 4u) << 12u)
-            | (FloatToUNormClearBits(values[1], 4u) << 8u)
-            | (FloatToUNormClearBits(values[0], 4u) << 4u)
-            | FloatToUNormClearBits(values[3], 4u)
+            (FloatToUNormClearBits(values[2], s_ClearChannelBits4444) << s_ClearShift12)
+            | (FloatToUNormClearBits(values[1], s_ClearChannelBits4444) << s_ClearShift8)
+            | (FloatToUNormClearBits(values[0], s_ClearChannelBits4444) << s_ClearShift4)
+            | FloatToUNormClearBits(values[3], s_ClearChannelBits4444)
         );
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
@@ -480,9 +496,9 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm565BGRComponents = [&](){
         const u16 packed = static_cast<u16>(
-            (FloatToUNormClearBits(values[2], 5u) << 11u)
-            | (FloatToUNormClearBits(values[1], 6u) << 5u)
-            | FloatToUNormClearBits(values[0], 5u)
+            (FloatToUNormClearBits(values[2], s_ClearChannelBits565R) << s_ClearShift11)
+            | (FloatToUNormClearBits(values[1], s_ClearChannelBits565G) << s_ClearShift5)
+            | FloatToUNormClearBits(values[0], s_ClearChannelBits565R)
         );
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
@@ -490,9 +506,9 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm5551BGRComponents = [&](){
         const u16 packed = static_cast<u16>(
-            (FloatToUNormClearBits(values[2], 5u) << 11u)
-            | (FloatToUNormClearBits(values[1], 5u) << 6u)
-            | (FloatToUNormClearBits(values[0], 5u) << 1u)
+            (FloatToUNormClearBits(values[2], s_ClearChannelBits565R) << s_ClearShift11)
+            | (FloatToUNormClearBits(values[1], s_ClearChannelBits555) << s_ClearShift6)
+            | (FloatToUNormClearBits(values[0], s_ClearChannelBits565R) << 1u)
             | FloatToUNormClearBits(values[3], 1u)
         );
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
@@ -501,10 +517,10 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUNorm1010102RGBComponents = [&](){
         const u32 packed =
-            FloatToUNormClearBits(values[0], 10u)
-            | (FloatToUNormClearBits(values[1], 10u) << 10u)
-            | (FloatToUNormClearBits(values[2], 10u) << 20u)
-            | (FloatToUNormClearBits(values[3], 2u) << 30u);
+            FloatToUNormClearBits(values[0], s_ClearChannelBits101010)
+            | (FloatToUNormClearBits(values[1], s_ClearChannelBits101010) << s_ClearShift10)
+            | (FloatToUNormClearBits(values[2], s_ClearChannelBits101010) << s_ClearShift20)
+            | (FloatToUNormClearBits(values[3], s_ClearChannelBits21030) << s_ClearShift30);
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
         return true;
@@ -524,7 +540,7 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
         return true;
     };
     auto writeBC2Components = [&](const bool srgb){
-        const u8 alpha = static_cast<u8>(FloatToUNormClearBits(values[3], 4u));
+        const u8 alpha = static_cast<u8>(FloatToUNormClearBits(values[3], s_ClearChannelBits4444));
         u64 alphaBits = 0u;
         for(u32 texelIndex = 0u; texelIndex < s_BC2AlphaTexelCount; ++texelIndex)
             alphaBits |= static_cast<u64>(alpha) << (texelIndex * 4u);

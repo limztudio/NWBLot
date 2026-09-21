@@ -29,8 +29,9 @@ inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9 (added static materi
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Render-property flags in the serialized materialFlags word, mirroring the authored booleans. `Refractive` is the caster classification (separate from `Transparent`); refraction values stay shader-side. `All` masks supported bits; loadBinary rejects anything outside it.
 namespace MaterialFlag{
+    static constexpr auto kMaterialFlagNoneBase = 0u;
     enum Mask : u32{
-        None = 0u,
+        None = kMaterialFlagNoneBase,
         Transparent = 1u << 0u,
         TwoSided = 1u << 1u,
         Refractive = 1u << 2u,

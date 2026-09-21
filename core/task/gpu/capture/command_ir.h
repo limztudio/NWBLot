@@ -22,20 +22,22 @@ NWB_CORE_BEGIN
 // Phase 11 capture is opt-in; native recording stays the ordinary path.
 namespace GpuCommandIrOpcode{
     // Original in-memory capture enum; keep width and ordinals stable.
+    static constexpr u8 kGpuCommandIrOpcodeCopyBufferBase = 0u;
     enum Enum : u8{
-        CopyBuffer = 0u,
-        CopyTexture = 1u,
-        ClearBuffer = 2u,
-        ClearTexture = 3u,
-        ClearTextureRectUInt = 4u,
+        CopyBuffer = kGpuCommandIrOpcodeCopyBufferBase,
+        CopyTexture,
+        ClearBuffer,
+        ClearTexture,
+        ClearTextureRectUInt,
 
         kCount,
     };
 };
 
 namespace GpuCommandIrWireOpcode{
+    static constexpr auto kGpuCommandIrWireOpcodeSetGraphicsStateBase = 0u;
     enum Enum : u16{
-        SetGraphicsState = 0u,
+        SetGraphicsState = kGpuCommandIrWireOpcodeSetGraphicsStateBase,
         Draw,
         DrawIndexed,
         DrawIndirect,
@@ -167,8 +169,9 @@ struct GpuCommandIrClearBufferRecord{
 };
 
 namespace GpuCommandIrClearTextureFlag{
+    static constexpr u8 kGpuCommandIrClearTextureFlagNoneBase = 0u;
     enum Mask : u8{
-        None = 0u,
+        None = kGpuCommandIrClearTextureFlagNoneBase,
         ClearDepth = 1u << 0u,
         ClearStencil = 1u << 1u,
     };
@@ -200,20 +203,33 @@ struct GpuCommandIrClearTextureRectUIntRecord{
 };
 #pragma pack(pop)
 
-static_assert(sizeof(GpuCommandIrStreamHeaderPrefix) == 8u, "Command IR stream header prefix wire layout drifted");
-static_assert(sizeof(GpuCommandIrStreamHeader) == 40u, "Command IR stream header wire layout drifted");
-static_assert(sizeof(GpuCommandIrHeader) == 4u, "Command IR command header wire layout drifted");
-static_assert(sizeof(GpuCommandIrRecordContext) == 12u, "Command IR context wire layout drifted");
-static_assert(sizeof(GpuCommandIrTextureSlice) == 32u, "Command IR texture slice wire layout drifted");
-static_assert(sizeof(GpuCommandIrTextureSubresourceSet) == 16u, "Command IR subresource wire layout drifted");
-static_assert(sizeof(GpuCommandIrRect) == 16u, "Command IR rect wire layout drifted");
-static_assert(sizeof(GpuCommandIrCopyBufferRecord) == 48u, "Command IR copy-buffer wire layout drifted");
-static_assert(sizeof(GpuCommandIrCopyTextureRecord) == 88u, "Command IR copy-texture wire layout drifted");
-static_assert(sizeof(GpuCommandIrClearBufferRecord) == 24u, "Command IR clear-buffer wire layout drifted");
-static_assert(sizeof(GpuCommandIrClearTextureRecord) == 92u, "Command IR clear-texture wire layout drifted");
-static_assert(sizeof(GpuCommandIrClearTextureRectUIntRecord) == 68u, "Command IR rectangular clear wire layout drifted");
-static_assert(alignof(GpuCommandIrStreamHeader) == 1u, "Command IR stream header must stay packed");
-static_assert(alignof(GpuCommandIrCopyBufferRecord) == 1u, "Command IR records must stay packed");
+static constexpr usize s_GpuCommandIrStreamHeaderPrefixByteSize = 8u;
+static_assert(sizeof(GpuCommandIrStreamHeaderPrefix) == s_GpuCommandIrStreamHeaderPrefixByteSize, "Command IR stream header prefix wire layout drifted");
+static constexpr usize s_GpuCommandIrStreamHeaderByteSize = 40u;
+static_assert(sizeof(GpuCommandIrStreamHeader) == s_GpuCommandIrStreamHeaderByteSize, "Command IR stream header wire layout drifted");
+static constexpr usize s_GpuCommandIrHeaderByteSize = 4u;
+static_assert(sizeof(GpuCommandIrHeader) == s_GpuCommandIrHeaderByteSize, "Command IR command header wire layout drifted");
+static constexpr usize s_GpuCommandIrRecordContextByteSize = 12u;
+static_assert(sizeof(GpuCommandIrRecordContext) == s_GpuCommandIrRecordContextByteSize, "Command IR context wire layout drifted");
+static constexpr usize s_GpuCommandIrTextureSliceByteSize = 32u;
+static_assert(sizeof(GpuCommandIrTextureSlice) == s_GpuCommandIrTextureSliceByteSize, "Command IR texture slice wire layout drifted");
+static constexpr usize s_GpuCommandIrTextureSubresourceSetByteSize = 16u;
+static_assert(sizeof(GpuCommandIrTextureSubresourceSet) == s_GpuCommandIrTextureSubresourceSetByteSize, "Command IR subresource wire layout drifted");
+static constexpr usize s_GpuCommandIrRectByteSize = 16u;
+static_assert(sizeof(GpuCommandIrRect) == s_GpuCommandIrRectByteSize, "Command IR rect wire layout drifted");
+static constexpr usize s_GpuCommandIrCopyBufferRecordByteSize = 48u;
+static_assert(sizeof(GpuCommandIrCopyBufferRecord) == s_GpuCommandIrCopyBufferRecordByteSize, "Command IR copy-buffer wire layout drifted");
+static constexpr usize s_GpuCommandIrCopyTextureRecordByteSize = 88u;
+static_assert(sizeof(GpuCommandIrCopyTextureRecord) == s_GpuCommandIrCopyTextureRecordByteSize, "Command IR copy-texture wire layout drifted");
+static constexpr usize s_GpuCommandIrClearBufferRecordByteSize = 24u;
+static_assert(sizeof(GpuCommandIrClearBufferRecord) == s_GpuCommandIrClearBufferRecordByteSize, "Command IR clear-buffer wire layout drifted");
+static constexpr usize s_GpuCommandIrClearTextureRecordByteSize = 92u;
+static_assert(sizeof(GpuCommandIrClearTextureRecord) == s_GpuCommandIrClearTextureRecordByteSize, "Command IR clear-texture wire layout drifted");
+static constexpr usize s_GpuCommandIrClearTextureRectUIntRecordByteSize = 68u;
+static_assert(sizeof(GpuCommandIrClearTextureRectUIntRecord) == s_GpuCommandIrClearTextureRectUIntRecordByteSize, "Command IR rectangular clear wire layout drifted");
+static constexpr usize s_CommandIrPackedAlignBytes = 1u;
+static_assert(alignof(GpuCommandIrStreamHeader) == s_CommandIrPackedAlignBytes, "Command IR stream header must stay packed");
+static_assert(alignof(GpuCommandIrCopyBufferRecord) == s_CommandIrPackedAlignBytes, "Command IR records must stay packed");
 static_assert(IsStandardLayout_V<GpuCommandIrStreamHeader>, "Command IR stream header must be binary-serializable");
 static_assert(IsTriviallyCopyable_V<GpuCommandIrStreamHeader>, "Command IR stream header must be binary-serializable");
 static_assert(IsStandardLayout_V<GpuCommandIrCopyBufferRecord>, "Command IR records must be binary-serializable");

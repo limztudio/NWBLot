@@ -46,7 +46,8 @@ struct MeshHeaderBinary{
 };
 #pragma pack(pop)
 static_assert(sizeof(MeshHeaderBinary) == sizeof(u32) + sizeof(u32) + (sizeof(u64) * 14u), "MeshHeaderBinary layout drifted");
-static_assert(alignof(MeshHeaderBinary) == 1u, "MeshHeaderBinary must stay packed");
+static constexpr usize s_MeshPackedAlignBytes = 1u;
+static_assert(alignof(MeshHeaderBinary) == s_MeshPackedAlignBytes, "MeshHeaderBinary must stay packed");
 static_assert(IsStandardLayout_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshHeaderBinary>, "MeshHeaderBinary must stay binary-serializable");
 

@@ -22,9 +22,10 @@ static_assert(IsStandardLayout_V<TangentFrameRebuildVertex>, "TangentFrameRebuil
 static_assert(IsTriviallyCopyable_V<TangentFrameRebuildVertex>, "TangentFrameRebuildVertex must stay cheap to copy");
 static_assert(sizeof(TangentFrameRebuildVertex) == sizeof(f32) * 16u, "TangentFrameRebuildVertex layout drifted");
 static_assert(alignof(TangentFrameRebuildVertex) >= alignof(Float4), "TangentFrameRebuildVertex must stay SIMD-aligned");
-static_assert((offsetof(TangentFrameRebuildVertex, position) % alignof(Float4)) == 0, "TangentFrameRebuildVertex::position must stay SIMD-aligned");
-static_assert((offsetof(TangentFrameRebuildVertex, normal) % alignof(Float4)) == 0, "TangentFrameRebuildVertex::normal must stay SIMD-aligned");
-static_assert((offsetof(TangentFrameRebuildVertex, tangent) % alignof(Float4)) == 0, "TangentFrameRebuildVertex::tangent must stay SIMD-aligned");
+static constexpr usize s_AlignRemainderZero = 0;
+static_assert((offsetof(TangentFrameRebuildVertex, position) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::position must stay SIMD-aligned");
+static_assert((offsetof(TangentFrameRebuildVertex, normal) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::normal must stay SIMD-aligned");
+static_assert((offsetof(TangentFrameRebuildVertex, tangent) % alignof(Float4)) == s_AlignRemainderZero, "TangentFrameRebuildVertex::tangent must stay SIMD-aligned");
 
 struct TangentFrameRebuildResult{
     u32 rebuiltVertexCount = 0;
@@ -63,7 +64,7 @@ static_assert(
     "TangentFrameAccumulator must keep SIMD calculation lanes aligned"
 );
 static_assert(
-    (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == 0,
+    (sizeof(TangentFrameAccumulator) % alignof(TangentFrameAccumulator)) == s_AlignRemainderZero,
     "TangentFrameAccumulator array stride must keep every element aligned"
 );
 

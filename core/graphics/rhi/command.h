@@ -27,8 +27,9 @@ namespace GraphicsBackend{
 
 // Queue identity for command lists and state handoffs (avoids pulling in device.h).
 namespace CommandQueue{
+    static constexpr u8 kCommandQueueGraphicsBase = 0;
     enum Enum : u8{
-        Graphics = 0,
+        Graphics = kCommandQueueGraphicsBase,
         Compute,
         // Optional copy transport, only when Vulkan exposes a distinct transfer-only family.
         Transfer,
@@ -80,8 +81,9 @@ struct QueueSubmissionToken{
 };
 
 namespace GpuQueueCapability{
+    static constexpr u8 kGpuQueueCapabilityNoneBase = 0u;
     enum Mask : u8{
-        None = 0u,
+        None = kGpuQueueCapabilityNoneBase,
         Transfer = 1u << 0u,
         Compute = 1u << 1u,
         Graphics = 1u << 2u,

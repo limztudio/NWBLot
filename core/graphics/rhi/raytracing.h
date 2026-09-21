@@ -18,15 +18,17 @@ NWB_CORE_BEGIN
 
 
 namespace OpacityMicromapFormat{
+    static constexpr u8 kOpacityMicromapFormatOC1_2_StateBase = 1;
     enum Enum : u8{
-        OC1_2_State = 1,
-        OC1_4_State = 2,
+        OC1_2_State = kOpacityMicromapFormatOC1_2_StateBase,
+        OC1_4_State,
     };
 };
 
 namespace RayTracingOpacityMicromapBuildFlags{
+    static constexpr u8 kRayTracingOpacityMicromapBuildFlagsNoneBase = 0;
     enum Mask : u8{
-        None = 0,
+        None = kRayTracingOpacityMicromapBuildFlagsNoneBase,
 
         FastTrace = 1 << 0,
         FastBuild = 1 << 1,
@@ -98,8 +100,9 @@ static_assert(sizeof(AffineTransform) == sizeof(f32) * s_AffineTransformFloatCou
 static_assert(alignof(AffineTransform) >= alignof(Float4), "AffineTransform must stay SIMD-aligned");
 
 namespace RayTracingGeometryFlags{
+    static constexpr u8 kRayTracingGeometryFlagsNoneBase = 0;
     enum Mask : u8{
-        None = 0,
+        None = kRayTracingGeometryFlagsNoneBase,
 
         Opaque = 1 << 0,
         NoDuplicateAnyHitInvocation = 1 << 1,
@@ -109,11 +112,12 @@ namespace RayTracingGeometryFlags{
 };
 
 namespace RayTracingGeometryType{
+    static constexpr u8 kRayTracingGeometryTypeTrianglesBase = 0;
     enum Enum : u8{
-        Triangles = 0,
-        AABBs = 1,
-        Spheres = 2,
-        Lss = 3,
+        Triangles = kRayTracingGeometryTypeTrianglesBase,
+        AABBs,
+        Spheres,
+        Lss,
     };
 };
 
@@ -207,16 +211,18 @@ struct RayTracingGeometrySpheres{
 };
 
 namespace RayTracingGeometryLssPrimitiveFormat{
+    static constexpr u8 kRayTracingGeometryLssPrimitiveFormatListBase = 0;
     enum Enum : u8{
-        List = 0,
-        SuccessiveImplicit = 1,
+        List = kRayTracingGeometryLssPrimitiveFormatListBase,
+        SuccessiveImplicit,
     };
 };
 
 namespace RayTracingGeometryLssEndcapMode{
+    static constexpr u8 kRayTracingGeometryLssEndcapModeNoneBase = 0;
     enum Enum : u8{
-        None = 0,
-        Chained = 1,
+        None = kRayTracingGeometryLssEndcapModeNoneBase,
+        Chained,
     };
 };
 
@@ -284,8 +290,9 @@ struct RayTracingGeometryDesc{
 };
 
 namespace RayTracingInstanceFlags{
+    static constexpr auto kRayTracingInstanceFlagsNoneBase = 0;
     enum Mask : u32{
-        None = 0,
+        None = kRayTracingInstanceFlagsNoneBase,
 
         TriangleCullDisable = 1 << 0,
         TriangleFrontCounterclockwise = 1 << 1,
@@ -332,8 +339,9 @@ static_assert(sizeof(RayTracingInstanceDesc) == RayTracingInstanceDesc::s_ByteSi
 static_assert(sizeof(IndirectInstanceDesc) == sizeof(RayTracingInstanceDesc));
 
 namespace RayTracingAccelStructBuildFlags{
+    static constexpr u8 kRayTracingAccelStructBuildFlagsNoneBase = 0;
     enum Mask : u8{
-        None = 0,
+        None = kRayTracingAccelStructBuildFlagsNoneBase,
 
         AllowUpdate = 1 << 0,
         PreferFastTrace = 1 << 2,
@@ -426,8 +434,9 @@ namespace RayTracingClusterOperationMode{
 };
 
 namespace RayTracingClusterOperationFlags{
+    static constexpr u8 kRayTracingClusterOperationFlagsNoneBase = 0;
     enum Mask : u8{
-        None = 0,
+        None = kRayTracingClusterOperationFlagsNoneBase,
 
         FastTrace = 1 << 0,
         FastBuild = 1 << 1,
@@ -439,10 +448,13 @@ namespace RayTracingClusterOperationFlags{
 };
 
 namespace RayTracingClusterOperationIndexFormat{
+    static constexpr u8 kIndexFormat8bitBytes = 1;
+    static constexpr u8 kIndexFormat16bitBytes = 2;
+    static constexpr u8 kIndexFormat32bitBytes = 4;
     enum Enum : u8{
-        IndexFormat8bit = 1,
-        IndexFormat16bit = 2,
-        IndexFormat32bit = 4,
+        IndexFormat8bit = kIndexFormat8bitBytes,
+        IndexFormat16bit = kIndexFormat16bitBytes,
+        IndexFormat32bit = kIndexFormat32bitBytes,
     };
 };
 

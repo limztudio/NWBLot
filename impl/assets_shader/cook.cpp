@@ -20,6 +20,11 @@
 #include <global/hash_utils.h>
 #include <global/process_execution.h>
 
+namespace __hidden_shader_cook{
+static constexpr char s_NoneOptText[] = "none";
+static constexpr char s_DefaultVariantText[] = "default";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -140,11 +145,11 @@ static bool TryParseShaderOptimizationLevel(
     const AStringView text,
     ShaderOptimizationLevel::Enum& outOptimizationLevel
 ){
-    if(text == "none"){
+    if(text == ::__hidden_shader_cook::s_NoneOptText){
         outOptimizationLevel = ShaderOptimizationLevel::None;
         return true;
     }
-    if(text == "default"){
+    if(text == ::__hidden_shader_cook::s_DefaultVariantText){
         outOptimizationLevel = ShaderOptimizationLevel::Default;
         return true;
     }
@@ -917,7 +922,7 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
     if(variantSignature.empty())
         return true;
 
-    if(variantSignature == "default"){
+    if(variantSignature == ::__hidden_shader_cook::s_DefaultVariantText){
         if(defineValues.empty())
             return true;
 
@@ -1454,7 +1459,7 @@ bool ShaderCook::expandDefineCombinations(
 
 ShaderCook::CookString ShaderCook::buildVariantName(const DefineCombo& combo, Alloc::ScratchArena& scratchArena){
     if(combo.empty())
-        return CookString("default", m_memoryArena);
+        return CookString(::__hidden_shader_cook::s_DefaultVariantText, m_memoryArena);
 
     if(combo.size() == 1u){
         const auto& [defineName, defineValue] = *combo.begin();

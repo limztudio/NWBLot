@@ -36,7 +36,8 @@ struct HeaderPrefix{
 };
 #pragma pack(pop)
 static_assert(sizeof(HeaderPrefix) == s_TextureHeaderPrefixBytes, "Texture header prefix layout drifted");
-static_assert(alignof(HeaderPrefix) == 1u, "Texture header prefix must stay packed");
+static constexpr usize s_PackedAlignBytes = 1u;
+static_assert(alignof(HeaderPrefix) == s_PackedAlignBytes, "Texture header prefix must stay packed");
 static_assert(IsStandardLayout_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 
@@ -57,7 +58,7 @@ struct HeaderBinaryV2{
 };
 #pragma pack(pop)
 static_assert(sizeof(HeaderBinaryV2) == s_TextureHeaderV2Bytes, "Texture V2 header layout drifted");
-static_assert(alignof(HeaderBinaryV2) == 1u, "Texture V2 header must stay packed");
+static_assert(alignof(HeaderBinaryV2) == s_PackedAlignBytes, "Texture V2 header must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");
 
@@ -79,8 +80,9 @@ struct HeaderBinary{
     u64 payloadByteCount = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(HeaderBinary) == 48u, "Texture V3 header layout drifted");
-static_assert(alignof(HeaderBinary) == 1u, "Texture V3 header must stay packed");
+static constexpr usize s_HeaderBinaryByteSize = 48u;
+static_assert(sizeof(HeaderBinary) == s_HeaderBinaryByteSize, "Texture V3 header layout drifted");
+static_assert(alignof(HeaderBinary) == s_PackedAlignBytes, "Texture V3 header must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinary>, "Texture V3 header must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderBinary>, "Texture V3 header must stay binary-serializable");
 
@@ -101,8 +103,9 @@ struct MipLevelBinary{
     u64 sizeBytes = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(MipLevelBinary) == 40u, "Texture mip level layout drifted");
-static_assert(alignof(MipLevelBinary) == 1u, "Texture mip level must stay packed");
+static constexpr usize s_MipLevelBinaryByteSize = 40u;
+static_assert(sizeof(MipLevelBinary) == s_MipLevelBinaryByteSize, "Texture mip level layout drifted");
+static_assert(alignof(MipLevelBinary) == s_PackedAlignBytes, "Texture mip level must stay packed");
 static_assert(IsStandardLayout_V<MipLevelBinary>, "Texture mip level must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MipLevelBinary>, "Texture mip level must stay binary-serializable");
 

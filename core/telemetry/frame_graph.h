@@ -47,36 +47,41 @@ namespace FrameGraphEdgeKind{
 };
 
 namespace FrameGraphQueueClass{
+    static constexpr u8 kFrameGraphQueueClassUnknownBase = 0u;
+    static constexpr u8 kFrameGraphQueueClassCountValue = 4u;
     enum Enum : u8{
-        Unknown = 0u,
-        Graphics = 1u,
-        Compute = 2u,
-        Transfer = 3u,
+        Unknown = kFrameGraphQueueClassUnknownBase,
+        Graphics,
+        Compute,
+        Transfer,
 
-        kCount = 4u,
+        kCount = kFrameGraphQueueClassCountValue,
     };
 };
 
 namespace FrameGraphQueueAssignmentReason{
+    static constexpr u8 kFrameGraphQueueAssignmentReasonUnknownBase = 0u;
+    static constexpr u8 kFrameGraphQueueAssignmentReasonCountValue = 10u;
     enum Enum : u8{
-        Unknown = 0u,
-        RequiredGraphics = 1u,
-        PreferredQueue = 2u,
-        DedicatedCompute = 3u,
-        DedicatedTransfer = 4u,
-        Fallback = 5u,
-        ConservativeAny = 6u,
-        SameClassRouting = 7u,
-        CompilerOverride = 8u,
-        ScoredAny = 9u,
+        Unknown = kFrameGraphQueueAssignmentReasonUnknownBase,
+        RequiredGraphics,
+        PreferredQueue,
+        DedicatedCompute,
+        DedicatedTransfer,
+        Fallback,
+        ConservativeAny,
+        SameClassRouting,
+        CompilerOverride,
+        ScoredAny,
 
-        kCount = 10u,
+        kCount = kFrameGraphQueueAssignmentReasonCountValue,
     };
 };
 
 namespace FrameGraphQueueAssignmentModifier{
+    static constexpr u8 kFrameGraphQueueAssignmentModifierNoneBase = 0u;
     enum Mask : u8{
-        None = 0u,
+        None = kFrameGraphQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
         NonPrimaryPreference = 1u << 2u,
@@ -94,32 +99,36 @@ namespace FrameGraphQueueAssignmentModifier{
 };
 
 namespace FrameGraphQueueAssignmentAcceptance{
+    static constexpr u8 kFrameGraphQueueAssignmentAcceptanceNotAcceptedBase = 0u;
+    static constexpr u8 kFrameGraphQueueAssignmentAcceptanceCountValue = 4u;
     enum Enum : u8{
-        NotAccepted = 0u,
-        First = 1u,
-        Unchanged = 2u,
-        Changed = 3u,
+        NotAccepted = kFrameGraphQueueAssignmentAcceptanceNotAcceptedBase,
+        First,
+        Unchanged,
+        Changed,
 
-        kCount = 4u,
+        kCount = kFrameGraphQueueAssignmentAcceptanceCountValue,
     };
 };
 
 namespace FrameGraphTaskPacketizationDecision{
+    static constexpr u8 kFrameGraphTaskPacketizationDecisionUnknownBase = 0u;
+    static constexpr u8 kFrameGraphTaskPacketizationDecisionCountValue = 12u;
     enum Enum : u8{
-        Unknown = 0u,
-        FirstTask = 1u,
-        MergeNotRequested = 2u,
-        TaskForcesBoundary = 3u,
-        QueueChanged = 4u,
-        PrecedingTaskForcesBoundary = 5u,
-        ScoredMergeIneligible = 6u,
-        MergeRequiresExplicitImmediateDependency = 7u,
-        CrossQueueConsumerFrontier = 8u,
-        MergedExplicit = 9u,
-        MergedFrontierScored = 10u,
-        ScoredMergeDomainMismatch = 11u,
+        Unknown = kFrameGraphTaskPacketizationDecisionUnknownBase,
+        FirstTask,
+        MergeNotRequested,
+        TaskForcesBoundary,
+        QueueChanged,
+        PrecedingTaskForcesBoundary,
+        ScoredMergeIneligible,
+        MergeRequiresExplicitImmediateDependency,
+        CrossQueueConsumerFrontier,
+        MergedExplicit,
+        MergedFrontierScored,
+        ScoredMergeDomainMismatch,
 
-        kCount = 12u,
+        kCount = kFrameGraphTaskPacketizationDecisionCountValue,
     };
 };
 
@@ -823,427 +832,704 @@ struct EncodedFrameGraphPacketSubmissionStatistics{
     f64 submissionSeconds = 0.0;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedFrameGraphPayloadHeader) == 28u, "EncodedFrameGraphPayloadHeader wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeader) == 1u, "EncodedFrameGraphPayloadHeader must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderByteSize = 28u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeader) == s_EncodedFrameGraphPayloadHeaderByteSize, "EncodedFrameGraphPayloadHeader wire layout drifted");
+static constexpr usize s_FrameGraphPackedAlignBytes = 1u;
+static_assert(alignof(EncodedFrameGraphPayloadHeader) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeader>, "EncodedFrameGraphPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeader>, "EncodedFrameGraphPayloadHeader must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV2) == 32u, "EncodedFrameGraphPayloadHeaderV2 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV2) == 1u, "EncodedFrameGraphPayloadHeaderV2 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV2ByteSize = 32u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV2) == s_EncodedFrameGraphPayloadHeaderV2ByteSize, "EncodedFrameGraphPayloadHeaderV2 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV2) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV2 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV2>, "EncodedFrameGraphPayloadHeaderV2 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV2>, "EncodedFrameGraphPayloadHeaderV2 must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV3) == 36u, "EncodedFrameGraphPayloadHeaderV3 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV3) == 1u, "EncodedFrameGraphPayloadHeaderV3 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV3ByteSize = 36u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV3) == s_EncodedFrameGraphPayloadHeaderV3ByteSize, "EncodedFrameGraphPayloadHeaderV3 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV3) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV3 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV3>, "EncodedFrameGraphPayloadHeaderV3 must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV4) == 40u, "EncodedFrameGraphPayloadHeaderV4 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV4) == 1u, "EncodedFrameGraphPayloadHeaderV4 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV4ByteSize = 40u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV4) == s_EncodedFrameGraphPayloadHeaderV4ByteSize, "EncodedFrameGraphPayloadHeaderV4 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV4) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV4 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV4>, "EncodedFrameGraphPayloadHeaderV4 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV4>, "EncodedFrameGraphPayloadHeaderV4 must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV5) == 44u, "EncodedFrameGraphPayloadHeaderV5 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV5) == 1u, "EncodedFrameGraphPayloadHeaderV5 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV5ByteSize = 44u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV5) == s_EncodedFrameGraphPayloadHeaderV5ByteSize, "EncodedFrameGraphPayloadHeaderV5 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV5) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV5 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV5>, "EncodedFrameGraphPayloadHeaderV5 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV5>, "EncodedFrameGraphPayloadHeaderV5 must stay binary-serializable");
+static constexpr usize s_HeaderV5MagicOffset = 0u;
+static constexpr usize s_HeaderV5VersionOffset = 4u;
+static constexpr usize s_HeaderV5ReservedOffset = 6u;
+static constexpr usize s_HeaderV5FrameIndexOffset = 8u;
+static constexpr usize s_HeaderV5NodeCountOffset = 16u;
+static constexpr usize s_HeaderV5EdgeCountOffset = 20u;
+static constexpr usize s_HeaderV5StringTableBytesOffset = 24u;
+static constexpr usize s_HeaderV5QueueAssignmentCountOffset = 28u;
+static constexpr usize s_HeaderV5RuntimeStatisticsCountOffset = 36u;
+static constexpr usize s_HeaderV5PhysicalQueueCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV5CompiledTaskCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6MagicOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6VersionOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6ReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6FrameIndexOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6NodeCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6EdgeCountOffset = 20u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6StringTableBytesOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6QueueAssignmentCountOffset = 28u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6CompiledTaskCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6RuntimeStatisticsCountOffset = 36u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6PhysicalQueueRuntimeStatisticsCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7MagicOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7VersionOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7ReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7FrameIndexOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7NodeCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7EdgeCountOffset = 20u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7StringTableBytesOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7QueueAssignmentCountOffset = 28u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7CompiledTaskCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7RuntimeStatisticsCountOffset = 36u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7PhysicalQueueRuntimeStatisticsCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7PacketSubmissionStatisticsCountOffset = 44u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8MagicOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8VersionOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8ReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8FrameIndexOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8NodeCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8EdgeCountOffset = 20u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8StringTableBytesOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8QueueAssignmentCountOffset = 28u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8CompiledTaskCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8RuntimeStatisticsCountOffset = 36u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8PhysicalQueueRuntimeStatisticsCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsCountOffset = 44u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsPresentOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8ReservedTailOffset = 49u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsTaskCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceUseCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsExplicitDependencyCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsInferredDependencyCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsMergedTaskCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsTransitionBarrierCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsUavBarrierCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsStateExportBarrierCountOffset = 96u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferCountOffset = 104u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferSignatureCountOffset = 112u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsRepeatedOwnershipTransferSignatureCountOffset = 120u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingCouldAvoidTransferCountOffset = 128u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset = 136u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferInternalCountOffset = 144u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalImportCountOffset = 152u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalExportCountOffset = 160u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetCountOffset = 168u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetMemberCountOffset = 176u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsDirectResourceUseCountOffset = 184u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsDeclaredResourceSetUseCountOffset = 192u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsExpandedResourceSetMemberUseCountOffset = 200u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectCountOffset = 208u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectBytesOffset = 216u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobCountOffset = 224u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobBytesOffset = 232u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsDeclarationSecondsOffset = 240u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsAnalysisSecondsOffset = 248u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsValidationSecondsOffset = 256u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsDependencyAnalysisSecondsOffset = 264u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsHazardAnalysisSecondsOffset = 272u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsTopologicalOrderSecondsOffset = 280u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsQueueAssignmentSecondsOffset = 288u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPlanningSecondsOffset = 296u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketizationSecondsOffset = 304u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsResourceStatePlanningSecondsOffset = 312u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyPlanningSecondsOffset = 320u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsTotalSecondsOffset = 328u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsBarrierCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsParallelPacketCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset = 48u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset = 56u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsTaskRecordSecondsOffset = 64u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingSecondsOffset = 72u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingElapsedSecondsOffset = 80u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierElapsedSecondsOffset = 88u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerBusySecondsOffset = 96u;
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerCapacitySecondsOffset = 104u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedPacketCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedTaskCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeSubmissionCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedSubmissionCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeCommandListCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsTimelineWaitCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsSubmissionSecondsOffset = 96u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsNodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsDeviceGenerationOffset = 4u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsGraphGenerationOffset = 8u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsPlanGenerationOffset = 16u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsRecordingAttemptGenerationOffset = 24u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsCompileOffset = 32u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsRecordingOffset = 368u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsSubmissionOffset = 480u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedPacketCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedTaskCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6NativeSubmissionCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedSubmissionCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6NativeCommandListCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6PlannedWaitTokenCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6SameQueueWaitElisionCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6TimelineWaitCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6MergedTimelineWaitCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedFrontierSubmissionCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6SubmissionSecondsOffset = 96u;
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RecoverySubmissionCountOffset = 104u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6NodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6DeviceGenerationOffset = 4u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6ReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6GraphGenerationOffset = 8u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6PlanGenerationOffset = 16u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6RecordingAttemptGenerationOffset = 24u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6CompileOffset = 32u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6RecordingOffset = 368u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6SubmissionOffset = 480u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6NestedSubmissionSecondsOffset = 576u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6NestedRecoverySubmissionCountOffset = 584u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsV8TaskCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsV8TotalSecondsOffset = 328u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsV8ResourceVersionCountOffset = 336u;
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsV8ResourceVersionEdgeCountOffset = 344u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8NodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8DeviceGenerationOffset = 4u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8ReservedOffset = 6u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8GraphGenerationOffset = 8u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8PlanGenerationOffset = 16u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8RecordingAttemptGenerationOffset = 24u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8CompileOffset = 32u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8RecordingOffset = 384u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8SubmissionOffset = 496u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8NestedSubmissionSecondsOffset = 592u;
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8NestedRecoverySubmissionCountOffset = 600u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsTaskCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPacketCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsMergedTaskCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPrologueBarrierCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsEpilogueBarrierCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferSignatureCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferSignatureCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingRepeatedOwnershipTransferSignatureCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingRepeatedOwnershipTransferSignatureCountOffset = 96u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset = 104u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsBarrierCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsParallelPacketCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset = 56u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskRecordSecondsOffset = 64u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsRecordingSecondsOffset = 72u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedPacketCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedTaskCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeSubmissionCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedSubmissionCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeCommandListCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsTimelineWaitCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSubmissionSecondsOffset = 96u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsOwnerNodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueClassOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsReservedOffset = 9u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsCompileOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsRecordingOffset = 128u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsSubmissionOffset = 208u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedPacketCountOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedTaskCountOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedPacketCountOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedTaskCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6NativeSubmissionCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedSubmissionCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6NativeCommandListCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6PlannedWaitTokenCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6SameQueueWaitElisionCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6TimelineWaitCountOffset = 72u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6MergedTimelineWaitCountOffset = 80u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedFrontierSubmissionCountOffset = 88u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6SubmissionSecondsOffset = 96u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RecoverySubmissionCountOffset = 104u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6OwnerNodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6QueueOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6QueueClassOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6ReservedOffset = 9u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6CompileOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6RecordingOffset = 128u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6SubmissionOffset = 208u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6NestedSubmissionSecondsOffset = 304u;
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6NestedRecoverySubmissionCountOffset = 312u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsOwnerNodeIndexOffset = 0u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsPacketIndexOffset = 4u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsPacketGenerationOffset = 8u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsQueueOffset = 16u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsQueueClassOffset = 20u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsJoinsAcceptedQueueFrontierOffset = 21u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsRecoverySubmissionOffset = 22u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsReservedOffset = 23u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsTaskCountOffset = 24u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsCommandListCountOffset = 32u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsPlannedWaitTokenCountOffset = 40u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsSameQueueWaitElisionCountOffset = 48u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsTimelineWaitCountOffset = 56u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsMergedTimelineWaitCountOffset = 64u;
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsSubmissionSecondsOffset = 72u;
 static_assert(
-    offsetof(EncodedFrameGraphPayloadHeaderV5, magic) == 0u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, version) == 4u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, reserved) == 6u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, frameIndex) == 8u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, nodeCount) == 16u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, edgeCount) == 20u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, stringTableBytes) == 24u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, queueAssignmentCount) == 28u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, compiledTaskCount) == 32u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, runtimeStatisticsCount) == 36u
-    && offsetof(EncodedFrameGraphPayloadHeaderV5, physicalQueueRuntimeStatisticsCount) == 40u,
+    offsetof(EncodedFrameGraphPayloadHeaderV5, magic) == s_HeaderV5MagicOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, version) == s_HeaderV5VersionOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, reserved) == s_HeaderV5ReservedOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, frameIndex) == s_HeaderV5FrameIndexOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, nodeCount) == s_HeaderV5NodeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, edgeCount) == s_HeaderV5EdgeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, stringTableBytes) == s_HeaderV5StringTableBytesOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, queueAssignmentCount) == s_HeaderV5QueueAssignmentCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, compiledTaskCount) == s_EncodedFrameGraphPayloadHeaderV5CompiledTaskCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, runtimeStatisticsCount) == s_HeaderV5RuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV5, physicalQueueRuntimeStatisticsCount) == s_HeaderV5PhysicalQueueCountOffset,
     "EncodedFrameGraphPayloadHeaderV5 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV6) == 44u, "EncodedFrameGraphPayloadHeaderV6 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV6) == 1u, "EncodedFrameGraphPayloadHeaderV6 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV6ByteSize = 44u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV6) == s_EncodedFrameGraphPayloadHeaderV6ByteSize, "EncodedFrameGraphPayloadHeaderV6 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV6) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV6 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV6>, "EncodedFrameGraphPayloadHeaderV6 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV6>, "EncodedFrameGraphPayloadHeaderV6 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPayloadHeaderV6, magic) == 0u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, version) == 4u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, reserved) == 6u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, frameIndex) == 8u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, nodeCount) == 16u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, edgeCount) == 20u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, stringTableBytes) == 24u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, queueAssignmentCount) == 28u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, compiledTaskCount) == 32u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, runtimeStatisticsCount) == 36u
-    && offsetof(EncodedFrameGraphPayloadHeaderV6, physicalQueueRuntimeStatisticsCount) == 40u,
+    offsetof(EncodedFrameGraphPayloadHeaderV6, magic) == s_EncodedFrameGraphPayloadHeaderV6MagicOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, version) == s_EncodedFrameGraphPayloadHeaderV6VersionOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, reserved) == s_EncodedFrameGraphPayloadHeaderV6ReservedOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, frameIndex) == s_EncodedFrameGraphPayloadHeaderV6FrameIndexOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, nodeCount) == s_EncodedFrameGraphPayloadHeaderV6NodeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, edgeCount) == s_EncodedFrameGraphPayloadHeaderV6EdgeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, stringTableBytes) == s_EncodedFrameGraphPayloadHeaderV6StringTableBytesOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, queueAssignmentCount) == s_EncodedFrameGraphPayloadHeaderV6QueueAssignmentCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, compiledTaskCount) == s_EncodedFrameGraphPayloadHeaderV6CompiledTaskCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, runtimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV6RuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV6, physicalQueueRuntimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV6PhysicalQueueRuntimeStatisticsCountOffset,
     "EncodedFrameGraphPayloadHeaderV6 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV7) == 48u, "EncodedFrameGraphPayloadHeaderV7 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV7) == 1u, "EncodedFrameGraphPayloadHeaderV7 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV7ByteSize = 48u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV7) == s_EncodedFrameGraphPayloadHeaderV7ByteSize, "EncodedFrameGraphPayloadHeaderV7 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV7) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV7 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV7>, "EncodedFrameGraphPayloadHeaderV7 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV7>, "EncodedFrameGraphPayloadHeaderV7 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPayloadHeaderV7, magic) == 0u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, version) == 4u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, reserved) == 6u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, frameIndex) == 8u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, nodeCount) == 16u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, edgeCount) == 20u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, stringTableBytes) == 24u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, queueAssignmentCount) == 28u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, compiledTaskCount) == 32u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, runtimeStatisticsCount) == 36u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, physicalQueueRuntimeStatisticsCount) == 40u
-    && offsetof(EncodedFrameGraphPayloadHeaderV7, packetSubmissionStatisticsCount) == 44u,
+    offsetof(EncodedFrameGraphPayloadHeaderV7, magic) == s_EncodedFrameGraphPayloadHeaderV7MagicOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, version) == s_EncodedFrameGraphPayloadHeaderV7VersionOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, reserved) == s_EncodedFrameGraphPayloadHeaderV7ReservedOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, frameIndex) == s_EncodedFrameGraphPayloadHeaderV7FrameIndexOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, nodeCount) == s_EncodedFrameGraphPayloadHeaderV7NodeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, edgeCount) == s_EncodedFrameGraphPayloadHeaderV7EdgeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, stringTableBytes) == s_EncodedFrameGraphPayloadHeaderV7StringTableBytesOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, queueAssignmentCount) == s_EncodedFrameGraphPayloadHeaderV7QueueAssignmentCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, compiledTaskCount) == s_EncodedFrameGraphPayloadHeaderV7CompiledTaskCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, runtimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV7RuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, physicalQueueRuntimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV7PhysicalQueueRuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV7, packetSubmissionStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV7PacketSubmissionStatisticsCountOffset,
     "EncodedFrameGraphPayloadHeaderV7 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPayloadHeaderV8) == 52u, "EncodedFrameGraphPayloadHeaderV8 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPayloadHeaderV8) == 1u, "EncodedFrameGraphPayloadHeaderV8 must stay packed");
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV8ByteSize = 52u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV8) == s_EncodedFrameGraphPayloadHeaderV8ByteSize, "EncodedFrameGraphPayloadHeaderV8 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV8) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV8 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV8>, "EncodedFrameGraphPayloadHeaderV8 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV8>, "EncodedFrameGraphPayloadHeaderV8 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPayloadHeaderV8, magic) == 0u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, version) == 4u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, reserved) == 6u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, frameIndex) == 8u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, nodeCount) == 16u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, edgeCount) == 20u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, stringTableBytes) == 24u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, queueAssignmentCount) == 28u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, compiledTaskCount) == 32u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, runtimeStatisticsCount) == 36u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, physicalQueueRuntimeStatisticsCount) == 40u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, packetSubmissionStatisticsCount) == 44u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, packetSubmissionStatisticsPresent) == 48u
-    && offsetof(EncodedFrameGraphPayloadHeaderV8, reservedTail) == 49u,
+    offsetof(EncodedFrameGraphPayloadHeaderV8, magic) == s_EncodedFrameGraphPayloadHeaderV8MagicOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, version) == s_EncodedFrameGraphPayloadHeaderV8VersionOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, reserved) == s_EncodedFrameGraphPayloadHeaderV8ReservedOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, frameIndex) == s_EncodedFrameGraphPayloadHeaderV8FrameIndexOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, nodeCount) == s_EncodedFrameGraphPayloadHeaderV8NodeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, edgeCount) == s_EncodedFrameGraphPayloadHeaderV8EdgeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, stringTableBytes) == s_EncodedFrameGraphPayloadHeaderV8StringTableBytesOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, queueAssignmentCount) == s_EncodedFrameGraphPayloadHeaderV8QueueAssignmentCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, compiledTaskCount) == s_EncodedFrameGraphPayloadHeaderV8CompiledTaskCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, runtimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8RuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, physicalQueueRuntimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8PhysicalQueueRuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, packetSubmissionStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, packetSubmissionStatisticsPresent) == s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsPresentOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV8, reservedTail) == s_EncodedFrameGraphPayloadHeaderV8ReservedTailOffset,
     "EncodedFrameGraphPayloadHeaderV8 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphNode) == 72u, "EncodedFrameGraphNode wire layout drifted");
-static_assert(alignof(EncodedFrameGraphNode) == 1u, "EncodedFrameGraphNode must stay packed");
+static constexpr usize s_EncodedFrameGraphNodeByteSize = 72u;
+static_assert(sizeof(EncodedFrameGraphNode) == s_EncodedFrameGraphNodeByteSize, "EncodedFrameGraphNode wire layout drifted");
+static_assert(alignof(EncodedFrameGraphNode) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphNode must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphNode>, "EncodedFrameGraphNode must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphNode>, "EncodedFrameGraphNode must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphEdge) == 12u, "EncodedFrameGraphEdge wire layout drifted");
-static_assert(alignof(EncodedFrameGraphEdge) == 1u, "EncodedFrameGraphEdge must stay packed");
+static constexpr usize s_EncodedFrameGraphEdgeByteSize = 12u;
+static_assert(sizeof(EncodedFrameGraphEdge) == s_EncodedFrameGraphEdgeByteSize, "EncodedFrameGraphEdge wire layout drifted");
+static_assert(alignof(EncodedFrameGraphEdge) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphEdge must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphEdge>, "EncodedFrameGraphEdge must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphEdge>, "EncodedFrameGraphEdge must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueId) == 4u, "EncodedFrameGraphPhysicalQueueId wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueId) == 1u, "EncodedFrameGraphPhysicalQueueId must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueIdByteSize = 4u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueId) == s_EncodedFrameGraphPhysicalQueueIdByteSize, "EncodedFrameGraphPhysicalQueueId wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueId) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueId must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueId>, "EncodedFrameGraphPhysicalQueueId must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueId>, "EncodedFrameGraphPhysicalQueueId must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphQueueAssignment) == 56u, "EncodedFrameGraphQueueAssignment wire layout drifted");
-static_assert(alignof(EncodedFrameGraphQueueAssignment) == 1u, "EncodedFrameGraphQueueAssignment must stay packed");
+static constexpr usize s_EncodedFrameGraphQueueAssignmentByteSize = 56u;
+static_assert(sizeof(EncodedFrameGraphQueueAssignment) == s_EncodedFrameGraphQueueAssignmentByteSize, "EncodedFrameGraphQueueAssignment wire layout drifted");
+static_assert(alignof(EncodedFrameGraphQueueAssignment) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphQueueAssignment must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphQueueAssignment>, "EncodedFrameGraphQueueAssignment must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphQueueAssignment>, "EncodedFrameGraphQueueAssignment must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphCompiledTask) == 20u, "EncodedFrameGraphCompiledTask wire layout drifted");
-static_assert(alignof(EncodedFrameGraphCompiledTask) == 1u, "EncodedFrameGraphCompiledTask must stay packed");
+static constexpr usize s_EncodedFrameGraphCompiledTaskByteSize = 20u;
+static_assert(sizeof(EncodedFrameGraphCompiledTask) == s_EncodedFrameGraphCompiledTaskByteSize, "EncodedFrameGraphCompiledTask wire layout drifted");
+static_assert(alignof(EncodedFrameGraphCompiledTask) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphCompiledTask must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphCompiledTask>, "EncodedFrameGraphCompiledTask must stay binary-serializable");
-static_assert(sizeof(EncodedFrameGraphCompileRuntimeStatistics) == 336u, "EncodedFrameGraphCompileRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphCompileRuntimeStatistics) == 1u, "EncodedFrameGraphCompileRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsByteSize = 336u;
+static_assert(sizeof(EncodedFrameGraphCompileRuntimeStatistics) == s_EncodedFrameGraphCompileRuntimeStatisticsByteSize, "EncodedFrameGraphCompileRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphCompileRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphCompileRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphCompileRuntimeStatistics>, "EncodedFrameGraphCompileRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphCompileRuntimeStatistics>, "EncodedFrameGraphCompileRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphCompileRuntimeStatistics, taskCount) == 0u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceCount) == 8u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceUseCount) == 16u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, explicitDependencyCount) == 24u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, inferredDependencyCount) == 32u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetCount) == 40u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetDependencyCount) == 48u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, mergedTaskCount) == 56u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, transitionBarrierCount) == 64u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uavBarrierCount) == 72u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, ownershipReleaseBarrierCount) == 80u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, ownershipAcquireBarrierCount) == 88u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, stateExportBarrierCount) == 96u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferCount) == 104u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferSignatureCount) == 112u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, repeatedOwnershipTransferSignatureCount) == 120u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, concurrentSharingCouldAvoidTransferCount) == 128u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, concurrentSharingAdviceResourceCount) == 136u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferInternalCount) == 144u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferExternalImportCount) == 152u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferExternalExportCount) == 160u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceSetCount) == 168u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceSetMemberCount) == 176u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, directResourceUseCount) == 184u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, declaredResourceSetUseCount) == 192u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, expandedResourceSetMemberUseCount) == 200u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, payloadObjectCount) == 208u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, payloadObjectBytes) == 216u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uploadBlobCount) == 224u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uploadBlobBytes) == 232u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, declarationSeconds) == 240u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, analysisSeconds) == 248u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, validationSeconds) == 256u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, dependencyAnalysisSeconds) == 264u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, hazardAnalysisSeconds) == 272u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, topologicalOrderSeconds) == 280u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, queueAssignmentSeconds) == 288u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, planningSeconds) == 296u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetizationSeconds) == 304u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceStatePlanningSeconds) == 312u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetDependencyPlanningSeconds) == 320u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, totalSeconds) == 328u,
+    offsetof(EncodedFrameGraphCompileRuntimeStatistics, taskCount) == s_EncodedFrameGraphCompileRuntimeStatisticsTaskCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceCount) == s_EncodedFrameGraphCompileRuntimeStatisticsResourceCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceUseCount) == s_EncodedFrameGraphCompileRuntimeStatisticsResourceUseCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, explicitDependencyCount) == s_EncodedFrameGraphCompileRuntimeStatisticsExplicitDependencyCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, inferredDependencyCount) == s_EncodedFrameGraphCompileRuntimeStatisticsInferredDependencyCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetCount) == s_EncodedFrameGraphCompileRuntimeStatisticsPacketCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetDependencyCount) == s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, mergedTaskCount) == s_EncodedFrameGraphCompileRuntimeStatisticsMergedTaskCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, transitionBarrierCount) == s_EncodedFrameGraphCompileRuntimeStatisticsTransitionBarrierCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uavBarrierCount) == s_EncodedFrameGraphCompileRuntimeStatisticsUavBarrierCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, ownershipReleaseBarrierCount) == s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, ownershipAcquireBarrierCount) == s_EncodedFrameGraphCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, stateExportBarrierCount) == s_EncodedFrameGraphCompileRuntimeStatisticsStateExportBarrierCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferCount) == s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferSignatureCount) == s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, repeatedOwnershipTransferSignatureCount) == s_EncodedFrameGraphCompileRuntimeStatisticsRepeatedOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, concurrentSharingCouldAvoidTransferCount) == s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingCouldAvoidTransferCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, concurrentSharingAdviceResourceCount) == s_EncodedFrameGraphCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferInternalCount) == s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferInternalCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferExternalImportCount) == s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalImportCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, logicalOwnershipTransferExternalExportCount) == s_EncodedFrameGraphCompileRuntimeStatisticsLogicalOwnershipTransferExternalExportCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceSetCount) == s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceSetMemberCount) == s_EncodedFrameGraphCompileRuntimeStatisticsResourceSetMemberCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, directResourceUseCount) == s_EncodedFrameGraphCompileRuntimeStatisticsDirectResourceUseCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, declaredResourceSetUseCount) == s_EncodedFrameGraphCompileRuntimeStatisticsDeclaredResourceSetUseCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, expandedResourceSetMemberUseCount) == s_EncodedFrameGraphCompileRuntimeStatisticsExpandedResourceSetMemberUseCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, payloadObjectCount) == s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, payloadObjectBytes) == s_EncodedFrameGraphCompileRuntimeStatisticsPayloadObjectBytesOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uploadBlobCount) == s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, uploadBlobBytes) == s_EncodedFrameGraphCompileRuntimeStatisticsUploadBlobBytesOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, declarationSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsDeclarationSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, analysisSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsAnalysisSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, validationSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsValidationSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, dependencyAnalysisSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsDependencyAnalysisSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, hazardAnalysisSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsHazardAnalysisSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, topologicalOrderSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsTopologicalOrderSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, queueAssignmentSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsQueueAssignmentSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, planningSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsPlanningSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetizationSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsPacketizationSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, resourceStatePlanningSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsResourceStatePlanningSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, packetDependencyPlanningSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsPacketDependencyPlanningSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatistics, totalSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsTotalSecondsOffset,
     "EncodedFrameGraphCompileRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphRecordingRuntimeStatistics) == 112u, "EncodedFrameGraphRecordingRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphRecordingRuntimeStatistics) == 1u, "EncodedFrameGraphRecordingRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize = 112u;
+static_assert(sizeof(EncodedFrameGraphRecordingRuntimeStatistics) == s_EncodedFrameGraphRecordingRuntimeStatisticsByteSize, "EncodedFrameGraphRecordingRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphRecordingRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphRecordingRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphRecordingRuntimeStatistics>, "EncodedFrameGraphRecordingRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphRecordingRuntimeStatistics>, "EncodedFrameGraphRecordingRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphRecordingRuntimeStatistics, packetCount) == 0u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, taskCount) == 8u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, commandListCount) == 16u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, barrierCount) == 24u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, workerRoutedPacketCount) == 32u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, parallelPacketCount) == 40u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, commandListAcquisitionSeconds) == 48u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, graphBarrierRecordingSeconds) == 56u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, taskRecordSeconds) == 64u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, recordingSeconds) == 72u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, recordingElapsedSeconds) == 80u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierElapsedSeconds) == 88u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierWorkerBusySeconds) == 96u
-    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierWorkerCapacitySeconds) == 104u,
+    offsetof(EncodedFrameGraphRecordingRuntimeStatistics, packetCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsPacketCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, taskCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsTaskCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, commandListCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, barrierCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsBarrierCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, workerRoutedPacketCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, parallelPacketCount) == s_EncodedFrameGraphRecordingRuntimeStatisticsParallelPacketCountOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, commandListAcquisitionSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, graphBarrierRecordingSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, taskRecordSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsTaskRecordSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, recordingSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, recordingElapsedSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsRecordingElapsedSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierElapsedSeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierElapsedSecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierWorkerBusySeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerBusySecondsOffset
+    && offsetof(EncodedFrameGraphRecordingRuntimeStatistics, readyFrontierWorkerCapacitySeconds) == s_EncodedFrameGraphRecordingRuntimeStatisticsReadyFrontierWorkerCapacitySecondsOffset,
     "EncodedFrameGraphRecordingRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphSubmissionRuntimeStatistics) == 104u, "EncodedFrameGraphSubmissionRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphSubmissionRuntimeStatistics) == 1u, "EncodedFrameGraphSubmissionRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize = 104u;
+static_assert(sizeof(EncodedFrameGraphSubmissionRuntimeStatistics) == s_EncodedFrameGraphSubmissionRuntimeStatisticsByteSize, "EncodedFrameGraphSubmissionRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphSubmissionRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphSubmissionRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphSubmissionRuntimeStatistics>, "EncodedFrameGraphSubmissionRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphSubmissionRuntimeStatistics>, "EncodedFrameGraphSubmissionRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedPacketCount) == 0u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedTaskCount) == 8u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedPacketCount) == 16u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedTaskCount) == 24u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, nativeSubmissionCount) == 32u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedSubmissionCount) == 40u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, nativeCommandListCount) == 48u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, plannedWaitTokenCount) == 56u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, sameQueueWaitElisionCount) == 64u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, timelineWaitCount) == 72u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, mergedTimelineWaitCount) == 80u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedFrontierSubmissionCount) == 88u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, submissionSeconds) == 96u,
+    offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedPacketCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedPacketCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedTaskCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedTaskCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedPacketCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedPacketCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedTaskCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedTaskCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, nativeSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, rejectedSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsRejectedSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, nativeCommandListCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsNativeCommandListCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, plannedWaitTokenCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, sameQueueWaitElisionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, timelineWaitCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, mergedTimelineWaitCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, acceptedFrontierSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatistics, submissionSeconds) == s_EncodedFrameGraphSubmissionRuntimeStatisticsSubmissionSecondsOffset,
     "EncodedFrameGraphSubmissionRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphRuntimeStatistics) == 584u, "EncodedFrameGraphRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphRuntimeStatistics) == 1u, "EncodedFrameGraphRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsByteSize = 584u;
+static_assert(sizeof(EncodedFrameGraphRuntimeStatistics) == s_EncodedFrameGraphRuntimeStatisticsByteSize, "EncodedFrameGraphRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphRuntimeStatistics>, "EncodedFrameGraphRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphRuntimeStatistics>, "EncodedFrameGraphRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphRuntimeStatistics, nodeIndex) == 0u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, deviceGeneration) == 4u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, reserved) == 6u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, graphGeneration) == 8u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, planGeneration) == 16u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, recordingAttemptGeneration) == 24u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, compile) == 32u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, recording) == 368u
-    && offsetof(EncodedFrameGraphRuntimeStatistics, submission) == 480u,
+    offsetof(EncodedFrameGraphRuntimeStatistics, nodeIndex) == s_EncodedFrameGraphRuntimeStatisticsNodeIndexOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, deviceGeneration) == s_EncodedFrameGraphRuntimeStatisticsDeviceGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, reserved) == s_EncodedFrameGraphRuntimeStatisticsReservedOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, graphGeneration) == s_EncodedFrameGraphRuntimeStatisticsGraphGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, planGeneration) == s_EncodedFrameGraphRuntimeStatisticsPlanGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, recordingAttemptGeneration) == s_EncodedFrameGraphRuntimeStatisticsRecordingAttemptGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, compile) == s_EncodedFrameGraphRuntimeStatisticsCompileOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, recording) == s_EncodedFrameGraphRuntimeStatisticsRecordingOffset
+    && offsetof(EncodedFrameGraphRuntimeStatistics, submission) == s_EncodedFrameGraphRuntimeStatisticsSubmissionOffset,
     "EncodedFrameGraphRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphSubmissionRuntimeStatisticsV6) == 112u, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphSubmissionRuntimeStatisticsV6) == 1u, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 must stay packed");
+static constexpr usize s_EncodedFrameGraphSubmissionRuntimeStatisticsV6ByteSize = 112u;
+static_assert(sizeof(EncodedFrameGraphSubmissionRuntimeStatisticsV6) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6ByteSize, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphSubmissionRuntimeStatisticsV6) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphSubmissionRuntimeStatisticsV6>, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphSubmissionRuntimeStatisticsV6>, "EncodedFrameGraphSubmissionRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedPacketCount) == 0u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedTaskCount) == 8u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedPacketCount) == 16u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedTaskCount) == 24u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, nativeSubmissionCount) == 32u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedSubmissionCount) == 40u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, nativeCommandListCount) == 48u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, plannedWaitTokenCount) == 56u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, sameQueueWaitElisionCount) == 64u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, timelineWaitCount) == 72u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, mergedTimelineWaitCount) == 80u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedFrontierSubmissionCount) == 88u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == 96u
-    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 104u,
+    offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedPacketCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedPacketCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedTaskCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedTaskCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedPacketCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedPacketCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedTaskCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedTaskCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, nativeSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6NativeSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, rejectedSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RejectedSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, nativeCommandListCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6NativeCommandListCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, plannedWaitTokenCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6PlannedWaitTokenCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, sameQueueWaitElisionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6SameQueueWaitElisionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, timelineWaitCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6TimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, mergedTimelineWaitCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6MergedTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, acceptedFrontierSubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6AcceptedFrontierSubmissionCountOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6SubmissionSecondsOffset
+    && offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == s_EncodedFrameGraphSubmissionRuntimeStatisticsV6RecoverySubmissionCountOffset,
     "EncodedFrameGraphSubmissionRuntimeStatisticsV6 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphRuntimeStatisticsV6) == 592u, "EncodedFrameGraphRuntimeStatisticsV6 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphRuntimeStatisticsV6) == 1u, "EncodedFrameGraphRuntimeStatisticsV6 must stay packed");
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV6ByteSize = 592u;
+static_assert(sizeof(EncodedFrameGraphRuntimeStatisticsV6) == s_EncodedFrameGraphRuntimeStatisticsV6ByteSize, "EncodedFrameGraphRuntimeStatisticsV6 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphRuntimeStatisticsV6) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphRuntimeStatisticsV6 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphRuntimeStatisticsV6>, "EncodedFrameGraphRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphRuntimeStatisticsV6>, "EncodedFrameGraphRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphRuntimeStatisticsV6, nodeIndex) == 0u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, deviceGeneration) == 4u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, reserved) == 6u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, graphGeneration) == 8u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, planGeneration) == 16u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, recordingAttemptGeneration) == 24u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, compile) == 32u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, recording) == 368u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, submission) == 480u
+    offsetof(EncodedFrameGraphRuntimeStatisticsV6, nodeIndex) == s_EncodedFrameGraphRuntimeStatisticsV6NodeIndexOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, deviceGeneration) == s_EncodedFrameGraphRuntimeStatisticsV6DeviceGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, reserved) == s_EncodedFrameGraphRuntimeStatisticsV6ReservedOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, graphGeneration) == s_EncodedFrameGraphRuntimeStatisticsV6GraphGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, planGeneration) == s_EncodedFrameGraphRuntimeStatisticsV6PlanGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, recordingAttemptGeneration) == s_EncodedFrameGraphRuntimeStatisticsV6RecordingAttemptGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, compile) == s_EncodedFrameGraphRuntimeStatisticsV6CompileOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, recording) == s_EncodedFrameGraphRuntimeStatisticsV6RecordingOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV6, submission) == s_EncodedFrameGraphRuntimeStatisticsV6SubmissionOffset
     && offsetof(EncodedFrameGraphRuntimeStatisticsV6, submission)
-        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == 576u
+        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == s_EncodedFrameGraphRuntimeStatisticsV6NestedSubmissionSecondsOffset
     && offsetof(EncodedFrameGraphRuntimeStatisticsV6, submission)
-        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 584u,
+        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == s_EncodedFrameGraphRuntimeStatisticsV6NestedRecoverySubmissionCountOffset,
     "EncodedFrameGraphRuntimeStatisticsV6 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphCompileRuntimeStatisticsV8) == 352u, "EncodedFrameGraphCompileRuntimeStatisticsV8 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphCompileRuntimeStatisticsV8) == 1u, "EncodedFrameGraphCompileRuntimeStatisticsV8 must stay packed");
+static constexpr usize s_EncodedFrameGraphCompileRuntimeStatisticsV8ByteSize = 352u;
+static_assert(sizeof(EncodedFrameGraphCompileRuntimeStatisticsV8) == s_EncodedFrameGraphCompileRuntimeStatisticsV8ByteSize, "EncodedFrameGraphCompileRuntimeStatisticsV8 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphCompileRuntimeStatisticsV8) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphCompileRuntimeStatisticsV8 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphCompileRuntimeStatisticsV8>, "EncodedFrameGraphCompileRuntimeStatisticsV8 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphCompileRuntimeStatisticsV8>, "EncodedFrameGraphCompileRuntimeStatisticsV8 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, taskCount) == 0u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, totalSeconds) == 328u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, resourceVersionCount) == 336u
-    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, resourceVersionEdgeCount) == 344u,
+    offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, taskCount) == s_EncodedFrameGraphCompileRuntimeStatisticsV8TaskCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, totalSeconds) == s_EncodedFrameGraphCompileRuntimeStatisticsV8TotalSecondsOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, resourceVersionCount) == s_EncodedFrameGraphCompileRuntimeStatisticsV8ResourceVersionCountOffset
+    && offsetof(EncodedFrameGraphCompileRuntimeStatisticsV8, resourceVersionEdgeCount) == s_EncodedFrameGraphCompileRuntimeStatisticsV8ResourceVersionEdgeCountOffset,
     "EncodedFrameGraphCompileRuntimeStatisticsV8 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphRuntimeStatisticsV8) == 608u, "EncodedFrameGraphRuntimeStatisticsV8 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphRuntimeStatisticsV8) == 1u, "EncodedFrameGraphRuntimeStatisticsV8 must stay packed");
+static constexpr usize s_EncodedFrameGraphRuntimeStatisticsV8ByteSize = 608u;
+static_assert(sizeof(EncodedFrameGraphRuntimeStatisticsV8) == s_EncodedFrameGraphRuntimeStatisticsV8ByteSize, "EncodedFrameGraphRuntimeStatisticsV8 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphRuntimeStatisticsV8) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphRuntimeStatisticsV8 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphRuntimeStatisticsV8>, "EncodedFrameGraphRuntimeStatisticsV8 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphRuntimeStatisticsV8>, "EncodedFrameGraphRuntimeStatisticsV8 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphRuntimeStatisticsV8, nodeIndex) == 0u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, deviceGeneration) == 4u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, reserved) == 6u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, graphGeneration) == 8u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, planGeneration) == 16u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, recordingAttemptGeneration) == 24u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, compile) == 32u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, recording) == 384u
-    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, submission) == 496u
+    offsetof(EncodedFrameGraphRuntimeStatisticsV8, nodeIndex) == s_EncodedFrameGraphRuntimeStatisticsV8NodeIndexOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, deviceGeneration) == s_EncodedFrameGraphRuntimeStatisticsV8DeviceGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, reserved) == s_EncodedFrameGraphRuntimeStatisticsV8ReservedOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, graphGeneration) == s_EncodedFrameGraphRuntimeStatisticsV8GraphGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, planGeneration) == s_EncodedFrameGraphRuntimeStatisticsV8PlanGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, recordingAttemptGeneration) == s_EncodedFrameGraphRuntimeStatisticsV8RecordingAttemptGenerationOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, compile) == s_EncodedFrameGraphRuntimeStatisticsV8CompileOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, recording) == s_EncodedFrameGraphRuntimeStatisticsV8RecordingOffset
+    && offsetof(EncodedFrameGraphRuntimeStatisticsV8, submission) == s_EncodedFrameGraphRuntimeStatisticsV8SubmissionOffset
     && offsetof(EncodedFrameGraphRuntimeStatisticsV8, submission)
-        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == 592u
+        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, submissionSeconds) == s_EncodedFrameGraphRuntimeStatisticsV8NestedSubmissionSecondsOffset
     && offsetof(EncodedFrameGraphRuntimeStatisticsV8, submission)
-        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 600u,
+        + offsetof(EncodedFrameGraphSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == s_EncodedFrameGraphRuntimeStatisticsV8NestedRecoverySubmissionCountOffset,
     "EncodedFrameGraphRuntimeStatisticsV8 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics) == 112u, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics) == 1u, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize = 112u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsByteSize, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, taskCount) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, packetCount) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, mergedTaskCount) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, prologueBarrierCount) == 24u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, epilogueBarrierCount) == 32u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, ownershipReleaseBarrierCount) == 40u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, ownershipAcquireBarrierCount) == 48u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingLogicalOwnershipTransferCount) == 56u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingLogicalOwnershipTransferCount) == 64u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingLogicalOwnershipTransferSignatureCount) == 72u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingLogicalOwnershipTransferSignatureCount) == 80u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingRepeatedOwnershipTransferSignatureCount) == 88u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingRepeatedOwnershipTransferSignatureCount) == 96u
-    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, concurrentSharingAdviceResourceCount) == 104u,
+    offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, taskCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, packetCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, mergedTaskCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsMergedTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, prologueBarrierCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsPrologueBarrierCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, epilogueBarrierCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsEpilogueBarrierCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, ownershipReleaseBarrierCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipReleaseBarrierCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, ownershipAcquireBarrierCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOwnershipAcquireBarrierCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingLogicalOwnershipTransferCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingLogicalOwnershipTransferCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingLogicalOwnershipTransferSignatureCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingLogicalOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingLogicalOwnershipTransferSignatureCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingLogicalOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, incomingRepeatedOwnershipTransferSignatureCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsIncomingRepeatedOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, outgoingRepeatedOwnershipTransferSignatureCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsOutgoingRepeatedOwnershipTransferSignatureCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics, concurrentSharingAdviceResourceCount) == s_EncodedFrameGraphPhysicalQueueCompileRuntimeStatisticsConcurrentSharingAdviceResourceCountOffset,
     "EncodedFrameGraphPhysicalQueueCompileRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics) == 80u, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics) == 1u, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize = 80u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsByteSize, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, packetCount) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, taskCount) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, commandListCount) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, barrierCount) == 24u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, workerRoutedPacketCount) == 32u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, parallelPacketCount) == 40u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, commandListAcquisitionSeconds) == 48u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, graphBarrierRecordingSeconds) == 56u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, taskRecordSeconds) == 64u
-    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, recordingSeconds) == 72u,
+    offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, packetCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, taskCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, commandListCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, barrierCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsBarrierCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, workerRoutedPacketCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsWorkerRoutedPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, parallelPacketCount) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsParallelPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, commandListAcquisitionSeconds) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsCommandListAcquisitionSecondsOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, graphBarrierRecordingSeconds) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsGraphBarrierRecordingSecondsOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, taskRecordSeconds) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsTaskRecordSecondsOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics, recordingSeconds) == s_EncodedFrameGraphPhysicalQueueRecordingRuntimeStatisticsRecordingSecondsOffset,
     "EncodedFrameGraphPhysicalQueueRecordingRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics) == 104u, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics) == 1u, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize = 104u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsByteSize, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedPacketCount) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedTaskCount) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedPacketCount) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedTaskCount) == 24u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, nativeSubmissionCount) == 32u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedSubmissionCount) == 40u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, nativeCommandListCount) == 48u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, plannedWaitTokenCount) == 56u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, sameQueueWaitElisionCount) == 64u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, timelineWaitCount) == 72u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, mergedTimelineWaitCount) == 80u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedFrontierSubmissionCount) == 88u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, submissionSeconds) == 96u,
+    offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedPacketCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedTaskCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedPacketCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedTaskCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, nativeSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, rejectedSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsRejectedSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, nativeCommandListCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsNativeCommandListCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, plannedWaitTokenCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsPlannedWaitTokenCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, sameQueueWaitElisionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSameQueueWaitElisionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, timelineWaitCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, mergedTimelineWaitCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsMergedTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, acceptedFrontierSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsAcceptedFrontierSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics, submissionSeconds) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsSubmissionSecondsOffset,
     "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatistics) == 312u, "EncodedFrameGraphPhysicalQueueRuntimeStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueRuntimeStatistics) == 1u, "EncodedFrameGraphPhysicalQueueRuntimeStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize = 312u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatistics) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsByteSize, "EncodedFrameGraphPhysicalQueueRuntimeStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueRuntimeStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueRuntimeStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueRuntimeStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueRuntimeStatistics>, "EncodedFrameGraphPhysicalQueueRuntimeStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, ownerNodeIndex) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, queue) == 4u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, queueClass) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, reserved) == 9u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, compile) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, recording) == 128u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, submission) == 208u,
+    offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, ownerNodeIndex) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsOwnerNodeIndexOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, queue) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, queueClass) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsQueueClassOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, reserved) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsReservedOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, compile) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsCompileOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, recording) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsRecordingOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatistics, submission) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsSubmissionOffset,
     "EncodedFrameGraphPhysicalQueueRuntimeStatistics field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6) == 112u, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6) == 1u, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6ByteSize = 112u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6ByteSize, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6>, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6>, "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedPacketCount) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedTaskCount) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedPacketCount) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedTaskCount) == 24u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, nativeSubmissionCount) == 32u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedSubmissionCount) == 40u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, nativeCommandListCount) == 48u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, plannedWaitTokenCount) == 56u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, sameQueueWaitElisionCount) == 64u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, timelineWaitCount) == 72u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, mergedTimelineWaitCount) == 80u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedFrontierSubmissionCount) == 88u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, submissionSeconds) == 96u
-    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 104u,
+    offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedPacketCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedTaskCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedPacketCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedPacketCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedTaskCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedTaskCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, nativeSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6NativeSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, rejectedSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RejectedSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, nativeCommandListCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6NativeCommandListCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, plannedWaitTokenCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6PlannedWaitTokenCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, sameQueueWaitElisionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6SameQueueWaitElisionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, timelineWaitCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6TimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, mergedTimelineWaitCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6MergedTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, acceptedFrontierSubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6AcceptedFrontierSubmissionCountOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, submissionSeconds) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6SubmissionSecondsOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == s_EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6RecoverySubmissionCountOffset,
     "EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) == 320u, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) == 1u, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 must stay packed");
+static constexpr usize s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6ByteSize = 320u;
+static_assert(sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6ByteSize, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6>, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6>, "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, ownerNodeIndex) == 0u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, queue) == 4u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, queueClass) == 8u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, reserved) == 9u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, compile) == 16u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, recording) == 128u
-    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, submission) == 208u
+    offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, ownerNodeIndex) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6OwnerNodeIndexOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, queue) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6QueueOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, queueClass) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6QueueClassOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, reserved) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6ReservedOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, compile) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6CompileOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, recording) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6RecordingOffset
+    && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, submission) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6SubmissionOffset
     && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, submission)
-        + offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, submissionSeconds) == 304u
+        + offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, submissionSeconds) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6NestedSubmissionSecondsOffset
     && offsetof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6, submission)
-        + offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == 312u,
+        + offsetof(EncodedFrameGraphPhysicalQueueSubmissionRuntimeStatisticsV6, recoverySubmissionCount) == s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6NestedRecoverySubmissionCountOffset,
     "EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 field order drifted"
 );
-static_assert(sizeof(EncodedFrameGraphPacketSubmissionStatistics) == 80u, "EncodedFrameGraphPacketSubmissionStatistics wire layout drifted");
-static_assert(alignof(EncodedFrameGraphPacketSubmissionStatistics) == 1u, "EncodedFrameGraphPacketSubmissionStatistics must stay packed");
+static constexpr usize s_EncodedFrameGraphPacketSubmissionStatisticsByteSize = 80u;
+static_assert(sizeof(EncodedFrameGraphPacketSubmissionStatistics) == s_EncodedFrameGraphPacketSubmissionStatisticsByteSize, "EncodedFrameGraphPacketSubmissionStatistics wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPacketSubmissionStatistics) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPacketSubmissionStatistics must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPacketSubmissionStatistics>, "EncodedFrameGraphPacketSubmissionStatistics must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPacketSubmissionStatistics>, "EncodedFrameGraphPacketSubmissionStatistics must stay binary-serializable");
 static_assert(
-    offsetof(EncodedFrameGraphPacketSubmissionStatistics, ownerNodeIndex) == 0u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetIndex) == 4u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetGeneration) == 8u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queue) == 16u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queueClass) == 20u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, joinsAcceptedQueueFrontier) == 21u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, recoverySubmission) == 22u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, reserved) == 23u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, taskCount) == 24u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, commandListCount) == 32u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, plannedWaitTokenCount) == 40u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, sameQueueWaitElisionCount) == 48u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, timelineWaitCount) == 56u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, mergedTimelineWaitCount) == 64u
-    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, submissionSeconds) == 72u,
+    offsetof(EncodedFrameGraphPacketSubmissionStatistics, ownerNodeIndex) == s_EncodedFrameGraphPacketSubmissionStatisticsOwnerNodeIndexOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetIndex) == s_EncodedFrameGraphPacketSubmissionStatisticsPacketIndexOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, packetGeneration) == s_EncodedFrameGraphPacketSubmissionStatisticsPacketGenerationOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queue) == s_EncodedFrameGraphPacketSubmissionStatisticsQueueOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, queueClass) == s_EncodedFrameGraphPacketSubmissionStatisticsQueueClassOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, joinsAcceptedQueueFrontier) == s_EncodedFrameGraphPacketSubmissionStatisticsJoinsAcceptedQueueFrontierOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, recoverySubmission) == s_EncodedFrameGraphPacketSubmissionStatisticsRecoverySubmissionOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, reserved) == s_EncodedFrameGraphPacketSubmissionStatisticsReservedOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, taskCount) == s_EncodedFrameGraphPacketSubmissionStatisticsTaskCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, commandListCount) == s_EncodedFrameGraphPacketSubmissionStatisticsCommandListCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, plannedWaitTokenCount) == s_EncodedFrameGraphPacketSubmissionStatisticsPlannedWaitTokenCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, sameQueueWaitElisionCount) == s_EncodedFrameGraphPacketSubmissionStatisticsSameQueueWaitElisionCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, timelineWaitCount) == s_EncodedFrameGraphPacketSubmissionStatisticsTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, mergedTimelineWaitCount) == s_EncodedFrameGraphPacketSubmissionStatisticsMergedTimelineWaitCountOffset
+    && offsetof(EncodedFrameGraphPacketSubmissionStatistics, submissionSeconds) == s_EncodedFrameGraphPacketSubmissionStatisticsSubmissionSecondsOffset,
     "EncodedFrameGraphPacketSubmissionStatistics field order drifted"
 );
 

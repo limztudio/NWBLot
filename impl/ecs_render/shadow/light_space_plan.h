@@ -32,10 +32,14 @@ struct LightSpaceViewGpu{
     u32 light[4] = {};
 };
 static_assert(sizeof(LightSpaceViewGpu) == NWB_LIGHT_SPACE_VIEW_BYTES);
-static_assert(offsetof(LightSpaceViewGpu, originOrDirection) == 64u);
-static_assert(offsetof(LightSpaceViewGpu, depthRange) == 80u);
-static_assert(offsetof(LightSpaceViewGpu, map) == 96u);
-static_assert(offsetof(LightSpaceViewGpu, light) == 112u);
+static constexpr usize s_LightSpaceViewGpuOriginOrDirectionOffset = 64u;
+static constexpr usize s_LightSpaceViewGpuDepthRangeOffset = 80u;
+static constexpr usize s_LightSpaceViewGpuMapOffset = 96u;
+static constexpr usize s_LightSpaceViewGpuLightOffset = 112u;
+static_assert(offsetof(LightSpaceViewGpu, originOrDirection) == s_LightSpaceViewGpuOriginOrDirectionOffset);
+static_assert(offsetof(LightSpaceViewGpu, depthRange) == s_LightSpaceViewGpuDepthRangeOffset);
+static_assert(offsetof(LightSpaceViewGpu, map) == s_LightSpaceViewGpuMapOffset);
+static_assert(offsetof(LightSpaceViewGpu, light) == s_LightSpaceViewGpuLightOffset);
 
 struct LightSpaceLightRequest{
     u32 lightIndex = 0u;

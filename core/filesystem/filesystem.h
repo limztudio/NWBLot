@@ -21,11 +21,14 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_ByteElementSize = 1;
+
 interface IFilesystem;
 
 namespace FileSeekOrigin{
+    static constexpr u8 kFileSeekOriginBeginBase = 0;
     enum Enum : u8{
-        Begin = 0,
+        Begin = kFileSeekOriginBeginBase,
         Current,
         End
     };
@@ -80,13 +83,13 @@ public:
 
     template<typename ByteContainer>
     bool writeFile(const Name& virtualPath, const ByteContainer& data){
-        static_assert(sizeof(typename ByteContainer::value_type) == 1, "Filesystem buffers must contain bytes");
+        static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
         return writeFile(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 
     template<typename ByteContainer>
     bool writeFileDeferred(const Name& virtualPath, const ByteContainer& data){
-        static_assert(sizeof(typename ByteContainer::value_type) == 1, "Filesystem buffers must contain bytes");
+        static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
         return writeFileDeferred(virtualPath, data.empty() ? nullptr : data.data(), data.size());
     }
 };
@@ -97,7 +100,7 @@ public:
 
 template<typename ByteContainer>
 bool IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const{
-    static_assert(sizeof(typename ByteContainer::value_type) == 1, "Filesystem buffers must contain bytes");
+    static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
     outData.clear();
 
     u64 size = 0;

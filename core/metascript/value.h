@@ -18,8 +18,9 @@ NWB_METASCRIPT_BEGIN
 
 
 namespace ValueType{
+    static constexpr u8 kValueTypeNullBase = 0;
     enum Enum : u8{
-        Null = 0,
+        Null = kValueTypeNullBase,
         Integer,
         Double,
         String,

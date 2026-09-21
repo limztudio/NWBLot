@@ -35,8 +35,9 @@ namespace PerfTimingSource{
 };
 
 namespace PerfMemoryPayloadFlag{
+    static constexpr auto kPerfMemoryPayloadFlagNoneBase = 0u;
     enum Mask : u16{
-        None = 0u,
+        None = kPerfMemoryPayloadFlagNoneBase,
         HasDelta = BitMask<u16>(0u),
     };
 };
@@ -82,12 +83,15 @@ struct EncodedPerfMemoryPayloadHeader{
     u32 source = Perf::MemorySource::ExplicitScope;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedPerfTimingPayloadHeader) == 136u, "EncodedPerfTimingPayloadHeader wire layout drifted");
-static_assert(alignof(EncodedPerfTimingPayloadHeader) == 1u, "EncodedPerfTimingPayloadHeader must stay packed");
+static constexpr usize s_EncodedPerfTimingPayloadHeaderByteSize = 136u;
+static_assert(sizeof(EncodedPerfTimingPayloadHeader) == s_EncodedPerfTimingPayloadHeaderByteSize, "EncodedPerfTimingPayloadHeader wire layout drifted");
+static constexpr usize s_PerfPackedAlignBytes = 1u;
+static_assert(alignof(EncodedPerfTimingPayloadHeader) == s_PerfPackedAlignBytes, "EncodedPerfTimingPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedPerfTimingPayloadHeader>, "EncodedPerfTimingPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedPerfTimingPayloadHeader>, "EncodedPerfTimingPayloadHeader must stay binary-serializable");
-static_assert(sizeof(EncodedPerfMemoryPayloadHeader) == 192u, "EncodedPerfMemoryPayloadHeader wire layout drifted");
-static_assert(alignof(EncodedPerfMemoryPayloadHeader) == 1u, "EncodedPerfMemoryPayloadHeader must stay packed");
+static constexpr usize s_EncodedPerfMemoryPayloadHeaderByteSize = 192u;
+static_assert(sizeof(EncodedPerfMemoryPayloadHeader) == s_EncodedPerfMemoryPayloadHeaderByteSize, "EncodedPerfMemoryPayloadHeader wire layout drifted");
+static_assert(alignof(EncodedPerfMemoryPayloadHeader) == s_PerfPackedAlignBytes, "EncodedPerfMemoryPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 

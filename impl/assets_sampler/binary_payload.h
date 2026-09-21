@@ -46,8 +46,10 @@ struct HeaderBinary{
     u32 reserved = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(HeaderBinary) == 64u, "Sampler header layout drifted");
-static_assert(alignof(HeaderBinary) == 1u, "Sampler header must stay packed");
+static constexpr usize s_HeaderBinaryByteSize = 64u;
+static_assert(sizeof(HeaderBinary) == s_HeaderBinaryByteSize, "Sampler header layout drifted");
+static constexpr usize s_PackedAlignBytes = 1u;
+static_assert(alignof(HeaderBinary) == s_PackedAlignBytes, "Sampler header must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinary>, "Sampler header must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderBinary>, "Sampler header must stay binary-serializable");
 

@@ -38,8 +38,9 @@ namespace EventKind{
 };
 
 namespace CaptureFlag{
+    static constexpr auto kCaptureFlagNoneBase = 0u;
     enum Mask : u32{
-        None = 0u,
+        None = kCaptureFlagNoneBase,
         TextLog = BitMask<u32>(0u),
         Diagnostic = BitMask<u32>(1u),
         Perf = BitMask<u32>(2u),

@@ -21,8 +21,9 @@ NWB_ASSETS_BEGIN
 
 
 namespace AssetLoadState{
+    static constexpr u8 kAssetLoadStateInvalidBase = 0;
     enum Enum : u8{
-        Invalid = 0,
+        Invalid = kAssetLoadStateInvalidBase,
         Pending,
         InFlight,
         Completed

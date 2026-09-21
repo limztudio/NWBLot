@@ -30,7 +30,8 @@ struct AttribGpu{
 static_assert(IsStandardLayout_V<AttribGpu>, "AttribGpu must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<AttribGpu>, "AttribGpu must stay binary-serializable");
 static_assert(sizeof(AttribGpu) == sizeof(Half4U) + sizeof(Float2U), "AttribGpu layout drifted");
-static_assert(sizeof(AttribGpu) == 16u, "AttribGpu must stay 16 bytes for the shadow trace attribute buffer");
+static constexpr usize s_AttribGpuByteSize = 16u;
+static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 bytes for the shadow trace attribute buffer");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

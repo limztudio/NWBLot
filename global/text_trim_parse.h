@@ -492,7 +492,8 @@ template<typename CharT>
 template<typename ByteContainer>
 [[nodiscard]] inline bool NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor, AStringView& outLine){
     using ByteType = typename ByteContainer::value_type;
-    static_assert(sizeof(ByteType) == 1u, "NextLfByteLine requires a byte-sized container");
+static constexpr usize s_ByteTypeByteSize = 1u;
+    static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "NextLfByteLine requires a byte-sized container");
 
     outLine = AStringView();
     if(inOutCursor >= bytes.size())

@@ -9,6 +9,10 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/vulkan/backend.h>
 
+namespace __hidden_refit_shader{
+static constexpr char s_DefaultShaderVariant[] = "default";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,7 +136,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!m_bindingLayout)
             return false;
     }
-    if(!shaderSystem.loadShader(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), AStringView("default"), Core::ShaderType::Compute, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), AStringView(::__hidden_refit_shader::s_DefaultShaderVariant), Core::ShaderType::Compute, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc

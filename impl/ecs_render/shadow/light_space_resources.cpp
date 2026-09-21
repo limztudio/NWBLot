@@ -10,6 +10,10 @@
 #include <core/graphics/vulkan/backend.h>
 #include <global/scope_exit.h>
 
+namespace __hidden_light_space{
+static constexpr char s_DefaultLightVariant[] = "default";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -51,9 +55,9 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     const Core::ShaderType::Mask stages[] = { Core::ShaderType::Compute, Core::ShaderType::Vertex, Core::ShaderType::Pixel,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute };
-    const AStringView variants[] = { AStringView("default"), AStringView("default"), AStringView("default"),
+    const AStringView variants[] = { AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant),
         AStringView("NWB_LIGHT_SPACE_OCCLUDER=0"), AStringView("NWB_LIGHT_SPACE_OCCLUDER=1"),
-        AStringView("NWB_LIGHT_SPACE_OCCLUDER=0"), AStringView("NWB_LIGHT_SPACE_OCCLUDER=1"), AStringView("default") };
+        AStringView("NWB_LIGHT_SPACE_OCCLUDER=0"), AStringView("NWB_LIGHT_SPACE_OCCLUDER=1"), AStringView(::__hidden_light_space::s_DefaultLightVariant) };
     for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
         if(
             !state.m_shaders[index] && !m_shaderSystem.loadShader(state.m_shaders[index], names[index], variants[index], stages[index],

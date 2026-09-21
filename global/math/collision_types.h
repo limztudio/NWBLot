@@ -11,18 +11,20 @@
 
 
 namespace ContainmentType{
+    static constexpr u8 kContainmentTypeDisjointBase = 0u;
     enum Enum : u8{
-        Disjoint = 0u,
-        Intersects = 1u,
-        Contains = 2u,
+        Disjoint = kContainmentTypeDisjointBase,
+        Intersects,
+        Contains,
     };
 };
 
 namespace PlaneIntersectionType{
+    static constexpr u8 kPlaneIntersectionTypeFrontBase = 0u;
     enum Enum : u8{
-        Front = 0u,
-        Intersecting = 1u,
-        Back = 2u,
+        Front = kPlaneIntersectionTypeFrontBase,
+        Intersecting,
+        Back,
     };
 };
 

@@ -24,8 +24,9 @@ NWB_CORE_BEGIN
 // Resource classes a shader selects between. Each class maps to exactly one heap register space,
 // so the class tag alone selects the shader-side array.
 namespace GpuDescriptorClass{
+    static constexpr u8 kGpuDescriptorClassSampledImageBase = 0;
     enum Enum : u8{
-        SampledImage = 0,   // Texture_SRV           -> SAMPLED_IMAGE
+        SampledImage = kGpuDescriptorClassSampledImageBase, // Texture_SRV           -> SAMPLED_IMAGE
         StorageImage,       // Texture_UAV           -> STORAGE_IMAGE
         SampledBuffer,      // TypedBuffer_SRV       -> UNIFORM_TEXEL_BUFFER
         StorageBuffer,      // StructuredBuffer_UAV  -> STORAGE_BUFFER (structured/raw SRV+UAV share one descriptor)
@@ -80,7 +81,8 @@ struct GpuDescriptorHandle{
 };
 inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs){ return lhs.value == rhs.value; }
 inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs){ return lhs.value != rhs.value; }
-static_assert(sizeof(GpuDescriptorHandle) == 4, "GpuDescriptorHandle is supposed to be a single 32-bit word");
+static constexpr usize s_GpuDescriptorHandleByteSize = 4;
+static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
 
 // Values connecting the generic descriptor heap to the shared shader ABI. Core validates this payload without

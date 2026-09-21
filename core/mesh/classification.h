@@ -18,9 +18,10 @@ NWB_MESH_BEGIN
 
 
 namespace MeshClass{
+    static constexpr auto kMeshClassStaticBase = 0;
     enum Enum : u32{
-        Static = 0,
-        Skinned = 1,
+        Static = kMeshClassStaticBase,
+        Skinned,
         Invalid = Limit<u32>::s_Max,
     };
 };
@@ -73,13 +74,16 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     return MeshClassUsesSkinning(meshClass) == hasSkin;
 }
 
+inline constexpr char s_InvalidMeshClassName[] = "invalid";
+inline constexpr char s_UnknownMeshClassName[] = "unknown";
+
 [[nodiscard]] inline AStringView MeshClassText(const u32 meshClass){
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     if(info)
         return info->text;
     if(meshClass == MeshClass::Invalid)
-        return "invalid";
-    return "unknown";
+        return s_InvalidMeshClassName;
+    return s_UnknownMeshClassName;
 }
 
 [[nodiscard]] inline bool ParseMeshClassText(const AStringView text, u32& outMeshClass){

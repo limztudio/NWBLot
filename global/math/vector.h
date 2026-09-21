@@ -23,6 +23,10 @@ namespace VectorComponentMask{
 };
 
 
+inline constexpr f32 s_RoundHalfBias = 0.5f;
+inline constexpr f32 s_CosQuarticCoeff = 0.5f;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -58,13 +62,13 @@ NWB_INLINE u32 BoundsMaskR(u32 mask, u32 activeMask)noexcept{
 NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
     f32 integer = Floor(value);
     value -= integer;
-    if(value < 0.5f)
+    if(value < s_RoundHalfBias)
         return integer;
-    if(value > 0.5f)
+    if(value > s_RoundHalfBias)
         return integer + 1.0f;
 
     f32 intPart{};
-    const f32 fractionalPart = ModF(integer * 0.5f, &intPart);
+    const f32 fractionalPart = ModF(integer * s_RoundHalfBias, &intPart);
     if(fractionalPart == 0.0f)
         return integer;
     return integer + 1.0f;
@@ -73,9 +77,9 @@ NWB_INLINE f32 RoundToNearest(f32 value)noexcept{
 NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
     f32 quotient = s_1DIV2PI * value;
     if(value >= 0.0f)
-        quotient = static_cast<f32>(static_cast<i32>(quotient + 0.5f));
+        quotient = static_cast<f32>(static_cast<i32>(quotient + s_RoundHalfBias));
     else
-        quotient = static_cast<f32>(static_cast<i32>(quotient - 0.5f));
+        quotient = static_cast<f32>(static_cast<i32>(quotient - s_RoundHalfBias));
 
     f32 y = value - (s_2PI * quotient);
     f32 sign{};
@@ -93,7 +97,7 @@ NWB_INLINE void ScalarSinCos(f32& outSin, f32& outCos, f32 value)noexcept{
 
     const f32 y2 = y * y;
     outSin = (((((-2.3889859e-08f * y2 + 2.7525562e-06f) * y2 - 0.00019840874f) * y2 + 0.0083333310f) * y2 - 0.16666667f) * y2 + 1.0f) * y;
-    outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - 0.5f) * y2 + 1.0f);
+    outCos = sign * (((((-2.6051615e-07f * y2 + 2.4760495e-05f) * y2 - 0.0013888378f) * y2 + 0.041666638f) * y2 - s_CosQuarticCoeff) * y2 + 1.0f);
 }
 
 NWB_INLINE u32 TruncateBits(f32 value)noexcept{

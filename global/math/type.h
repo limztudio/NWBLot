@@ -56,7 +56,8 @@ template<typename Value, usize Count>
 
 using Half = u16;
 using Float16 = Half;
-static_assert(sizeof(Half) == 2u, "Half must stay a 16-bit IEEE 754 binary16 storage type");
+static constexpr usize s_HalfByteSize = 2u;
+static_assert(sizeof(Half) == s_HalfByteSize, "Half must stay a 16-bit IEEE 754 binary16 storage type");
 static_assert(alignof(Half) == alignof(u16), "Half storage alignment must match u16");
 
 struct Half2U{

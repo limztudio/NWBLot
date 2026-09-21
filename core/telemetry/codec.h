@@ -39,12 +39,15 @@ struct EncodedEventHeader{
     u64 payloadBytes = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedStreamHeader) == 24u, "EncodedStreamHeader wire layout drifted");
-static_assert(alignof(EncodedStreamHeader) == 1u, "EncodedStreamHeader must stay packed");
+static constexpr usize s_EncodedStreamHeaderByteSize = 24u;
+static_assert(sizeof(EncodedStreamHeader) == s_EncodedStreamHeaderByteSize, "EncodedStreamHeader wire layout drifted");
+static constexpr usize s_CodecPackedAlignBytes = 1u;
+static_assert(alignof(EncodedStreamHeader) == s_CodecPackedAlignBytes, "EncodedStreamHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedStreamHeader>, "EncodedStreamHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedStreamHeader>, "EncodedStreamHeader must stay binary-serializable");
-static_assert(sizeof(EncodedEventHeader) == 37u, "EncodedEventHeader wire layout drifted");
-static_assert(alignof(EncodedEventHeader) == 1u, "EncodedEventHeader must stay packed");
+static constexpr usize s_EncodedEventHeaderByteSize = 37u;
+static_assert(sizeof(EncodedEventHeader) == s_EncodedEventHeaderByteSize, "EncodedEventHeader wire layout drifted");
+static_assert(alignof(EncodedEventHeader) == s_CodecPackedAlignBytes, "EncodedEventHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedEventHeader>, "EncodedEventHeader must stay binary-serializable");
 

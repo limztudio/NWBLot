@@ -75,30 +75,34 @@ namespace VulkanDetail{
 
 
 namespace PipelineStencilFaceMode{
+    static constexpr u8 kPipelineStencilFaceModeDepthOnlyBase = 0u;
     enum Enum : u8{
-        DepthOnly = 0u,
-        IncludeStencilFaces = 1u,
+        DepthOnly = kPipelineStencilFaceModeDepthOnlyBase,
+        IncludeStencilFaces,
     };
 };
 
 namespace IndirectDrawIndexMode{
+    static constexpr u8 kIndirectDrawIndexModeNonIndexedBase = 0u;
     enum Enum : u8{
-        NonIndexed = 0u,
-        Indexed = 1u,
+        NonIndexed = kIndirectDrawIndexModeNonIndexedBase,
+        Indexed,
     };
 };
 
 namespace BufferImageCopyRequiredSize{
+    static constexpr u8 kBufferImageCopyRequiredSizeTouchedBytesBase = 0u;
     enum Enum : u8{
-        TouchedBytes = 0u,
-        PaddedSlices = 1u,
+        TouchedBytes = kBufferImageCopyRequiredSizeTouchedBytesBase,
+        PaddedSlices,
     };
 };
 
 namespace BufferImageCopyPitchFields{
+    static constexpr u8 kBufferImageCopyPitchFieldsOmitImplicitBase = 0u;
     enum Enum : u8{
-        OmitImplicit = 0u,
-        EmitExplicit = 1u,
+        OmitImplicit = kBufferImageCopyPitchFieldsOmitImplicitBase,
+        EmitExplicit,
     };
 };
 
@@ -862,8 +866,9 @@ struct PendingOpacityMicromapBuildCommit{
 };
 
 namespace TrackedCommandBufferArenaState{
+    static constexpr u8 kTrackedCommandBufferArenaStateUntrackedBase = 0u;
     enum Enum : u8{
-        Untracked = 0u,
+        Untracked = kTrackedCommandBufferArenaStateUntrackedBase,
         Leased,
         Reusable,
         Pending,
@@ -1982,8 +1987,9 @@ inline void AttachPipelineBindingState(
 // Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
 
 namespace DescriptorBufferSegmentKind{
+    static constexpr u8 kDescriptorBufferSegmentKindNoneBase = 0;
     enum Enum : u8{
-        None = 0,
+        None = kDescriptorBufferSegmentKindNoneBase,
         Resource,
         Sampler,
     };

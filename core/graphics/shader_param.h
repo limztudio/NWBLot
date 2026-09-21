@@ -65,9 +65,11 @@ struct IndirectInstanceDesc{
 #if defined(__cplusplus)
 static_assert(IsStandardLayout_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<IndirectInstanceDesc>, "IndirectInstanceDesc must stay GPU-uploadable");
-static_assert(sizeof(IndirectInstanceDesc) == 64u, "IndirectInstanceDesc GPU layout drifted");
+static constexpr usize s_IndirectInstanceDescByteSize = 64u;
+static_assert(sizeof(IndirectInstanceDesc) == s_IndirectInstanceDescByteSize, "IndirectInstanceDesc GPU layout drifted");
 static_assert(alignof(IndirectInstanceDesc) >= alignof(Float4), "IndirectInstanceDesc must stay SIMD-aligned");
-static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == 0, "IndirectInstanceDesc::transform must stay SIMD-aligned");
+static constexpr usize s_AlignRemainderZero = 0;
+static_assert((offsetof(IndirectInstanceDesc, transform) % alignof(Float4)) == s_AlignRemainderZero, "IndirectInstanceDesc::transform must stay SIMD-aligned");
 #endif
 
 inline constexpr u32 s_ClasByteAlignment = 128;
@@ -126,11 +128,15 @@ struct IndirectArgs{
 #if defined(__cplusplus)
 static_assert(IsStandardLayout_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
 static_assert(IsTriviallyCopyable_V<IndirectArgs>, "IndirectArgs must stay GPU-uploadable");
-static_assert(sizeof(IndirectArgs) == 16u, "IndirectArgs GPU layout drifted");
+static constexpr usize s_IndirectArgsByteSize = 16u;
+static_assert(sizeof(IndirectArgs) == s_IndirectArgsByteSize, "IndirectArgs GPU layout drifted");
 static_assert(alignof(IndirectArgs) == alignof(GpuVirtualAddress), "IndirectArgs GPU alignment drifted");
-static_assert(offsetof(IndirectArgs, clusterCount) == 0u, "IndirectArgs::clusterCount layout drifted");
-static_assert(offsetof(IndirectArgs, clusterReferencesStride) == 4u, "IndirectArgs::clusterReferencesStride layout drifted");
-static_assert(offsetof(IndirectArgs, clusterAddresses) == 8u, "IndirectArgs::clusterAddresses layout drifted");
+static constexpr usize s_IndirectArgsClusterCountOffset = 0u;
+static_assert(offsetof(IndirectArgs, clusterCount) == s_IndirectArgsClusterCountOffset, "IndirectArgs::clusterCount layout drifted");
+static constexpr usize s_IndirectArgsClusterReferencesStrideOffset = 4u;
+static_assert(offsetof(IndirectArgs, clusterReferencesStride) == s_IndirectArgsClusterReferencesStrideOffset, "IndirectArgs::clusterReferencesStride layout drifted");
+static constexpr usize s_IndirectArgsClusterAddressesOffset = 8u;
+static_assert(offsetof(IndirectArgs, clusterAddresses) == s_IndirectArgsClusterAddressesOffset, "IndirectArgs::clusterAddresses layout drifted");
 static_assert(IndirectArgs{}.clusterReferencesStride >= sizeof(GpuVirtualAddress), "IndirectArgs default cluster-reference stride is invalid");
 #endif
 

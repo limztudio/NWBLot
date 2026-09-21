@@ -8,6 +8,12 @@
 
 #include <global/termination.h>
 
+namespace __hidden_graphics_api{
+static constexpr char s_UnknownFormatName[] = "UNKNOWN";
+static constexpr int s_UnknownFormatBlockX = 0;
+static constexpr int s_UnknownFormatBlockY = 0;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -76,7 +82,7 @@ RayTracingPipelineDesc& RayTracingPipelineDesc::addBindingLayout(const BindingLa
 
 
 static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
-    { Format::UNKNOWN              , "UNKNOWN"              ,  0,  0, FormatKind::Integer     , false, false, false, false, false, false, false, false },
+    { Format::UNKNOWN              , __hidden_graphics_api::s_UnknownFormatName, __hidden_graphics_api::s_UnknownFormatBlockX, __hidden_graphics_api::s_UnknownFormatBlockY, FormatKind::Integer     , false, false, false, false, false, false, false, false },
 
     { Format::R8_UINT              , "R8_UINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, false, false },
     { Format::R8_SINT              , "R8_SINT"              ,  1,  1, FormatKind::Integer     , true , false, false, false, false, false, true , false },

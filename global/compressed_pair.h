@@ -26,8 +26,9 @@ namespace CompressedPairDetail{
 
 
 namespace ImplementationKind{
+    static constexpr auto kImplementationKindTwoValuesBase = 0;
     enum Enum : int{
-        TwoValues = 0,
+        TwoValues = kImplementationKindTwoValuesBase,
         FirstEmpty,
         SecondEmpty,
         DistinctEmptyValues,

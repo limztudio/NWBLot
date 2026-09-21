@@ -30,6 +30,8 @@
 
 NWB_ASSET_BUILDER_BEGIN
 
+static constexpr char s_DefaultPipelineConfig[] = "default";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,7 +81,7 @@ bool BuildAssets(const AssetBuildOptions& options){
 
     Assets::CookString configurationSafeName = BuildCanonicalSafeCacheName(arena, options.configuration.view());
     if(configurationSafeName.empty())
-        configurationSafeName = "default";
+        configurationSafeName = s_DefaultPipelineConfig;
 
     u64 plannedFileCount = 0u;
     Assets::AssetsVolumeCookDetail::AssetVolumeManifestCookerVector manifestCookers(arena);

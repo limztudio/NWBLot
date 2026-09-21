@@ -107,8 +107,9 @@ struct BindingLayoutDesc{
 // BindlessLayoutType describes descriptor classes in the global heap. Slang bindings and host layouts must agree
 // on explicit Vulkan descriptor-set and binding indices.
 namespace BindlessLayoutType{
+    static constexpr u8 kBindlessLayoutTypeImmutableBase = 0;
     enum Enum : u8{
-        Immutable = 0,      // Must use registerSpaces to define a fixed descriptor type
+        Immutable = kBindlessLayoutTypeImmutableBase, // Must use registerSpaces to define a fixed descriptor type
 
         MutableSrvUavCbv,   // Global non-sampler resource table
                             // Valid descriptor types: Texture_SRV, Texture_UAV, TypedBuffer_SRV, TypedBuffer_UAV,

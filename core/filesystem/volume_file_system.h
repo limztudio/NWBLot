@@ -22,9 +22,10 @@ NWB_FILESYSTEM_BEGIN
 class VolumeFileSystem final : public IFilesystem, NoCopy{
 private:
     struct MetadataFlushMode{
+        static constexpr u8 kDeferredBase = 0u;
         enum Enum : u8{
-            Deferred = 0u,
-            Immediate = 1u,
+            Deferred = kDeferredBase,
+            Immediate,
         };
     };
 

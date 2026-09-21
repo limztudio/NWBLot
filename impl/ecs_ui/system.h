@@ -174,7 +174,8 @@ private:
         i32 framebufferHeight = 0;
         bool valid = false;
     };
-    static_assert(sizeof(TaskGraphDrawSnapshot) == 96u, "Task graph draw snapshots should stay compact");
+static constexpr usize s_TaskGraphDrawSnapshotByteSize = 96u;
+    static_assert(sizeof(TaskGraphDrawSnapshot) == s_TaskGraphDrawSnapshotByteSize, "Task graph draw snapshots should stay compact");
 
 private:
     void setCurrentContext()const;

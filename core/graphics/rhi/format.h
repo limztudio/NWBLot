@@ -276,8 +276,9 @@ struct TextureUploadAspectLayout{
 )noexcept;
 
 namespace FormatSupport{
+    static constexpr auto kFormatSupportNoneBase = 0;
     enum Mask : u32{
-        None = 0,
+        None = kFormatSupportNoneBase,
 
         Buffer = 1 << 0,
         IndexBuffer = 1 << 1,

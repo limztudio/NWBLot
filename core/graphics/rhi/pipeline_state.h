@@ -18,40 +18,44 @@ NWB_CORE_BEGIN
 
 
 namespace BlendFactor{
+    static constexpr u8 kBlendFactorZeroBase = 1;
+    static constexpr u8 kBlendFactorConstantColorBase = 14;
     enum Enum : u8{
-        Zero = 1,
-        One = 2,
-        SrcColor = 3,
-        InvSrcColor = 4,
-        SrcAlpha = 5,
-        InvSrcAlpha = 6,
-        DstAlpha  = 7,
-        InvDstAlpha = 8,
-        DstColor = 9,
-        InvDstColor = 10,
-        SrcAlphaSaturate = 11,
-        ConstantColor = 14,
-        InvConstantColor = 15,
-        Src1Color = 16,
-        InvSrc1Color = 17,
-        Src1Alpha = 18,
-        InvSrc1Alpha = 19,
+        Zero = kBlendFactorZeroBase,
+        One,
+        SrcColor,
+        InvSrcColor,
+        SrcAlpha,
+        InvSrcAlpha,
+        DstAlpha,
+        InvDstAlpha,
+        DstColor,
+        InvDstColor,
+        SrcAlphaSaturate,
+        ConstantColor = kBlendFactorConstantColorBase,
+        InvConstantColor,
+        Src1Color,
+        InvSrc1Color,
+        Src1Alpha,
+        InvSrc1Alpha,
     };
 };
 
 namespace BlendOp{
+    static constexpr u8 kBlendOpAddBase = 1;
     enum Enum : u8{
-        Add = 1,
-       Subtract = 2,
-       ReverseSubtract = 3,
-       Min = 4,
-       Max = 5,
+        Add = kBlendOpAddBase,
+       Subtract,
+       ReverseSubtract,
+       Min,
+       Max,
     };
 };
 
 namespace ColorMask{
+    static constexpr u8 kColorMaskNoneBase = 0;
     enum Mask : u8{
-        None = 0,
+        None = kColorMaskNoneBase,
 
         Red = 1 << 0,
         Green = 1 << 1,
@@ -215,28 +219,30 @@ struct RasterState{
 
 
 namespace StencilOp{
+    static constexpr u8 kStencilOpKeepBase = 1;
     enum Enum : u8{
-        Keep = 1,
-        Zero = 2,
-        Replace = 3,
-        IncrementAndClamp = 4,
-        DecrementAndClamp = 5,
-        Invert = 6,
-        IncrementAndWrap = 7,
-        DecrementAndWrap = 8,
+        Keep = kStencilOpKeepBase,
+        Zero,
+        Replace,
+        IncrementAndClamp,
+        DecrementAndClamp,
+        Invert,
+        IncrementAndWrap,
+        DecrementAndWrap,
     };
 };
 
 namespace ComparisonFunc{
+    static constexpr u8 kComparisonFuncNeverBase = 1;
     enum Enum : u8{
-        Never = 1,
-        Less = 2,
-        Equal = 3,
-        LessOrEqual = 4,
-        Greater = 5,
-        NotEqual = 6,
-        GreaterOrEqual = 7,
-        Always = 8,
+        Never = kComparisonFuncNeverBase,
+        Less,
+        Equal,
+        LessOrEqual,
+        Greater,
+        NotEqual,
+        GreaterOrEqual,
+        Always,
     };
 };
 

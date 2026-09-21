@@ -9,6 +9,10 @@
 #include <global/hash_utils.h>
 #include <global/type_properties.h>
 
+namespace __hidden_telemetry_report{
+static constexpr char s_UnknownReportField[] = "unknown";
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -127,7 +131,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "external";
     case Telemetry::FrameGraphNodeKind::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -155,7 +159,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "transfer";
     case Telemetry::FrameGraphQueueClass::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -183,7 +187,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scoredAny";
     case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -200,7 +204,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     case Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted:
         return "notAccepted";
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 
@@ -236,7 +240,7 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
         return "scoredMergeDomainMismatch";
     case Telemetry::FrameGraphTaskPacketizationDecision::Unknown:
     default:
-        return "unknown";
+        return ::__hidden_telemetry_report::s_UnknownReportField;
     }
 }
 

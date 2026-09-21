@@ -47,10 +47,11 @@ static_assert(IsStandardLayout_V<TransformComponent>, "TransformComponent must s
 static_assert(IsTriviallyCopyable_V<TransformComponent>, "TransformComponent must stay cheap to move in dense ECS storage");
 static_assert(alignof(TransformComponent) >= alignof(Float4), "TransformComponent must stay aligned for SIMD component loads");
 static_assert(sizeof(TransformComponent) == sizeof(Float4) + sizeof(Float4) + sizeof(Float4), "TransformComponent must only contain aligned decomposed transform state");
-static_assert((sizeof(TransformComponent) % alignof(TransformComponent)) == 0, "TransformComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(TransformComponent, position) % alignof(Float4)) == 0, "TransformComponent::position must stay aligned");
-static_assert((offsetof(TransformComponent, rotation) % alignof(Float4)) == 0, "TransformComponent::rotation must stay aligned");
-static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == 0, "TransformComponent::scale must stay aligned");
+static constexpr usize s_StrideRemainderZero = 0;
+static_assert((sizeof(TransformComponent) % alignof(TransformComponent)) == s_StrideRemainderZero, "TransformComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(TransformComponent, position) % alignof(Float4)) == s_StrideRemainderZero, "TransformComponent::position must stay aligned");
+static_assert((offsetof(TransformComponent, rotation) % alignof(Float4)) == s_StrideRemainderZero, "TransformComponent::rotation must stay aligned");
+static_assert((offsetof(TransformComponent, scale) % alignof(Float4)) == s_StrideRemainderZero, "TransformComponent::scale must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,8 +94,8 @@ static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay la
 static_assert(IsTriviallyCopyable_V<CameraComponent>, "CameraComponent must stay cheap to move in dense ECS storage");
 static_assert(alignof(CameraComponent) >= alignof(Float4), "CameraComponent must stay aligned for SIMD component loads");
 static_assert(sizeof(CameraComponent) == sizeof(Float4), "CameraComponent must stay one aligned vector wide");
-static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == 0, "CameraComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == 0, "CameraComponent::projection must stay aligned");
+static_assert((sizeof(CameraComponent) % alignof(CameraComponent)) == s_StrideRemainderZero, "CameraComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(CameraComponent, projection) % alignof(Float4)) == s_StrideRemainderZero, "CameraComponent::projection must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -166,15 +167,15 @@ static_assert(IsStandardLayout_V<LightComponent>, "LightComponent must stay layo
 static_assert(IsTriviallyCopyable_V<LightComponent>, "LightComponent must stay cheap to move in dense ECS storage");
 static_assert(alignof(LightComponent) >= alignof(Float4), "LightComponent must stay aligned for SIMD component loads");
 static_assert(sizeof(LightComponent) == (sizeof(Float4) * 3), "LightComponent must stay three aligned vectors wide");
-static_assert((sizeof(LightComponent) % alignof(LightComponent)) == 0, "LightComponent array stride must keep every element SIMD-aligned");
-static_assert((offsetof(LightComponent, colorIntensity) % alignof(Float4)) == 0, "LightComponent::colorIntensity must stay aligned");
-static_assert((offsetof(LightComponent, range) % alignof(f32)) == 0, "LightComponent::range must stay aligned");
-static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == 0, "LightComponent::innerConeCos must stay aligned");
-static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == 0, "LightComponent::outerConeCos must stay aligned");
-static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == 0, "LightComponent::type must stay aligned");
-static_assert((offsetof(LightComponent, enableCaustics) % alignof(bool)) == 0, "LightComponent::enableCaustics must stay aligned");
-static_assert((offsetof(LightComponent, angularRadius) % alignof(f32)) == 0, "LightComponent::angularRadius must stay aligned");
-static_assert((offsetof(LightComponent, sourceRadius) % alignof(f32)) == 0, "LightComponent::sourceRadius must stay aligned");
+static_assert((sizeof(LightComponent) % alignof(LightComponent)) == s_StrideRemainderZero, "LightComponent array stride must keep every element SIMD-aligned");
+static_assert((offsetof(LightComponent, colorIntensity) % alignof(Float4)) == s_StrideRemainderZero, "LightComponent::colorIntensity must stay aligned");
+static_assert((offsetof(LightComponent, range) % alignof(f32)) == s_StrideRemainderZero, "LightComponent::range must stay aligned");
+static_assert((offsetof(LightComponent, innerConeCos) % alignof(f32)) == s_StrideRemainderZero, "LightComponent::innerConeCos must stay aligned");
+static_assert((offsetof(LightComponent, outerConeCos) % alignof(f32)) == s_StrideRemainderZero, "LightComponent::outerConeCos must stay aligned");
+static_assert((offsetof(LightComponent, type) % alignof(LightType::Enum)) == s_StrideRemainderZero, "LightComponent::type must stay aligned");
+static_assert((offsetof(LightComponent, enableCaustics) % alignof(bool)) == s_StrideRemainderZero, "LightComponent::enableCaustics must stay aligned");
+static_assert((offsetof(LightComponent, angularRadius) % alignof(f32)) == s_StrideRemainderZero, "LightComponent::angularRadius must stay aligned");
+static_assert((offsetof(LightComponent, sourceRadius) % alignof(f32)) == s_StrideRemainderZero, "LightComponent::sourceRadius must stay aligned");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

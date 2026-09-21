@@ -335,8 +335,9 @@ struct InstanceParameters{
 // 10-bit Rec.2020/PQ surface; renderer code keeps scene color in linear RGBA16F until the
 // final presentation pass performs that encoding.
 namespace SwapChainOutputMode{
+    static constexpr u8 kSwapChainOutputModeSDRBase = 0;
     enum Enum : u8{
-        SDR = 0,
+        SDR = kSwapChainOutputModeSDRBase,
         HDR10,
     };
 };

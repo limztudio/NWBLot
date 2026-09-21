@@ -26,7 +26,8 @@ inline constexpr bool s_DependentFalse = false;
 template<typename Container>
 inline void RequireByteContainer(){
     using ByteType = typename Container::value_type;
-    static_assert(sizeof(ByteType) == 1u, "binary helpers require a byte-sized container");
+static constexpr usize s_ByteTypeByteSize = 1u;
+    static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "binary helpers require a byte-sized container");
 }
 
 template<typename Container>

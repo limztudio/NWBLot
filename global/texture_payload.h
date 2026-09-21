@@ -15,8 +15,9 @@
 
 
 namespace TextureDimension{
+    static constexpr u8 kTextureDimensionTexture2DBase = 0u;
     enum Enum : u8{
-        Texture2D = 0u,
+        Texture2D = kTextureDimensionTexture2DBase,
         TextureCube,
         Texture3D,
     };
@@ -34,8 +35,9 @@ namespace TextureDimension{
 
 
 namespace TexturePayloadFormat{
+    static constexpr u8 kTexturePayloadFormatUastcLdr4x4Base = 0u;
     enum Enum : u8{
-        UastcLdr4x4 = 0u,
+        UastcLdr4x4 = kTexturePayloadFormatUastcLdr4x4Base,
         // UASTC HDR uses the standard ASTC HDR 4x4 block bitstream. It is RGB-only in the current Basis encoder; a non-opaque alpha mask, when present, is stored as a companion UASTC LDR stream with the same mip/slice layout.
         UastcHdr4x4,
     };
@@ -56,9 +58,10 @@ namespace TexturePayloadFormat{
 
 
 namespace TextureAlphaMode{
+    static constexpr u8 kTextureAlphaModeOpaqueBase = 0u;
     enum Enum : u8{
         // The primary texture stream has no meaningful alpha and samples as one.
-        Opaque = 0u,
+        Opaque = kTextureAlphaModeOpaqueBase,
         // LDR UASTC stores alpha in its ordinary RGBA blocks.
         EmbeddedLdr,
         // HDR color remains RGB-only while a single normalized alpha value is supplied at load time.

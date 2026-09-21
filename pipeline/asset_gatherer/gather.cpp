@@ -16,6 +16,8 @@
 
 NWB_ASSET_GATHERER_BEGIN
 
+static constexpr char s_DefaultGatherConfig[] = "default";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -149,7 +151,7 @@ bool GatherAssets(const AssetGatherOptions& options){
     }
     Assets::CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
     if(configuration.empty())
-        configuration = "default";
+        configuration = s_DefaultGatherConfig;
 
     Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult result;
     if(!Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, result, scratchArena))

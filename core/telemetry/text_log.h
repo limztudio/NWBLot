@@ -31,8 +31,10 @@ struct EncodedTextLogPayloadHeader{
     u64 messageBytes = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(EncodedTextLogPayloadHeader) == 16u, "EncodedTextLogPayloadHeader wire layout drifted");
-static_assert(alignof(EncodedTextLogPayloadHeader) == 1u, "EncodedTextLogPayloadHeader must stay packed");
+static constexpr usize s_EncodedTextLogPayloadHeaderByteSize = 16u;
+static_assert(sizeof(EncodedTextLogPayloadHeader) == s_EncodedTextLogPayloadHeaderByteSize, "EncodedTextLogPayloadHeader wire layout drifted");
+static constexpr usize s_TextLogPackedAlignBytes = 1u;
+static_assert(alignof(EncodedTextLogPayloadHeader) == s_TextLogPackedAlignBytes, "EncodedTextLogPayloadHeader must stay packed");
 static_assert(IsStandardLayout_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 

@@ -81,7 +81,8 @@ private:
     Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
     bool m_frameStateCacheValid = false;
 };
-static_assert(sizeof(RendererCsgState) == 328u, "RendererCsgState should keep its compact CPU-only layout");
+static constexpr usize s_RendererCsgStateByteSize = 328u;
+static_assert(sizeof(RendererCsgState) == s_RendererCsgStateByteSize, "RendererCsgState should keep its compact CPU-only layout");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

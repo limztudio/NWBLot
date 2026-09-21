@@ -130,7 +130,8 @@ struct NwbBvhNodeGpu{
     Float3UInt aabbMinLeftChild;
     Float3UInt aabbMaxRightChild;
 };
-static_assert(sizeof(NwbBvhNodeGpu) == 32u, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
+static constexpr usize s_NwbBvhNodeGpuByteSize = 32u;
+static_assert(sizeof(NwbBvhNodeGpu) == s_NwbBvhNodeGpuByteSize, "NwbBvhNodeGpu must match the shader NwbBvhNode std430 layout");
 
 // Scratch scene-BVH build values.
 struct SceneBvhPrimitiveCalculation{
@@ -217,13 +218,20 @@ struct NwbRtInstanceMaterialGpu{
     u32 positionSlot = Limit<u32>::s_Max;
     u32 nodeSlot = Limit<u32>::s_Max;
 };
-static_assert(sizeof(NwbRtInstanceMaterialGpu) == 36u, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
+static constexpr usize s_NwbRtInstanceMaterialGpuByteSize = 36u;
+static_assert(sizeof(NwbRtInstanceMaterialGpu) == s_NwbRtInstanceMaterialGpuByteSize, "NwbRtInstanceMaterialGpu must match the shader NwbRtInstanceMaterial std430 layout (9 x uint)");
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 84u;
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 88u;
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 92u;
+static constexpr usize s_CausticResolvePushConstantsActivityInputSlotOffset = 56u;
+static constexpr usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 60u;
 static_assert(offsetof(NwbRtInstanceMaterialGpu, shadingModelId) == sizeof(u32) * 2u);
 
 // Shader-mirrored flags: transparent selects transmittance; refractive selects caustics.
 namespace RtInstanceMaterialFlag{
+    static constexpr auto kRtInstanceMaterialFlagNoneBase = 0u;
     enum Mask : u32{
-        None = 0u,
+        None = kRtInstanceMaterialFlagNoneBase,
         Transparent = NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT,
         Refractive = NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE,
     };
@@ -319,9 +327,9 @@ struct ShadowCombinedWaveletPushConstants{
     u32 opaqueOutputStorageSlot = 0u;
 };
 static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 96u);
-static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == 84u);
-static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == 88u);
-static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == 92u);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset);
+static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset);
 
 // Shader-mirrored shadow resolve stages.
 namespace ShadowResolveStage{
@@ -395,9 +403,10 @@ struct CausticResolvePushConstants{
     u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
     u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
 };
-static_assert(sizeof(CausticResolvePushConstants) == 64u, "CausticResolvePushConstants must match the shader push-constant layout");
-static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == 56u);
-static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == 60u);
+static constexpr usize s_CausticResolvePushConstantsByteSize = 64u;
+static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
+static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
+static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
 
 // Heap-only selector ABI shared by every surfel GI pass.
 struct SurfelHeapPushConstants{

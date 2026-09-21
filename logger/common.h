@@ -39,6 +39,7 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr auto s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
 [[nodiscard]] inline const tchar* MessageTypeToString(Type::Enum type){
     switch(type){
     case Type::Info:
@@ -56,7 +57,7 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
     case Type::Fatal:
         return NWB_TEXT("FATAL");
     }
-    return NWB_TEXT("UNKNOWN");
+    return s_UnknownLogLevelName;
 }
 
 [[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type){

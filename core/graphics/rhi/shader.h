@@ -18,21 +18,22 @@ NWB_CORE_BEGIN
 
 
 namespace ShaderType{
+    static constexpr u8 kShaderTypeVertexStageBase = 0;
     enum Enum : u8{
-        VertexStage = 0,
-        HullStage = 1,
-        DomainStage = 2,
-        GeometryStage = 3,
-        PixelStage = 4,
-        ComputeStage = 5,
-        AmplificationStage = 6,
-        MeshStage = 7,
-        RayGenerationStage = 8,
-        AnyHitStage = 9,
-        ClosestHitStage = 10,
-        MissStage = 11,
-        IntersectionStage = 12,
-        CallableStage = 13,
+        VertexStage = kShaderTypeVertexStageBase,
+        HullStage,
+        DomainStage,
+        GeometryStage,
+        PixelStage,
+        ComputeStage,
+        AmplificationStage,
+        MeshStage,
+        RayGenerationStage,
+        AnyHitStage,
+        ClosestHitStage,
+        MissStage,
+        IntersectionStage,
+        CallableStage,
 
         Count,
         Invalid = Count,
@@ -114,8 +115,9 @@ namespace ShaderType{
 };
 
 namespace FastGeometryShaderFlags{
+    static constexpr u8 kFastGeometryShaderFlagsNoneBase = 0;
     enum Mask : u8{
-        None                             = 0,
+        None = kFastGeometryShaderFlagsNoneBase,
 
         ForceFastGS                      = 1 << 0,
         UseViewportMask                  = 1 << 1,
@@ -127,10 +129,11 @@ namespace FastGeometryShaderFlags{
 };
 
 struct CustomSemantic{
+    static constexpr u8 kUndefinedBase = 0;
     enum Enum : u8{
-        Undefined = 0,
-        XRight = 1,
-        ViewportMask = 2,
+        Undefined = kUndefinedBase,
+        XRight,
+        ViewportMask,
     };
 
     Enum type;

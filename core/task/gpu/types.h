@@ -100,8 +100,9 @@ namespace GpuTaskHazardType{
 // Dependency-edge flags are stored in the existing frame-graph telemetry payload without changing its wire format
 // or the renderer's live scheduling behavior.
 namespace GpuTaskGraphTelemetryEdgeFlag{
+    static constexpr u8 kGpuTaskGraphTelemetryEdgeFlagNoneBase = 0u;
     enum Mask : u8{
-        None = 0u,
+        None = kGpuTaskGraphTelemetryEdgeFlagNoneBase,
         ExplicitDependency = 1u << 0u,
         InferredDependency = 1u << 1u,
         VersionDependency = 1u << 2u,
@@ -112,8 +113,9 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
 // Queue-assignment information reuses the existing frame-graph node flags. Keeping it in the node payload avoids
 // changing the telemetry wire schema while still making compiler decisions visible.
 namespace GpuTaskGraphTelemetryNodeFlag{
+    static constexpr u8 kGpuTaskGraphTelemetryNodeFlagNoneBase = 0u;
     enum Mask : u8{
-        None = 0u,
+        None = kGpuTaskGraphTelemetryNodeFlagNoneBase,
         AssignedGraphicsQueue = 1u << 0u,
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,
@@ -366,7 +368,8 @@ struct GpuCompiledBarrier{
     // mutable UAV-barrier policy is disabled. Initial-state, ownership, and export records never set this flag.
     bool forceMemoryDependency = false;
 };
-static_assert(sizeof(GpuCompiledBarrier) == 72u, "GpuCompiledBarrier should keep its compact runtime layout");
+static constexpr usize s_GpuCompiledBarrierByteSize = 72u;
+static_assert(sizeof(GpuCompiledBarrier) == s_GpuCompiledBarrierByteSize, "GpuCompiledBarrier should keep its compact runtime layout");
 
 // A packet-state seed names the prior packet that owns the authoritative native state snapshot for one declared
 // resource range.  The recorder filters that snapshot to the declared range before opening the consumer command

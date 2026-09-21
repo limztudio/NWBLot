@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
 
 #include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
 
@@ -84,24 +85,12 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const bool useHwTrace = rayTracingResources.surfelUsesHardwareTrace;
     const bool hasSurfelWork = m_raytracingSystem.hasSurfelWork();
     const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
-    const Core::GpuTaskResourceSetUse traceGeometrySetUse{
-        .resourceSet = traceGeometrySet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
-    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
-        .resourceSet = traceMaterialSampledTextureSet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
+    const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets =
+        RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
     Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
     usize traceResourceSetUseCount = 0u;
-    if(traceGeometryStatesGraphOwned)
-        traceResourceSetUses[traceResourceSetUseCount++] = traceGeometrySetUse;
-    if(traceMaterialSampledTextureSet.valid())
-        traceResourceSetUses[traceResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
+    for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
+        traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];
 
     const Core::GpuTaskExternalStateSource surfelGiComputeStateSource{
         .states = m_surfelGiComputePersistentState.source(),

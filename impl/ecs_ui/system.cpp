@@ -858,33 +858,19 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
         for(const Core::GpuTaskId task : uploadTasks)
             dependencies.push_back(task);
 
-        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
-        resourceUses.reserve(uploadedTextures.size());
-        for(const Core::GpuGraphResourceId texture : uploadedTextures)
-            UiDetail::AppendTextureReadUse(resourceUses, texture);
-
-        Core::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = Core::GpuTaskCostHint::Tiny;
-        scheduling.avoidQueueCrossing = true;
-        scheduling.forceSubmissionBoundary = true;
-        scheduling.allowPacketMerge = false;
-        Core::GpuTaskDesc desc;
-        desc
-            .setIdentity(Name("ui.imgui_upload_completion"))
-            .setMarkerLabel("ImGui Upload Completion")
-            .setQueue(Core::GpuQueueRequest{
-                Core::GpuQueueCapability::Graphics,
-                Core::GpuQueuePreference::Graphics,
-                false,
-                false,
-            })
-            .setScheduling(scheduling)
+        UiDetail::UploadCompletionDeclare completion = UiDetail::MakeUploadCompletionDeclare(
+            scratchArena,
+            uploadedTextures,
+            Name("ui.imgui_upload_completion"),
+            "ImGui Upload Completion"
+        );
+        completion.desc
             .setDependencies(dependencies.data(), dependencies.size())
             // Return Transfer-owned updates to Graphics even with no visible draws.
-            .setResourceUses(resourceUses.data(), resourceUses.size())
+            .setResourceUses(completion.resourceUses.data(), completion.resourceUses.size())
         ;
         const Core::GpuTaskId task = graph.addTask<TaskGraphUploadCompletionTask>(
-            desc,
+            completion.desc,
             TaskGraphUploadCompletionTask::Payload{
                 .ui = this,
             }

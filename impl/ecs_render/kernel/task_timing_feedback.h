@@ -170,6 +170,18 @@ private:
     bool m_active = false;
 };
 
+namespace ECSRenderDetail{
+
+// Shared task-record prologue: open a timing sample for the current task when feedback plus scope are present.
+// The caller owns the recording scope plus dispatch and resets the attribution when dispatch skips recording.
+[[nodiscard]] Core::GpuTimingSampleAttribution BeginTaskTimingSample(
+    RendererTaskTimingFeedback* timingFeedback,
+    const Core::GpuTimingScopeDefinition* timingScope,
+    const Core::GpuTaskRecordContext& context
+);
+
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

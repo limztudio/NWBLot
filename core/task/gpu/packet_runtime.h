@@ -13,6 +13,7 @@
 #include <core/task/cpu/scheduler.h>
 #include <core/graphics/rhi/device.h>
 #include <global/sync.h>
+#include <global/termination.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -978,6 +979,25 @@ private:
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
     )noexcept;
+    // Shared unwind prologue for the scheduler exception finalizer and the transaction rejection scope: return
+    // true when closing already resolved, wait out in-flight recording claims otherwise. Returns false when the
+    // caller must terminate on an inconsistent claim state.
+    [[nodiscard]] static bool waitForSubmissionExceptionClosing(
+        GpuGraphSubmissionTransaction& transaction,
+        GpuTaskGraph& graph,
+        const GpuCompiledGraph& compiledGraph,
+        u64 recordingAttemptGeneration,
+        const GpuGraphSubmissionBinding& submissionBinding
+    )noexcept{
+        if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+            return true;
+        if(!graph.waitForSubmissionExceptionRecordingClaims(compiledGraph, recordingAttemptGeneration, submissionBinding)){
+            if(transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding))
+                return true;
+            TerminateInvariant();
+        }
+        return transaction.submissionExceptionClosingResolved(compiledGraph, recordingAttemptGeneration, submissionBinding);
+    }
     void completeSubmissionExceptionClosingWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

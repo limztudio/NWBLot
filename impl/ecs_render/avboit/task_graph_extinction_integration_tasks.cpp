@@ -116,24 +116,7 @@ namespace RendererTaskGraphDetail{
 
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     bool timingRecorded = false;
-    if(payload.timingFeedback && payload.timingScope){
-        const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);
-        const Core::GpuCompiledTaskView compiledTask = context.compiledPlan.findTask(context.task);
-        if(queueInfo && compiledTask.valid()){
-            const Core::GpuTaskGraphTaskView task = context.declarations.taskAt(context.task.index);
-            payload.timingAttribution = payload.timingFeedback->beginSample(
-                payload.timingScope->identity,
-                Core::GpuTaskTimingKey{
-                    .task = task.identity,
-                    .variant = task.timing.variant,
-                    .resolutionClass = task.timing.resolutionClass,
-                    .queue = queueInfo->queueClass,
-                },
-                context.queue,
-                compiledTask.plan->recordsNonCommittingTimingSample
-            );
-        }
-    }
+    payload.timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
     payload.avboitSystem->dispatchAvboitIntegration(
         commandList,
         *payload.targets,

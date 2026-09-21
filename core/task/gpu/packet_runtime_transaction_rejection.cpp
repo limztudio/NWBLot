@@ -135,26 +135,9 @@ public:
         if(!m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
 
-        if(m_transaction.submissionExceptionClosingResolved(
-            m_compiledGraph,
-            m_recordingAttemptGeneration,
-            m_submissionBinding
-        ))
-            return;
-        if(!m_graph.waitForSubmissionExceptionRecordingClaims(
-            m_compiledGraph,
-            m_recordingAttemptGeneration,
-            m_submissionBinding
-        )){
-            if(m_transaction.submissionExceptionClosingResolved(
-                m_compiledGraph,
-                m_recordingAttemptGeneration,
-                m_submissionBinding
-            ))
-                return;
-            TerminateInvariant();
-        }
-        if(m_transaction.submissionExceptionClosingResolved(
+        if(GpuGraphSubmissionTransaction::waitForSubmissionExceptionClosing(
+            m_transaction,
+            m_graph,
             m_compiledGraph,
             m_recordingAttemptGeneration,
             m_submissionBinding

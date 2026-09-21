@@ -64,6 +64,24 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 [[nodiscard]] bool EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource, TexturePayload& outPayload);
 [[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims);
 [[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd);
+// Shared volume-mip prologue: derive the next-level dims from the source planes and size the output planes.
+template<typename ImagePlane, typename PlaneVector>
+[[nodiscard]] bool PrepareVolumeMipTargets(
+    const PlaneVector& sourcePlanes,
+    const u32 sourceWidth,
+    const u32 sourceHeight,
+    PlaneVector& outPlanes,
+    VolumeMipDims& outDims
+){
+    static_cast<void>(sizeof(ImagePlane));
+    if(sourcePlanes.empty())
+        return false;
+    if(!ComputeVolumeMipDims(sourceWidth, sourceHeight, static_cast<u32>(sourcePlanes.size()), outDims))
+        return false;
+    outPlanes.clear();
+    outPlanes.resize(outDims.targetDepth);
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -479,24 +479,15 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             resourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
     }
-    const Core::GpuTaskResourceSetUse traceGeometrySetUse{
-        .resourceSet = traceGeometrySet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
-    const Core::GpuTaskResourceSetUse traceMaterialSampledTextureSetUse{
-        .resourceSet = traceMaterialSampledTextureSet,
-        .range = {},
-        .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::Read,
-    };
+    const RendererFramePipelineDetail::TraceResourceSetUses traceResourceSets =
+        RendererFramePipelineDetail::MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet);
     Core::GpuTaskResourceSetUse traceResourceSetUses[2u] = {};
     usize traceResourceSetUseCount = 0u;
-    if(traceGeometryStatesGraphOwned)
-        traceResourceSetUses[traceResourceSetUseCount++] = traceGeometrySetUse;
-    if(traceMaterialSampledTextureSet.valid())
-        traceResourceSetUses[traceResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
+    for(usize traceSetIndex = 0u; traceSetIndex < traceResourceSets.useCount; ++traceSetIndex)
+        traceResourceSetUses[traceResourceSetUseCount++] = traceResourceSets.uses[traceSetIndex];
+    const Core::GpuTaskResourceSetUse traceGeometrySetUse = traceResourceSets.useCount != 0u
+        ? traceResourceSets.uses[0u]
+        : Core::GpuTaskResourceSetUse{};
 
 
     // The prepared soft path keeps the opaque first wavelet, optional resolve tail, transparent trace, and temporal/RGB

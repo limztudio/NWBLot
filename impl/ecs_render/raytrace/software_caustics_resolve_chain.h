@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
 
 #include <core/graphics/gpu_timing.h>
@@ -26,24 +27,10 @@ class RendererRayTracingSystem;
 struct DeferredFrameTargets;
 
 // Software caustics resolve chain owns prepare plus wavelet plus upsample plus timing-close declaration.
-struct SoftwareCausticsResolveChainInputs{
+struct SoftwareCausticsResolveChainInputs : public CausticsResolveChainStageUseInputs{
     DeferredFrameTargets* targets = nullptr;
     Core::GpuTaskId geometryTask;
     Core::GpuTaskSchedulingHint baseScheduling;
-    const Core::GpuTaskResourceUse* prepareUses = nullptr;
-    usize prepareUseCount = 0u;
-    const Core::GpuTaskResourceUse* waveletUses = nullptr;
-    usize waveletUseCount = 0u;
-    const Core::GpuTaskResourceUse* secondWaveletUses = nullptr;
-    usize secondWaveletUseCount = 0u;
-    const Core::GpuTaskResourceUse* thirdWaveletUses = nullptr;
-    usize thirdWaveletUseCount = 0u;
-    const Core::GpuTaskResourceUse* fourthWaveletUses = nullptr;
-    usize fourthWaveletUseCount = 0u;
-    const Core::GpuTaskResourceUse* fifthWaveletUses = nullptr;
-    usize fifthWaveletUseCount = 0u;
-    const Core::GpuTaskResourceUse* upsampleUses = nullptr;
-    usize upsampleUseCount = 0u;
     const Core::GpuTaskExternalStateSource* stateSources = nullptr;
     usize stateSourceCount = 0u;
     bool* producerDispatched = nullptr;

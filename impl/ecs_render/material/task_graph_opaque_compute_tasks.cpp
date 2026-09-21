@@ -52,10 +52,10 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
 
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(!frameSetupReady)
         return true;
 
@@ -127,10 +127,10 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::record(
     }
 
     RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(!frameSetupReady || !payload.plan.matches(payload.drawIndex))
         return false;
 

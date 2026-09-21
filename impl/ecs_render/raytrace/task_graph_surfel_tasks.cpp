@@ -41,22 +41,9 @@ bool SurfelIrradianceClearGraphTask::record(
         .destination = payload.destination,
         .subresources = s_FramebufferSubresources,
         .valueType = Core::GpuClearTextureTaskValueType::Float,
-        .floatValue = Core::Color(0.f, 0.f, 0.f, 0.f),
+        .floatValue = s_SurfelIrradianceClearColor,
     };
-    if(
-        context.commandIrCapture
-        && !context.commandIrCapture->captureClearTexture(
-            context.task,
-            context.packet,
-            context.queue,
-            payload.destination,
-            clearDesc
-        )
-    )
-        return false;
-
-    commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);
-    return true;
+    return RecordFloatTextureClear(commandList, context, payload.destination, *destination, clearDesc);
 }
 
 

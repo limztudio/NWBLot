@@ -50,27 +50,36 @@ struct DeferredFrameTargets;
 
 namespace ECSRenderDetail{
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+// Shared opaque-interval record inputs core. All opaque interval tasks carry the same material/CSG/target/ticket,
+// setup-flag, binding-snapshot, and upload-flag prefix and differ only in their trailing image-state ownership flags.
+struct CsgOpaqueIntervalRecordInputs{
+    RendererMaterialSystem* materialSystem = nullptr;
+    RendererCsgSystem* csgSystem = nullptr;
+    DeferredFrameTargets* targets = nullptr;
+    Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+    const bool* meshViewSetupReady = nullptr;
+    const bool* sceneShadingSetupReady = nullptr;
+    MeshFrameBindingSnapshot frameBindings;
+    CsgGraphResourceSnapshot csgResources;
+    OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
+    bool materialDrawBuffersUploaded = false;
+    bool csgFrameBuffersUploaded = false;
+
+    explicit CsgOpaqueIntervalRecordInputs(Core::Alloc::GlobalArena& arena)
+        : opaqueDrawSnapshot(arena)
+    {}
+};
 
 struct CsgReceiverSpanBuildGraphTask{
-    struct Payload{
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-        const bool* meshViewSetupReady = nullptr;
-        const bool* sceneShadingSetupReady = nullptr;
-        MeshFrameBindingSnapshot frameBindings;
-        CsgGraphResourceSnapshot csgResources;
-        OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
+    struct Payload : public CsgOpaqueIntervalRecordInputs{
         bool receiverSpanInputImageStatesGraphOwned = false;
         bool receiverSpanOutputImageStatesGraphOwned = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena);
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : CsgOpaqueIntervalRecordInputs(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(
@@ -83,22 +92,13 @@ struct CsgReceiverSpanBuildGraphTask{
 
 // Interval combine maps peel/span aliases to removed-interval aliases; graph lowers fences.
 struct CsgIntervalCombineGraphTask{
-    struct Payload{
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-        const bool* meshViewSetupReady = nullptr;
-        const bool* sceneShadingSetupReady = nullptr;
-        MeshFrameBindingSnapshot frameBindings;
-        CsgGraphResourceSnapshot csgResources;
-        OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
-        bool materialDrawBuffersUploaded = false;
-        bool csgFrameBuffersUploaded = false;
+    struct Payload : public CsgOpaqueIntervalRecordInputs{
         bool intervalCombineInputImageStatesGraphOwned = false;
         bool removedIntervalOutputImageStatesGraphOwned = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena);
+        explicit Payload(Core::Alloc::GlobalArena& arena)
+            : CsgOpaqueIntervalRecordInputs(arena)
+        {}
     };
 
     [[nodiscard]] static bool record(

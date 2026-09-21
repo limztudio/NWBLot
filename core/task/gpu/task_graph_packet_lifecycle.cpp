@@ -385,15 +385,8 @@ bool GpuTaskGraph::beginPacketRecording(
     const u64 recordingAttemptGeneration,
     PacketRecordingLease& outLease
 )const noexcept{
-    if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.validPacket(packet)
-        || recordingAttemptGeneration == 0u
-        || outLease.valid()
-    )
-        return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
+    GpuCompiledPacketView packetView;
+    if(!resolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid(), packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -448,16 +441,8 @@ bool GpuTaskGraph::completePacketRecording(
     const GpuSubmissionPacketId packet,
     PacketRecordingLease& lease
 )const noexcept{
-    if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.validPacket(packet)
-        || !lease.valid()
-        || lease.m_packet != packet
-        || lease.m_planGeneration != planAccess.planGeneration()
-    )
-        return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
+    GpuCompiledPacketView packetView;
+    if(!resolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;

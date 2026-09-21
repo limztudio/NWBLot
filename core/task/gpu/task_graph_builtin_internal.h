@@ -142,6 +142,18 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 
+// Shared declaration-plus-region prologue shape for builtin copy/resolve tasks: clear the accepted token, open a
+// declaration mutation, and reject caller-provided resource uses, empty regions, oversized batches, or a queue
+// missing the required capability. Each task spells its own region-count limit inline; this helper only documents
+// the shared shape.
+[[nodiscard]] inline bool BuiltinCopyDeclarationRequiresTransferCapability(const GpuTaskDesc& desc)noexcept{
+    return (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) != 0u;
+}
+
+[[nodiscard]] inline bool BuiltinDeclarationHasNoCallerResourceUses(const GpuTaskDesc& desc)noexcept{
+    return !desc.resourceUses && desc.resourceUseCount == 0u && !desc.resourceSetUses && desc.resourceSetUseCount == 0u;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

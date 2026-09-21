@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
+
 #include <core/graphics/backend_selection.h>
 
 #include <global/scope_exit.h>
@@ -447,6 +449,57 @@ void RendererTaskTimingFeedback::onGpuTimingSample(const Core::GpuTimingSample& 
     ScopedLock lock(m_mutex);
     m_state.completeSample(sample, m_active);
 }
+
+namespace ECSRenderDetail{
+
+[[nodiscard]] Core::GpuTimingSampleAttribution BeginTaskTimingSample(
+    RendererTaskTimingFeedback* timingFeedback,
+    const Core::GpuTimingScopeDefinition* timingScope,
+    const Core::GpuTaskRecordContext& context
+){
+    if(!timingFeedback || !timingScope)
+        return Core::s_NoGpuTimingSampleAttribution;
+    const Core::GpuPhysicalQueueInfo* const queueInfo = context.compiledPlan.queueInfo(context.queue);
+    const Core::GpuCompiledTaskView compiledTask = context.compiledPlan.findTask(context.task);
+    if(!queueInfo || !compiledTask.valid())
+        return Core::s_NoGpuTimingSampleAttribution;
+    const Core::GpuTaskGraphTaskView task = context.declarations.taskAt(context.task.index);
+    return timingFeedback->beginSample(
+        timingScope->identity,
+        Core::GpuTaskTimingKey{
+            .task = task.identity,
+            .variant = task.timing.variant,
+            .resolutionClass = task.timing.resolutionClass,
+            .queue = queueInfo->queueClass,
+        },
+        context.queue,
+        compiledTask.plan->recordsNonCommittingTimingSample
+    );
+}
+
+bool RecordFloatTextureClear(
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context,
+    const Core::GpuGraphResourceId destination,
+    Core::Texture& nativeDestination,
+    const Core::GpuClearTextureTaskDesc& clearDesc
+){
+    if(
+        context.commandIrCapture
+        && !context.commandIrCapture->captureClearTexture(
+            context.task,
+            context.packet,
+            context.queue,
+            destination,
+            clearDesc
+        )
+    )
+        return false;
+    commandList.clearTextureFloat(nativeDestination, clearDesc.subresources, clearDesc.floatValue);
+    return true;
+}
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

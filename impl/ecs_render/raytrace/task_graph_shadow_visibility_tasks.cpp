@@ -39,22 +39,9 @@ bool ShadowVisibilityAllLitClearGraphTask::record(
         .destination = payload.destination,
         .subresources = s_ShadowVisibilitySubresources,
         .valueType = Core::GpuClearTextureTaskValueType::Float,
-        .floatValue = Core::Color(1.f, 1.f, 1.f, 1.f),
+        .floatValue = s_ShadowVisibilityAllLitClearColor,
     };
-    if(
-        context.commandIrCapture
-        && !context.commandIrCapture->captureClearTexture(
-            context.task,
-            context.packet,
-            context.queue,
-            payload.destination,
-            clearDesc
-        )
-    )
-        return false;
-
-    commandList.clearTextureFloat(*destination, clearDesc.subresources, clearDesc.floatValue);
-    return true;
+    return RecordFloatTextureClear(commandList, context, payload.destination, *destination, clearDesc);
 }
 
 

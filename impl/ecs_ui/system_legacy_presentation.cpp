@@ -121,33 +121,19 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
         return {};
     }
 
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
-    resourceUses.reserve(uploadedTextures.size());
-    for(const Core::GpuGraphResourceId texture : uploadedTextures)
-        UiDetail::AppendTextureReadUse(resourceUses, texture);
-
-    Core::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Core::GpuTaskCostHint::Tiny;
-    scheduling.avoidQueueCrossing = true;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
-    Core::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("ui.imgui_standalone_texture_upload_completion"))
-        .setMarkerLabel("ImGui Standalone Texture Upload Completion")
-        .setQueue(Core::GpuQueueRequest{
-            Core::GpuQueueCapability::Graphics,
-            Core::GpuQueuePreference::Graphics,
-            false,
-            false,
-        })
-        .setScheduling(scheduling)
+    UiDetail::UploadCompletionDeclare completion = UiDetail::MakeUploadCompletionDeclare(
+        scratchArena,
+        uploadedTextures,
+        Name("ui.imgui_standalone_texture_upload_completion"),
+        "ImGui Standalone Texture Upload Completion"
+    );
+    completion.desc
         .setDependencies(uploadTasks.data(), uploadTasks.size())
         // Next retained frame observes the compiler-owned ShaderResource handoff.
-        .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceUses(completion.resourceUses.data(), completion.resourceUses.size())
     ;
     const Core::GpuTaskId completionTask = graph.addTask<StandaloneTextureUploadCompletionTask>(
-        desc,
+        completion.desc,
         StandaloneTextureUploadCompletionTask::Payload{
             .ui = this,
             .uploadsPrepared = true,

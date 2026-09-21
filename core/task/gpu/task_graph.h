@@ -1025,6 +1025,77 @@ private:
         bool& outRecordThunkInvoked
     )const;
 
+    // Shared packet-guard prologue: validate the plan access plus packet id, then resolve the packet view with tasks.
+    [[nodiscard]] static bool resolvePacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet,
+        GpuCompiledPacketView& outPacketView
+    )noexcept{
+        if(
+            !planAccess.validFor(compiledGraph)
+            || !planAccess.validPacket(packet)
+        )
+            return false;
+        outPacketView = planAccess.packetWithTasks(packet);
+        return outPacketView.valid();
+    }
+
+    // Shared recording-claim guard: resolve the packet view and authenticate the caller's lease for that packet.
+    [[nodiscard]] static bool resolveLeasedPacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet,
+        const PacketRecordingLease& lease,
+        GpuCompiledPacketView& outPacketView
+    )noexcept{
+        if(
+            !resolvePacketView(compiledGraph, planAccess, packet, outPacketView)
+            || !lease.valid()
+            || lease.m_packet != packet
+            || lease.m_planGeneration != planAccess.planGeneration()
+        )
+            return false;
+        return true;
+    }
+
+    // Shared recording-attempt guard: resolve the packet view for a fresh claim when the attempt is live and the
+    // output lease is still empty.
+    [[nodiscard]] static bool resolveAttemptPacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet,
+        const u64 recordingAttemptGeneration,
+        const bool outLeaseValid,
+        GpuCompiledPacketView& outPacketView
+    )noexcept{
+        if(
+            !resolvePacketView(compiledGraph, planAccess, packet, outPacketView)
+            || recordingAttemptGeneration == 0u
+            || outLeaseValid
+        )
+            return false;
+        return true;
+    }
+
+    // Shared discard epilogue for packet-abandon paths: mark every task Discarded and clear its claim generations
+    // plus thunk state. The caller owns teardown/binding validation, lease reset, and claim release. Task fields
+    // are mutable so this runs under the lifecycle lock from const methods.
+    void discardPacketTasksWithinLock(
+        const GpuSubmissionPacket& packetPlan,
+        const GpuTaskId* const tasks
+    )const noexcept{
+        for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
+            const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
+            task.lifecycleState = TaskLifecycleState::Discarded;
+            task.recordingClaimGeneration = 0u;
+            task.submissionClaimGeneration = 0u;
+            task.discardNotificationGeneration = 0u;
+            task.recordThunkInProgress = false;
+            task.recordThunkCompleted = false;
+        }
+    }
+
     // Claims all packet tasks before native command recording begins. One recording attempt can therefore have exactly one native artifact per packet even when callers use separate recorded-graph outputs concurrently. The returned opaque lease authenticates the one recorder that may invoke task thunks, complete, or abort it.
     [[nodiscard]] bool beginPacketRecording(
         const GpuCompiledGraph& compiledGraph,

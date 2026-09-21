@@ -5,6 +5,7 @@
 #pragma once
 
 
+// UI subsystem aggregation: components plus system.
 #include "components.h"
 #include "system.h"
 

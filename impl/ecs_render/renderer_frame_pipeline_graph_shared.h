@@ -70,6 +70,37 @@ template<typename ImportBufferFn, typename AppendBufferFn>
     return true;
 }
 
+// Shared ray-trace set-use assembly for the shadow-visibility and surfel-GI graph declares. Both build the same
+// geometry plus material-sampled-texture read uses and differ only in their downstream consumers.
+struct TraceResourceSetUses{
+    Core::GpuTaskResourceSetUse uses[2u] = {};
+    usize useCount = 0u;
+};
+
+[[nodiscard]] inline TraceResourceSetUses MakeTraceResourceSetUses(
+    const Core::GpuGraphResourceSetId traceGeometrySet,
+    const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet
+){
+    TraceResourceSetUses result;
+    if(traceGeometrySet.valid()){
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{
+            .resourceSet = traceGeometrySet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+    }
+    if(traceMaterialSampledTextureSet.valid()){
+        result.uses[result.useCount++] = Core::GpuTaskResourceSetUse{
+            .resourceSet = traceMaterialSampledTextureSet,
+            .range = {},
+            .requiredState = Core::ResourceStates::ShaderResource,
+            .access = Core::GpuTaskResourceAccess::Read,
+        };
+    }
+    return result;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

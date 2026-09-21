@@ -95,15 +95,12 @@ GpuTaskId GpuTaskGraph::addCopyBufferTask(const GpuTaskDesc& desc, const GpuCopy
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !copyDesc.regions
         || copyDesc.regionCount == 0u
         || copyDesc.regionCount > Limit<u32>::s_Max
         || copyDesc.regionCount > Limit<usize>::s_Max / 2u
-        || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
+        || !GpuTaskGraphBuiltinDetail::BuiltinCopyDeclarationRequiresTransferCapability(desc)
     )
         return {};
 

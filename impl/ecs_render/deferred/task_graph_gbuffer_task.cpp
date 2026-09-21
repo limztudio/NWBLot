@@ -61,11 +61,10 @@ namespace ECSRenderDetail{
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(deferredTargets.framebuffer->getFramebufferInfo().getViewport());
 
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && payload.sceneShadingSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(frameSetupReady)
         payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 

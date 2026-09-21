@@ -6,6 +6,10 @@
 
 
 #include <core/graphics/api.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/compiled_graph.h>
+#include <core/task/gpu/task_graph.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
@@ -49,6 +53,18 @@ inline constexpr u32 s_MeshDispatchFlagMeshletConeCull = NWB_MESH_DISPATCH_FLAG_
 inline constexpr u32 s_MeshDispatchFlagCsgMeshletFullyRemovedCull = NWB_MESH_DISPATCH_FLAG_CSG_MESHLET_FULLY_REMOVED_CULL;
 inline constexpr Core::TextureSubresourceSet s_FramebufferSubresources = Core::TextureSubresourceSet(0, 1, 0, 1);
 inline constexpr Core::TextureSubresourceSet s_ShadowVisibilitySubresources = Core::TextureSubresourceSet(0, 1, 0, NWB_SCENE_SHADOW_SLOT_COUNT);
+inline constexpr Core::Color s_ShadowVisibilityAllLitClearColor = Core::Color(1.f, 1.f, 1.f, 1.f);
+
+// Shared float-texture clear tail for the shadow-visibility all-lit and surfel-irradiance record callbacks:
+// capture the clear for command-IR replay, then issue the native clear. The caller owns destination lookup,
+// render-pass gating, and clearDesc construction.
+[[nodiscard]] bool RecordFloatTextureClear(
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context,
+    const Core::GpuGraphResourceId destination,
+    Core::Texture& nativeDestination,
+    const Core::GpuClearTextureTaskDesc& clearDesc
+);
 // The caustic splat accumulators are fixed-point R32_UINT (no float image atomics on the backend), one layer per
 // RGB channel that the producer InterlockedAdds into; the resolve pass converts them to the RGBA16F irradiance.
 inline constexpr u32 s_CausticAccumulatorChannelCount = NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT;

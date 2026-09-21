@@ -32,6 +32,18 @@ struct CausticsResolveStageUses{
     usize useCount = 0u;
 };
 
+// Shared stage-use core for the hardware/software resolve-chain input structs below. Both chains carry the same
+// prepare plus five-wavelet plus upsample use ranges and differ only in naming, queues, and state sources.
+struct CausticsResolveChainStageUseInputs{
+    CausticsResolveStageUses prepare;
+    CausticsResolveStageUses wavelet;
+    CausticsResolveStageUses secondWavelet;
+    CausticsResolveStageUses thirdWavelet;
+    CausticsResolveStageUses fourthWavelet;
+    CausticsResolveStageUses fifthWavelet;
+    CausticsResolveStageUses upsample;
+};
+
 struct CausticsResolveStageNaming{
     Name identity;
     AStringView label;

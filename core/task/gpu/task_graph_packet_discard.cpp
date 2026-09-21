@@ -23,16 +23,8 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     const GpuSubmissionPacketId packet,
     PacketRecordingLease& lease
 )const noexcept{
-    if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.validPacket(packet)
-        || !lease.valid()
-        || lease.m_packet != packet
-        || lease.m_planGeneration != planAccess.planGeneration()
-    )
-        return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
+    GpuCompiledPacketView packetView;
+    if(!resolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -46,8 +38,6 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     )
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        if(!validTask(tasks[taskIndex]))
-            return false;
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
         if(
             task.lifecycleState != TaskLifecycleState::Recording
@@ -57,15 +47,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
         )
             return false;
     }
-    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        task.lifecycleState = TaskLifecycleState::Discarded;
-        task.recordingClaimGeneration = 0u;
-        task.submissionClaimGeneration = 0u;
-        task.discardNotificationGeneration = 0u;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
-    }
+    discardPacketTasksWithinLock(packetPlan, tasks);
     lease.reset();
     releasePacketRecordingClaimWithinLock();
     return true;

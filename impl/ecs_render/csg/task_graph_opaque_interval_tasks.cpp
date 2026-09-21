@@ -30,11 +30,6 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CsgReceiverSpanBuildGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : opaqueDrawSnapshot(arena)
-{}
-
-
 bool CsgReceiverSpanBuildGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -61,11 +56,10 @@ bool CsgReceiverSpanBuildGraphTask::record(
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && payload.sceneShadingSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(frameSetupReady)
         payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 
@@ -108,11 +102,6 @@ bool CsgReceiverSpanBuildGraphTask::record(
 }
 
 
-CsgIntervalCombineGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : opaqueDrawSnapshot(arena)
-{}
-
-
 bool CsgIntervalCombineGraphTask::record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -139,11 +128,10 @@ bool CsgIntervalCombineGraphTask::record(
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && payload.sceneShadingSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(frameSetupReady)
         payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 
@@ -221,11 +209,10 @@ bool CsgIntervalSampleGraphTask::record(
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
-    const bool frameSetupReady =
-        *payload.meshViewSetupReady
-        && payload.sceneShadingSetupReady
-        && *payload.sceneShadingSetupReady
-    ;
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
     if(frameSetupReady)
         payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
 

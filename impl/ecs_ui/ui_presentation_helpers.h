@@ -72,6 +72,42 @@ inline void AppendTextureReadUse(
     resourceUses.push_back(ReadTextureUse(texture));
 }
 
+// Shared ImGui upload-completion declare: build the deduped texture-read uses plus the tiny Graphics completion
+// scheduling. The caller owns identities, queue choice, dependencies, and the final addTask call.
+struct UploadCompletionDeclare{
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses;
+    Core::GpuTaskSchedulingHint scheduling;
+    Core::GpuTaskDesc desc;
+};
+
+[[nodiscard]] inline UploadCompletionDeclare MakeUploadCompletionDeclare(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& uploadedTextures,
+    const Name& identity,
+    const char* markerLabel
+){
+    UploadCompletionDeclare result{ Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena) };
+    result.resourceUses.reserve(uploadedTextures.size());
+    for(const Core::GpuGraphResourceId texture : uploadedTextures)
+        AppendTextureReadUse(result.resourceUses, texture);
+    result.scheduling.cost = Core::GpuTaskCostHint::Tiny;
+    result.scheduling.avoidQueueCrossing = true;
+    result.scheduling.forceSubmissionBoundary = true;
+    result.scheduling.allowPacketMerge = false;
+    result.desc
+        .setIdentity(identity)
+        .setMarkerLabel(markerLabel)
+        .setQueue(Core::GpuQueueRequest{
+            Core::GpuQueueCapability::Graphics,
+            Core::GpuQueuePreference::Graphics,
+            false,
+            false,
+        })
+        .setScheduling(result.scheduling)
+    ;
+    return result;
+}
+
 [[nodiscard]] inline bool ValidAcquiredPresentationFrame(const Core::AcquiredPresentationFrame& frame){
     if(!frame.valid())
         return false;

@@ -25,15 +25,12 @@ bool GpuTaskGraph::discardUnacceptedPacket(
     const u64 recordingAttemptGeneration,
     const GpuGraphSubmissionBinding& submissionBinding
 )const{
+    GpuCompiledPacketView packetView;
     if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.validPacket(packet)
+        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
     )
-        return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -108,15 +105,12 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
     const u64 recordingAttemptGeneration,
     const GpuGraphSubmissionBinding& submissionBinding
 )const noexcept{
+    GpuCompiledPacketView packetView;
     if(
-        !planAccess.validFor(compiledGraph)
-        || !planAccess.validPacket(packet)
+        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
     )
-        return false;
-    const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-    if(!packetView.valid())
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -146,15 +140,7 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
         )
             return false;
     }
-    for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
-        task.lifecycleState = TaskLifecycleState::Discarded;
-        task.recordingClaimGeneration = 0u;
-        task.submissionClaimGeneration = 0u;
-        task.discardNotificationGeneration = 0u;
-        task.recordThunkInProgress = false;
-        task.recordThunkCompleted = false;
-    }
+    discardPacketTasksWithinLock(packetPlan, tasks);
     return true;
 }
 

@@ -226,12 +226,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         if(node->latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
         if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
-            if(++m_searchGeneration == 0u){
-                for(u64& visit : m_searchVisits)
-                    visit = 0u;
-                ++m_searchGeneration;
-            }
-            m_searchStack.clear();
+            beginLockedSearch();
             const auto visit = [this](const TaskHandle candidate){
                 if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
                     m_searchVisits[candidate.index] = m_searchGeneration;

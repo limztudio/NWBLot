@@ -94,6 +94,19 @@ namespace ECSRenderDetail{
             ;
         }
     };
+
+    // Shared opaque/gbuffer record prologue: frame setup is ready when both setup flags are present and set.
+    [[nodiscard]] inline bool FrameSetupReady(
+        const bool* meshViewSetupReady,
+        const bool* sceneShadingSetupReady
+    )noexcept{
+        return
+            meshViewSetupReady
+            && sceneShadingSetupReady
+            && *meshViewSetupReady
+            && *sceneShadingSetupReady
+        ;
+    }
 };
 
 

@@ -5,6 +5,7 @@
 #pragma once
 
 
+// Model subsystem aggregation: components plus system.
 #include "components.h"
 #include "system.h"
 

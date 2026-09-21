@@ -300,14 +300,12 @@ private:
     const bool srgb,
     ImagePlanes& outPlanes
 ){
-    if(sourcePlanes.empty())
-        return false;
-
     EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::ComputeVolumeMipDims(
+    if(!EncodeBackendDetail::PrepareVolumeMipTargets<basisu::image>(
+        sourcePlanes,
         sourcePlanes.front().get_width(),
         sourcePlanes.front().get_height(),
-        static_cast<u32>(sourcePlanes.size()),
+        outPlanes,
         mipDims
     ))
         return false;
@@ -315,8 +313,6 @@ private:
     const u32 targetWidth = mipDims.targetWidth;
     const u32 targetHeight = mipDims.targetHeight;
     const u32 targetDepth = mipDims.targetDepth;
-    outPlanes.clear();
-    outPlanes.resize(targetDepth);
 
     for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
         u32 sourceFirst = 0u;

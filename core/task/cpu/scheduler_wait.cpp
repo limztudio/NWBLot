@@ -79,12 +79,7 @@ void CpuTaskScheduler::drainTask(const TaskHandle handle)noexcept{
 }
 
 void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTaskScope* const scope){
-    if(++m_searchGeneration == 0u){
-        for(u64& visit : m_searchVisits)
-            visit = 0u;
-        ++m_searchGeneration;
-    }
-    m_searchStack.clear();
+    beginLockedSearch();
     const auto visit = [this](const TaskHandle candidate){
         if(resolveLocked(candidate) && m_searchVisits[candidate.index] != m_searchGeneration){
             m_searchVisits[candidate.index] = m_searchGeneration;

@@ -17,6 +17,9 @@
 namespace __hidden_build_input_tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -34,7 +37,6 @@ public:
 
 
 protected:
-
     virtual void SetUp()override{
         m_root = NWB::Path(m_testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path()
             / "__build_obj" / "build_input_tests";

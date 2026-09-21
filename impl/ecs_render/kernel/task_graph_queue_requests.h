@@ -34,9 +34,7 @@ namespace RendererTaskGraphDetail{
     };
 }
 
-// Built-in uploads require Transfer capability, while these small frame updates must stay on the Graphics packet
-// that consumes them. Vulkan's Graphics transport advertises Transfer capability, so the compiler retains that
-// physical route without introducing an asynchronous ownership handoff.
+// Built-in uploads require Transfer capability, while these small frame updates must stay on the Graphics packet that consumes them. Vulkan's Graphics transport advertises Transfer capability, so the compiler retains that physical route without introducing an asynchronous ownership handoff.
 [[nodiscard]] inline Core::GpuQueueRequest GraphicsUploadQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -55,10 +53,8 @@ namespace RendererTaskGraphDetail{
     };
 }
 
-// Large graph-owned compute effects may use an auxiliary physical queue only when the device-wide same-class
-// policy is enabled. Keep each direct successor on the initially chosen transport: the effect remains one
-// semantic packet while the compiler owns its exact inter-packet waits. Cross-family routing stays separately
-// disabled here until an effect-specific ownership/performance decision promotes it.
+// Large graph-owned compute effects may use an auxiliary physical queue only when the device-wide same-class policy is enabled. Keep each direct successor on the initially chosen transport: the effect remains one semantic packet while the compiler owns its exact inter-packet waits.
+//Cross-family routing stays separately disabled here until an effect-specific ownership/performance decision promotes it.
 inline void EnableSameFamilyComputeEffectRouting(
     Core::GpuTaskSchedulingHint& scheduling,
     const bool preserveDirectDependency = true
@@ -68,8 +64,7 @@ inline void EnableSameFamilyComputeEffectRouting(
     scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;
 }
 
-// A cross-family route remains a second explicit opt-in. The compiler validates every declared resource against
-// its concurrent-sharing contract and lowers paired ownership barriers for any exclusive crossing.
+// A cross-family route remains a second explicit opt-in. The compiler validates every declared resource against its concurrent-sharing contract and lowers paired ownership barriers for any exclusive crossing.
 inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling){
     scheduling.allowCrossFamilySameClassQueueRouting = true;
 }
@@ -87,8 +82,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// These callbacks dispatch Compute work but form one ordered packet with the graphics prefix and subsequent
-// deferred passes. Keep the physical primary-Graphics route while declaring the command capability they use.
+// These callbacks dispatch Compute work but form one ordered packet with the graphics prefix and subsequent deferred passes. Keep the physical primary-Graphics route while declaring the command capability they use.
 [[nodiscard]] inline Core::GpuQueueRequest GraphicsPreferredComputeQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Compute,
@@ -98,8 +92,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// Shadow preparation can issue software BVH compute work and native sentinel clears. Keep both capabilities
-// declared in its accepting primary-Graphics packet.
+// Shadow preparation can issue software BVH compute work and native sentinel clears. Keep both capabilities declared in its accepting primary-Graphics packet.
 [[nodiscard]] inline Core::GpuQueueRequest GraphicsComputeUploadQueueRequest(){
     return Core::GpuQueueRequest{
         static_cast<Core::GpuQueueCapability::Mask>(
@@ -112,9 +105,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// A tiny setup dispatch can otherwise be rerouted to Graphics while its large Compute consumer selects the dedicated
-// Compute transport. Use this only for work that must merge into that consumer's packet, so both requests select the
-// same physical queue whenever a Compute transport is available.
+// A tiny setup dispatch can otherwise be rerouted to Graphics while its large Compute consumer selects the dedicated Compute transport. Use this only for work that must merge into that consumer's packet, so both requests select the same physical queue whenever a Compute transport is available.
 [[nodiscard]] inline Core::GpuQueueRequest ComputePacketQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Compute,
@@ -124,10 +115,8 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// Native image clears require Transfer capability, while Surfel GI keeps its output initialization and compute work
-// in one packet on the selected Compute transport. Lock the Compute preference so a tiny clear does not fall back to
-// Graphics merely because it is too small to amortize a queue crossing; Graphics remains the explicit fallback when
-// no Compute transport exists.
+// Native image clears require Transfer capability, while Surfel GI keeps its output initialization and compute work in one packet on the selected Compute transport.
+//Lock the Compute preference so a tiny clear does not fall back to Graphics merely because it is too small to amortize a queue crossing; Graphics remains the explicit fallback when no Compute transport exists.
 [[nodiscard]] inline Core::GpuQueueRequest ComputeTransferQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -137,9 +126,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// Adaptive software-shadow primitives are built-in Transfer operations, but their following/preceding traversal
-// callback dispatches Compute work.  Require both capabilities and lock the Compute preference so the whole
-// clear -> trace -> readback chain selects one physical packet on every supported topology.
+// Adaptive software-shadow primitives are built-in Transfer operations, but their following/preceding traversal callback dispatches Compute work.  Require both capabilities and lock the Compute preference so the whole clear -> trace -> readback chain selects one physical packet on every supported topology.
 [[nodiscard]] inline Core::GpuQueueRequest ComputeTransferPacketQueueRequest(){
     return Core::GpuQueueRequest{
         static_cast<Core::GpuQueueCapability::Mask>(
@@ -152,9 +139,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// The lagged-history selector must share Deferred Lighting's selected packet. Its built-in upload needs Transfer
-// capability and prefers Compute without cost-based rerouting; Graphics remains the fallback when no Compute
-// transport exists, preserving the renderer on single-queue Vulkan devices.
+// The lagged-history selector must share Deferred Lighting's selected packet. Its built-in upload needs Transfer capability and prefers Compute without cost-based rerouting; Graphics remains the fallback when no Compute transport exists, preserving the renderer on single-queue Vulkan devices.
 [[nodiscard]] inline Core::GpuQueueRequest ComputeUploadQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -173,12 +158,9 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the
-// following graph packets. All of those states are declared below, so this callback retains only timing ownership.
+// The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the following graph packets. All of those states are declared below, so this callback retains only timing ownership.
 
-// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a
-// single list owns timing and handoff. Occupancy, extinction, and accumulation share this policy and differ only
-// in their downstream consumers.
+// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff. Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
 [[nodiscard]] inline Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -189,8 +171,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     return scheduling;
 }
 
-// Shared shared-phase task descriptor core for the occupancy/extinction/accumulation alternating chains above:
-// one Graphics-routed Compute queue, the shared chain scheduling, one dependency, and the caller uses/sets.
+// Shared shared-phase task descriptor core for the occupancy/extinction/accumulation alternating chains above: one Graphics-routed Compute queue, the shared chain scheduling, one dependency, and the caller uses/sets.
 inline void MakeSharedComputeEmulationPhaseTaskDesc(
     Core::GpuTaskDesc& desc,
     const Name identity,

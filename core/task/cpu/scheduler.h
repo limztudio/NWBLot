@@ -37,7 +37,8 @@ public:
 
 
 private:
-    using TaskFunction = InplaceFunction<384u>;
+    static constexpr usize s_TaskFunctionBytes = 384u;
+    using TaskFunction = InplaceFunction<s_TaskFunctionBytes>;
     using RangeFunction = void(*)(const void*, usize, usize);
 
 

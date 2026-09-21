@@ -41,14 +41,17 @@ private:
 private:
     static constexpr usize s_LinearSearchThreshold = 8u;
     static constexpr usize s_MinimumTableCapacity = 16u;
+    static constexpr u64 s_OwnerHashMixFirst = 0xff51afd7ed558ccdull;
+    static constexpr u64 s_OwnerHashMixSecond = 0xc4ceb9fe1a85ec53ull;
+    static constexpr u64 s_OwnerHashFinalShift = 33u;
 
     [[nodiscard]] static usize hashOwner(const TrackedCommandBuffer& owner)noexcept{
         u64 value = static_cast<u64>(reinterpret_cast<usize>(&owner));
-        value ^= value >> 33u;
-        value *= 0xff51afd7ed558ccdull;
-        value ^= value >> 33u;
-        value *= 0xc4ceb9fe1a85ec53ull;
-        value ^= value >> 33u;
+        value ^= value >> s_OwnerHashFinalShift;
+        value *= s_OwnerHashMixFirst;
+        value ^= value >> s_OwnerHashFinalShift;
+        value *= s_OwnerHashMixSecond;
+        value ^= value >> s_OwnerHashFinalShift;
         return static_cast<usize>(value);
     }
     [[nodiscard]] static usize resolveTableCapacity(const usize ownerCount)noexcept{

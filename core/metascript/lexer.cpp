@@ -20,7 +20,11 @@ namespace __hidden_metascript_lexer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool isDigit(MChar c){ return c >= '0' && c <= '9'; }
+inline constexpr MChar s_DigitFirst = '0';
+inline constexpr MChar s_DigitLast = '9';
+
+
+[[nodiscard]] inline bool isDigit(MChar c){ return c >= s_DigitFirst && c <= s_DigitLast; }
 [[nodiscard]] inline bool isAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
 [[nodiscard]] inline bool isAlphaNumeric(MChar c){ return isAlpha(c) || isDigit(c); }
 

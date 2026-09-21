@@ -26,6 +26,8 @@ namespace TextureBinaryPayload{
 inline constexpr u32 s_TextureMagic = 0x54455831u; // TEX1
 inline constexpr u32 s_TextureVersionV2 = 2u;
 inline constexpr u32 s_TextureVersion = 3u;
+inline constexpr usize s_TextureHeaderPrefixBytes = 8u;
+inline constexpr usize s_TextureHeaderV2Bytes = 48u;
 
 #pragma pack(push, 1)
 struct HeaderPrefix{
@@ -33,7 +35,7 @@ struct HeaderPrefix{
     u32 version = s_TextureVersion;
 };
 #pragma pack(pop)
-static_assert(sizeof(HeaderPrefix) == 8u, "Texture header prefix layout drifted");
+static_assert(sizeof(HeaderPrefix) == s_TextureHeaderPrefixBytes, "Texture header prefix layout drifted");
 static_assert(alignof(HeaderPrefix) == 1u, "Texture header prefix must stay packed");
 static_assert(IsStandardLayout_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderPrefix>, "Texture header prefix must stay binary-serializable");
@@ -54,7 +56,7 @@ struct HeaderBinaryV2{
     u64 uastcByteCount = 0u;
 };
 #pragma pack(pop)
-static_assert(sizeof(HeaderBinaryV2) == 48u, "Texture V2 header layout drifted");
+static_assert(sizeof(HeaderBinaryV2) == s_TextureHeaderV2Bytes, "Texture V2 header layout drifted");
 static_assert(alignof(HeaderBinaryV2) == 1u, "Texture V2 header must stay packed");
 static_assert(IsStandardLayout_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<HeaderBinaryV2>, "Texture V2 header must stay binary-serializable");

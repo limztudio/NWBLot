@@ -353,7 +353,9 @@ private:
                 // Ordinary updates are interval-bound. Sleep until the next deadline instead of consuming a core
                 // repeatedly polling the timer; the existing cadence still bounds message and shutdown latency.
                 const f32 remainingSeconds = UPDATE_INTERVAL - elapsedSeconds;
-                const u32 sleepMilliseconds = Max<u32>(1u, static_cast<u32>(Ceil(remainingSeconds * 1000.0f)));
+                static constexpr f32 s_MillisecondsPerSecondF = 1000.0f;
+                static constexpr u32 s_MinSleepMilliseconds = 1u;
+                const u32 sleepMilliseconds = Max<u32>(s_MinSleepMilliseconds, static_cast<u32>(Ceil(remainingSeconds * s_MillisecondsPerSecondF)));
                 SleepMS(sleepMilliseconds);
                 continue;
             }

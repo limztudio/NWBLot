@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 
 
 usize CommandListResourceSelection::hashIdentity(void* const resource, const bool texture)noexcept{
-    return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(0x9e3779b97f4a7c15ull) : 0u);
+    return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(CommandListResourceSelection::s_TextureIdentitySeed) : 0u);
 }
 
 void CommandListResourceSelection::insertIndex(void* const storage, const usize capacity, const usize entryIndex)noexcept{

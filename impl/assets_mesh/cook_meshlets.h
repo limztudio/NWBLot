@@ -111,6 +111,9 @@ static constexpr usize s_MeshletDisconnectedCandidateParallelOversubscription = 
 
 static constexpr f32 s_MeshletBoundsRadiusInflation = 1.25f;
 
+static constexpr f64 s_MeshletPercentScale = 100.0;
+static constexpr f32 s_TriangleVertexCount = 3.0f;
+
 struct MeshletBoundsCalculation{
     SIMDVector center = {};
     SIMDVector coneAxis = {};
@@ -499,7 +502,7 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
     const f64 positionCountAverage = static_cast<f64>(metrics.positionCountSum) * invMeshletCount;
     const f64 attributeCountAverage = static_cast<f64>(metrics.attributeCountSum) * invMeshletCount;
     const f64 radiusAverage = metrics.radiusSum * invMeshletCount;
-    const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * 100.0 * invMeshletCount;
+    const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
     const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u
         ? metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount)
         : 0.0
@@ -590,7 +593,7 @@ bool MeshCookMeshlets::PrecomputeMeshletTriangleData(
         const SIMDVector p0 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[0u]]));
         const SIMDVector p1 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[1u]]));
         const SIMDVector p2 = MakeMeshletPositionVector(LoadFloat(entry.positions[triangle.positions[2u]]));
-        const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / 3.0f);
+        const SIMDVector centroid = VectorScale(VectorAdd(VectorAdd(p0, p1), p2), 1.0f / s_TriangleVertexCount);
         const SIMDVector areaNormal = TriangleTests::AreaNormal(p0, p1, p2);
         calculation.vectors = MakeMeshletTriangleVectors(
             p0,

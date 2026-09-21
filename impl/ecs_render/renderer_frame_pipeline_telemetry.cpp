@@ -27,6 +27,11 @@ namespace __hidden_frame_graph_export{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] static AStringView PhysicalQueueClassLabel(const Core::CommandQueue::Enum queueClass)noexcept{
     switch(queueClass){
     case Core::CommandQueue::Graphics:
@@ -285,27 +290,27 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             submissionStatistics.nativeCommandListCount,
             submissionStatistics.timelineWaitCount,
             submissionStatistics.rejectedSubmissionCount,
-            compileStatistics.declarationSeconds * 1000.0,
-            compileStatistics.totalSeconds * 1000.0,
-            recordingStatistics.recordingElapsedSeconds * 1000.0,
-            submissionStatistics.submissionSeconds * 1000.0,
-            compileStatistics.analysisSeconds * 1000.0,
-            compileStatistics.queueAssignmentSeconds * 1000.0,
-            compileStatistics.planningSeconds * 1000.0,
-            compileStatistics.validationSeconds * 1000.0,
-            compileStatistics.dependencyAnalysisSeconds * 1000.0,
-            compileStatistics.hazardAnalysisSeconds * 1000.0,
-            compileStatistics.topologicalOrderSeconds * 1000.0,
-            compileStatistics.packetizationSeconds * 1000.0,
-            compileStatistics.resourceStatePlanningSeconds * 1000.0,
-            compileStatistics.packetDependencyPlanningSeconds * 1000.0,
-            recordingStatistics.recordingSeconds * 1000.0,
-            recordingStatistics.commandListAcquisitionSeconds * 1000.0,
-            recordingStatistics.graphBarrierRecordingSeconds * 1000.0,
-            recordingStatistics.taskRecordSeconds * 1000.0,
-            recordingStatistics.readyFrontierElapsedSeconds * 1000.0,
-            recordingStatistics.readyFrontierWorkerBusySeconds * 1000.0,
-            recordingStatistics.readyFrontierWorkerCapacitySeconds * 1000.0,
+            compileStatistics.declarationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.totalSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.recordingElapsedSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            submissionStatistics.submissionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.analysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.queueAssignmentSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.planningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.validationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.dependencyAnalysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.hazardAnalysisSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.topologicalOrderSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.packetizationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.resourceStatePlanningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            compileStatistics.packetDependencyPlanningSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.recordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.commandListAcquisitionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.graphBarrierRecordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.taskRecordSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.readyFrontierElapsedSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.readyFrontierWorkerBusySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+            recordingStatistics.readyFrontierWorkerCapacitySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
             recordingStatistics.readyFrontierWorkerUtilization() * 100.0
         );
 
@@ -374,7 +379,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 queueStatistics.mergedTimelineWaitCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
                 queueStatistics.recoverySubmissionCount,
-                queueStatistics.submissionSeconds * 1000.0,
+                queueStatistics.submissionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
                 queueCompileStatistics.taskCount,
                 queueCompileStatistics.packetCount,
                 queueCompileStatistics.mergedTaskCount,
@@ -395,10 +400,10 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 queueRecordingStatistics.barrierCount,
                 queueRecordingStatistics.workerRoutedPacketCount,
                 queueRecordingStatistics.parallelPacketCount,
-                queueRecordingStatistics.commandListAcquisitionSeconds * 1000.0,
-                queueRecordingStatistics.graphBarrierRecordingSeconds * 1000.0,
-                queueRecordingStatistics.taskRecordSeconds * 1000.0,
-                queueRecordingStatistics.recordingSeconds * 1000.0,
+                queueRecordingStatistics.commandListAcquisitionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+                queueRecordingStatistics.graphBarrierRecordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+                queueRecordingStatistics.taskRecordSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
+                queueRecordingStatistics.recordingSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
                 commandArenaStatistics.workerArenaCount,
                 commandArenaStatistics.commandPoolEpochCount,
                 commandArenaStatistics.pendingCommandPoolEpochCount,

@@ -37,6 +37,8 @@ namespace __hidden_crash_handler{
 
 
 inline constexpr u64 s_DecimalRadix = 10u;
+inline constexpr char s_DecimalDigitFirst = '0';
+inline constexpr char s_DecimalDigitLast = '9';
 inline constexpr int s_ProcessSuccessExitCode = 0;
 inline constexpr int s_ProcessFailureExitCode = -1;
 
@@ -55,8 +57,8 @@ template<typename CharT>
     if(!text)
         return value;
 
-    while(*text >= static_cast<CharT>('0') && *text <= static_cast<CharT>('9')){
-        value = (value * s_DecimalRadix) + static_cast<u64>(*text - static_cast<CharT>('0'));
+    while(*text >= static_cast<CharT>(s_DecimalDigitFirst) && *text <= static_cast<CharT>(s_DecimalDigitLast)){
+        value = (value * s_DecimalRadix) + static_cast<u64>(*text - static_cast<CharT>(s_DecimalDigitFirst));
         ++text;
     }
     return value;

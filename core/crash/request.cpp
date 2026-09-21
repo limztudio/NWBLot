@@ -20,6 +20,9 @@ namespace Detail{
 
 CrashState g_State;
 
+inline constexpr const char* s_UnknownPlatformLabel = "unknown";
+inline constexpr const char* s_UnknownReasonLabel = "unknown";
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -45,7 +48,7 @@ const char* PlatformKindName(const u32 platform)noexcept{
     case PlatformKind::Android:
         return "android";
     default:
-        return "unknown";
+        return s_UnknownPlatformLabel;
     }
 }
 
@@ -62,7 +65,7 @@ const char* ReasonKindName(const u32 reasonKind)noexcept{
     case CrashReasonKind::GpuCrash:
         return s_GpuCrashCategory.data();
     default:
-        return "unknown";
+        return s_UnknownReasonLabel;
     }
 }
 

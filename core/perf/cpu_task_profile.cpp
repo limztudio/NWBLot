@@ -30,6 +30,7 @@ inline constexpr Name s_ScopeJoin("cpu.task.scope_join");
 inline constexpr Name s_SchedulerJoin("cpu.task.scheduler_join");
 inline constexpr Name s_WorkerIdle("cpu.worker.idle");
 inline constexpr usize s_ReadBatchSize = 32u;
+inline constexpr f64 s_NanosecondsToSeconds = 1.0e-9;
 
 
 [[nodiscard]] const Name* TimingScope(const CpuTaskProfileEvent& event)noexcept{
@@ -73,7 +74,7 @@ void CollectCpuTaskProfile(CpuTaskScheduler& scheduler, TimingSink& timing){
             if(!scopeName)
                 continue;
             const TimingScopeId scope = timing.registerScope(*scopeName);
-            timing.recordSample(scope, static_cast<f64>(event.durationNanoseconds) * 1.0e-9, event.frameIndex);
+            timing.recordSample(scope, static_cast<f64>(event.durationNanoseconds) * __hidden_cpu_task_profile::s_NanosecondsToSeconds, event.frameIndex);
         }
     }
 }

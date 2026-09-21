@@ -23,7 +23,9 @@ NWB_IMPL_SCENE_BEGIN
 
 // Default camera policy; zero aspect asks the renderer to derive it from the framebuffer.
 namespace CameraDefaults{
-inline constexpr f32 s_VerticalFovRadians = 60.0f * (s_PI / 180.0f);
+inline constexpr f32 s_DefaultVerticalFovDegrees = 60.0f;
+inline constexpr f32 s_DegreesPerHalfTurn = 180.0f;
+inline constexpr f32 s_VerticalFovRadians = s_DefaultVerticalFovDegrees * (s_PI / s_DegreesPerHalfTurn);
 inline constexpr f32 s_NearPlane = 0.001f;
 inline constexpr f32 s_FarPlane = 10000.0f;
 inline constexpr f32 s_AutoAspectRatio = 0.0f;

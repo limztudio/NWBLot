@@ -29,7 +29,8 @@ namespace __hidden_ui_frame{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static constexpr f32 s_FallbackDeltaSeconds = 1.0f / 60.0f;
+static constexpr f32 s_FallbackFrameRate = 60.0f;
+static constexpr f32 s_FallbackDeltaSeconds = 1.0f / s_FallbackFrameRate;
 static constexpr f32 s_DefaultFramebufferScale = 1.0f;
 
 

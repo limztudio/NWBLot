@@ -28,6 +28,9 @@ inline constexpr u32 s_MeshletConeFlagShift = NWB_MESHLET_CONE_FLAG_SHIFT;
 inline constexpr u32 s_MeshletPackedByteBits = NWB_MESHLET_PACKED_BYTE_BITS;
 inline constexpr u32 s_MeshletPackedByteMask = NWB_MESHLET_PACKED_BYTE_MASK;
 inline constexpr u32 s_MeshletConeAxisFallback = NWB_MESHLET_CONE_AXIS_FALLBACK;
+inline constexpr f32 s_MeshletOctEncodeBias = 0.5f;
+inline constexpr f32 s_MeshletOctDecodeScale = 2.0f;
+inline constexpr f32 s_MeshletOctDecodeBias = 1.0f;
 inline constexpr f32 s_MeshletConeAxisLengthEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_EPSILON);
 inline constexpr f32 s_MeshletConeAxisLengthSquaredEpsilon = static_cast<f32>(NWB_MESHLET_CONE_AXIS_LENGTH_SQUARED_EPSILON);
 inline constexpr f32 s_MeshletUnorm8Max = static_cast<f32>(NWB_MESHLET_UNORM8_MAX);
@@ -158,8 +161,8 @@ namespace MeshletRefDeltaWidth{
     octAxis = FoldMeshletConeOctAxis(VectorMultiply(octAxis, VectorReciprocal(lengthVector)));
 
     return
-        (PackMeshletConeUnorm8(VectorGetX(octAxis) * 0.5f + 0.5f) << s_MeshletConeAxisXShift)
-        | (PackMeshletConeUnorm8(VectorGetY(octAxis) * 0.5f + 0.5f) << s_MeshletConeAxisYShift)
+        (PackMeshletConeUnorm8(VectorGetX(octAxis) * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias) << s_MeshletConeAxisXShift)
+        | (PackMeshletConeUnorm8(VectorGetY(octAxis) * s_MeshletOctEncodeBias + s_MeshletOctEncodeBias) << s_MeshletConeAxisYShift)
     ;
 }
 
@@ -169,8 +172,8 @@ namespace MeshletRefDeltaWidth{
 
 [[nodiscard]] NWB_INLINE SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){
     SIMDVector axis = VectorSet(
-        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * 2.0f - 1.0f,
-        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * 2.0f - 1.0f,
+        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
+        UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
         0.0f,
         0.0f
     );

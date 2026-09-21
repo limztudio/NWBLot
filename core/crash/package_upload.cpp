@@ -34,6 +34,8 @@ inline constexpr long s_CrashUploadConnectTimeoutMilliseconds = 1000L;
 inline constexpr long s_CrashUploadTimeoutMilliseconds = 5000L;
 inline constexpr long s_HttpSuccessStatusBegin = 200L;
 inline constexpr long s_HttpSuccessStatusEnd = 300L;
+inline constexpr char s_SafeNameDigitFirst = '0';
+inline constexpr char s_SafeNameDigitLast = '9';
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -112,7 +114,7 @@ static bool IsSafePackageName(ArenaT& arena, const ::Path<ArenaT>& path){
         const bool ok =
             (ch >= 'a' && ch <= 'z')
             || (ch >= 'A' && ch <= 'Z')
-            || (ch >= '0' && ch <= '9')
+            || (ch >= s_SafeNameDigitFirst && ch <= s_SafeNameDigitLast)
             || ch == '-'
             || ch == '_'
             || ch == '.'

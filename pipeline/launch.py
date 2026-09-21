@@ -23,6 +23,7 @@ import launcher as ROOT_LAUNCHER  # noqa: E402
 TARGET = "nwb_pipeline"
 EXIT_SUCCESS = 0
 EXIT_FAILURE = 1
+CACHE_KEY_HEX_DIGITS = 16
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -161,8 +162,8 @@ def cook(options: argparse.Namespace) -> None:
     configuration = settings.config if options.configuration is None else options.configuration
     output = resolve_path(repo_root, options.output)
     cache = resolve_path(repo_root, options.cache_directory or Path("__build_obj/asset_cache"))
-    output_key = hashlib.sha256(str(output).encode("utf-8")).hexdigest()[:16]
-    configuration_key = hashlib.sha256(configuration.encode("utf-8")).hexdigest()[:16]
+    output_key = hashlib.sha256(str(output).encode("utf-8")).hexdigest()[:CACHE_KEY_HEX_DIGITS]
+    configuration_key = hashlib.sha256(configuration.encode("utf-8")).hexdigest()[:CACHE_KEY_HEX_DIGITS]
     built = resolve_path(repo_root, options.build_directory) if options.build_directory else cache / "pipeline" / configuration_key / output_key
 
     env = ROOT_LAUNCHER.build_environment(options)

@@ -18,6 +18,27 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_cpu_scheduler_fairness{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u64 s_BackgroundAdmissionPeriod = 32u;
+inline constexpr u64 s_BackgroundAdmissionTick = 31u;
+inline constexpr u64 s_NormalAdmissionPeriod = 8u;
+inline constexpr u64 s_NormalAdmissionTick = 7u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 CpuTaskScheduler::TaskNode::TaskNode(Alloc::GlobalArena& arena)
     : dependents(arena)
     , olderCanceledGenerations(arena)
@@ -358,7 +379,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
 )noexcept{
     // Periodically admit background and normal work even while critical producers keep publishing.
     const u64 dispatch = m_dispatchCount;
-    const usize firstPriority = dispatch % 32u == 31u ? 2u : (dispatch % 8u == 7u ? 1u : 0u);
+    const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick ? 2u : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? 1u : 0u);
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
     const usize costs[4] = { 3u, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? 2u : 1u };
     for(usize pass = 0u; pass < 3u; ++pass){

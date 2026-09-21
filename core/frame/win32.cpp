@@ -57,6 +57,10 @@ static constexpr u32 s_LowSurrogateStart = 0xdc00u;
 static constexpr u32 s_LowSurrogateEnd = 0xdfffu;
 static constexpr u32 s_SupplementaryPlaneCodePointBase = 0x10000u;
 static constexpr usize s_SurrogatePayloadBitCount = 10u;
+static constexpr u32 s_AsciiDigitFirst = '0';
+static constexpr u32 s_AsciiDigitLast = '9';
+static constexpr u32 s_AsciiUpperFirst = 'A';
+static constexpr u32 s_AsciiUpperLast = 'Z';
 
 
 static HMODULE GetUser32Module(){
@@ -175,11 +179,11 @@ static i32 TranslateNavigationKey(i32 extendedKey, i32 keypadKey, LPARAM lParam)
 static i32 TranslateKey(WPARAM wParam, LPARAM lParam){
     const u32 vk = static_cast<u32>(wParam);
 
-    if(vk >= '0' && vk <= '9')
-        return static_cast<i32>(Key::Number0 + (vk - '0'));
+    if(vk >= s_AsciiDigitFirst && vk <= s_AsciiDigitLast)
+        return static_cast<i32>(Key::Number0 + (vk - s_AsciiDigitFirst));
 
-    if(vk >= 'A' && vk <= 'Z')
-        return static_cast<i32>(Key::A + (vk - 'A'));
+    if(vk >= s_AsciiUpperFirst && vk <= s_AsciiUpperLast)
+        return static_cast<i32>(Key::A + (vk - s_AsciiUpperFirst));
 
     if(vk >= VK_F1 && vk <= VK_F24)
         return static_cast<i32>(Key::F1 + (vk - VK_F1));

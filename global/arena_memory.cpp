@@ -37,6 +37,8 @@ namespace __hidden_arena_memory{
 
 
 inline constexpr usize s_OwnerBucketCount = 256u;
+inline constexpr usize s_HeapShardPadBytes = 80u;
+inline constexpr usize s_HeapShardMinBytes = 128u;
 constinit ArenaMemoryOwnerRecord s_HeapBacking{
     .ownerName = Name("core/alloc/heap_backing"),
     .source = ArenaMemorySource::HeapBacking,
@@ -54,9 +56,9 @@ struct HeapMemoryShard{
     const HeapMemoryShard* next = nullptr;
 
     // Separate different threads' writable counters even when CRT allocations have only ordinary alignment.
-    u8 padding[80u] = {};
+    u8 padding[s_HeapShardPadBytes] = {};
 };
-static_assert(sizeof(HeapMemoryShard) >= 128u);
+static_assert(sizeof(HeapMemoryShard) >= s_HeapShardMinBytes);
 
 constinit HeapMemoryShard s_HeapFallback;
 constinit Atomic<const HeapMemoryShard*> s_HeapHead{ &s_HeapFallback };

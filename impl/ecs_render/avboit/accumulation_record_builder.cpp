@@ -24,6 +24,31 @@
 
 NWB_IMPL_BEGIN
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_avboit_accumulation_record{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr usize s_ResourceBaseCount = 12u;
+static constexpr usize s_StreamUseCount = 7u;
+static constexpr usize s_CsgIntervalUseCount = 4u;
+static constexpr usize s_EmulationBaseCount = 4u;
+static constexpr usize s_EmulationPlanUseCount = 8u;
+static constexpr usize s_SharedGenerateUseCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -196,9 +221,9 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
     Core::Alloc::ScratchArena accumulationResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationResourceUses{ accumulationResourceScratch };
     accumulationResourceUses.reserve(
-        12u
-        + (inputs.streamsUploaded ? 7u : 0u)
-        + (accumulationCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+        __hidden_avboit_accumulation_record::s_ResourceBaseCount
+        + (inputs.streamsUploaded ? __hidden_avboit_accumulation_record::s_StreamUseCount : 0u)
+        + (accumulationCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_accumulation_record::s_CsgIntervalUseCount : 0u)
     );
     accumulationResourceUses.push_back(ReadUse(inputs.albedo));
     accumulationResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -334,7 +359,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             accumulationResourceScratch
         };
         accumulationComputeEmulationResourceUses.reserve(
-            4u + (inputs.csgComputeEmulationPlanCaptured ? 8u : 0u)
+            __hidden_avboit_accumulation_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_accumulation_record::s_EmulationPlanUseCount : 0u)
         );
         accumulationComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         accumulationComputeEmulationResourceUses.push_back(
@@ -438,7 +463,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedGenerateResourceUses{
             accumulationResourceScratch
         };
-        accumulationSharedGenerateResourceUses.reserve(5u);
+        accumulationSharedGenerateResourceUses.reserve(__hidden_avboit_accumulation_record::s_SharedGenerateUseCount);
         accumulationSharedGenerateResourceUses.push_back(ReadUse(
             inputs.meshView,
             Core::ResourceStates::ConstantBuffer

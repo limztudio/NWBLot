@@ -115,6 +115,22 @@ void GpuGraphSubmissionTransaction::SubmissionWriterReservation::reset()noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_submission_gate{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u32 s_WriterBit = 1u << 31u;
+inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
 thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
 
 
@@ -123,8 +139,8 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
     const SubmissionOperationMode mode,
     const GpuRecordedGraph::ArtifactOperation* const borrowedArtifact
 )noexcept{
-    constexpr u32 writerBit = 1u << 31u;
-    constexpr u32 readerMask = writerBit - 1u;
+    constexpr u32 s_SubmissionGateWriterBit = __hidden_submission_gate::s_WriterBit;
+    constexpr u32 s_SubmissionGateReaderMask = __hidden_submission_gate::s_ReaderMask;
     for(const SubmissionOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_transaction == &transaction)
             return;
@@ -160,7 +176,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         u32 expectedState = 0u;
         while(!transaction.m_submissionGateState.compare_exchange_strong(
             expectedState,
-            writerBit,
+            s_SubmissionGateWriterBit,
             MemoryOrder::acq_rel,
             MemoryOrder::acquire
         )){
@@ -180,11 +196,11 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
                 continue;
             }
             u32 operationState = transaction.m_submissionGateState.load(MemoryOrder::acquire);
-            if((operationState & writerBit) != 0u){
+            if((operationState & s_SubmissionGateWriterBit) != 0u){
                 transaction.m_submissionGateState.wait(operationState, MemoryOrder::acquire);
                 continue;
             }
-            if((operationState & readerMask) == readerMask){
+            if((operationState & s_SubmissionGateReaderMask) == s_SubmissionGateReaderMask){
                 NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership overflowed");
                 TerminateInvariant();
             }
@@ -198,7 +214,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
             if(transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) == 0u)
                 break;
             const u32 previousState = transaction.m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-            if((previousState & readerMask) == 1u)
+            if((previousState & s_SubmissionGateReaderMask) == 1u)
                 transaction.m_submissionGateState.notify_all();
         }
     }
@@ -211,9 +227,9 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         }
         else{
             const u32 previousState = transaction.m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-            if((previousState & readerMask) == 0u)
+            if((previousState & s_SubmissionGateReaderMask) == 0u)
                 TerminateInvariant();
-            if((previousState & readerMask) == 1u)
+            if((previousState & s_SubmissionGateReaderMask) == 1u)
                 transaction.m_submissionGateState.notify_all();
         }
         return;
@@ -245,7 +261,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     if(m_composite)
         m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     if(m_exclusive){
-        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != (1u << 31u)){
+        if(m_transaction->m_submissionGateState.load(MemoryOrder::acquire) != __hidden_submission_gate::s_WriterBit){
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission writer operation lost its exact gate claim");
             TerminateInvariant();
         }
@@ -255,11 +271,11 @@ GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexce
     }
     else{
         const u32 previousState = m_transaction->m_submissionGateState.fetch_sub(1u, MemoryOrder::release);
-        if((previousState & ((1u << 31u) - 1u)) == 0u){
+        if((previousState & __hidden_submission_gate::s_ReaderMask) == 0u){
             NWB_FATAL_ASSERT_MSG(false, "GPU graph submission reader ownership underflowed");
             TerminateInvariant();
         }
-        if((previousState & ((1u << 31u) - 1u)) == 1u)
+        if((previousState & __hidden_submission_gate::s_ReaderMask) == 1u)
             m_transaction->m_submissionGateState.notify_all();
     }
 }

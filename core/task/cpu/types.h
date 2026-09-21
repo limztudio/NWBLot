@@ -60,7 +60,8 @@ struct CpuTaskSchedulerConfig{
 
     u32 workerCount = s_AutomaticWorkerCount;
     u32 reservedThreadCount = 1u;
-    usize profileEventCapacity = 4096u;
+    static constexpr usize s_DefaultProfileEventCapacity = 4096u;
+    usize profileEventCapacity = s_DefaultProfileEventCapacity;
     bool heterogeneous = true;
 };
 

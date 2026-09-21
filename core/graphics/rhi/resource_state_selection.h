@@ -38,6 +38,7 @@ public:
 
 private:
     static constexpr usize s_InlineCapacity = 32u;
+    static constexpr usize s_TextureIdentitySeed = 0x9e3779b97f4a7c15ull;
     static constexpr usize s_BytesPerEntry = sizeof(Entry) + sizeof(usize) * 2u;
 
     [[nodiscard]] static usize hashIdentity(void* resource, bool texture)noexcept;

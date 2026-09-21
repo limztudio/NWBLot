@@ -35,6 +35,8 @@ namespace __hidden_telemetry_frame_graph{
 );
 
 static constexpr f64 s_DoublePrecisionEpsilon = 2.2204460492503130808472633361816e-16;
+static constexpr f64 s_SubmissionRoundingLimit = 0.5;
+static constexpr f64 s_SubmissionRoundingScale = 2.0;
 inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStatisticsValidation");
 
 
@@ -960,11 +962,11 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
         return false;
 
     const f64 roundingFactor = static_cast<f64>(submissionCount) * s_DoublePrecisionEpsilon;
-    if(roundingFactor >= 0.5)
+    if(roundingFactor >= s_SubmissionRoundingLimit)
         return false;
     const f64 magnitude = lhs > rhs ? lhs : rhs;
     const f64 difference = lhs > rhs ? lhs - rhs : rhs - lhs;
-    return difference / magnitude <= (2.0 * roundingFactor) / (1.0 - roundingFactor);
+    return difference / magnitude <= (s_SubmissionRoundingScale * roundingFactor) / (1.0 - roundingFactor);
 }
 
 template<typename SubmissionStatistics>

@@ -20,12 +20,16 @@ namespace __hidden_frame_graph_contributor{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u64 s_OwnerNodeShift = 32u;
+inline constexpr u64 s_QueueIndexShift = 16u;
+
+
 [[nodiscard]] static u64 PhysicalQueueIdentity(const u32 ownerNodeIndex, const FrameGraphPhysicalQueueId queue)noexcept{
-    return (static_cast<u64>(ownerNodeIndex) << 32u) | (static_cast<u64>(queue.index) << 16u) | queue.deviceGeneration;
+    return (static_cast<u64>(ownerNodeIndex) << s_OwnerNodeShift) | (static_cast<u64>(queue.index) << s_QueueIndexShift) | queue.deviceGeneration;
 }
 
 [[nodiscard]] static u64 PacketIdentity(const u32 ownerNodeIndex, const u32 packetIndex)noexcept{
-    return (static_cast<u64>(ownerNodeIndex) << 32u) | packetIndex;
+    return (static_cast<u64>(ownerNodeIndex) << s_OwnerNodeShift) | packetIndex;
 }
 
 

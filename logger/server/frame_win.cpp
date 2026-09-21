@@ -99,6 +99,7 @@ struct MessageStore{
 static Frame* s_Frame = nullptr;
 static HFONT s_Font = nullptr;
 static HWND s_ListHwnd = nullptr;
+static constexpr int s_LogFontHeight = 10;
 
 // Points at the live Frame store; null outside Frame lifetime. Guarded by s_ListMutex.
 static MessageStore* s_Store = nullptr;
@@ -188,7 +189,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_CREATE:
         {
             s_Font = CreateFont(
-                10,
+                s_LogFontHeight,
                 0,
                 0, 0,
                 FW_NORMAL,

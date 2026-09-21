@@ -29,6 +29,7 @@ using namespace GpuTaskGraphCompilerDetail;
 
 
 inline constexpr usize s_InvalidAccess = Limit<usize>::s_Max;
+inline constexpr u64 s_EdgePairProducerShift = 32u;
 
 
 struct TrackedResourceAccess{
@@ -84,7 +85,7 @@ struct TrackedResourceAccessLists{
 
 struct DependencyPairHasher{
     [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
-        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> 32u));
+        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> s_EdgePairProducerShift));
         HashCombine(hash, static_cast<u32>(pairKey));
         return hash;
     }
@@ -360,7 +361,7 @@ bool GpuTaskGraphCompiler::analyze(
     outAnalysis.m_inferredEdges.reserve(expectedEdgeCount);
 
     const auto appendRawEdge = [&](const GpuTaskDependencyEdge& edge) -> DependencyPairIndices&{
-        const u64 pairKey = (static_cast<u64>(edge.producer.index) << 32u) | edge.consumer.index;
+        const u64 pairKey = (static_cast<u64>(edge.producer.index) << s_EdgePairProducerShift) | edge.consumer.index;
         auto [pair, inserted] = dependencyPairs.try_emplace(pairKey, DependencyPairIndices{ outAnalysis.m_edges.size() });
         if(inserted){
             outAnalysis.m_edges.push_back(edge);

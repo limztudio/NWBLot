@@ -23,6 +23,31 @@
 
 NWB_IMPL_BEGIN
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_avboit_extinction_record{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr usize s_ResourceBaseCount = 16u;
+static constexpr usize s_StreamUseCount = 7u;
+static constexpr usize s_CsgIntervalUseCount = 4u;
+static constexpr usize s_EmulationBaseCount = 4u;
+static constexpr usize s_EmulationPlanUseCount = 8u;
+static constexpr usize s_SharedGenerateUseCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -186,9 +211,9 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     Core::Alloc::ScratchArena extinctionResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionResourceUses{ extinctionResourceScratch };
     extinctionResourceUses.reserve(
-        16u
-        + (inputs.streamsUploaded ? 7u : 0u)
-        + (extinctionCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+        __hidden_avboit_extinction_record::s_ResourceBaseCount
+        + (inputs.streamsUploaded ? __hidden_avboit_extinction_record::s_StreamUseCount : 0u)
+        + (extinctionCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_extinction_record::s_CsgIntervalUseCount : 0u)
     );
     // Keep the full raster contract on every route so crossings retain hazards and lowering.
     extinctionResourceUses.push_back(ReadUse(inputs.albedo));
@@ -318,7 +343,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             extinctionResourceScratch
         };
         extinctionComputeEmulationResourceUses.reserve(
-            4u + (inputs.csgComputeEmulationPlanCaptured ? 8u : 0u)
+            __hidden_avboit_extinction_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_extinction_record::s_EmulationPlanUseCount : 0u)
         );
         extinctionComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         extinctionComputeEmulationResourceUses.push_back(
@@ -422,7 +447,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedGenerateResourceUses{
             extinctionResourceScratch
         };
-        extinctionSharedGenerateResourceUses.reserve(5u);
+        extinctionSharedGenerateResourceUses.reserve(__hidden_avboit_extinction_record::s_SharedGenerateUseCount);
         extinctionSharedGenerateResourceUses.push_back(ReadUse(
             inputs.meshView,
             Core::ResourceStates::ConstantBuffer

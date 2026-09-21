@@ -50,8 +50,10 @@ struct VolumeIndexEntryDisk{
     u64 size;
 };
 
-static_assert(sizeof(VolumeHeaderDisk) == 48, "VolumeHeaderDisk size mismatch");
-static_assert(sizeof(VolumeIndexEntryDisk) == 80, "VolumeIndexEntryDisk size mismatch");
+static constexpr usize s_VolumeHeaderDiskBytes = 48u;
+static_assert(sizeof(VolumeHeaderDisk) == s_VolumeHeaderDiskBytes, "VolumeHeaderDisk size mismatch");
+static constexpr usize s_VolumeIndexEntryDiskBytes = 80u;
+static_assert(sizeof(VolumeIndexEntryDisk) == s_VolumeIndexEntryDiskBytes, "VolumeIndexEntryDisk size mismatch");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

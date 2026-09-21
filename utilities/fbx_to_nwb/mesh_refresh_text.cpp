@@ -58,10 +58,14 @@ using TextWrite::s_OutputFloatPrecision;
     return offset;
 }
 
+inline constexpr char s_DigitFirst = '0';
+inline constexpr char s_DigitLast = '9';
+
+
 [[nodiscard]] bool IsIdentifierChar(const char c){
     return (c >= 'a' && c <= 'z')
         || (c >= 'A' && c <= 'Z')
-        || (c >= '0' && c <= '9')
+        || (c >= s_DigitFirst && c <= s_DigitLast)
         || c == '_'
     ;
 }

@@ -23,6 +23,14 @@ namespace __hidden_skinning_graph_resource_uses{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr usize s_DeformationUseCapacity = 13u;
+static constexpr usize s_PostDispatchUseCapacity = 11u;
+static constexpr usize s_LocalBoundsUseCapacity = 3u;
+static constexpr usize s_FinalizerUseCapacity = 6u;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct ResourceHash{
     [[nodiscard]] usize operator()(const Core::GpuGraphResourceId resource)const noexcept{
         usize hash = Hasher<u64>{}(resource.generation);
@@ -151,10 +159,10 @@ bool BuildMeshSkinningGraphResourceUses(
         return false;
     }
 
-    ResourceUseCollector<13u> deformation(scratchArena);
-    ResourceUseCollector<11u> postDispatch(scratchArena);
-    ResourceUseCollector<3u> localBounds(scratchArena);
-    ResourceUseCollector<6u> finalizer(scratchArena);
+    ResourceUseCollector<s_DeformationUseCapacity> deformation(scratchArena);
+    ResourceUseCollector<s_PostDispatchUseCapacity> postDispatch(scratchArena);
+    ResourceUseCollector<s_LocalBoundsUseCapacity> localBounds(scratchArena);
+    ResourceUseCollector<s_FinalizerUseCapacity> finalizer(scratchArena);
     for(usize planIndex = 0u; planIndex < planCount; ++planIndex){
         const MeshSkinningGraphDispatchPlan& plan = plans[planIndex];
         if(!plan.hasActiveSkin)

@@ -24,6 +24,31 @@
 
 NWB_IMPL_BEGIN
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_avboit_occupancy_record{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static constexpr usize s_ResourceBaseCount = 13u;
+static constexpr usize s_StreamUseCount = 7u;
+static constexpr usize s_CsgIntervalUseCount = 4u;
+static constexpr usize s_EmulationBaseCount = 4u;
+static constexpr usize s_EmulationPlanUseCount = 8u;
+static constexpr usize s_SharedGenerateUseCount = 5u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -192,9 +217,9 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     Core::Alloc::ScratchArena avboitPreResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitPreResourceUses{ avboitPreResourceScratch };
     avboitPreResourceUses.reserve(
-        13u
-        + (occupancyPayload.occupancyStreamsUploaded ? 7u : 0u)
-        + (occupancyCsgIntervalSampleImageStatesGraphOwned ? 4u : 0u)
+        __hidden_avboit_occupancy_record::s_ResourceBaseCount
+        + (occupancyPayload.occupancyStreamsUploaded ? __hidden_avboit_occupancy_record::s_StreamUseCount : 0u)
+        + (occupancyCsgIntervalSampleImageStatesGraphOwned ? __hidden_avboit_occupancy_record::s_CsgIntervalUseCount : 0u)
     );
     avboitPreResourceUses.push_back(ReadUse(inputs.albedo));
     avboitPreResourceUses.push_back(ReadUse(inputs.normal, Core::ResourceStates::ShaderResource));
@@ -322,7 +347,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             occupancyComputeEmulationResourceScratch
         };
         occupancyComputeEmulationResourceUses.reserve(
-            4u + (inputs.csgComputeEmulationPlanCaptured ? 8u : 0u)
+            __hidden_avboit_occupancy_record::s_EmulationBaseCount + (inputs.csgComputeEmulationPlanCaptured ? __hidden_avboit_occupancy_record::s_EmulationPlanUseCount : 0u)
         );
         occupancyComputeEmulationResourceUses.push_back(ReadUse(inputs.meshView, Core::ResourceStates::ConstantBuffer));
         occupancyComputeEmulationResourceUses.push_back(
@@ -438,7 +463,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedGenerateResourceUses{
             avboitPreResourceScratch
         };
-        occupancySharedGenerateResourceUses.reserve(5u);
+        occupancySharedGenerateResourceUses.reserve(__hidden_avboit_occupancy_record::s_SharedGenerateUseCount);
         occupancySharedGenerateResourceUses.push_back(ReadUse(
             meshView,
             Core::ResourceStates::ConstantBuffer

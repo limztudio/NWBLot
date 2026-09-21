@@ -55,6 +55,9 @@ def resolve_ctest_command():
     return [ctest_base]
 
 
+CTEST_NO_TESTS_EXIT_CODE = 8
+
+
 def run_command(command, cwd=None):
     log("$ {}".format(" ".join(command)))
     completed = subprocess.run(command, cwd=cwd)
@@ -150,7 +153,7 @@ def run_workloads(arguments):
             ctest + ["--test-dir", arguments.build_dir, "-C", arguments.config, "-R", regex, "--output-on-failure"],
             cwd=arguments.source_dir,
         )
-        if rc == 8:
+        if rc == CTEST_NO_TESTS_EXIT_CODE:
             log("WARNING: ctest found NO tests matching '{}' (GUI sidecars will be missing)".format(regex))
         elif rc != 0:
             log("WARNING: ctest returned {} for '{}' (GUI run failed/skipped; its sidecars may be missing)".format(rc, regex))

@@ -14,6 +14,31 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_mesh_source_streams{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr usize s_VertexRefComponentCountWithSkin = 6u;
+inline constexpr usize s_VertexRefComponentCountWithoutSkin = 5u;
+inline constexpr AStringView s_VertexRefPositionName = "position";
+inline constexpr AStringView s_VertexRefNormalName = "normal";
+inline constexpr AStringView s_VertexRefTangentName = "tangent";
+inline constexpr AStringView s_VertexRefUvName = "uv0";
+inline constexpr AStringView s_VertexRefColorName = "color";
+inline constexpr AStringView s_VertexRefSkinName = "skin";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool MeshCookSourceStreams::ParseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
@@ -34,7 +59,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
         return false;
 
     const auto& list = field->asList();
-    const usize expectedComponentCount = includeSkin ? 6u : 5u;
+    const usize expectedComponentCount = includeSkin ? __hidden_mesh_source_streams::s_VertexRefComponentCountWithSkin : __hidden_mesh_source_streams::s_VertexRefComponentCountWithoutSkin;
     outVertexRefs.reserve(list.size());
     for(usize vertexRefIndex = 0u; vertexRefIndex < list.size(); ++vertexRefIndex){
         const Core::Metascript::Value& value = list[vertexRefIndex];
@@ -52,12 +77,12 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
         const auto& components = value.asList();
         const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, "vertex_refs", vertexRefIndex);
         const AStringView componentNames[] = {
-            "position",
-            "normal",
-            "tangent",
-            "uv0",
-            "color",
-            "skin",
+            __hidden_mesh_source_streams::s_VertexRefPositionName,
+            __hidden_mesh_source_streams::s_VertexRefNormalName,
+            __hidden_mesh_source_streams::s_VertexRefTangentName,
+            __hidden_mesh_source_streams::s_VertexRefUvName,
+            __hidden_mesh_source_streams::s_VertexRefColorName,
+            __hidden_mesh_source_streams::s_VertexRefSkinName,
         };
         u32* const componentValues[] = {
             &ref.position,

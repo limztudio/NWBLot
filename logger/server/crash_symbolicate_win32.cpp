@@ -28,6 +28,14 @@ namespace LoggerCrashSymbolicateDetail{
 using CrashBytes = Vector<u8, LogArena>;
 namespace CrashNames = ::NWB::Core::Crash::PackageNames;
 inline constexpr u32 s_MaxWindowsStackFrames = 128u;
+inline constexpr char s_HexDigitFirst = '0';
+inline constexpr char s_HexDigitLast = '9';
+inline constexpr char s_HexLowerFirst = 'a';
+inline constexpr char s_HexLowerLast = 'f';
+inline constexpr char s_HexUpperFirst = 'A';
+inline constexpr char s_HexUpperLast = 'F';
+inline constexpr u64 s_HexLetterOffset = 10u;
+inline constexpr u64 s_HexRadixBits = 4u;
 
 struct DumpMemoryRange{
     u64 begin = 0u;
@@ -317,15 +325,15 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
     u64 value = 0u;
     for(const char c : hexText){
         u64 digit;
-        if(c >= '0' && c <= '9')
-            digit = static_cast<u64>(c - '0');
-        else if(c >= 'a' && c <= 'f')
-            digit = static_cast<u64>(c - 'a') + 10u;
-        else if(c >= 'A' && c <= 'F')
-            digit = static_cast<u64>(c - 'A') + 10u;
+        if(c >= s_HexDigitFirst && c <= s_HexDigitLast)
+            digit = static_cast<u64>(c - s_HexDigitFirst);
+        else if(c >= s_HexLowerFirst && c <= s_HexLowerLast)
+            digit = static_cast<u64>(c - s_HexLowerFirst) + s_HexLetterOffset;
+        else if(c >= s_HexUpperFirst && c <= s_HexUpperLast)
+            digit = static_cast<u64>(c - s_HexUpperFirst) + s_HexLetterOffset;
         else
             break;
-        value = (value << 4) | digit;
+        value = (value << s_HexRadixBits) | digit;
     }
     return value;
 }

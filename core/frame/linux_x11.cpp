@@ -65,6 +65,7 @@ static constexpr u32 s_TextInputControlCodePointLimit = 32u;
 static constexpr u32 s_TextInputDeleteCodePoint = 127u;
 // Idle throttle while hidden or unfocused; mirrors the Wayland inactive timeout.
 static constexpr i32 s_InactivePollSleepMs = 10;
+static constexpr int s_X11CardinalPropertyFormatBits = 32;
 
 static bool s_DetectableAutoRepeat = false;
 static bool s_KeyStates[s_KeyStateCount] = {};
@@ -419,7 +420,7 @@ bool InitX11Frame(Frame& frame){
                 GetX11Window(frameData),
                 pidAtom,
                 XA_CARDINAL,
-                32,
+                s_X11CardinalPropertyFormatBits,
                 PropModeReplace,
                 reinterpret_cast<const unsigned char*>(&pidValue),
                 1

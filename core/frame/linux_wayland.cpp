@@ -52,6 +52,7 @@ static constexpr u32 s_TextInputControlCodePointLimit = 32u;
 static constexpr u32 s_TextInputDeleteCodePoint = 127u;
 static constexpr f64 s_WaylandScrollAxisUnit = 120.0;
 static constexpr i32 s_MillisecondsPerSecond = 1000;
+static constexpr u32 s_EvdevToXkbKeycodeOffset = 8u;
 static constexpr i32 s_MinKeyRepeatStepMs = 1;
 static constexpr i32 s_InactivePollTimeoutMs = 10;
 static constexpr u32 s_WaylandCompositorBindVersion = 4u;
@@ -669,7 +670,7 @@ static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 tim
     if(!context.xkbState)
         return;
 
-    const u32 keycode = key + 8u;
+    const u32 keycode = key + s_EvdevToXkbKeycodeOffset;
     const xkb_keysym_t keySym = xkb_state_key_get_one_sym(context.xkbState, keycode);
     const i32 translatedKey = TranslateKey(keySym);
 

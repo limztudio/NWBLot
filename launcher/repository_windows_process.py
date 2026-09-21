@@ -24,6 +24,10 @@ INFINITE_TIMEOUT_LIMIT = 0xFFFFFFFE
 FORCED_EXIT_CODE = 1
 MAX_WINDOWS_IMAGE_PATH = 32768
 MILLISECONDS_PER_SECOND = 1000.0
+UNC_DEVICE_PREFIX = "\\\\?\\"
+UNC_UNC_PREFIX = "\\\\?\\unc\\"
+UNC_UNC_TRIM = 8
+UNC_DEVICE_TRIM = 4
 PROCESS_ENUM_INITIAL_CAPACITY = 1024
 PROCESS_ENUM_CAPACITY_GROWTH_FACTOR = 2
 QUERY_IMAGE_PATH_UNUSED_FLAGS = 0
@@ -166,10 +170,10 @@ class WindowsProcessApi:
 def normalize_windows_image_path(path, resolve_path: Optional[Callable[[str], str]] = None) -> str:
     resolver = resolve_path or os.path.realpath
     resolved = ntpath.normcase(ntpath.normpath(os.fspath(resolver(os.fspath(path)))))
-    if resolved.startswith("\\\\?\\unc\\"):
-        return "\\\\" + resolved[8:]
-    if resolved.startswith("\\\\?\\"):
-        return resolved[4:]
+    if resolved.startswith(UNC_UNC_PREFIX):
+        return "\\\\" + resolved[UNC_UNC_TRIM:]
+    if resolved.startswith(UNC_DEVICE_PREFIX):
+        return resolved[UNC_DEVICE_TRIM:]
     return resolved
 
 

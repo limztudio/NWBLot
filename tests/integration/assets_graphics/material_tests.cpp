@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -1146,7 +1149,6 @@ asset.shaders = {
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, materialEntry, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
-#else
 #endif
 }
 
@@ -1175,7 +1177,6 @@ asset.shader_variant = "default";
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
     EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, materialEntry, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'refractive' is required and must be 0 or 1")));
-#else
 #endif
 }
 
@@ -1196,7 +1197,6 @@ TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
 
     expectRejected(AssetsGraphicsFixture::s_ExplicitTransparentMaterialMeta);
     expectRejected(AssetsGraphicsFixture::s_ExplicitRefractiveMaterialMeta);
-#else
 #endif
 }
 
@@ -1990,8 +1990,6 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
 TEST(AssetsGraphics, MaterialBindCookIntegration){
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
@@ -2402,7 +2400,6 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
 
     errorCode.clear();
     EXPECT_TRUE(RemoveAllIfExists(interfaceIdentityMismatchRoot, errorCode));
-
 #endif
 }
 
@@ -2582,7 +2579,6 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-#else
 #endif
 }
 

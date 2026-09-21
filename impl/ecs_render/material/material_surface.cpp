@@ -293,16 +293,7 @@ bool RendererMaterialSystem::resolveMaterialResourceReferences(MaterialSurfaceIn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo){
-    if(materialInfo.resourceFixturesResolved)
-        return true;
-
-    // The asset pass above already patched per-material slots into constantTypedBytes; only patch static fixture slots here.
-    if(materialInfo.resourceReferences.empty()){
-        materialInfo.resourceFixturesResolved = true;
-        return true;
-    }
-
+bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     RendererMaterialResourceFixtureState& fixtures = m_materialState.m_resourceFixtures;
     Core::GraphicsRuntime& graphicsModule = m_graphics;
     Core::GpuDescriptorHeap& heap = graphicsModule.getDevice().getDescriptorHeap();
@@ -316,67 +307,85 @@ bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo
         && fixtures.checkerRgba8HeapHandle.valid()
         && fixtures.linearClampHeapHandle.valid()
     ;
-    if(!fixtureCacheReady){
+    if(fixtureCacheReady)
+        return true;
+
+    __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+    Core::TextureDesc textureDesc;
+    textureDesc
+        .setWidth(__hidden_material_surface::s_FixtureCheckerWidth)
+        .setHeight(__hidden_material_surface::s_FixtureCheckerHeight)
+        .setFormat(Core::Format::RGBA8_UNORM)
+        .setInitialState(Core::ResourceStates::ShaderResource)
+        .setKeepInitialState(true)
+        // Material surface hooks can run in the optional AsyncCompute trace/GI packets as well as Graphics.
+        // The fixture is immutable after its Graphics upload, so concurrent sharing avoids a permanent ownership handoff for this common sampled input.
+        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+        .setName(Name(MaterialResourceFixture::s_CheckerRgba8))
+    ;
+    Core::GraphicsRuntime::TextureSetupDesc textureSetup;
+    textureSetup.textureDesc = textureDesc;
+    textureSetup.data = __hidden_material_surface::s_CheckerRgba8Pixels;
+    textureSetup.uploadDataSize = sizeof(__hidden_material_surface::s_CheckerRgba8Pixels);
+    textureSetup.rowPitch = __hidden_material_surface::s_FixtureCheckerWidth * sizeof(u32);
+    textureSetup.depthPitch = sizeof(__hidden_material_surface::s_CheckerRgba8Pixels);
+    textureSetup.queue = Core::CommandQueue::Graphics;
+    fixtures.checkerRgba8Texture = graphicsModule.setupTexture(textureSetup);
+    if(!fixtures.checkerRgba8Texture){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material checker texture fixture"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
-        Core::TextureDesc textureDesc;
-        textureDesc
-            .setWidth(__hidden_material_surface::s_FixtureCheckerWidth)
-            .setHeight(__hidden_material_surface::s_FixtureCheckerHeight)
-            .setFormat(Core::Format::RGBA8_UNORM)
-            .setInitialState(Core::ResourceStates::ShaderResource)
-            .setKeepInitialState(true)
-            // Material surface hooks can run in the optional AsyncCompute trace/GI packets as well as Graphics.
-            // The fixture is immutable after its Graphics upload, so concurrent sharing avoids a permanent ownership handoff for this common sampled input.
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setName(Name(MaterialResourceFixture::s_CheckerRgba8))
-        ;
-        Core::GraphicsRuntime::TextureSetupDesc textureSetup;
-        textureSetup.textureDesc = textureDesc;
-        textureSetup.data = __hidden_material_surface::s_CheckerRgba8Pixels;
-        textureSetup.uploadDataSize = sizeof(__hidden_material_surface::s_CheckerRgba8Pixels);
-        textureSetup.rowPitch = __hidden_material_surface::s_FixtureCheckerWidth * sizeof(u32);
-        textureSetup.depthPitch = sizeof(__hidden_material_surface::s_CheckerRgba8Pixels);
-        textureSetup.queue = Core::CommandQueue::Graphics;
-        fixtures.checkerRgba8Texture = graphicsModule.setupTexture(textureSetup);
-        if(!fixtures.checkerRgba8Texture){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material checker texture fixture"));
-            __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
-            return false;
-        }
-        Core::SamplerDesc samplerDesc;
-        samplerDesc.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
-        fixtures.linearClampSampler = graphicsModule.getDevice().createSampler(samplerDesc);
-        if(!fixtures.linearClampSampler){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material clamp sampler fixture"));
-            __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
-            return false;
-        }
-        fixtures.checkerRgba8HeapHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-        if(
-            !fixtures.checkerRgba8HeapHandle.valid()
-            || !heap.write(fixtures.checkerRgba8HeapHandle, Core::DescriptorWriteItem::Texture_SRV(
-                0u,
-                fixtures.checkerRgba8Texture.get(),
-                Core::Format::RGBA8_UNORM,
-                Core::s_AllSubresources,
-                Core::TextureDimension::Texture2D
-            ))
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material checker texture fixture in the descriptor heap"));
-            __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
-            return false;
-        }
-        fixtures.linearClampHeapHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
-        if(
-            !fixtures.linearClampHeapHandle.valid()
-            || !heap.write(fixtures.linearClampHeapHandle, Core::DescriptorWriteItem::Sampler(0u, fixtures.linearClampSampler.get()))
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
-            __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
-            return false;
-        }
+        return false;
+    }
+    Core::SamplerDesc samplerDesc;
+    samplerDesc.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
+    fixtures.linearClampSampler = graphicsModule.getDevice().createSampler(samplerDesc);
+    if(!fixtures.linearClampSampler){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create material clamp sampler fixture"));
+        __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+        return false;
+    }
+    fixtures.checkerRgba8HeapHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
+    if(
+        !fixtures.checkerRgba8HeapHandle.valid()
+        || !heap.write(fixtures.checkerRgba8HeapHandle, Core::DescriptorWriteItem::Texture_SRV(
+            0u,
+            fixtures.checkerRgba8Texture.get(),
+            Core::Format::RGBA8_UNORM,
+            Core::s_AllSubresources,
+            Core::TextureDimension::Texture2D
+        ))
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material checker texture fixture in the descriptor heap"));
+        __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+        return false;
+    }
+    fixtures.linearClampHeapHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
+    if(
+        !fixtures.linearClampHeapHandle.valid()
+        || !heap.write(fixtures.linearClampHeapHandle, Core::DescriptorWriteItem::Sampler(0u, fixtures.linearClampSampler.get()))
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
+        __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
+        return false;
+    }
+    return true;
+}
+
+bool RendererMaterialSystem::resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo){
+    if(materialInfo.resourceFixturesResolved)
+        return true;
+
+    // Fixture creation lives in resource/target setup (ensureMaterialResourceFixtures); this preparation
+    // step only consumes the existing layouts/handles and fails if setup is missing.
+    if(materialInfo.resourceReferences.empty()){
+        materialInfo.resourceFixturesResolved = true;
+        return true;
     }
 
+    if(!ensureMaterialResourceFixtures())
+        return false;
+
+    RendererMaterialResourceFixtureState& fixtures = m_materialState.m_resourceFixtures;
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         // Per-material asset paths are patched by the asset pass above; only the static slice lands here.
         if(!resourceReference.fixtureName)
@@ -582,10 +591,13 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
     if(!materialInfo.resourceReferencesResolved)
         return false;
 
+    // Prepared-only draw/pipeline paths consume existing layouts/handles and fail if setup is missing;
+    // fixture creation belongs to resource/target setup (ensureMaterialResourceFixtures via the
+    // createMaterialSurfaceInfo preparation path), never to update()/render()/draw submission.
+    if(!materialInfo.resourceFixturesResolved)
+        return false;
     outInfo = &materialInfo;
-    // A device reset keeps the CPU material cache but deliberately clears its descriptor-backed fixture slots.
-    // Find-only paths (notably the shadow/trace material context) must not observe those zeroed words before a visible-material creation pass happens to revisit the cache.
-    return resolveMaterialResourceFixtures(*outInfo);
+    return true;
 }
 
 bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(

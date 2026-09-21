@@ -118,6 +118,9 @@ public:
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
     [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
+    // Fixture texture/sampler/descriptor creation for resource/target setup. Draw submission and
+    // material pipeline hot paths must only consume the existing handles and fail if setup is missing.
+    [[nodiscard]] bool ensureMaterialResourceFixtures();
     [[nodiscard]] bool resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo);
     void releaseMaterialResourceFixtures();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();

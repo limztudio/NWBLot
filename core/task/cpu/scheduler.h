@@ -179,13 +179,8 @@ public:
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
     [[nodiscard]] u32 workerThreadCount()const noexcept{ return m_workerCount; }
     [[nodiscard]] bool isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
-    [[nodiscard]] usize currentWorkerIndex()const noexcept{
-        return s_execution && &s_execution->scheduler == this ? s_execution->workerIndex : 0u;
-    }
-
-    [[nodiscard]] CpuAffinity::Enum currentWorkerAffinity()const noexcept{
-        return s_execution && &s_execution->scheduler == this ? s_execution->affinity : CpuAffinity::Any;
-    }
+    [[nodiscard]] usize currentWorkerIndex()const noexcept{ return s_execution && &s_execution->scheduler == this ? s_execution->workerIndex : 0u; }
+    [[nodiscard]] CpuAffinity::Enum currentWorkerAffinity()const noexcept{ return s_execution && &s_execution->scheduler == this ? s_execution->affinity : CpuAffinity::Any; }
 
 
 public:
@@ -250,8 +245,7 @@ private:
         CpuAffinity::Enum affinity
     )const noexcept;
     void finishProfileLocked(const ProfileSample& sample, Timer end)noexcept;
-    // Shared DFS prologue for locked graph searches: roll the visit generation on wrap and clear the stack.
-    // Callers push their own roots and visit filters afterwards.
+    // Shared DFS prologue for locked graph searches: roll the visit generation on wrap and clear the stack. Callers push their own roots and visit filters afterwards.
     void beginLockedSearch()noexcept{
         if(++m_searchGeneration == 0u){
             for(u64& visit : m_searchVisits)

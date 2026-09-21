@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -38,10 +41,6 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-
-
 
 
 TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
@@ -278,11 +277,6 @@ static NWB::Impl::MeshletBounds MakeTestMeshletBounds(){
     };
 }
 
-#if defined(NWB_FINAL)
-
-
-#endif
-
 static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     NWB::Impl::Mesh mesh(testArena.arena, Name("tests/meshes/minimal_mesh"));
 
@@ -364,8 +358,6 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     );
     return mesh;
 }
-
-
 
 TEST(AssetsGraphics, MeshCodecRoundTrip){
     TestArena testArena;

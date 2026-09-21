@@ -258,6 +258,7 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
 
     GpuUploadBlobNode blob(m_arena);
     const u8* const sourceBytes = static_cast<const u8*>(data);
+    blob.bytes.reserve(byteSize);
     blob.bytes.assign(sourceBytes, sourceBytes + byteSize);
     if(blob.bytes.size() != byteSize)
         return {};

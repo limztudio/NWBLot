@@ -84,10 +84,12 @@ namespace ECSRenderDetail{
     MaterialPassDrawItems regularMeshDrawItems{ scratchArena };
     const MaterialPassDrawItems* regularDrawItemsForGbuffer = &opaqueDrawItems.regular;
     if(payload.regularSharedComputeEmulationDrawsGraphOwned){
+        regularMeshDrawItems.meshDrawItems.reserve(opaqueDrawItems.regular.meshDrawItems.size());
         regularMeshDrawItems.meshDrawItems.assign(
             opaqueDrawItems.regular.meshDrawItems.begin(),
             opaqueDrawItems.regular.meshDrawItems.end()
         );
+        regularMeshDrawItems.indexedDrawItems.reserve(opaqueDrawItems.regular.indexedDrawItems.size());
         regularMeshDrawItems.indexedDrawItems.assign(
             opaqueDrawItems.regular.indexedDrawItems.begin(),
             opaqueDrawItems.regular.indexedDrawItems.end()

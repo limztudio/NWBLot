@@ -457,6 +457,7 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> accumulationSharedRasterResourceUses{
             accumulationResourceScratch
         };
+        accumulationSharedRasterResourceUses.reserve(accumulationResourceUses.size() + 1u);
         accumulationSharedRasterResourceUses.assign(
             accumulationResourceUses.begin(),
             accumulationResourceUses.end()

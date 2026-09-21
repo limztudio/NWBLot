@@ -143,6 +143,7 @@ bool AvboitGeneratedGeometryReuse::capture(
     reset();
     if(!__hidden_generated_geometry_reuse::EligibleGroup(draws, instances, frameBindings, pass, m_arena))
         return false;
+    m_draws.reserve(draws.regular.computeDrawItems.size());
     m_draws.assign(draws.regular.computeDrawItems.begin(), draws.regular.computeDrawItems.end());
     m_instances.reserve(m_draws.size());
     for(const MaterialPassDrawItem& draw : m_draws)

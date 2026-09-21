@@ -78,6 +78,7 @@ struct CaptureTask{
             , casters(inputs.arena)
             , transparent(transparent)
         {
+            casters.reserve(inputs.snapshot.casterCount);
             casters.assign(inputs.snapshot.casters, inputs.snapshot.casters + inputs.snapshot.casterCount);
             snapshot.casters = nullptr;
             snapshot.casterCount = 0u;

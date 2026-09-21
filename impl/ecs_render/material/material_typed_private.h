@@ -59,6 +59,7 @@ struct MaterialTypedByteContentKey{
         : byteHash(ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()))
         , bytes(arena)
     {
+        bytes.reserve(typedBytes.size());
         bytes.assign(typedBytes.begin(), typedBytes.end());
     }
 

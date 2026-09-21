@@ -81,10 +81,12 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         if(receiverSurfaceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
 
+        meshDrawItems.reserve(receiverSurfaceDrawItems.meshDrawItems.size());
         meshDrawItems.assign(
             receiverSurfaceDrawItems.meshDrawItems.begin(),
             receiverSurfaceDrawItems.meshDrawItems.end()
         );
+        regularDrawItems.reserve(sourceRegularDrawItems.computeDrawItems.size());
         regularDrawItems.assign(
             sourceRegularDrawItems.computeDrawItems.begin(),
             sourceRegularDrawItems.computeDrawItems.end()
@@ -130,7 +132,9 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
             outputBuffers.push_back(mesh.emulationVertexBuffer);
             outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
         }
+        receiverRanges.reserve(csgFrameData.receiverRanges.size());
         receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        cutters.reserve(csgFrameData.cutters.size());
         cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
         workRegion = csgFrameData.workRegion;
         captured = drawItems.size() == outputBuffers.size() && !drawItems.empty();
@@ -174,9 +178,13 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
+        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
         outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.computeDrawItems.reserve(drawItems.size());
         outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
+        outCsgFrameData.receiverRanges.reserve(receiverRanges.size());
         outCsgFrameData.receiverRanges.assign(receiverRanges.begin(), receiverRanges.end());
+        outCsgFrameData.cutters.reserve(cutters.size());
         outCsgFrameData.cutters.assign(cutters.begin(), cutters.end());
         outCsgFrameData.workRegion = workRegion;
     }
@@ -232,6 +240,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
         if(sourceDrawItems.computeDrawItems.empty() || !csgFrameData.hasWork())
             return false;
 
+        meshDrawItems.reserve(sourceDrawItems.meshDrawItems.size());
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
@@ -261,7 +270,9 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
             outputLayouts.push_back({ mesh.emulationIndexByteOffset, drawItem.pipelineResources.indexedGeometryOutput });
             outputHeapSlots.push_back(mesh.emulationVertexHeapHandle.slot());
         }
+        receiverRanges.reserve(csgFrameData.receiverRanges.size());
         receiverRanges.assign(csgFrameData.receiverRanges.begin(), csgFrameData.receiverRanges.end());
+        cutters.reserve(csgFrameData.cutters.size());
         cutters.assign(csgFrameData.cutters.begin(), csgFrameData.cutters.end());
         workRegion = csgFrameData.workRegion;
         captured = drawItems.size() == outputBuffers.size()
@@ -293,9 +304,13 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
+        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
         outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.computeDrawItems.reserve(drawItems.size());
         outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
+        outCsgFrameData.receiverRanges.reserve(receiverRanges.size());
         outCsgFrameData.receiverRanges.assign(receiverRanges.begin(), receiverRanges.end());
+        outCsgFrameData.cutters.reserve(cutters.size());
         outCsgFrameData.cutters.assign(cutters.begin(), cutters.end());
         outCsgFrameData.workRegion = workRegion;
     }

@@ -54,7 +54,9 @@ struct OpaqueRegularComputeEmulationGraphPlan{
         if(sourceDrawItems.computeDrawItems.empty())
             return false;
 
+        meshDrawItems.reserve(sourceDrawItems.meshDrawItems.size());
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
+        indexedDrawItems.reserve(sourceDrawItems.indexedDrawItems.size());
         indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
@@ -119,8 +121,11 @@ struct OpaqueRegularComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems)const{
+        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
         outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
+        outDrawItems.indexedDrawItems.reserve(indexedDrawItems.size());
         outDrawItems.indexedDrawItems.assign(indexedDrawItems.begin(), indexedDrawItems.end());
+        outDrawItems.computeDrawItems.reserve(drawItems.size());
         outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
     }
 };

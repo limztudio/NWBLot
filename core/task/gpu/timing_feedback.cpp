@@ -460,6 +460,7 @@ void GpuTaskTimingHistoryStore::snapshot(GpuTaskTimingHistorySnapshot& outSnapsh
     for(const HistoryRecord& record : m_histories)
         outSnapshot.m_histories.push_back(record.entry);
 
+    outSnapshot.m_assignments.reserve(m_assignments.size());
     outSnapshot.m_assignments.assign(m_assignments.begin(), m_assignments.end());
     if(m_historyIndex){
         if(!outSnapshot.m_historyIndex)

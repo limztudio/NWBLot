@@ -110,6 +110,7 @@ struct CaptureDrawTask{
 
         Core::Alloc::ScratchArena scratch(RendererArenaScope::s_RenderArena);
         MaterialPassDrawItemVector drawItems{scratch};
+        drawItems.reserve(payload.drawItems.size());
         drawItems.assign(payload.drawItems.begin(), payload.drawItems.end());
         bool resourcesReady = false;
         switch(payload.renderPath){
@@ -386,6 +387,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         payload.avboitTargets = targets.avboit;
         payload.frameBindings = frameBindings;
         payload.csgResources = csgResources;
+        payload.drawItems.reserve(count);
         payload.drawItems.assign(items, items + count);
         payload.instanceCount = instances.size();
         payload.materialTypedByteCount = typedBytes.size();

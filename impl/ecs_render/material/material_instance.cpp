@@ -234,6 +234,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
 
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_MutableTypedBytesArena);
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
+    mutableTypedBytes.reserve(materialInfo.mutableDefaultTypedBytes.size());
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
     if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
         m_materialState.m_instanceMutableCache.erase(it);

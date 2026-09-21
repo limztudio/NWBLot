@@ -526,6 +526,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant"), StringConvert(materialPath.c_str()));
         return false;
     }
+    createdInfo.shaderVariant.reserve(material.shaderVariant().size());
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
     const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
@@ -542,8 +543,6 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
     }
 
-    createdInfo.materialInterface = material.materialInterface();
-    NWB_ASSERT(createdInfo.materialInterface);
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
     NWB_ASSERT(material.typedLayoutHash() != 0u && !typedBlockBytes.empty());
     NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
@@ -572,8 +571,11 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     }
 
     createdInfo.typedLayoutHash = material.typedLayoutHash();
+    createdInfo.typedLayoutBlocks.reserve(material.typedLayoutBlocks().size());
     createdInfo.typedLayoutBlocks.assign(material.typedLayoutBlocks().begin(), material.typedLayoutBlocks().end());
+    createdInfo.typedLayoutFields.reserve(material.typedLayoutFields().size());
     createdInfo.typedLayoutFields.assign(material.typedLayoutFields().begin(), material.typedLayoutFields().end());
+    createdInfo.resourceReferences.reserve(material.resourceReferences().size());
     createdInfo.resourceReferences.assign(material.resourceReferences().begin(), material.resourceReferences().end());
     if(!splitMaterialTypedBytesByClass(
         material,

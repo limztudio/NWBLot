@@ -457,6 +457,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> occupancySharedRasterResourceUses{
             avboitPreResourceScratch
         };
+        occupancySharedRasterResourceUses.reserve(avboitPreResourceUses.size() + 1u);
         occupancySharedRasterResourceUses.assign(
             avboitPreResourceUses.begin(),
             avboitPreResourceUses.end()

@@ -247,6 +247,7 @@ RendererTaskTimingFeedback::RendererTaskTimingFeedback(
 {
     NWB_ASSERT(feedbackCollectionScopeCount != 0u);
     const Name* const scopeNames = feedbackCollectionScopes.get();
+    m_feedbackCollectionScopes.reserve(feedbackCollectionScopeCount);
     m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);
 }
 RendererTaskTimingFeedback::~RendererTaskTimingFeedback()noexcept{

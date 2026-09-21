@@ -441,6 +441,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> extinctionSharedRasterResourceUses{
             extinctionResourceScratch
         };
+        extinctionSharedRasterResourceUses.reserve(extinctionResourceUses.size() + 1u);
         extinctionSharedRasterResourceUses.assign(
             extinctionResourceUses.begin(),
             extinctionResourceUses.end()

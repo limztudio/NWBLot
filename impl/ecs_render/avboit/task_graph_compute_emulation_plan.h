@@ -115,6 +115,7 @@ struct AvboitAliasFreeComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems)const{
+        outDrawItems.computeDrawItems.reserve(drawItems.size());
         outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
     }
 };

@@ -26,8 +26,9 @@ void main(){
     if(!blockerReady)
         blockerDistance = 0.0;
     const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
-    float3 softwareMean = float3(0.0);
-    float3 selectedMean = float3(0.0);
+    // Visibility means are (0, 1) bounded factors matching the half visibility math under test.
+    half3 softwareMean = half3(0.0h);
+    half3 selectedMean = half3(0.0h);
     bool allMapped = true;
     uint faceMask = 0u;
     uint fallbackMask = 0u;
@@ -43,8 +44,8 @@ void main(){
         float minimum;
         float maximum;
         const bool rayReady = nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum);
-        const float3 software = float3(nwbSwShadowLightVisible(position, normal, light, jitter));
-        float3 selected = float3(1.0);
+        const half3 software = nwbSwShadowLightVisible(position, normal, light, jitter);
+        half3 selected = half3(1.0h);
         const bool accepted = rayReady && blockerReady && nwbLightSpaceEvaluate(0u, origin, normal, direction, blockerDistance, selected);
         if(!accepted){
             selected = software;
@@ -52,7 +53,7 @@ void main(){
         }
         allMapped = allMapped && accepted;
         uint face = 0xffffffffu;
-        float3 reprojected = float3(1.0);
+        half3 reprojected = half3(1.0h);
         bool reprojectedAccepted = false;
         if(rayReady && blockerReady){
             NwbLightSpaceView displaced;
@@ -80,13 +81,13 @@ void main(){
                 }
             }
         }
-        softwareMean += software / float(sampleCount);
-        selectedMean += selected / float(sampleCount);
+        softwareMean += software / half(sampleCount);
+        selectedMean += selected / half(sampleCount);
         const uint address = 64u + sample * 64u;
         output.Store4(address, uint4(asuint(direction), asuint(maximum)));
-        output.Store4(address + 16u, uint4(asuint(software), face));
-        output.Store4(address + 32u, uint4(asuint(selected), accepted ? 1u : 0u));
-        output.Store4(address + 48u, uint4(asuint(reprojected), reprojectedAccepted ? 1u : 0u));
+        output.Store4(address + 16u, uint4(asuint(float3(software)), face));
+        output.Store4(address + 32u, uint4(asuint(float3(selected)), accepted ? 1u : 0u));
+        output.Store4(address + 48u, uint4(asuint(float3(reprojected)), reprojectedAccepted ? 1u : 0u));
     }
     uint2 pixel = uint2(0u);
     float projectedDepth = 0.0;
@@ -95,8 +96,8 @@ void main(){
     const uint count = projected ? NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u) : 0u;
     if(!allMapped)
         selectedMean = softwareMean;
-    output.Store4(0u, uint4(asuint(softwareMean), allMapped ? 1u : 0u));
-    output.Store4(16u, uint4(asuint(selectedMean), count));
+    output.Store4(0u, uint4(asuint(float3(softwareMean)), allMapped ? 1u : 0u));
+    output.Store4(16u, uint4(asuint(float3(selectedMean)), count));
     output.Store4(32u, uint4(pixelIndex, view.light.z, viewReady ? 1u : 0u, projected ? 1u : 0u));
     output.Store4(48u, uint4(asuint(blockerDistance), blockerReady ? 1u : 0u, faceMask, fallbackMask));
 }

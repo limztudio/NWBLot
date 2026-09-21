@@ -41,7 +41,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 position = NwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
         const float3 normal = normalize(NwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
         const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
-        float3 result = float3(0.0);
+        // Visibility visibility is a (0, 1) bounded factor; nwbSwShadowLightVisible already returns half3.
+        half3 result = half3(0.0h);
         for(uint sample = 0u; sample < sampleCount; ++sample){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
             const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
@@ -50,7 +51,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 #endif
             const float2 jitter = nwbShadowLowDiscrepancy2D(pixel,
                 g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
-            result += float3(nwbSwShadowLightVisible(position, normal, light, jitter)) / float(sampleCount);
+            result += nwbSwShadowLightVisible(position, normal, light, jitter) / half(sampleCount);
         }
         NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(result, 1.0);
     }

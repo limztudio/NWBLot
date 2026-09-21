@@ -42,7 +42,7 @@ bool nwbHwShadowFindNextCrossing(
     return found;
 }
 
-float3 nwbHwShadowEvaluateContinuation(const RayDesc ray){
+half3 nwbHwShadowEvaluateContinuation(const RayDesc ray){
     NwbHardwareTransparentStream stream = nwbHwShadowStreamBegin();
     NwbHardwareTransparentCrossing previous = (NwbHardwareTransparentCrossing)0;
     bool hasPrevious = false;
@@ -54,7 +54,7 @@ float3 nwbHwShadowEvaluateContinuation(const RayDesc ray){
         previous = next;
         hasPrevious = true;
     }
-    return nwbHwShadowStreamFinish(stream, ray);
+    return half3(nwbHwShadowStreamFinish(stream, ray));
 }
 
 

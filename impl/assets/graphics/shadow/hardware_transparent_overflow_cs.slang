@@ -17,7 +17,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint2 extent = nwbHwShadowTraceExtent();
     const uint pixel = g_NwbHardwareTransparentOverflowList[index];
     const uint2 halfPixel = uint2(pixel % extent.x, pixel / extent.x);
-    float3 visibility = float3(1.0);
+    // Visibility visibility is a (0, 1) bounded factor; half math matches the finalized transmittance.
+    half3 visibility = half3(1.0h);
     RayDesc ray;
     if(nwbHwShadowBuildRay(halfPixel, ray))
         visibility = nwbHwShadowEvaluateContinuation(ray);

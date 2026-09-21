@@ -18,7 +18,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     const uint count = g_NwbHardwareTransparentCrossings[pixel];
     if(count > NWB_HW_TRANSPARENT_CROSSING_CAPACITY)
         return;
-    float3 visibility = float3(1.0);
+    // Visibility visibility is a (0, 1) bounded factor; half math matches the finalized transmittance.
+    half3 visibility = half3(1.0h);
     RayDesc ray;
     if(count != 0u && nwbHwShadowBuildRay(dispatchThreadId.xy, ray))
         visibility = nwbHwShadowEvaluateGathered(ray, pixel, extent.x * extent.y);

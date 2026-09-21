@@ -135,10 +135,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // bounce immediately; the first real trace refines it (seeded sampleCount 1 -> the trace blends at weight 1/2). No
     // established neighbour (bootstrap, or a genuinely new region) -> stays 0. The neighbours' SH was written by the
     // PREVIOUS frame's trace (pass 4) and is stable during this spawn (pass 3, before this frame's trace) -> race-free.
-    float4 seedShR = float4(0.0, 0.0, 0.0, 0.0);
-    float4 seedShG = float4(0.0, 0.0, 0.0, 0.0);
-    float4 seedShB = float4(0.0, 0.0, 0.0, 0.0);
-    float seedWeight = 0.0;
+    // SH seed sums are bounded irradiance blends; half accumulators match the trace-side SH math.
+    half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
+    half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
+    half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);
+    half seedWeight = half(0.0h);
     for(int dz = -NWB_SURFEL_SEED_CELL_EXTENT; dz <= NWB_SURFEL_SEED_CELL_EXTENT; ++dz)
     for(int dy = -NWB_SURFEL_SEED_CELL_EXTENT; dy <= NWB_SURFEL_SEED_CELL_EXTENT; ++dy)
     for(int dx = -NWB_SURFEL_SEED_CELL_EXTENT; dx <= NWB_SURFEL_SEED_CELL_EXTENT; ++dx){
@@ -153,26 +154,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
                 const half distanceWeight = half(saturate(1.0 - dist / max(neighbour.radius, NWB_SURFEL_RADIUS_MIN)));
                 const half weight = normalWeight * distanceWeight;
-                seedShR += neighbour.shR * float(weight);
-                seedShG += neighbour.shG * float(weight);
-                seedShB += neighbour.shB * float(weight);
-                seedWeight += float(weight);
+                seedShR += half4(neighbour.shR) * weight;
+                seedShG += half4(neighbour.shG) * weight;
+                seedShB += half4(neighbour.shB) * weight;
+                seedWeight += weight;
             }
             seedId = neighbour.nextInCell;
             ++seedWalk;
         }
     }
-    const bool seeded = seedWeight > NWB_SURFEL_GATHER_WEIGHT_EPSILON;
-    const float seedNorm = seeded ? (1.0 / seedWeight) : 0.0;
+    const bool seeded = seedWeight > half(NWB_SURFEL_GATHER_WEIGHT_EPSILON);
+    const half seedNorm = seeded ? (half(1.0h) / seedWeight) : half(0.0h);
 
     NwbSurfel surfel;
     surfel.position = worldPosition;
     surfel.radius = defaultRadius;
     surfel.normal = worldNormal;
     surfel.nextInCell = NWB_SURFEL_CELL_INVALID;   // sole member of this cell's list
-    surfel.shR = seedShR * seedNorm;
-    surfel.shG = seedShG * seedNorm;
-    surfel.shB = seedShB * seedNorm;
+    surfel.shR = float4(seedShR * seedNorm);
+    surfel.shG = float4(seedShG * seedNorm);
+    surfel.shB = float4(seedShB * seedNorm);
     surfel.sampleCount = seeded ? 1u : 0u;
     surfel.lastSeenFrame = frameIndex;
     surfel.alive = 1u;

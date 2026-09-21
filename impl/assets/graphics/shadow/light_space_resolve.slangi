@@ -121,11 +121,12 @@ uint nwbLightSpaceBoundaryMode(const uint instance){
 
 // Raw event count, including all distinct instances, is bounded before any load. Overflow asks the caller for SW traversal.
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth,
-    const float projectedDepth, out float3 visibility){
-    visibility = float3(1.0);
+    const float projectedDepth, out half3 visibility){
+    // Visibility visibility is a (0, 1) bounded factor; half math matches the SW visibility accumulator.
+    visibility = half3(1.0h);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     const float depth = NwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
-    visibility = depth < projectedDepth ? float3(0.0) : float3(1.0);
+    visibility = depth < projectedDepth ? half3(0.0h) : half3(1.0h);
     return true;
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
@@ -138,8 +139,9 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         if(!isfinite(event.depth) || (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) >= g_NwbLightSpacePush.instanceCount)
             return false;
     }
-    float3 opticalDepth = float3(0.0);
-    float interfaceProduct = 1.0;
+    // Bounded (0, 1) transmittance math stays half; depth/distance/chord geometry remains float.
+    half3 opticalDepth = half3(0.0h);
+    half interfaceProduct = half(1.0h);
     uint index = 0u;
     while(index < count){
         const NwbLightSpaceEvent firstEvent = nwbLightSpaceLoadEvent(pixelIndex, index);
@@ -150,8 +152,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         const uint instance = firstEvent.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
         const uint mode = nwbLightSpaceBoundaryMode(instance);
         const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
-        float3 absorption = float3(0.0);
-        float transmission = 1.0;
+        half3 absorption = half3(0.0h);
+        half transmission = half(1.0h);
         float chord = 0.0;
         float start = 0.0;
         float first = 0.0;
@@ -178,14 +180,14 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
             if(closed && facing == 3u)
                 continue;
             if(crossings == 0u){
-                absorption = float3(f16tof32(event.absorptionRG & 0xffffu), f16tof32(event.absorptionRG >> 16u),
+                absorption = half3(f16tof32(event.absorptionRG & 0xffffu), f16tof32(event.absorptionRG >> 16u),
                     f16tof32(event.absorptionBInterface & 0xffffu));
                 first = distance;
                 if(closed && facing == 2u)
                     inside = true;
             }
             last = distance;
-            transmission *= f16tof32(event.absorptionBInterface >> 16u);
+            transmission *= half(f16tof32(event.absorptionBInterface >> 16u));
             if(inside)
                 chord += max(distance - start, 0.0);
             else
@@ -197,8 +199,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
             chord += max(receiverDepth - start, 0.0);
         else if(!closed && (crossings & 1u) != 0u)
             chord = crossings > 1u ? max(last - first, 0.0) : 0.0;
-        opticalDepth += absorption * chord;
-        interfaceProduct *= lerp(1.0, transmission, smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
+        opticalDepth += absorption * half(chord);
+        interfaceProduct *= lerp(half(1.0h), transmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord)));
     }
     visibility = saturate(interfaceProduct * exp(-opticalDepth));
     return all(isfinite(visibility));
@@ -258,8 +260,9 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
 }
 
 bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction,
-    const float blockerDistance, out float3 visibility){
-    visibility = float3(1.0);
+    const float blockerDistance, out half3 visibility){
+    // Visibility visibility is a (0, 1) bounded factor; half math matches the SW visibility accumulator.
+    visibility = half3(1.0h);
     const float3 samplePosition = origin + direction * blockerDistance;
     NwbLightSpaceView view;
     uint2 pixel;

@@ -25,7 +25,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const NwbSceneLight light = g_NwbSceneLights[index];
         if(light.params.z < 0.0)
             continue;
-        float3 result = float3(1.0);
+        // Visibility visibility is a (0, 1) bounded factor; keep the multi-sample mean in half.
+        half3 result = half3(1.0h);
         bool requiresFallback = false;
         if(!background){
             const float3 origin = position + normal * NWB_SHADOW_RAY_MIN_DISTANCE;
@@ -35,7 +36,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const bool soft = light.params.y < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX ? light.params2.x > 0.0 : light.params2.y > 0.0;
             if(mapReady && soft)
                 mapReady = nwbLightSpaceBlockerDistance(index, origin, normal, light, centerView, blockerDistance);
-            result = float3(0.0);
+            result = half3(0.0h);
             for(uint sample = 0u; sample < sampleCount; ++sample){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
                 const uint salt = NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT;
@@ -46,14 +47,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 float3 direction;
                 float minimum;
                 float maximum;
-                float3 visibility = float3(1.0);
+                half3 visibility = half3(1.0h);
                 if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
                     if(!mapReady || !nwbLightSpaceEvaluate(index, origin, normal, direction, blockerDistance, visibility)){
                         requiresFallback = true;
                         break;
                     }
                 }
-                result += visibility / float(sampleCount);
+                result += visibility / half(sampleCount);
             }
         }
         NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[uint3(pixel, uint(light.params.z))] = float4(result, requiresFallback ? 0.0 : 1.0);

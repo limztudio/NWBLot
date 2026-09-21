@@ -35,16 +35,16 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 struct NwbHardwareTransparentCrossingOptics{
-    float3 absorption;
-    float transmission;
+    half3 absorption;
+    half transmission;
     uint facing;
 };
 
 struct NwbHardwareTransparentStream{
-    float3 opticalDepth;
-    float transmission;
-    float3 instanceAbsorption;
-    float instanceTransmission;
+    half3 opticalDepth;
+    half transmission;
+    half3 instanceAbsorption;
+    half instanceTransmission;
     float chord;
     float intervalStart;
     float firstDistance;
@@ -127,8 +127,9 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
         smoothWeight
     ));
     NwbHardwareTransparentCrossingOptics optics;
-    optics.absorption = float3(nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint));
-    optics.transmission = float(nwbShadowFresnelTransmittedFraction(float(surface.refractionIor), cosine));
+    // Bounded (0, 1) optics factors stay half; geometry chord/distances below remain float for precision.
+    optics.absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
+    optics.transmission = nwbShadowFresnelTransmittedFraction(float(surface.refractionIor), cosine);
     optics.facing = nwbHwShadowFacing(geometricNormal, objectDirection);
     return optics;
 }
@@ -143,8 +144,8 @@ uint nwbHwShadowBoundaryMode(const uint instance){
 
 NwbHardwareTransparentStream nwbHwShadowStreamBegin(){
     NwbHardwareTransparentStream stream = (NwbHardwareTransparentStream)0;
-    stream.transmission = 1.0;
-    stream.instanceTransmission = 1.0;
+    stream.transmission = half(1.0h);
+    stream.instanceTransmission = half(1.0h);
     return stream;
 }
 
@@ -191,8 +192,9 @@ void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const 
         // Unspecified materials preserve the legacy singleton/odd-boundary behavior.
         chord = stream.crossingCount > 1u ? stream.lastDistance - stream.firstDistance : 0.0;
     }
-    stream.opticalDepth += stream.instanceAbsorption * chord;
-    stream.transmission *= lerp(1.0, stream.instanceTransmission, smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
+    // Bounded (0, 1) visibility math stays half; widen only the geometry chord product.
+    stream.opticalDepth += stream.instanceAbsorption * half(chord);
+    stream.transmission *= lerp(half(1.0h), stream.instanceTransmission, half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord)));
 }
 
 void nwbHwShadowConsumeCrossing(
@@ -210,7 +212,7 @@ void nwbHwShadowConsumeCrossing(
         stream.boundaryMode = nwbHwShadowBoundaryMode(crossing.instance);
         stream.hasInstance = true;
         stream.crossingCount = 0u;
-        stream.instanceTransmission = 1.0;
+        stream.instanceTransmission = half(1.0h);
         stream.chord = 0.0;
         stream.inside = false;
     }
@@ -219,13 +221,13 @@ void nwbHwShadowConsumeCrossing(
     stream.hasCluster = true;
 }
 
-float3 nwbHwShadowStreamFinish(inout NwbHardwareTransparentStream stream, const RayDesc ray){
+half3 nwbHwShadowStreamFinish(inout NwbHardwareTransparentStream stream, const RayDesc ray){
     nwbHwShadowFinishCluster(stream);
     nwbHwShadowFinishInstance(stream, ray);
     return saturate(stream.transmission * exp(-stream.opticalDepth));
 }
 
-float3 nwbHwShadowEvaluateGathered(const RayDesc ray, const uint pixel, const uint rayCount){
+half3 nwbHwShadowEvaluateGathered(const RayDesc ray, const uint pixel, const uint rayCount){
     const uint count = g_NwbHardwareTransparentCrossings[pixel];
     NwbHardwareTransparentStream stream = nwbHwShadowStreamBegin();
     uint remaining = (1u << count) - 1u;

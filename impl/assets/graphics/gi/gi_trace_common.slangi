@@ -73,7 +73,8 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
 #if NWB_GI_HIT_SHADOW_RAYS
     // One occlusion ray toward the DOMINANT light (the highest-NdotL lit light): miss -> lit, hit -> shadowed.
     {
-        float bestNdotl = 0.0;
+        // Dominant-light NdotL tracking is a (0, 1) bounded factor; half math is sufficient here.
+        half bestNdotl = half(0.0h);
         float3 dominantLightDir = float3(0.0, 1.0, 0.0);
         uint dominantLightIndex = NWB_GI_INVALID_LIGHT_INDEX;
         for(uint i = 0u; i < lightCount; ++i){
@@ -83,14 +84,14 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             nwbSceneResolveLight(light, hit.worldPos, lv, lr);
             if(all(lr <= half3(0.0h)))
                 continue;
-            const float ndotl = max(dot(facingNormal, lv), 0.0);
+            const half ndotl = half(max(dot(facingNormal, lv), 0.0));
             if(ndotl > bestNdotl){
                 bestNdotl = ndotl;
                 dominantLightDir = lv;
                 dominantLightIndex = i;
             }
         }
-        if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > 0.0){
+        if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > half(0.0h)){
             // Boolean occlusion only: the shadow ray needs blocker existence, not reconstructed attributes.
             const bool occluded = nwbGiTraceOccluded(
                 hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE,

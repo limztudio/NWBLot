@@ -1403,7 +1403,7 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
         EXPECT_FALSE(ContainsText(taskHeader, "#include <impl/ecs_render/mesh/mesh_system.h>"));
         payloadFrameBindingCount += CountText(compactTaskHeader, "MeshFrameBindingSnapshotframeBindings;");
     }
-    EXPECT_EQ(payloadFrameBindingCount, 20u);
+    EXPECT_EQ(payloadFrameBindingCount, 19u);
 
     const TestPath taskSourcePaths[] = {
         repoRoot / "impl" / "ecs_render" / "deferred" / "task_graph_gbuffer_task.cpp",

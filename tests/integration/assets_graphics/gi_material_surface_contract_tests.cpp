@@ -230,9 +230,9 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(hardwareCausticsStage, "render.hardware_caustics.photons"));
     EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "render.surfel_gi.trace"));
     EXPECT_TRUE(ContainsText(hardwareCausticsStage, "traceMaterialSampledTextureSetUse"));
-    EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "traceMaterialSampledTextureSetUse"));
+    EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet)"));
     EXPECT_TRUE(ContainsText(causticsTaskGraph, "traceMaterialSampledTextureSetUse"));
-    EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "traceMaterialSampledTextureSetUse"));
+    EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "MakeTraceResourceSetUses(traceGeometrySet, traceMaterialSampledTextureSet)"));
     EXPECT_TRUE(ContainsText(hardwareSampledUse, ".resourceSet = inputs.traceMaterialSampledTextureSet"));
     EXPECT_TRUE(ContainsText(hardwareSampledUse, ".requiredState = Core::ResourceStates::ShaderResource"));
     EXPECT_TRUE(ContainsText(hardwareSampledUse, ".access = Core::GpuTaskResourceAccess::Read"));

@@ -790,13 +790,13 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     for(const AStringView task : { depthWarp, integration }){
         EXPECT_TRUE(ContainsText(task, ".timingFeedback"));
         EXPECT_TRUE(ContainsText(task, ".timingScope"));
-        EXPECT_TRUE(ContainsText(task, "beginSample("));
-        EXPECT_TRUE(ContainsText(task, "compiledTask.plan->recordsNonCommittingTimingSample"));
+        EXPECT_TRUE(ContainsText(task, "BeginTaskTimingSample("));
         EXPECT_TRUE(ContainsText(task, "static void accepted("));
         EXPECT_TRUE(ContainsText(task, "acceptSubmission("));
         EXPECT_TRUE(ContainsText(task, "static void discarded("));
         EXPECT_TRUE(ContainsText(task, "discardRecording("));
     }
+    EXPECT_TRUE(ContainsText(timingFeedback, "compiledTask.plan->recordsNonCommittingTimingSample"));
 
     const AStringView lighting(taskGraph.substr(lightingOffset));
     AString computeChainSource;

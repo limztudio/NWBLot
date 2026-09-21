@@ -215,16 +215,27 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
         ASSERT_NE(taskBegin, AStringView::npos);
         const usize taskEnd = source.find(endMarker, taskBegin + taskMarker.size());
         ASSERT_NE(taskEnd, AStringView::npos);
-        const usize payloadBegin = source.find("    struct Payload{", taskBegin);
+        usize payloadBegin = source.find("    struct Payload{", taskBegin);
+        const usize inheritedPayloadBegin = source.find("    struct Payload : public CsgOpaqueIntervalRecordInputs{", taskBegin);
+        const bool usesSharedRecordInputs = inheritedPayloadBegin != AStringView::npos && inheritedPayloadBegin < taskEnd
+            && (payloadBegin == AStringView::npos || inheritedPayloadBegin < payloadBegin);
+        if(usesSharedRecordInputs)
+            payloadBegin = inheritedPayloadBegin;
         ASSERT_NE(payloadBegin, AStringView::npos);
         ASSERT_LT(payloadBegin, taskEnd);
         const usize payloadEnd = source.find("\n    };", payloadBegin);
         ASSERT_NE(payloadEnd, AStringView::npos);
         ASSERT_LT(payloadEnd, taskEnd);
         const AStringView payloadDeclaration = source.substr(payloadBegin, payloadEnd - payloadBegin);
-        EXPECT_EQ(CountText(payloadDeclaration, "CsgGraphResourceSnapshot csgResources;"), 1u);
-        EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot*"));
-        EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot&"));
+        if(usesSharedRecordInputs){
+            EXPECT_TRUE(ContainsText(source, "struct CsgOpaqueIntervalRecordInputs{"));
+            EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot*"));
+            EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot&"));
+        }else{
+            EXPECT_EQ(CountText(payloadDeclaration, "CsgGraphResourceSnapshot csgResources;"), 1u);
+            EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot*"));
+            EXPECT_FALSE(ContainsText(payloadDeclaration, "CsgGraphResourceSnapshot&"));
+        }
         if(csgSystemDependencyForbidden)
             EXPECT_EQ(CountText(payloadDeclaration, "RendererCsgSystem"), 0u);
     };
@@ -318,7 +329,9 @@ TEST(EcsGraphics, CsgGraphResourcesAreFrozenOnceAndOwnedByEveryRecordPayload){
         "struct AvboitAccumulationFinalizeGraphTask{",
         false
     );
-    EXPECT_EQ(CountText(taskPayloadHeaders, "CsgGraphResourceSnapshot csgResources;"), 15u);
+    EXPECT_EQ(CountText(taskPayloadHeaders, "CsgGraphResourceSnapshot csgResources;"), 14u);
+    EXPECT_EQ(CountText(taskPayloadHeaders, "struct CsgOpaqueIntervalRecordInputs{"), 1u);
+    EXPECT_EQ(CountText(taskPayloadHeaders, "struct Payload : public CsgOpaqueIntervalRecordInputs{"), 2u);
 
     const auto expectRecordUsesOwnedSnapshot = [](
         const AStringView source,

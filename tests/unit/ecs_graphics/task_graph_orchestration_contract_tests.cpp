@@ -135,8 +135,9 @@ TEST(EcsGraphics, RendererTaskPayloadsDependOnExactDomainsInsteadOfFramePipeline
         "csg/task_graph_opaque_interval_tasks.h",
         {
             { "Core::GraphicsRuntime* graphics = nullptr;", 1u },
-            { "RendererMaterialSystem* materialSystem = nullptr;", 3u },
-            { "RendererCsgSystem* csgSystem = nullptr;", 3u },
+            { "RendererMaterialSystem* materialSystem = nullptr;", 2u },
+            { "RendererCsgSystem* csgSystem = nullptr;", 2u },
+            { "struct CsgOpaqueIntervalRecordInputs{", 1u },
         }
     );
     verifyTaskHeader(

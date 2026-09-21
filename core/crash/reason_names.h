@@ -49,35 +49,50 @@ NWB_CRASH_BEGIN
     return "signal";
 }
 
+inline constexpr u32 kWindowsExceptionBreakpointCode = 0x80000003u;
+inline constexpr u32 kWindowsExceptionAccessViolationCode = 0xC0000005u;
+inline constexpr u32 kWindowsExceptionIllegalInstructionCode = 0xC000001Du;
+inline constexpr u32 kWindowsExceptionArrayBoundsExceededCode = 0xC000008Cu;
+inline constexpr u32 kWindowsExceptionFloatDenormalOperandCode = 0xC000008Du;
+inline constexpr u32 kWindowsExceptionFloatDivideByZeroCode = 0xC000008Eu;
+inline constexpr u32 kWindowsExceptionFloatInexactResultCode = 0xC000008Fu;
+inline constexpr u32 kWindowsExceptionFloatInvalidOperationCode = 0xC0000090u;
+inline constexpr u32 kWindowsExceptionFloatOverflowCode = 0xC0000091u;
+inline constexpr u32 kWindowsExceptionFloatStackCheckCode = 0xC0000092u;
+inline constexpr u32 kWindowsExceptionFloatUnderflowCode = 0xC0000093u;
+inline constexpr u32 kWindowsExceptionIntegerDivideByZeroCode = 0xC0000094u;
+inline constexpr u32 kWindowsExceptionIntegerOverflowCode = 0xC0000095u;
+inline constexpr u32 kWindowsExceptionStackOverflowCode = 0xC00000FDu;
+
 [[nodiscard]] inline const char* WindowsExceptionName(const u64 exceptionCode)noexcept{
     switch(exceptionCode){
-    case 0x80000003u:
+    case kWindowsExceptionBreakpointCode:
         return "breakpoint";
-    case 0xC0000005u:
+    case kWindowsExceptionAccessViolationCode:
         return "access_violation";
-    case 0xC000001Du:
+    case kWindowsExceptionIllegalInstructionCode:
         return "illegal_instruction";
-    case 0xC000008Cu:
+    case kWindowsExceptionArrayBoundsExceededCode:
         return "array_bounds_exceeded";
-    case 0xC000008Du:
+    case kWindowsExceptionFloatDenormalOperandCode:
         return "float_denormal_operand";
-    case 0xC000008Eu:
+    case kWindowsExceptionFloatDivideByZeroCode:
         return "float_divide_by_zero";
-    case 0xC000008Fu:
+    case kWindowsExceptionFloatInexactResultCode:
         return "float_inexact_result";
-    case 0xC0000090u:
+    case kWindowsExceptionFloatInvalidOperationCode:
         return "float_invalid_operation";
-    case 0xC0000091u:
+    case kWindowsExceptionFloatOverflowCode:
         return "float_overflow";
-    case 0xC0000092u:
+    case kWindowsExceptionFloatStackCheckCode:
         return "float_stack_check";
-    case 0xC0000093u:
+    case kWindowsExceptionFloatUnderflowCode:
         return "float_underflow";
-    case 0xC0000094u:
+    case kWindowsExceptionIntegerDivideByZeroCode:
         return "integer_divide_by_zero";
-    case 0xC0000095u:
+    case kWindowsExceptionIntegerOverflowCode:
         return "integer_overflow";
-    case 0xC00000FDu:
+    case kWindowsExceptionStackOverflowCode:
         return "stack_overflow";
     default:
         return "windows_exception";

@@ -30,6 +30,7 @@ namespace __hidden_crash_win32{
 
 inline constexpr usize s_HandlerCommandLineReserveSlack = 160u;
 inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
+inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 
 
 static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
@@ -195,8 +196,8 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
         // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full
         // timeout. Falls back to a single-object wait if the handler process handle is unavailable.
-        HANDLE waitHandles[2] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
-        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? 2u : 1u;
+        HANDLE waitHandles[s_CrashWaitHandleCount] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
+        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? s_CrashWaitHandleCount : 1u;
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
         if(waitResult == WAIT_OBJECT_0){
             CrashAck ack;

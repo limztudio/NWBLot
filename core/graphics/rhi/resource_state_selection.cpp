@@ -23,7 +23,7 @@ usize CommandListResourceSelection::hashIdentity(void* const resource, const boo
 void CommandListResourceSelection::insertIndex(void* const storage, const usize capacity, const usize entryIndex)noexcept{
     const Entry* const entries = static_cast<const Entry*>(storage);
     usize* const buckets = reinterpret_cast<usize*>(static_cast<u8*>(storage) + capacity * sizeof(Entry));
-    const usize bucketCount = capacity * 2u;
+    const usize bucketCount = capacity * s_BucketCountFactor;
     const usize mask = bucketCount - 1u;
     usize bucket = hashIdentity(entries[entryIndex].resource, entries[entryIndex].texture) & mask;
     for(usize probe = 0u; probe < bucketCount; ++probe){
@@ -83,7 +83,7 @@ bool CommandListResourceSelection::addResource(void* const resource, const usize
 bool CommandListResourceSelection::containsIndexedResource(void* const resource, const bool texture)const noexcept{
     const Entry* const values = static_cast<const Entry*>(m_storage);
     const usize* const buckets = reinterpret_cast<const usize*>(static_cast<const u8*>(m_storage) + m_capacity * sizeof(Entry));
-    const usize bucketCount = m_capacity * 2u;
+    const usize bucketCount = m_capacity * s_BucketCountFactor;
     const usize mask = bucketCount - 1u;
     usize bucket = hashIdentity(resource, texture) & mask;
     for(usize probe = 0u; probe < bucketCount; ++probe){
@@ -101,9 +101,9 @@ bool CommandListResourceSelection::containsIndexedResource(void* const resource,
 bool CommandListResourceSelection::grow(){
     static_assert(IsTriviallyCopyable_V<Entry> && IsStandardLayout_V<Entry>);
     static_assert(alignof(Entry) >= alignof(usize) && sizeof(Entry) % alignof(usize) == 0u);
-    if(MultiplyOverflows<usize>(m_capacity, 2u))
+    if(MultiplyOverflows<usize>(m_capacity, s_BucketCountFactor))
         return false;
-    const usize capacity = m_capacity * 2u;
+    const usize capacity = m_capacity * s_BucketCountFactor;
     if(MultiplyOverflows<usize>(capacity, s_BytesPerEntry))
         return false;
     const usize bytes = capacity * s_BytesPerEntry;
@@ -126,7 +126,7 @@ bool CommandListResourceSelection::grow(){
         new(static_cast<Entry*>(storage) + index) Entry(entry);
     }
     usize* const buckets = reinterpret_cast<usize*>(static_cast<u8*>(storage) + capacity * sizeof(Entry));
-    new(buckets) usize[capacity * 2u]{};
+    new(buckets) usize[capacity * s_BucketCountFactor]{};
     for(usize index = 0u; index < m_size; ++index)
         insertIndex(storage, capacity, index);
     m_storage = storage;

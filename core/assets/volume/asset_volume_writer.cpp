@@ -39,6 +39,7 @@ using ScratchArena = AssetsVolumeCookDetail::ScratchArena;
 
 static constexpr u64 s_DefaultSegmentSize = 512ull * 1024ull * 1024ull;
 static constexpr u64 s_DefaultMetadataSize = 512ull * 1024ull;
+static constexpr u64 s_SegmentGrowthFactor = 2ull;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,11 +73,11 @@ static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::
 
     outConfig.segmentSize = s_DefaultSegmentSize;
     while(outConfig.segmentSize <= outConfig.metadataSize){
-        if(outConfig.segmentSize > Limit<u64>::s_Max / 2ull){
+        if(outConfig.segmentSize > Limit<u64>::s_Max / s_SegmentGrowthFactor){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: segment size overflow while planning volume"));
             return false;
         }
-        outConfig.segmentSize *= 2ull;
+        outConfig.segmentSize *= s_SegmentGrowthFactor;
     }
 
     return true;

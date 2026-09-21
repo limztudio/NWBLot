@@ -37,6 +37,9 @@ namespace Core{
 
 class GpuGraphSubmissionTransactionGateTestAccess final{
 public:
+    static constexpr u32 s_WriterBitIndex = 31u;
+    static constexpr f64 s_WriterWaitTimeoutSeconds = 5.0;
+
     struct Snapshot{
         u32 readerCount = 0u;
         u32 writerReservationCount = 0u;
@@ -59,7 +62,7 @@ public:
 
 public:
     [[nodiscard]] static Snapshot snapshot(const GpuGraphSubmissionTransaction& transaction)noexcept{
-        constexpr u32 writerBit = 1u << 31u;
+        constexpr u32 writerBit = 1u << s_WriterBitIndex;
         constexpr u32 readerMask = writerBit - 1u;
         const u32 state = transaction.m_submissionGateState.load(MemoryOrder::acquire);
         return Snapshot{
@@ -75,7 +78,7 @@ public:
         const Timer begin = TimerNow();
         while(
             transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) != expectedCount
-            && DurationInSeconds<f64>(TimerNow(), begin) < 5.0
+            && DurationInSeconds<f64>(TimerNow(), begin) < s_WriterWaitTimeoutSeconds
         )
             YieldThread();
         return transaction.m_submissionGateWriterCount.load(MemoryOrder::acquire) == expectedCount;
@@ -480,7 +483,7 @@ struct AcceptedCallbackBlocker{
 
 [[nodiscard]] static bool WaitForFlag(const AtomicFlag& flag)noexcept{
     const Timer begin = TimerNow();
-    while(!flag.test(MemoryOrder::acquire) && DurationInSeconds<f64>(TimerNow(), begin) < 5.0)
+    while(!flag.test(MemoryOrder::acquire) && DurationInSeconds<f64>(TimerNow(), begin) < Core::GpuGraphSubmissionTransactionGateTestAccess::s_WriterWaitTimeoutSeconds)
         YieldThread();
     return flag.test(MemoryOrder::acquire);
 }

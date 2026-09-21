@@ -61,13 +61,15 @@ static bool EnvEquals(Alloc::GlobalArena& arena, const char* name, const char* e
 }
 #endif
 
-static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[2], usize& count, const Common::LinuxFrameBackend::Enum backend){
+inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
+
+static void AppendBackend(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity], usize& count, const Common::LinuxFrameBackend::Enum backend){
     NWB_ASSERT(count < LengthOf(outOrder));
     outOrder[count] = backend;
     ++count;
 }
 
-static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[2]){
+static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_LinuxBackendOrderCapacity]){
     Alloc::GlobalArena arena(FrameArenaScope::s_LinuxEnvironmentArena);
     usize count = 0;
 
@@ -181,7 +183,7 @@ static void CleanupBackendFrame(Frame& frame, Common::LinuxFrameBackend::Enum ba
 bool Frame::init(){
     auto& frameData = data<Common::LinuxFrame>();
 
-    Common::LinuxFrameBackend::Enum backendOrder[2] = {};
+    Common::LinuxFrameBackend::Enum backendOrder[FrameDetail::s_LinuxBackendOrderCapacity] = {};
     const usize backendCount = FrameDetail::BuildBackendOrder(backendOrder);
     for(usize i = 0; i < backendCount; ++i){
         const Common::LinuxFrameBackend::Enum backend = backendOrder[i];

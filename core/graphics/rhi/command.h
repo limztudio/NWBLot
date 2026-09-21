@@ -186,6 +186,8 @@ struct CommandMarkerRecordingToken{
 // Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use
 // modular tick arithmetic; absolute endpoints need probed calibrated timestamps plus a full 64-bit queue.
 struct TimerQueryResult{
+    static constexpr u32 s_FullWidthBits = 64u;
+
     u64 beginTicks = 0u;
     u64 endTicks = 0u;
     f64 secondsPerTick = 0.0;
@@ -194,12 +196,12 @@ struct TimerQueryResult{
     bool comparableAcrossSubmissions = false;
 
     [[nodiscard]] bool valid()const{
-        return timestampValidBits > 0u && timestampValidBits <= 64u && secondsPerTick > 0.0;
+        return timestampValidBits > 0u && timestampValidBits <= s_FullWidthBits && secondsPerTick > 0.0;
     }
     [[nodiscard]] u64 timestampMask()const{
         if(!valid())
             return 0u;
-        return timestampValidBits == 64u ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
+        return timestampValidBits == s_FullWidthBits ? Limit<u64>::s_Max : (static_cast<u64>(1u) << timestampValidBits) - 1u;
     }
     [[nodiscard]] u64 maskedBeginTicks()const{ return beginTicks & timestampMask(); }
     [[nodiscard]] u64 durationTicks()const{
@@ -208,14 +210,14 @@ struct TimerQueryResult{
             return 0u;
 
         const u64 duration = (endTicks & mask) - (beginTicks & mask);
-        return timestampValidBits == 64u ? duration : duration & mask;
+        return timestampValidBits == s_FullWidthBits ? duration : duration & mask;
     }
     [[nodiscard]] f64 durationSeconds()const{ return static_cast<f64>(durationTicks()) * secondsPerTick; }
     [[nodiscard]] bool hasComparableRange()const{
         return
             valid()
             && comparableAcrossSubmissions
-            && timestampValidBits == 64u
+            && timestampValidBits == s_FullWidthBits
             && physicalQueue.valid()
             && beginTicks <= endTicks
         ;

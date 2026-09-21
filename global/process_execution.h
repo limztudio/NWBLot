@@ -40,6 +40,11 @@ namespace ProcessExecutionDetail{
 
 
 #if defined(NWB_PLATFORM_WINDOWS)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 template<typename StringT>
 inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStringView value){
     if(!inOutCommand.empty())
@@ -83,9 +88,23 @@ inline void AppendWindowsCommandLineArgument(StringT& inOutCommand, const AStrin
         inOutCommand += '\\';
     inOutCommand += '"';
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr int s_ProcessSignalExitCodeBase = 128;
 inline constexpr int s_ExecFailureExitCode = 127;
 inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
@@ -105,6 +124,11 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
         return s_ProcessSignalExitCodeBase + WTERMSIG(status);
     return -1;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 
@@ -112,6 +136,11 @@ inline constexpr mode_t s_RedirectedOutputFileMode = 0666;
 
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 inline constexpr usize s_DefaultCaptureProcessOutputTimeoutMilliseconds = 3000u;
 inline constexpr u64 s_MillisecondsPerSecond = 1000u;
 inline constexpr u64 s_NanosecondsPerMillisecond = 1000000u;
@@ -189,6 +218,11 @@ inline void KillAndReapProcess(const pid_t childPid)noexcept{
         }
     }
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
 
 

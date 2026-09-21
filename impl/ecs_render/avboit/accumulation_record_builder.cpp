@@ -66,15 +66,8 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         return false;
 
 
-    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
-    if(
-        (generatedGeometryReused || inputs.producesReusableGeometry)
-        && (
-            !inputs.regularComputeEmulationPlanCaptured
-            || inputs.csgComputeEmulationPlanCaptured
-            || inputs.sharedComputeEmulationPlanCaptured
-        )
-    )
+    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    if(!inputs.generatedGeometryReusePlansValid())
         return false;
     accumulationPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_accumulationReusedGeometryProducer = inputs.reusedGeometryProducer;
@@ -473,20 +466,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
-        Core::GpuTaskSchedulingHint accumulationSharedComputeEmulationScheduling;
-        accumulationSharedComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
-        accumulationSharedComputeEmulationScheduling.forceSubmissionBoundary = false;
-        accumulationSharedComputeEmulationScheduling.allowPacketMerge = true;
-        accumulationSharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Keep the full alternating chain in AVBOIT Pre so one list owns timing and handoff.
-        accumulationSharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto addAccumulationSharedComputeEmulationPhase = [
             this,
             &frameBindings,
             &inputs,
             accumulationMaterialFrameStatesGraphOwned = accumulationPayload.accumulationMaterialFrameStatesGraphOwned,
-            accumulationMaterialGeometryStatesGraphOwned = accumulationPayload.accumulationMaterialGeometryStatesGraphOwned,
-            &accumulationSharedComputeEmulationScheduling
+            accumulationMaterialGeometryStatesGraphOwned = accumulationPayload.accumulationMaterialGeometryStatesGraphOwned
         ](
             const Name identity,
             const AStringView markerLabel,
@@ -500,15 +485,15 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             const usize resourceSetUseCount
         ){
             Core::GpuTaskDesc desc;
-            desc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsComputeQueueRequest())
-                .setScheduling(accumulationSharedComputeEmulationScheduling)
-                .setDependencies(&dependency, 1u)
-                .setResourceUses(resourceUses.data(), resourceUses.size())
-                .setResourceSetUses(resourceSetUses, resourceSetUseCount)
-            ;
+            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(
+                desc,
+                identity,
+                markerLabel,
+                dependency,
+                resourceUses,
+                resourceSetUses,
+                resourceSetUseCount
+            );
             AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;

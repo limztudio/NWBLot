@@ -64,15 +64,8 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
         return false;
 
-    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
-    if(
-        (generatedGeometryReused || inputs.producesReusableGeometry)
-        && (
-            !inputs.regularComputeEmulationPlanCaptured
-            || inputs.csgComputeEmulationPlanCaptured
-            || inputs.sharedComputeEmulationPlanCaptured
-        )
-    )
+    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    if(!inputs.generatedGeometryReusePlansValid())
         return false;
     extinctionPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
@@ -457,13 +450,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
-        Core::GpuTaskSchedulingHint extinctionSharedComputeEmulationScheduling;
-        extinctionSharedComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
-        extinctionSharedComputeEmulationScheduling.forceSubmissionBoundary = false;
-        extinctionSharedComputeEmulationScheduling.allowPacketMerge = true;
-        extinctionSharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Integration and Accumulation consume the terminal raster; successors carry dependencies.
-        extinctionSharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         static_cast<void>(inputs.targets);
         Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming = *inputs.extinctionComputeEmulationTiming;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& planAlias = inputs.sharedComputeEmulationPlan;
@@ -487,8 +473,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             streamsUploaded,
             extinctionMaterialFrameStatesGraphOwned = extinctionPayload.extinctionMaterialFrameStatesGraphOwned,
             extinctionMaterialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned,
-            phaseTimingTicket = extinctionPayload.timingTicket,
-            &extinctionSharedComputeEmulationScheduling
+            phaseTimingTicket = extinctionPayload.timingTicket
         ](
             const Name identity,
             const AStringView markerLabel,
@@ -502,15 +487,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             const usize resourceSetUseCount
         ){
             Core::GpuTaskDesc desc;
-            desc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsComputeQueueRequest())
-                .setScheduling(extinctionSharedComputeEmulationScheduling)
-                .setDependencies(&dependency, 1u)
-                .setResourceUses(resourceUses.data(), resourceUses.size())
-                .setResourceSetUses(resourceSetUses, resourceSetUseCount)
-            ;
+            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(
+                desc,
+                identity,
+                markerLabel,
+                dependency,
+                resourceUses,
+                resourceSetUses,
+                resourceSetUseCount
+            );
             AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = graphicsAlias;

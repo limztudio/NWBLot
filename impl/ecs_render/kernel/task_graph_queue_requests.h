@@ -176,6 +176,41 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
 // The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the
 // following graph packets. All of those states are declared below, so this callback retains only timing ownership.
 
+// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a
+// single list owns timing and handoff. Occupancy, extinction, and accumulation share this policy and differ only
+// in their downstream consumers.
+[[nodiscard]] inline Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Medium;
+    scheduling.forceSubmissionBoundary = false;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    return scheduling;
+}
+
+// Shared shared-phase task descriptor core for the occupancy/extinction/accumulation alternating chains above:
+// one Graphics-routed Compute queue, the shared chain scheduling, one dependency, and the caller uses/sets.
+inline void MakeSharedComputeEmulationPhaseTaskDesc(
+    Core::GpuTaskDesc& desc,
+    const Name identity,
+    const AStringView markerLabel,
+    const Core::GpuTaskId& dependency,
+    const Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& resourceUses,
+    const Core::GpuTaskResourceSetUse* const resourceSetUses,
+    const usize resourceSetUseCount
+){
+    desc
+        .setIdentity(identity)
+        .setMarkerLabel(markerLabel)
+        .setQueue(GraphicsComputeQueueRequest())
+        .setScheduling(SharedComputeEmulationChainScheduling())
+        .setDependencies(&dependency, 1u)
+        .setResourceUses(resourceUses.data(), resourceUses.size())
+        .setResourceSetUses(resourceSetUses, resourceSetUseCount)
+    ;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

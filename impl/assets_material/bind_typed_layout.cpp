@@ -952,17 +952,8 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
         resourceReference.resourceKind = resourceKind;
         resourceReference.resourceSource = MaterialResourceSource::Asset;
         resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
-        switch(resourceKind){
-        case MaterialResourceKind::SampledImage2D:
-            resourceReference.textureAsset.virtualPath = resourceName;
-            break;
-        case MaterialResourceKind::Sampler:
-            resourceReference.samplerAsset.virtualPath = resourceName;
-            break;
-        default:
-            NWB_ASSERT(false);
+        if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
             return false;
-        }
         outResourceReferences.push_back(resourceReference);
         return true;
     }

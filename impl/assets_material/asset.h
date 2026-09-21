@@ -419,6 +419,26 @@ struct MaterialResourceReference{
     u32 constantByteOffset = 0u;
 };
 
+// Shared typed-reference asset assignment for the bind and runtime paths: route the resource name into the
+// matching typed asset reference for the declared kind. Returns false for an unhandled kind.
+[[nodiscard]] inline bool AssignMaterialResourceReferenceAsset(
+    MaterialResourceReference& reference,
+    const MaterialResourceKind::Enum resourceKind,
+    const Name& resourceName
+){
+    switch(resourceKind){
+    case MaterialResourceKind::SampledImage2D:
+        reference.textureAsset.virtualPath = resourceName;
+        return true;
+    case MaterialResourceKind::Sampler:
+        reference.samplerAsset.virtualPath = resourceName;
+        return true;
+    default:
+        NWB_ASSERT(false);
+        return false;
+    }
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

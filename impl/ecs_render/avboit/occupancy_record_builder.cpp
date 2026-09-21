@@ -65,15 +65,8 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     if(!inputs.clearTask.valid() || !inputs.uploadTask.valid())
         return false;
 
-    const bool generatedGeometryReused = inputs.reusedGeometryProducer.valid();
-    if(
-        (generatedGeometryReused || inputs.producesReusableGeometry)
-        && (
-            !inputs.regularComputeEmulationPlanCaptured
-            || inputs.csgComputeEmulationPlanCaptured
-            || inputs.sharedComputeEmulationPlanCaptured
-        )
-    )
+    const bool generatedGeometryReused = inputs.generatedGeometryReused();
+    if(!inputs.generatedGeometryReusePlansValid())
         return false;
     occupancyPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
@@ -473,13 +466,6 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
-        Core::GpuTaskSchedulingHint occupancySharedComputeEmulationScheduling;
-        occupancySharedComputeEmulationScheduling.cost = Core::GpuTaskCostHint::Medium;
-        occupancySharedComputeEmulationScheduling.forceSubmissionBoundary = false;
-        occupancySharedComputeEmulationScheduling.allowPacketMerge = true;
-        occupancySharedComputeEmulationScheduling.mergeWithPrevious = true;
-        // Keep the full alternating chain in AVBOIT Pre so one list owns timing and handoff.
-        occupancySharedComputeEmulationScheduling.allowMergeAcrossConsumerFrontier = true;
         const auto addOccupancySharedComputeEmulationPhase = [
             this,
             &deferredTargets,
@@ -491,8 +477,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             occupancyStreamsUploaded = occupancyPayload.occupancyStreamsUploaded,
             occupancyMaterialFrameStatesGraphOwned = occupancyPayload.occupancyMaterialFrameStatesGraphOwned,
             occupancyMaterialGeometryStatesGraphOwned = occupancyPayload.occupancyMaterialGeometryStatesGraphOwned,
-            &avboitPreTimingTicket,
-            &occupancySharedComputeEmulationScheduling
+            &avboitPreTimingTicket
         ](
             const Name identity,
             const AStringView markerLabel,
@@ -506,15 +491,15 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             const usize resourceSetUseCount
         ){
             Core::GpuTaskDesc desc;
-            desc
-                .setIdentity(identity)
-                .setMarkerLabel(markerLabel)
-                .setQueue(GraphicsComputeQueueRequest())
-                .setScheduling(occupancySharedComputeEmulationScheduling)
-                .setDependencies(&dependency, 1u)
-                .setResourceUses(resourceUses.data(), resourceUses.size())
-                .setResourceSetUses(resourceSetUses, resourceSetUseCount)
-            ;
+            RendererTaskGraphDetail::MakeSharedComputeEmulationPhaseTaskDesc(
+                desc,
+                identity,
+                markerLabel,
+                dependency,
+                resourceUses,
+                resourceSetUses,
+                resourceSetUseCount
+            );
             AvboitOccupancySharedComputeEmulationGraphTask::Payload payload;
             payload.frameBindings = frameBindings;
             payload.graphics = &m_graphics;

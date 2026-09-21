@@ -73,6 +73,26 @@ struct AvboitRecordInputsBase{
     explicit AvboitRecordInputsBase(Core::Alloc::GlobalArena& arena){
         static_cast<void>(arena);
     }
+
+    // Shared generated-geometry reuse guard for the occupancy/extinction/accumulation record builders.
+    // Reused geometry requires the regular emulation plan and forbids the CSG/shared plans.
+    [[nodiscard]] bool generatedGeometryReusePlansValid()const noexcept{
+        const bool generatedGeometryReused = reusedGeometryProducer.valid();
+        if(
+            (generatedGeometryReused || producesReusableGeometry)
+            && (
+                !regularComputeEmulationPlanCaptured
+                || csgComputeEmulationPlanCaptured
+                || sharedComputeEmulationPlanCaptured
+            )
+        )
+            return false;
+        return true;
+    }
+
+    [[nodiscard]] bool generatedGeometryReused()const noexcept{
+        return reusedGeometryProducer.valid();
+    }
 };
 
 

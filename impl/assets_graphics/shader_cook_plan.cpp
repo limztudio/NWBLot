@@ -214,10 +214,7 @@ static bool CountShaderVariants(const ShaderCook::ShaderEntry& entry, u64& outVa
 }
 
 static AStringView UnquoteProjectEvaluatorModuleInclude(const AStringView defineValue){
-    if(defineValue.size() < 2u || defineValue.front() != '"' || defineValue.back() != '"')
-        return AStringView{};
-
-    return defineValue.substr(1u, defineValue.size() - 2u);
+    return UnquoteDoubleQuotedView(defineValue);
 }
 
 static bool ResolveProjectEvaluatorModuleIncludePath(

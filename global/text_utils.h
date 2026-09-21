@@ -34,6 +34,29 @@ template<typename CharT>
 }
 
 template<typename CharT>
+[[nodiscard]] inline bool IsConfirmYesText(const BasicStringView<CharT> text){
+    return text == BasicStringView<CharT>("y") || text == BasicStringView<CharT>("yes") || text == BasicStringView<CharT>("true") || text == BasicStringView<CharT>("1");
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool IsConfirmNoText(const BasicStringView<CharT> text){
+    return text == BasicStringView<CharT>("n") || text == BasicStringView<CharT>("no") || text == BasicStringView<CharT>("false") || text == BasicStringView<CharT>("0");
+}
+
+template<typename CharT>
+[[nodiscard]] inline bool ParseConfirmText(const BasicStringView<CharT> text, bool& outValue){
+    if(IsConfirmYesText(text)){
+        outValue = true;
+        return true;
+    }
+    if(IsConfirmNoText(text)){
+        outValue = false;
+        return true;
+    }
+    return false;
+}
+
+template<typename CharT>
 [[nodiscard]] inline BasicStringView<CharT> TruncateView(const BasicStringView<CharT> text, const usize maxChars){
     return text.substr(0u, text.size() < maxChars ? text.size() : maxChars);
 }
@@ -210,6 +233,13 @@ template<typename StringT>
         }
     }
     return text;
+}
+
+template<typename CharT>
+[[nodiscard]] inline BasicStringView<CharT> UnquoteDoubleQuotedView(const BasicStringView<CharT> text){
+    if(text.size() < 2u || text.front() != static_cast<CharT>('"') || text.back() != static_cast<CharT>('"'))
+        return BasicStringView<CharT>();
+    return text.substr(1u, text.size() - 2u);
 }
 
 template<typename CharT>

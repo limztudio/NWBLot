@@ -101,14 +101,8 @@ bool PromptBool(const AString& label, const bool defaultValue, bool& outValue, b
             outValue = defaultValue;
             return true;
         }
-        if(line == s_ConfirmYesShort || line == s_ConfirmYesText || line == s_ConfirmTrueText || line == s_ConfirmOneText){
-            outValue = true;
+        if(ParseConfirmText(AStringView(line.data(), line.size()), outValue))
             return true;
-        }
-        if(line == s_ConfirmNoShort || line == s_ConfirmNoText || line == s_ConfirmFalseText || line == s_ConfirmZeroText){
-            outValue = false;
-            return true;
-        }
 
         NWB_COUT << "Please answer y or n.\n";
     }

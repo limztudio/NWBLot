@@ -49,7 +49,7 @@ using TextWrite::s_OutputFloatPrecision;
 }
 
 [[nodiscard]] bool IsWhitespace(const char c){
-    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+    return IsAsciiSpace(c);
 }
 
 [[nodiscard]] usize SkipWhitespace(const AString& text, usize offset){

@@ -154,6 +154,8 @@ bool ObjectGeometryCacheGraph::prepare(
         return false;
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> cacheReads{scratchArena};
     Vector<Core::GpuTaskId, Core::Alloc::ScratchArena> producers{scratchArena};
+    cacheReads.reserve(drawCount);
+    producers.reserve(drawCount + 1u);
     for(usize drawIndex = 0u; drawIndex < drawCount; ++drawIndex){
         const MaterialPassDrawItem& draw = draws[drawIndex];
         if(!draw.pipelineResources.indexedPipeline || !draw.pipelineResources.objectGeometryDecodePipeline)
@@ -187,6 +189,7 @@ bool ObjectGeometryCacheGraph::prepare(
                 Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
                 if(!GatherPreparedMaterialGeometryUses(m_graph, sets, LengthOf(sets), scratchArena, uses))
                     return false;
+                uses.reserve(uses.size() + 3u);
                 Core::GpuGraphResourceId instances;
                 {
                     const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);

@@ -312,12 +312,14 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         return {};
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> commonUses{scratch};
+    commonUses.reserve(4u);
     commonUses.push_back(ReadBufferUse(materialInstances, Core::BufferRange(0u, instances.size() * sizeof(InstanceGpuData))));
     commonUses.push_back(ReadBufferUse(materialTyped, Core::BufferRange(0u, typedBytes.size())));
     commonUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     commonUses.push_back(ReadUse(slots, Core::ResourceStates::ConstantBuffer));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses{scratch};
+    csgUses.reserve(8u);
     if(hasCsg){
         CsgClipContextSlots clipContext;
         if(!csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings, clipContext))
@@ -361,6 +363,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         if(count == 0u)
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratch};
+        uses.reserve(commonUses.size() + (csg ? csgUses.size() : 0u) + 7u);
         uses.assign(commonUses.begin(), commonUses.end());
         if(csg)
             uses.insert(uses.end(), csgUses.begin(), csgUses.end());

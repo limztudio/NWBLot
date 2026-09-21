@@ -2263,6 +2263,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     if(refractionActive && refractionResources.valid()){
         Core::Alloc::ScratchArena refractionScratch(RendererArenaScope::s_TaskGraphArena);
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> refractionUses{refractionScratch};
+        refractionUses.reserve(LengthOf(refractionInputs) + 5u + LengthOf(sceneReads.uses));
         const Core::GpuGraphResourceId refractionInputs[] = {
             refractionDepth, refractionNormalIor, refractionTintCoverage, refractionInstance,
             opaqueColor, reflectionGraph.opaqueRadiance, worldPosition, depth, avboitAccumColor, avboitAccumExtinction,

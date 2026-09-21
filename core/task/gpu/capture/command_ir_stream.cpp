@@ -126,7 +126,7 @@ namespace __hidden_gpu_command_ir_stream{
 GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)noexcept
     : m_bytes(bytes)
 {
-    if(m_bytes.size() != 0u && !m_bytes.data()){
+    if(!m_bytes.empty() && !m_bytes.data()){
         fail(GpuCommandIrStreamValidationError::NullData, 0u, Limit<u64>::s_Max);
         return;
     }

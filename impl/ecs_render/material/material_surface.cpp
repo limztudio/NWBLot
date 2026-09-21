@@ -442,6 +442,7 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     MaterialTypedByteVector& outMutableDefaultTypedBytes
 ){
     static_cast<void>(materialPath);
+    NWB_ASSERT(material.typedLayoutHash() != 0u);
     outConstantTypedBytes.clear();
     outMutableDefaultTypedBytes.clear();
 
@@ -452,18 +453,6 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
         NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
         NWB_ASSERT((block.byteSize & (sizeof(u32) - 1u)) == 0u);
         NWB_ASSERT(sourceByteOffset <= packedTypedBytes.size() && block.byteSize <= packedTypedBytes.size() - sourceByteOffset);
-        if(!IsValidMaterialBlockClass(block.blockClass)){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has invalid typed material block class"), StringConvert(materialPath.c_str()));
-            return false;
-        }
-        if((block.byteSize & (sizeof(u32) - 1u)) != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block size is not u32 aligned"), StringConvert(materialPath.c_str()));
-            return false;
-        }
-        if(sourceByteOffset > packedTypedBytes.size() || block.byteSize > packedTypedBytes.size() - sourceByteOffset){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block bytes exceed packed data"), StringConvert(materialPath.c_str()));
-            return false;
-        }
 
         MaterialTypedByteVector& targetTypedBytes = block.blockClass == MaterialBlockClass::MaterialConstant
             ? outConstantTypedBytes
@@ -478,10 +467,6 @@ bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
     }
     // Material::loadBinary already validated the packed byte count against the cooked layout.
     NWB_ASSERT(sourceByteOffset == packedTypedBytes.size());
-    if(sourceByteOffset != packedTypedBytes.size()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material layout size does not match packed data"), StringConvert(materialPath.c_str()));
-        return false;
-    }
 
     return true;
 }
@@ -516,16 +501,12 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         return false;
 
     const Material& material = *loadedMaterial;
-    const auto& typedBlockBytes = material.typedBlockBytes();
 
     MaterialSurfaceInfo createdInfo(m_arena);
     createdInfo.materialName = materialPath;
     // Material::loadBinary already rejected empty shader variants and missing material interfaces.
     NWB_ASSERT(!material.shaderVariant().empty());
-    if(material.shaderVariant().empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' has empty shader variant"), StringConvert(materialPath.c_str()));
-        return false;
-    }
+    NWB_ASSERT(material.materialInterface());
     createdInfo.shaderVariant.reserve(material.shaderVariant().size());
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
@@ -544,31 +525,11 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     }
 
     // Material::loadBinary already validated the typed layout (hash, blocks, fields, bytes).
-    NWB_ASSERT(material.typedLayoutHash() != 0u && !typedBlockBytes.empty());
+    NWB_ASSERT(material.typedLayoutHash() != 0u && !material.typedBlockBytes().empty());
     NWB_ASSERT(material.typedLayoutBlocks().size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(material.typedLayoutFields().size() <= static_cast<usize>(Limit<u32>::s_Max));
-    NWB_ASSERT(typedBlockBytes.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    if(!material.materialInterface()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing required material interface"), StringConvert(materialPath.c_str()));
-        return false;
-    }
+    NWB_ASSERT(material.typedBlockBytes().size() <= static_cast<usize>(Limit<u32>::s_Max));
     createdInfo.materialInterface = material.materialInterface();
-    if(material.typedLayoutHash() == 0u || typedBlockBytes.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' is missing typed material data"), StringConvert(materialPath.c_str()));
-        return false;
-    }
-    if(material.typedLayoutBlocks().size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material block count exceeds u32 limits"), StringConvert(materialPath.c_str()));
-        return false;
-    }
-    if(material.typedLayoutFields().size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material field count exceeds u32 limits"), StringConvert(materialPath.c_str()));
-        return false;
-    }
-    if(typedBlockBytes.size() > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material '{}' typed material data exceeds u32 limits"), StringConvert(materialPath.c_str()));
-        return false;
-    }
 
     createdInfo.typedLayoutHash = material.typedLayoutHash();
     createdInfo.typedLayoutBlocks.reserve(material.typedLayoutBlocks().size());
@@ -582,8 +543,10 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
         materialPath,
         createdInfo.constantTypedBytes,
         createdInfo.mutableDefaultTypedBytes
-    ))
+    )){
+        NWB_ASSERT(false);
         return false;
+    }
     createdInfo.unpatchedConstantTypedBytes = createdInfo.constantTypedBytes;
     if(!resolveMaterialResourceReferences(createdInfo))
         return false;

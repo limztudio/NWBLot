@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -385,7 +388,6 @@ asset_bunch bunch = [
         outputDirectory
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("row 3 must be the affine homogeneous row [0, 0, 0, 1]")));
-#else
 #endif
 }
 
@@ -490,7 +492,6 @@ asset_bunch bunch = [
         scratchArena
     );
     EXPECT_FALSE(expanded);
-#else
 #endif
 }
 

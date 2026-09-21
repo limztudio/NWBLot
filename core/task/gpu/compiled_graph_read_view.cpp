@@ -35,7 +35,7 @@ GpuCompiledGraph::ReadView::ReadView(const GpuCompiledGraph& graph)noexcept{
     }
 
     u32 planAccessState = graph.m_planAccessState.load(MemoryOrder::acquire);
-    while(true){
+    for(;;){
         if(
             (planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u
             || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask)
@@ -77,7 +77,7 @@ void GpuCompiledGraph::ReadView::release()noexcept{
     s_activeView = m_previousView;
     if(m_ownsAdmission){
         u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
-        while(true){
+        for(;;){
             if(
                 (planAccessState & GpuCompiledGraph::s_PlanAccessWriterBit) != 0u
                 || (planAccessState & GpuCompiledGraph::s_PlanAccessReaderMask) == 0u

@@ -149,8 +149,7 @@ void GpuTimingRecorder::unsubscribeSampleListener(const GpuTimingSampleSubscript
     }
 
     {
-        // A callback-lifetime barrier cannot be skipped during unsubscribe. Recursive-mutex acquisition failure is
-        // therefore terminal under this noexcept cleanup contract rather than an ordinary recoverable result.
+        // A callback-lifetime barrier cannot be skipped during unsubscribe. Recursive-mutex acquisition failure is therefore terminal under this noexcept cleanup contract rather than an ordinary recoverable result.
         ScopedLock callbackLock(m_sampleCallbackMutex);
         NothrowScopedLock listenerLock(m_sampleListenerMutex);
 
@@ -396,7 +395,7 @@ bool GpuTimingRecorder::retireMarkedPendingAttributionLocked(SampleDispatch& out
 }
 
 void GpuTimingRecorder::retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples){
-    while(true){
+    for(;;){
         SampleDispatch dispatch;
         if(!retireMarkedPendingAttributionLocked(dispatch))
             return;

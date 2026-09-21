@@ -132,8 +132,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
         return;
     }
 
-    // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle. This keeps
-    // blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
+    // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle. This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
     if(s_activeOperation || GpuGraphSubmissionTransaction::SubmissionOperation::active())
         return;
     const bool acquireExclusive = exclusive;
@@ -149,7 +148,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
     }
     else{
         u32 operationState = recordedGraph.m_operationState.load(MemoryOrder::acquire);
-        while(true){
+        for(;;){
             if((operationState & GpuRecordedGraph::s_ArtifactOperationWriterBit) != 0u){
                 if(!waitRead)
                     return;
@@ -202,7 +201,7 @@ GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
     }
     else{
         u32 operationState = m_recordedGraph->m_operationState.load(MemoryOrder::acquire);
-        while(true){
+        for(;;){
             if((operationState & GpuRecordedGraph::s_ArtifactOperationReaderMask) == 0u){
                 NWB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph shared artifact operation must retain its reader claim");
                 TerminateInvariant();
@@ -259,8 +258,7 @@ GpuRecordedGraph::~GpuRecordedGraph(){
         TerminateInvariant();
     }
 
-    // Destruction normally joins existing readers. A callback that already owns another artifact or transaction
-    // cannot wait here without permitting a symmetric cross-object destruction deadlock.
+    // Destruction normally joins existing readers. A callback that already owns another artifact or transaction cannot wait here without permitting a symmetric cross-object destruction deadlock.
     if(ArtifactOperation::active() || GpuGraphSubmissionTransaction::SubmissionOperation::active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
         if(!artifactOperation.valid()){
@@ -274,7 +272,7 @@ GpuRecordedGraph::~GpuRecordedGraph(){
     }
 
     u32 operationState = m_operationState.load(MemoryOrder::acquire);
-    while(true){
+    for(;;){
         if((operationState & s_ArtifactOperationWriterBit) != 0u){
             m_operationState.wait(operationState, MemoryOrder::acquire);
             operationState = m_operationState.load(MemoryOrder::acquire);
@@ -581,9 +579,7 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
         && validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
         && storage->graphIdentity == &graph
         && storage->recordingAttemptGeneration != 0u
-        // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its
-        // active attempt lease. Declaration admission plus the exact compiled-plan identity proves that the source
-        // graph has not mutated; active-attempt matching is required only by claim/reset paths.
+        // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease. Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated; active-attempt matching is required only by claim/reset paths.
     ;
 }
 
@@ -724,8 +720,7 @@ GpuTaskGraphPhysicalQueueRecordingStatistics GpuRecordedGraph::physicalQueueReco
         statistics.recordingSeconds += recordedPacket.recordingSeconds;
         if(recordedPacket.recordingWorkerIndex != 0u)
             ++statistics.workerRoutedPacketCount;
-        // The cached flag is graph-wide. A packet on this queue retains overlap with a published packet on another
-        // physical queue, preserving the aggregate's cross-queue recording semantics.
+        // The cached flag is graph-wide. A packet on this queue retains overlap with a published packet on another physical queue, preserving the aggregate's cross-queue recording semantics.
         if(storage.packetRecordingOverlaps[packetIndex] != 0u)
             ++statistics.parallelPacketCount;
     }
@@ -746,9 +741,7 @@ bool GpuTaskGraphExternalCompletionToken::validFor(
     )
         return false;
 
-    // A metadata-only compatibility binding may originate on a current-device queue omitted from the assignment topology.
-    // Graph-owned tokens instead require complete-topology validation during compile; this fallback validates device
-    // lifetime here and leaves concrete queue validation to the submitting Device.
+    // A metadata-only compatibility binding may originate on a current-device queue omitted from the assignment topology. Graph-owned tokens instead require complete-topology validation during compile; this fallback validates device lifetime here and leaves concrete queue validation to the submitting Device.
     return token.deviceGeneration == planAccess.deviceGeneration();
 }
 

@@ -35,7 +35,7 @@ template<typename ArenaT>
     WIN32_FIND_DATA data = {};
     HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
     if(findHandle != INVALID_HANDLE_VALUE){
-        while(true){
+        for(;;){
             const TStringView fileName(data.cFileName);
             if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT("..")){
                 const Path<ArenaT> child = path / fileName;
@@ -90,7 +90,7 @@ template<typename ArenaT>
         return 0u;
     }
 
-    while(true){
+    for(;;){
         errno = 0;
         dirent* entry = readdir(directory);
         if(entry == nullptr){

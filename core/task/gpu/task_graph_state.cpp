@@ -310,8 +310,7 @@ bool GpuTaskGraph::beginRecordingAttempt(
             || task.lifecycleState == TaskLifecycleState::Accepted
         )
             return false;
-        // Once a plan began recording, every task must receive its discarded callback before a different plan or
-        // retry can re-arm the graph.
+        // Once a plan began recording, every task must receive its discarded callback before a different plan or retry can re-arm the graph.
         if(
             m_activeRecordingPlanGeneration != 0u
             && task.lifecycleState != TaskLifecycleState::Discarded
@@ -674,7 +673,7 @@ bool GpuTaskGraph::waitForSubmissionExceptionRecordingClaims(
     if(recordingAttemptGeneration == 0u || !submissionBinding.valid())
         return false;
 
-    while(true){
+    for(;;){
         u32 activeClaimCount = 0u;
         {
             NothrowScopedLock lock(m_lifecycleMutex);
@@ -702,8 +701,7 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
         return false;
 
     const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states){
-        // Invalid declarations intentionally remain a record-time failure so legacy callers retain their existing
-        // diagnostic. A valid snapshot, however, must never cross a native Device lifetime.
+        // Invalid declarations intentionally remain a record-time failure so legacy callers retain their existing diagnostic. A valid snapshot, however, must never cross a native Device lifetime.
         return !states || !states->valid() || states->validForDeviceGeneration(deviceGeneration);
     };
 
@@ -746,8 +744,6 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
     }
     return true;
 }
-
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

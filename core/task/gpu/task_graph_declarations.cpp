@@ -32,7 +32,7 @@ u64 GpuTaskGraph::allocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
 
     u64 nextGeneration = s_NextGeneration.load(MemoryOrder::relaxed);
-    while(true){
+    for(;;){
         if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
             NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
             TerminateInvariant();

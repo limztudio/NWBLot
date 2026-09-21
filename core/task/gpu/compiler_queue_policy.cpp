@@ -30,14 +30,12 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
     | static_cast<u8>(GpuQueueCapability::Graphics)
 ;
 
-// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph
-// generation remains the identity of declared task/resource handles; this distinct generation invalidates every
-// packet-local artifact whenever a graph is compiled into a replacement immutable plan.
+// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles; this distinct generation invalidates every packet-local artifact whenever a graph is compiled into a replacement immutable plan.
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
     u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
-    while(true){
+    for(;;){
         if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
             NWB_FATAL_ASSERT_MSG(false, "GPU compiled plan generation identity space is exhausted");
             TerminateInvariant();
@@ -81,8 +79,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return false;
 }
 
-// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by
-// this compile topology. A single requested family remains exclusive and may use ordinary ownership handoffs.
+// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by this compile topology. A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
     const ResourceQueueSharing::Mask sharing,
     const GpuTaskGraphQueueTopology& topology
@@ -191,9 +188,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
             const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
             if(
                 previous.id == queue.id
-                // Queue IDs are graph-facing handles, but one family/index pair must still name exactly one native
-                // transport. Otherwise same-class routing could manufacture distinct packet identities for the same
-                // VkQueue and incorrectly turn ordinary queue order into a timeline edge.
+                // Queue IDs are graph-facing handles, but one family/index pair must still name exactly one native transport. Otherwise same-class routing could manufacture distinct packet identities for the same VkQueue and incorrectly turn ordinary queue order into a timeline edge.
                 || (previous.familyIndex == queue.familyIndex && previous.queueIndex == queue.queueIndex)
             )
                 return false;
@@ -233,8 +228,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 }
 
 [[nodiscard]] bool ShouldUseDedicatedTransfer(const GpuTaskSchedulingHint& hint)noexcept{
-    // Dedicated copies buy queue overlap only when their synchronization cost is plausibly amortized. Keep the
-    // same conservative threshold as Compute until per-packet timing feeds a richer queue score.
+    // Dedicated copies buy queue overlap only when their synchronization cost is plausibly amortized. Keep the same conservative threshold as Compute until per-packet timing feeds a richer queue score.
     return ShouldUseDedicatedCompute(hint);
 }
 

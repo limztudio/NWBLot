@@ -518,12 +518,16 @@ void Material::setTypedLayout(
     const TypedBlockByteVector& blockBytes
 ){
     m_typedLayoutHash = layoutHash;
+    m_typedLayoutBlocks.reserve(blocks.size());
     m_typedLayoutBlocks.assign(blocks.begin(), blocks.end());
+    m_typedLayoutFields.reserve(fields.size());
     m_typedLayoutFields.assign(fields.begin(), fields.end());
+    m_typedBlockBytes.reserve(blockBytes.size());
     m_typedBlockBytes.assign(blockBytes.begin(), blockBytes.end());
 }
 
 void Material::setResourceReferences(const ResourceReferenceVector& resourceReferences){
+    m_resourceReferences.reserve(resourceReferences.size());
     m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }
 

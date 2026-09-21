@@ -392,6 +392,7 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
         NWB_MEMCPY(destination.data(), sourceSize * sizeof(DestinationValue), source.data(), sourceSize * sizeof(SourceValue));
     }
     else{
+        ContainerDetail::ReserveGrowingCapacity(destination, sourceSize);
         destination.assign(source.begin(), source.end());
     }
 }

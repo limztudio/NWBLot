@@ -448,6 +448,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
     auto* layout = NewArenaObject<InputLayout>(m_context.objectArena, m_context);
     if(attributeCount > 0){
         static_assert(IsTriviallyCopyable_V<VertexAttributeDesc>, "vertex attribute descriptors must be trivially copyable");
+        layout->m_attributes.reserve(attributeCount);
         layout->m_attributes.assign(d, d + attributeCount);
     }
 

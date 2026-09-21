@@ -458,8 +458,10 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
 
     preparedRole->accelStructType = accelStructType;
     preparedRole->buildFlags = buildFlags;
-    if(geometrySignatureCount != 0u)
+    if(geometrySignatureCount != 0u){
+        preparedRole->geometrySignatures.reserve(geometrySignatureCount);
         preparedRole->geometrySignatures.assign(geometrySignatures, geometrySignatures + geometrySignatureCount);
+    }
 
     m_resourceReferences.retainResource(accelStruct);
     m_pendingAccelStructBuildCommits.push_back(PendingAccelStructBuildCommit{

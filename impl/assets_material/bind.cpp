@@ -207,9 +207,13 @@ void CopyMaterialBindTypedLayoutDefaults(
     Material::ResourceReferenceVector& outResourceReferences
 ){
     outLayoutHash = layout.layoutHash;
+    outBlocks.reserve(layout.typedLayoutBlocks.size());
     outBlocks.assign(layout.typedLayoutBlocks.begin(), layout.typedLayoutBlocks.end());
+    outFields.reserve(layout.typedLayoutFields.size());
     outFields.assign(layout.typedLayoutFields.begin(), layout.typedLayoutFields.end());
+    outBlockBytes.reserve(layout.typedBlockBytes.size());
     outBlockBytes.assign(layout.typedBlockBytes.begin(), layout.typedBlockBytes.end());
+    outResourceReferences.reserve(layout.resourceReferences.size());
     outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
 }
 
@@ -225,6 +229,7 @@ bool ApplyMaterialBindTypedLayoutParameters(
     Material::ResourceReferenceVector& outResourceReferences
 ){
     // Seed with the layout's static fixture references; per-material asset-path parameters append below.
+    outResourceReferences.reserve(layout.resourceReferences.size());
     outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
     for(const auto& [parameterName, parameterValue] : parameters){
         if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(

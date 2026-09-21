@@ -76,6 +76,7 @@ struct MeshSetupTaskData{
         return bytes;
 
     const u8* const byteData = static_cast<const u8*>(data);
+    bytes.reserve(dataSize);
     bytes.assign(byteData, byteData + dataSize);
 
     return bytes;

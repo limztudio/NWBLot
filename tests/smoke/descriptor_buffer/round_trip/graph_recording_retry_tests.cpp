@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -354,7 +357,7 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentRecordersClaimOneMergedPacketAnd
         EXPECT_EQ(views.compiled.packetForTask(suffixTask), packet);
         const GpuCompiledPacketView packetView = views.compiled.packet(packet);
         ASSERT_TRUE(packetView.valid());
-        EXPECT_EQ(packetView.plan->taskCount, 2u);
+        EXPECT_EQ(packetView.plan->taskCount, s_ExpectedDualCount);
     }
 
     GpuRecordedGraph ownerRecordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -422,7 +425,7 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentRecordersClaimOneMergedPacketAnd
         retryRecordedGraph
     ));
     ASSERT_TRUE(retryRecordedGraph.packetSnapshot(packet).has_value());
-    EXPECT_EQ(state.prefixRecordCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.prefixRecordCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
     EXPECT_EQ(state.suffixRecordCount.load(MemoryOrder::relaxed), 1u);
     EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 1u);
     EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 1u);
@@ -435,12 +438,12 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentRecordersClaimOneMergedPacketAnd
         suffixTask,
         retryRecordedGraph.recordingAttemptGeneration()
     );
-    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
-    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
     const GpuTaskGraphSubmissionStatistics retryStatistics = retryTransaction.submissionStatistics();
     ASSERT_TRUE(retryStatistics.valid());
     EXPECT_EQ(retryStatistics.rejectedPacketCount, 1u);
-    EXPECT_EQ(retryStatistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(retryStatistics.rejectedTaskCount, s_ExpectedDualCount);
     EXPECT_EQ(retryStatistics.rejectedSubmissionCount, 0u);
 
     retryTransaction.rejectTask(
@@ -454,11 +457,11 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentRecordersClaimOneMergedPacketAnd
         compiledGraph,
         retryRecordedGraph.recordingAttemptGeneration()
     ));
-    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
-    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
     EXPECT_TRUE(graph.tryReset());
-    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), 2u);
-    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.prefixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
+    EXPECT_EQ(state.suffixDiscardCount.load(MemoryOrder::relaxed), s_ExpectedDualCount);
 }
 
 

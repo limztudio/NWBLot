@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -558,7 +561,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
-        ASSERT_EQ(views.compiled.packetCount(), 2u);
+        ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
 
         const GpuCompiledTaskView compiledProducer = views.compiled.findTask(producer);
         const GpuCompiledTaskView compiledConsumer = views.compiled.findTask(consumer);

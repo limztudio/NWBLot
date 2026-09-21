@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -267,7 +270,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningSelectorMergesWithGraphC
     EXPECT_EQ(views.compiled.packetCount(), 1u);
     EXPECT_EQ(selectorConsumerPacket, selectorPacket);
     EXPECT_EQ(views.compiled.packet(selectorPacket).plan->queue, primaryGraphicsQueue);
-    EXPECT_EQ(views.compiled.packet(selectorPacket).plan->taskCount, 2u);
+    EXPECT_EQ(views.compiled.packet(selectorPacket).plan->taskCount, s_ExpectedDualCount);
     EXPECT_EQ(
         views.compiled.packetizationDecisionForTask(selectorConsumerTask),
         GpuTaskPacketizationDecision::MergedFrontierScored

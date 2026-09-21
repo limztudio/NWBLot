@@ -24,6 +24,10 @@
 namespace __hidden_compute_emulation_alias_plan_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -72,7 +76,7 @@ struct AliasPlanContext{
     void appendDraws(MaterialPassDrawItems& draws, const usize count, const MaterialPipelineCsgMode::Enum csgMode){
         draws.computeDrawItems.reserve(count);
         for(usize index = 0u; index < count; ++index){
-            const u32 drawIndex = static_cast<u32>(m_buffers.size() / 2u);
+            const u32 drawIndex = static_cast<u32>(m_buffers.size() / s_ExpectedDualCount);
             char indexText[32u] = {};
             const Name identity = DeriveName(Name("tests/compute_emulation_alias/mesh"), FormatDecimal(drawIndex, indexText));
             const Core::BufferHandle source = makeBuffer(DeriveName(identity, AStringView("/source")));
@@ -85,7 +89,7 @@ struct AliasPlanContext{
             draw.pipelineKey.csgMode = csgMode;
             draw.instanceIndex = drawIndex;
             draw.materialConstantByteOffset = drawIndex * 16u;
-            draw.shadingModelId = 2u;
+            draw.shadingModelId = s_ExpectedDualCount;
             draw.meshletConeCullScaleSafe = true;
             MaterialPassMeshResourceSnapshot& mesh = draw.meshResources;
             mesh.sourceBuffers = RuntimeMeshBuffers{
@@ -171,7 +175,7 @@ TEST(ComputeEmulationAliasPlan, RegularCapturePreservesOrderOwnersAndCurrentDraw
     ASSERT_EQ(plan.drawItems.size(), 40u);
     ASSERT_EQ(plan.meshDrawItems.size(), 1u);
     EXPECT_EQ(source->getReferenceCount(), sourceReferences + 11u);
-    EXPECT_EQ(output->getReferenceCount(), outputReferences + 2u);
+    EXPECT_EQ(output->getReferenceCount(), outputReferences + s_ExpectedDualCount);
     for(usize index = 0u; index < plan.drawItems.size(); ++index){
         EXPECT_TRUE(plan.drawItems[index].meshResources.valid());
         EXPECT_EQ(plan.drawItems[index].meshKey, context.m_regular.computeDrawItems[index].meshKey);
@@ -263,7 +267,7 @@ TEST(ComputeEmulationAliasPlan, EmptyAndLateInvalidInputsClearEveryCapturedPlan)
             context.m_regular.computeDrawItems.back().meshResources.emulationVertexBuffer = nullptr;
             context.m_receivers.computeDrawItems.back().meshResources.emulationVertexBuffer = nullptr;
         }
-        else if(invalidKind == 2u){
+        else if(invalidKind == s_ExpectedDualCount){
             context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
             context.m_receivers.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
         }
@@ -304,7 +308,7 @@ TEST(ComputeEmulationAliasPlan, CsgPlansRetainFrozenFramePayloadsAndRequireBothW
         ASSERT_EQ(frame.receiverRanges.size(), 1u);
         ASSERT_EQ(frame.cutters.size(), 1u);
         EXPECT_EQ(frame.receiverRanges[0u].shadingModelId, 7u);
-        EXPECT_EQ(frame.workRegion.minX, 2u);
+        EXPECT_EQ(frame.workRegion.minX, s_ExpectedDualCount);
         EXPECT_EQ(frame.workRegion.maxY, 13u);
         receiver.materialize(materialized, frame);
         EXPECT_EQ(materialized.computeDrawItems.back().meshKey, context.m_receivers.computeDrawItems.back().meshKey);
@@ -393,7 +397,7 @@ TEST(ComputeEmulationAliasPlan, ReceiverMatchesAllowsMirroredDuplicatesWithinEit
 }
 
 TEST(ComputeEmulationAliasPlan, RegularCaptureRejectsChangedUnifiedOutputLayoutAndRepresentation){
-    AliasPlanContext context(2u);
+    AliasPlanContext context(s_ExpectedDualCount);
     RegularPlan plan(context.m_planArena);
     auto& draw = context.m_regular.computeDrawItems[1u];
     draw.meshResources.emulationIndexByteOffset = 256u;
@@ -451,8 +455,8 @@ TEST(ComputeEmulationAliasPlan, OpaqueAndTransparentSnapshotsRetainAndReplaceInd
     source.regular.computeDrawItems.push_back(context.m_regular.computeDrawItems.front());
     ECSRenderDetail::OpaqueMaterialPassGraphSnapshot opaque(context.m_planArena);
     ECSRenderDetail::TransparentMaterialPassGraphSnapshot transparent(context.m_planArena);
-    opaque.capture(source, context.m_csg, 2u, 64u);
-    transparent.capture(source, context.m_csg, 2u, 64u);
+    opaque.capture(source, context.m_csg, s_ExpectedDualCount, 64u);
+    transparent.capture(source, context.m_csg, s_ExpectedDualCount, 64u);
     source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision = 18u;
     source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.buffer.reset();
     const auto verify = [&](auto& snapshot){
@@ -467,7 +471,7 @@ TEST(ComputeEmulationAliasPlan, OpaqueAndTransparentSnapshotsRetainAndReplaceInd
         EXPECT_EQ(retained.meshResources.objectGeometryCache.sourceRevision, 17u);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.indexByteOffset, 192u);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.indexCount, 6u);
-        EXPECT_EQ(snapshot.instanceCount, 2u);
+        EXPECT_EQ(snapshot.instanceCount, s_ExpectedDualCount);
         EXPECT_EQ(snapshot.materialTypedByteCount, 64u);
         source.regular.indexedDrawItems.clear();
         snapshot.capture(source, context.m_csg, 1u, 32u);
@@ -480,7 +484,7 @@ TEST(ComputeEmulationAliasPlan, OpaqueAndTransparentSnapshotsRetainAndReplaceInd
 }
 
 TEST(ComputeEmulationAliasPlan, FrozenRegularPlanRetainsIndependentIndexedRasterDraws){
-    AliasPlanContext context(2u);
+    AliasPlanContext context(s_ExpectedDualCount);
     RegularPlan regular(context.m_planArena);
     MaterialPassDrawItem indexed = context.m_regular.computeDrawItems.front();
     indexed.meshKey = Name("tests/compute_emulation_alias/indexed");
@@ -495,7 +499,7 @@ TEST(ComputeEmulationAliasPlan, FrozenRegularPlanRetainsIndependentIndexedRaster
     MaterialPassDrawItems materialized(context.m_inputArena);
     regular.materialize(materialized);
     ASSERT_EQ(materialized.indexedDrawItems.size(), 1u);
-    ASSERT_EQ(materialized.computeDrawItems.size(), 2u);
+    ASSERT_EQ(materialized.computeDrawItems.size(), s_ExpectedDualCount);
     const auto& retained = materialized.indexedDrawItems.front();
     EXPECT_EQ(retained.meshKey, indexed.meshKey);
     EXPECT_EQ(retained.meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
@@ -508,7 +512,7 @@ TEST(ComputeEmulationAliasPlan, FrozenRegularPlanRetainsIndependentIndexedRaster
 }
 
 TEST(ComputeEmulationAliasPlan, AvboitAndCsgSnapshotsRejectChangedUnifiedOutputLayout){
-    AliasPlanContext context(2u);
+    AliasPlanContext context(s_ExpectedDualCount);
     AvboitPlan avboit(context.m_planArena);
     IntervalPlan interval(context.m_planArena);
     ReceiverPlan receiver(context.m_planArena);
@@ -562,12 +566,12 @@ TEST(ComputeEmulationAliasPlan, SharedPlanRejectsChangedDrawMetadataAndOutput){
     plan.drawItems[0u].pipelineResources.indexedGeometryOutput = false;
     EXPECT_TRUE(plan.matches(0u));
     // Mutating a frozen generation input (instance payload) invalidates the lease at record time.
-    ++context.m_regular.computeDrawItems[2u].instanceIndex;
-    plan.drawItems[2u].instanceIndex = context.m_regular.computeDrawItems[2u].instanceIndex;
-    EXPECT_FALSE(plan.matches(2u));
-    --context.m_regular.computeDrawItems[2u].instanceIndex;
-    plan.drawItems[2u].instanceIndex = context.m_regular.computeDrawItems[2u].instanceIndex;
-    EXPECT_TRUE(plan.matches(2u));
+    ++context.m_regular.computeDrawItems[s_ThirdElementIndex].instanceIndex;
+    plan.drawItems[s_ThirdElementIndex].instanceIndex = context.m_regular.computeDrawItems[s_ThirdElementIndex].instanceIndex;
+    EXPECT_FALSE(plan.matches(s_ExpectedDualCount));
+    --context.m_regular.computeDrawItems[s_ThirdElementIndex].instanceIndex;
+    plan.drawItems[s_ThirdElementIndex].instanceIndex = context.m_regular.computeDrawItems[s_ThirdElementIndex].instanceIndex;
+    EXPECT_TRUE(plan.matches(s_ExpectedDualCount));
     // A recycled buffer address with different generation inputs must never validate a stale lease.
     Core::BufferHandle otherOutput = context.makeBuffer(Name("tests/compute_emulation_alias/other"));
     context.m_regular.computeDrawItems[1u].meshResources.emulationVertexBuffer = otherOutput;
@@ -726,19 +730,19 @@ TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_Unique512){
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_Unique1024){
-    BenchmarkAliasPlans(1024u, 2u, AliasWorkload::Unique);
+    BenchmarkAliasPlans(1024u, s_ExpectedDualCount, AliasWorkload::Unique);
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_LatePointerAlias1024){
-    BenchmarkAliasPlans(1024u, 2u, AliasWorkload::LatePointer);
+    BenchmarkAliasPlans(1024u, s_ExpectedDualCount, AliasWorkload::LatePointer);
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_LateSlotAlias1024){
-    BenchmarkAliasPlans(1024u, 2u, AliasWorkload::LateSlot);
+    BenchmarkAliasPlans(1024u, s_ExpectedDualCount, AliasWorkload::LateSlot);
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_LateCsgIntersection1024){
-    BenchmarkAliasPlans(1024u, 2u, AliasWorkload::LateIntersection);
+    BenchmarkAliasPlans(1024u, s_ExpectedDualCount, AliasWorkload::LateIntersection);
 }
 
 TEST(ComputeEmulationAliasPlanBenchmark, DISABLED_MutatedCsgIntersection1024){

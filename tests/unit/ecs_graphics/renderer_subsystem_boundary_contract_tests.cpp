@@ -16,6 +16,9 @@
 namespace __hidden_renderer_subsystem_boundary_contract_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -1130,7 +1133,7 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "NWB_ASSERT(csgContextHeapSlotReady);"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!csgContextHeapSlotReady)returnfalse;"));
     EXPECT_TRUE(ContainsText(compactMaterialDraw, "if(!frameHeapSlotsReady)returnfalse;"));
-    EXPECT_EQ(CountText(compactMaterialDraw, "if(!setMaterialPassDrawPushConstants(context,drawItem,mesh))"), 2u);
+    EXPECT_EQ(CountText(compactMaterialDraw, "if(!setMaterialPassDrawPushConstants(context,drawItem,mesh))"), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(compactDeferredGbufferTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
     EXPECT_TRUE(ContainsText(compactOpaqueCsgTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
     EXPECT_TRUE(ContainsText(compactAvboitOccupancyTaskHeader, "MeshFrameBindingSnapshotframeBindings;"));
@@ -1460,7 +1463,7 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     // accumulation) alongside the 10 inline payload contexts.
     EXPECT_EQ(capturedReadinessCount, 12u);
     EXPECT_EQ(liveReadinessCount, 0u);
-    EXPECT_EQ(capturedContextCount, 2u);
+    EXPECT_EQ(capturedContextCount, s_ExpectedDualCount);
 
     EXPECT_EQ(CountText(compactPrefix, ".frameBindings=frameBindings;"), 8u);
     for(const StringView payloadStorage : {
@@ -1827,10 +1830,10 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     EXPECT_TRUE(ContainsText(compactRayTracingHeader, "renderSurfelGi(Core::CommandList&commandList,DeferredFrameTargets&targets,constDeferredLightingGraphResources&deferredLightingResources,"));
 
     EXPECT_EQ(CountText(compactRayTracingShadow, "DeferredLightingGraphResourcesdeferredLightingResources;"), 8u);
-    EXPECT_EQ(CountText(compactRayTracingCaustics, "DeferredLightingGraphResourcesdeferredLightingResources;"), 2u);
+    EXPECT_EQ(CountText(compactRayTracingCaustics, "DeferredLightingGraphResourcesdeferredLightingResources;"), s_ExpectedDualCount);
     EXPECT_EQ(CountText(compactRayTracingSurfel, "DeferredLightingGraphResourcesdeferredLightingResources;"), 7u);
     EXPECT_EQ(CountText(compactRayTracingShadow, ".deferredLightingResources=deferredLightingResources,"), 8u);
-    EXPECT_EQ(CountText(compactRayTracingCaustics, ".deferredLightingResources=deferredLightingResources,"), 2u);
+    EXPECT_EQ(CountText(compactRayTracingCaustics, ".deferredLightingResources=deferredLightingResources,"), s_ExpectedDualCount);
     EXPECT_EQ(CountText(compactRayTracingSurfel, ".deferredLightingResources=deferredLightingResources,"), 7u);
     EXPECT_TRUE(ContainsText(compactRayTracingShadow, "deferredLightingResources.sceneShadingBuffer.get()"));
     EXPECT_TRUE(ContainsText(compactRayTracingCaustics, "deferredLightingResources.lightBuffer.get()"));

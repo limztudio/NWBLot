@@ -18,6 +18,9 @@
 namespace __hidden_scratch_reuse_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -100,7 +103,7 @@ static void RecordUnsignedProperty(const NotNull<const char*> key, const u64 val
 }
 
 static void RecordSeries(const Array<RepeatedSample, 5u>& samples){
-    constexpr Array<usize, 5u> s_CallCounts{ 1u, 2u, 4u, 8u, 16u };
+    constexpr Array<usize, 5u> s_CallCounts{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     constexpr Array<NotNull<const char*>, 5u> s_UsedKeys{
         MakeNotNull("scratch_used_after_1"), MakeNotNull("scratch_used_after_2"), MakeNotNull("scratch_used_after_4"),
         MakeNotNull("scratch_used_after_8"), MakeNotNull("scratch_used_after_16"),
@@ -138,13 +141,13 @@ TEST(ScratchArenaReuse, ReverseFreesCrossChunkBoundariesAndReuseAllEmptyChunks){
         const ArenaMemoryStats current = arena.memoryStats();
         EXPECT_EQ(current.usedBytes, 0u);
         EXPECT_EQ(current.reservedBytes, warm.reservedBytes);
-        EXPECT_EQ(current.allocationCount, (iteration + 2u) * 3u);
+        EXPECT_EQ(current.allocationCount, (iteration + s_ExpectedDualCount) * 3u);
         EXPECT_EQ(current.deallocationCount, current.allocationCount);
     }
 }
 
 TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
-    constexpr usize s_Alignments[]{ 1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
+    constexpr usize s_Alignments[]{ 1u, s_ExpectedDualCount, 4u, 8u, 16u, 32u, 64u, 128u, 256u };
     ArenaMemoryStats before;
     ArenaMemoryStats live;
     bool valid = true;
@@ -192,7 +195,7 @@ TEST(ScratchArenaReuse, ColdAlignmentBucketsAllocateOnceAndReleaseAllBacking){
 
 TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     ScratchArena arena(Name("tests/scratch_reuse/invalid_alignment"), 256u);
-    auto* sentinel = static_cast<u8*>(arena.allocate(2u, 32u));
+    auto* sentinel = static_cast<u8*>(arena.allocate(s_ExpectedDualCount, 32u));
     ASSERT_NE(sentinel, nullptr);
     sentinel[0u] = 71u;
     const ArenaMemoryStats before = arena.memoryStats();
@@ -212,7 +215,7 @@ TEST(ScratchArenaReuse, InvalidRuntimeAlignmentDoesNotConsumeExistingBucket){
     EXPECT_EQ(arena.memoryStats().deallocationCount, before.deallocationCount);
     EXPECT_THROW({ EXPECT_EQ(arena.allocate(256u, Limit<usize>::s_Max), nullptr); }, AllocationSizeException);
     EXPECT_EQ(arena.memoryStats().usedBytes, before.usedBytes);
-    arena.deallocate(sentinel, 2u, 32u);
+    arena.deallocate(sentinel, s_ExpectedDualCount, 32u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -343,8 +346,8 @@ TEST(ScratchArenaReuse, ZeroByteOperationsRemainValidBeforeAndAfterCachingTheLas
     EXPECT_EQ(arena.reallocate(resized, 8u, 0u), resized);
     arena.deallocate(resized, 8u, 0u);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    EXPECT_EQ(arena.memoryStats().allocationCount, 2u);
-    EXPECT_EQ(arena.memoryStats().deallocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, s_ExpectedDualCount);
 }
 
 TEST(ScratchArenaReuse, ZeroInitialCapacityNeedsPositiveBackingBeforeRawZeroAllocation){
@@ -546,7 +549,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedScopedCollection4096){
     Vector<u64, ScratchArena> caller(arena);
     caller.assign(32u, 0x76543210u);
     Array<RepeatedSample, 5u> samples{};
-    constexpr Array<usize, 5u> s_SampleCalls{ 1u, 2u, 4u, 8u, 16u };
+    constexpr Array<usize, 5u> s_SampleCalls{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     usize sampleIndex = 0u;
     u64 elapsed = 0u;
     bool valid = true;
@@ -574,7 +577,7 @@ TEST(ScratchArenaReuseBenchmark, DISABLED_RepeatedMixedAlignmentBatches){
         { 1u, 4096u }, { 8u, 4096u }, { 64u, 4096u }, { 256u, 4096u },
     };
     Array<RepeatedSample, 5u> samples{};
-    constexpr Array<usize, 5u> s_SampleCalls{ 1u, 2u, 4u, 8u, 16u };
+    constexpr Array<usize, 5u> s_SampleCalls{ 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     usize sampleIndex = 0u;
     u64 elapsed = 0u;
     bool valid = true;

@@ -24,6 +24,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -179,7 +182,7 @@ static void FillSource(const Case& testCase, const Source::Enum source, Vector<P
             case Source::GlassNormal:
                 value = crossedPanel ? Pixel{ -1.0f, 0.0f, 0.0f, 1.5f } : Pixel{ 0.7071068f, 0.0f, 0.7071068f, 1.5f };
                 if(testCase.pattern == Pattern::Invalid && index % 3u == 0u)
-                    value.a = index % 2u == 0u ? 1.0f : BitCast<f32>(0x7f800000u);
+                    value.a = index % s_ExpectedDualCount == 0u ? 1.0f : BitCast<f32>(0x7f800000u);
                 break;
             case Source::ScreenColor:
                 value = { 0.5f + static_cast<f32>(x % 4u), 0.25f, 2.0f, 1.0f };
@@ -212,7 +215,7 @@ static void RunClassify(
     const u32 tilesY = DivideUp<u32>(height, NWB_REFLECTION_CLASSIFY_GROUP_SIZE);
     const u32 tileCount = tilesX * tilesY;
     constexpr u32 outputDescriptorBase = Source::kCount;
-    constexpr u32 slotsDescriptor = outputDescriptorBase + 2u;
+    constexpr u32 slotsDescriptor = outputDescriptorBase + s_ExpectedDualCount;
     constexpr u32 viewDescriptor = slotsDescriptor + 1u;
     constexpr u32 parametersDescriptor = viewDescriptor + 1u;
     constexpr u32 queueDescriptor = parametersDescriptor + 1u;
@@ -245,7 +248,7 @@ static void RunClassify(
     outputDesc.setFormat(Format::RGBA16_FLOAT).setInUAV(true);
     TextureHandle outputs[2];
     StagingTextureHandle readbacks[2];
-    for(u32 surface = 0u; surface < 2u; ++surface){
+    for(u32 surface = 0u; surface < s_ExpectedDualCount; ++surface){
         outputs[surface] = device.createTexture(outputDesc);
         readbacks[surface] = device.createStagingTexture(outputDesc, CpuAccessMode::Read);
         ASSERT_TRUE(outputs[surface]);
@@ -269,8 +272,8 @@ static void RunClassify(
         ASSERT_TRUE(heap.write(descriptors[slotsDescriptor + index], DescriptorWriteItem::ConstantBuffer(0u, constants[index].get())));
     }
     const u32 rawWordCounts[] = {
-        pixelCount * 2u + s_GuardWords, NWB_REFLECTION_COUNTER_SIZE / sizeof(u32),
-        4u + tileCount * 2u + s_GuardWords, 4u + tileCount * 2u + s_GuardWords,
+        pixelCount * s_ExpectedDualCount + s_GuardWords, NWB_REFLECTION_COUNTER_SIZE / sizeof(u32),
+        4u + tileCount * s_ExpectedDualCount + s_GuardWords, 4u + tileCount * s_ExpectedDualCount + s_GuardWords,
     };
     BufferHandle raw[4];
     for(u32 index = 0u; index < LengthOf(raw); ++index){
@@ -283,7 +286,7 @@ static void RunClassify(
         ASSERT_TRUE(raw[index]);
         descriptors[queueDescriptor + index] = heap.allocate(GpuDescriptorClass::StorageBuffer);
         ASSERT_TRUE(descriptors[queueDescriptor + index].valid());
-        const DescriptorWriteItem item = index == 2u
+        const DescriptorWriteItem item = index == s_ExpectedDualCount
             ? DescriptorWriteItem::RawBuffer_SRV(0u, raw[index].get())
             : DescriptorWriteItem::RawBuffer_UAV(0u, raw[index].get());
         ASSERT_TRUE(heap.write(descriptors[queueDescriptor + index], item));
@@ -312,8 +315,8 @@ static void RunClassify(
     parameters.traceMode = testCase.mode;
     parameters.hardwareEnabled = testCase.hardware;
     parameters.diagnosticsEnabled = testCase.diagnostics;
-    parameters.maxHardwareRays = fullQueue ? pixelCount * 2u : Min(testCase.budget, pixelCount * 2u);
-    parameters.queueCapacity = fullQueue ? pixelCount * 2u : Min(testCase.capacity, pixelCount * 2u);
+    parameters.maxHardwareRays = fullQueue ? pixelCount * s_ExpectedDualCount : Min(testCase.budget, pixelCount * s_ExpectedDualCount);
+    parameters.queueCapacity = fullQueue ? pixelCount * s_ExpectedDualCount : Min(testCase.capacity, pixelCount * s_ExpectedDualCount);
     parameters.opaqueSpecularSlot = descriptors[Source::OpaqueSpecular].slot();
     parameters.glassSpecularSlot = descriptors[Source::GlassSpecular].slot();
     parameters.opaqueOutputSlot = descriptors[outputDescriptorBase].slot();
@@ -356,20 +359,20 @@ static void RunClassify(
         initialRaw.resize(rawWordCounts[index]);
         for(u32& value : initialRaw)
             value = index == 0u ? s_QueueSentinel : (index == 1u ? 0u : s_FeedbackSentinel);
-        if(index == 2u){
-            initialRaw[0] = testCase.feedback == Feedback::BoundExceedsBudget ? pixelCount * 2u + 1u : pixelCount * 2u;
-            initialRaw[1] = testCase.probeIndex - (testCase.feedback == Feedback::StaleFrame ? 2u : 1u);
+        if(index == s_ExpectedDualCount){
+            initialRaw[0] = testCase.feedback == Feedback::BoundExceedsBudget ? pixelCount * s_ExpectedDualCount + 1u : pixelCount * s_ExpectedDualCount;
+            initialRaw[1] = testCase.probeIndex - (testCase.feedback == Feedback::StaleFrame ? s_ExpectedDualCount : 1u);
             initialRaw[2] = tileCount + (testCase.feedback == Feedback::WrongTileCount ? 1u : 0u);
             initialRaw[3] = testCase.feedback == Feedback::InvalidHeader ? 0u : NWB_REFLECTION_FEEDBACK_HEADER_VALID;
-            for(u32 entry = 0u; entry < tileCount * 2u; ++entry){
+            for(u32 entry = 0u; entry < tileCount * s_ExpectedDualCount; ++entry){
                 initialRaw[4u + entry] = testCase.feedback == Feedback::FirstMiss ? NWB_REFLECTION_FEEDBACK_FIRST_MISS
                     : (testCase.feedback == Feedback::Active ? NWB_REFLECTION_FEEDBACK_ACTIVE : NWB_REFLECTION_FEEDBACK_DORMANT);
-                if(testCase.feedback == Feedback::InvalidEntry && entry % 2u == 0u)
+                if(testCase.feedback == Feedback::InvalidEntry && entry % s_ExpectedDualCount == 0u)
                     initialRaw[4u + entry] = 0xffffffffu;
             }
         }
         ASSERT_TRUE(commandList->tryWriteBuffer(*raw[index], initialRaw.data(), initialRaw.size() * sizeof(u32)));
-        commandList->setBufferState(raw[index].get(), index == 2u ? ResourceStates::ShaderResource : ResourceStates::UnorderedAccess);
+        commandList->setBufferState(raw[index].get(), index == s_ExpectedDualCount ? ResourceStates::ShaderResource : ResourceStates::UnorderedAccess);
     }
     for(const TextureHandle& output : outputs){
         commandList->clearTextureFloat(*output, s_AllSubresources, Color(outputSentinel));
@@ -383,7 +386,7 @@ static void RunClassify(
     const u32 push = descriptors[parametersDescriptor].slot();
     commandList->setPushConstants(&push, sizeof(push));
     commandList->dispatch(tilesX, tilesY, 1u);
-    for(u32 surface = 0u; surface < 2u; ++surface)
+    for(u32 surface = 0u; surface < s_ExpectedDualCount; ++surface)
         commandList->copyTexture(*readbacks[surface], TextureSlice{}, *outputs[surface], TextureSlice{});
     ASSERT_FALSE(commandList->commandRecordingFailed());
     commandList->close();
@@ -395,7 +398,7 @@ static void RunClassify(
     ASSERT_TRUE(token.valid());
     ASSERT_TRUE(device.waitForIdle());
     observation.pixels.resize(pixelCount * 8u);
-    for(u32 surface = 0u; surface < 2u; ++surface){
+    for(u32 surface = 0u; surface < s_ExpectedDualCount; ++surface){
         usize pitch = 0u;
         const u8* mapped = static_cast<const u8*>(device.mapStagingTexture(*readbacks[surface], TextureSlice{}, CpuAccessMode::Read, &pitch));
         ASSERT_NE(mapped, nullptr);
@@ -407,7 +410,7 @@ static void RunClassify(
         }
     }
     for(u32 index = 0u; index < LengthOf(raw); ++index){
-        if(index == 2u)
+        if(index == s_ExpectedDualCount)
             continue;
         const u32* mapped = static_cast<const u32*>(device.mapBuffer(*raw[index], CpuAccessMode::Read));
         ASSERT_NE(mapped, nullptr);
@@ -430,13 +433,13 @@ static void CheckQueue(
     const u32 tilesX = DivideUp<u32>(testCase.width, NWB_REFLECTION_CLASSIFY_GROUP_SIZE);
     const u32 tileCount = tilesX * DivideUp<u32>(testCase.height, NWB_REFLECTION_CLASSIFY_GROUP_SIZE);
     const u32 candidates = fullReference.counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)];
-    ASSERT_LE(candidates, pixelCount * 2u);
+    ASSERT_LE(candidates, pixelCount * s_ExpectedDualCount);
     ASSERT_EQ(observed.counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)], candidates);
     Vector<GroupCandidates, Alloc::ScratchArena> groups(scratchArena);
     groups.resize(tileCount);
     for(u32 index = 0u; index < candidates; ++index){
         const u32 packed = fullReference.queue[index];
-        ASSERT_LT(packed, pixelCount * 2u);
+        ASSERT_LT(packed, pixelCount * s_ExpectedDualCount);
         const u32 surface = packed / pixelCount;
         const u32 pixel = packed % pixelCount;
         const u32 x = pixel % testCase.width;
@@ -462,7 +465,7 @@ static void CheckQueue(
     u32 cursor = 0u;
     while(cursor < count){
         const u32 packed = observed.queue[cursor];
-        ASSERT_LT(packed, pixelCount * 2u);
+        ASSERT_LT(packed, pixelCount * s_ExpectedDualCount);
         const u32 pixel = packed % pixelCount;
         const u32 tile = pixel / testCase.width / 8u * tilesX + pixel % testCase.width / 8u;
         ASSERT_EQ(seen[tile], 0u) << "A group reservation may move, but its canonical block cannot be interleaved or duplicated";
@@ -521,8 +524,8 @@ static void CompareCase(
         EXPECT_EQ(after.counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)], 0u);
     }
     if(testCase.mode == NWB_REFLECTION_MODE_HARDWARE && testCase.hardware != 0u && testCase.pattern == Pattern::Dense){
-        EXPECT_EQ(after.counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)], pixelCount * 2u);
-        for(u32 pixel = 0u; pixel < pixelCount * 2u; ++pixel)
+        EXPECT_EQ(after.counters[NWB_REFLECTION_COUNTER_CANDIDATES / sizeof(u32)], pixelCount * s_ExpectedDualCount);
+        for(u32 pixel = 0u; pixel < pixelCount * s_ExpectedDualCount; ++pixel)
             EXPECT_EQ(after.pixels[pixel * 4u + 3u], ConvertFloatToHalf(1.0f));
     }
     if(testCase.diagnostics != 0u && testCase.mode == NWB_REFLECTION_MODE_SCREEN

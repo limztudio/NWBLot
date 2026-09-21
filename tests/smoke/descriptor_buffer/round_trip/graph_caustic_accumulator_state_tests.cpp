@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -29,7 +32,7 @@ namespace Tests{
 struct NativePacketHardwareCausticsEntryProbeTask{
     static constexpr u32 s_ShaderBufferCount = 6u;
     static constexpr u32 s_ConstantBufferCount = 4u;
-    static constexpr u32 s_ShaderTextureCount = 2u;
+    static constexpr u32 s_ShaderTextureCount = s_ExpectedDualCount;
 
     struct Payload{
         Buffer* shaderBuffers[s_ShaderBufferCount] = {};
@@ -423,7 +426,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHardwareCausticsEntryStatesRecor
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId prefixPacket = views.compiled.packetForTask(prefixTask);
     const GpuSubmissionPacketId irradianceClearPacket = views.compiled.packetForTask(irradianceClearTask);
     const GpuSubmissionPacketId accumulatorBootstrapClearPacket =

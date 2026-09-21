@@ -17,6 +17,9 @@
 namespace __hidden_reflection_statistics_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -124,8 +127,8 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnly
     ReflectionStatistics statistics;
     EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
     const u32 counters[] = {
-        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, 2u, 1u, 3u, 4u, 5u,
-        123u, 25u, 70u, 2u, 17u, 3u, 6u, 19u,
+        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u,
+        123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u,
     };
     static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
     context.control->complete(key, Token(), counters);
@@ -156,7 +159,7 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnly
     EXPECT_EQ(statistics.hardwareQueries, 98u);
     EXPECT_EQ(statistics.bootstrapEvents, 42u);
     EXPECT_EQ(statistics.transparentPaths, 12u);
-    EXPECT_EQ(statistics.unsupportedPaths, 2u);
+    EXPECT_EQ(statistics.unsupportedPaths, s_ExpectedDualCount);
     EXPECT_EQ(statistics.limitedPaths, 1u);
     EXPECT_EQ(statistics.ambiguousPaths, 3u);
     EXPECT_EQ(statistics.tirEvents, 4u);
@@ -164,7 +167,7 @@ TEST(ReflectionStatistics, AcceptedCopyPublishesFrozenMetadataAndAllCountersOnly
     EXPECT_EQ(statistics.potentialReceivers, 123u);
     EXPECT_EQ(statistics.screenReturns, 25u);
     EXPECT_EQ(statistics.feedbackBypassedPixels, 70u);
-    EXPECT_EQ(statistics.feedbackProbeTiles, 2u);
+    EXPECT_EQ(statistics.feedbackProbeTiles, s_ExpectedDualCount);
     EXPECT_EQ(statistics.screenIterations, (static_cast<u64>(3u) << 32u) | 17u);
     EXPECT_EQ(statistics.screenLimitMisses, 6u);
     EXPECT_EQ(statistics.exteriorEligibleRays, 19u);

@@ -15,6 +15,9 @@
 namespace __hidden_telemetry_recorder_reuse_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -157,7 +160,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
     ASSERT_TRUE(RecordFilledPayload(recorder, 256u, 3u));
     ASSERT_TRUE(recorder.recordBuiltPayload(
         Telemetry::EventKind::PerfFrame,
-        2u,
+        s_ExpectedDualCount,
         7u,
         [&](Telemetry::TelemetryArena& arena, Telemetry::TelemetryBytes& payload){
             EXPECT_EQ(&arena, &testArena.arena);
@@ -175,7 +178,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
             return nested;
         }
     ));
-    ASSERT_EQ(recorder.eventCount(), 2u);
+    ASSERT_EQ(recorder.eventCount(), s_ExpectedDualCount);
     const auto* nested = recorder.view().eventAt(0u);
     const auto* outer = recorder.view().eventAt(1u);
     ASSERT_NE(nested, nullptr);
@@ -212,7 +215,7 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
     bool builderCalled = false;
     EXPECT_FALSE(recorder.recordBuiltPayload(
         Telemetry::EventKind::PerfFrame,
-        2u,
+        s_ExpectedDualCount,
         0u,
         [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&){ builderCalled = true; return true; }
     ));
@@ -241,7 +244,7 @@ TEST(Telemetry, RecorderPublicationUsesCaptureOptionsAtBuilderCompletion){
     EXPECT_EQ(recorder.view().eventAt(0u)->payload.back(), 71u);
     EXPECT_FALSE(recorder.recordBuiltPayload(
         Telemetry::EventKind::PerfFrame,
-        2u,
+        s_ExpectedDualCount,
         0u,
         [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload){
             payload.resize(64u, 29u);
@@ -268,7 +271,7 @@ TEST(Telemetry, RecorderFailedAndThrowingBuildersRecycleWithoutAllocations){
     EXPECT_THROW(
         EXPECT_TRUE(recorder.recordBuiltPayload(
             Telemetry::EventKind::PerfFrame,
-            2u,
+            s_ExpectedDualCount,
             0u,
             [](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes& payload)->bool{
                 payload.resize(128u, 47u);
@@ -342,7 +345,7 @@ TEST(Telemetry, RecorderReusedSlotsKeepForeignPayloadsIndependentAndMoveOwnedPay
     Telemetry::TelemetryBytes ownedPayload(testArena.arena);
     ownedPayload.resize(128u, 67u);
     const u8* const ownedData = ownedPayload.data();
-    ASSERT_TRUE(recorder.recordPayload(Telemetry::EventKind::PerfFrame, 2u, Move(ownedPayload)));
+    ASSERT_TRUE(recorder.recordPayload(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, Move(ownedPayload)));
     EXPECT_EQ(recorder.view().eventAt(0u)->payload.data(), ownedData);
     EXPECT_TRUE(ownedPayload.empty());
     recorder.clear();
@@ -456,13 +459,13 @@ TEST(Telemetry, RecorderExplicitForeignBuilderStorageIsCopiedOrReleasedOnEveryEx
                         payload.~Payload();
                         new(&payload) Payload(Move(foreignPayload));
                         EXPECT_EQ(payload.get_allocator().arenaPtr(), &foreignArena.arena);
-                        if(outcome == 2u)
+                        if(outcome == s_ExpectedDualCount)
                             throw PayloadBuildFailure{};
                         if(outcome == 3u)
                             recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
                         return outcome != 1u;
                     };
-                    if(outcome == 2u){
+                    if(outcome == s_ExpectedDualCount){
                         EXPECT_THROW(
                             EXPECT_TRUE(recorder.recordBuiltPayload(Telemetry::EventKind::PerfFrame, 1u, 0u, buildPayload)),
                             PayloadBuildFailure

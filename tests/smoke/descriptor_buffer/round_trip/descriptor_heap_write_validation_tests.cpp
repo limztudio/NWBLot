@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -39,7 +42,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsRetaggedAndIncompati
     GpuDescriptorHeapDesc heapDesc;
     heapDesc
         .setResourceCapacity(8u)
-        .setSamplerCapacity(2u)
+        .setSamplerCapacity(s_ExpectedDualCount)
         .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));
@@ -379,7 +382,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapTypedRetentionOutlivesExter
     GpuDescriptorHeapDesc heapDesc;
     heapDesc
         .setResourceCapacity(4u)
-        .setSamplerCapacity(2u)
+        .setSamplerCapacity(s_ExpectedDualCount)
         .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));
@@ -414,7 +417,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapTypedRetentionOutlivesExter
     ASSERT_TRUE(heap.write(bufferHandle, DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer.get())));
     EXPECT_EQ(observedBuffer->getReferenceCount(), 3u);
     buffer.reset();
-    EXPECT_EQ(observedBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(observedBuffer->getReferenceCount(), s_ExpectedDualCount);
     heap.free(bufferHandle);
     EXPECT_EQ(observedBuffer->getReferenceCount(), 1u);
 
@@ -423,7 +426,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapTypedRetentionOutlivesExter
     ASSERT_TRUE(heap.write(textureHandle, DescriptorWriteItem::Texture_SRV(0u, texture.get())));
     EXPECT_EQ(observedTexture->getReferenceCount(), 3u);
     texture.reset();
-    EXPECT_EQ(observedTexture->getReferenceCount(), 2u);
+    EXPECT_EQ(observedTexture->getReferenceCount(), s_ExpectedDualCount);
     heap.free(textureHandle);
     EXPECT_EQ(observedTexture->getReferenceCount(), 1u);
 
@@ -432,7 +435,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapTypedRetentionOutlivesExter
     ASSERT_TRUE(heap.write(samplerHandle, DescriptorWriteItem::Sampler(0u, sampler.get())));
     EXPECT_EQ(observedSampler->getReferenceCount(), 3u);
     sampler.reset();
-    EXPECT_EQ(observedSampler->getReferenceCount(), 2u);
+    EXPECT_EQ(observedSampler->getReferenceCount(), s_ExpectedDualCount);
     heap.free(samplerHandle);
     EXPECT_EQ(observedSampler->getReferenceCount(), 1u);
 }
@@ -448,7 +451,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsForeignResourcesAndD
     GpuDescriptorHeapDesc heapDesc;
     heapDesc
         .setResourceCapacity(8u)
-        .setSamplerCapacity(2u)
+        .setSamplerCapacity(s_ExpectedDualCount)
         .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
     ;
     ASSERT_TRUE(heap.initialize(heapDesc));

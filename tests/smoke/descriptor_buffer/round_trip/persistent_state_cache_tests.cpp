@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -79,7 +82,7 @@ TEST_F(DescriptorBufferRoundTripTest, PersistentGraphStateCacheFiltersAndMergesA
             fanInScratchArena
         ));
     }
-    EXPECT_EQ(acceptedState.retainedBufferCount(), 2u);
+    EXPECT_EQ(acceptedState.retainedBufferCount(), s_ExpectedDualCount);
     GpuPersistentResourceStateCache::Candidate recordingSource(acceptedState);
     {
         const BufferHandle recordingLiveBuffers[] = { liveBuffer, retiredBuffer };

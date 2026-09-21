@@ -21,6 +21,9 @@
 namespace __hidden_model_payload_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -141,7 +144,7 @@ TEST(ModelPayload, RejectsDuplicateNamesWithinAndAcrossObjectKinds){
         switch(duplicateCase){
         case 0u: inputs.skeletonObjects.push_back(inputs.skeletonObjects.front()); break;
         case 1u: inputs.staticMeshObjects.push_back(inputs.staticMeshObjects.front()); break;
-        case 2u: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects.front()); break;
+        case s_ExpectedDualCount: inputs.skinnedMeshObjects.push_back(inputs.skinnedMeshObjects.front()); break;
         case 3u: inputs.staticMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
         case 4u: inputs.skinnedMeshObjects.front().name = inputs.skeletonObjects.front().name; break;
         case 5u: inputs.skinnedMeshObjects.front().name = inputs.staticMeshObjects.front().name; break;
@@ -161,7 +164,7 @@ TEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels){
         switch(invalidCase){
         case 0u: inputs.skeletonObjects.front().name = NAME_NONE; break;
         case 1u: inputs.skeletonObjects.front().skeleton.reset(); break;
-        case 2u: inputs.staticMeshObjects.front().name = NAME_NONE; break;
+        case s_ExpectedDualCount: inputs.staticMeshObjects.front().name = NAME_NONE; break;
         case 3u: inputs.staticMeshObjects.front().mesh.reset(); break;
         case 4u: inputs.skinnedMeshObjects.front().name = NAME_NONE; break;
         case 5u: inputs.skinnedMeshObjects.front().mesh.reset(); break;
@@ -189,7 +192,7 @@ TEST(ModelPayload, RejectsMissingOrWrongKindParents){
         switch(invalidCase){
         case 0u: inputs.staticMeshObjects.front().parentObject = Name("missing"); break;
         case 1u: inputs.staticMeshObjects.front().parentObject = Name("prop"); break;
-        case 2u: inputs.staticMeshObjects.front().parentObject = Name("body"); break;
+        case s_ExpectedDualCount: inputs.staticMeshObjects.front().parentObject = Name("body"); break;
         case 3u: inputs.staticMeshObjects.front().parentObject = NAME_NONE; break;
         case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name("missing"); break;
         case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name("prop"); break;
@@ -246,9 +249,9 @@ TEST(ModelPayload, RepeatedValidationReclaimsCallerScratchAfterSuccessAndRejecti
     ASSERT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
     const ArenaMemoryStats warm = inputs.scratchArena.memoryStats();
     for(usize iteration = 0u; iteration < 16u; ++iteration){
-        inputs.skinnedMeshObjects.front().name = iteration % 2u == 0u ? Name("body") : Name("prop");
+        inputs.skinnedMeshObjects.front().name = iteration % s_ExpectedDualCount == 0u ? Name("body") : Name("prop");
         inputs.publish();
-        EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % 2u == 0u);
+        EXPECT_EQ(inputs.model.validatePayload(inputs.scratchArena), iteration % s_ExpectedDualCount == 0u);
         const ArenaMemoryStats current = inputs.scratchArena.memoryStats();
         EXPECT_EQ(current.usedBytes, warm.usedBytes);
         EXPECT_EQ(current.reservedBytes, warm.reservedBytes);

@@ -22,6 +22,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -112,7 +115,7 @@ struct NativeAcceptedFrontierWithoutPrefixTask{
 
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedClaimsWithoutInvokingDiscardObservers){
     auto& device = DescriptorBufferRoundTripTest::device();
-    CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -250,7 +253,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierCallerExceptionDrainsTimedCla
 // must consume successful, false, and throwing packet states without invoking any discard observer.
 TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResolvesWholeAttemptWithoutDiscardCallbacks){
     auto& device = DescriptorBufferRoundTripTest::device();
-    CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
     ParallelRecordingExceptionState state(recordingWorkers);
     GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
     GpuTaskSchedulingHint scheduling;
@@ -372,7 +375,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeReadyFrontierCallerExceptionResol
 TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierWorkerExceptionIsTerminal){
     const auto recordWithFailingWorker = [](){
         auto& device = DescriptorBufferRoundTripTest::device();
-        CpuTaskScheduler recordingWorkers(2u);
+        CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
         ParallelRecordingExceptionState state(recordingWorkers, true);
         GpuTaskGraph graph(DescriptorBufferRoundTripTest::arena());
         GpuTaskSchedulingHint scheduling;
@@ -514,7 +517,7 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackExceptionResolves
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
 
-        ASSERT_EQ(views.compiled.packetCount(), 2u);
+        ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
         firstPacket = views.compiled.packetForTask(firstTask);
         secondPacket = views.compiled.packetForTask(secondTask);
         ASSERT_TRUE(firstPacket.valid());
@@ -563,13 +566,13 @@ TEST_F(DescriptorBufferRoundTripTest, CompositeRecordedCallbackExceptionResolves
     EXPECT_EQ(state.discardCount, 0u);
     EXPECT_EQ(state.destructionCount, 0u);
     const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
-    EXPECT_EQ(statistics.rejectedPacketCount, 2u);
-    EXPECT_EQ(statistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(statistics.rejectedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.rejectedTaskCount, s_ExpectedDualCount);
     EXPECT_TRUE(transaction.tryReset(compiledGraph));
     recordedGraph.reset(compiledGraph);
     EXPECT_TRUE(graph.tryReset());
     EXPECT_EQ(state.discardCount, 0u);
-    EXPECT_EQ(state.destructionCount, 2u);
+    EXPECT_EQ(state.destructionCount, s_ExpectedDualCount);
 }
 
 
@@ -725,7 +728,7 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedFrontierRejectionExceptionResolves
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
 
-        ASSERT_EQ(views.compiled.packetCount(), 2u);
+        ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
         rejectedPacket = views.compiled.packetForTask(rejectedTask);
         remainingPacket = views.compiled.packetForTask(remainingTask);
         ASSERT_TRUE(rejectedPacket.valid());
@@ -765,13 +768,13 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedFrontierRejectionExceptionResolves
     EXPECT_FALSE(transaction.packetToken(rejectedPacket).valid());
     EXPECT_FALSE(transaction.packetToken(remainingPacket).valid());
     const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
-    EXPECT_EQ(statistics.rejectedPacketCount, 2u);
-    EXPECT_EQ(statistics.rejectedTaskCount, 2u);
+    EXPECT_EQ(statistics.rejectedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.rejectedTaskCount, s_ExpectedDualCount);
     EXPECT_TRUE(transaction.tryReset(compiledGraph));
     recordedGraph.reset(compiledGraph);
     EXPECT_TRUE(graph.tryReset());
     EXPECT_EQ(state.discardCount, 1u);
-    EXPECT_EQ(state.destructionCount, 2u);
+    EXPECT_EQ(state.destructionCount, s_ExpectedDualCount);
 }
 
 

@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -209,7 +213,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     clearTextureTaskDescPayload.destination = textureResource;
     clearTextureTaskDescPayload.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
     clearTextureTaskDescPayload.valueType = GpuClearTextureTaskValueType::UInt;
-    clearTextureTaskDescPayload.uintValue = UIntColor(1u, 2u, 3u, 4u);
+    clearTextureTaskDescPayload.uintValue = UIntColor(1u, s_ExpectedDualCount, 3u, 4u);
     clearTextureTaskDescPayload.recordHooks = GpuClearTextureTaskRecordHooks{
         .context = &textureHooks,
         .beforeClear = beforeTextureClear,
@@ -316,7 +320,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
         && transferFamily != Limit<u32>::s_Max
         && transferFamily != graphicsFamily
     ;
-    GpuPhysicalQueueInfo queues[2u] = {
+    GpuPhysicalQueueInfo queues[s_ThirdElementIndex] = {
         GpuPhysicalQueueInfo{
             .familyIndex = graphicsFamily,
             .queueIndex = 0u,
@@ -384,7 +388,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     ASSERT_EQ(commandIrCapture.recordCount(), 4u);
     const GpuCommandIrBuiltinTaskRecord* const bufferCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const textureCapture = commandIrCapture.recordAt(1u);
-    const GpuCommandIrBuiltinTaskRecord* const textureRectCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const textureRectCapture = commandIrCapture.recordAt(s_ThirdElementIndex);
     const GpuCommandIrBuiltinTaskRecord* const depthTextureCapture = commandIrCapture.recordAt(3u);
     ASSERT_NE(bufferCapture, nullptr);
     ASSERT_NE(textureCapture, nullptr);
@@ -400,7 +404,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
     EXPECT_EQ(textureCapture->packet, clearTexturePacket);
     EXPECT_EQ(textureCapture->destination, textureResource);
     EXPECT_EQ(textureCapture->clearTextureValueType, GpuClearTextureTaskValueType::UInt);
-    EXPECT_EQ(textureCapture->uintClearValue, UIntColor(1u, 2u, 3u, 4u));
+    EXPECT_EQ(textureCapture->uintClearValue, UIntColor(1u, s_ExpectedDualCount, 3u, 4u));
     EXPECT_EQ(textureRectCapture->opcode, GpuCommandIrOpcode::ClearTextureRectUInt);
     EXPECT_EQ(textureRectCapture->task, clearTextureRectTask);
     EXPECT_EQ(textureRectCapture->packet, clearTextureRectPacket);
@@ -527,7 +531,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInClearTasksRecordAndCapture){
             ;
             EXPECT_EQ(pixel[0u], static_cast<u8>(expected.r));
             EXPECT_EQ(pixel[1u], static_cast<u8>(expected.g));
-            EXPECT_EQ(pixel[2u], static_cast<u8>(expected.b));
+            EXPECT_EQ(pixel[s_ThirdElementIndex], static_cast<u8>(expected.b));
             EXPECT_EQ(pixel[3u], static_cast<u8>(expected.a));
         }
     }
@@ -553,7 +557,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
         .setHeight(s_Height)
         .setDimension(TextureDimension::Texture2DMS)
         .setFormat(Format::RGBA8_UNORM)
-        .setSampleCount(2u)
+        .setSampleCount(s_ExpectedDualCount)
         .setInRenderTarget(true)
         .setInitialState(ResourceStates::Common)
         .setKeepInitialState(true)
@@ -580,7 +584,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
                 .setHeight(s_Height)
                 .setDimension(TextureDimension::Texture2DMS)
                 .setFormat(Format::D32)
-                .setSampleCount(2u)
+                .setSampleCount(s_ExpectedDualCount)
                 .setInRenderTarget(true)
                 .setInitialState(ResourceStates::Common)
                 .setKeepInitialState(true)
@@ -592,7 +596,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
         resolvedColor.get(),
         multisampleDepth.get(),
     };
-    const usize initialTextureCount = multisampleDepth ? LengthOf(initialTextures) : 2u;
+    const usize initialTextureCount = multisampleDepth ? LengthOf(initialTextures) : s_ExpectedDualCount;
     ASSERT_TRUE(PrimeTextureStatesForGraph(
         device,
         initialTextures,
@@ -735,7 +739,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphFullMultisampleTextureClearSubmitsAnd
         &failedPacket,
         &capture
     )) << "failed packet " << failedPacket.index;
-    EXPECT_EQ(capture.recordCount(), depthTask.valid() ? 2u : 1u);
+    EXPECT_EQ(capture.recordCount(), depthTask.valid() ? s_ExpectedDualCount : 1u);
     const GpuCommandIrBuiltinTaskRecord* const colorRecord = capture.recordAt(0u);
     ASSERT_NE(colorRecord, nullptr);
     EXPECT_EQ(colorRecord->opcode, GpuCommandIrOpcode::ClearTexture);
@@ -1278,7 +1282,7 @@ TEST_F(DescriptorBufferRoundTripTest, MergedGraphBuiltInsEndInheritedAndHookOpen
             ;
             EXPECT_EQ(pixel[0u], 0x11u);
             EXPECT_EQ(pixel[1u], 0x22u);
-            EXPECT_EQ(pixel[2u], 0x33u);
+            EXPECT_EQ(pixel[s_ThirdElementIndex], 0x33u);
             EXPECT_EQ(pixel[3u], 0x44u);
         }
     }

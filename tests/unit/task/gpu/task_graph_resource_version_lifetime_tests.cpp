@@ -17,6 +17,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -103,7 +107,7 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], consumer);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], clobber);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], clobber);
     EXPECT_TRUE(HasResourceVersionEdge(
         analysis,
         producer,
@@ -298,7 +302,7 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], clobber);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], consumer);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], consumer);
     EXPECT_FALSE(HasResourceVersionEdge(
         analysis,
         consumer,
@@ -362,7 +366,7 @@ TEST(GpuTaskGraphResourceVersion, ProtectsImportedRootConsumerFromLaterClobber){
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0u], consumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], clobber);
     EXPECT_TRUE(HasResourceVersionEdge(
@@ -468,7 +472,7 @@ TEST(GpuTaskGraphResourceVersion, TreatsImportedRootLifetimeWriterAsPreBirthForP
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], importedConsumer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producer);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], consumer);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], consumer);
     EXPECT_TRUE(HasResourceVersionEdge(
         analysis,
         importedConsumer,

@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -218,7 +221,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
                 .setWidth(s_OutputSize)
                 .setHeight(s_OutputSize)
                 .setDimension(TextureDimension::Texture2DArray)
-                .setArraySize(2u)
+                .setArraySize(s_ExpectedDualCount)
                 .setFormat(Format::RGBA16_FLOAT)
                 .setInUAV(true)
             ;
@@ -240,7 +243,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
     ASSERT_TRUE(mapReadback);
     ASSERT_TRUE(depthReadback);
     BufferHandle referenceBuffers[2];
-    for(u32 index = 0u; index < 2u; ++index){
+    for(u32 index = 0u; index < s_ExpectedDualCount; ++index){
         BufferDesc desc;
         desc
             .setByteSize(sizes[BufferIndex::Counts + index])
@@ -262,7 +265,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
         ASSERT_TRUE(framebuffers[index]);
         if(index != 0u)
             continue;
-        for(u32 mode = 0u; mode < 2u; ++mode){
+        for(u32 mode = 0u; mode < s_ExpectedDualCount; ++mode){
             RasterState raster;
             raster.setCullMode(RasterCullMode::None).enableDepthClip().enableScissor();
             DepthStencilState depth;
@@ -354,7 +357,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
     commands->commitBarriers();
     const u32 mode = testCase.opaque ? 0u : 1u;
     // The unchanged direct capture is the raster oracle; the second capture uses only production-generated indirect arguments.
-    for(u32 replay = 0u; replay < 2u; ++replay){
+    for(u32 replay = 0u; replay < s_ExpectedDualCount; ++replay){
         if(replay != 0u){
             ASSERT_TRUE(commands->tryWriteBuffer(*buffers[BufferIndex::Counts], counts.data(), counts.size() * sizeof(u32)));
             ASSERT_TRUE(commands->tryWriteBuffer(*buffers[BufferIndex::Events], events.data(), events.size() * sizeof(Event)));
@@ -399,7 +402,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
         Dispatch(graphicsDevice, *commands, *programs.shade, shadePush, shadeGroups);
 
         if(replay == 0u){
-            for(u32 index = 0u; index < 2u; ++index)
+            for(u32 index = 0u; index < s_ExpectedDualCount; ++index)
                 commands->copyBuffer(*referenceBuffers[index], 0u, *buffers[BufferIndex::Counts + index], 0u, sizes[BufferIndex::Counts + index]);
             for(u32 layer = 0u; layer < viewCount; ++layer){
                 const TextureSlice slice = TextureSlice{}.setArraySlice(layer);
@@ -422,7 +425,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
     commands->setTextureState(textures[TextureIndex::Capture].get(), s_AllSubresources, ResourceStates::ShaderResource);
     commands->commitBarriers();
     Dispatch(graphicsDevice, *commands, *programs.resolve[mode], push);
-    for(u32 layer = 0u; layer < 2u; ++layer){
+    for(u32 layer = 0u; layer < s_ExpectedDualCount; ++layer){
         const TextureSlice slice = TextureSlice{}.setArraySlice(layer);
         commands->copyTexture(*mapReadback, slice, *textures[TextureIndex::Output], slice);
     }
@@ -431,7 +434,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
     Dispatch(graphicsDevice, *commands, *programs.fallback[mode], push);
     push.sceneRootSlot = bufferSlots[BufferIndex::Observation].slot();
     Dispatch(graphicsDevice, *commands, *programs.observe[mode], push);
-    for(u32 layer = 0u; layer < 2u; ++layer){
+    for(u32 layer = 0u; layer < s_ExpectedDualCount; ++layer){
         const TextureSlice slice = TextureSlice{}.setArraySlice(layer);
         commands->copyTexture(*outputReadback, slice, *textures[TextureIndex::Output], slice);
     }
@@ -472,7 +475,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
     graphicsDevice.unmapBuffer(*buffers[BufferIndex::Observation]);
     const Float3U expected = Expected(testCase, input);
     const Float3U expectedSoftware = Expected(testCase, input, true);
-    const bool fallback = testCase.count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL / 2u || testCase.invalidView
+    const bool fallback = testCase.count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL / s_ExpectedDualCount || testCase.invalidView
         || testCase.missingFace || testCase.corruptEvent || testCase.nearClip || testCase.invalidFit
         || testCase.receiverExpectation == ReceiverExpectation::Singular;
     const bool soft = testCase.sourceSize > 0.0f;
@@ -519,11 +522,11 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
         if(testCase.point){
             const Float3U magnitude{ Abs(input.receiver.x), Abs(input.receiver.y), Abs(input.receiver.z) };
             const u32 face = magnitude.x >= Max(magnitude.y, magnitude.z) ? (input.receiver.x >= 0.0f ? 0u : 1u)
-                : magnitude.y >= magnitude.z ? (input.receiver.y >= 0.0f ? 2u : 3u) : (input.receiver.z >= 0.0f ? 4u : 5u);
+                : magnitude.y >= magnitude.z ? (input.receiver.y >= 0.0f ? s_ExpectedDualCount : 3u) : (input.receiver.z >= 0.0f ? 4u : 5u);
             EXPECT_EQ(observed.face, face);
         }
         if(!testCase.opaque && !soft)
-            EXPECT_EQ(observed.count, testCase.count * 2u);
+            EXPECT_EQ(observed.count, testCase.count * s_ExpectedDualCount);
     }
     for(u32 channel = 0u; channel < 3u; ++channel){
         EXPECT_TRUE(IsFinite(observed.software.raw[channel]));
@@ -566,7 +569,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
             }
             if(!fallback && !soft){
                 for(u32 instance = 0u; instance < testCase.count; ++instance)
-                    EXPECT_EQ(perInstance[instance], 2u);
+                    EXPECT_EQ(perInstance[instance], s_ExpectedDualCount);
             }
         }
         graphicsDevice.unmapBuffer(*buffers[index]);
@@ -588,7 +591,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
             EXPECT_FLOAT_EQ(value, 1.0f);
         graphicsDevice.unmapStagingTexture(*depthReadback);
     }
-    for(u32 layer = 0u; layer < 2u; ++layer){
+    for(u32 layer = 0u; layer < s_ExpectedDualCount; ++layer){
         usize pitch = 0u;
         usize mapPitch = 0u;
         const TextureSlice slice = TextureSlice{}.setArraySlice(layer);
@@ -602,7 +605,7 @@ void LightSpaceKernelTest::runCase(const LightSpaceKernel::Case& testCase,
                 NWB_MEMCPY(&pixel, sizeof(pixel), mapped + y * pitch + x * sizeof(pixel), sizeof(pixel));
                 Half4 beforeFallback{};
                 NWB_MEMCPY(&beforeFallback, sizeof(beforeFallback), mapData + y * mapPitch + x * sizeof(beforeFallback), sizeof(beforeFallback));
-                const bool active = layer == s_OutputLayer && x < (s_FullWidth + 1u) / 2u && y < (s_FullHeight + 1u) / 2u;
+                const bool active = layer == s_OutputLayer && x < (s_FullWidth + 1u) / s_ExpectedDualCount && y < (s_FullHeight + 1u) / s_ExpectedDualCount;
                 if(active){
                     const f32 marker = ConvertHalfToFloat(beforeFallback.values[3]);
                     EXPECT_TRUE(marker == 0.0f || marker == 1.0f);

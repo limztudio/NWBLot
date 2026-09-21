@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -319,8 +322,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
     EXPECT_EQ(acceptedToken.value, consumerToken.value);
     EXPECT_EQ(discardedCount, 0u);
     EXPECT_FALSE(submissionObserver.overflowed());
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 0u);
     VulkanTestQueueSubmit2Capture consumerCapture;
     ASSERT_TRUE(submissionObserver.capturedSubmission(1u, consumerCapture));

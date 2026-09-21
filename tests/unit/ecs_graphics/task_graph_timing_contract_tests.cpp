@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_timing_contract_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -102,13 +105,13 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_FALSE(ContainsText(collectLocked, "m_timing.publishFrame("));
 
     EXPECT_TRUE(ContainsText(timingHeader, "Futex m_collectionMutex;"));
-    EXPECT_EQ(CountText(timing, "ScopedLock collectionLock(m_collectionMutex);"), 2u);
-    EXPECT_EQ(CountText(timing, "for(const GpuTimingSinkSample& sample : performanceSamples)"), 2u);
+    EXPECT_EQ(CountText(timing, "ScopedLock collectionLock(m_collectionMutex);"), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(timing, "for(const GpuTimingSinkSample& sample : performanceSamples)"), s_ExpectedDualCount);
     EXPECT_EQ(CountText(
         timing,
         "m_timing.recordSample(sample.scope, sample.durationSeconds, sample.sourceFrameIndex);"
-    ), 2u);
-    EXPECT_EQ(CountText(timing, "m_timing.publishFrame(publishFrameIndex);"), 2u);
+    ), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(timing, "m_timing.publishFrame(publishFrameIndex);"), s_ExpectedDualCount);
 
     const usize implicitCollectOffset = timing.find("void GpuTimingRecorder::collect(Device& device){");
     const usize explicitCollectOffset = timing.find(
@@ -589,7 +592,7 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     EXPECT_EQ(CountText(
         renderFunction,
         "const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());"
-    ), 2u);
+    ), s_ExpectedDualCount);
     EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder deferredRecorder(device);"));
     EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder recorder(device);"));
 }
@@ -645,7 +648,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
         timingFeedback,
         "m_feedbackCollectionScopes.assign(scopeNames, scopeNames + feedbackCollectionScopeCount);"
     ));
-    EXPECT_EQ(CountText(timingFeedback, "setFeedbackCollectionScopes("), 2u);
+    EXPECT_EQ(CountText(timingFeedback, "setFeedbackCollectionScopes("), s_ExpectedDualCount);
     EXPECT_EQ(CountText(timingFeedback, "clearFeedbackCollectionScopes("), 1u);
     EXPECT_FALSE(ContainsText(timingFeedback, "setFeedbackCollectionEnabled("));
     EXPECT_TRUE(ContainsText(timingFeedback, "!scopeName || !collectsScope(scopeName)"));
@@ -673,7 +676,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     ASSERT_NE(feedbackScopesOffset, AStringView::npos);
     ASSERT_NE(feedbackScopesEnd, AStringView::npos);
     const AStringView feedbackScopes = system.substr(feedbackScopesOffset, feedbackScopesEnd - feedbackScopesOffset);
-    EXPECT_EQ(CountText(feedbackScopes, "RendererGpuTimingScope::"), 2u);
+    EXPECT_EQ(CountText(feedbackScopes, "RendererGpuTimingScope::"), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitDepthWarp.identity"));
     EXPECT_TRUE(ContainsText(feedbackScopes, "RendererGpuTimingScope::s_AvboitIntegration.identity"));
     EXPECT_TRUE(ContainsText(
@@ -807,7 +810,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(lighting, "avboitComputeEffectChainBuilder.declareIntegration("));
     EXPECT_TRUE(ContainsText(lighting, ".depthWarpTimingTicket = &avboitDepthWarpTimingTicket,"));
     EXPECT_TRUE(ContainsText(lighting, ".integrationTimingTicket = &avboitIntegrationTimingTicket,"));
-    EXPECT_EQ(CountText(lighting, ".timingFeedback = &m_deferredTaskTimingFeedback,"), 2u);
+    EXPECT_EQ(CountText(lighting, ".timingFeedback = &m_deferredTaskTimingFeedback,"), s_ExpectedDualCount);
     const usize depthWarpDeclarationOffset = computeChain.find("Core::GpuTaskDesc depthWarpDesc;");
     const usize depthWarpDeclarationEnd = computeChain.find(
         "if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid())",

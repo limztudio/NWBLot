@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -94,8 +97,8 @@ void RunStageCase(
     SCOPED_TRACE(stage);
     SCOPED_TRACE(static_cast<u32>(pattern));
     const bool prepare = stage == NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE;
-    const u32 halfWidth = (width + 1u) / 2u;
-    const u32 halfHeight = (height + 1u) / 2u;
+    const u32 halfWidth = (width + 1u) / s_ExpectedDualCount;
+    const u32 halfHeight = (height + 1u) / s_ExpectedDualCount;
     const u32 outputWidth = prepare ? halfWidth : width;
     const u32 outputHeight = prepare ? halfHeight : height;
     const usize fullPixels = static_cast<usize>(width) * height;
@@ -119,15 +122,15 @@ void RunStageCase(
     for(u32 y = 0u; y < halfHeight; ++y){
         for(u32 x = 0u; x < halfWidth; ++x){
             const bool valid = pattern != Pattern::AllInvalid && (pattern != Pattern::MixedInvalid || (x + y) % 3u != 0u);
-            const f32 value = pattern == Pattern::Zero ? 0.0f : pattern == Pattern::Uniform ? 1.0f : 0.25f * static_cast<f32>(1u + (x + 2u * y) % 5u);
+            const f32 value = pattern == Pattern::Zero ? 0.0f : pattern == Pattern::Uniform ? 1.0f : 0.25f * static_cast<f32>(1u + (x + s_ExpectedDualCount * y) % 5u);
             colors.push_back(Pixel(value, value * 0.5f, value * 0.25f, 7.0f));
-            geometry.push_back(Pixel(static_cast<f32>(x * 2u), static_cast<f32>(y * 2u), 2.0f, valid ? 1.0f : 0.0f));
+            geometry.push_back(Pixel(static_cast<f32>(x * s_ExpectedDualCount), static_cast<f32>(y * s_ExpectedDualCount), 2.0f, valid ? 1.0f : 0.0f));
         }
     }
     for(u32 layer = 0u; layer < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++layer){
         for(u32 y = 0u; y < height; ++y){
             for(u32 x = 0u; x < width; ++x){
-                const u32 value = pattern == Pattern::Zero ? 0u : 256u * (1u + (x + 2u * y) % 4u);
+                const u32 value = pattern == Pattern::Zero ? 0u : 256u * (1u + (x + s_ExpectedDualCount * y) % 4u);
                 flux.push_back(value * (1u << layer));
             }
         }
@@ -150,7 +153,7 @@ void RunStageCase(
     const TextureHandle accumulator = device.createTexture(accumulatorDesc);
     ASSERT_TRUE(accumulator);
     TextureDesc outputDesc = fullDesc;
-    outputDesc.setWidth(outputWidth + 2u).setHeight(outputHeight + 2u).setInUAV(true);
+    outputDesc.setWidth(outputWidth + s_ExpectedDualCount).setHeight(outputHeight + s_ExpectedDualCount).setInUAV(true);
     const TextureHandle outputs[] = { device.createTexture(outputDesc), device.createTexture(outputDesc) };
     const StagingTextureHandle readbacks[] = {
         device.createStagingTexture(outputDesc, CpuAccessMode::Read),
@@ -234,11 +237,11 @@ void RunStageCase(
     for(u32 index = 0u; index < LengthOf(readbacks); ++index){
         mapped[index] = static_cast<const u8*>(device.mapStagingTexture(*readbacks[index], TextureSlice{}, CpuAccessMode::Read, &pitches[index]));
         ASSERT_NE(mapped[index], nullptr);
-        ASSERT_GE(pitches[index], (outputWidth + 2u) * sizeof(HalfPixel));
+        ASSERT_GE(pitches[index], (outputWidth + s_ExpectedDualCount) * sizeof(HalfPixel));
     }
     usize activePixels = 0u;
-    for(u32 y = 0u; y < outputHeight + 2u; ++y){
-        for(u32 x = 0u; x < outputWidth + 2u; ++x){
+    for(u32 y = 0u; y < outputHeight + s_ExpectedDualCount; ++y){
+        for(u32 x = 0u; x < outputWidth + s_ExpectedDualCount; ++x){
             HalfPixel reference;
             HalfPixel candidate;
             NWB_MEMCPY(&reference, sizeof(reference), mapped[0] + y * pitches[0] + x * sizeof(HalfPixel), sizeof(reference));
@@ -260,7 +263,7 @@ void RunStageCase(
             EXPECT_TRUE(IsFinite(ConvertHalfToFloat(candidate.b)));
             // At the last full pixel both forward differences clamp to zero; an even extent leaves no coincident half-grid tap, so the original edge weights underflow to zero.
             const bool lastPixelHasNoCoincidentTap = !prepare && x + 1u == width && y + 1u == height
-                && ((width % 2u) == 0u || (height % 2u) == 0u);
+                && ((width % s_ExpectedDualCount) == 0u || (height % s_ExpectedDualCount) == 0u);
             const bool expectedZero = pattern == Pattern::Zero || pattern == Pattern::AllInvalid || lastPixelHasNoCoincidentTap
                 || (prepare ? geometry[static_cast<usize>(y) * halfWidth + x].a == 0u : depth[static_cast<usize>(y) * width + x] == 1.0f);
             if(expectedZero){
@@ -272,10 +275,10 @@ void RunStageCase(
                 // This regular receiver grid has area four except at the clamped right/bottom boundary.
                 const f32 area = x + 1u < halfWidth && y + 1u < halfHeight ? 4.0f : 1e-4f;
                 u32 sum = 0u;
-                for(u32 oy = 0u; oy < 2u; ++oy){
-                    for(u32 ox = 0u; ox < 2u; ++ox){
-                        const u32 fx = Min(x * 2u + ox, width - 1u);
-                        const u32 fy = Min(y * 2u + oy, height - 1u);
+                for(u32 oy = 0u; oy < s_ExpectedDualCount; ++oy){
+                    for(u32 ox = 0u; ox < s_ExpectedDualCount; ++ox){
+                        const u32 fx = Min(x * s_ExpectedDualCount + ox, width - 1u);
+                        const u32 fy = Min(y * s_ExpectedDualCount + oy, height - 1u);
                         sum += flux[static_cast<usize>(fy) * width + fx];
                     }
                 }

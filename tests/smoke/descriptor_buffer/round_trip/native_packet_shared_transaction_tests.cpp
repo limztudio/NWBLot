@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -288,13 +292,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
     ASSERT_TRUE(compositePacket.valid());
     EXPECT_EQ(views.compiled.packetIdAt(0u), hardwarePacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), avboitPrePacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), lightingPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), lightingPacket);
     EXPECT_EQ(views.compiled.packetIdAt(3u), compositePacket);
     EXPECT_EQ(views.compiled.packet(hardwarePacket).plan->dependencyCount, 0u);
     EXPECT_EQ(views.compiled.packet(avboitPrePacket).plan->dependencyCount, 0u);
     ASSERT_EQ(views.compiled.packet(lightingPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(views.compiled.packet(lightingPacket).dependencies[0u].producer, hardwarePacket);
-    ASSERT_EQ(views.compiled.packet(compositePacket).plan->dependencyCount, 2u);
+    ASSERT_EQ(views.compiled.packet(compositePacket).plan->dependencyCount, s_ExpectedDualCount);
     const GpuPacketDependency* const compositePacketDependencies = views.compiled.packet(compositePacket).dependencies;
     ASSERT_NE(compositePacketDependencies, nullptr);
     bool compositeWaitsForLighting = false;
@@ -776,7 +780,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         ASSERT_EQ(views.compiled.packetCount(), 8u);
         EXPECT_EQ(views.compiled.packetIdAt(0u), sourceProducerPacket);
         EXPECT_EQ(views.compiled.packetIdAt(1u), presentPacket);
-        EXPECT_EQ(views.compiled.packetIdAt(2u), historyPacket);
+        EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), historyPacket);
         EXPECT_EQ(views.compiled.packetIdAt(3u), rejectedTailPacket);
         const GpuCompiledTaskView compiledHistoryTask = views.compiled.findTask(historyTask);
         ASSERT_TRUE(compiledHistoryTask.valid());

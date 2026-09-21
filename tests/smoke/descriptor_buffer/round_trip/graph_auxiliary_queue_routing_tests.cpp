@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -223,8 +226,8 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
         views.compiled
     );
     ASSERT_TRUE(recordingStatistics.valid());
-    EXPECT_EQ(recordingStatistics.packetCount, 2u);
-    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    EXPECT_EQ(recordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.commandListCount, s_ExpectedDualCount);
     const GpuTaskGraphPhysicalQueueRecordingStatistics primaryQueueRecordingStatistics =
         recordedGraph.physicalQueueRecordingStatistics(compiledGraph, views.compiled, primaryGraphicsQueue)
     ;
@@ -305,13 +308,13 @@ TEST_F(DescriptorBufferRoundTripTest, SameClassGraphicsQueuesRouteGraphPacketsAn
     EXPECT_EQ(recordingStatistics.readyFrontierWorkerUtilization(), 0.0);
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
-    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
-    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
     EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 0u);
     EXPECT_EQ(submissionStatistics.timelineWaitCount, 1u);
     EXPECT_EQ(submissionStatistics.mergedTimelineWaitCount, 0u);
-    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 1u);
 
     const GpuTaskGraphPhysicalQueueSubmissionStatistics primaryQueueStatistics =

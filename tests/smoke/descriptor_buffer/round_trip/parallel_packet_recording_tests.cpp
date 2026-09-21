@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -40,7 +44,7 @@ struct RecordingOverlapBridgeTask{
         CommandList& commandList,
         const GpuTaskRecordContext&
     ){
-        if(!payload.state || payload.sequenceIndex > 2u || !commandList.isRecording())
+        if(!payload.state || payload.sequenceIndex > s_ExpectedDualCount || !commandList.isRecording())
             return false;
 
         State& state = *payload.state;
@@ -52,7 +56,7 @@ struct RecordingOverlapBridgeTask{
         }
         else{
             state.longRecordingEntered.wait(false, MemoryOrder::acquire);
-            if(payload.sequenceIndex == 2u){
+            if(payload.sequenceIndex == s_ExpectedDualCount){
                 if(state.secondShortRecordingEntered.test_and_set(MemoryOrder::release))
                     return false;
                 state.secondShortRecordingEntered.notify_all();
@@ -232,7 +236,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderReportsWorkerRoutingW
     EXPECT_EQ(views.compiled.packet(firstPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
 
-    CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     ASSERT_TRUE(recorder.recordPacketRangeInReadyFrontiers(
@@ -508,9 +512,9 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderRecordsExplicitGpuDep
         views.compiled
     );
     ASSERT_TRUE(recordingStatistics.valid());
-    EXPECT_EQ(recordingStatistics.packetCount, 2u);
-    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
-    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, s_ExpectedDualCount);
     EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
     EXPECT_EQ(
         recordingStatistics.readyFrontierWorkerBusySeconds,
@@ -606,7 +610,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheHandlesO
     const GpuTaskId secondShortTask = addTask(
         Name("tests/descriptor_buffer/recording_overlap_bridge_second_short"),
         "Recording Overlap Bridge Second Short",
-        2u
+        s_ExpectedDualCount
     );
     ASSERT_TRUE(longTask.valid());
     ASSERT_TRUE(firstShortTask.valid());
@@ -643,7 +647,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheHandlesO
     ASSERT_TRUE(secondShortPacket.valid());
     ASSERT_EQ(views.compiled.packetIdAt(0u), longPacket);
     ASSERT_EQ(views.compiled.packetIdAt(1u), firstShortPacket);
-    ASSERT_EQ(views.compiled.packetIdAt(2u), secondShortPacket);
+    ASSERT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), secondShortPacket);
     ASSERT_EQ(views.compiled.packet(longPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(firstShortPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(secondShortPacket).plan->recordingFrontier, 0u);
@@ -800,7 +804,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheKeepsPub
     ASSERT_EQ(views.compiled.packet(secondPacket).plan->recordingFrontier, 0u);
     ASSERT_EQ(views.compiled.packet(expectedFailedPacket).plan->recordingFrontier, 0u);
 
-    CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     const GpuNativePacketRecorder recorder(device);
     GpuSubmissionPacketId failedPacket;
@@ -826,16 +830,16 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecordingOverlapCacheKeepsPub
         views.compiled
     );
     ASSERT_TRUE(recordingStatistics.valid());
-    EXPECT_EQ(recordingStatistics.packetCount, 2u);
-    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
-    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
-    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.commandListCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, s_ExpectedDualCount);
     const GpuTaskGraphPhysicalQueueRecordingStatistics queueStatistics =
         recordedGraph.physicalQueueRecordingStatistics(compiledGraph, views.compiled, graphicsQueue.id)
     ;
     ASSERT_TRUE(queueStatistics.valid());
-    EXPECT_EQ(queueStatistics.packetCount, 2u);
-    EXPECT_EQ(queueStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(queueStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(queueStatistics.parallelPacketCount, s_ExpectedDualCount);
 
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);

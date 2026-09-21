@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_hybrid_fallback_contract_tests{
 
 
+constexpr AStringView s_TransparentMaterialClassText = "const bool transparentMaterialClass = (index % 2u) == 0u;";
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -19,6 +22,7 @@ using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
 // Hardware and explicit software captures retain distinct route expectations and the same benchmark scene geometry.
+
 TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -179,7 +183,7 @@ TEST(EcsGraphics, ShadowBenchmarkCapturesKeepExplicitRoutesAndComparableGeometry
         createCharacterOffset,
         createCharacterEndOffset - createCharacterOffset
     );
-    EXPECT_TRUE(ContainsText(createCharacter, "const bool transparentMaterialClass = (index % 2u) == 0u;"));
+    EXPECT_TRUE(ContainsText(createCharacter, s_TransparentMaterialClassText));
     EXPECT_TRUE(ContainsText(
         createCharacter,
         "const bool transparent = !hybridShadowOpaqueBaseline() && transparentMaterialClass;"

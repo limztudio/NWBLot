@@ -32,6 +32,10 @@ NWB_BEGIN
 namespace Core{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -965,7 +969,7 @@ TEST(TaskGraphRuntimeOwnershipTest, ThrowingDiscardWaitsForExistingRecorderAfter
     threads.start([&](){
         queuedWriterObserved = GpuGraphSubmissionTransactionGateTestAccess::waitForWriterReservationCount(
             transaction,
-            2u
+            s_ExpectedDualCount
         );
         ReleaseFlagIdempotently(releaseDiscard);
         resetReturnedBeforeRecorderRelease = WaitForFlag(closingResetReturned);
@@ -1137,7 +1141,7 @@ TEST(TaskGraphRuntimeOwnershipTest, LiveRecordingRejectAndDiscardRemainFailureAt
     threads.releaseAndJoin();
     EXPECT_TRUE(recordingResult);
     EXPECT_TRUE(transaction.discardUnaccepted(graph, compiledGraph, recordingAttemptGeneration));
-    EXPECT_EQ(transaction.submissionStatistics().rejectedPacketCount, 2u);
+    EXPECT_EQ(transaction.submissionStatistics().rejectedPacketCount, s_ExpectedDualCount);
     EXPECT_EQ(recordingTaskDiscardedCount, 1u);
     EXPECT_EQ(terminalTaskDiscardedCount, 1u);
     EXPECT_TRUE(transaction.tryReset(compiledGraph));
@@ -1398,10 +1402,10 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccu
     EXPECT_EQ(declaredStatistics.preparedScopeCount, 3u);
     EXPECT_EQ(declaredStatistics.requestedQueryCount, 10u * s_MaxFramesInFlight);
     EXPECT_EQ(declaredStatistics.materializedQueryCount, 0u);
-    EXPECT_EQ(declaredStatistics.scopeAttemptCount, 2u);
+    EXPECT_EQ(declaredStatistics.scopeAttemptCount, s_ExpectedDualCount);
     EXPECT_EQ(declaredStatistics.recordedScopeCount, 0u);
     EXPECT_EQ(declaredStatistics.beginFailureCount, 0u);
-    EXPECT_EQ(declaredStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable], 2u);
+    EXPECT_EQ(declaredStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable], s_ExpectedDualCount);
 
     GpuGraphSubmissionTransaction transaction(graphicsScope.arena());
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
@@ -1424,10 +1428,10 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedDuplicateAndAliasedScopesReserveAllOccu
     ASSERT_EQ(timingSink.scopeCount(), 3u);
     EXPECT_EQ(timingSink.scopeNameAt(0u), packetIdentity);
     EXPECT_EQ(timingSink.scopeNameAt(1u), sharedIdentity);
-    EXPECT_EQ(timingSink.scopeNameAt(2u), GpuTaskPacketTimingScopeName(packetIdentity));
+    EXPECT_EQ(timingSink.scopeNameAt(s_ThirdElementIndex), GpuTaskPacketTimingScopeName(packetIdentity));
     EXPECT_EQ(prefixStatistics.requestedQueryCount, 10u * s_MaxFramesInFlight);
     EXPECT_EQ(prefixStatistics.materializedQueryCount, prefixStatistics.requestedQueryCount);
-    EXPECT_EQ(prefixStatistics.recordedScopeCount, 2u);
+    EXPECT_EQ(prefixStatistics.recordedScopeCount, s_ExpectedDualCount);
     ASSERT_TRUE(recorder.recordTaskRangeInCompileOrder(graph, compiledGraph, tasks[1u], tasks[6u], recordedGraph));
     EXPECT_EQ(recordedGraph.recordingAttemptGeneration(), recordingAttemptGeneration);
     const GpuTimingRecorderStatistics recordedStatistics = timing.statistics(device);
@@ -1751,7 +1755,7 @@ TEST(TaskGraphRuntimeOwnershipTest, ConcurrentSubmissionReadersYieldToPendingWri
     const GpuGraphSubmissionTransactionGateTestAccess::Snapshot concurrentReaderState =
         GpuGraphSubmissionTransactionGateTestAccess::snapshot(transaction)
     ;
-    EXPECT_EQ(concurrentReaderState.readerCount, 2u);
+    EXPECT_EQ(concurrentReaderState.readerCount, s_ExpectedDualCount);
     EXPECT_EQ(concurrentReaderState.writerReservationCount, 0u);
     EXPECT_FALSE(concurrentReaderState.writerActive);
 
@@ -1795,7 +1799,7 @@ TEST(TaskGraphRuntimeOwnershipTest, ConcurrentSubmissionReadersYieldToPendingWri
     const GpuGraphSubmissionTransactionGateTestAccess::Snapshot pendingWriterState =
         GpuGraphSubmissionTransactionGateTestAccess::snapshot(transaction)
     ;
-    EXPECT_EQ(pendingWriterState.readerCount, 2u);
+    EXPECT_EQ(pendingWriterState.readerCount, s_ExpectedDualCount);
     EXPECT_EQ(pendingWriterState.writerReservationCount, 1u);
     EXPECT_FALSE(pendingWriterState.writerActive);
 
@@ -2149,7 +2153,7 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFalseResultPreservesPeerAn
             views.compiled
         );
         ASSERT_TRUE(retryStatistics.valid());
-        EXPECT_EQ(retryStatistics.packetCount, 2u);
+        EXPECT_EQ(retryStatistics.packetCount, s_ExpectedDualCount);
     }
 
     ASSERT_TRUE(transaction.tryReset(compiledGraph));
@@ -2158,8 +2162,8 @@ TEST(TaskGraphRuntimeOwnershipTest, TimedReadyFrontierFalseResultPreservesPeerAn
         compiledGraph,
         recordedGraph.recordingAttemptGeneration()
     ));
-    EXPECT_EQ(successfulPeerDiscardedCount, 2u);
-    EXPECT_EQ(failedPeerDiscardedCount, 2u);
+    EXPECT_EQ(successfulPeerDiscardedCount, s_ExpectedDualCount);
+    EXPECT_EQ(failedPeerDiscardedCount, s_ExpectedDualCount);
     EXPECT_TRUE(transaction.tryReset(compiledGraph));
     EXPECT_TRUE(recordedGraph.tryReset(compiledGraph));
     EXPECT_TRUE(graph.tryReset());

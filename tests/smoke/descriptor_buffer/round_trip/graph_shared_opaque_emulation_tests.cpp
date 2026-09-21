@@ -21,6 +21,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -323,7 +327,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena));
     EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, rasterTask));
     EXPECT_TRUE(analysis.hasInferredEdge(producerTask, rasterTask));
-    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producerTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], rasterTask);
 
@@ -349,7 +353,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     EXPECT_TRUE(views.compiled.taskPrecedesOrSharesPacket(producerTask, rasterTask));
     EXPECT_EQ(views.compiled.packet(producerPacket).plan->queue, primaryGraphicsQueue);
     EXPECT_EQ(views.compiled.packet(producerPacket).plan->dependencyCount, 0u);
-    ASSERT_EQ(views.compiled.packet(producerPacket).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(producerPacket).plan->taskCount, s_ExpectedDualCount);
     const GpuTaskId* const packetTasks = views.compiled.packet(producerPacket).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], producerTask);
@@ -360,7 +364,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
     ASSERT_TRUE(compiledProducer.valid());
     ASSERT_TRUE(compiledRaster.valid());
     ASSERT_EQ(compiledProducer.plan->prologueBarrierCount, 1u);
-    ASSERT_EQ(compiledRaster.plan->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledRaster.plan->prologueBarrierCount, s_ExpectedDualCount);
     const GpuCompiledBarrier* const producerBarrier = views.compiled.findTask(producerTask).prologueBarriers;
     const GpuCompiledBarrier* const rasterBarriers = compiledRaster.prologueBarriers;
     const GpuCompiledBarrier* rasterBarrier = nullptr;
@@ -588,7 +592,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
             .buffer = generatedVertex.get(),
             .expectedState = ResourceStates::UnorderedAccess,
             .recordOrdinal = &recordOrdinal,
-            .expectedOrdinal = 2u,
+            .expectedOrdinal = s_ExpectedDualCount,
             .device = &device,
             .timing = &timing,
             .timingTicket = &timingTicket,
@@ -674,7 +678,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationPair
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], dispatchA);
     EXPECT_EQ(packetTasks[1u], rasterA);
-    EXPECT_EQ(packetTasks[2u], dispatchB);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], dispatchB);
     EXPECT_EQ(packetTasks[3u], rasterB);
 
     const auto expectTransition = [&](const GpuTaskId task, const ResourceStates::Mask before, const ResourceStates::Mask after){
@@ -893,7 +897,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     QueueSubmissionToken acceptedTokens[LengthOf(identities)] = {};
     GpuTaskId tasks[LengthOf(identities)] = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        const bool isRaster = taskIndex % 2u != 0u;
+        const bool isRaster = taskIndex % s_ExpectedDualCount != 0u;
         GpuTaskDesc desc;
         desc
             .setIdentity(identities[taskIndex])
@@ -918,7 +922,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
                 .expectedOrdinal = static_cast<u32>(taskIndex),
                 .device = &device,
                 .timing = &timing,
-                .timingTicket = pairTimingTickets[taskIndex / 2u],
+                .timingTicket = pairTimingTickets[taskIndex / s_ExpectedDualCount],
                 .recordTiming = isRaster,
                 .recorded = &observedStates[taskIndex],
                 .acceptedToken = &acceptedTokens[taskIndex],
@@ -983,7 +987,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     };
     expectTransition(0u, ResourceStates::Common, ResourceStates::UnorderedAccess);
     expectTransition(1u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
-    expectTransition(2u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(s_ExpectedDualCount, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
     expectTransition(3u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     expectTransition(4u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
     expectTransition(5u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
@@ -1022,7 +1026,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
         timingTickets[taskIndex] = GpuTaskGraphTaskTimingTicket{
             .task = tasks[taskIndex],
-            .timingTicket = pairTimingTickets[taskIndex / 2u],
+            .timingTicket = pairTimingTickets[taskIndex / s_ExpectedDualCount],
         };
     }
     const GpuTaskScheduler submitter(device);
@@ -1030,8 +1034,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationTrip
     resolvedTimingTicket.discard();
     const GpuTaskGraphTaskTimingTicket retryableTimingTickets[] = {
         GpuTaskGraphTaskTimingTicket{ .task = tasks[0u], .timingTicket = pairTimingTickets[0u] },
-        GpuTaskGraphTaskTimingTicket{ .task = tasks[2u], .timingTicket = pairTimingTickets[1u] },
-        GpuTaskGraphTaskTimingTicket{ .task = tasks[4u], .timingTicket = pairTimingTickets[2u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[s_ThirdElementIndex], .timingTicket = pairTimingTickets[1u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[4u], .timingTicket = pairTimingTickets[s_ThirdElementIndex] },
         GpuTaskGraphTaskTimingTicket{ .task = tasks[5u], .timingTicket = &resolvedTimingTicket },
     };
     EXPECT_FALSE(submitter.submitTaskRangeInCompileOrder(
@@ -1216,7 +1220,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
     QueueSubmissionToken acceptedTokens[LengthOf(identities)] = {};
     GpuTaskId tasks[LengthOf(identities)] = {};
     for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        const bool isRaster = taskIndex % 2u != 0u;
+        const bool isRaster = taskIndex % s_ExpectedDualCount != 0u;
         GpuTaskDesc desc;
         desc
             .setIdentity(identities[taskIndex])
@@ -1303,7 +1307,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSharedOpaqueComputeEmulationQuad
     };
     expectTransition(0u, ResourceStates::Common, ResourceStates::UnorderedAccess);
     expectTransition(1u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
-    expectTransition(2u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
+    expectTransition(s_ExpectedDualCount, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
     expectTransition(3u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);
     expectTransition(4u, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState, ResourceStates::UnorderedAccess);
     expectTransition(5u, ResourceStates::UnorderedAccess, Impl::ECSRenderDetail::s_GeneratedGeometryRasterState);

@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -116,7 +119,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
             TextureDimension::Texture2DArray
         )
     )) << "heap Texture2DArray write() did not route through the descriptor-buffer path";
-    EXPECT_EQ(sampledImageArray->getReferenceCount(), 2u)
+    EXPECT_EQ(sampledImageArray->getReferenceCount(), s_ExpectedDualCount)
         << "heap write() did not retain the persistent Texture2DArray resource";
 
     heap.free(sampledImageArrayHandle);
@@ -155,7 +158,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
             TextureDimension::Texture2DArray
         )
     )) << "heap R32_UINT Texture2DArray write() did not route through the descriptor-buffer path";
-    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), 2u)
+    EXPECT_EQ(sampledImageArrayUint->getReferenceCount(), s_ExpectedDualCount)
         << "heap write() did not retain the typed Texture2DArray resource";
 
     heap.free(sampledImageArrayUintHandle);
@@ -194,7 +197,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
             TextureDimension::Texture3D
         )
     )) << "heap Texture3D write() did not route through the descriptor-buffer path";
-    EXPECT_EQ(sampledImage3D->getReferenceCount(), 2u)
+    EXPECT_EQ(sampledImage3D->getReferenceCount(), s_ExpectedDualCount)
         << "heap write() did not retain the persistent Texture3D resource";
 
     heap.free(sampledImage3DHandle);
@@ -232,7 +235,7 @@ TEST_F(DescriptorBufferRoundTripTest, GlobalDescriptorHeapRequiresDescriptorBuff
             TextureDimension::TextureCube
         )
     )) << "heap TextureCube write() did not route through the descriptor-buffer path";
-    EXPECT_EQ(sampledImageCube->getReferenceCount(), 2u)
+    EXPECT_EQ(sampledImageCube->getReferenceCount(), s_ExpectedDualCount)
         << "heap write() did not retain the persistent TextureCube resource";
 
     heap.free(sampledImageCubeHandle);

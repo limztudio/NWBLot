@@ -21,6 +21,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -478,7 +482,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverSpanCombineAndS
     ASSERT_NE(views.compiled.packet(packet).tasks, nullptr);
     EXPECT_EQ(views.compiled.packet(packet).tasks[0u], producerTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[1u], spanTask);
-    EXPECT_EQ(views.compiled.packet(packet).tasks[2u], combineTask);
+    EXPECT_EQ(views.compiled.packet(packet).tasks[s_ThirdElementIndex], combineTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[3u], sampleTask);
 
     const GpuCompiledTaskView compiledProducer = views.compiled.findTask(producerTask);
@@ -828,7 +832,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
 
     const GpuSubmissionPacketId accumulationPacket = views.compiled.packetForTask(accumulationTask);
     const GpuSubmissionPacketId finalizerPacket = views.compiled.packetForTask(finalizerTask);

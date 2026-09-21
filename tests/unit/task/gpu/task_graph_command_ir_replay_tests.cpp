@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -228,7 +231,7 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     const Graphics::TextureDesc validDescription = Graphics::TextureDesc()
         .setWidth(8u)
         .setHeight(8u)
-        .setMipLevels(2u)
+        .setMipLevels(s_ExpectedDualCount)
         .setFormat(Graphics::Format::RGBA8_UNORM)
         .setInitialState(Graphics::ResourceStates::Common)
     ;
@@ -425,13 +428,13 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         .setDimension(Graphics::TextureDimension::Texture2DMS)
         .setFormat(Graphics::Format::D32)
         .setMipLevels(1u)
-        .setSampleCount(2u)
+        .setSampleCount(s_ExpectedDualCount)
     ;
     expectImmutableDescriptionRejected(rejectedDescription);
 
     rejectedDescription
         .setFormat(Graphics::Format::BC1_UNORM)
-        .setSampleCount(2u)
+        .setSampleCount(s_ExpectedDualCount)
     ;
     expectImmutableDescriptionRejected(rejectedDescription);
 
@@ -641,7 +644,7 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(capture.captureCopyBuffer(task, packet, queue, source, 0u, destination, 0u, 4u));
     ASSERT_TRUE(capture.captureCopyBuffer(secondTask, secondPacket, queue, source, 0u, destination, 0u, 4u));
-    ASSERT_EQ(capture.recordCount(), 2u);
+    ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     const Graphics::GpuCommandIrReplayResult validContext = Graphics::PreflightGpuCommandIrPacket(
         capture.commandBytes(),
         declarations,

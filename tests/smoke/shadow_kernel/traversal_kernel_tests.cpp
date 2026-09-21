@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -110,12 +113,12 @@ TEST_F(ShadowKernelTest, CompletedCrossingsSurviveTheLastInternalSubtreeMiss){
     // The near subtree intersects two boundaries at z=1 and z=2. The deferred far parent's AABB intersects the ray,
     // but both child boxes miss at x=0. Exhausting that last internal subtree must preserve the earlier crossings.
     const Node nodes[] = {
-        { { -3.0f, -1.0f, 1.0f }, 1u, { 3.0f, 1.0f, 5.0f }, 2u },
+        { { -3.0f, -1.0f, 1.0f }, 1u, { 3.0f, 1.0f, 5.0f }, s_ExpectedDualCount },
         { { -1.0f, -1.0f, 1.0f }, 3u, { 1.0f, 1.0f, 2.0f }, 4u },
         { { -3.0f, -1.0f, 5.0f }, 5u, { 3.0f, 1.0f, 5.0f }, 6u },
         { { -1.0f, -1.0f, 1.0f }, NWB_BVH_LEAF_FLAG | 0u, { 1.0f, 1.0f, 1.0f }, 1u },
         { { -1.0f, -1.0f, 2.0f }, NWB_BVH_LEAF_FLAG | 1u, { 1.0f, 1.0f, 2.0f }, 1u },
-        { { -3.0f, -1.0f, 5.0f }, NWB_BVH_LEAF_FLAG | 2u, { -2.0f, 1.0f, 5.0f }, 1u },
+        { { -3.0f, -1.0f, 5.0f }, NWB_BVH_LEAF_FLAG | s_ExpectedDualCount, { -2.0f, 1.0f, 5.0f }, 1u },
         { { 2.0f, -1.0f, 5.0f }, NWB_BVH_LEAF_FLAG | 3u, { 3.0f, 1.0f, 5.0f }, 1u },
     };
     const Float3U positions[] = {
@@ -124,7 +127,7 @@ TEST_F(ShadowKernelTest, CompletedCrossingsSurviveTheLastInternalSubtreeMiss){
         { -3.0f, -1.0f, 5.0f }, { -2.0f, -1.0f, 5.0f }, { -2.5f, 1.0f, 5.0f },
         { 2.0f, -1.0f, 5.0f }, { 3.0f, -1.0f, 5.0f }, { 2.5f, 1.0f, 5.0f },
     };
-    const u32 indices[] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u };
+    const u32 indices[] = { 0u, 1u, s_ExpectedDualCount, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u };
     const Attribute attributes[12]{};
     const Instance instances[2]{};
     Material materials[2];
@@ -206,7 +209,7 @@ TEST_F(ShadowKernelTest, CompletedCrossingsSurviveTheLastInternalSubtreeMiss){
     state.setPipeline(pipeline.get());
     commandList->setComputeState(state);
     heap.bindCompute(*commandList, *pipeline);
-    const PushConstants push{ descriptors[s_ContextIndex].slot(), descriptors[s_InputCount].slot(), 2u };
+    const PushConstants push{ descriptors[s_ContextIndex].slot(), descriptors[s_InputCount].slot(), s_ExpectedDualCount };
     commandList->setPushConstants(&push, sizeof(push));
     commandList->dispatch(1u, 1u, 1u);
     ASSERT_FALSE(commandList->commandRecordingFailed());
@@ -223,11 +226,11 @@ TEST_F(ShadowKernelTest, CompletedCrossingsSurviveTheLastInternalSubtreeMiss){
     ScopeExit unmap([&]()noexcept{ graphicsDevice.unmapBuffer(*output); });
     for(usize index = 0u; index < s_CaseCount; ++index){
         SCOPED_TRACE(index);
-        const bool paired = index < 2u;
+        const bool paired = index < s_ExpectedDualCount;
         const bool blocked = index == 4u;
         const bool singleton = index == 5u;
-        EXPECT_EQ(actual[index].status, paired || singleton ? 0u : blocked ? 2u : 1u);
-        EXPECT_EQ(actual[index].crossingCount, paired ? 2u : singleton ? 1u : 0u);
+        EXPECT_EQ(actual[index].status, paired || singleton ? 0u : blocked ? s_ExpectedDualCount : 1u);
+        EXPECT_EQ(actual[index].crossingCount, paired ? s_ExpectedDualCount : singleton ? 1u : 0u);
         EXPECT_EQ(actual[index].overflow, 0u);
         EXPECT_NEAR(actual[index].interfaceTransmittance, paired ? 0.9216f : 1.0f, 0.001f);
         EXPECT_FLOAT_EQ(actual[index].chordLength, paired ? 1.0f : 0.0f);

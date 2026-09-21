@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -71,7 +74,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffTransfersFinalBuffe
 
     CommandList* commandLists[] = { producer.get(), consumer.get() };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u, CommandQueue::Graphics, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, s_ExpectedDualCount, CommandQueue::Graphics, &submitted), 0u);
     EXPECT_TRUE(submitted);
     EXPECT_TRUE(device.waitForIdle());
 }
@@ -86,7 +89,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetBuildersSuppo
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInUAV(true)
             .setInitialState(ResourceStates::Common)
@@ -179,7 +182,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetValidationPre
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInUAV(true)
             .setInitialState(ResourceStates::Common)
@@ -219,7 +222,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandListStateHandoffSubsetValidationPre
     EXPECT_FALSE(destination.buildTextureRangeSubset(
         preserved,
         texture.get(),
-        TextureSubresourceSet(2u, 1u, 0u, 1u)
+        TextureSubresourceSet(s_ExpectedDualCount, 1u, 0u, 1u)
     ));
     EXPECT_TRUE(destination.equivalentTo(preserved));
 

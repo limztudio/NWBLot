@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -260,7 +263,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(allocatedStatistics.pendingRetiredSlotCount, 0u);
     EXPECT_EQ(allocatedStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(allocatedStatistics.unsubmittedHeapUseCount, 0u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     auto unsubmittedCommandList = device.createCommandList();
     ASSERT_TRUE(unsubmittedCommandList);
@@ -286,7 +289,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(retiredUnsubmittedStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(retiredUnsubmittedStatistics.unsubmittedHeapUseCount, 1u);
     EXPECT_EQ(retiredUnsubmittedStatistics.abandonedHeapUseCount, 0u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount)
         << "an unsubmitted command buffer lost its descriptor resource";
 
     const GpuDescriptorHandle heldSlot = heap.allocate(GpuDescriptorClass::StorageBuffer);
@@ -304,10 +307,10 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     heap.collectRetired();
     const GpuDescriptorHeapLifecycleStatistics garbageCollectedUnsubmittedStatistics = heap.lifecycleStatistics();
     EXPECT_EQ(garbageCollectedUnsubmittedStatistics.resourceLiveSlotCount, 0u);
-    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.pendingRetiredSlotCount, 2u);
+    EXPECT_EQ(garbageCollectedUnsubmittedStatistics.pendingRetiredSlotCount, s_ExpectedDualCount);
     EXPECT_EQ(garbageCollectedUnsubmittedStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(garbageCollectedUnsubmittedStatistics.unsubmittedHeapUseCount, 1u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount)
         << "CPU garbage collection released an unsubmitted descriptor heap use";
 
     CommandList* unsubmittedCommandLists[] = { unsubmittedCommandList.get() };
@@ -331,7 +334,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
 
     const GpuDescriptorHeapLifecycleStatistics rejectedStatistics = heap.lifecycleStatistics();
     EXPECT_EQ(rejectedStatistics.resourceLiveSlotCount, 0u);
-    EXPECT_EQ(rejectedStatistics.pendingRetiredSlotCount, 2u);
+    EXPECT_EQ(rejectedStatistics.pendingRetiredSlotCount, s_ExpectedDualCount);
     EXPECT_EQ(rejectedStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(rejectedStatistics.unsubmittedHeapUseCount, 0u);
     EXPECT_EQ(rejectedStatistics.abandonedHeapUseCount, 1u);
@@ -353,7 +356,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_TRUE(recycledFirst.slot() == unsubmittedHandle.slot() || recycledSecond.slot() == unsubmittedHandle.slot())
         << "an injected native-submit failure did not return the abandoned descriptor slot";
     const GpuDescriptorHeapLifecycleStatistics recycledStatistics = heap.lifecycleStatistics();
-    EXPECT_EQ(recycledStatistics.resourceLiveSlotCount, 2u);
+    EXPECT_EQ(recycledStatistics.resourceLiveSlotCount, s_ExpectedDualCount);
     EXPECT_EQ(recycledStatistics.pendingRetiredSlotCount, 0u);
     EXPECT_EQ(recycledStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(recycledStatistics.unsubmittedHeapUseCount, 0u);
@@ -393,7 +396,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksCommandBuffe
     EXPECT_EQ(acceptedRetiredStatistics.pendingRetiredSlotCount, 1u);
     EXPECT_EQ(acceptedRetiredStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(acceptedRetiredStatistics.unsubmittedHeapUseCount, 1u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount)
         << "an unsubmitted accepted-path command buffer lost its descriptor resource";
 
     CommandList* acceptedCommandLists[] = { acceptedCommandList.get() };
@@ -515,7 +518,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     const GpuDescriptorHandle handle = heap.allocate(GpuDescriptorClass::StorageBuffer);
     ASSERT_TRUE(handle.valid());
     ASSERT_TRUE(heap.write(handle, DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())));
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     const GpuDescriptorHeapLifecycleStatistics allocatedStatistics = heap.lifecycleStatistics();
     EXPECT_EQ(allocatedStatistics.resourceLiveSlotCount, 1u);
@@ -557,7 +560,7 @@ TEST_F(DescriptorBufferRoundTripTest, DescriptorHeapRetirementTracksAuxiliaryGra
     EXPECT_EQ(retiredStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(retiredStatistics.unsubmittedHeapUseCount, 1u);
     EXPECT_EQ(retiredStatistics.abandonedHeapUseCount, 0u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u)
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount)
         << "an unsubmitted auxiliary command buffer lost its descriptor resource";
 
     CommandList* commandLists[] = { commandList.get() };

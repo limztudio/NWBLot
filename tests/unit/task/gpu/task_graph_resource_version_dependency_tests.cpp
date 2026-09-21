@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -98,7 +101,7 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
         ASSERT_TRUE(declarations.valid());
         ASSERT_TRUE(analysis.validFor(declarations));
     }
-    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1], consumer);
     EXPECT_TRUE(HasResourceVersionEdge(
@@ -328,7 +331,7 @@ TEST(GpuTaskGraphResourceVersion, DeduplicatesVersionAndPhysicalHazardsInQueueSc
 
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_EQ(analysis.inferredEdges().size(), 2u);
+    ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
     ASSERT_EQ(analysis.schedulingEdges().size(), 1u);
     bool foundVersionDependency = false;
     bool foundPhysicalRaw = false;
@@ -519,7 +522,7 @@ TEST(GpuTaskGraphResourceVersion, ReportsClosedPureResourceVersionCycle){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     EXPECT_FALSE(Analyze(graph, analysis));
     EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::Cycle);
-    EXPECT_EQ(analysis.resourceVersionEdgeCount(), 2u);
+    EXPECT_EQ(analysis.resourceVersionEdgeCount(), s_ExpectedDualCount);
     ExpectClosedCycle(analysis);
     for(const Graphics::GpuTaskDependencyEdge& edge : analysis.cycleEdges()){
         EXPECT_EQ(edge.hazard, Graphics::GpuTaskHazardType::VersionDependency);

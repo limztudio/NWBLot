@@ -29,6 +29,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -62,8 +66,8 @@ struct NativeBuildScratchCommand{
 };
 
 struct NativeBuildScratchReuseCapture{
-    NativeBufferAddressQuery addressQueries[2u] = {};
-    NativeBuildScratchCommand buildCommands[2u] = {};
+    NativeBufferAddressQuery addressQueries[s_ThirdElementIndex] = {};
+    NativeBuildScratchCommand buildCommands[s_ThirdElementIndex] = {};
     u32 addressQueryCount = 0u;
     u32 buildCommandCount = 0u;
 };
@@ -378,7 +382,7 @@ TEST_F(RayTracingBuildIngressTest, AccelerationStructureCommandDependenciesAreRe
     if(!device().queryFeatureSupport(Feature::RayTracingAccelStruct))
         GTEST_SKIP() << "AS ingress: VK_KHR_acceleration_structure is unavailable.";
 
-    for(u32 trackingMode = 0u; trackingMode < 2u; ++trackingMode){
+    for(u32 trackingMode = 0u; trackingMode < s_ExpectedDualCount; ++trackingMode){
         const bool trackLiveness = trackingMode != 0u;
         const BufferHandle vertex = __hidden_ray_tracing_build_ingress_tests::CreateBuildInputBuffer(
             device(),
@@ -453,7 +457,7 @@ TEST_F(RayTracingBuildIngressTest, OpacityMicromapCommandDependenciesAreRetained
         GTEST_SKIP() << "OMM ingress: VK_EXT_opacity_micromap is unavailable.";
 
     using namespace __hidden_ray_tracing_build_ingress_tests;
-    for(u32 trackingMode = 0u; trackingMode < 2u; ++trackingMode){
+    for(u32 trackingMode = 0u; trackingMode < s_ExpectedDualCount; ++trackingMode){
         const bool trackLiveness = trackingMode != 0u;
         const RayTracingOpacityMicromapHandle opacityMicromap = CreateOpacityMicromap(device(), arena());
         OpacityMicromapBuildInputs inputs;
@@ -757,7 +761,7 @@ TEST_F(RayTracingBuildIngressTest, CpuTlasEmptyInstancesRequireExplicitOptIn){
 
     const RayTracingAccelStructHandle blas = device().createAccelStruct(RayTracingAccelStructDesc(arena()));
     RayTracingAccelStructDesc tlasDesc(arena());
-    tlasDesc.setTopLevelMaxInstances(2u);
+    tlasDesc.setTopLevelMaxInstances(s_ExpectedDualCount);
     const RayTracingAccelStructHandle tlas = device().createAccelStruct(tlasDesc);
     ASSERT_TRUE(blas);
     ASSERT_TRUE(tlas);
@@ -1101,7 +1105,7 @@ TEST_F(RayTracingBuildIngressTest, InjectedNativeSubmissionFailureReusesBuildScr
         ASSERT_FALSE(retryBuild->commandRecordingFailed());
         retryBuild->close();
         EXPECT_EQ(nativeCapture.addressQueryCount, 1u);
-        ASSERT_EQ(nativeCapture.buildCommandCount, 2u);
+        ASSERT_EQ(nativeCapture.buildCommandCount, s_ExpectedDualCount);
         EXPECT_EQ(nativeCapture.buildCommands[1u].scratchAddress, nativeCapture.buildCommands[0u].scratchAddress);
         EXPECT_EQ(nativeCapture.buildCommands[1u].destination, nativeCapture.buildCommands[0u].destination);
 

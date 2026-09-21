@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -241,7 +244,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], clearTask);
     EXPECT_EQ(packetTasks[1u], producerTask);
-    EXPECT_EQ(packetTasks[2u], gbufferTask);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], gbufferTask);
 
     const auto hasTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){
         const GpuCompiledTaskView compiledTask = views.compiled.findTask(task);
@@ -591,7 +594,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], combineTask);
     EXPECT_EQ(packetTasks[1u], computeEmulationTask);
-    EXPECT_EQ(packetTasks[2u], sampleTask);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], sampleTask);
 
     const auto hasTextureBarrier = [&](const GpuTaskId task, const GpuCompiledBarrierType::Enum type, const ResourceStates::Mask before, const ResourceStates::Mask after){
         const GpuCompiledTaskView compiledTask = views.compiled.findTask(task);

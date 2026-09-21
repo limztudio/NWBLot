@@ -21,6 +21,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -569,7 +572,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
     ASSERT_NE(views.compiled.packet(packet).tasks, nullptr);
     EXPECT_EQ(views.compiled.packet(packet).tasks[0u], preTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[1u], spanTask);
-    EXPECT_EQ(views.compiled.packet(packet).tasks[2u], combineTask);
+    EXPECT_EQ(views.compiled.packet(packet).tasks[s_ThirdElementIndex], combineTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[3u], clearTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[4u], occupancyTask);
 

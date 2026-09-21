@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -195,7 +198,7 @@ void SubmitAndVerify(
     ASSERT_TRUE(terminal.valid());
     EXPECT_EQ(context.reused, expectedReuse);
     EXPECT_EQ(context.uploadBlobCount, expectedReuse ? 0u : 1u);
-    EXPECT_EQ(context.taskCount, expectedReuse ? 1u : 2u);
+    EXPECT_EQ(context.taskCount, expectedReuse ? 1u : s_ExpectedDualCount);
     const auto accepted = optical.uploadState->plan(optical.upload);
     ASSERT_TRUE(accepted.valid());
     EXPECT_TRUE(accepted.reused);
@@ -406,7 +409,7 @@ TEST_F(DescriptorBufferRoundTripTest, OpticalSceneOwnerWithholdsRuntimeSnapshotU
     EXPECT_FALSE(owner.resources.snapshot().valid());
 
     Impl::RayTracingOpticalSceneGather staticGather(scratch, 1u);
-    staticGather.append(ECS::EntityID(2u, 0u), renderer, true, {-1.f, -2.f, -3.f}, {1.f, 2.f, 3.f}, true);
+    staticGather.append(ECS::EntityID(s_ExpectedDualCount, 0u), renderer, true, {-1.f, -2.f, -3.f}, {1.f, 2.f, 3.f}, true);
     ASSERT_TRUE(owner.resources.prepare(staticGather));
     const auto restored = owner.resources.snapshot();
     ASSERT_TRUE(restored.valid());

@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -264,7 +268,7 @@ struct NativePacketSurfelGiTraceProbeTask{
 struct NativePacketSurfelGiResolveProbeTask{
     static constexpr u32 s_ShaderBufferCount = 9u;
     static constexpr u32 s_ConstantBufferCount = 4u;
-    static constexpr u32 s_ShaderTextureCount = 2u;
+    static constexpr u32 s_ShaderTextureCount = s_ExpectedDualCount;
     static constexpr u32 s_UavBufferCount = 5u;
     static constexpr u32 s_PoolBufferIndex = 0u;
     static constexpr u32 s_CellHeadsBufferIndex = 1u;
@@ -590,7 +594,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId prefixPacket = views.compiled.packetForTask(prefixTask);
     const GpuSubmissionPacketId initializePacket = views.compiled.packetForTask(poolClearTask);
     ASSERT_TRUE(prefixPacket.valid());
@@ -604,7 +608,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     ASSERT_NE(initializeTasks, nullptr);
     EXPECT_EQ(initializeTasks[0u], poolClearTask);
     EXPECT_EQ(initializeTasks[1u], cellHeadClearTask);
-    EXPECT_EQ(initializeTasks[2u], counterClearTask);
+    EXPECT_EQ(initializeTasks[s_ThirdElementIndex], counterClearTask);
     EXPECT_EQ(initializeTasks[3u], freeListClearTask);
     EXPECT_EQ(initializeTasks[4u], initializeLifecycleTask);
     const auto hasInitializeTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource){
@@ -684,7 +688,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelInitializationEntryStatesR
     ASSERT_EQ(commandIrCapture.recordCount(), 4u);
     const GpuCommandIrBuiltinTaskRecord* const poolClearCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const cellHeadClearCapture = commandIrCapture.recordAt(1u);
-    const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(s_ThirdElementIndex);
     const GpuCommandIrBuiltinTaskRecord* const freeListClearCapture = commandIrCapture.recordAt(3u);
     ASSERT_NE(poolClearCapture, nullptr);
     ASSERT_NE(cellHeadClearCapture, nullptr);
@@ -1044,9 +1048,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     surfelScheduling.allowPacketMerge = true;
     surfelScheduling.mergeWithPrevious = true;
     const GpuTaskResourceUse ageFreeUses[] = {
-        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = constantBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[0u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
-        { .resource = uavBufferResources[2u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
+        { .resource = uavBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
         { .resource = uavBufferResources[4u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
     };
     GpuTaskDesc ageFreeDesc;
@@ -1062,9 +1066,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskId ageFreeTask = graph.addTask<NativePacketSurfelGiAgeFreeProbeTask>(
         ageFreeDesc,
         NativePacketSurfelGiAgeFreeProbeTask::Payload{
-            .constants = constantBuffers[2u].get(),
+            .constants = constantBuffers[s_ThirdElementIndex].get(),
             .pool = uavBuffers[0u].get(),
-            .counter = uavBuffers[2u].get(),
+            .counter = uavBuffers[s_ThirdElementIndex].get(),
             .freeList = uavBuffers[4u].get(),
             .recorded = &ageFreeRecorded,
         }
@@ -1089,7 +1093,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(cellHeadClearTask.valid());
 
     const GpuTaskResourceUse hashBuildUses[] = {
-        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = constantBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[0u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = uavBufferResources[1u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
     };
@@ -1106,7 +1110,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskId hashBuildTask = graph.addTask<NativePacketSurfelGiHashBuildProbeTask>(
         hashBuildDesc,
         NativePacketSurfelGiHashBuildProbeTask::Payload{
-            .constants = constantBuffers[2u].get(),
+            .constants = constantBuffers[s_ThirdElementIndex].get(),
             .pool = uavBuffers[0u].get(),
             .cellHeads = uavBuffers[1u].get(),
             .recorded = &hashBuildRecorded,
@@ -1117,10 +1121,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskResourceUse spawnUses[] = {
         { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = normalResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = constantBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[0u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = uavBufferResources[1u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
-        { .resource = uavBufferResources[2u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
+        { .resource = uavBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
         { .resource = uavBufferResources[4u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::ReadWrite },
     };
     GpuTaskDesc spawnDesc;
@@ -1138,10 +1142,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
         NativePacketSurfelGiSpawnProbeTask::Payload{
             .worldPosition = shaderTextures[0u].get(),
             .normal = shaderTextures[1u].get(),
-            .constants = constantBuffers[2u].get(),
+            .constants = constantBuffers[s_ThirdElementIndex].get(),
             .pool = uavBuffers[0u].get(),
             .cellHeads = uavBuffers[1u].get(),
-            .counter = uavBuffers[2u].get(),
+            .counter = uavBuffers[s_ThirdElementIndex].get(),
             .freeList = uavBuffers[4u].get(),
             .recorded = &spawnRecorded,
         }
@@ -1149,8 +1153,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(spawnTask.valid());
 
     const GpuTaskResourceUse traceBuildArgsUses[] = {
-        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
-        { .resource = uavBufferResources[2u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Read },
+        { .resource = constantBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = uavBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[3u], .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
     };
     GpuTaskDesc traceBuildArgsDesc;
@@ -1166,8 +1170,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskId traceBuildArgsTask = graph.addTask<NativePacketSurfelGiTraceBuildArgsProbeTask>(
         traceBuildArgsDesc,
         NativePacketSurfelGiTraceBuildArgsProbeTask::Payload{
-            .constants = constantBuffers[2u].get(),
-            .counter = uavBuffers[2u].get(),
+            .constants = constantBuffers[s_ThirdElementIndex].get(),
+            .counter = uavBuffers[s_ThirdElementIndex].get(),
             .traceArgs = uavBuffers[3u].get(),
             .recorded = &traceBuildArgsRecorded,
         }
@@ -1175,7 +1179,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_TRUE(traceBuildArgsTask.valid());
 
     Vector<GpuTaskResourceUse, Alloc::ScratchArena> traceUses(resourceUseArena);
-    traceUses.reserve(shaderBufferCount - 1u + constantBufferCount + 2u);
+    traceUses.reserve(shaderBufferCount - 1u + constantBufferCount + s_ExpectedDualCount);
     for(u32 bufferIndex = 0u; bufferIndex < shaderBufferCount; ++bufferIndex){
         if(bufferIndex != traceGeometryBufferIndex)
             traceUses.push_back({ .resource = shaderBufferResources[bufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read });
@@ -1212,7 +1216,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskResourceUse resolveUses[] = {
         { .resource = worldPositionResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = normalResource, .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
-        { .resource = constantBufferResources[2u], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
+        { .resource = constantBufferResources[s_ThirdElementIndex], .range = {}, .requiredState = ResourceStates::ConstantBuffer, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = uavBufferResources[NativePacketSurfelGiResolveProbeTask::s_CellHeadsBufferIndex], .range = {}, .requiredState = ResourceStates::ShaderResource, .access = GpuTaskResourceAccess::Read },
         { .resource = irradianceHalfResource, .range = {}, .requiredState = ResourceStates::UnorderedAccess, .access = GpuTaskResourceAccess::Write },
@@ -1230,7 +1234,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     const GpuTaskId resolveTask = graph.addTask<NativePacketSurfelGiResolveProbeTask>(
         resolveDesc,
         NativePacketSurfelGiResolveProbeTask::Payload{
-            .constants = constantBuffers[2u].get(),
+            .constants = constantBuffers[s_ThirdElementIndex].get(),
             .pool = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_PoolBufferIndex].get(),
             .cellHeads = uavBuffers[NativePacketSurfelGiResolveProbeTask::s_CellHeadsBufferIndex].get(),
             .worldPosition = shaderTextures[0u].get(),
@@ -1363,7 +1367,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     ASSERT_EQ(views.compiled.packet(surfelPacket).plan->taskCount, 9u);
     EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[0u], outputClearTask);
     EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[1u], ageFreeTask);
-    EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[2u], cellHeadClearTask);
+    EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[s_ThirdElementIndex], cellHeadClearTask);
     EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[3u], hashBuildTask);
     EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[4u], spawnTask);
     EXPECT_EQ(views.compiled.packet(surfelPacket).tasks[5u], traceBuildArgsTask);
@@ -1386,9 +1390,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
         }
         return false;
     };
-    EXPECT_TRUE(hasAgeFreeTransition(constantBufferResources[2u], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
+    EXPECT_TRUE(hasAgeFreeTransition(constantBufferResources[s_ThirdElementIndex], ResourceStates::CopyDest, ResourceStates::ConstantBuffer));
     EXPECT_TRUE(hasAgeFreeTransition(uavBufferResources[0u], ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
-    EXPECT_TRUE(hasAgeFreeTransition(uavBufferResources[2u], ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
+    EXPECT_TRUE(hasAgeFreeTransition(uavBufferResources[s_ThirdElementIndex], ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     EXPECT_TRUE(hasAgeFreeTransition(uavBufferResources[4u], ResourceStates::CopyDest, ResourceStates::UnorderedAccess));
     const GpuCompiledTaskView compiledHashBuild = views.compiled.findTask(hashBuildTask);
     ASSERT_TRUE(compiledHashBuild.valid());
@@ -1460,7 +1464,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     };
     EXPECT_TRUE(hasTraceBuildArgsBarrier(
         GpuCompiledBarrierType::BufferUav,
-        uavBufferResources[2u],
+        uavBufferResources[s_ThirdElementIndex],
         ResourceStates::UnorderedAccess,
         ResourceStates::UnorderedAccess
     ));
@@ -1579,7 +1583,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSurfelGiResolveRecordsWithoutNat
     EXPECT_TRUE(resolveRecorded);
     EXPECT_TRUE(surfelRecorded);
     EXPECT_TRUE(lightingRecorded);
-    ASSERT_EQ(commandIrCapture.recordCount(), 2u);
+    ASSERT_EQ(commandIrCapture.recordCount(), s_ExpectedDualCount);
     const GpuCommandIrBuiltinTaskRecord* const outputClearCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const cellHeadClearCapture = commandIrCapture.recordAt(1u);
     ASSERT_NE(outputClearCapture, nullptr);

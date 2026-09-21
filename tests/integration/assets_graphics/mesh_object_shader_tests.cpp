@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr AStringView s_SharedSlangiValueSnippet = "static const uint value = 2u;\n";
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -118,7 +122,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     mesh.entry.defineValues.emplace(Impl::ShaderCook::CookString("AUTHORED_OPTION", testArena.arena), Move(authoredDefine));
     mesh.sourcePath = meshRoot / "shared_ms.slang";
     mesh.includeDirectories.push_back(meshRoot);
-    mesh.variantCount = 2u;
+    mesh.variantCount = s_ExpectedDualCount;
     mesh.usesMaterialTypedBinding = true;
     mesh.supportsCsgClipVariant = true;
     Plan::PreparedShaderPlan plan(testArena.arena);
@@ -151,7 +155,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_FALSE(auxiliary.supportsCsgClipVariant);
         EXPECT_FALSE(auxiliary.supportsAvboitCsgClipVariant);
         EXPECT_NE(auxiliary.dependencyChecksum, 0u);
-        EXPECT_GE(auxiliary.dependencies.size(), 2u);
+        EXPECT_GE(auxiliary.dependencies.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
     for(u32 mismatch = 0u; mismatch < 6u; ++mismatch){
@@ -160,7 +164,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         switch(mismatch){
         case 0u: rejected.entry.name = "project/mesh/shared_ms"; break;
         case 1u: rejected.sourcePath = root / "project" / "shared_ms.slang"; break;
-        case 2u: rejected.entry.archiveStage = "mesh_compute"; break;
+        case s_ExpectedDualCount: rejected.entry.archiveStage = "mesh_compute"; break;
         case 3u: rejected.entry.stage = "cs"; break;
         case 4u: rejected.entry.meshObjectVertexSource = "custom_vs.slang"; break;
         case 5u: rejected.entry.emitMeshComputeShadow = false; break;
@@ -180,7 +184,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     EXPECT_TRUE(legacyPlan.preparedEntries.empty());
     EXPECT_EQ(legacyPlan.plannedFileCount, 3u);
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint value = 2u;\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);

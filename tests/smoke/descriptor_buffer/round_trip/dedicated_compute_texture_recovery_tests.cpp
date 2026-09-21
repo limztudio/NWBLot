@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -102,7 +105,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueRecoversCausticSurfel
     ASSERT_TRUE(surfelGraphicsState.buildTextureSubset(computeState, surfelIrradiance.get(), fanInScratchArena));
 
     const CommandListResourceStateHandoff* recoveryBranches[] = { &causticGraphicsState, &surfelGraphicsState };
-    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, 2u, fanInScratchArena));
+    ASSERT_TRUE(recoveryInputState.buildFanIn(shadowGraphicsState, recoveryBranches, s_ExpectedDualCount, fanInScratchArena));
 
     CommandList* prefixLists[] = { prefix.get() };
     const QueueSubmissionToken prefixToken = device.executeCommandLists(

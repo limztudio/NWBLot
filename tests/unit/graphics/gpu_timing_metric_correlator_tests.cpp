@@ -22,6 +22,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -72,7 +76,7 @@ private:
 
 TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
     constexpr usize s_ScopeCount = 2048u;
-    constexpr usize s_PairCount = s_ScopeCount / 2u;
+    constexpr usize s_PairCount = s_ScopeCount / s_ExpectedDualCount;
     constexpr u64 s_FrameIndex = 91u;
     TestArena testArena;
     Core::Perf::TimingRecorder timing(testArena.arena);
@@ -85,7 +89,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         char scopeIndexBuffer[32u] = {};
         scopes.push_back(Core::GpuPacketEnvelopeMetricScope{
             .scopeName = DeriveName(Name("tests/timing/large_envelope/"), FormatDecimal(scopeIndex, scopeIndexBuffer)),
-            .physicalQueue = { .index = static_cast<u16>(scopeIndex % 2u), .deviceGeneration = 7u },
+            .physicalQueue = { .index = static_cast<u16>(scopeIndex % s_ExpectedDualCount), .deviceGeneration = 7u },
         });
     }
     const Name overlapScope("tests/timing/large_envelope_overlap");
@@ -114,7 +118,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, CorrelatesLargeOutOfOrderFrame){
         // An odd stride permutes this power-of-two input count and separates arrival order from queue order.
         const usize scopeIndex = (arrivalIndex * 773u) % s_ScopeCount;
         const Core::GpuPacketEnvelopeMetricScope& scope = scopes[scopeIndex];
-        const u64 beginTicks = static_cast<u64>(scopeIndex / 2u) * 20u + static_cast<u64>(scopeIndex % 2u) * 5u;
+        const u64 beginTicks = static_cast<u64>(scopeIndex / s_ExpectedDualCount) * 20u + static_cast<u64>(scopeIndex % s_ExpectedDualCount) * 5u;
         correlator.recordTimestampRange(
             scope.scopeName,
             s_FrameIndex,
@@ -263,7 +267,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedP
     samples.reserve(3u);
     for(usize frameOffset = 0u; frameOffset < s_FrameCount; ++frameOffset){
         const u64 frameIndex = 100u + frameOffset;
-        const bool reverseOrder = frameOffset % 2u != 0u;
+        const bool reverseOrder = frameOffset % s_ExpectedDualCount != 0u;
         ASSERT_TRUE(prepare(frameIndex, reverseOrder ? reversedScopes : scopes));
         correlator.recordTimestampRange(scopes[0u].scopeName, frameIndex, firstRange, samples, scratchArena);
         ASSERT_TRUE(samples.empty());
@@ -279,7 +283,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PreservesPartialFramesAcrossGrowthRejectedP
         ASSERT_EQ(samples.size(), 3u);
         EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 2.5);
         EXPECT_DOUBLE_EQ(samples[1u].durationSeconds, 0.0);
-        EXPECT_DOUBLE_EQ(samples[2u].durationSeconds, 0.0);
+        EXPECT_DOUBLE_EQ(samples[s_ThirdElementIndex].durationSeconds, 0.0);
         for(const Core::GpuTimingSinkSample& sample : samples)
             EXPECT_EQ(sample.sourceFrameIndex, frameIndex);
         samples.clear();
@@ -323,7 +327,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, PublishesNoPartialFrameWhenOutputRegistrati
     Core::GpuTimingSinkSampleVector samples{ scratchArena };
     samples.reserve(3u);
     const Core::GpuComparableTimestampRange firstRange{
-        .beginTicks = 2u, .endTicks = 8u, .secondsPerTick = 0.5, .physicalQueue = firstQueue,
+        .beginTicks = s_ExpectedDualCount, .endTicks = 8u, .secondsPerTick = 0.5, .physicalQueue = firstQueue,
     };
     const Core::GpuComparableTimestampRange secondRange{
         .beginTicks = 4u, .endTicks = 10u, .secondsPerTick = 0.5, .physicalQueue = secondQueue,

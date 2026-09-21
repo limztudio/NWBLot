@@ -25,6 +25,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -83,7 +86,7 @@ struct GeometryContext{
     mesh.sourceBuffers = Impl::RuntimeMeshBuffers{
         .positionBuffer = buffers[firstBuffer],
         .normalBuffer = buffers[firstBuffer + 1u],
-        .tangentBuffer = buffers[firstBuffer + 2u],
+        .tangentBuffer = buffers[firstBuffer + s_ExpectedDualCount],
         .uv0Buffer = buffers[firstBuffer + 3u],
         .colorBuffer = buffers[firstBuffer + 4u],
         .meshletDescBuffer = buffers[firstBuffer + 5u],
@@ -251,7 +254,7 @@ TEST(MaterialGeometryUses, RejectsInvalidInputsBeforeImportAndClearsOutput){
     BufferVector buffers{ context.scratchArena };
     ASSERT_TRUE(CreateBuffers(context, s_SourceBufferCount, buffers));
     Impl::MaterialPassDrawItems drawItems(context.scratchArena);
-    drawItems.meshDrawItems.reserve(2u);
+    drawItems.meshDrawItems.reserve(s_ExpectedDualCount);
     drawItems.meshDrawItems.push_back(MakeDrawItem(buffers, 0u));
     drawItems.meshDrawItems.push_back(drawItems.meshDrawItems.front());
     const Impl::MaterialPassDrawItems* const drawItemSets[] = { &drawItems };
@@ -276,7 +279,7 @@ TEST(MaterialGeometryUses, RejectsInvalidInputsBeforeImportAndClearsOutput){
         switch(invalidCase){
         case 0u: mesh.sourceBuffers.normalBuffer = nullptr; break;
         case 1u: mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::invalid(); break;
-        case 2u:
+        case s_ExpectedDualCount:
             mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 1u);
             break;
         case 3u: mesh.meshletCount = 0u; break;
@@ -353,7 +356,7 @@ TEST(MaterialGeometryUses, PreservesPartialImportFailureAndReusesUnnamedExisting
 TEST(MaterialGeometryUses, ResolvesImportsAcrossUnrelatedResourcesAndMetadataOnlyDeclarations){
     GeometryContext context;
     BufferVector buffers{ context.scratchArena };
-    ASSERT_TRUE(CreateBuffers(context, 2u * s_SourceBufferCount, buffers));
+    ASSERT_TRUE(CreateBuffers(context, s_ExpectedDualCount * s_SourceBufferCount, buffers));
     BufferVector expected{ context.scratchArena };
     expected.reserve(s_SourceBufferCount);
     for(usize bufferIndex = 0u; bufferIndex < s_SourceBufferCount; ++bufferIndex)
@@ -398,7 +401,7 @@ TEST(MaterialGeometryUses, ResolvesImportsAcrossUnrelatedResourcesAndMetadataOnl
     ASSERT_NO_FATAL_FAILURE(ExpectUses(context.graph, uses, expected));
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
     ASSERT_TRUE(declarations.valid());
-    EXPECT_EQ(declarations.resourceCount(), buffers.size() + 2u);
+    EXPECT_EQ(declarations.resourceCount(), buffers.size() + s_ExpectedDualCount);
 }
 
 TEST(MaterialGeometryUses, ReservedOutputReleasesTupleAndBufferMembershipStorage){
@@ -416,7 +419,7 @@ TEST(MaterialGeometryUses, ReservedOutputReleasesTupleAndBufferMembershipStorage
         ResourceUseVector uses{ gatherScratch };
         uses.reserve(drawCount * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT);
         const ArenaMemoryStats before = gatherScratch.memoryStats();
-        for(usize pass = 0u; pass < 2u; ++pass){
+        for(usize pass = 0u; pass < s_ExpectedDualCount; ++pass){
             ASSERT_TRUE(Impl::RendererTaskGraphDetail::GatherPreparedMaterialGeometryUses(
                 context.graph, drawItemSets, LengthOf(drawItemSets), gatherScratch, uses
             ));
@@ -430,7 +433,7 @@ TEST(MaterialGeometryUses, ReservedOutputReleasesTupleAndBufferMembershipStorage
 TEST(MaterialGeometryUses, TracksEveryChangedSourceInRepeatedMeshTuples){
     GeometryContext context;
     BufferVector buffers{ context.scratchArena };
-    ASSERT_TRUE(CreateBuffers(context, 2u * s_SourceBufferCount, buffers));
+    ASSERT_TRUE(CreateBuffers(context, s_ExpectedDualCount * s_SourceBufferCount, buffers));
     using BufferMember = Core::BufferHandle Impl::RuntimeMeshBuffers::*;
     constexpr BufferMember s_SourceMembers[] = {
         &Impl::RuntimeMeshBuffers::positionBuffer,

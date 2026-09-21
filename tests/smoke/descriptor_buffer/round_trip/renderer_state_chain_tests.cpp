@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -133,14 +137,14 @@ TEST_F(DescriptorBufferRoundTripTest, NormalizedStatePreludeFansInIndependentBra
 
     const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
     Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/state_fan_in_scratch"));
-    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u, fanInScratchArena));
+    ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, s_ExpectedDualCount, fanInScratchArena));
     ASSERT_TRUE(fanInState.valid());
 
     const ArenaMemoryStats warmedOwningArenaStats = DescriptorBufferRoundTripTest::arena().memoryStats();
     const ArenaMemoryStats warmedScratchArenaStats = fanInScratchArena.memoryStats();
     EXPECT_EQ(warmedScratchArenaStats.usedBytes, 0u);
     for(u32 repeat = 0u; repeat < 32u; ++repeat)
-        ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, 2u, fanInScratchArena));
+        ASSERT_TRUE(fanInState.buildFanIn(normalizedState, branchStates, s_ExpectedDualCount, fanInScratchArena));
     const ArenaMemoryStats reusedOwningArenaStats = DescriptorBufferRoundTripTest::arena().memoryStats();
     const ArenaMemoryStats reusedScratchArenaStats = fanInScratchArena.memoryStats();
     EXPECT_EQ(reusedOwningArenaStats.reservedBytes, warmedOwningArenaStats.reservedBytes);
@@ -712,7 +716,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
     ASSERT_TRUE(presentPacket.valid());
     EXPECT_EQ(views.compiled.packetIdAt(0u), shadowPreparePacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), graphicsPrefixPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), shadowVisibilityPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), shadowVisibilityPacket);
     EXPECT_EQ(views.compiled.packetIdAt(3u), causticsPacket);
     EXPECT_EQ(views.compiled.packetIdAt(4u), surfelGiPacket);
     EXPECT_EQ(views.compiled.packetIdAt(5u), lightingPacket);

@@ -17,6 +17,10 @@
 namespace __hidden_skinning_deformation_state_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,7 +59,7 @@ struct DeformationContext{
     Core::CpuTaskScheduler cpuScheduler{ 0u };
     Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
     Core::GraphicsBackend::VulkanAllocator allocator{ context };
-    Array<Core::BufferHandle, 2u> buffers;
+    Array<Core::BufferHandle, s_ExpectedDualCount> buffers;
     MeshSkinningRuntimeInstance instance{ arena };
     MeshSkinningDeformationInputs inputs;
 
@@ -121,12 +125,12 @@ TEST(SkinningDeformationState, FirstUseAndRejectedSubmissionStayUnknownUntilLate
 TEST(SkinningDeformationState, OwnsResolvedPaletteAndComparesContentsInsteadOfPaletteAddresses){
     DeformationContext context;
     MeshSkinningDeformationState& state = context.instance.deformationState;
-    Array<SkeletonJointMatrix, 2u> joints{ Float34Identity(), Float34Identity() };
-    joints[1u].rows[2u].w = 3.5f;
-    const Array<SkeletonJointMatrix, 2u> original = joints;
+    Array<SkeletonJointMatrix, s_ExpectedDualCount> joints{ Float34Identity(), Float34Identity() };
+    joints[1u].rows[s_ThirdElementIndex].w = 3.5f;
+    const Array<SkeletonJointMatrix, s_ExpectedDualCount> original = joints;
     const u64 candidate = state.stage(context.inputs, joints.data(), joints.size());
     ASSERT_NE(candidate, 0u);
-    joints[1u].rows[2u].w = 3.75f;
+    joints[1u].rows[s_ThirdElementIndex].w = 3.75f;
     ASSERT_TRUE(state.accept(candidate));
     state.refreshCurrent(context.inputs, joints.data(), joints.size(), false);
     EXPECT_EQ(state.contentRevision(), 0u);
@@ -134,7 +138,7 @@ TEST(SkinningDeformationState, OwnsResolvedPaletteAndComparesContentsInsteadOfPa
     EXPECT_EQ(state.contentRevision(), 1u);
     state.refreshCurrent(context.inputs, original.data(), 1u, false);
     EXPECT_EQ(state.contentRevision(), 0u);
-    state.refreshCurrent(context.inputs, nullptr, 2u, false);
+    state.refreshCurrent(context.inputs, nullptr, s_ExpectedDualCount, false);
     EXPECT_EQ(state.contentRevision(), 0u);
 }
 
@@ -149,7 +153,7 @@ TEST(SkinningDeformationState, MeshEditsModesDirtyInputsAndResourceGenerationsRe
         switch(change){
         case 0u: ++changed.editRevision; break;
         case 1u: changed.skinningMode = SkeletonSkinningMode::DualQuaternion; break;
-        case 2u: changed.resourceSlotsBuffer = context.buffers[1u]; break;
+        case s_ExpectedDualCount: changed.resourceSlotsBuffer = context.buffers[1u]; break;
         case 3u: changed.resourceSlotsBuffer = nullptr; break;
         default: break;
         }
@@ -162,11 +166,11 @@ TEST(SkinningDeformationState, MeshEditsModesDirtyInputsAndResourceGenerationsRe
     replacement.resourceSlotsBuffer = context.buffers[1u];
     const u64 candidate = state.stage(replacement, &joint, 1u);
     ASSERT_TRUE(state.accept(candidate));
-    EXPECT_EQ(state.contentRevision(), 2u);
+    EXPECT_EQ(state.contentRevision(), s_ExpectedDualCount);
     state.refreshCurrent(context.inputs, &joint, 1u, false);
     EXPECT_EQ(state.contentRevision(), 0u);
     state.refreshCurrent(replacement, &joint, 1u, false);
-    EXPECT_EQ(state.contentRevision(), 2u);
+    EXPECT_EQ(state.contentRevision(), s_ExpectedDualCount);
 }
 
 TEST(SkinningDeformationState, ReturningToAcceptedPoseAfterRejectionCancelsStalePublication){
@@ -189,7 +193,7 @@ TEST(SkinningDeformationState, ReturningToAcceptedPoseAfterRejectionCancelsStale
     EXPECT_EQ(state.contentRevision(), 0u);
     const u64 retry = state.stage(context.inputs, &changed, 1u);
     ASSERT_TRUE(state.accept(retry));
-    EXPECT_EQ(state.contentRevision(), 2u);
+    EXPECT_EQ(state.contentRevision(), s_ExpectedDualCount);
 }
 
 TEST(SkinningDeformationState, PoseRemovalProducesRestGeometryOnceAndPoseReintroductionInvalidatesIt){
@@ -203,9 +207,9 @@ TEST(SkinningDeformationState, PoseRemovalProducesRestGeometryOnceAndPoseReintro
     EXPECT_EQ(state.contentRevision(), 0u);
     const u64 rest = state.stage(context.inputs, nullptr, 0u);
     ASSERT_TRUE(state.accept(rest));
-    EXPECT_EQ(state.contentRevision(), 2u);
+    EXPECT_EQ(state.contentRevision(), s_ExpectedDualCount);
     state.refreshCurrent(context.inputs, nullptr, 0u, false);
-    EXPECT_EQ(state.contentRevision(), 2u);
+    EXPECT_EQ(state.contentRevision(), s_ExpectedDualCount);
     state.refreshCurrent(context.inputs, &joint, 1u, false);
     EXPECT_EQ(state.contentRevision(), 0u);
 }
@@ -241,7 +245,7 @@ TEST(SkinningDeformationState, RuntimeDescriptionPublishesPendingZeroWithoutChan
     EXPECT_EQ(accepted.localBoundsBuffer, instance.localBoundsBuffer);
     EXPECT_EQ(accepted.meshKey, initial.meshKey);
     EXPECT_EQ(accepted.version, initial.version);
-    joint.rows[2u].w = 1.0f;
+    joint.rows[s_ThirdElementIndex].w = 1.0f;
     state.refreshCurrent(context.inputs, &joint, 1u, false);
     RuntimeMeshDesc pending;
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, pending));
@@ -261,7 +265,7 @@ TEST(SkinningDeformationState, RuntimeDescriptionPublishesPendingZeroWithoutChan
     ASSERT_TRUE(state.accept(retry));
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, accepted));
     EXPECT_EQ(accepted.localBoundsBuffer, instance.localBoundsBuffer);
-    EXPECT_EQ(accepted.geometryContentRevision, 2u);
+    EXPECT_EQ(accepted.geometryContentRevision, s_ExpectedDualCount);
     state.refreshCurrent(context.inputs, &joint, 1u, false);
     RuntimeMeshDesc unchanged;
     ASSERT_TRUE(BuildSkinnedRuntimeMeshDesc(instance.entity, instance.handle, &instance, false, false, unchanged));
@@ -278,7 +282,7 @@ TEST(SkinningDeformationState, AcceptanceAndRepeatedUnchangedQueriesDoNotAllocat
     const Array<SkeletonJointMatrix, 4u> joints{
         Float34Identity(), Float34Identity(), Float34Identity(), Float34Identity(),
     };
-    for(u32 generation = 1u; generation <= 2u; ++generation){
+    for(u32 generation = 1u; generation <= s_ExpectedDualCount; ++generation){
         const u64 candidate = state.stage(context.inputs, joints.data(), joints.size());
         const ArenaMemoryStats before = context.arena.memoryStats();
         ASSERT_TRUE(state.accept(candidate));

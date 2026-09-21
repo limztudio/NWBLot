@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_smoke_contract_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -328,10 +331,10 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeSoftwareMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeMeshMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeComputeMarker));
-    EXPECT_EQ(CountText(smokeCmake, s_NativeHardwareMarker), 2u);
-    EXPECT_EQ(CountText(smokeCmake, s_NativeSoftwareMarker), 2u);
-    EXPECT_EQ(CountText(smokeCmake, s_NativeMeshMarker), 2u);
-    EXPECT_EQ(CountText(smokeCmake, s_NativeComputeMarker), 2u);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeHardwareMarker), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeSoftwareMarker), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeMeshMarker), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeComputeMarker), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(
         smokeCmake,
         "nwb_transparent_multi_sw_capture_smoke\n"

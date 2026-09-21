@@ -17,6 +17,10 @@
 namespace __hidden_buffer_range_handoff_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -81,8 +85,8 @@ TEST(BufferRangeHandoff, FanInCombinesDisjointBranchChangesAgainstWholeBufferBas
     EXPECT_EQ(states[0u].state, Core::ResourceStates::CopyDest);
     EXPECT_EQ(states[1u].range, Core::BufferRange(64u, 128u));
     EXPECT_EQ(states[1u].state, Core::ResourceStates::ShaderResource);
-    EXPECT_EQ(states[2u].range, Core::BufferRange(192u, 64u));
-    EXPECT_EQ(states[2u].state, Core::ResourceStates::CopySource);
+    EXPECT_EQ(states[s_ThirdElementIndex].range, Core::BufferRange(192u, 64u));
+    EXPECT_EQ(states[s_ThirdElementIndex].state, Core::ResourceStates::CopySource);
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
 
     const ArenaMemoryStats warmedStats = scratch.memoryStats();
@@ -128,7 +132,7 @@ TEST(BufferRangeHandoff, FanInPreservesOwnershipOnDifferentIntervals){
     const Handoff* const branches[] = { &first, &second };
 
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    ASSERT_EQ(Access::stateHandoffBuffers(result).size(), 2u);
+    ASSERT_EQ(Access::stateHandoffBuffers(result).size(), s_ExpectedDualCount);
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination, { 0u, 128u }));
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Destination, s_Destination, { 128u, 128u }));
     EXPECT_FALSE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination));
@@ -161,7 +165,7 @@ TEST(BufferRangeHandoff, SubsetClipsIntervalsAndSupportsInPlaceSelection){
     ASSERT_EQ(states.size(), 3u);
     EXPECT_EQ(states[0u].range, Core::BufferRange(32u, 32u));
     EXPECT_EQ(states[1u].range, Core::BufferRange(64u, 128u));
-    EXPECT_EQ(states[2u].range, Core::BufferRange(192u, 32u));
+    EXPECT_EQ(states[s_ThirdElementIndex].range, Core::BufferRange(192u, 32u));
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner, { 32u, 192u }));
     EXPECT_FALSE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
     ASSERT_TRUE(source.buildBufferRangeSubset(source, context.buffer.get(), { 32u, 192u }));
@@ -246,7 +250,7 @@ TEST(BufferRangeHandoff, PendingReleaseIntervalsRemainDistinctAndCannotBeClipped
     const Handoff* const branches[] = { &first, &second };
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
     const auto& states = Access::stateHandoffBuffers(result);
-    ASSERT_EQ(states.size(), 2u);
+    ASSERT_EQ(states.size(), s_ExpectedDualCount);
     EXPECT_EQ(states[0u].range, Core::BufferRange(0u, 128u));
     EXPECT_EQ(states[1u].range, Core::BufferRange(128u, 128u));
     EXPECT_FALSE(subset.buildBufferRangeSubset(result, context.buffer.get(), { 64u, 128u }));

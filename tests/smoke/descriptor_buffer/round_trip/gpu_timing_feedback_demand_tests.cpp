@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -154,7 +158,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
     timingSink.setEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, s_ExpectedDualCount));
     ReplacingGpuTimingSampleCapture replacingSamples(timing);
     replacingSamples.replaceOnFirstSample = true;
     replacingSamples.subscription = timing.subscribeSampleListener(GpuTimingSampleListener{
@@ -228,7 +232,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
     EXPECT_EQ(replacingSamples.capturedSamples.samples[0u].attribution, firstAttribution);
     EXPECT_TRUE(replacingSamples.capturedSamples.samples[0u].published);
     EXPECT_GE(replacingSamples.capturedSamples.samples[0u].durationSeconds, 0.0);
-    ASSERT_EQ(observingSamples.sampleCount, 2u);
+    ASSERT_EQ(observingSamples.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(observingSamples.samples[0u].attribution, firstAttribution);
     EXPECT_EQ(observingSamples.samples[1u].attribution, secondAttribution);
     EXPECT_TRUE(observingSamples.samples[0u].published);
@@ -265,9 +269,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesTimerQuer
 
     EXPECT_EQ(replacingSamples.capturedSamples.sampleCount, 1u);
     ASSERT_EQ(observingSamples.sampleCount, 3u);
-    EXPECT_EQ(observingSamples.samples[2u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
-    EXPECT_EQ(observingSamples.samples[2u].attribution, thirdAttribution);
-    EXPECT_TRUE(observingSamples.samples[2u].published);
+    EXPECT_EQ(observingSamples.samples[s_ThirdElementIndex].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
+    EXPECT_EQ(observingSamples.samples[s_ThirdElementIndex].attribution, thirdAttribution);
+    EXPECT_TRUE(observingSamples.samples[s_ThirdElementIndex].published);
     ASSERT_EQ(replacingSamples.replacementSamples.sampleCount, 1u);
     EXPECT_EQ(replacingSamples.replacementSamples.samples[0u].scopeName, s_FrameTimingFeedbackOnlyScope.identity);
     EXPECT_EQ(replacingSamples.replacementSamples.samples[0u].attribution, thirdAttribution);
@@ -289,7 +293,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingListenerFailureUnwindsCompletedCo
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingFeedbackOnlyScope.identity, device, s_ExpectedDualCount));
     GpuTimingSampleCapture earlierSamples;
     ScopedGpuTimingSampleListener earlierListener(timing, earlierSamples);
     ThrowingGpuTimingSampleCapture throwingSamples;
@@ -335,8 +339,8 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingListenerFailureUnwindsCompletedCo
     EXPECT_TRUE(earlierSamples.samples[0u].published);
     EXPECT_EQ(laterSamples.sampleCount, 0u);
     const GpuTimingRecorderStatistics failedStatistics = timing.statistics(device);
-    EXPECT_EQ(failedStatistics.acceptedScopeCount, 2u);
-    EXPECT_EQ(failedStatistics.publishedSampleCount, 2u);
+    EXPECT_EQ(failedStatistics.acceptedScopeCount, s_ExpectedDualCount);
+    EXPECT_EQ(failedStatistics.publishedSampleCount, s_ExpectedDualCount);
     EXPECT_EQ(failedStatistics.sampleListenerFailureCount, 1u);
 
     throwingListener.unsubscribe();
@@ -375,14 +379,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesAndRecord
         1u
     ));
     const GpuTimingRecorderStatistics declaredStatistics = timing.statistics(device);
-    EXPECT_EQ(declaredStatistics.preparedScopeCount, 2u);
+    EXPECT_EQ(declaredStatistics.preparedScopeCount, s_ExpectedDualCount);
     EXPECT_EQ(declaredStatistics.requestedQueryCount, 4u);
     EXPECT_EQ(declaredStatistics.materializedQueryCount, 0u);
 
     ASSERT_TRUE(graphics.prepareFramePreamble());
     ASSERT_TRUE(device.waitForIdle());
     const GpuTimingRecorderStatistics materializedStatistics = timing.statistics(device);
-    EXPECT_EQ(materializedStatistics.preparedScopeCount, 2u);
+    EXPECT_EQ(materializedStatistics.preparedScopeCount, s_ExpectedDualCount);
     EXPECT_EQ(materializedStatistics.requestedQueryCount, 4u);
     EXPECT_EQ(materializedStatistics.materializedQueryCount, 1u);
     timing.beginFrame(401u);
@@ -458,7 +462,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsFramePreambleMaterializesAndRecord
     EXPECT_EQ(completedStatistics.publishedSampleCount, 1u);
     EXPECT_EQ(
         completedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive],
-        2u
+        s_ExpectedDualCount
     );
 
     ASSERT_TRUE(sampleListener.clearFeedbackCollectionScopes());
@@ -492,7 +496,7 @@ TEST_F(DescriptorBufferRoundTripTest, BroadGpuTimingCaptureOverridesScopedFeedba
     ASSERT_TRUE(device.waitForIdle());
 
     const GpuTimingRecorderStatistics materializedStatistics = timing.statistics(device);
-    EXPECT_EQ(materializedStatistics.preparedScopeCount, 2u);
+    EXPECT_EQ(materializedStatistics.preparedScopeCount, s_ExpectedDualCount);
     EXPECT_EQ(materializedStatistics.requestedQueryCount, 4u);
     EXPECT_EQ(materializedStatistics.materializedQueryCount, 4u);
     timing.beginFrame(403u);
@@ -543,7 +547,7 @@ TEST_F(DescriptorBufferRoundTripTest, BroadGpuTimingCaptureOverridesScopedFeedba
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 404u);
 
-    ASSERT_EQ(completedSamples.sampleCount, 2u);
+    ASSERT_EQ(completedSamples.sampleCount, s_ExpectedDualCount);
     const GpuTimingSample* const demandedSample = completedSamples.find(demandedAttribution);
     const GpuTimingSample* const undemandedSample = completedSamples.find(undemandedAttribution);
     ASSERT_NE(demandedSample, nullptr);
@@ -669,7 +673,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingPerformanceCaptureEpochExcludesOl
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 412u);
-    ASSERT_EQ(completedSamples.sampleCount, 2u);
+    ASSERT_EQ(completedSamples.sampleCount, s_ExpectedDualCount);
     const GpuTimingSample* const restartedSessionSample = completedSamples.find(restartedSessionAttribution);
     ASSERT_NE(restartedSessionSample, nullptr);
     EXPECT_EQ(restartedSessionSample->scopeName, s_FrameTimingFeedbackPerfRestartedSessionScope.identity);

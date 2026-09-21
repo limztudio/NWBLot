@@ -17,6 +17,9 @@
 namespace __hidden_build_input_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -100,7 +103,7 @@ TEST_F(BuildInputSelection, DirectoryInputsRespectBoundariesAndAllowEmptyRoots){
     addInput("assets/part/nested");
     addInput("assets/empty");
     ASSERT_TRUE(select());
-    ASSERT_EQ(m_files.size(), 2u);
+    ASSERT_EQ(m_files.size(), s_ExpectedDualCount);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "a.nwb");
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[1].filePath.filename()), "c.nwb");
 }
@@ -111,11 +114,11 @@ TEST_F(BuildInputSelection, RejectedInputsLeaveDiscoveredFilesIntact){
     addInput("assets/a.nwb");
     addInput("outside");
     EXPECT_FALSE(select());
-    EXPECT_EQ(m_files.size(), 2u);
+    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
     m_options.inputs.clear();
     addInput("assets/missing.nwb");
     EXPECT_FALSE(select());
-    EXPECT_EQ(m_files.size(), 2u);
+    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
     m_options.inputs.clear();
     addInput("assets/empty");
     ASSERT_TRUE(select());
@@ -128,7 +131,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     addInput("assets/Case");
     ASSERT_TRUE(select());
 #if defined(NWB_PLATFORM_WINDOWS)
-    EXPECT_EQ(m_files.size(), 2u);
+    EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
 #else
     ASSERT_EQ(m_files.size(), 1u);
     EXPECT_EQ(PathToString(m_testArena.arena, m_files[0].filePath.filename()), "a.nwb");

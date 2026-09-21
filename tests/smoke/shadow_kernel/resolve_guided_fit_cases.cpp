@@ -21,6 +21,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_HalfDivisor = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -59,11 +63,11 @@ namespace ShadowResolveGuidedFit{
     const Float4U color = testCase.uniformColor ? Float4U{ 0.25f, 0.5f, 0.75f, 1.0f }
         : Float4U{ edge, 1.0f - edge, 0.125f + 0.0625f * static_cast<f32>(x) + 0.03125f * static_cast<f32>(y), 1.0f };
     const u32 rotation = (layer + 1u) % 3u;
-    return { color.raw[rotation], color.raw[(rotation + 1u) % 3u], color.raw[(rotation + 2u) % 3u], 1.0f };
+    return { color.raw[rotation], color.raw[(rotation + 1u) % 3u], color.raw[(rotation + s_ExpectedDualCount) % 3u], 1.0f };
 }
 
 [[nodiscard]] Float4U Prior(const u32 y, const u32 height, const u32 layer){
-    if(y == height / 2u)
+    if(y == height / s_ExpectedDualCount)
         return { 0.0f, 0.0f, 0.0f, 1.0f };
     return { 0.125f + 0.0625f * static_cast<f32>(layer), 0.5f, 0.75f, 1.0f };
 }
@@ -84,10 +88,10 @@ namespace ShadowResolveGuidedFit{
         return prior;
     if(x == 0u || y == 0u)
         return rgb && multiply ? prior : Float4U{ 1.0f, 1.0f, 1.0f, 1.0f };
-    const i32 halfWidth = static_cast<i32>(DivideUp(width, 2u));
-    const i32 halfHeight = static_cast<i32>(DivideUp(height, 2u));
-    const i32 baseX = static_cast<i32>(x / 2u);
-    const i32 baseY = static_cast<i32>(y / 2u);
+    const i32 halfWidth = static_cast<i32>(DivideUp(width, s_HalfDivisor));
+    const i32 halfHeight = static_cast<i32>(DivideUp(height, s_HalfDivisor));
+    const i32 baseX = static_cast<i32>(x / s_ExpectedDualCount);
+    const i32 baseY = static_cast<i32>(y / s_ExpectedDualCount);
     // Exact factor-two B-spline phases. Odd pixels interpolate the two adjacent samples; even pixels use 1:6:1.
     const f32 evenWeights[] = { 0.125f, 0.75f, 0.125f };
     const f32 oddWeights[] = { 0.0f, 0.5f, 0.5f };

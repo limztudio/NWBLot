@@ -28,6 +28,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -145,8 +148,8 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
         GraphicsBackend::StateTracker tracker(context);
         tracker.setPermanentBufferState(*baselineBuffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*baselineTexture, ResourceStates::Common);
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), s_ExpectedDualCount);
 
         tracker.setPermanentBufferState(*baselineBuffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*baselineTexture, ResourceStates::Common);
@@ -154,24 +157,24 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
         tracker.setPermanentTextureState(*baselineTexture, ResourceStates::CopyDest);
         EXPECT_EQ(tracker.getPermanentBufferState(baselineBuffer.get()), ResourceStates::Common);
         EXPECT_EQ(tracker.getPermanentTextureState(baselineTexture.get()), ResourceStates::Common);
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), s_ExpectedDualCount);
 
         tracker.beginRecordingAttempt();
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), s_ExpectedDualCount);
         tracker.setPermanentBufferState(*provisionalBuffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*provisionalTexture, ResourceStates::Common);
-        EXPECT_EQ(provisionalBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(provisionalTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(provisionalBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(provisionalTexture->getReferenceCount(), s_ExpectedDualCount);
 
         tracker.rollbackRecordingAttempt();
         EXPECT_EQ(tracker.getPermanentBufferState(baselineBuffer.get()), ResourceStates::Common);
         EXPECT_EQ(tracker.getPermanentTextureState(baselineTexture.get()), ResourceStates::Common);
         EXPECT_EQ(tracker.getPermanentBufferState(provisionalBuffer.get()), ResourceStates::Unknown);
         EXPECT_EQ(tracker.getPermanentTextureState(provisionalTexture.get()), ResourceStates::Unknown);
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), s_ExpectedDualCount);
         EXPECT_EQ(provisionalBuffer->getReferenceCount(), 1u);
         EXPECT_EQ(provisionalTexture->getReferenceCount(), 1u);
 
@@ -179,10 +182,10 @@ TEST(PermanentStateOwnership, StateTrackerValuesOwnSnapshotsTransactionally){
         tracker.setPermanentBufferState(*provisionalBuffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*provisionalTexture, ResourceStates::Common);
         tracker.commitRecordingAttempt();
-        EXPECT_EQ(baselineBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(baselineTexture->getReferenceCount(), 2u);
-        EXPECT_EQ(provisionalBuffer->getReferenceCount(), 2u);
-        EXPECT_EQ(provisionalTexture->getReferenceCount(), 2u);
+        EXPECT_EQ(baselineBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(baselineTexture->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(provisionalBuffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(provisionalTexture->getReferenceCount(), s_ExpectedDualCount);
     }
 
     EXPECT_EQ(baselineBuffer->getReferenceCount(), 1u);
@@ -200,7 +203,7 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
     Core::CpuTaskScheduler trackerCpuTaskScheduler(0u);
     Core::CpuTaskScheduler resourceCpuTaskScheduler(0u);
     GraphicsBackend::VulkanContext trackerContext(trackerGraphicsAllocator, trackerCpuTaskScheduler, 1u);
-    GraphicsBackend::VulkanContext resourceContext(resourceGraphicsAllocator, resourceCpuTaskScheduler, 2u);
+    GraphicsBackend::VulkanContext resourceContext(resourceGraphicsAllocator, resourceCpuTaskScheduler, s_ExpectedDualCount);
     GraphicsBackend::VulkanAllocator resourceAllocator(resourceContext);
     const u64 trackerUsedBytesBefore = trackerArena.arena.memoryStats().usedBytes;
     const u64 resourceUsedBytesBefore = resourceArena.arena.memoryStats().usedBytes;
@@ -228,8 +231,8 @@ TEST(PermanentStateOwnership, StateTrackerUsesEachResourceArenaForLastOwnerDelet
         GraphicsBackend::StateTracker tracker(trackerContext);
         tracker.setPermanentBufferState(*buffer, ResourceStates::Common);
         tracker.setPermanentTextureState(*texture, ResourceStates::Common);
-        ASSERT_EQ(buffer->getReferenceCount(), 2u);
-        ASSERT_EQ(texture->getReferenceCount(), 2u);
+        ASSERT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
+        ASSERT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
         buffer.reset();
         texture.reset();
         EXPECT_GT(resourceArena.arena.memoryStats().usedBytes, resourceUsedBytesBefore);
@@ -295,9 +298,9 @@ TEST_F(PermanentStateLifetimeTest, SubmittedSameStatePermanentsSurviveCallerDrop
     ASSERT_TRUE(commandList->hasCommandBuffer());
     ASSERT_TRUE(submit().valid());
     ASSERT_TRUE(device.waitForIdle());
-    retirePacketReferences(2u);
-    ASSERT_EQ(rawBuffer->getReferenceCount(), 2u);
-    ASSERT_EQ(rawTexture->getReferenceCount(), 2u);
+    retirePacketReferences(s_ExpectedDualCount);
+    ASSERT_EQ(rawBuffer->getReferenceCount(), s_ExpectedDualCount);
+    ASSERT_EQ(rawTexture->getReferenceCount(), s_ExpectedDualCount);
 
     buffer.reset();
     texture.reset();
@@ -316,8 +319,8 @@ TEST_F(PermanentStateLifetimeTest, SubmittedSameStatePermanentsSurviveCallerDrop
 
     BufferHandle observedBuffer(rawBuffer, BufferHandle::deleter_type(&PermanentStateLifetimeTest::arena()));
     TextureHandle observedTexture(rawTexture, TextureHandle::deleter_type(&PermanentStateLifetimeTest::arena()));
-    EXPECT_EQ(rawBuffer->getReferenceCount(), 2u);
-    EXPECT_EQ(rawTexture->getReferenceCount(), 2u);
+    EXPECT_EQ(rawBuffer->getReferenceCount(), s_ExpectedDualCount);
+    EXPECT_EQ(rawTexture->getReferenceCount(), s_ExpectedDualCount);
     commandList.reset();
     EXPECT_EQ(observedBuffer->getReferenceCount(), 1u);
     EXPECT_EQ(observedTexture->getReferenceCount(), 1u);

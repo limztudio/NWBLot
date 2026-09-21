@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -81,7 +85,7 @@ TEST_F(DescriptorBufferRoundTripTest, StickyNativeRecordingFailureCannotSubmitAn
 
 TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAndReopenInAllBuilds){
     auto& device = DescriptorBufferRoundTripTest::device();
-    static constexpr u32 s_InitialWords[] = { 1u, 2u, 3u, 4u };
+    static constexpr u32 s_InitialWords[] = { 1u, s_ExpectedDualCount, 3u, 4u };
     constexpr u32 s_DiscardedClearValue = 0xa5a55a5au;
 
     const BufferHandle buffer = device.createBuffer(
@@ -167,10 +171,10 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
             commandList->writeBuffer(*buffer, s_InitialWords, sizeof(s_InitialWords), sizeof(u32));
             break;
         case Operation::WriteOffsetUnaligned:
-            commandList->writeBuffer(*buffer, s_InitialWords, sizeof(u32), 2u);
+            commandList->writeBuffer(*buffer, s_InitialWords, sizeof(u32), s_ExpectedDualCount);
             break;
         case Operation::WriteSizeUnaligned:
-            commandList->writeBuffer(*buffer, s_InitialWords, 2u);
+            commandList->writeBuffer(*buffer, s_InitialWords, s_ExpectedDualCount);
             break;
         case Operation::ClearSizeUnaligned:
             commandList->clearBufferUInt(*unalignedSizeBuffer, s_DiscardedClearValue);
@@ -185,7 +189,7 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
             commandList->copyBuffer(*buffer, Limit<u64>::s_Max, *otherBuffer, 0u, sizeof(u32));
             break;
         case Operation::OverlappingSelfCopy:
-            commandList->copyBuffer(*buffer, sizeof(u32), *buffer, 0u, sizeof(u32) * 2u);
+            commandList->copyBuffer(*buffer, sizeof(u32), *buffer, 0u, sizeof(u32) * s_ExpectedDualCount);
             break;
         }
 
@@ -217,7 +221,7 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     lastAcceptedToken = zeroWorkToken;
 
     commandList->open();
-    commandList->copyBuffer(*buffer, sizeof(u32) * 2u, *buffer, 0u, sizeof(u32) * 2u);
+    commandList->copyBuffer(*buffer, sizeof(u32) * s_ExpectedDualCount, *buffer, 0u, sizeof(u32) * s_ExpectedDualCount);
     EXPECT_FALSE(commandList->commandRecordingFailed());
     EXPECT_EQ(commandList->getBufferState(buffer.get()), ResourceStates::CopySource | ResourceStates::CopyDest);
     commandList->close();
@@ -230,7 +234,7 @@ TEST_F(DescriptorBufferRoundTripTest, BufferSemanticRejectionsDiscardPriorWorkAn
     ASSERT_NE(copiedWords, nullptr);
     EXPECT_EQ(copiedWords[0u], s_InitialWords[0u]);
     EXPECT_EQ(copiedWords[1u], s_InitialWords[1u]);
-    EXPECT_EQ(copiedWords[2u], s_InitialWords[0u]);
+    EXPECT_EQ(copiedWords[s_ThirdElementIndex], s_InitialWords[0u]);
     EXPECT_EQ(copiedWords[3u], s_InitialWords[1u]);
     device.unmapBuffer(*buffer);
 }
@@ -374,7 +378,7 @@ TEST_F(DescriptorBufferRoundTripTest, ComputeAndPushSemanticRejectionsDiscardPri
             commandList->setComputeState(
                 ComputeState().setPipeline(zeroRangePipeline.get()).setIndirectParams(indirectBuffer.get())
             );
-            commandList->dispatchIndirect(2u);
+            commandList->dispatchIndirect(s_ExpectedDualCount);
             break;
         case Operation::IndirectRangeOutOfBounds:
             commandList->setComputeState(
@@ -386,7 +390,7 @@ TEST_F(DescriptorBufferRoundTripTest, ComputeAndPushSemanticRejectionsDiscardPri
             commandList->setPushConstants(nullptr, sizeof(s_PushValue));
             break;
         case Operation::PushSizeUnaligned:
-            commandList->setPushConstants(&s_PushValue, 2u);
+            commandList->setPushConstants(&s_PushValue, s_ExpectedDualCount);
             break;
         case Operation::PushWithoutPipeline:
             commandList->setPushConstants(&s_PushValue, sizeof(s_PushValue));

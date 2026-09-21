@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -48,7 +51,7 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
     EXPECT_NE(first, second);
-    EXPECT_EQ(Graphics::GpuTaskGraph::DeclarationReadView(graph).resourceVersionCount(), 2u);
+    EXPECT_EQ(Graphics::GpuTaskGraph::DeclarationReadView(graph).resourceVersionCount(), s_ExpectedDualCount);
     EXPECT_NE(firstRevision, initialRevision);
     EXPECT_NE(Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision(), firstRevision);
 

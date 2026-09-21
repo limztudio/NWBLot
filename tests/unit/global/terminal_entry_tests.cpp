@@ -14,6 +14,10 @@
 namespace __hidden_terminal_entry_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -30,7 +34,7 @@ TEST(TerminalEntry, SuccessfulAndExpectedFailureReturnsDoNotInvokeExceptionHandl
     const auto unexpected = [&](){ ++handled; return -3; };
     EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([&](){ ++calls; return 0; }, handle, unexpected), 0);
     EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([&](){ ++calls; return 1; }, handle, unexpected), 1);
-    EXPECT_EQ(calls, 2u);
+    EXPECT_EQ(calls, s_ExpectedDualCount);
     EXPECT_EQ(handled, 0u);
 }
 
@@ -66,7 +70,7 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
     bool typedHandled = false;
     const int result = InvokeTerminalEntry<TerminalTestError>([&]()->int{
         ScopeExit first([&]()noexcept{ order[count] = 1u; ++count; });
-        ScopeExit second([&]()noexcept{ order[count] = 2u; ++count; });
+        ScopeExit second([&]()noexcept{ order[count] = s_ExpectedDualCount; ++count; });
 
         throw 42;
     }, [&](const TerminalTestError&){ typedHandled = true; return 0; }, [&](){
@@ -77,9 +81,9 @@ TEST(TerminalEntry, UnknownFailureUsesItsTerminalHandlerAfterReverseOrderCleanup
     EXPECT_EQ(result, -1);
     EXPECT_FALSE(typedHandled);
     EXPECT_EQ(count, 3u);
-    EXPECT_EQ(order[0u], 2u);
+    EXPECT_EQ(order[0u], s_ExpectedDualCount);
     EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[2u], 3u);
+    EXPECT_EQ(order[s_ThirdElementIndex], 3u);
 }
 
 TEST(TerminalEntry, ApplicationFailurePolicyPreservesOutputAndNormalizesOnlyTypedTerminalExits){
@@ -93,7 +97,7 @@ TEST(TerminalEntry, ApplicationFailurePolicyPreservesOutputAndNormalizesOnlyType
         }, [](){ return -7; }, TerminalErrorExitPolicy::ApplicationFailure);
         EXPECT_EQ(result, -1);
     }
-    EXPECT_EQ(messages, 2u);
+    EXPECT_EQ(messages, s_ExpectedDualCount);
     EXPECT_EQ(InvokeTerminalEntry<TerminalTestError>([](){ return 23; }, [](const TerminalTestError&){
         return 0;
     }, [](){ return -7; }, TerminalErrorExitPolicy::ApplicationFailure), 23);

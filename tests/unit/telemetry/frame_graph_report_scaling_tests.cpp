@@ -17,6 +17,9 @@
 namespace __hidden_frame_graph_report_scaling_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -79,9 +82,9 @@ struct ReportFixture{
             .runtimeStatistics = owner,
         });
         if(includeQueues){
-            const u32 queueCount = packetCount > 1u ? 2u : packetCount;
+            const u32 queueCount = packetCount > 1u ? s_ExpectedDualCount : packetCount;
             for(u32 queueOffset = 0u; queueOffset < queueCount; ++queueOffset){
-                const u32 acceptedCount = packetCount / 2u + (queueOffset == 0u ? packetCount % 2u : 0u);
+                const u32 acceptedCount = packetCount / s_ExpectedDualCount + (queueOffset == 0u ? packetCount % s_ExpectedDualCount : 0u);
                 Telemetry::FrameGraphPhysicalQueueRuntimeStatistics statistics;
                 statistics.graphGeneration = owner.graphGeneration;
                 statistics.planGeneration = owner.planGeneration;
@@ -110,7 +113,7 @@ struct ReportFixture{
                 .commandListCount = 1u,
                 .ownerNodeIndex = ownerIndex,
                 .packetIndex = packetIndex,
-                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % 2u), .deviceGeneration = 17u },
+                .queue = { .index = static_cast<u16>(firstQueueIndex + packetIndex % s_ExpectedDualCount), .deviceGeneration = 17u },
                 .queueClass = Telemetry::FrameGraphQueueClass::Graphics,
             });
         }
@@ -150,7 +153,7 @@ void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 task
     TestArena testArena;
     ReportFixture fixture(testArena.arena);
     fixture.nodes.reserve(ownerCount + taskCount);
-    fixture.queues.reserve(ownerCount * 2u);
+    fixture.queues.reserve(ownerCount * s_ExpectedDualCount);
     fixture.packets.reserve(packetCount);
     for(u32 ownerIndex = 0u; ownerIndex < ownerCount; ++ownerIndex){
         fixture.addOwner(packetCount / ownerCount, 1u);
@@ -205,7 +208,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     fixture.addUnmeasuredNode();
     fixture.addOwner(0u, 5u);
     fixture.addUnmeasuredNode();
-    fixture.addOwner(2u, 7u, false);
+    fixture.addOwner(s_ExpectedDualCount, 7u, false);
     fixture.addUnmeasuredNode();
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -231,7 +234,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     EXPECT_LT(first.find("\"packet\": {\"index\": 0,"), first.find("\"packet\": {\"index\": 1,"));
     EXPECT_LT(first.find("\"packet\": {\"index\": 1,"), first.find("\"packet\": {\"index\": 2,"));
     EXPECT_TRUE(ContainsText(empty, "\"physicalQueues\": null, \"packetSubmissions\": []"));
-    EXPECT_EQ(CountText(last, "\"packet\": {\"index\":"), 2u);
+    EXPECT_EQ(CountText(last, "\"packet\": {\"index\":"), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(last, "\"physicalQueues\": null"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 7,"));
     EXPECT_TRUE(ContainsText(last, "\"queue\": {\"index\": 8,"));
@@ -258,16 +261,16 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     first.addUnmeasuredNode();
     ReportFixture second(testArena.arena);
     second.addUnmeasuredNode();
-    second.addOwner(2u, 7u);
+    second.addOwner(s_ExpectedDualCount, 7u);
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-    ASSERT_EQ(report.summary.frameGraphFrameCount, 2u);
+    ASSERT_EQ(report.summary.frameGraphFrameCount, s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), 5u);
-    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), 2u);
+    EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"), 1u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=2"), 1u);
 
@@ -275,7 +278,7 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), 2u);
+    EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=2"), 1u);
     EXPECT_FALSE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"));
 }
@@ -295,12 +298,12 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_EQ(header.compiledTaskCount, 0u);
     ASSERT_EQ(header.edgeCount, 0u);
     ASSERT_EQ(header.runtimeStatisticsCount, 1u);
-    ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
     ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
     const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
     ;
-    const usize packetOffset = queueOffset + 2u * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6);
+    const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6);
     ASSERT_LE(packetOffset + 3u * sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -318,7 +321,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     NWB_MEMCPY(&nextPacket, sizeof(nextPacket), original.data() + packetOffset + sizeof(packet), sizeof(nextPacket));
     NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &nextPacket, sizeof(nextPacket));
     NWB_MEMCPY(malformed.data() + packetOffset + sizeof(packet), sizeof(packet), &packet, sizeof(packet));
-    ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 2u));
+    ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), s_ExpectedDualCount));
 
     malformed = original;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 queue;
@@ -335,7 +338,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.parseFailureCount, 3u);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(report.summary.frameGraphNodeCount, 2u);
+    EXPECT_EQ(report.summary.frameGraphNodeCount, s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), "\"packet\": {\"index\":"), 3u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_packet_submission_count=3"), 1u);
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "Frame 918 stream 4"));

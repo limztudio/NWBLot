@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -63,7 +66,7 @@ TEST_F(DescriptorBufferRoundTripTest, StateFanInRejectsConflictingBranchFinalSta
 
     const CommandListResourceStateHandoff* branchStates[] = { &firstBranchState, &secondBranchState };
     Alloc::ScratchArena fanInScratchArena(Name("tests/descriptor_buffer/conflicting_fan_in"));
-    EXPECT_FALSE(fanInState.buildFanIn(baseState, branchStates, 2u, fanInScratchArena));
+    EXPECT_FALSE(fanInState.buildFanIn(baseState, branchStates, s_ExpectedDualCount, fanInScratchArena));
     EXPECT_FALSE(fanInState.valid());
 }
 
@@ -169,7 +172,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     // storage may be populated by earlier tests, while these two shards still have deterministic first-growth and
     // second-recording reuse transitions.
     constexpr u32 s_FirstTelemetryWorkerIndex = Limit<u32>::s_Max - 1u;
-    constexpr u32 s_SecondTelemetryWorkerIndex = Limit<u32>::s_Max - 2u;
+    constexpr u32 s_SecondTelemetryWorkerIndex = Limit<u32>::s_Max - s_ExpectedDualCount;
     CommandListParameters firstParameters;
     firstParameters
         .setPhysicalQueue(graphicsQueue)
@@ -216,13 +219,13 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
 
     const GpuCommandArenaStatistics growthStatistics = device.getCommandArenaStatistics(graphicsQueue);
     ASSERT_TRUE(growthStatistics.valid());
-    EXPECT_EQ(growthStatistics.growthEventCount, beforeStatistics.growthEventCount + 2u);
-    EXPECT_EQ(growthStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + 2u);
+    EXPECT_EQ(growthStatistics.growthEventCount, beforeStatistics.growthEventCount + s_ExpectedDualCount);
+    EXPECT_EQ(growthStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + s_ExpectedDualCount);
     EXPECT_GE(growthStatistics.highWaterCommandBufferCount, growthStatistics.currentCommandBufferCount);
     EXPECT_GE(growthStatistics.highWaterCommandBufferCount, beforeStatistics.highWaterCommandBufferCount);
-    EXPECT_EQ(growthStatistics.workerArenaCount, beforeStatistics.workerArenaCount + 2u);
-    EXPECT_EQ(growthStatistics.commandPoolEpochCount, beforeStatistics.commandPoolEpochCount + 2u);
-    EXPECT_EQ(growthStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_EQ(growthStatistics.workerArenaCount, beforeStatistics.workerArenaCount + s_ExpectedDualCount);
+    EXPECT_EQ(growthStatistics.commandPoolEpochCount, beforeStatistics.commandPoolEpochCount + s_ExpectedDualCount);
+    EXPECT_EQ(growthStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + s_ExpectedDualCount);
     EXPECT_GE(growthStatistics.commandPoolEpochCount, growthStatistics.workerArenaCount);
     EXPECT_GT(
         growthStatistics.nativeHandleStorageLowerBoundBytes,
@@ -249,12 +252,12 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
 
     CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
     bool submitted = false;
-    EXPECT_GT(device.executeCommandLists(commandLists, 2u, graphicsQueue, &submitted), 0u);
+    EXPECT_GT(device.executeCommandLists(commandLists, s_ExpectedDualCount, graphicsQueue, &submitted), 0u);
     EXPECT_TRUE(submitted);
     const GpuCommandArenaStatistics pendingStatistics = device.getCommandArenaStatistics(graphicsQueue);
     ASSERT_TRUE(pendingStatistics.valid());
-    EXPECT_EQ(pendingStatistics.pendingCommandBufferCount, beforeStatistics.pendingCommandBufferCount + 2u);
-    EXPECT_EQ(pendingStatistics.pendingCommandPoolEpochCount, beforeStatistics.pendingCommandPoolEpochCount + 2u);
+    EXPECT_EQ(pendingStatistics.pendingCommandBufferCount, beforeStatistics.pendingCommandBufferCount + s_ExpectedDualCount);
+    EXPECT_EQ(pendingStatistics.pendingCommandPoolEpochCount, beforeStatistics.pendingCommandPoolEpochCount + s_ExpectedDualCount);
     const GpuCommandArenaWorkerStatistics firstPendingWorkerStatistics =
         device.getCommandArenaWorkerStatistics(graphicsQueue, 0u, s_FirstTelemetryWorkerIndex)
     ;
@@ -274,7 +277,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     EXPECT_LT(retiredStatistics.pendingCommandBufferCount, pendingStatistics.pendingCommandBufferCount);
     EXPECT_GE(
         retiredStatistics.reusableCommandBufferCount,
-        pendingStatistics.reusableCommandBufferCount + 2u
+        pendingStatistics.reusableCommandBufferCount + s_ExpectedDualCount
     );
     const GpuCommandArenaWorkerStatistics firstRetiredWorkerStatistics =
         device.getCommandArenaWorkerStatistics(graphicsQueue, 0u, s_FirstTelemetryWorkerIndex)
@@ -319,11 +322,11 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
     EXPECT_TRUE(secondRecorded);
     const GpuCommandArenaStatistics reusedStatistics = device.getCommandArenaStatistics(graphicsQueue);
     ASSERT_TRUE(reusedStatistics.valid());
-    EXPECT_GE(reusedStatistics.resetEventCount, retiredStatistics.resetEventCount + 2u);
-    EXPECT_GE(reusedStatistics.leasedCommandBufferCount, retiredStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_GE(reusedStatistics.resetEventCount, retiredStatistics.resetEventCount + s_ExpectedDualCount);
+    EXPECT_GE(reusedStatistics.leasedCommandBufferCount, retiredStatistics.leasedCommandBufferCount + s_ExpectedDualCount);
     EXPECT_GE(
         retiredStatistics.reusableCommandBufferCount,
-        reusedStatistics.reusableCommandBufferCount + 2u
+        reusedStatistics.reusableCommandBufferCount + s_ExpectedDualCount
     );
     const GpuCommandArenaWorkerStatistics firstReusedWorkerStatistics =
         device.getCommandArenaWorkerStatistics(graphicsQueue, 0u, s_FirstTelemetryWorkerIndex)
@@ -342,7 +345,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPrimaryCommandListsRecordConcur
 
     CommandList* reusedCommandLists[] = { firstCommandList.get(), secondCommandList.get() };
     bool reusedSubmitted = false;
-    EXPECT_GT(device.executeCommandLists(reusedCommandLists, 2u, graphicsQueue, &reusedSubmitted), 0u);
+    EXPECT_GT(device.executeCommandLists(reusedCommandLists, s_ExpectedDualCount, graphicsQueue, &reusedSubmitted), 0u);
     EXPECT_TRUE(reusedSubmitted);
     EXPECT_TRUE(device.waitForIdle());
 }
@@ -443,7 +446,7 @@ TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWor
     ASSERT_NE(firstWorkers.domainIdentity(), 0u);
     ASSERT_NE(secondWorkers.domainIdentity(), 0u);
     ASSERT_NE(firstWorkers.domainIdentity(), secondWorkers.domainIdentity());
-    constexpr u32 s_CollidingWorkerIndex = 2u;
+    constexpr u32 s_CollidingWorkerIndex = s_ExpectedDualCount;
 
     CommandListParameters legacyParameters;
     legacyParameters
@@ -505,11 +508,11 @@ TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWor
     EXPECT_EQ(secondObservedWorkerIndex, s_CollidingWorkerIndex);
     const GpuCommandArenaStatistics distinctStatistics = device.getCommandArenaStatistics(graphicsQueue);
     EXPECT_TRUE(distinctStatistics.valid());
-    EXPECT_EQ(distinctStatistics.workerArenaCount, beforeStatistics.workerArenaCount + 2u);
-    EXPECT_EQ(distinctStatistics.commandPoolEpochCount, beforeStatistics.commandPoolEpochCount + 2u);
-    EXPECT_EQ(distinctStatistics.growthEventCount, beforeStatistics.growthEventCount + 2u);
-    EXPECT_EQ(distinctStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + 2u);
-    EXPECT_EQ(distinctStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_EQ(distinctStatistics.workerArenaCount, beforeStatistics.workerArenaCount + s_ExpectedDualCount);
+    EXPECT_EQ(distinctStatistics.commandPoolEpochCount, beforeStatistics.commandPoolEpochCount + s_ExpectedDualCount);
+    EXPECT_EQ(distinctStatistics.growthEventCount, beforeStatistics.growthEventCount + s_ExpectedDualCount);
+    EXPECT_EQ(distinctStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + s_ExpectedDualCount);
+    EXPECT_EQ(distinctStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + s_ExpectedDualCount);
     EXPECT_EQ(distinctStatistics.reusableCommandBufferCount, beforeStatistics.reusableCommandBufferCount);
     EXPECT_EQ(distinctStatistics.pendingCommandBufferCount, beforeStatistics.pendingCommandBufferCount);
     EXPECT_GE(distinctStatistics.highWaterCommandBufferCount, distinctStatistics.currentCommandBufferCount);
@@ -624,9 +627,9 @@ TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWor
     EXPECT_TRUE(sharedStatistics.valid());
     EXPECT_EQ(sharedStatistics.workerArenaCount, distinctStatistics.workerArenaCount);
     EXPECT_EQ(sharedStatistics.commandPoolEpochCount, distinctStatistics.commandPoolEpochCount);
-    EXPECT_EQ(sharedStatistics.growthEventCount, distinctStatistics.growthEventCount + 2u);
-    EXPECT_EQ(sharedStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + 2u);
-    EXPECT_EQ(sharedStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + 2u);
+    EXPECT_EQ(sharedStatistics.growthEventCount, distinctStatistics.growthEventCount + s_ExpectedDualCount);
+    EXPECT_EQ(sharedStatistics.currentCommandBufferCount, beforeStatistics.currentCommandBufferCount + s_ExpectedDualCount);
+    EXPECT_EQ(sharedStatistics.leasedCommandBufferCount, beforeStatistics.leasedCommandBufferCount + s_ExpectedDualCount);
     EXPECT_GE(sharedStatistics.highWaterCommandBufferCount, distinctStatistics.highWaterCommandBufferCount);
     const GpuCommandArenaWorkerStatistics sharedWorkerStatistics = device.getCommandArenaWorkerStatistics(
         graphicsQueue,
@@ -634,10 +637,10 @@ TEST_F(DescriptorBufferRoundTripTest, CpuTaskSchedulerDomainsIsolateCollidingWor
         s_CollidingWorkerIndex
     );
     EXPECT_TRUE(sharedWorkerStatistics.valid());
-    EXPECT_EQ(sharedWorkerStatistics.currentCommandBufferCount, 2u);
-    EXPECT_EQ(sharedWorkerStatistics.leasedCommandBufferCount, 2u);
+    EXPECT_EQ(sharedWorkerStatistics.currentCommandBufferCount, s_ExpectedDualCount);
+    EXPECT_EQ(sharedWorkerStatistics.leasedCommandBufferCount, s_ExpectedDualCount);
     EXPECT_EQ(sharedWorkerStatistics.growthEventCount, 3u);
-    EXPECT_GE(sharedWorkerStatistics.highWaterCommandBufferCount, 2u);
+    EXPECT_GE(sharedWorkerStatistics.highWaterCommandBufferCount, s_ExpectedDualCount);
 
     releaseSharedCommandLists.count_down();
     firstTasks.wait();

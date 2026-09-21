@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -34,7 +37,7 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
-    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = 2u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = s_ExpectedDualCount };
     const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
     const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
     const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
@@ -59,7 +62,7 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     clearTexture.clearStencil = true;
     ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
 
-    ASSERT_EQ(capture.recordCount(), 2u);
+    ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(capture.planGeneration(), packet.generation);
     const Graphics::GpuCommandIrBuiltinTaskRecord* const copyRecord = capture.recordAt(0u);
@@ -117,12 +120,12 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     ));
     EXPECT_FALSE(capture.captureClearBuffer(
         task,
-        Graphics::GpuSubmissionPacketId{ .generation = packet.generation + 2u, .index = packet.index },
+        Graphics::GpuSubmissionPacketId{ .generation = packet.generation + s_ExpectedDualCount, .index = packet.index },
         queue,
         destination,
         0xdecafbadU
     ));
-    EXPECT_EQ(capture.recordCount(), 2u);
+    EXPECT_EQ(capture.recordCount(), s_ExpectedDualCount);
     const BinaryByteView bytesAfterRejectedRecord = capture.commandBytes();
     EXPECT_EQ(bytesAfterRejectedRecord.size(), streamBeforeRejectedRecord.size());
     EXPECT_EQ(
@@ -155,7 +158,7 @@ TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
-    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = 2u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 23u, .index = s_ExpectedDualCount };
     const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
     const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
     const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
@@ -177,7 +180,7 @@ TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanI
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     Graphics::GpuClearTextureRectUIntTaskDesc clear;
     clear.destination = s_CommandIrDestination;
-    clear.subresources = Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u);
+    clear.subresources = Graphics::TextureSubresourceSet(s_ExpectedDualCount, 3u, 4u, 5u);
     clear.rect = Graphics::Rect(-2, 7, 3, 11);
     clear.uintValue = Graphics::UIntColor(0x10203040u, 0x50607080u, 0x90a0b0c0u, 0xd0e0f000u);
     ASSERT_TRUE(capture.captureClearTextureRectUInt(
@@ -260,7 +263,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     const Graphics::GpuTaskId task{ .generation = 17u, .index = 4u };
-    const Graphics::GpuSubmissionPacketId packet{ .generation = 17u, .index = 2u };
+    const Graphics::GpuSubmissionPacketId packet{ .generation = 17u, .index = s_ExpectedDualCount };
     const Graphics::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 3u };
     const Graphics::GpuGraphResourceId source{ .generation = 17u, .index = 5u };
     const Graphics::GpuGraphResourceId destination{ .generation = 17u, .index = 6u };
@@ -281,7 +284,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
 
     Graphics::TextureSlice sourceSlice;
     sourceSlice
-        .setOrigin(1u, 2u, 3u)
+        .setOrigin(1u, s_ExpectedDualCount, 3u)
         .setSize(4u, 5u, 6u)
         .setMipLevel(7u)
         .setArraySlice(8u)
@@ -295,10 +298,10 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     ;
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.destination = destination;
-    clearTexture.subresources = Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u);
+    clearTexture.subresources = Graphics::TextureSubresourceSet(s_ExpectedDualCount, 3u, 4u, 5u);
     clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::DepthStencil;
     clearTexture.floatValue = Graphics::Color(0.25f, 0.5f, 0.75f, 1.f);
-    clearTexture.uintValue = Graphics::UIntColor(2u, 3u, 5u, 7u);
+    clearTexture.uintValue = Graphics::UIntColor(s_ExpectedDualCount, 3u, 5u, 7u);
     clearTexture.intValue = Graphics::IntColor(-2, -3, -5, -7);
     clearTexture.depthValue = 0.125f;
     clearTexture.stencilValue = 19u;
@@ -420,9 +423,9 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
     Graphics::GraphicsBytes expectedPrefix(testArena.arena);
     expectedPrefix.resize(copyTextureEnd);
     NWB_MEMCPY(expectedPrefix.data(), expectedPrefix.size(), bytes.data(), expectedPrefix.size());
-    capture.rollback(2u);
+    capture.rollback(s_ExpectedDualCount);
     const BinaryByteView rolledBackBytes = capture.commandBytes();
-    EXPECT_EQ(capture.recordCount(), 2u);
+    EXPECT_EQ(capture.recordCount(), s_ExpectedDualCount);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(rolledBackBytes.size(), expectedPrefix.size());
     // Rollback rewrites the stream header's count/payload fields, while the surviving two POD records remain an
@@ -438,7 +441,7 @@ TEST(GpuCommandIrCapture, EncodesBuiltInsAsLinearPodRecordsAndRollsBackAtRecordB
 
     cursor = 0u;
     ASSERT_TRUE(ReadPOD(rolledBackBytes, cursor, streamHeader));
-    EXPECT_EQ(streamHeader.recordCount, 2u);
+    EXPECT_EQ(streamHeader.recordCount, s_ExpectedDualCount);
     EXPECT_EQ(
         streamHeader.payloadBytes,
         sizeof(Graphics::GpuCommandIrCopyBufferRecord) + sizeof(Graphics::GpuCommandIrCopyTextureRecord)

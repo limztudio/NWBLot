@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -257,7 +261,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload extinctionPayload;
     extinctionPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     extinctionPayload.expectations[1u] = { depthWarp.get(), ResourceStates::ShaderResource };
-    extinctionPayload.expectations[2u] = { control.get(), ResourceStates::ShaderResource };
+    extinctionPayload.expectations[s_ThirdElementIndex] = { control.get(), ResourceStates::ShaderResource };
     extinctionPayload.expectations[3u] = { extinction.get(), ResourceStates::UnorderedAccess };
     extinctionPayload.expectations[4u] = { extinctionOverflow.get(), ResourceStates::UnorderedAccess };
     extinctionPayload.expectationCount = 5u;
@@ -281,12 +285,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload integrationPayload;
     integrationPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     integrationPayload.expectations[1u] = { extinction.get(), ResourceStates::ShaderResource };
-    integrationPayload.expectations[2u] = { control.get(), ResourceStates::ShaderResource };
+    integrationPayload.expectations[s_ThirdElementIndex] = { control.get(), ResourceStates::ShaderResource };
     integrationPayload.expectations[3u] = { extinctionOverflow.get(), ResourceStates::ShaderResource };
     integrationPayload.expectations[4u] = { transmittance.get(), ResourceStates::UnorderedAccess };
     integrationPayload.expectationCount = 5u;
     integrationPayload.recordOrdinal = &recordOrdinal;
-    integrationPayload.expectedOrdinal = 2u;
+    integrationPayload.expectedOrdinal = s_ExpectedDualCount;
     integrationPayload.device = &device;
     integrationPayload.timing = &timing;
     integrationPayload.timingTicket = &preTimingTicket;
@@ -309,7 +313,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload accumulationPayload;
     accumulationPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     accumulationPayload.expectations[1u] = { transmittance.get(), ResourceStates::ShaderResource };
-    accumulationPayload.expectationCount = 2u;
+    accumulationPayload.expectationCount = s_ExpectedDualCount;
     accumulationPayload.recordOrdinal = &recordOrdinal;
     accumulationPayload.expectedOrdinal = 3u;
     accumulationPayload.timingTicket = &preTimingTicket;
@@ -385,7 +389,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitTypedAvboitIntegrationTai
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], preTask);
     EXPECT_EQ(packetTasks[1u], extinctionTask);
-    EXPECT_EQ(packetTasks[2u], integrationTask);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], integrationTask);
     EXPECT_EQ(packetTasks[3u], accumulationTask);
 
     const auto hasBufferTransition = [&](const GpuTaskId task, const GpuGraphResourceId resource, const ResourceStates::Mask before, const ResourceStates::Mask after){

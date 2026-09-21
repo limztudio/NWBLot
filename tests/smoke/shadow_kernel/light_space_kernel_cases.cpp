@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -54,7 +57,7 @@ namespace __hidden_light_space_kernel_cases{
         nodes[index] = leaves[first];
         return index;
     }
-    const u32 leftCount = count / 2u;
+    const u32 leftCount = count / s_ExpectedDualCount;
     const u32 left = AppendTree(nodes, leaves, first, leftCount);
     const u32 right = AppendTree(nodes, leaves, first + leftCount, count - leftCount);
     nodes[index] = { Minimum(nodes[left].minimum, nodes[right].minimum), left,
@@ -75,7 +78,7 @@ void BuildReceiver(const Case& testCase, Inputs& input, Alloc::ScratchArena& scr
     const Float2U corners[] = { { -1.0f, -1.0f }, { 1.0f, -1.0f }, { 1.0f, 1.0f }, { -1.0f, 1.0f } };
     for(const auto& corner : corners)
         input.positions.push_back({ corner.x, corner.y, a * corner.x + b * corner.y + base });
-    const u32 triangles[] = { 0u, 1u, 2u, 0u, 2u, 3u };
+    const u32 triangles[] = { 0u, 1u, s_ExpectedDualCount, 0u, s_ExpectedDualCount, 3u };
     const f32 length = Sqrt(a * a + b * b + 1.0f);
     const Float3U geometricNormal{ -a / length, -b / length, 1.0f / length };
     Attribute attribute{};
@@ -85,7 +88,7 @@ void BuildReceiver(const Case& testCase, Inputs& input, Alloc::ScratchArena& scr
     for(u32 triangle = 0u; triangle < LengthOf(triangles); triangle += 3u){
         const auto& p0 = input.positions[triangles[triangle]];
         const auto& p1 = input.positions[triangles[triangle + 1u]];
-        const auto& p2 = input.positions[triangles[triangle + 2u]];
+        const auto& p2 = input.positions[triangles[triangle + s_ExpectedDualCount]];
         leaves.push_back({ Minimum(Minimum(p0, p1), p2), NWB_BVH_LEAF_FLAG | triangle / 3u,
             Maximum(Maximum(p0, p1), p2), 1u });
         for(u32 corner = 0u; corner < 3u; ++corner){
@@ -93,14 +96,14 @@ void BuildReceiver(const Case& testCase, Inputs& input, Alloc::ScratchArena& scr
             input.attributes.push_back(attribute);
         }
     }
-    EXPECT_EQ(AppendTree(input.mesh, leaves, 0u, 2u), 0u);
+    EXPECT_EQ(AppendTree(input.mesh, leaves, 0u, s_ExpectedDualCount), 0u);
     leaves.clear();
     input.localMinimum = input.mesh[0].minimum;
     input.localMaximum = input.mesh[0].maximum;
     for(u32 instance = 0u; instance < testCase.count; ++instance){
         const f32 shift = instance == 0u ? 0.0f : testCase.receiverGap;
         Instance inverse{};
-        inverse.primitiveCount = 2u;
+        inverse.primitiveCount = s_ExpectedDualCount;
         inverse.inverseRows[0] = { 1.0f, 0.0f, 0.0f, 0.0f };
         inverse.inverseRows[1] = { 0.0f, 1.0f, 0.0f, 0.0f };
         inverse.inverseRows[2] = { 0.0f, 0.0f, 1.0f, -shift };
@@ -195,7 +198,7 @@ void BuildInputs(const Case& testCase, Inputs& input, Alloc::ScratchArena& scrat
         BuildReceiver(testCase, input, scratchArena);
         return;
     }
-    const u32 axis = testCase.face / 2u;
+    const u32 axis = testCase.face / s_ExpectedDualCount;
     const f32 sign = (testCase.face & 1u) == 0u ? 1.0f : -1.0f;
     input.localMinimum = { -1.0f, -1.0f, -1.0f };
     input.localMaximum = { 1.0f, 1.0f, 1.0f };
@@ -245,14 +248,14 @@ void BuildInputs(const Case& testCase, Inputs& input, Alloc::ScratchArena& scrat
     input.light.color = { 1.0f, 1.0f, 1.0f, 1.0f };
     input.light.params = { 100.0f, testCase.point ? 1.0f : 0.0f, static_cast<f32>(s_OutputLayer), -1.0f };
     constexpr u32 triangles[] = {
-        0u, 2u, 1u, 0u, 3u, 2u, 4u, 5u, 6u, 4u, 6u, 7u,
-        0u, 1u, 5u, 0u, 5u, 4u, 3u, 7u, 6u, 3u, 6u, 2u,
-        0u, 4u, 7u, 0u, 7u, 3u, 1u, 2u, 6u, 1u, 6u, 5u,
+        0u, s_ExpectedDualCount, 1u, 0u, 3u, s_ExpectedDualCount, 4u, 5u, 6u, 4u, 6u, 7u,
+        0u, 1u, 5u, 0u, 5u, 4u, 3u, 7u, 6u, 3u, 6u, s_ExpectedDualCount,
+        0u, 4u, 7u, 0u, 7u, 3u, 1u, s_ExpectedDualCount, 6u, 1u, 6u, 5u,
     };
     for(u32 corner = 0u; corner < 8u; ++corner){
         // Ordering matches the standard closed-box triangle list above.
-        const u32 x = corner == 1u || corner == 2u || corner == 5u || corner == 6u ? 1u : 0u;
-        const u32 y = corner == 2u || corner == 3u || corner == 6u || corner == 7u ? 1u : 0u;
+        const u32 x = corner == 1u || corner == s_ExpectedDualCount || corner == 5u || corner == 6u ? 1u : 0u;
+        const u32 y = corner == s_ExpectedDualCount || corner == 3u || corner == 6u || corner == 7u ? 1u : 0u;
         const u32 z = corner >= 4u ? 1u : 0u;
         input.positions.push_back({ x ? input.localMaximum.x : input.localMinimum.x,
             y ? input.localMaximum.y : input.localMinimum.y, z ? input.localMaximum.z : input.localMinimum.z });
@@ -261,7 +264,7 @@ void BuildInputs(const Case& testCase, Inputs& input, Alloc::ScratchArena& scrat
     for(u32 triangle = 0u; triangle < LengthOf(triangles); triangle += 3u){
         const Float3U& a = input.positions[triangles[triangle]];
         const Float3U& b = input.positions[triangles[triangle + 1u]];
-        const Float3U& c = input.positions[triangles[triangle + 2u]];
+        const Float3U& c = input.positions[triangles[triangle + s_ExpectedDualCount]];
         const Float3U edge1{ b.x - a.x, b.y - a.y, b.z - a.z };
         const Float3U edge2{ c.x - a.x, c.y - a.y, c.z - a.z };
         Float3U normal = Cross(edge1, edge2);

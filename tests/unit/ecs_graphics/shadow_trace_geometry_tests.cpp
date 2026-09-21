@@ -20,6 +20,10 @@
 namespace __hidden_shadow_trace_geometry_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -91,7 +95,7 @@ struct GeometryContext{
 
 TEST(ShadowTraceGeometry, InactiveBackendsPruneRetiredOwnersAndRetainInvisibleMeshes){
     GeometryContext context;
-    context.meshes.reserve(2u);
+    context.meshes.reserve(s_ExpectedDualCount);
     context.addMesh(0u);
     context.addMesh(1u);
     context.accepted.push_back(context.meshes[0u].positionBuffer);
@@ -106,7 +110,7 @@ TEST(ShadowTraceGeometry, InactiveBackendsPruneRetiredOwnersAndRetainInvisibleMe
 
 TEST(ShadowTraceGeometry, PreservesSelectionOrderMemberIdentityAndCombinedRoles){
     GeometryContext context;
-    context.meshes.reserve(2u);
+    context.meshes.reserve(s_ExpectedDualCount);
     context.addMesh(0u);
     context.addMesh(1u);
     MeshSnapshot& first = context.meshes[0u];
@@ -126,14 +130,14 @@ TEST(ShadowTraceGeometry, PreservesSelectionOrderMemberIdentityAndCombinedRoles)
     ASSERT_EQ(context.prepared.size(), 4u);
     EXPECT_EQ(context.prepared[0u].buffer.get(), second.positionBuffer.get());
     EXPECT_EQ(context.prepared[1u].buffer.get(), first.positionBuffer.get());
-    EXPECT_EQ(context.prepared[2u].buffer.get(), first.triangleIndexBuffer.get());
+    EXPECT_EQ(context.prepared[s_ThirdElementIndex].buffer.get(), first.triangleIndexBuffer.get());
     EXPECT_EQ(context.prepared[3u].buffer.get(), first.swBvhNodeBuffer.get());
     EXPECT_EQ(context.prepared[0u].identity, DeriveName(second.meshName, AStringView(":shadow_trace_hw_position")));
     EXPECT_EQ(
         context.prepared[0u].roles,
         Roles::HardwarePosition | Roles::HardwareAttribute | Roles::SoftwarePosition | Roles::SoftwareAttribute
     );
-    EXPECT_EQ(context.prepared[2u].roles, Roles::HardwareIndex | Roles::SoftwareIndex);
+    EXPECT_EQ(context.prepared[s_ThirdElementIndex].roles, Roles::HardwareIndex | Roles::SoftwareIndex);
 
     // The same pointer in another member cannot replace that member's first owning mesh.
     context.hardwarePositions.clear();
@@ -156,15 +160,15 @@ TEST(ShadowTraceGeometry, IncludesOffscreenPendingAndRuntimeBuildInputs){
         context.addMesh(meshIndex);
     context.meshes[0u].runtimeMesh = true;
     context.meshes[1u].blasBuildPending = true;
-    context.meshes[2u].swBvhBuildPending = true;
+    context.meshes[s_ThirdElementIndex].swBvhBuildPending = true;
     ASSERT_TRUE(context.freeze(true, true));
     ASSERT_EQ(context.prepared.size(), 8u);
     EXPECT_EQ(context.prepared[0u].buffer.get(), context.meshes[0u].positionBuffer.get());
     EXPECT_EQ(context.prepared[0u].roles, Roles::HardwarePosition | Roles::SoftwarePosition);
-    EXPECT_EQ(context.prepared[2u].buffer.get(), context.meshes[1u].positionBuffer.get());
+    EXPECT_EQ(context.prepared[s_ThirdElementIndex].buffer.get(), context.meshes[1u].positionBuffer.get());
     EXPECT_EQ(context.prepared[4u].buffer.get(), context.meshes[0u].swBvhNodeBuffer.get());
-    EXPECT_EQ(context.prepared[5u].buffer.get(), context.meshes[2u].swBvhNodeBuffer.get());
-    EXPECT_EQ(context.prepared[7u].buffer.get(), context.meshes[2u].triangleIndexBuffer.get());
+    EXPECT_EQ(context.prepared[5u].buffer.get(), context.meshes[s_ThirdElementIndex].swBvhNodeBuffer.get());
+    EXPECT_EQ(context.prepared[7u].buffer.get(), context.meshes[s_ThirdElementIndex].triangleIndexBuffer.get());
     for(const Impl::PreparedShadowTraceGeometryBuffer& prepared : context.prepared){
         EXPECT_TRUE(prepared.normalizationPending);
         EXPECT_EQ(prepared.initialState, prepared.buffer->getCreationDescription().initialState);
@@ -294,7 +298,7 @@ TEST(ShadowTraceGeometry, IndexedGeometryPreservesStablePruningMemberOwnershipAn
     ASSERT_EQ(context.accepted.size(), 4u);
     EXPECT_EQ(context.accepted[0u].get(), context.meshes[10u].positionBuffer.get());
     EXPECT_EQ(context.accepted[1u].get(), context.meshes[0u].attributeBuffer.get());
-    EXPECT_EQ(context.accepted[2u].get(), context.meshes[15u].swBvhNodeBuffer.get());
+    EXPECT_EQ(context.accepted[s_ThirdElementIndex].get(), context.meshes[15u].swBvhNodeBuffer.get());
     EXPECT_EQ(context.accepted[3u].get(), context.meshes[10u].positionBuffer.get());
     EXPECT_EQ(retiredFirst->getReferenceCount(), 1u);
     EXPECT_EQ(retiredMiddle->getReferenceCount(), 1u);

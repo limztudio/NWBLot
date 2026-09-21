@@ -15,6 +15,11 @@
 namespace __hidden_telemetry_report_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -37,7 +42,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     stats.sampleCount = 1u;
     stats.firstSampleFrameIndex = stats.publishFrameIndex;
     stats.lastSampleFrameIndex = stats.publishFrameIndex;
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, 2u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "gbuffer", stats, s_ExpectedDualCount));
 
     const Name memoryScopeName("memory/project_arena");
     const NWB::Core::Perf::MemorySnapshot snapshot = MakeTestMemorySnapshot(memoryScopeName);
@@ -72,7 +77,7 @@ TEST(Telemetry, TelemetryReportSummarizesBenchmarkEvents){
     EXPECT_EQ(memory.totalUsedDeltaBytes, delta.usedBytes);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
     EXPECT_EQ(report.summary.frameGraphNodeCount, 3u);
-    EXPECT_EQ(report.summary.frameGraphEdgeCount, 2u);
+    EXPECT_EQ(report.summary.frameGraphEdgeCount, s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"eventCount\": 4"));
     EXPECT_FALSE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"maxMemoryUsedBytes\":"));
     EXPECT_FALSE(ContainsText(AStringView(report.json.data(), report.json.size()), "\"maxMemoryPeakUsedBytes\":"));
@@ -204,7 +209,7 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
 
     NWB::Core::Perf::TimingStats aggregatedTiming = MakeTestTimingStats();
     aggregatedTiming.seconds = 0.043;
-    aggregatedTiming.sampleCount = 2u;
+    aggregatedTiming.sampleCount = s_ExpectedDualCount;
     aggregatedTiming.publishFrameIndex = 44u;
     aggregatedTiming.firstSampleFrameIndex = 43u;
     aggregatedTiming.lastSampleFrameIndex = 43u;
@@ -244,7 +249,7 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
     BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
-    nodes[2u].queueAssignment.previousAcceptedQueue = {};
+    nodes[s_ThirdElementIndex].queueAssignment.previousAcceptedQueue = {};
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 52u, nodes, edges, 12u));
 
     Log::TelemetryReport report(testArena.arena);
@@ -785,7 +790,7 @@ TEST(Telemetry, TelemetryIngestStoresRawAndReports){
 
     const Name cpuScopeName("ingest/cpu");
     const NWB::Core::Perf::TimingStats stats = MakeTestTimingStats();
-    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "ingest/cpu", stats, 2u));
+    EXPECT_TRUE(Telemetry::RecordPerfTiming(recorder, Telemetry::PerfTimingSource::Cpu, cpuScopeName, "ingest/cpu", stats, s_ExpectedDualCount));
 
     Telemetry::TelemetryBytes encoded(testArena.arena);
     EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
@@ -797,7 +802,7 @@ TEST(Telemetry, TelemetryIngestStoresRawAndReports){
     EXPECT_TRUE(result.ok());
     EXPECT_TRUE(result.decode.ok());
     EXPECT_EQ(result.decode.bytesRead, encoded.size());
-    EXPECT_EQ(result.summary.eventCount, 2u);
+    EXPECT_EQ(result.summary.eventCount, s_ExpectedDualCount);
     EXPECT_EQ(result.summary.cpuTimingEventCount, 1u);
     EXPECT_TRUE(FileExists(result.rawPath, error));
     EXPECT_FALSE(error);

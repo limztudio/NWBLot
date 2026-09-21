@@ -22,6 +22,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -58,7 +61,7 @@ struct ResourceSetContext{
                 return false;
             members.push_back(resource);
         }
-        for(usize index = 0u; index < count / 2u; ++index)
+        for(usize index = 0u; index < count / s_ExpectedDualCount; ++index)
             Swap(members[index], members[count - index - 1u]);
         return true;
     }
@@ -127,11 +130,11 @@ TEST(ResourceSetValidation, CopiesOrderedMembersAndReusesOnlyTheSameOrderedIdent
     desc = context.description(Name("tests/resource_set_validation/second_ordered"));
     EXPECT_TRUE(context.graph.importResourceSet(desc).valid());
     const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
-    EXPECT_EQ(declarations.resourceSetCount(), 2u);
+    EXPECT_EQ(declarations.resourceSetCount(), s_ExpectedDualCount);
 }
 
 TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartialSets){
-    for(const usize count : { 2u, 8u, 32u, 33u, 1024u }){
+    for(const usize count : { s_ExpectedDualCount, 8u, 32u, 33u, 1024u }){
         ResourceSetContext context(count);
         ASSERT_TRUE(context.ready);
         const Core::GpuGraphResourceSetDesc desc = context.description(Name("tests/resource_set_validation/rejected"));
@@ -140,14 +143,14 @@ TEST(ResourceSetValidation, EarlyAndLateDuplicatesOrInvalidIdsDoNotPublishPartia
             const Core::GpuTaskGraph::DeclarationReadView declarations(context.graph);
             revision = declarations.declarationRevision();
         }
-        for(const usize index : Array<usize, 2u>{ 1u, count - 1u }){
+        for(const usize index : Array<usize, s_ExpectedDualCount>{ 1u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = context.members[0u];
             EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
             ExpectUnchangedDeclaration(context, revision, 0u);
             context.members[index] = saved;
         }
-        for(const usize index : Array<usize, 2u>{ 0u, count - 1u }){
+        for(const usize index : Array<usize, s_ExpectedDualCount>{ 0u, count - 1u }){
             const Core::GpuGraphResourceId saved = context.members[index];
             context.members[index] = {};
             EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
@@ -310,7 +313,7 @@ TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused1024){
 }
 
 TEST(ResourceSetValidationBenchmark, DISABLED_FirstAndReused4096){
-    BenchmarkResourceSets(4096u, 2u);
+    BenchmarkResourceSets(4096u, s_ExpectedDualCount);
 }
 
 

@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -100,7 +104,7 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
 
     const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
     ASSERT_NE(compiledTask, nullptr);
-    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     bool exportedTexture = false;
@@ -192,7 +196,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
         EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
         EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
 
-        ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+        ASSERT_EQ(compiledTask->epilogueBarrierCount, s_ExpectedDualCount);
         const Graphics::GpuCompiledBarrier* const barriers = compiledTaskView.epilogueBarriers;
         ASSERT_NE(barriers, nullptr);
         EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
@@ -339,7 +343,7 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
     EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
     EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::AccelStructRead);
 
-    ASSERT_EQ(compiledTask->epilogueBarrierCount, 2u);
+    ASSERT_EQ(compiledTask->epilogueBarrierCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::AccelStructStateExport);
@@ -439,7 +443,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     // No singular semantic producer exists: each mip's terminal range belongs to a different packet and queue.
     EXPECT_FALSE(exportInfo->producerTask.valid());
     EXPECT_FALSE(exportInfo->sourceQueue.valid());
-    ASSERT_EQ(exportInfo->sourceCount, 2u);
+    ASSERT_EQ(exportInfo->sourceCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
     ASSERT_NE(sources, nullptr);
     EXPECT_EQ(sources[0u].producerTask, graphicsTask);
@@ -455,7 +459,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     ASSERT_NE(compiledCompute, nullptr);
     EXPECT_EQ(compiledGraphics->queue, queues[0u].id);
     EXPECT_EQ(compiledCompute->queue, queues[1u].id);
-    ASSERT_EQ(compiledGraphics->epilogueBarrierCount, 2u);
+    ASSERT_EQ(compiledGraphics->epilogueBarrierCount, s_ExpectedDualCount);
     ASSERT_EQ(compiledCompute->epilogueBarrierCount, 1u);
     const Graphics::GpuCompiledBarrier* const graphicsBarriers = compiledPlan.findTask(graphicsTask).epilogueBarriers;
     const Graphics::GpuCompiledBarrier* const computeBarriers = compiledPlan.findTask(computeTask).epilogueBarriers;
@@ -837,7 +841,7 @@ TEST(GpuTaskGraph, ElidesSamePacketReleaseOnlyExternalFinalizationSelfDependency
     EXPECT_EQ(compiledPlan.packet(packet).plan->dependencyCount, 0u);
     const Graphics::GpuCompiledTask* const finalizingTask = compiledPlan.findTask(pair.finalizingReader).plan;
     ASSERT_NE(finalizingTask, nullptr);
-    ASSERT_EQ(finalizingTask->epilogueBarrierCount, 2u);
+    ASSERT_EQ(finalizingTask->epilogueBarrierCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(pair.finalizingReader).epilogueBarriers;
     ASSERT_NE(barriers, nullptr);
     EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::TextureStateExport);
@@ -1019,7 +1023,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
 
     EXPECT_NE(FindEdge(analysis, readers[0u], readers[1u]), nullptr);
     EXPECT_EQ(FindEdge(analysis, readers[0u], readers[3u]), nullptr);
-    EXPECT_EQ(FindEdge(analysis, readers[2u], readers[3u]), nullptr);
+    EXPECT_EQ(FindEdge(analysis, readers[s_ThirdElementIndex], readers[3u]), nullptr);
     ASSERT_EQ(compiledPlan.packetCount(), LengthOf(readers));
 
     Graphics::GpuSubmissionPacketId packets[4u] = {};
@@ -1027,20 +1031,20 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
         packets[readerIndex] = compiledPlan.packetForTask(readers[readerIndex]);
         ASSERT_TRUE(packets[readerIndex].valid());
         EXPECT_EQ(packets[readerIndex].index, readerIndex);
-        EXPECT_EQ(compiledPlan.packet(packets[readerIndex]).plan->queue, queues[readerIndex % 2u].id);
+        EXPECT_EQ(compiledPlan.packet(packets[readerIndex]).plan->queue, queues[readerIndex % s_ExpectedDualCount].id);
     }
 
     ASSERT_EQ(compiledPlan.packet(packets[0u]).plan->dependencyCount, 0u);
     ASSERT_EQ(compiledPlan.packet(packets[1u]).plan->dependencyCount, 1u);
-    ASSERT_EQ(compiledPlan.packet(packets[2u]).plan->dependencyCount, 0u);
-    ASSERT_EQ(compiledPlan.packet(packets[3u]).plan->dependencyCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(packets[s_ThirdElementIndex]).plan->dependencyCount, 0u);
+    ASSERT_EQ(compiledPlan.packet(packets[3u]).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const secondDependencies = compiledPlan.packet(packets[1u]).dependencies;
     const Graphics::GpuPacketDependency* const terminalDependencies = compiledPlan.packet(packets[3u]).dependencies;
     ASSERT_NE(secondDependencies, nullptr);
     ASSERT_NE(terminalDependencies, nullptr);
     EXPECT_EQ(secondDependencies[0u].producer, packets[0u]);
     EXPECT_EQ(secondDependencies[0u].consumer, packets[1u]);
-    EXPECT_EQ(terminalDependencies[0u].producer, packets[2u]);
+    EXPECT_EQ(terminalDependencies[0u].producer, packets[s_ThirdElementIndex]);
     EXPECT_EQ(terminalDependencies[0u].consumer, packets[3u]);
     EXPECT_EQ(terminalDependencies[1u].producer, packets[1u]);
     EXPECT_EQ(terminalDependencies[1u].consumer, packets[3u]);
@@ -1158,7 +1162,7 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         ASSERT_TRUE(terminalPacket.valid());
         EXPECT_EQ(earlierPacket.index, prefixPacketCount);
         EXPECT_EQ(middlePacket.index, prefixPacketCount + 1u);
-        EXPECT_EQ(terminalPacket.index, prefixPacketCount + 2u);
+        EXPECT_EQ(terminalPacket.index, prefixPacketCount + s_ExpectedDualCount);
         ASSERT_EQ(compiledPlan.packet(middlePacket).plan->dependencyCount, 1u);
         ASSERT_EQ(compiledPlan.packet(terminalPacket).plan->dependencyCount, 1u);
         const Graphics::GpuPacketDependency* const middleDependencies = compiledPlan.packet(middlePacket).dependencies;
@@ -1189,7 +1193,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
             .setType(Graphics::GpuGraphResourceType::Texture)
             .setInitialState(Graphics::ResourceStates::Common)
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
-            .setExternalFinalReleaseDestinationQueue(queues[2u].id)
+            .setExternalFinalReleaseDestinationQueue(queues[s_ThirdElementIndex].id)
     );
     ASSERT_TRUE(texture.valid());
 
@@ -1278,11 +1282,11 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
     const Graphics::GpuCompiledExternalResourceExport* const exportInfo = exportView.plan;
     ASSERT_NE(exportInfo, nullptr);
     EXPECT_EQ(exportInfo->resource, texture);
-    EXPECT_EQ(exportInfo->destinationQueue, queues[2u].id);
+    EXPECT_EQ(exportInfo->destinationQueue, queues[s_ThirdElementIndex].id);
     EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::ShaderResource);
     EXPECT_FALSE(exportInfo->producerTask.valid());
     EXPECT_FALSE(exportInfo->sourceQueue.valid());
-    ASSERT_EQ(exportInfo->sourceCount, 2u);
+    ASSERT_EQ(exportInfo->sourceCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledExternalResourceExportSource* const sources = exportView.sources;
     ASSERT_NE(sources, nullptr);
     bool hasWholeWriterTail = false;
@@ -1346,7 +1350,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
                 && barrier.before == Graphics::ResourceStates::ShaderResource
                 && barrier.after == Graphics::ResourceStates::ShaderResource
                 && barrier.sourceQueue == sourceQueue
-                && barrier.destinationQueue == queues[2u].id
+                && barrier.destinationQueue == queues[s_ThirdElementIndex].id
             )
                 return true;
         }

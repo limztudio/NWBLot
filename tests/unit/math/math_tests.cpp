@@ -19,6 +19,9 @@
 namespace __hidden_math_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -257,11 +260,11 @@ TEST(Math, DynamicVectorLanes){
     const SIMDVector value = VectorSet(3.0f, -7.0f, 11.0f, -19.0f);
     EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 0u), 3.0f));
     EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 1u), -7.0f));
-    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 2u), 11.0f));
+    EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, s_ExpectedDualCount), 11.0f));
     EXPECT_TRUE(NearlyEqual(VectorGetByIndex(value, 3u), -19.0f));
 
     f32 component = 0.0f;
-    VectorGetByIndexPtr(component, value, 2u);
+    VectorGetByIndexPtr(component, value, s_ExpectedDualCount);
     EXPECT_TRUE(NearlyEqual(component, 11.0f));
 
     SIMDVector updated = VectorSetByIndex(value, 5.0f, 1u);
@@ -272,7 +275,7 @@ TEST(Math, DynamicVectorLanes){
     const SIMDVector integerValue = VectorSetInt(3u, 7u, 11u, 19u);
     EXPECT_EQ(VectorGetIntByIndex(integerValue, 0u), 3u);
     EXPECT_EQ(VectorGetIntByIndex(integerValue, 1u), 7u);
-    EXPECT_EQ(VectorGetIntByIndex(integerValue, 2u), 11u);
+    EXPECT_EQ(VectorGetIntByIndex(integerValue, s_ExpectedDualCount), 11u);
     EXPECT_EQ(VectorGetIntByIndex(integerValue, 3u), 19u);
 
     u32 integerComponent = 0u;
@@ -292,13 +295,13 @@ TEST(Math, DynamicVectorSwizzleAndPermute){
     const SIMDVector first = VectorSetInt(11u, 22u, 33u, 44u);
     const SIMDVector second = VectorSetInt(55u, 66u, 77u, 88u);
 
-    const SIMDVector swizzled = VectorSwizzle(first, 3u, 1u, 0u, 2u);
+    const SIMDVector swizzled = VectorSwizzle(first, 3u, 1u, 0u, s_ExpectedDualCount);
     EXPECT_EQ(VectorGetIntX(swizzled), 44u);
     EXPECT_EQ(VectorGetIntY(swizzled), 22u);
     EXPECT_EQ(VectorGetIntZ(swizzled), 11u);
     EXPECT_EQ(VectorGetIntW(swizzled), 33u);
 
-    const SIMDVector permuted = VectorPermute(first, second, 5u, 2u, 7u, 0u);
+    const SIMDVector permuted = VectorPermute(first, second, 5u, s_ExpectedDualCount, 7u, 0u);
     EXPECT_EQ(VectorGetIntX(permuted), 66u);
     EXPECT_EQ(VectorGetIntY(permuted), 33u);
     EXPECT_EQ(VectorGetIntZ(permuted), 88u);
@@ -733,7 +736,7 @@ TEST(Math, MathStorageHashAndEquality){
     EXPECT_EQ(FloatHashBits(-0.0f), FloatHashBits(0.0f));
 
     const Half h1 = static_cast<Half>(1u);
-    const Half h2 = static_cast<Half>(2u);
+    const Half h2 = static_cast<Half>(s_ExpectedDualCount);
     const Half h3 = static_cast<Half>(3u);
     const Half h4 = static_cast<Half>(4u);
     const Half h5 = static_cast<Half>(5u);
@@ -741,7 +744,7 @@ TEST(Math, MathStorageHashAndEquality){
     CheckStorageHashMatchesEquality(Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h4), Half4U(h1, h2, h3, h5));
     CheckStorageHashMatchesEquality(Float4(-0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 3.0f), Float4(0.0f, 1.0f, 2.0f, 4.0f));
     CheckStorageHashMatchesEquality(MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 4), MakeInt4Value(-1, 2, -3, 5));
-    CheckStorageHashMatchesEquality(MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 4u), MakeUInt4Value(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(MakeUInt4Value(1u, s_ExpectedDualCount, 3u, 4u), MakeUInt4Value(1u, s_ExpectedDualCount, 3u, 4u), MakeUInt4Value(1u, s_ExpectedDualCount, 3u, 5u));
     CheckStorageHashMatchesEquality(Float3Int(-0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -3), Float3Int(0.0f, 1.0f, 2.0f, -4));
     CheckStorageHashMatchesEquality(Float3UInt(-0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 3u), Float3UInt(0.0f, 1.0f, 2.0f, 4u));
     CheckStorageHashMatchesEquality(Float2U(-0.0f, 1.0f), Float2U(0.0f, 1.0f), Float2U(0.0f, 2.0f));
@@ -750,9 +753,9 @@ TEST(Math, MathStorageHashAndEquality){
     CheckStorageHashMatchesEquality(MakeInt2Value(-1, 2), MakeInt2Value(-1, 2), MakeInt2Value(-1, 3));
     CheckStorageHashMatchesEquality(MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -3), MakeInt3Value(-1, 2, -4));
     CheckStorageHashMatchesEquality(MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 4), MakeInt4UValue(-1, 2, -3, 5));
-    CheckStorageHashMatchesEquality(MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 2u), MakeUInt2Value(1u, 3u));
-    CheckStorageHashMatchesEquality(MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 3u), MakeUInt3Value(1u, 2u, 4u));
-    CheckStorageHashMatchesEquality(MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 4u), MakeUInt4UValue(1u, 2u, 3u, 5u));
+    CheckStorageHashMatchesEquality(MakeUInt2Value(1u, s_ExpectedDualCount), MakeUInt2Value(1u, s_ExpectedDualCount), MakeUInt2Value(1u, 3u));
+    CheckStorageHashMatchesEquality(MakeUInt3Value(1u, s_ExpectedDualCount, 3u), MakeUInt3Value(1u, s_ExpectedDualCount, 3u), MakeUInt3Value(1u, s_ExpectedDualCount, 4u));
+    CheckStorageHashMatchesEquality(MakeUInt4UValue(1u, s_ExpectedDualCount, 3u, 4u), MakeUInt4UValue(1u, s_ExpectedDualCount, 3u, 4u), MakeUInt4UValue(1u, s_ExpectedDualCount, 3u, 5u));
 
     Float33U float33 = {};
     Float34U float34u = {};

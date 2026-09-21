@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -278,7 +282,7 @@ struct MeshletAcceptanceQualityMetrics{
 [[nodiscard]] static bool operator==(const MeshletAcceptanceTriangleKey& lhs, const MeshletAcceptanceTriangleKey& rhs){
     return lhs.vertices[0u] == rhs.vertices[0u]
         && lhs.vertices[1u] == rhs.vertices[1u]
-        && lhs.vertices[2u] == rhs.vertices[2u]
+        && lhs.vertices[s_ThirdElementIndex] == rhs.vertices[s_ThirdElementIndex]
     ;
 }
 
@@ -302,13 +306,13 @@ static constexpr usize s_MeshletAcceptanceAlternatingConeTrianglePairCount = NWB
 static constexpr MeshletAcceptanceVertexKey s_MeshletAcceptanceAlternatingConeVertexRefs[] = {
     MakeMeshletAcceptanceVertexKey(0u, 0u, 0u, 0u, 0u),
     MakeMeshletAcceptanceVertexKey(1u, 0u, 0u, 1u, 0u),
-    MakeMeshletAcceptanceVertexKey(2u, 0u, 0u, 2u, 0u),
+    MakeMeshletAcceptanceVertexKey(s_ExpectedDualCount, 0u, 0u, s_ExpectedDualCount, 0u),
     MakeMeshletAcceptanceVertexKey(3u, 1u, 1u, 0u, 0u),
     MakeMeshletAcceptanceVertexKey(4u, 1u, 1u, 1u, 0u),
-    MakeMeshletAcceptanceVertexKey(5u, 1u, 1u, 2u, 0u),
+    MakeMeshletAcceptanceVertexKey(5u, 1u, 1u, s_ExpectedDualCount, 0u),
 };
 static constexpr u32 s_MeshletAcceptanceAlternatingConeTriangles[][3] = {
-    { 0u, 1u, 2u },
+    { 0u, 1u, s_ExpectedDualCount },
     { 3u, 4u, 5u },
 };
 
@@ -344,7 +348,7 @@ static void AppendMeshletAcceptanceTriangleMeta(AString& meta, const u32 (&trian
         "    [{}, {}, {}],\n",
         triangle[0u],
         triangle[1u],
-        triangle[2u]
+        triangle[s_ThirdElementIndex]
     );
 }
 
@@ -412,7 +416,7 @@ static void BuildMeshletAcceptanceAlternatingConeSourceTriangles(
     NWB::Core::Assets::AssetVector<MeshletAcceptanceTriangleKey>& outTriangles
 ){
     outTriangles.clear();
-    outTriangles.reserve(s_MeshletAcceptanceAlternatingConeTrianglePairCount * 2u);
+    outTriangles.reserve(s_MeshletAcceptanceAlternatingConeTrianglePairCount * s_ExpectedDualCount);
     ForEachMeshletAcceptanceAlternatingConeTriangle([&outTriangles](const u32 (&triangle)[3]){
         outTriangles.push_back(BuildMeshletAcceptanceTriangleKey(triangle));
     });
@@ -664,7 +668,7 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
 
             EXPECT_TRUE(TestMeshletAcceptanceLimits(loadedMesh));
             EXPECT_TRUE(TestMeshletAcceptanceTrianglesMatchSource(testArena, loadedMesh, sourceTriangles));
-            EXPECT_EQ(cookedMetrics.meshletCount, 2u);
+            EXPECT_EQ(cookedMetrics.meshletCount, s_ExpectedDualCount);
             EXPECT_EQ(cookedMetrics.coneDisabledCount, 0u);
             EXPECT_TRUE(NWB::Tests::NearlyEqual(static_cast<f32>(MeshletAcceptanceAverageRadius(cookedMetrics)), 0.88388348f, 0.0001f));
             EXPECT_EQ(MeshletAcceptanceAverageVertexReuse(cookedMetrics), static_cast<f64>(NWB::Impl::s_MeshMaxMeshletTriangles));
@@ -710,7 +714,7 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
         [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(loadedMesh.positionStream().size(), 4u);
             EXPECT_EQ(loadedMesh.uv0Stream().size(), 4u);
-            EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
+            EXPECT_EQ(loadedMesh.tangentStream().size(), s_ExpectedDualCount);
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 4u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
             EXPECT_TRUE(TestMeshletReferenceCompressionShrinksPayload(loadedMesh));
@@ -719,20 +723,20 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
             EXPECT_EQ(localRefs[0u].localDeformedPosition, localRefs[3u].localDeformedPosition);
-            EXPECT_EQ(localRefs[2u].localDeformedPosition, localRefs[4u].localDeformedPosition);
+            EXPECT_EQ(localRefs[s_ThirdElementIndex].localDeformedPosition, localRefs[4u].localDeformedPosition);
             EXPECT_NE(localRefs[0u].localAttribute, localRefs[3u].localAttribute);
-            EXPECT_NE(localRefs[2u].localAttribute, localRefs[4u].localAttribute);
+            EXPECT_NE(localRefs[s_ThirdElementIndex].localAttribute, localRefs[4u].localAttribute);
 
             NWB::Impl::MeshletAttributeStreamRef attributeRef0;
             NWB::Impl::MeshletAttributeStreamRef attributeRef2;
             NWB::Impl::MeshletAttributeStreamRef attributeRef3;
             NWB::Impl::MeshletAttributeStreamRef attributeRef4;
             EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[2u].localAttribute, attributeRef2));
+            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[s_ThirdElementIndex].localAttribute, attributeRef2));
             EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
             EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute, attributeRef4));
             EXPECT_EQ(attributeRef0.uv0, 0u);
-            EXPECT_EQ(attributeRef2.uv0, 2u);
+            EXPECT_EQ(attributeRef2.uv0, s_ExpectedDualCount);
             EXPECT_EQ(attributeRef3.uv0, 1u);
             EXPECT_EQ(attributeRef4.uv0, 3u);
             EXPECT_EQ(attributeRef0.tangent, 0u);
@@ -749,7 +753,7 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
         "mirrored_uv_quad",
         Name("project/meshes/mirrored_uv_quad"),
         [](const NWB::Impl::Mesh& loadedMesh){
-            EXPECT_EQ(loadedMesh.tangentStream().size(), 2u);
+            EXPECT_EQ(loadedMesh.tangentStream().size(), s_ExpectedDualCount);
             EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[0u]).w, 1.0f);
             EXPECT_EQ(LoadHalf4U(loadedMesh.tangentStream()[1u]).w, -1.0f);
 
@@ -772,7 +776,7 @@ TEST(AssetsGraphics, MeshAcceptanceTwoSidedPlane){
         Name("project/meshes/two_sided_plane"),
         [](const NWB::Impl::Mesh& loadedMesh){
             EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
-            EXPECT_EQ(loadedMesh.normalStream().size(), 2u);
+            EXPECT_EQ(loadedMesh.normalStream().size(), s_ExpectedDualCount);
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 3u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);
             EXPECT_FALSE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
@@ -787,8 +791,8 @@ TEST(AssetsGraphics, MeshAcceptanceLargeManyMeshlets){
         Name("project/meshes/large_mesh_many_meshlets"),
         [](const NWB::Impl::Mesh& loadedMesh){
             const usize expectedPrimitiveCount = static_cast<usize>(NWB::Impl::s_MeshMaxMeshletTriangles) + 1u;
-            const usize expectedMeshletCount = 2u;
-            EXPECT_EQ(loadedMesh.meshlets().size(), 2u);
+            const usize expectedMeshletCount = s_ExpectedDualCount;
+            EXPECT_EQ(loadedMesh.meshlets().size(), s_ExpectedDualCount);
             EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), expectedPrimitiveCount * 3u);
             EXPECT_EQ(TestMeshletLogicalPositionRefCount(loadedMesh), 6u);
             EXPECT_EQ(TestMeshletLogicalAttributeRefCount(loadedMesh), 6u);

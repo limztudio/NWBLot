@@ -13,6 +13,11 @@
 namespace __hidden_telemetry_frame_graph_packet_submission_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -20,7 +25,7 @@ using namespace TelemetryTestDetail;
 TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
     Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
         .packetGeneration = 72u,
-        .taskCount = 2u,
+        .taskCount = s_ExpectedDualCount,
         .commandListCount = 1u,
         .ownerNodeIndex = 0u,
         .packetIndex = 1u,
@@ -77,14 +82,14 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
     EXPECT_EQ(header.runtimeStatisticsCount, 1u);
-    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
     EXPECT_EQ(header.packetSubmissionStatisticsCount, 3u);
     EXPECT_EQ(header.packetSubmissionStatisticsPresent, 1u);
 
     const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
         + sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
-        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * s_ExpectedDualCount
     ;
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics firstEncodedStatistics;
     NWB_MEMCPY(
@@ -102,9 +107,9 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
     EXPECT_EQ(firstEncodedStatistics.joinsAcceptedQueueFrontier, 0u);
     EXPECT_EQ(firstEncodedStatistics.recoverySubmission, 0u);
     EXPECT_EQ(firstEncodedStatistics.reserved, 0u);
-    EXPECT_EQ(firstEncodedStatistics.taskCount, 2u);
+    EXPECT_EQ(firstEncodedStatistics.taskCount, s_ExpectedDualCount);
     EXPECT_EQ(firstEncodedStatistics.commandListCount, 1u);
-    EXPECT_EQ(firstEncodedStatistics.plannedWaitTokenCount, 2u);
+    EXPECT_EQ(firstEncodedStatistics.plannedWaitTokenCount, s_ExpectedDualCount);
     EXPECT_EQ(firstEncodedStatistics.sameQueueWaitElisionCount, 1u);
     EXPECT_EQ(firstEncodedStatistics.timelineWaitCount, 1u);
     EXPECT_EQ(firstEncodedStatistics.mergedTimelineWaitCount, 0u);
@@ -117,13 +122,13 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
     ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 3u);
     EXPECT_EQ(parsed.packetSubmissionStatistics[0u].packetIndex, 0u);
     EXPECT_EQ(parsed.packetSubmissionStatistics[1u].packetIndex, 1u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[2u].packetIndex, 2u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[s_ThirdElementIndex].packetIndex, s_ExpectedDualCount);
     EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queue.index, 3u);
     EXPECT_EQ(parsed.packetSubmissionStatistics[1u].queueClass, Telemetry::FrameGraphQueueClass::Compute);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].commandListCount, 2u);
-    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].mergedTimelineWaitCount, 2u);
-    EXPECT_TRUE(parsed.packetSubmissionStatistics[2u].joinsAcceptedQueueFrontier);
-    EXPECT_TRUE(parsed.packetSubmissionStatistics[2u].recoverySubmission);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].commandListCount, s_ExpectedDualCount);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].mergedTimelineWaitCount, s_ExpectedDualCount);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics[s_ThirdElementIndex].joinsAcceptedQueueFrontier);
+    EXPECT_TRUE(parsed.packetSubmissionStatistics[s_ThirdElementIndex].recoverySubmission);
 
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecord firstPhysicalQueue =
         physicalQueueRuntimeStatistics[0u]
@@ -131,11 +136,11 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
     physicalQueueRuntimeStatistics[0u] = physicalQueueRuntimeStatistics[1u];
     physicalQueueRuntimeStatistics[1u] = firstPhysicalQueue;
     const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetZero = packetSubmissionStatistics[1u];
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetOne = packetSubmissionStatistics[2u];
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetOne = packetSubmissionStatistics[s_ThirdElementIndex];
     const Telemetry::FrameGraphPacketSubmissionStatisticsRecord packetTwo = packetSubmissionStatistics[0u];
     packetSubmissionStatistics[0u] = packetZero;
     packetSubmissionStatistics[1u] = packetOne;
-    packetSubmissionStatistics[2u] = packetTwo;
+    packetSubmissionStatistics[s_ThirdElementIndex] = packetTwo;
 
     Telemetry::TelemetryBytes reorderedPayload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
@@ -240,7 +245,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         physicalQueueRuntimeStatistics,
         packetSubmissionStatistics
     );
-    packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[2u].packetIndex;
+    packetSubmissionStatistics[1u].packetIndex = packetSubmissionStatistics[s_ThirdElementIndex].packetIndex;
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
         testArena.arena,
         920u,
@@ -257,7 +262,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         physicalQueueRuntimeStatistics,
         packetSubmissionStatistics
     );
-    packetSubmissionStatistics[2u].commandListCount = 1u;
+    packetSubmissionStatistics[s_ThirdElementIndex].commandListCount = 1u;
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
         testArena.arena,
         920u,
@@ -322,7 +327,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
     const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
         + sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
-        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * s_ExpectedDualCount
     ;
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics encodedStatistics;
     NWB_MEMCPY(

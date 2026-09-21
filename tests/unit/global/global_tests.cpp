@@ -54,6 +54,10 @@
 namespace __hidden_global_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -312,7 +316,7 @@ TEST(Global, AllocationSizeHelpers){
     usize product = Limit<usize>::s_Max;
     EXPECT_TRUE(::TryMultiply<usize>(7u, 6u, product));
     EXPECT_EQ(product, 42u);
-    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, 2u, product));
+    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount, product));
     EXPECT_EQ(product, 0u);
 }
 
@@ -325,13 +329,13 @@ TEST(Global, GenericAllocationAndTypeHelpers){
     ::DestroyArenaObject(arena, probe);
     EXPECT_TRUE(destroyed);
 
-    u32* const values = ::AllocateArenaTyped<u32>(arena, 2u);
+    u32* const values = ::AllocateArenaTyped<u32>(arena, s_ExpectedDualCount);
     ASSERT_NE(values, nullptr);
     values[0u] = 11u;
     values[1u] = 42u;
     EXPECT_EQ(values[0u], 11u);
     EXPECT_EQ(values[1u], 42u);
-    ::DeallocateArenaTyped<u32>(arena, values, 2u);
+    ::DeallocateArenaTyped<u32>(arena, values, s_ExpectedDualCount);
 
     const usize firstId = ::TypeCounter<TypeCounterFirstTag>::id<u32>();
     EXPECT_EQ(firstId, ::TypeCounter<TypeCounterFirstTag>::id<u32>());
@@ -409,16 +413,16 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
 
     Vector<u32> values;
     queue.copyTo(values);
-    ASSERT_EQ(values.size(), 2u);
+    ASSERT_EQ(values.size(), s_ExpectedDualCount);
     EXPECT_EQ(values[0u], 7u);
     EXPECT_EQ(values[1u], 19u);
 
     queue.appendUnique(23u, equal);
-    EXPECT_EQ(values.size(), 2u);
+    EXPECT_EQ(values.size(), s_ExpectedDualCount);
 
     queue.copyTo(values);
     ASSERT_EQ(values.size(), 3u);
-    EXPECT_EQ(values[2u], 23u);
+    EXPECT_EQ(values[s_ThirdElementIndex], 23u);
 }
 
 TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
@@ -447,7 +451,7 @@ TEST(Global, LinuxProcessMemoryMapUtilitiesParseAndLookupRanges){
 
     Vector<LinuxProcessMemoryMapEntry> entries;
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
-    ASSERT_EQ(entries.size(), 2u);
+    ASSERT_EQ(entries.size(), s_ExpectedDualCount);
     EXPECT_EQ(entries[0u].fileOffset, 0x20u);
     EXPECT_EQ(entries[0u].path, AStringView("/tmp/first.so"));
 
@@ -477,7 +481,7 @@ TEST(Global, GrowingCapacityHelpers){
     EXPECT_EQ(::NextGrowingCapacity(8u, 8u), 8u);
     EXPECT_EQ(::NextGrowingCapacity(8u, 9u), 16u);
     EXPECT_EQ(::NextGrowingCapacity(0u, 4097u, 4096u), 8192u);
-    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / 2u) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
+    EXPECT_EQ(::NextGrowingCapacity((Limit<usize>::s_Max / s_ExpectedDualCount) + 1u, Limit<usize>::s_Max), Limit<usize>::s_Max);
 }
 
 TEST(Global, CheckedDivideUp){
@@ -628,7 +632,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_EQ(probe.resolveCount, 1u);
 #if defined(NWB_BUILDMODE)
     EXPECT_EQ(literal.hash(), literal.identityHash());
-    EXPECT_EQ(probe.recordCount, 2u);
+    EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
 #endif
 }
 
@@ -852,7 +856,7 @@ TEST(Global, BasicCompactStringTypes){
     const WCompactString fileText = wide.substr(7u, 4u);
     EXPECT_EQ(fileText.view(), WStringView(L"file"));
 
-    wchar oversized[WCompactString::s_MaxLength + 2u] = {};
+    wchar oversized[WCompactString::s_MaxLength + s_ExpectedDualCount] = {};
     for(usize i = 0u; i < WCompactString::s_MaxLength + 1u; ++i)
         oversized[i] = L'a';
 
@@ -1156,7 +1160,7 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
         EXPECT_FALSE(entry.path().empty());
         ++entryCount;
     }
-    EXPECT_EQ(entryCount, 2u);
+    EXPECT_EQ(entryCount, s_ExpectedDualCount);
 
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
@@ -1235,7 +1239,7 @@ TEST(Global, BinaryVectorPayloadRoundTrip){
     Vector<u8> binary;
     Vector<u16> source;
     source.push_back(1u);
-    source.push_back(2u);
+    source.push_back(s_ExpectedDualCount);
     source.push_back(static_cast<u16>(0xBEEFu));
 
     EXPECT_EQ(AppendBinaryVectorPayload(binary, source), BinaryVectorPayloadFailure::None);
@@ -1276,10 +1280,10 @@ TEST(Global, FixedVectorBinaryPayloadRoundTrip){
     EXPECT_EQ(parsedValues.size(), 3u);
     EXPECT_EQ(parsedValues[0u], values[0u]);
     EXPECT_EQ(parsedValues[1u], values[1u]);
-    EXPECT_EQ(parsedValues[2u], values[2u]);
+    EXPECT_EQ(parsedValues[s_ThirdElementIndex], values[s_ThirdElementIndex]);
 
     vectorCursor = 0u;
-    FixedVector<u16, 2u> tooSmall;
+    FixedVector<u16, s_ExpectedDualCount> tooSmall;
     EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), BinaryVectorPayloadFailure::OutputOverflow);
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
@@ -1309,7 +1313,7 @@ TEST(Global, FixedVectorBinaryStringWrites){
     ASSERT_EQ(rawText.size(), 3u);
     EXPECT_EQ(rawText[0u], static_cast<u8>('r'));
     EXPECT_EQ(rawText[1u], static_cast<u8>('a'));
-    EXPECT_EQ(rawText[2u], static_cast<u8>('w'));
+    EXPECT_EQ(rawText[s_ThirdElementIndex], static_cast<u8>('w'));
 }
 
 TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
@@ -1320,7 +1324,7 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
     usize cursor = 0u;
     Vector<u32> parsed;
     parsed.push_back(0xAABBCCDDu);
-    EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, 2u, parsed), BinaryVectorPayloadFailure::SourceTruncated);
+    EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, s_ExpectedDualCount, parsed), BinaryVectorPayloadFailure::SourceTruncated);
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -1328,45 +1332,45 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
 TEST(Global, AppendTriviallyCopyableVectorSelfAppend){
     Vector<u32> values;
     values.push_back(1u);
-    values.push_back(2u);
+    values.push_back(s_ExpectedDualCount);
     values.push_back(3u);
 
     AppendTriviallyCopyableVector(values, values);
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
-    EXPECT_EQ(values[1u], 2u);
-    EXPECT_EQ(values[2u], 3u);
+    EXPECT_EQ(values[1u], s_ExpectedDualCount);
+    EXPECT_EQ(values[s_ThirdElementIndex], 3u);
     EXPECT_EQ(values[3u], 1u);
-    EXPECT_EQ(values[4u], 2u);
+    EXPECT_EQ(values[4u], s_ExpectedDualCount);
     EXPECT_EQ(values[5u], 3u);
 }
 
 TEST(Global, TriviallyCopyableVectorAlias){
     Vector<u32> values;
     values.push_back(1u);
-    values.push_back(2u);
+    values.push_back(s_ExpectedDualCount);
     values.push_back(3u);
     values.push_back(4u);
 
-    const U32VectorView middle{ values.data() + 1u, 2u };
+    const U32VectorView middle{ values.data() + 1u, s_ExpectedDualCount };
     AppendTriviallyCopyableVector(values, middle);
 
     EXPECT_EQ(values.size(), 6u);
     EXPECT_EQ(values[0u], 1u);
-    EXPECT_EQ(values[1u], 2u);
-    EXPECT_EQ(values[2u], 3u);
+    EXPECT_EQ(values[1u], s_ExpectedDualCount);
+    EXPECT_EQ(values[s_ThirdElementIndex], 3u);
     EXPECT_EQ(values[3u], 4u);
-    EXPECT_EQ(values[4u], 2u);
+    EXPECT_EQ(values[4u], s_ExpectedDualCount);
     EXPECT_EQ(values[5u], 3u);
 
     const U32VectorView assignedMiddle{ values.data() + 1u, 3u };
     AssignTriviallyCopyableVector(values, assignedMiddle);
 
     EXPECT_EQ(values.size(), 3u);
-    EXPECT_EQ(values[0u], 2u);
+    EXPECT_EQ(values[0u], s_ExpectedDualCount);
     EXPECT_EQ(values[1u], 3u);
-    EXPECT_EQ(values[2u], 4u);
+    EXPECT_EQ(values[s_ThirdElementIndex], 4u);
 }
 
 TEST(Global, CompressedPairSwapUsesMove){
@@ -1458,7 +1462,7 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
     NWB_LOGGER_WARNING(StringConvert(rawMessage));
 
 #if NWB_OCCUR_WARNING
-    EXPECT_EQ(logger.messageCount(), 2u);
+    EXPECT_EQ(logger.messageCount(), s_ExpectedDualCount);
     EXPECT_EQ(logger.lastType(), NWB::Core::Common::LogType::Warning);
     EXPECT_TRUE(logger.sawMessageContaining(NWB_TEXT("raw converted warning")));
 #else
@@ -1472,9 +1476,9 @@ TEST(Global, CapturingLoggerSerializesConcurrentWritersAndReaders){
     constexpr u32 s_ThreadCount = 4u;
     constexpr u32 s_MessagesPerThread = 512u;
     constexpr u32 s_ExpectedMessageCount = s_ThreadCount * s_MessagesPerThread;
-    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / 2u;
+    constexpr u32 s_ExpectedErrorCount = s_ExpectedMessageCount / s_ExpectedDualCount;
     CapturingLogger logger;
-    Latch startGate(s_ThreadCount + 2u);
+    Latch startGate(s_ThreadCount + s_ExpectedDualCount);
     Atomic<u32> activeWriters{ s_ThreadCount };
     Atomic<bool> invalidObservation{ false };
     bool sawConcurrentMessage = false;

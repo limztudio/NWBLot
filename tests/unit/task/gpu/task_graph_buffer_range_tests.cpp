@@ -17,6 +17,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -167,10 +171,10 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
         ASSERT_NE(barrier, nullptr);
         EXPECT_EQ(
             barrier->before,
-            index == 2u ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::CopyDest
+            index == s_ExpectedDualCount ? Graphics::ResourceStates::UnorderedAccess : Graphics::ResourceStates::CopyDest
         );
         EXPECT_EQ(barrier->after, Graphics::ResourceStates::ShaderResource);
-        const Graphics::GpuSubmissionPacketId producerPacket = plan.findTask(index == 2u ? middle : whole).plan->packet;
+        const Graphics::GpuSubmissionPacketId producerPacket = plan.findTask(index == s_ExpectedDualCount ? middle : whole).plan->packet;
         bool foundSeed = false;
         for(u32 seedIndex = 0u; seedIndex < readerView.plan->prologueStateSeedCount; ++seedIndex){
             const Graphics::GpuPacketStateSeed& seed = readerView.prologueStateSeeds[seedIndex];
@@ -242,7 +246,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
             .setType(Graphics::GpuGraphResourceType::Buffer)
             .setInitialState(Graphics::ResourceStates::Common)
             .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
-            .setExternalFinalReleaseDestinationQueue(queues[2u].id)
+            .setExternalFinalReleaseDestinationQueue(queues[s_ThirdElementIndex].id)
     );
     const Graphics::GpuTaskResourceUse wholeUse = BufferUse(
         buffer,
@@ -266,7 +270,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     EXPECT_FALSE(exportView.plan->producerTask.valid());
     const Graphics::BufferRange ranges[] = { { 0u, 32u }, { 64u, Graphics::BufferRange::AllBytes }, { 32u, 32u } };
     for(usize index = 0u; index < LengthOf(ranges); ++index){
-        const Graphics::GpuTaskId producer = index == 2u ? middle : whole;
+        const Graphics::GpuTaskId producer = index == s_ExpectedDualCount ? middle : whole;
         const Graphics::GpuCompiledTaskView taskView = plan.findTask(producer);
         ASSERT_TRUE(taskView.valid());
         const Graphics::GpuCompiledBarrier* const stateExport = FindRangeBarrier(
@@ -328,7 +332,7 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     ASSERT_TRUE(computeView.valid());
     ASSERT_TRUE(readerView.valid());
     EXPECT_EQ(computeView.plan->queue, queues[1u].id);
-    EXPECT_EQ(readerView.plan->prologueStateSeedCount, 2u);
+    EXPECT_EQ(readerView.plan->prologueStateSeedCount, s_ExpectedDualCount);
     ASSERT_EQ(plan.logicalOwnershipTransferCount(), 1u);
     const Graphics::GpuCompiledOwnershipTransfer* const transfer = plan.logicalOwnershipTransferAt(0u);
     ASSERT_NE(transfer, nullptr);

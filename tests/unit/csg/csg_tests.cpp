@@ -17,6 +17,10 @@
 namespace __hidden_csg_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -89,7 +93,7 @@ TEST(Csg, CsgCutterComponent){
             EXPECT_TRUE(entityId.valid());
             EXPECT_EQ(viewCutter.receiverGroup, Name("project/csg/receiver_group_a"));
             EXPECT_EQ(viewCutter.shapeType, Name("engine/csg/box"));
-            EXPECT_EQ(viewCutter.parameterBytes.size(), 2u);
+            EXPECT_EQ(viewCutter.parameterBytes.size(), s_ExpectedDualCount);
             EXPECT_EQ(viewCutter.parameterBytes[0u], 0xAu);
             EXPECT_EQ(viewCutter.parameterBytes[1u], 0xBu);
         }
@@ -376,7 +380,7 @@ TEST(Csg, CsgFrameReceiverLookup){
         ));
         EXPECT_TRUE(opaqueDrawState.active);
         EXPECT_EQ(opaqueDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
-        EXPECT_EQ(opaqueDrawState.cutterCount, 2u);
+        EXPECT_EQ(opaqueDrawState.cutterCount, s_ExpectedDualCount);
 
         usize resolvedCutterCount = 0u;
         {
@@ -396,7 +400,7 @@ TEST(Csg, CsgFrameReceiverLookup){
                 }
             );
         }
-        EXPECT_EQ(resolvedCutterCount, 2u);
+        EXPECT_EQ(resolvedCutterCount, s_ExpectedDualCount);
 
         NWB::Impl::CsgReceiverDrawState transparentDrawState;
         EXPECT_TRUE(ResolveTestCsgReceiverDrawState(
@@ -407,7 +411,7 @@ TEST(Csg, CsgFrameReceiverLookup){
         ));
         EXPECT_TRUE(transparentDrawState.active);
         EXPECT_EQ(transparentDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
-        EXPECT_EQ(transparentDrawState.cutterCount, 2u);
+        EXPECT_EQ(transparentDrawState.cutterCount, s_ExpectedDualCount);
     }
 
     {
@@ -680,17 +684,17 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
         makeVertex(-1.0f, 1.0f, 1.0f),
     };
     const NWB::Impl::CsgDeformTriangle inputTriangles[] = {
-        { { 0u, 1u, 2u } }, { { 0u, 2u, 3u } },
+        { { 0u, 1u, s_ExpectedDualCount } }, { { 0u, s_ExpectedDualCount, 3u } },
         { { 4u, 6u, 5u } }, { { 4u, 7u, 6u } },
         { { 0u, 4u, 5u } }, { { 0u, 5u, 1u } },
-        { { 2u, 6u, 7u } }, { { 2u, 7u, 3u } },
+        { { s_ExpectedDualCount, 6u, 7u } }, { { s_ExpectedDualCount, 7u, 3u } },
         { { 0u, 3u, 7u } }, { { 0u, 7u, 4u } },
-        { { 1u, 5u, 6u } }, { { 1u, 6u, 2u } },
+        { { 1u, 5u, 6u } }, { { 1u, 6u, s_ExpectedDualCount } },
     };
 
     // Two sequential plane cuts: keep x >= -0.5, then keep y >= -0.5.
     // Plane SDF keeps distance >= 0 with parameter0 = (normal, distance).
-    NWB::Impl::CsgDeformCutDesc cuts[2u];
+    NWB::Impl::CsgDeformCutDesc cuts[s_ThirdElementIndex];
     cuts[0u].active = true;
     cuts[0u].shape.shapeType = Name("engine/csg/plane");
     cuts[0u].shape.worldToShape = ::Float34Identity();
@@ -709,7 +713,7 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
         MakeNotNull(inputTriangles),
         12u,
         cuts,
-        2u,
+        s_ExpectedDualCount,
         options
     );
     EXPECT_TRUE(viability.viable);
@@ -725,7 +729,7 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
         MakeNotNull(inputTriangles),
         12u,
         cuts,
-        2u,
+        s_ExpectedDualCount,
         options,
         previewVertices,
         previewTriangles,
@@ -733,7 +737,7 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     ));
     EXPECT_GT(previewVertices.size(), 8u);
     EXPECT_GT(previewTriangles.size(), 0u);
-    EXPECT_EQ(previewStats.appliedCutCount, 2u);
+    EXPECT_EQ(previewStats.appliedCutCount, s_ExpectedDualCount);
     EXPECT_GT(previewStats.capTriangleCount, 0u);
 
     NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
@@ -747,7 +751,7 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
         MakeNotNull(inputTriangles),
         12u,
         cuts,
-        2u,
+        s_ExpectedDualCount,
         options,
         commitVertices,
         commitTriangles,
@@ -772,8 +776,8 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
     // Seam-safe rebuild never welds or drops source verts: originals survive verbatim.
     EXPECT_EQ(commitVertices[0u].position.x, -1.0f);
     EXPECT_EQ(commitVertices[0u].position.y, -1.0f);
-    EXPECT_EQ(commitVertices[2u].position.x, 1.0f);
-    EXPECT_EQ(commitVertices[2u].position.y, 1.0f);
+    EXPECT_EQ(commitVertices[s_ThirdElementIndex].position.x, 1.0f);
+    EXPECT_EQ(commitVertices[s_ThirdElementIndex].position.y, 1.0f);
     // The second cut refines the first cut's output: at least one split vertex sits on x == -0.5.
     bool foundCutWall = false;
     for(const NWB::Impl::CsgDeformVertex& vertex : commitVertices){
@@ -794,7 +798,7 @@ TEST(Csg, CsgDeformCutViabilityRejectsDegenerateCommit){
     vertex.uv0 = Float2U(0.0f, 0.0f);
     vertex.color = Float4(1.0f, 1.0f, 1.0f, 1.0f);
     const NWB::Impl::CsgDeformVertex inputVertices[] = { vertex, vertex, vertex };
-    const NWB::Impl::CsgDeformTriangle inputTriangles[] = { { { 0u, 1u, 2u } } };
+    const NWB::Impl::CsgDeformTriangle inputTriangles[] = { { { 0u, 1u, s_ExpectedDualCount } } };
 
     // Cut keeps x >= 0; the whole triangle sits at x == -5, fully outside the kept
     // half-space, so both preview and commit must agree on NoKeptGeometry failure.

@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -185,7 +188,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
     const GpuSubmissionPacketId packet = views.compiled.packetForTask(precursorTask);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(views.compiled.packetForTask(prepareTask), packet);
-    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, s_ExpectedDualCount);
 
     const GpuCompiledTaskView compiledPrecursor = views.compiled.findTask(precursorTask);
     const GpuCompiledTaskView compiledPrepare = views.compiled.findTask(prepareTask);
@@ -441,7 +444,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecord
     const GpuSubmissionPacketId packet = views.compiled.packetForTask(precursorTask);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(views.compiled.packetForTask(hybridTailTask), packet);
-    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, s_ExpectedDualCount);
 
     const GpuCompiledTaskView compiledPrecursor = views.compiled.findTask(precursorTask);
     const GpuCompiledTaskView compiledHybridTail = views.compiled.findTask(hybridTailTask);

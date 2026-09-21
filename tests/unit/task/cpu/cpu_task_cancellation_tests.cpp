@@ -11,6 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
 TEST(CpuTaskCancellationTests, OldGenerationsKeepDistinctResultsAcrossRepeatedReuse){
     using namespace NWB::Core;
     constexpr usize s_Count = 1024u;
@@ -24,19 +26,19 @@ TEST(CpuTaskCancellationTests, OldGenerationsKeepDistinctResultsAcrossRepeatedRe
         history[index] = scope.submit([&](){ ++originalCallbacks; });
         ASSERT_TRUE(history[index].valid());
         EXPECT_EQ(history[index].index, history[0u].index);
-        if(index % 2u == 0u)
+        if(index % s_ExpectedDualCount == 0u)
             scope.cancel();
         scope.wait();
     }
-    EXPECT_EQ(originalCallbacks, s_Count / 2u);
+    EXPECT_EQ(originalCallbacks, s_Count / s_ExpectedDualCount);
     for(usize index = 0u; index < s_Count; ++index){
         const u32 before = laterCallbacks;
         const auto task = scheduler.submit([&](){ ++laterCallbacks; }, history[index]);
         ASSERT_TRUE(task.valid());
         scheduler.wait(task);
-        EXPECT_EQ(laterCallbacks - before, index % 2u);
+        EXPECT_EQ(laterCallbacks - before, index % s_ExpectedDualCount);
     }
-    EXPECT_EQ(laterCallbacks, s_Count / 2u);
+    EXPECT_EQ(laterCallbacks, s_Count / s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().canceledTasks, s_Count);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -69,8 +71,8 @@ TEST(CpuTaskCancellationTests, CancellationIsIndexedBySlotAsWellAsGeneration){
     }
     scheduler.wait();
     EXPECT_EQ(canceledCallbacks, 0u);
-    EXPECT_EQ(completedCallbacks, s_Count * 2u);
-    EXPECT_EQ(scheduler.statistics().canceledTasks, s_Count * 2u);
+    EXPECT_EQ(completedCallbacks, s_Count * s_ExpectedDualCount);
+    EXPECT_EQ(scheduler.statistics().canceledTasks, s_Count * s_ExpectedDualCount);
 }
 
 TEST(CpuTaskCancellationTests, ParallelRangesPreserveHistoryInRecycledSlots){

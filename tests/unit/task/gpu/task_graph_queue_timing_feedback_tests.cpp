@@ -16,6 +16,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -250,7 +253,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     ;
     EXPECT_EQ(timingHistory.findAssignment(assignmentKey), nullptr);
     timingHistory.snapshot(timingSnapshot);
-    assignmentOptions.timingFrameIndex = 2u;
+    assignmentOptions.timingFrameIndex = s_ExpectedDualCount;
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, assignmentOptions));
     assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
@@ -291,15 +294,15 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
 
     // An under-sampled probe remains bounded to its configured interval. Its first observation neither becomes
     // the incumbent nor causes the following non-calibration frame to retain that route.
-    Graphics::GpuTaskTimingHistoryStore intervalTimingHistory(testArena.arena, 2u);
+    Graphics::GpuTaskTimingHistoryStore intervalTimingHistory(testArena.arena, s_ExpectedDualCount);
     intervalTimingHistory.resetForDeviceGeneration(queues[0u].id.deviceGeneration);
     ASSERT_TRUE(intervalTimingHistory.recordSample(timingKey, queues[0u].id, 0.010, 10u));
     ASSERT_TRUE(intervalTimingHistory.recordNonCommittingSample(timingKey, queues[0u].id, 0.010));
     Graphics::GpuTaskTimingHistorySnapshot intervalTimingSnapshot(testArena.arena);
     intervalTimingHistory.snapshot(intervalTimingSnapshot);
     Graphics::GpuTaskTimingFeedbackPolicy intervalTimingPolicy = timingPolicy;
-    intervalTimingPolicy.minimumSampleCount = 2u;
-    intervalTimingPolicy.calibrationIntervalFrames = 2u;
+    intervalTimingPolicy.minimumSampleCount = s_ExpectedDualCount;
+    intervalTimingPolicy.calibrationIntervalFrames = s_ExpectedDualCount;
     Graphics::GpuTaskGraphQueueAssignmentOptions intervalAssignmentOptions;
     intervalAssignmentOptions.timingHistory = &intervalTimingSnapshot;
     intervalAssignmentOptions.timingFeedbackPolicy = intervalTimingPolicy;
@@ -423,7 +426,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
         const Graphics::GpuTaskTimingKey& candidateKey = staticCompute ? graphicsKey : computeKey;
         Graphics::GpuTaskTimingHistoryStore timingHistory(testArena.arena, 1u);
         ASSERT_TRUE(timingHistory.recordSample(candidateKey, candidateQueue.id, 0.001, 1u));
-        ASSERT_TRUE(timingHistory.recordSample(incumbentKey, incumbentQueue.id, 0.010, 2u));
+        ASSERT_TRUE(timingHistory.recordSample(incumbentKey, incumbentQueue.id, 0.010, s_ExpectedDualCount));
 
         Graphics::GpuTaskTimingHistorySnapshot timingSnapshot(testArena.arena);
         timingHistory.snapshot(timingSnapshot);
@@ -586,7 +589,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
 
     ASSERT_TRUE(timingHistory.recordNonCommittingSample(graphicsKey, queues[0u].id, 0.004));
     ASSERT_TRUE(timingHistory.recordSample(computeKey, queues[1u].id, 0.010, 3u));
-    EXPECT_EQ(timingHistory.historyCount(), 2u);
+    EXPECT_EQ(timingHistory.historyCount(), s_ExpectedDualCount);
     const Graphics::GpuTaskTimingAssignmentKey assignmentKey =
         Graphics::GpuTaskTimingAssignmentKeyFromHistoryKey(computeKey)
     ;
@@ -875,8 +878,8 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
 
     Graphics::GpuPhysicalQueueInfo firstAuxiliaryQueue = GraphicsQueue(1u);
     firstAuxiliaryQueue.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondAuxiliaryQueue = GraphicsQueue(2u);
-    secondAuxiliaryQueue.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliaryQueue = GraphicsQueue(s_ExpectedDualCount);
+    secondAuxiliaryQueue.queueIndex = s_ExpectedDualCount;
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         firstAuxiliaryQueue,
@@ -935,7 +938,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_EQ(analysis.edges().size(), 3u);
-    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), s_ExpectedDualCount);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
@@ -989,8 +992,8 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesForcedQueu
 
     Graphics::GpuPhysicalQueueInfo firstAuxiliaryGraphicsQueue = GraphicsQueue(1u);
     firstAuxiliaryGraphicsQueue.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondAuxiliaryGraphicsQueue = GraphicsQueue(2u);
-    secondAuxiliaryGraphicsQueue.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliaryGraphicsQueue = GraphicsQueue(s_ExpectedDualCount);
+    secondAuxiliaryGraphicsQueue.queueIndex = s_ExpectedDualCount;
     const Graphics::GpuPhysicalQueueInfo queues[] = {
         GraphicsQueue(),
         firstAuxiliaryGraphicsQueue,
@@ -1286,7 +1289,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
     EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
 
     const Graphics::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
     EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);

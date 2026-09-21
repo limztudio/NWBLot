@@ -13,6 +13,11 @@
 namespace __hidden_telemetry_recorder_codec_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -46,7 +51,7 @@ TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
-    const u8 perfPayload[] = { 1u, 2u };
+    const u8 perfPayload[] = { 1u, s_ExpectedDualCount };
     EXPECT_FALSE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 12u, perfPayload, sizeof(perfPayload)));
     EXPECT_EQ(recorder.eventCount(), 0u);
 
@@ -68,7 +73,7 @@ TEST(Telemetry, RecorderFiltersAndCopiesPayload){
     EXPECT_EQ(record->payload.size(), 3u);
     EXPECT_EQ(record->payload[0u], 4u);
     EXPECT_EQ(record->payload[1u], 5u);
-    EXPECT_EQ(record->payload[2u], 6u);
+    EXPECT_EQ(record->payload[s_ThirdElementIndex], 6u);
 
     EXPECT_EQ(view.eventAt(1u), nullptr);
 }
@@ -93,7 +98,7 @@ TEST(Telemetry, RecorderMovesOwnedPayload){
     EXPECT_EQ(record->payload.size(), 3u);
     EXPECT_EQ(record->payload[0u], 4u);
     EXPECT_EQ(record->payload[1u], 5u);
-    EXPECT_EQ(record->payload[2u], 6u);
+    EXPECT_EQ(record->payload[s_ThirdElementIndex], 6u);
 }
 
 TEST(Telemetry, RecorderClearAndDisabledState){
@@ -108,7 +113,7 @@ TEST(Telemetry, RecorderClearAndDisabledState){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
     EXPECT_FALSE(recorder.enabled());
     EXPECT_EQ(recorder.eventCount(), 0u);
-    EXPECT_FALSE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 2u, &payload, sizeof(payload)));
+    EXPECT_FALSE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, s_ExpectedDualCount, &payload, sizeof(payload)));
 }
 
 TEST(Telemetry, EventCodecRoundTrip){
@@ -172,7 +177,7 @@ TEST(Telemetry, EventCodecReportsTruncatedPayload){
     TestArena testArena;
     Telemetry::TelemetryBytes encoded(testArena.arena);
 
-    const u8 payload[] = { 1u, 2u, 3u };
+    const u8 payload[] = { 1u, s_ExpectedDualCount, 3u };
     Telemetry::EventHeader header;
     header.kind = Telemetry::EventKind::PerfFrame;
     header.payloadBytes = sizeof(payload);
@@ -190,7 +195,7 @@ TEST(Telemetry, EventStreamCodecRoundTrip){
 
     const u32 perfPayload = 99u;
     const char frameGraphPayload[] = "{frame:1}";
-    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), 2u));
+    EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 101u, &perfPayload, sizeof(perfPayload), s_ExpectedDualCount));
     EXPECT_TRUE(recorder.recordBinary(
         Telemetry::EventKind::FrameGraphFrame,
         102u,
@@ -202,7 +207,7 @@ TEST(Telemetry, EventStreamCodecRoundTrip){
     Telemetry::TelemetryBytes encoded(testArena.arena);
     EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
     EXPECT_EQ(encoded.size(), sizeof(Telemetry::EncodedStreamHeader)
-            + (sizeof(Telemetry::EncodedEventHeader) * 2u)
+            + (sizeof(Telemetry::EncodedEventHeader) * s_ExpectedDualCount)
             + sizeof(perfPayload)
             + sizeof(frameGraphPayload) - 1u);
 

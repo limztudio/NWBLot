@@ -22,6 +22,9 @@
 namespace __hidden_metadata_extension_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -158,7 +161,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
     const NWB::Path root = NWB::Path(fixtureArena, __FILE__).parent_path().parent_path().parent_path().parent_path()
         / "__build_obj" / "metadata_extension_tests" / caseName;
     DiscoveredNwbFileVector files(fixtureArena);
-    files.reserve(pairCount * 2u);
+    files.reserve(pairCount * s_ExpectedDualCount);
     for(usize index = 0u; index < pairCount; ++index){
         const AssetString directoryName = StringFormat(fixtureArena, "pair_{:04}", index);
         const NWB::Path directory = root / directoryName;
@@ -259,9 +262,9 @@ TEST(MetadataExtensionOwnership, RequireRetainsAlignedTypedPayloadAndReturnsTheS
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(borrowed, name), &first);
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, Name("tests/metadata_extension/absent")), nullptr);
         TextExtension& text = RequireParsedMetadataExtension<TextExtension>(metadata, Name("tests/metadata_extension/text"), arena, textState);
-        ASSERT_EQ(text.strings.size(), 2u);
+        ASSERT_EQ(text.strings.size(), s_ExpectedDualCount);
         EXPECT_EQ(text.strings[1u], "second separately allocated extension payload");
-        EXPECT_EQ(metadata.extensions.size(), 2u);
+        EXPECT_EQ(metadata.extensions.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(alignedState.constructions, 1u);
     EXPECT_EQ(alignedState.destructions, 1u);
@@ -281,7 +284,7 @@ TEST(MetadataExtensionOwnership, EraseClearAndGrowthDestroyEveryConcretePayloadO
         for(usize index = 0u; index < 80u; ++index){
             const AssetString nameText = StringFormat(arena, "tests/metadata_extension/growth_{}", index);
             const AlignedExtension& created = RequireParsedMetadataExtension<AlignedExtension>(metadata, ToName(nameText), arena, state);
-            EXPECT_EQ(created.identity, index + 2u);
+            EXPECT_EQ(created.identity, index + s_ExpectedDualCount);
         }
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, firstName), first);
         EXPECT_EQ(metadata.extensions.erase(firstName), 1u);
@@ -324,10 +327,10 @@ TEST(MetadataExtensionOwnership, MapMoveAndReplacementUseEachOriginalObjectArena
         EXPECT_EQ(firstState.memberDestructions, 1u);
         EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
         ASSERT_GT(secondOwnerArena.memoryStats().usedBytes, 0u);
-        EXPECT_EQ(static_cast<TextExtension*>(secondMap.at(firstName).get())->strings.size(), 2u);
+        EXPECT_EQ(static_cast<TextExtension*>(secondMap.at(firstName).get())->strings.size(), s_ExpectedDualCount);
     }
     EXPECT_EQ(firstState.destructions, 1u);
-    EXPECT_EQ(secondState.destructions, 2u);
+    EXPECT_EQ(secondState.destructions, s_ExpectedDualCount);
     EXPECT_EQ(firstMapArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(secondMapArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(firstOwnerArena.memoryStats().usedBytes, 0u);
@@ -346,12 +349,12 @@ TEST(MetadataExtensionOwnership, RequireRefillsAnExplicitlyMovedOutOwner){
         EXPECT_EQ(FindParsedMetadataExtension<AlignedExtension>(metadata, name), nullptr);
         AlignedExtension& replacement = RequireParsedMetadataExtension<AlignedExtension>(metadata, name, arena, state);
         EXPECT_NE(&replacement, first);
-        EXPECT_EQ(replacement.identity, 2u);
+        EXPECT_EQ(replacement.identity, s_ExpectedDualCount);
         EXPECT_EQ(metadata.extensions.size(), 1u);
         detached.reset();
         EXPECT_EQ(state.destructions, 1u);
     }
-    EXPECT_EQ(state.destructions, 2u);
+    EXPECT_EQ(state.destructions, s_ExpectedDualCount);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -396,14 +399,14 @@ TEST(MetadataExtensionOwnership, ReentrantInsertionReturnsTheActualStoredValue){
         ParsedAssetMetadata metadata(arena);
         const Name name("tests/metadata_extension/reentrant");
         ReentrantExtension& result = RequireParsedMetadataExtension<ReentrantExtension>(metadata, name, metadata, name, state, true);
-        EXPECT_EQ(result.identity, 2u);
+        EXPECT_EQ(result.identity, s_ExpectedDualCount);
         EXPECT_EQ(result.nested, nullptr);
         EXPECT_EQ(&result, FindParsedMetadataExtension<ReentrantExtension>(metadata, name));
         EXPECT_EQ(metadata.extensions.size(), 1u);
-        EXPECT_EQ(state.constructions, 2u);
+        EXPECT_EQ(state.constructions, s_ExpectedDualCount);
         EXPECT_EQ(state.destructions, 1u);
     }
-    EXPECT_EQ(state.destructions, 2u);
+    EXPECT_EQ(state.destructions, s_ExpectedDualCount);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
 }
 
@@ -473,7 +476,7 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
 }
 
 TEST(MetadataExtensionOwnership, PublicShaderAndIncludeParsingRetiresAllMetadata){
-    BenchmarkMetadataParsing(1u, 2u);
+    BenchmarkMetadataParsing(1u, s_ExpectedDualCount);
 }
 
 TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnusedBuckets){

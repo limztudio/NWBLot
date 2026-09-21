@@ -17,6 +17,9 @@
 namespace __hidden_optical_scene_upload_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -135,7 +138,7 @@ TEST(OpticalSceneUpload, AcceptedPayloadAndExactTokenPermitTheFirstReuse){
 TEST(OpticalSceneUpload, RejectedReplacementPreservesOnlyThePreviouslyAcceptedPayload){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto replacement = context.makeUpload(2u);
+    const auto replacement = context.makeUpload(s_ExpectedDualCount);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 4u));
     const auto plan = context.control->plan(replacement);
     ASSERT_TRUE(context.control->reserve(plan));
@@ -148,7 +151,7 @@ TEST(OpticalSceneUpload, RejectedReplacementPreservesOnlyThePreviouslyAcceptedPa
 TEST(OpticalSceneUpload, AcceptedReplacementSurvivesLaterFrameFailureAndForcesReversionUpload){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto replacement = context.makeUpload(2u);
+    const auto replacement = context.makeUpload(s_ExpectedDualCount);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 4u));
     const auto plan = context.control->plan(replacement);
     ASSERT_TRUE(context.control->reserve(plan));
@@ -170,7 +173,7 @@ TEST(OpticalSceneUpload, ByteIdenticalNewIdentityConservativelyReuploadsAndPolic
     ASSERT_EQ(first->bytes.size(), duplicateBytes->bytes.size());
     EXPECT_EQ(NWB_MEMCMP(first->bytes.data(), duplicateBytes->bytes.data(), first->bytes.size()), 0);
     EXPECT_NE(NWB_MEMCMP(first->bytes.data(), changedPriority->bytes.data(), first->bytes.size()), 0);
-    ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 2u));
+    ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, s_ExpectedDualCount));
     EXPECT_FALSE(context.control->plan(duplicateBytes).reused);
     EXPECT_FALSE(context.control->plan(changedPriority).reused);
 }
@@ -178,7 +181,7 @@ TEST(OpticalSceneUpload, ByteIdenticalNewIdentityConservativelyReuploadsAndPolic
 TEST(OpticalSceneUpload, AStaleUnreservedPlanCannotReplaceARecentlyAcceptedWriter){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto second = context.makeUpload(2u);
+    const auto second = context.makeUpload(s_ExpectedDualCount);
     const auto stale = context.control->plan(first);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, second, 3u));
     EXPECT_FALSE(context.control->reserve(stale));
@@ -189,14 +192,14 @@ TEST(OpticalSceneUpload, AStaleUnreservedPlanCannotReplaceARecentlyAcceptedWrite
 TEST(OpticalSceneUpload, LateCallbacksCannotReleaseANewerPendingReplacement){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto second = context.makeUpload(2u);
+    const auto second = context.makeUpload(s_ExpectedDualCount);
     const auto old = context.control->plan(first);
     ASSERT_TRUE(context.control->reserve(old));
     ASSERT_TRUE(context.control->accept(old, Token(3u)));
     const auto current = context.control->plan(second);
     ASSERT_TRUE(context.control->reserve(current));
     context.control->discard(old);
-    EXPECT_FALSE(context.control->accept(old, Token(2u)));
+    EXPECT_FALSE(context.control->accept(old, Token(s_ExpectedDualCount)));
     EXPECT_TRUE(context.control->isReserved(current));
     ASSERT_TRUE(context.control->accept(current, Token(4u)));
     EXPECT_TRUE(context.control->plan(second).reused);
@@ -206,7 +209,7 @@ TEST(OpticalSceneUpload, InvalidAcceptedProvenanceQuarantinesRatherThanRestoring
     for(u32 invalid = 0u; invalid < 7u; ++invalid){
         UploadContext context;
         const auto first = context.makeUpload(1u);
-        const auto second = context.makeUpload(2u);
+        const auto second = context.makeUpload(s_ExpectedDualCount);
         ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 8u));
         const auto plan = context.control->plan(second);
         ASSERT_TRUE(context.control->reserve(plan));
@@ -214,7 +217,7 @@ TEST(OpticalSceneUpload, InvalidAcceptedProvenanceQuarantinesRatherThanRestoring
         switch(invalid){
         case 0u: token.value = 0u; break;
         case 1u: token.physicalQueueIndex = Limit<u16>::s_Max; break;
-        case 2u: token.deviceGeneration = 2u; break;
+        case s_ExpectedDualCount: token.deviceGeneration = s_ExpectedDualCount; break;
         case 3u: token.queue = Core::CommandQueue::Compute; break;
         case 4u: token.value = 8u; break;
         case 5u: token.value = 7u; break;
@@ -240,12 +243,12 @@ TEST(OpticalSceneUpload, BufferIdentityAndControlIdentityPreventCrossGenerationA
     EXPECT_FALSE(sameBufferNewControl->reserve(old));
     EXPECT_FALSE(other->plan(upload).reused);
     EXPECT_FALSE(sameBufferNewControl->plan(upload).reused);
-    EXPECT_FALSE(CreateRayTracingOpticalUploadControl(context.testArena.arena, context.buffer, {0u, 2u}));
+    EXPECT_FALSE(CreateRayTracingOpticalUploadControl(context.testArena.arena, context.buffer, {0u, s_ExpectedDualCount}));
 }
 
 TEST(OpticalSceneUpload, OwnerInvalidationBlocksOldCallbacksWithoutAffectingNewDeviceResources){
     UploadContext oldContext;
-    UploadContext newContext(2u);
+    UploadContext newContext(s_ExpectedDualCount);
     const auto upload = oldContext.makeUpload(1u);
     const auto old = oldContext.control->plan(upload);
     ASSERT_TRUE(oldContext.control->reserve(old));
@@ -258,7 +261,7 @@ TEST(OpticalSceneUpload, OwnerInvalidationBlocksOldCallbacksWithoutAffectingNewD
     EXPECT_FALSE(oldContext.control->accept(old, Token(1u)));
     EXPECT_FALSE(oldContext.control->plan(upload).valid());
     EXPECT_TRUE(newContext.control->isReserved(next));
-    ASSERT_TRUE(newContext.control->accept(next, Token(1u, 2u)));
+    ASSERT_TRUE(newContext.control->accept(next, Token(1u, s_ExpectedDualCount)));
     EXPECT_TRUE(newContext.control->plan(upload).reused);
 }
 
@@ -282,8 +285,8 @@ TEST(OpticalSceneUpload, MoveOnlyReservationPublishesOnceAndDestructorKeepsAccep
 TEST(OpticalSceneUpload, UnacceptedReservationDestructionReleasesOnlyItsOwnAttempt){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto second = context.makeUpload(2u);
-    ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 2u));
+    const auto second = context.makeUpload(s_ExpectedDualCount);
+    ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, s_ExpectedDualCount));
     {
         RayTracingOpticalUploadReservation pending(context.control, context.control->plan(second));
         ASSERT_TRUE(pending.valid());
@@ -315,7 +318,7 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     EXPECT_FALSE(task.queue.allowFallback);
     EXPECT_FALSE(task.queue.compilerMayOverridePreference);
     EXPECT_FALSE(task.scheduling.allowSameClassQueueRouting);
-    ASSERT_EQ(task.resourceUseCount, 2u);
+    ASSERT_EQ(task.resourceUseCount, s_ExpectedDualCount);
     for(usize index = 0u; index < task.resourceUseCount; ++index){
         EXPECT_EQ(task.resourceUses[index].resource, result.resource);
         EXPECT_EQ(task.resourceUses[index].range.bufferRange.byteOffset, 0u);
@@ -362,7 +365,7 @@ TEST(OpticalSceneUpload, AcceptedGraphHitKeepsExactProducerAvailabilityWithoutUp
 TEST(OpticalSceneUpload, RealGraphResetDiscardsTheProductionUploadReservation){
     UploadContext context;
     const auto first = context.makeUpload(1u);
-    const auto second = context.makeUpload(2u);
+    const auto second = context.makeUpload(s_ExpectedDualCount);
     ASSERT_NO_FATAL_FAILURE(Accept(*context.control, first, 3u));
     ASSERT_TRUE(ImportRayTracingOpticalSceneBuffer(context.graph, context.snapshot(second), context.scratch).valid());
     EXPECT_FALSE(context.control->plan(first).valid());

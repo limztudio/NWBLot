@@ -20,6 +20,10 @@
 namespace __hidden_command_buffer_resource_references_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -78,8 +82,8 @@ struct ReferencesContext{
 
 TEST(CommandBufferResourceReferences, PreservesIndependentOwningAndTypedMembershipOrder){
     ReferencesContext context;
-    context.addBuffers(2u);
-    context.addTextures(2u);
+    context.addBuffers(s_ExpectedDualCount);
+    context.addTextures(s_ExpectedDualCount);
     context.references.retainResource(*context.textures[1u]);
     context.references.trackRetainedBuffer(*context.buffers[1u]);
     context.references.trackRetainedTexture(*context.textures[0u]);
@@ -93,20 +97,20 @@ TEST(CommandBufferResourceReferences, PreservesIndependentOwningAndTypedMembersh
     ASSERT_EQ(owners.size(), 4u);
     EXPECT_EQ(owners[0u].get(), context.textures[1u].get());
     EXPECT_EQ(owners[1u].get(), context.buffers[0u].get());
-    EXPECT_EQ(owners[2u].get(), context.textures[0u].get());
+    EXPECT_EQ(owners[s_ThirdElementIndex].get(), context.textures[0u].get());
     EXPECT_EQ(owners[3u].get(), context.buffers[1u].get());
     const auto& buffers = Access::retainedBuffers(context.references);
-    ASSERT_EQ(buffers.size(), 2u);
+    ASSERT_EQ(buffers.size(), s_ExpectedDualCount);
     EXPECT_EQ(buffers[0u], context.buffers[1u].get());
     EXPECT_EQ(buffers[1u], context.buffers[0u].get());
     const auto& textures = Access::retainedTextures(context.references);
-    ASSERT_EQ(textures.size(), 2u);
+    ASSERT_EQ(textures.size(), s_ExpectedDualCount);
     EXPECT_EQ(textures[0u], context.textures[0u].get());
     EXPECT_EQ(textures[1u], context.textures[1u].get());
     for(const Core::BufferHandle& buffer : context.buffers)
-        EXPECT_EQ(buffer->getReferenceCount(), 2u);
+        EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     for(const Core::TextureHandle& texture : context.textures)
-        EXPECT_EQ(texture->getReferenceCount(), 2u);
+        EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
 }
 
 TEST(CommandBufferResourceReferences, IndirectOwnershipDoesNotPreventLaterOwningUpgrade){
@@ -125,8 +129,8 @@ TEST(CommandBufferResourceReferences, IndirectOwnershipDoesNotPreventLaterOwning
     context.references.retainTexture(*context.textures[0u]);
     context.references.retainResource(*context.buffers[0u]);
     context.references.retainResource(*context.textures[0u]);
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
-    EXPECT_EQ(context.textures[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
+    EXPECT_EQ(context.textures[0u]->getReferenceCount(), s_ExpectedDualCount);
     Core::Buffer* const retainedBuffer = context.buffers[0u].get();
     context.buffers.clear();
     EXPECT_EQ(retainedBuffer->getReferenceCount(), 1u);
@@ -141,25 +145,25 @@ TEST(CommandBufferResourceReferences, IndirectOwnershipDoesNotPreventLaterOwning
 TEST(CommandBufferResourceReferences, PendingStateDiscardAllowsFreshOrderedJournalWithoutReleasingOwners){
     ReferencesContext context;
     context.addBuffers(3u);
-    context.references.appendBufferStateCommit(*context.buffers[2u]);
+    context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
-    context.references.appendBufferStateCommit(*context.buffers[2u]);
+    context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
     const auto& first = Access::retainedBufferStateCommits(context.references);
-    ASSERT_EQ(first.size(), 2u);
-    EXPECT_EQ(first[0u].buffer, context.buffers[2u].get());
+    ASSERT_EQ(first.size(), s_ExpectedDualCount);
+    EXPECT_EQ(first[0u].buffer, context.buffers[s_ThirdElementIndex].get());
     EXPECT_EQ(first[1u].buffer, context.buffers[0u].get());
     context.references.discardBufferStateCommits();
     EXPECT_TRUE(Access::retainedBufferStateCommits(context.references).empty());
-    EXPECT_EQ(context.buffers[2u]->getReferenceCount(), 2u);
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[s_ThirdElementIndex]->getReferenceCount(), s_ExpectedDualCount);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
-    context.references.appendBufferStateCommit(*context.buffers[2u]);
+    context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
     context.references.appendBufferStateCommit(*context.buffers[1u]);
     const auto& second = Access::retainedBufferStateCommits(context.references);
     ASSERT_EQ(second.size(), 3u);
     EXPECT_EQ(second[0u].buffer, context.buffers[0u].get());
-    EXPECT_EQ(second[1u].buffer, context.buffers[2u].get());
-    EXPECT_EQ(second[2u].buffer, context.buffers[1u].get());
+    EXPECT_EQ(second[1u].buffer, context.buffers[s_ThirdElementIndex].get());
+    EXPECT_EQ(second[s_ThirdElementIndex].buffer, context.buffers[1u].get());
     context.references.clear();
     EXPECT_TRUE(Access::retainedBufferStateCommits(context.references).empty());
     for(const Core::BufferHandle& buffer : context.buffers)
@@ -190,7 +194,7 @@ TEST(CommandBufferResourceReferences, ClearAndReusePreserveMembershipAcrossGrowt
     EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 192u);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 3u);
     context.references.clear();
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     EXPECT_EQ(Access::retainedResources(independent).size(), 1u);
     independent.clear();
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
@@ -250,10 +254,10 @@ TEST(CommandBufferResourceReferences, TexturePromotionPreservesEveryPreexistingM
     EXPECT_EQ(Access::retainedResources(context.references).size(), 1u);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 1u);
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.retainTexture(*context.textures[0u]);
     EXPECT_EQ(Access::retainedTextures(context.references).size(), 33u);
-    EXPECT_EQ(context.textures[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.textures[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.retainBuffer(*context.buffers[32u]);
     EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 66u);
 
@@ -265,7 +269,7 @@ TEST(CommandBufferResourceReferences, TexturePromotionPreservesEveryPreexistingM
     EXPECT_EQ(commits.front().buffer, context.buffers.back().get());
     EXPECT_EQ(commits.back().buffer, context.buffers.front().get());
     for(const Core::BufferHandle& buffer : context.buffers)
-        EXPECT_EQ(buffer->getReferenceCount(), 2u);
+        EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     context.references.clear();
     EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 0u);
     context.recordResources();
@@ -287,7 +291,7 @@ TEST(CommandBufferResourceReferences, OwningPromotionKeepsUntypedOwnersAliveUnti
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     EXPECT_EQ(Access::retainedBuffers(context.references).size(), 1u);
     EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 1u);
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
 
     Core::Buffer* const retainedBuffer = context.buffers[0u].get();
     context.buffers.clear();
@@ -351,9 +355,9 @@ static void BenchmarkReferences(const usize bufferCount, const usize textureCoun
     EXPECT_EQ(Access::retainedResources(context.references).size(), bufferCount + textureCount);
     EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), bufferCount);
     for(const Core::BufferHandle& buffer : context.buffers)
-        EXPECT_EQ(buffer->getReferenceCount(), 2u);
+        EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     for(const Core::TextureHandle& texture : context.textures)
-        EXPECT_EQ(texture->getReferenceCount(), 2u);
+        EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
 
     const ArenaMemoryStats stats = context.testArena.arena.memoryStats();
     char coldText[32u] = {};

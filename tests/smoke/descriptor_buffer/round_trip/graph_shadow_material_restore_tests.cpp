@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -322,7 +326,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
     ASSERT_EQ(commandIrCapture.recordCount(), 3u);
     const GpuCommandIrBuiltinTaskRecord* const statsClearCapture = commandIrCapture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const counterClearCapture = commandIrCapture.recordAt(1u);
-    const GpuCommandIrBuiltinTaskRecord* const statsCopyCapture = commandIrCapture.recordAt(2u);
+    const GpuCommandIrBuiltinTaskRecord* const statsCopyCapture = commandIrCapture.recordAt(s_ThirdElementIndex);
     ASSERT_NE(statsClearCapture, nullptr);
     ASSERT_NE(counterClearCapture, nullptr);
     ASSERT_NE(statsCopyCapture, nullptr);
@@ -521,7 +525,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadSnapshotWritesComple
     EXPECT_TRUE(recordAttempted);
     EXPECT_TRUE(allBlobsMatched);
     EXPECT_EQ(matchedBlobCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount);
-    EXPECT_EQ(transitionAttemptCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount * 2u);
+    EXPECT_EQ(transitionAttemptCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount * s_ExpectedDualCount);
     EXPECT_EQ(writeAttemptCount, GraphOwnedBufferUploadSnapshotTask::s_StreamCount);
     EXPECT_FALSE(acceptedToken.valid());
     EXPECT_EQ(discardedCount, 0u);
@@ -639,7 +643,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedBufferUploadSnapshotRejectsMisma
     u32 sourceWords[GraphOwnedBufferUploadSnapshotTask::s_StreamCount]
         [GraphOwnedBufferUploadSnapshotTask::s_WordCount] = {};
     NWB_MEMCPY(sourceWords, sizeof(sourceWords), s_ExpectedWords, sizeof(s_ExpectedWords));
-    sourceWords[2u][GraphOwnedBufferUploadSnapshotTask::s_WordCount - 1u] ^= 0xffffffffu;
+    sourceWords[s_ThirdElementIndex][GraphOwnedBufferUploadSnapshotTask::s_WordCount - 1u] ^= 0xffffffffu;
 
     bool recordAttempted = false;
     bool allBlobsMatched = false;
@@ -988,8 +992,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
     ASSERT_TRUE(lightingPacket.valid());
     EXPECT_EQ(clearPacket, shadowPacket);
     EXPECT_NE(lightingPacket, shadowPacket);
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
-    ASSERT_EQ(views.compiled.packet(shadowPacket).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
+    ASSERT_EQ(views.compiled.packet(shadowPacket).plan->taskCount, s_ExpectedDualCount);
     const GpuTaskId* const shadowPacketTasks = views.compiled.packet(shadowPacket).tasks;
     ASSERT_NE(shadowPacketTasks, nullptr);
     EXPECT_EQ(shadowPacketTasks[0u], allLitClear);

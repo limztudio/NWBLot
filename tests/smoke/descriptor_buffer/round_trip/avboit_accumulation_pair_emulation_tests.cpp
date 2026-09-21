@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -350,7 +354,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamPayload;
     streamPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamPayload.expectationCount = 2u;
+    streamPayload.expectationCount = s_ExpectedDualCount;
     streamPayload.recordOrdinal = &recordOrdinal;
     streamPayload.expectedOrdinal = 1u;
     streamPayload.timingTicket = &preTimingTicket;
@@ -382,7 +386,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     };
     GpuTaskId sharedPhaseTasks[LengthOf(sharedPhaseIdentities)] = {};
     for(usize phaseIndex = 0u; phaseIndex < LengthOf(sharedPhaseTasks); ++phaseIndex){
-        const bool isRaster = phaseIndex % 2u != 0u;
+        const bool isRaster = phaseIndex % s_ExpectedDualCount != 0u;
         const GpuTaskId dependency = phaseIndex == 0u ? streamTask : sharedPhaseTasks[phaseIndex - 1u];
         GpuTaskDesc phaseDesc;
         phaseDesc
@@ -399,7 +403,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         NativePacketAsyncAvboitExtinctionLifecycleTask::Payload phasePayload;
         phasePayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
         phasePayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-        phasePayload.expectations[2u] = {
+        phasePayload.expectations[s_ThirdElementIndex] = {
             generatedVertex.get(),
             isRaster ? ResourceStates::VertexBuffer : ResourceStates::UnorderedAccess,
         };
@@ -407,11 +411,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
         if(isRaster){
             phasePayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::RenderTarget };
             phasePayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::RenderTarget };
-            phasePayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::DepthRead };
+            phasePayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::DepthRead };
             phasePayload.textureExpectationCount = 3u;
         }
         phasePayload.recordOrdinal = &recordOrdinal;
-        phasePayload.expectedOrdinal = static_cast<u32>(phaseIndex + 2u);
+        phasePayload.expectedOrdinal = static_cast<u32>(phaseIndex + s_ExpectedDualCount);
         phasePayload.device = &device;
         phasePayload.timing = &timing;
         phasePayload.timingTicket = &preTimingTicket;
@@ -431,7 +435,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     }
     const GpuTaskId dispatchATask = sharedPhaseTasks[0u];
     const GpuTaskId rasterATask = sharedPhaseTasks[1u];
-    const GpuTaskId dispatchBTask = sharedPhaseTasks[2u];
+    const GpuTaskId dispatchBTask = sharedPhaseTasks[s_ThirdElementIndex];
     const GpuTaskId rasterBTask = sharedPhaseTasks[3u];
 
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload finalizerPayload;
@@ -439,7 +443,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     finalizerPayload.expectationCount = 1u;
     finalizerPayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::ShaderResource };
-    finalizerPayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::ShaderResource };
+    finalizerPayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectationCount = 3u;
     finalizerPayload.recordOrdinal = &recordOrdinal;
     finalizerPayload.expectedOrdinal = 6u;
@@ -487,7 +491,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationSharedO
     ASSERT_EQ(analysis.topologicalOrder().size(), 7u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], preTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], streamTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], dispatchATask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], dispatchATask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], rasterATask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], dispatchBTask);
     EXPECT_EQ(analysis.topologicalOrder()[5u], rasterBTask);

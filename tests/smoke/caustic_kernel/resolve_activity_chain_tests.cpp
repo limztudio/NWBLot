@@ -22,6 +22,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -114,7 +117,7 @@ void FillInputs(
             else if((pattern == Pattern::Impulse && impulse) || (pattern == Pattern::GroupEdges && boundary))
                 color = Pixel(128.0f, 64.0f, 32.0f, 7.0f);
             else if(pattern == Pattern::Underflow && impulse)
-                color = { 1u, 2u, 3u, ConvertFloatToHalf(7.0f) };
+                color = { 1u, s_ExpectedDualCount, 3u, ConvertFloatToHalf(7.0f) };
             if(pattern == Pattern::InvalidGeometry && (x + 3u * y) % 5u == 0u){
                 world = Pixel(32.0f, 16.0f, 8.0f, 0.0f);
                 // Invalid samples retain arbitrary coordinates, which still affect the right-neighbor spacing.
@@ -122,9 +125,9 @@ void FillInputs(
                     world.r = 0x7e00u;
             }
             if(pattern == Pattern::SignedAndNonfinite){
-                if((x + 2u * y) % 3u == 0u)
+                if((x + s_ExpectedDualCount * y) % 3u == 0u)
                     color.r = ConvertFloatToHalf(-1.0f);
-                if(x == width / 2u && y == height / 2u){
+                if(x == width / s_ExpectedDualCount && y == height / s_ExpectedDualCount){
                     color.r = 0x7e00u;
                     color.g = 0x7c00u;
                     color.b = 0xfc00u;
@@ -173,8 +176,8 @@ void RunChain(
     const TextureHandle sources[] = { device.createTexture(sourceDesc), device.createTexture(sourceDesc) };
     TextureDesc outputDesc = sourceDesc;
     outputDesc
-        .setWidth(width + 2u)
-        .setHeight(height + 2u)
+        .setWidth(width + s_ExpectedDualCount)
+        .setHeight(height + s_ExpectedDualCount)
         .setInUAV(true)
     ;
     TextureHandle outputs[4];
@@ -270,17 +273,17 @@ void RunChain(
         commands->setTextureState(accumulator.get(), s_AllSubresources, ResourceStates::ShaderResource);
         for(const auto& output : outputs)
             commands->clearTextureFloat(*output, s_AllSubresources, Color(19.0f));
-        for(u32 arm = 0u; arm < 2u; ++arm){
+        for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
             for(u32 stage = 0u; stage < s_Stages; ++stage){
-                const u32 outputIndex = arm * 2u + stage % 2u;
-                const u32 inputIndex = arm * 2u + (stage + 1u) % 2u;
+                const u32 outputIndex = arm * s_ExpectedDualCount + stage % s_ExpectedDualCount;
+                const u32 inputIndex = arm * s_ExpectedDualCount + (stage + 1u) % s_ExpectedDualCount;
                 if(stage != 0u)
                     commands->setTextureState(outputs[inputIndex].get(), s_AllSubresources, ResourceStates::ShaderResource);
                 commands->setTextureState(outputs[outputIndex].get(), s_AllSubresources, ResourceStates::UnorderedAccess, true);
                 if(arm == 1u){
                     if(stage != 0u)
                         commands->setBufferState(masks[stage - 1u].get(), ResourceStates::ShaderResource);
-                    if(stage != 2u)
+                    if(stage != s_ExpectedDualCount)
                         commands->setBufferState(masks[stage].get(), ResourceStates::UnorderedAccess, true);
                 }
                 commands->commitBarriers();
@@ -290,14 +293,14 @@ void RunChain(
                 commands->setComputeState(state);
                 heap.bindCompute(*commands, pipeline);
                 const ResolvePushConstants push{
-                    width * 2u, height * 2u, width, height, 1.0f, 4u << stage,
+                    width * s_ExpectedDualCount, height * s_ExpectedDualCount, width, height, 1.0f, 4u << stage,
                     NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, 0u,
                     descriptors[1].slot(), descriptors[1].slot(),
                     stage == 0u ? descriptors[0].slot() : descriptors[3u + inputIndex].slot(),
                     descriptors[1].slot(), descriptors[2].slot(), descriptors[7u + outputIndex].slot(),
                     arm == 1u && stage != 0u && inputMapAvailable
                         ? descriptors[10u + stage].slot() : NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT,
-                    arm == 1u && stage != 2u ? descriptors[11u + stage].slot() : NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT,
+                    arm == 1u && stage != s_ExpectedDualCount ? descriptors[11u + stage].slot() : NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT,
                 };
                 commands->setPushConstants(&push, sizeof(push));
                 commands->dispatch(tilesX, tilesY, 1u);
@@ -329,23 +332,23 @@ void RunChain(
             usize pitches[2]{};
             const u8* mapped[2]{};
             ScopeExit unmapImages([&]()noexcept{
-                for(u32 arm = 0u; arm < 2u; ++arm){
+                for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                     if(mapped[arm])
                         device.unmapStagingTexture(*readbacks[arm][stage]);
                 }
             });
-            for(u32 arm = 0u; arm < 2u; ++arm){
+            for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                 mapped[arm] = static_cast<const u8*>(device.mapStagingTexture(*readbacks[arm][stage], TextureSlice{}, CpuAccessMode::Read, &pitches[arm]));
                 ASSERT_NE(mapped[arm], nullptr);
-                ASSERT_GE(pitches[arm], (width + 2u) * sizeof(HalfPixel));
+                ASSERT_GE(pitches[arm], (width + s_ExpectedDualCount) * sizeof(HalfPixel));
             }
             for(auto& flag : expectedFlags)
                 flag = 0u;
             usize activePixels = 0u;
-            for(u32 y = 0u; y < height + 2u; ++y){
-                for(u32 x = 0u; x < width + 2u; ++x){
+            for(u32 y = 0u; y < height + s_ExpectedDualCount; ++y){
+                for(u32 x = 0u; x < width + s_ExpectedDualCount; ++x){
                     HalfPixel actual[2];
-                    for(u32 arm = 0u; arm < 2u; ++arm)
+                    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm)
                         NWB_MEMCPY(&actual[arm], sizeof(HalfPixel), mapped[arm] + y * pitches[arm] + x * sizeof(HalfPixel), sizeof(HalfPixel));
                     EXPECT_EQ(actual[1].r, actual[0].r) << x << "," << y;
                     EXPECT_EQ(actual[1].g, actual[0].g) << x << "," << y;
@@ -367,13 +370,13 @@ void RunChain(
                         EXPECT_EQ(actual[1].b, 0u);
                     }
                     // Three maximum-offset taps connect (64,64) to (8,8): 8 + 16 + 32 pixels.
-                    if(pattern == Pattern::Impulse && width > 64u && height > 64u && stage == 2u && x == 8u && y == 8u)
+                    if(pattern == Pattern::Impulse && width > 64u && height > 64u && stage == s_ExpectedDualCount && x == 8u && y == 8u)
                         EXPECT_GT(ConvertHalfToFloat(actual[1].r), 0.0f);
                 }
             }
             if(pattern == Pattern::Impulse || pattern == Pattern::Dense || pattern == Pattern::GroupEdges)
                 EXPECT_GT(activePixels, 0u);
-            if(stage != 2u){
+            if(stage != s_ExpectedDualCount){
                 usize inactiveTiles = 0u;
                 for(u32 index = 0u; index < tileCount; ++index){
                     EXPECT_EQ(mappedMasks[stage][index], expectedFlags[index]) << "tile " << index;

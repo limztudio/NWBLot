@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -122,7 +126,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
         .resource = skinnedNormalResource,
         .state = ResourceStates::UnorderedAccess,
     };
-    deformationPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+    deformationPayload.expectations[s_ThirdElementIndex] = SkinningGraphStateProbeTask::Expectation{
         .resource = skinnedTangentResource,
         .state = ResourceStates::UnorderedAccess,
     };
@@ -181,7 +185,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
         .resource = skinnedNormalResource,
         .state = ResourceStates::ShaderResource,
     };
-    postDispatchPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+    postDispatchPayload.expectations[s_ThirdElementIndex] = SkinningGraphStateProbeTask::Expectation{
         .resource = meshletBoundsResource,
         .state = ResourceStates::UnorderedAccess,
     };
@@ -232,7 +236,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
         .resource = localBoundsResource,
         .state = ResourceStates::UnorderedAccess,
     };
-    localBoundsPayload.expectationCount = 2u;
+    localBoundsPayload.expectationCount = s_ExpectedDualCount;
     localBoundsPayload.recorded = &localBoundsObservedStates;
     localBoundsPayload.acceptedToken = &localBoundsAcceptedToken;
     const GpuTaskId localBoundsTask = graph.addTask<SkinningGraphStateProbeTask>(
@@ -302,7 +306,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
         .resource = skinnedNormalResource,
         .state = ResourceStates::ShaderResource,
     };
-    finalizerPayload.expectations[2u] = SkinningGraphStateProbeTask::Expectation{
+    finalizerPayload.expectations[s_ThirdElementIndex] = SkinningGraphStateProbeTask::Expectation{
         .resource = skinnedTangentResource,
         .state = ResourceStates::ShaderResource,
     };
@@ -402,7 +406,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     ASSERT_TRUE(compiledFinalizer.valid());
     EXPECT_EQ(compiledDeformation.plan->prologueBarrierCount, 3u);
     ASSERT_EQ(compiledPostDispatch.plan->prologueBarrierCount, 5u);
-    ASSERT_EQ(compiledLocalBounds.plan->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledLocalBounds.plan->prologueBarrierCount, s_ExpectedDualCount);
     ASSERT_EQ(compiledFinalizer.plan->prologueBarrierCount, 4u);
     const GpuCompiledBarrier* const postDispatchBarriers = views.compiled.findTask(postDispatchTask).prologueBarriers;
     const GpuCompiledBarrier* const localBoundsBarriers = compiledLocalBounds.prologueBarriers;
@@ -438,10 +442,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningDeformationHandoffStaysI
     EXPECT_EQ(finalizerBarriers[1u].resource, meshletBoundsResource);
     EXPECT_EQ(finalizerBarriers[1u].before, ResourceStates::UnorderedAccess);
     EXPECT_EQ(finalizerBarriers[1u].after, ResourceStates::ShaderResource);
-    EXPECT_EQ(finalizerBarriers[2u].type, GpuCompiledBarrierType::BufferTransition);
-    EXPECT_EQ(finalizerBarriers[2u].resource, attributesResource);
-    EXPECT_EQ(finalizerBarriers[2u].before, ResourceStates::UnorderedAccess);
-    EXPECT_EQ(finalizerBarriers[2u].after, ResourceStates::ShaderResource);
+    EXPECT_EQ(finalizerBarriers[s_ThirdElementIndex].type, GpuCompiledBarrierType::BufferTransition);
+    EXPECT_EQ(finalizerBarriers[s_ThirdElementIndex].resource, attributesResource);
+    EXPECT_EQ(finalizerBarriers[s_ThirdElementIndex].before, ResourceStates::UnorderedAccess);
+    EXPECT_EQ(finalizerBarriers[s_ThirdElementIndex].after, ResourceStates::ShaderResource);
     EXPECT_EQ(finalizerBarriers[3u].type, GpuCompiledBarrierType::BufferTransition);
     EXPECT_EQ(finalizerBarriers[3u].resource, localBoundsResource);
     EXPECT_EQ(finalizerBarriers[3u].before, ResourceStates::UnorderedAccess);

@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -242,7 +246,7 @@ TEST(GpuTaskGraph, RejectsMalformedBufferRangesAndDetectsTextureOverlap){
     const Graphics::GpuGraphResourceId texture = graph.importResource(textureDesc);
     ASSERT_TRUE(texture.valid());
     Graphics::GpuTaskResourceRange firstTextureRange;
-    firstTextureRange.textureSubresources = Graphics::TextureSubresourceSet(0u, 2u, 0u, 1u);
+    firstTextureRange.textureSubresources = Graphics::TextureSubresourceSet(0u, s_ExpectedDualCount, 0u, 1u);
     Graphics::GpuTaskResourceRange secondTextureRange;
     secondTextureRange.textureSubresources = Graphics::TextureSubresourceSet(1u, 1u, 0u, 1u);
     const Graphics::GpuTaskResourceUse firstTextureUse{
@@ -564,9 +568,9 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     EXPECT_EQ(analysis.edges()[0u].consumer, second);
     EXPECT_EQ(analysis.edges()[1u].producer, second);
     EXPECT_EQ(analysis.edges()[1u].consumer, third);
-    EXPECT_EQ(analysis.edges()[2u].producer, first);
-    EXPECT_EQ(analysis.edges()[2u].consumer, third);
-    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    EXPECT_EQ(analysis.edges()[s_ThirdElementIndex].producer, first);
+    EXPECT_EQ(analysis.edges()[s_ThirdElementIndex].consumer, third);
+    ASSERT_EQ(analysis.schedulingEdges().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.schedulingEdges()[0u].producer, first);
     EXPECT_EQ(analysis.schedulingEdges()[0u].consumer, second);
     EXPECT_EQ(analysis.schedulingEdges()[1u].producer, second);
@@ -615,7 +619,7 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     Graphics::GpuCompiledGraph scoredGraph(testArena.arena);
     ASSERT_TRUE(Compile(graph, scoredAnalysis, topology, scoredAssignments, scoredGraph, scoredOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(scoredGraph);
-    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
     const Graphics::GpuSubmissionPacketId scoredFirstPacket = compiledPlan.packetForTask(first);
     const Graphics::GpuSubmissionPacketId scoredSecondPacket = compiledPlan.packetForTask(second);
     const Graphics::GpuSubmissionPacketId scoredThirdPacket = compiledPlan.packetForTask(third);
@@ -636,7 +640,7 @@ TEST(GpuTaskGraph, ReducesDenseLayeredDagAndPreservesStableTopologicalOrder){
     constexpr usize s_LayerWidth = 16u;
     constexpr usize s_TaskCount = s_LayerCount * s_LayerWidth;
     constexpr usize s_RawEdgeCount = 3u * s_LayerWidth * s_LayerWidth;
-    constexpr usize s_SchedulingEdgeCount = 2u * s_LayerWidth * s_LayerWidth;
+    constexpr usize s_SchedulingEdgeCount = s_ExpectedDualCount * s_LayerWidth * s_LayerWidth;
 
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
@@ -788,7 +792,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         const Name taskBaseName("tests/task_graph/packed_reachability_task_");
         char taskIndexBuffer[32u] = {};
         for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-            const Graphics::GpuTaskId* const dependency = taskIndex >= 2u ? &tasks[taskIndex - 2u] : nullptr;
+            const Graphics::GpuTaskId* const dependency = taskIndex >= s_ExpectedDualCount ? &tasks[taskIndex - s_ExpectedDualCount] : nullptr;
             tasks[taskIndex] = AddTask(
                 graph,
                 DeriveName(taskBaseName, FormatDecimal(taskIndex, taskIndexBuffer)),
@@ -816,8 +820,8 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
             graphGeneration = declarations.generation();
         }
 
-        const usize lastEvenTask = (taskCount & 1u) != 0u ? taskCount - 1u : taskCount - 2u;
-        const usize lastOddTask = (taskCount & 1u) != 0u ? taskCount - 2u : taskCount - 1u;
+        const usize lastEvenTask = (taskCount & 1u) != 0u ? taskCount - 1u : taskCount - s_ExpectedDualCount;
+        const usize lastOddTask = (taskCount & 1u) != 0u ? taskCount - s_ExpectedDualCount : taskCount - 1u;
         EXPECT_TRUE(reachability.reaches(tasks[0u], tasks[lastEvenTask]));
         EXPECT_FALSE(reachability.reaches(tasks[lastEvenTask], tasks[0u]));
         EXPECT_TRUE(reachability.reaches(tasks[1u], tasks[lastOddTask]));
@@ -831,7 +835,7 @@ TEST(GpuTaskGraph, PackedSchedulingReachabilityPreservesStrictClosureAcrossWordB
         const usize boundaryConsumer = taskCount - 1u;
         EXPECT_TRUE(reachability.reaches(tasks[boundaryProducer], tasks[boundaryConsumer]));
         EXPECT_FALSE(reachability.reaches(tasks[boundaryConsumer], tasks[boundaryProducer]));
-        EXPECT_TRUE(reachability.transitivelyIndependent(tasks[taskCount - 2u], tasks[boundaryConsumer]));
+        EXPECT_TRUE(reachability.transitivelyIndependent(tasks[taskCount - s_ExpectedDualCount], tasks[boundaryConsumer]));
         if(taskCount >= 127u){
             const usize secondWordProducer = taskCount - 63u;
             EXPECT_TRUE(reachability.reaches(tasks[secondWordProducer], tasks[boundaryConsumer]));
@@ -916,7 +920,7 @@ TEST(GpuTaskGraph, TracksOnlyTheNearestWholeResourceWriters){
     EXPECT_NE(FindEdge(analysis, first, second), nullptr);
     EXPECT_NE(FindEdge(analysis, second, third), nullptr);
     EXPECT_EQ(FindEdge(analysis, first, third), nullptr);
-    ASSERT_EQ(analysis.inferredEdges().size(), 2u);
+    ASSERT_EQ(analysis.inferredEdges().size(), s_ExpectedDualCount);
     EXPECT_TRUE(HasInferredHazard(
         analysis,
         first,
@@ -988,7 +992,7 @@ TEST(GpuTaskGraph, UsesTheFullExplicitOrderToOrientInferredHazards){
 
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId futureThird{ .generation = graphGeneration, .index = 2u };
+    const Graphics::GpuTaskId futureThird{ .generation = graphGeneration, .index = s_ExpectedDualCount };
     const Graphics::GpuTaskId first = AddTask(
         graph,
         Name("tests/task_graph/explicit_first"),
@@ -1134,7 +1138,7 @@ TEST(GpuTaskGraph, RejectsExplicitCyclesAndExportsExternalMetadata){
         ASSERT_TRUE(declarations.valid());
         EXPECT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, telemetryScratchArena));
     }
-    ASSERT_EQ(nodes.size(), 2u);
+    ASSERT_EQ(nodes.size(), s_ExpectedDualCount);
     ASSERT_EQ(edges.size(), 1u);
     EXPECT_EQ(edges[0].kind, Telemetry::FrameGraphEdgeKind::DependsOn);
 

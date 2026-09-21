@@ -22,6 +22,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -336,7 +340,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     ASSERT_NE(views.compiled.packet(packet).tasks, nullptr);
     EXPECT_EQ(views.compiled.packet(packet).tasks[0u], meshViewSetupTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[1u], sceneSetupTask);
-    EXPECT_EQ(views.compiled.packet(packet).tasks[2u], clearTask);
+    EXPECT_EQ(views.compiled.packet(packet).tasks[s_ThirdElementIndex], clearTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[3u], gbufferTask);
     EXPECT_EQ(views.compiled.packet(packet).tasks[4u], normalizeTask);
     EXPECT_TRUE(views.declarations.taskAt(meshViewSetupTask.index).hasPayload);
@@ -447,7 +451,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     NativeTaskAcceptanceObserver normalizeAcceptance{
         .lastToken = {},
         .order = &taskAcceptanceOrder,
-        .orderMarker = 2u,
+        .orderMarker = s_ExpectedDualCount,
     };
     const GpuTaskGraphTaskAcceptedCallback taskAcceptedCallbacks[] = {
         GpuTaskGraphTaskAcceptedCallback{
@@ -485,9 +489,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
     EXPECT_EQ(normalizeAcceptance.acceptedCount, 1u);
     EXPECT_EQ(meshViewSetupAcceptance.lastToken.value, packetToken.value);
     EXPECT_EQ(normalizeAcceptance.lastToken.value, packetToken.value);
-    EXPECT_EQ(taskAcceptanceOrder.invocationCount, 2u);
+    EXPECT_EQ(taskAcceptanceOrder.invocationCount, s_ExpectedDualCount);
     EXPECT_EQ(taskAcceptanceOrder.markers[0u], 1u);
-    EXPECT_EQ(taskAcceptanceOrder.markers[1u], 2u);
+    EXPECT_EQ(taskAcceptanceOrder.markers[1u], s_ExpectedDualCount);
     EXPECT_TRUE(device.waitForIdle());
 }
 

@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -97,10 +100,10 @@ TEST(GpuCommandIrStreamReader, DecodesTheCompleteBuiltinPodStream){
     ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
     EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
     EXPECT_EQ(record.destination, s_CommandIrDestination);
-    EXPECT_EQ(record.destinationSubresources, Graphics::TextureSubresourceSet(2u, 3u, 4u, 5u));
+    EXPECT_EQ(record.destinationSubresources, Graphics::TextureSubresourceSet(s_ExpectedDualCount, 3u, 4u, 5u));
     EXPECT_EQ(record.clearTextureValueType, Graphics::GpuClearTextureTaskValueType::DepthStencil);
     EXPECT_EQ(record.floatClearValue, Graphics::Color(0.25f, 0.5f, 0.75f, 1.f));
-    EXPECT_EQ(record.uintClearValue, Graphics::UIntColor(2u, 3u, 5u, 7u));
+    EXPECT_EQ(record.uintClearValue, Graphics::UIntColor(s_ExpectedDualCount, 3u, 5u, 7u));
     EXPECT_EQ(record.intClearValue, Graphics::IntColor(-2, -3, -5, -7));
     EXPECT_EQ(record.depthClearValue, 0.125f);
     EXPECT_EQ(record.stencilClearValue, 19u);
@@ -120,7 +123,7 @@ TEST(GpuCommandIrStreamReader, DecodesCanonicalColorAndSingleAspectClearRecords)
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.destination = s_CommandIrDestination;
-    clearTexture.subresources = Graphics::TextureSubresourceSet(1u, 2u, 3u, 4u);
+    clearTexture.subresources = Graphics::TextureSubresourceSet(1u, s_ExpectedDualCount, 3u, 4u);
     // The legacy capture record keeps these descriptor values, while the POD stream must canonicalize them away for
     // color clears because native color-clear lowering ignores depth/stencil aspect selection.
     clearTexture.clearDepth = true;
@@ -347,7 +350,7 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
             Limit<u32>::s_Max
         );
     }, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
-    expectRecordError(2u, s_CommandIrClearBufferOffset, [](Graphics::GraphicsBytes& bytes){
+    expectRecordError(s_ExpectedDualCount, s_CommandIrClearBufferOffset, [](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(
             bytes,
             s_CommandIrClearBufferOffset + offsetof(Graphics::GpuCommandIrClearBufferRecord, destinationResourceIndex),
@@ -414,7 +417,7 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
         WriteCommandIrPod(
             bytes,
             offsetof(Graphics::GpuCommandIrStreamHeader, recordCount),
-            2u
+            s_ExpectedDualCount
         );
         WriteCommandIrPod(
             bytes,

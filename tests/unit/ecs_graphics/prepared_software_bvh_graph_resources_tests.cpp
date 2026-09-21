@@ -19,6 +19,10 @@
 namespace __hidden_prepared_software_bvh_graph_resources_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -89,13 +93,13 @@ struct BuildContext{
         build.meshName = DeriveName(Name("tests/prepared_sw_bvh/mesh"), FormatDecimal(ordinal, indexText));
         build.positionBuffer = buffers[privateFirst];
         build.triangleIndexBuffer = buffers[privateFirst + 1u];
-        build.nodeBuffer = buffers[privateFirst + 2u];
+        build.nodeBuffer = buffers[privateFirst + s_ExpectedDualCount];
         build.parentBuffer = buffers[privateFirst + 3u];
         build.sortKeysBuffer = buffers[sharedFirst];
         build.sortPayloadBuffer = buffers[sharedFirst + 1u];
-        build.visitCounterBuffer = buffers[sharedFirst + 2u];
+        build.visitCounterBuffer = buffers[sharedFirst + s_ExpectedDualCount];
         build.positionHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u);
-        build.triangleIndexHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 2u);
+        build.triangleIndexHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
         build.nodeHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 3u);
         build.parentHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 4u);
         build.sortKeysHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 5u);
@@ -114,9 +118,9 @@ struct BuildContext{
         build.sortPayloadByteSize = 192u + ordinal;
         build.visitCounterByteSize = 224u + ordinal;
         build.primitiveCount = static_cast<u32>(ordinal + 5u);
-        build.refitsBeforeBuild = static_cast<u32>(ordinal + 2u);
+        build.refitsBeforeBuild = static_cast<u32>(ordinal + s_ExpectedDualCount);
         build.refitsAfterBuild = static_cast<u32>(ordinal + 3u);
-        build.runtimeMesh = ordinal % 2u != 0u;
+        build.runtimeMesh = ordinal % s_ExpectedDualCount != 0u;
         build.buildPending = ordinal % 3u != 0u;
         build.firstBuild = ordinal % 5u != 0u;
         build.performRefit = ordinal % 7u != 0u;
@@ -197,7 +201,7 @@ TEST(PreparedSoftwareBvhGraphResources, ResolvesAllRolesAndPreservesRepeatedBuil
     resources.reserve(context.builds.size());
     ASSERT_TRUE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
     ASSERT_NO_FATAL_FAILURE(ExpectRows(context, resources));
-    EXPECT_EQ(resources[0u].position, resources[2u].position);
+    EXPECT_EQ(resources[0u].position, resources[s_ThirdElementIndex].position);
     EXPECT_NE(resources[0u].position, resources[1u].position);
     EXPECT_EQ(resources[0u].sortKeys, resources[1u].sortKeys);
     EXPECT_EQ(resources[0u].sortPayload, resources[1u].sortPayload);
@@ -224,7 +228,7 @@ TEST(PreparedSoftwareBvhGraphResources, AnyMissingRoleDiscardsEveryPreparedRowWi
             EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
             EXPECT_TRUE(resources.empty());
             if(missing)
-                EXPECT_EQ(missing->getReferenceCount(), 2u);
+                EXPECT_EQ(missing->getReferenceCount(), s_ExpectedDualCount);
             const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
             ASSERT_TRUE(view.valid());
             EXPECT_EQ(view.resourceCount(), 7u);
@@ -339,7 +343,7 @@ TEST(PreparedSoftwareBvhGraphResources, LargePermutedRequestsRetainOrderAndLateF
     context.builds.back().visitCounterBuffer = missing;
     EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
     EXPECT_TRUE(resources.empty());
-    EXPECT_EQ(missing->getReferenceCount(), 2u);
+    EXPECT_EQ(missing->getReferenceCount(), s_ExpectedDualCount);
 }
 
 TEST(PreparedSoftwareBvhGraphResources, UniqueAndRepeatedRequestsDoNotAllocateBeyondReservedOutput){
@@ -432,7 +436,7 @@ static void BenchmarkGraphResources(
     EXPECT_EQ(view.resourceCount(), bufferCount);
     if(lateMissing){
         EXPECT_FALSE(view.findImportedBuffer(missing).valid());
-        EXPECT_EQ(missing->getReferenceCount(), 2u);
+        EXPECT_EQ(missing->getReferenceCount(), s_ExpectedDualCount);
     }
     RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_ns"), elapsed);
     RecordUnsignedProperty(MakeNotNull("sw_bvh_resource_lookup_iterations"), iterations);

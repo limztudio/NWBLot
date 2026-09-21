@@ -17,6 +17,10 @@
 namespace __hidden_allocator_propagation_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -444,7 +448,7 @@ TEST(AllocatorPropagation, SameArenaSwapsAndHashMapMovesKeepStorageOwners){
         Vector<u32, GlobalArena> first{ arena };
         Vector<u32, GlobalArena> second{ arena };
         first.assign(64u, 1u);
-        second.assign(96u, 2u);
+        second.assign(96u, s_ExpectedDualCount);
         const u32* const firstStorage = first.data();
         const u32* const secondStorage = second.data();
         ASSERT_EQ(first.get_allocator(), second.get_allocator());
@@ -461,11 +465,11 @@ TEST(AllocatorPropagation, SameArenaSwapsAndHashMapMovesKeepStorageOwners){
         HashMap<u32, u32, GlobalArena> firstMap{ arena };
         HashMap<u32, u32, GlobalArena> secondMap{ arena };
         firstMap.emplace(1u, 11u);
-        secondMap.emplace(2u, 22u);
+        secondMap.emplace(s_ExpectedDualCount, 22u);
         firstMap.swap(secondMap);
-        EXPECT_EQ(firstMap.at(2u), 22u);
+        EXPECT_EQ(firstMap.at(s_ThirdElementIndex), 22u);
         secondMap = Move(firstMap);
-        EXPECT_EQ(secondMap.at(2u), 22u);
+        EXPECT_EQ(secondMap.at(s_ThirdElementIndex), 22u);
         EXPECT_EQ(secondMap.get_allocator().arenaPtr(), &arena);
     }
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);

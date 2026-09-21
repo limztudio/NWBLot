@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -109,7 +112,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorSubmitsOrdinaryPrefix){
     ASSERT_EQ(views.compiled.packetCount(), 3u);
     EXPECT_EQ(views.compiled.packetIdAt(0u), firstPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), secondPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), frontierPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), frontierPacket);
     EXPECT_TRUE(views.compiled.packet(frontierPacket).plan->joinsAcceptedQueueFrontier);
     EXPECT_FALSE(views.compiled.packet(frontierPacket).plan->isRecoverySubmission);
 
@@ -305,7 +308,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorStopsAtSemanticTerminal
     ASSERT_EQ(views.compiled.packetCount(), 4u);
     EXPECT_EQ(views.compiled.packetIdAt(0u), prefixPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), terminalPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), lateTailPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), lateTailPacket);
     EXPECT_EQ(views.compiled.packetIdAt(3u), frontierPacket);
 
     const GpuNativePacketRecorder recorder(device);

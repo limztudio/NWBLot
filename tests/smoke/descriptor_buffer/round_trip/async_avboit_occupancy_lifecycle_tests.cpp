@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -250,9 +254,9 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload occupancyPayload;
     occupancyPayload.expectations[0u] = { generatedVertex.get(), ResourceStates::VertexBuffer };
     occupancyPayload.expectations[1u] = { coverage.get(), ResourceStates::UnorderedAccess };
-    occupancyPayload.expectationCount = 2u;
+    occupancyPayload.expectationCount = s_ExpectedDualCount;
     occupancyPayload.recordOrdinal = &recordOrdinal;
-    occupancyPayload.expectedOrdinal = 2u;
+    occupancyPayload.expectedOrdinal = s_ExpectedDualCount;
     occupancyPayload.device = &device;
     occupancyPayload.timing = &timing;
     occupancyPayload.timingTicket = &occupancyTimingTicket;
@@ -277,7 +281,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload depthWarpPayload;
     depthWarpPayload.expectations[0u] = { coverage.get(), ResourceStates::ShaderResource };
     depthWarpPayload.expectations[1u] = { depthWarp.get(), ResourceStates::UnorderedAccess };
-    depthWarpPayload.expectationCount = 2u;
+    depthWarpPayload.expectationCount = s_ExpectedDualCount;
     depthWarpPayload.recordOrdinal = &recordOrdinal;
     depthWarpPayload.expectedOrdinal = 3u;
     depthWarpPayload.recorded = &depthWarpRecorded;
@@ -320,7 +324,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     ASSERT_EQ(analysis.topologicalOrder().size(), 4u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], clearTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producerTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], occupancyTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], occupancyTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], depthWarpTask);
 
     const auto expectAssignment = [&](const GpuTaskId task, const GpuPhysicalQueueId queue, const CommandQueue::Enum queueClass){
@@ -337,7 +341,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId prePacket = views.compiled.packetForTask(clearTask);
     const GpuSubmissionPacketId depthWarpPacket = views.compiled.packetForTask(depthWarpTask);
     ASSERT_TRUE(prePacket.valid());
@@ -350,7 +354,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     EXPECT_TRUE(views.compiled.tasksSharePacket(producerTask, occupancyTask));
     const GpuSubmissionPacketRange packetRange = views.compiled.packetRange(prePacket, depthWarpPacket);
     ASSERT_TRUE(packetRange.valid());
-    EXPECT_EQ(packetRange.packetCount, 2u);
+    EXPECT_EQ(packetRange.packetCount, s_ExpectedDualCount);
     const GpuCompiledPacketView prePacketPlan = views.compiled.packet(prePacket);
     ASSERT_TRUE(prePacketPlan.valid());
     const GpuCompiledPacketView depthWarpPacketPlan = views.compiled.packet(depthWarpPacket);
@@ -362,7 +366,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitOccupancyComputeEmulationShares
     ASSERT_NE(prePacketTasks, nullptr);
     EXPECT_EQ(prePacketTasks[0u], clearTask);
     EXPECT_EQ(prePacketTasks[1u], producerTask);
-    EXPECT_EQ(prePacketTasks[2u], occupancyTask);
+    EXPECT_EQ(prePacketTasks[s_ThirdElementIndex], occupancyTask);
     ASSERT_EQ(depthWarpPacketPlan.plan->dependencyCount, 1u);
     ASSERT_NE(views.compiled.packet(depthWarpPacket).dependencies, nullptr);
     EXPECT_EQ(views.compiled.packet(depthWarpPacket).dependencies[0u].producer, prePacket);

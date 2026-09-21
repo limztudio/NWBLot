@@ -21,6 +21,9 @@
 namespace __hidden_allocation_owner_telemetry_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -58,7 +61,7 @@ struct OwnedAllocation{
     snapshot.usedBytes = 1536u;
     snapshot.peakUsedBytes = 2048u;
     snapshot.allocationCount = 7u;
-    snapshot.reallocationCount = 2u;
+    snapshot.reallocationCount = s_ExpectedDualCount;
     snapshot.deallocationCount = 1u;
     return snapshot;
 }
@@ -219,8 +222,8 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
         switch(invalidCase){
         case 0u: malformed.version = 0u; break;
-        case 1u: malformed.version = 2u; break;
-        case 2u: malformed.version = Limit<u16>::s_Max; break;
+        case 1u: malformed.version = s_ExpectedDualCount; break;
+        case s_ExpectedDualCount: malformed.version = Limit<u16>::s_Max; break;
         case 3u: malformed.source = 3u; break;
         case 4u: malformed.source = Limit<u32>::s_Max; break;
         case 5u: malformed.flags = 0x8000u; break;
@@ -476,7 +479,7 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
         EXPECT_EQ(both.reservedBytes, firstBytes + secondBytes);
         EXPECT_EQ(both.peakUsedBytes, Max(firstBytes, secondBytes));
         EXPECT_LT(both.peakUsedBytes, both.usedBytes);
-        EXPECT_EQ(both.allocationCount, 2u);
+        EXPECT_EQ(both.allocationCount, s_ExpectedDualCount);
         EXPECT_EQ(both.deallocationCount, 0u);
     }
 
@@ -487,7 +490,7 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     EXPECT_EQ(surviving.usedBytes, firstBytes);
     EXPECT_EQ(surviving.reservedBytes, firstBytes);
     EXPECT_EQ(surviving.peakUsedBytes, Max(firstBytes, secondBytes));
-    EXPECT_EQ(surviving.allocationCount, 2u);
+    EXPECT_EQ(surviving.allocationCount, s_ExpectedDualCount);
     EXPECT_EQ(surviving.deallocationCount, 1u);
     const Perf::MemoryDelta delta = perfSession.memoryView().delta(ownerName, Perf::MemorySource::Arena);
     EXPECT_TRUE(delta.hasSamples);
@@ -618,7 +621,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     const AStringView beforeJson(report.json.data(), report.json.size());
     const AStringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, "\"source\": \"arena\"");
     ASSERT_FALSE(beforeRecord.empty());
-    EXPECT_EQ(NWB::Tests::CountText(beforeRecord, firstHashText), 2u);
+    EXPECT_EQ(NWB::Tests::CountText(beforeRecord, firstHashText), s_ExpectedDualCount);
 
     AString<Core::Alloc::GlobalArena> namesymText(testArena.arena);
     StringAppendFormat(
@@ -643,7 +646,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     EXPECT_EQ(NWB::Tests::CountText(firstRecord, firstHashText), 1u);
     EXPECT_EQ(NWB::Tests::CountText(secondRecord, secondHashText), 1u);
     EXPECT_NE(explicitRecord.find("\"scope\": \"Producer Display Name\""), AStringView::npos);
-    EXPECT_EQ(NWB::Tests::CountText(unknownRecord, unknownHashText), 2u);
+    EXPECT_EQ(NWB::Tests::CountText(unknownRecord, unknownHashText), s_ExpectedDualCount);
 }
 
 TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){

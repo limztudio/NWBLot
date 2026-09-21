@@ -21,6 +21,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -194,7 +198,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     ASSERT_EQ(views.compiled.packetCount(), 3u);
     EXPECT_EQ(views.compiled.packetIdAt(0u), prefixPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), finalPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), recoveryPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), recoveryPacket);
     EXPECT_EQ(views.compiled.packet(recoveryPacket).plan->dependencyCount, 0u);
     EXPECT_EQ(views.compiled.packet(recoveryPacket).plan->externalDependencyCount, 0u);
     EXPECT_TRUE(views.compiled.packet(recoveryPacket).plan->joinsAcceptedQueueFrontier);
@@ -307,9 +311,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsFrameRecoveryInShar
     EXPECT_FALSE(frameTransaction.needsRetirement());
     const GpuTaskGraphSubmissionStatistics recoveredSubmissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(recoveredSubmissionStatistics.valid());
-    EXPECT_EQ(recoveredSubmissionStatistics.acceptedPacketCount, 2u);
-    EXPECT_EQ(recoveredSubmissionStatistics.acceptedTaskCount, 2u);
-    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(recoveredSubmissionStatistics.acceptedTaskCount, s_ExpectedDualCount);
+    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedPacketCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedTaskCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.rejectedSubmissionCount, 1u);

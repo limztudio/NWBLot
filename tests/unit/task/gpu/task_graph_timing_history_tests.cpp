@@ -16,6 +16,10 @@
 namespace __hidden_task_graph_timing_history_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -50,7 +54,7 @@ TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
     for(TimingInput& input : inputs)
         input = base;
     inputs[1u].key.variant = 1u;
-    inputs[2u].key.resolutionClass = 1u;
+    inputs[s_ThirdElementIndex].key.resolutionClass = 1u;
     inputs[3u].key.queue = CommandQueue::Compute;
     inputs[4u].queue.index = 1u;
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
@@ -86,7 +90,7 @@ TEST(GpuTaskTimingHistory, PreservesEveryRouteKeyFieldAndFullNameIdentity){
 
 TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLateSamples){
     GraphicsArena arena(Name("tests/timing_history/assignment_order"));
-    GpuTaskTimingHistoryStore store(arena, 2u);
+    GpuTaskTimingHistoryStore store(arena, s_ExpectedDualCount);
     for(u32 index = 1u; index < 80u; ++index){
         const TimingInput input = Input(index);
         ASSERT_TRUE(store.recordSample(input.key, input.queue, 1.0, 1u));
@@ -112,7 +116,7 @@ TEST(GpuTaskTimingHistory, KeepsSemanticAssignmentsAcrossQueueClassChangesAndLat
     EXPECT_DOUBLE_EQ(history->averageSeconds, 8.0);
     EXPECT_DOUBLE_EQ(history->minimumSeconds, 6.0);
     EXPECT_DOUBLE_EQ(history->maximumSeconds, 10.0);
-    EXPECT_EQ(history->sampleCount, 2u);
+    EXPECT_EQ(history->sampleCount, s_ExpectedDualCount);
     ASSERT_TRUE(store.recordNonCommittingSample(graphics.key, graphics.queue, 14.0));
     EXPECT_EQ(store.findAssignment(assignmentKey)->lastAcceptedQueue, compute.queue);
     ASSERT_TRUE(store.noteAcceptedAssignment(graphics.key, graphics.queue, 30u));
@@ -160,7 +164,7 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
         EXPECT_EQ(snapshot.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(first.key))->lastAcceptedFrameIndex, 10u);
         const TimingInput newer = Input(600u);
         EXPECT_EQ(snapshot.find(newer.key, newer.queue), nullptr);
-        store.resetForDeviceGeneration(2u);
+        store.resetForDeviceGeneration(s_ExpectedDualCount);
         EXPECT_EQ(store.historyCount(), 0u);
         EXPECT_EQ(store.find(first.key, first.queue), nullptr);
         EXPECT_EQ(store.findAssignment(GpuTaskTimingAssignmentKeyFromHistoryKey(first.key)), nullptr);
@@ -172,11 +176,11 @@ TEST(GpuTaskTimingHistory, SnapshotSurvivesStoreGrowthResetAndReplacementInAnoth
     replacement.reset(snapshot);
     EXPECT_FALSE(snapshot.valid());
     EXPECT_EQ(snapshot.find(first.key, first.queue), nullptr);
-    replacement.resetForDeviceGeneration(2u);
-    const TimingInput newGeneration = Input(0u, 2u);
+    replacement.resetForDeviceGeneration(s_ExpectedDualCount);
+    const TimingInput newGeneration = Input(0u, s_ExpectedDualCount);
     ASSERT_TRUE(replacement.recordSample(newGeneration.key, newGeneration.queue, 7.0, 1u));
     replacement.snapshot(snapshot);
-    EXPECT_EQ(snapshot.deviceGeneration(), 2u);
+    EXPECT_EQ(snapshot.deviceGeneration(), s_ExpectedDualCount);
     EXPECT_EQ(snapshot.find(first.key, first.queue), nullptr);
     ASSERT_NE(snapshot.find(newGeneration.key, newGeneration.queue), nullptr);
     EXPECT_DOUBLE_EQ(snapshot.find(newGeneration.key, newGeneration.queue)->averageSeconds, 7.0);
@@ -253,7 +257,7 @@ TEST(GpuTaskTimingHistory, SmallRepeatedUpdatesAndSnapshotsReuseTheirAllocations
     }
     store.snapshot(snapshot);
     const ArenaMemoryStats before = arena.memoryStats();
-    for(u64 frame = 2u; frame < 16u; ++frame){
+    for(u64 frame = s_ExpectedDualCount; frame < 16u; ++frame){
         for(u32 index = 0u; index < 8u; ++index){
             const TimingInput input = Input(index);
             ASSERT_TRUE(store.recordSample(input.key, input.queue, 2.0, frame));
@@ -285,7 +289,7 @@ static void BenchmarkHistory(const u32 keyCount, const u32 repeatCount){
     const Timer updateBegin = TimerNow();
     for(u32 repeat = 0u; repeat < repeatCount; ++repeat){
         for(const TimingInput& input : inputs)
-            accepted = store.recordSample(input.key, input.queue, 2.0, repeat + 2u) && accepted;
+            accepted = store.recordSample(input.key, input.queue, 2.0, repeat + s_ExpectedDualCount) && accepted;
     }
     const u64 updateNanoseconds = DurationInNS<u64>(TimerNow(), updateBegin);
     const Timer snapshotBegin = TimerNow();

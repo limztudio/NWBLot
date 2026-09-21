@@ -12,6 +12,11 @@
 namespace __hidden_telemetry_perf_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -228,7 +233,7 @@ TEST(Telemetry, PerfViewsExposeScopes){
     EXPECT_EQ(report.memory.scopeNameAt(0u), Name("perf/memory/project"));
     EXPECT_TRUE(report.cpuTiming.scopeAt(0u).valid());
     EXPECT_FALSE(report.cpuTiming.scopeAt(1u).valid());
-    EXPECT_EQ(report.cpuTiming.statsAt(0u).sampleCount, 2u);
+    EXPECT_EQ(report.cpuTiming.statsAt(0u).sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(report.gpuTiming.statsAt(0u).sampleCount, 1u);
     EXPECT_EQ(report.memory.snapshotAt(0u).usedBytes, 2048u);
     EXPECT_EQ(report.memory.deltaAt(0u).usedBytes, 1024u);
@@ -256,7 +261,7 @@ TEST(Telemetry, RecordPerfSessionReportUsesTelemetryEvents){
 
     const Telemetry::EventRecord* cpuEvent = recorder.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = recorder.view().eventAt(1u);
-    const Telemetry::EventRecord* memoryEvent = recorder.view().eventAt(2u);
+    const Telemetry::EventRecord* memoryEvent = recorder.view().eventAt(s_ThirdElementIndex);
     ASSERT_NE(cpuEvent, nullptr);
     ASSERT_NE(gpuEvent, nullptr);
     ASSERT_NE(memoryEvent, nullptr);
@@ -301,7 +306,7 @@ TEST(Telemetry, CaptureSessionRecordsPerfReport){
 
     const Telemetry::EventRecord* cpuEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* gpuEvent = session.view().eventAt(1u);
-    const Telemetry::EventRecord* memoryEvent = session.view().eventAt(2u);
+    const Telemetry::EventRecord* memoryEvent = session.view().eventAt(s_ThirdElementIndex);
     ASSERT_NE(cpuEvent, nullptr);
     ASSERT_NE(gpuEvent, nullptr);
     ASSERT_NE(memoryEvent, nullptr);

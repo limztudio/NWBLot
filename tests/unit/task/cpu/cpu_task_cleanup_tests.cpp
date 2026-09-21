@@ -16,6 +16,9 @@
 namespace __hidden_cpu_task_cleanup_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -89,8 +92,8 @@ TEST(CpuTaskCleanupTests, NormalDestructorsCompleteTasksBeforeRetiringTheirCaptu
         }
         EXPECT_GE(callbacks, 1u);
     }
-    EXPECT_EQ(callbacks, 2u);
-    EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
+    EXPECT_EQ(callbacks, s_ExpectedDualCount);
+    EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
 }
 
 
@@ -114,7 +117,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         return 0;
     }, [&](const TerminalTaskError& error){
         ++handled;
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         return error.code;
     }, [](){ return -1; });
     EXPECT_EQ(result, 17);
@@ -142,7 +145,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
         }).valid());
         return 0;
     }, [&](const TerminalTaskError& error){
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
     }, [](){ return -1; });
@@ -170,7 +173,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
         }).valid());
         throw TerminalTaskError{ 47 };
     }, [&](const TerminalTaskError& error){
-        EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
+        EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         return error.code;
     }, [](){ return -1; });
     EXPECT_EQ(result, 47);
@@ -216,7 +219,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     releaseWorker.join();
     EXPECT_TRUE(finished.load(MemoryOrder::acquire));
     EXPECT_FALSE(expired.load(MemoryOrder::acquire));
-    EXPECT_EQ(retirements.load(MemoryOrder::acquire), 2u);
+    EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
     EXPECT_EQ(canceledCallbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     EXPECT_FALSE(scheduler.submit([](){}).valid());
@@ -239,7 +242,7 @@ TEST(CpuTaskCleanupTests, CancelingOneScopeKeepsTheSchedulerAvailableForOtherWor
     ASSERT_TRUE(later.valid());
     scheduler.wait(later);
     EXPECT_EQ(canceledCallbacks, 0u);
-    EXPECT_EQ(completedCallbacks, 2u);
+    EXPECT_EQ(completedCallbacks, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
@@ -264,11 +267,11 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
     using namespace __hidden_cpu_task_cleanup_tests;
     Atomic<u32> visits{ 0u };
     CpuTaskSchedulerConfig config;
-    config.workerCount = 2u;
+    config.workerCount = s_ExpectedDualCount;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scope(scheduler);
-    for(u32 producer = 0u; producer < 2u; ++producer){
+    for(u32 producer = 0u; producer < s_ExpectedDualCount; ++producer){
         ASSERT_TRUE(scope.submit([&](){
             scheduler.parallelFor(0u, 128u, 4u, [&](usize){
                 scheduler.parallelFor(0u, 32u, 4u, [&](usize){
@@ -278,7 +281,7 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
         }).valid());
     }
     scope.wait();
-    EXPECT_EQ(visits.load(MemoryOrder::acquire), 2u * 128u * 32u);
+    EXPECT_EQ(visits.load(MemoryOrder::acquire), s_ExpectedDualCount * 128u * 32u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 

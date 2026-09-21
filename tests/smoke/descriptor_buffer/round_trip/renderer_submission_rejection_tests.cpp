@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -657,7 +661,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
             ASSERT_TRUE(statistics.valid());
             const usize expectedRejectedSubmissions = failurePoint == FailurePoint::Clean
                 ? 0u
-                : (failurePoint == FailurePoint::Recovery ? 2u : 1u)
+                : (failurePoint == FailurePoint::Recovery ? s_ExpectedDualCount : 1u)
             ;
             EXPECT_EQ(statistics.rejectedSubmissionCount, expectedRejectedSubmissions);
             EXPECT_FALSE(submissionObserver.overflowed());
@@ -675,7 +679,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
         if(timingActive)
             timing.collect(device, timingFrameIndex + 1u);
         timing.resetQueries();
-        timingFrameIndex += 2u;
+        timingFrameIndex += s_ExpectedDualCount;
     }
 
     s_scope->setGpuTimingEnabled(false);
@@ -860,7 +864,7 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     ASSERT_TRUE(recoveryPacket.valid());
     EXPECT_EQ(views.compiled.packetIdAt(0u), firstPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), computePacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), endpointPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), endpointPacket);
     EXPECT_EQ(views.compiled.packetIdAt(3u), recoveryPacket);
     const GpuPhysicalQueueInfo* const computeQueue = views.compiled.queueInfoForTask(computeTask);
     ASSERT_NE(computeQueue, nullptr);

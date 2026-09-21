@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests::Smoke{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -114,13 +117,13 @@ TEST(PresentationPacingRing, FrequentIdlePollsCountEachPendingStallOnce){
     ring.record(1u, TimerAddMS(begin, 100));
     ring.record(1u, TimerAddMS(begin, 150));
     ring.record(1u, TimerAddMS(begin, 160));
-    EXPECT_EQ(ring.stallCount(), 2u);
-    ring.record(2u, TimerAddMS(begin, 200));
+    EXPECT_EQ(ring.stallCount(), s_ExpectedDualCount);
+    ring.record(s_ExpectedDualCount, TimerAddMS(begin, 200));
     const PresentationPacingSummary summary = ring.summarize();
-    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_EQ(summary.samples, s_ExpectedDualCount);
     EXPECT_DOUBLE_EQ(summary.p50Ms, 100.0);
     EXPECT_DOUBLE_EQ(summary.maxMs, 100.0);
-    EXPECT_EQ(summary.stallsOver50Ms, 2u);
+    EXPECT_EQ(summary.stallsOver50Ms, s_ExpectedDualCount);
 }
 
 TEST(PresentationPacingRing, BatchedAdvanceAveragesTheWholeIntervalAfterIdlePolling){
@@ -132,7 +135,7 @@ TEST(PresentationPacingRing, BatchedAdvanceAveragesTheWholeIntervalAfterIdlePoll
     ring.record(14u, TimerAddMS(begin, 88));
     ring.record(15u, TimerAddMS(begin, 96));
     const PresentationPacingSummary summary = ring.summarize();
-    EXPECT_EQ(summary.samples, 2u);
+    EXPECT_EQ(summary.samples, s_ExpectedDualCount);
     EXPECT_DOUBLE_EQ(summary.maxMs, 20.0);
     EXPECT_EQ(summary.stallsOver50Ms, 0u);
 }

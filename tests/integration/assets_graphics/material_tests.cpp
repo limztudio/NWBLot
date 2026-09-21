@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -435,7 +438,7 @@ static void CheckMinimalMaterialTypedLayout(
     const u32 expectedFeatureMaskZ = 6u
 ){
     EXPECT_NE(material.typedLayoutHash(), 0u);
-    EXPECT_EQ(material.typedLayoutBlocks().size(), 2u);
+    EXPECT_EQ(material.typedLayoutBlocks().size(), s_ExpectedDualCount);
     EXPECT_EQ(material.typedLayoutFields().size(), 6u);
 
     const NWB::Impl::MaterialTypedLayoutBlock* runtimeBlock = FindMaterialTypedLayoutBlock(material, "runtime");
@@ -497,7 +500,7 @@ static void CheckMinimalMaterialTypedLayout(
             20u
         );
         if(layerIds){
-            const u32 layerIdDefaults[] = { 1u, 2u };
+            const u32 layerIdDefaults[] = { 1u, s_ExpectedDualCount };
             CheckMaterialTypedLayoutDefaultPODValues(*layerIds, layerIdDefaults);
         }
 
@@ -547,7 +550,7 @@ static void CheckMinimalMaterialTypedBlockBytes(
 
     const ExpectedTypedBlockU32Value expectedU32Values[] = {
         { "surface", 20u, 1u },
-        { "surface", 24u, 2u },
+        { "surface", 24u, s_ExpectedDualCount },
         { "surface", 28u, expectedFeatureMaskX },
         { "surface", 32u, expectedFeatureMaskY },
         { "surface", 36u, expectedFeatureMaskZ },
@@ -594,7 +597,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
         *surfaceBlock,
         "range",
         NWB::Impl::MaterialLayoutFieldType::Half2,
-        2u,
+        s_ExpectedDualCount,
         rangeDefaults
     );
 
@@ -620,7 +623,7 @@ static void CheckHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Material&
 
     const ExpectedHalfBlockValue expectedHalfValues[] = {
         { 0u, 0.25f },
-        { 2u, 0.125f },
+        { s_ExpectedDualCount, 0.125f },
         { 4u, 0.5f },
         { 6u, 1.0f },
         { 8u, 0.75f },
@@ -660,7 +663,7 @@ static void CheckMixedHalfMaterialTypedLayoutAndBlockBytes(const NWB::Impl::Mate
     const auto& bytes = material.typedBlockBytes();
     if(bytes.size() < 24u)
         return;
-    const u32 expectedZeroByteOffsets[] = { 2u, 3u, 14u, 15u, 22u, 23u };
+    const u32 expectedZeroByteOffsets[] = { s_ExpectedDualCount, 3u, 14u, 15u, 22u, 23u };
     for(const u32 byteOffset : expectedZeroByteOffsets)
         EXPECT_EQ(bytes[byteOffset], 0u);
 
@@ -731,11 +734,11 @@ static void CheckCompactIntegerMaterialTypedLayoutAndBlockBytes(const NWB::Impl:
     const ExpectedTypedBlockU8Value expectedU8Values[] = {
         { "surface", 0u, 0u },
         { "surface", 1u, 1u },
-        { "surface", 2u, 0u },
+        { "surface", s_ExpectedDualCount, 0u },
         { "surface", 3u, 1u },
         { "surface", 4u, 0x80u },
         { "surface", 5u, 0xfeu },
-        { "surface", 6u, 2u },
+        { "surface", 6u, s_ExpectedDualCount },
         { "surface", 7u, 64u },
         { "surface", 8u, 3u },
         { "surface", 9u, 4u },
@@ -1111,7 +1114,7 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
         scratchArena
     ));
 
-    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "AVBOIT pixel shaders must be present if and only if it is transparent"
     )));
@@ -1424,7 +1427,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
 
         constexpr usize s_AvboitPixelShaderBinaryBytes = sizeof(u32) + sizeof(NameHash);
         ASSERT_GE(binary.size(), s_AvboitPixelShaderBinaryBytes * 3u);
-        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * 2u;
+        const usize occupancyPresenceOffset = binary.size() - s_AvboitPixelShaderBinaryBytes * s_ExpectedDualCount;
         NWB::Core::Assets::AssetBytes missingOccupancyBinary = binary;
         EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(missingOccupancyBinary, occupancyPresenceOffset, static_cast<u32>(0u)));
         missingOccupancyBinary.erase(
@@ -1463,8 +1466,8 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     );
     EXPECT_TRUE(parsed);
     if(parsed){
-        EXPECT_EQ(entry.structs.size(), 2u);
-        EXPECT_EQ(entry.instances.size(), 2u);
+        EXPECT_EQ(entry.structs.size(), s_ExpectedDualCount);
+        EXPECT_EQ(entry.instances.size(), s_ExpectedDualCount);
 
         const NWB::Impl::MaterialBindStruct* surfaceStruct = entry.findStruct("NwbTestSurfaceMaterial");
         const NWB::Impl::MaterialBindStruct* runtimeStruct = entry.findStruct("NwbTestRuntimeMaterial");
@@ -1756,7 +1759,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
             20u
         );
 
-        ASSERT_EQ(material.resourceReferences().size(), 2u);
+        ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
         EXPECT_EQ(imageReference.blockName, Name("surface"));
@@ -1780,7 +1783,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourcePaths){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-            ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
+            ASSERT_EQ(loadedMaterial.resourceReferences().size(), s_ExpectedDualCount);
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].textureAsset, imageReference.textureAsset);
             EXPECT_FALSE(loadedMaterial.resourceReferences()[0u].samplerAsset.valid());
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
@@ -1849,7 +1852,7 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
     );
     EXPECT_TRUE(built);
     if(built){
-        ASSERT_EQ(material.resourceReferences().size(), 2u);
+        ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
         const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
         const NWB::Impl::MaterialResourceReference& samplerReference = material.resourceReferences()[1u];
         EXPECT_EQ(imageReference.blockName, Name("surface"));
@@ -1869,7 +1872,7 @@ TEST(AssetsGraphics, MaterialBindStaticResourceFixtures){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         if(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset)){
             const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-            ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
+            ASSERT_EQ(loadedMaterial.resourceReferences().size(), s_ExpectedDualCount);
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].fixtureName, imageReference.fixtureName);
             EXPECT_EQ(loadedMaterial.resourceReferences()[1u].fixtureName, samplerReference.fixtureName);
             EXPECT_EQ(loadedMaterial.resourceReferences()[0u].constantByteOffset, imageReference.constantByteOffset);
@@ -1964,7 +1967,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
         scratchArena
     );
     ASSERT_TRUE(built);
-    ASSERT_EQ(material.resourceReferences().size(), 2u);
+    ASSERT_EQ(material.resourceReferences().size(), s_ExpectedDualCount);
     const NWB::Impl::MaterialResourceReference& imageReference = material.resourceReferences()[0u];
     EXPECT_EQ(imageReference.textureAsset.name(), Name("project/textures/test_checker"));
     EXPECT_FALSE(imageReference.samplerAsset.valid());
@@ -1976,7 +1979,7 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset));
     const NWB::Impl::Material& loadedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
-    ASSERT_EQ(loadedMaterial.resourceReferences().size(), 2u);
+    ASSERT_EQ(loadedMaterial.resourceReferences().size(), s_ExpectedDualCount);
     EXPECT_EQ(loadedMaterial.resourceReferences()[0u].textureAsset, imageReference.textureAsset);
     EXPECT_FALSE(loadedMaterial.resourceReferences()[0u].samplerAsset.valid());
     EXPECT_EQ(loadedMaterial.resourceReferences()[0u].resourceSource, imageReference.resourceSource);
@@ -2158,7 +2161,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     if(loadedResourceAsset){
         EXPECT_EQ(loadedResourceAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& resourceMaterial = static_cast<const NWB::Impl::Material&>(*loadedResourceAsset);
-        ASSERT_EQ(resourceMaterial.resourceReferences().size(), 2u);
+        ASSERT_EQ(resourceMaterial.resourceReferences().size(), s_ExpectedDualCount);
         EXPECT_EQ(
             resourceMaterial.resourceReferences()[0u].textureAsset.name(),
             Name("project/textures/test_checker")
@@ -2216,7 +2219,7 @@ TEST(AssetsGraphics, MaterialBindCookIntegration){
     if(loadedFixtureAsset){
         EXPECT_EQ(loadedFixtureAsset->assetType(), NWB::Impl::Material::AssetTypeName());
         const NWB::Impl::Material& fixtureMaterial = static_cast<const NWB::Impl::Material&>(*loadedFixtureAsset);
-        ASSERT_EQ(fixtureMaterial.resourceReferences().size(), 2u);
+        ASSERT_EQ(fixtureMaterial.resourceReferences().size(), s_ExpectedDualCount);
         EXPECT_EQ(
             fixtureMaterial.resourceReferences()[0u].fixtureName,
             Name(NWB::Impl::MaterialResourceFixture::s_CheckerRgba8)

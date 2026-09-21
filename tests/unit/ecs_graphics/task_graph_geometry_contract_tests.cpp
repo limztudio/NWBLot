@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_geometry_contract_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -472,7 +475,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
         5u
     );
     // Hardware shadows import early; reflection/refraction import only when that shared read set is still absent.
-    EXPECT_EQ(CountText(taskGraph, "sceneReads = ImportRayTracingSceneGraphReads("), 2u);
+    EXPECT_EQ(CountText(taskGraph, "sceneReads = ImportRayTracingSceneGraphReads("), s_ExpectedDualCount);
     EXPECT_EQ(
         CountText(taskGraph, "sceneTlasBackingInitialState()")
             + CountText(hardwareCaustics, "sceneTlasBackingInitialState()"),

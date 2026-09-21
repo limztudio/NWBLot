@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -29,7 +32,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsRetiredAndDoubleFree
     GraphicsBackend::GpuDescriptorHeap heap(device);
     GpuDescriptorHeapDesc heapDesc;
     heapDesc
-        .setResourceCapacity(2u)
+        .setResourceCapacity(s_ExpectedDualCount)
         .setSamplerCapacity(1u)
         .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
     ;
@@ -37,7 +40,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapRejectsRetiredAndDoubleFree
 
     const GpuDescriptorHeapLifecycleStatistics initialStatistics = heap.lifecycleStatistics();
     EXPECT_TRUE(initialStatistics.initialized);
-    EXPECT_EQ(initialStatistics.resourceCapacity, 2u);
+    EXPECT_EQ(initialStatistics.resourceCapacity, s_ExpectedDualCount);
     EXPECT_EQ(initialStatistics.samplerCapacity, 1u);
     EXPECT_EQ(initialStatistics.resourceLiveSlotCount, 0u);
     EXPECT_EQ(initialStatistics.samplerLiveSlotCount, 0u);
@@ -103,7 +106,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtec
     GraphicsBackend::GpuDescriptorHeap heap(device);
     GpuDescriptorHeapDesc heapDesc;
     heapDesc
-        .setResourceCapacity(2u)
+        .setResourceCapacity(s_ExpectedDualCount)
         .setSamplerCapacity(1u)
         .setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
     ;
@@ -125,7 +128,7 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtec
         capturedHandle,
         DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())
     ));
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     GpuDescriptorHandle secondPendingHandle = GpuDescriptorHandle::invalid();
     ArenaMemoryStats beforeFinalLeaseRelease;
@@ -140,19 +143,19 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtec
             const GpuDescriptorHeapLifecycleStatistics firstPendingStatistics = heap.lifecycleStatistics();
             EXPECT_EQ(firstPendingStatistics.resourceLiveSlotCount, 0u);
             EXPECT_EQ(firstPendingStatistics.pendingRetiredSlotCount, 1u);
-            EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+            EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
             secondPendingHandle = heap.allocate(GpuDescriptorClass::StorageBuffer);
             ASSERT_TRUE(secondPendingHandle.valid());
             EXPECT_NE(secondPendingHandle.slot(), capturedHandle.slot());
             heap.free(secondPendingHandle);
             heap.collectRetired();
-            EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 2u);
+            EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, s_ExpectedDualCount);
 
             heap.shutdown();
             EXPECT_TRUE(heap.isInitialized()) << "an active recording lease allowed heap shutdown";
         }
-        EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, 2u)
+        EXPECT_EQ(heap.lifecycleStatistics().pendingRetiredSlotCount, s_ExpectedDualCount)
             << "an overlapping lease release promoted slots too early";
         beforeFinalLeaseRelease = DescriptorBufferRoundTripTest::arena().memoryStats();
     }
@@ -162,10 +165,10 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtec
     EXPECT_EQ(afterFinalLeaseRelease.reallocationCount, beforeFinalLeaseRelease.reallocationCount);
     EXPECT_EQ(afterFinalLeaseRelease.deallocationCount, beforeFinalLeaseRelease.deallocationCount);
     const GpuDescriptorHeapLifecycleStatistics promotedStatistics = heap.lifecycleStatistics();
-    EXPECT_EQ(promotedStatistics.pendingRetiredSlotCount, 2u);
+    EXPECT_EQ(promotedStatistics.pendingRetiredSlotCount, s_ExpectedDualCount);
     EXPECT_EQ(promotedStatistics.acceptedHeapUseCount, 0u);
     EXPECT_EQ(promotedStatistics.unsubmittedHeapUseCount, 0u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     heap.collectRetired();
     const GpuDescriptorHeapLifecycleStatistics completedStatistics = heap.lifecycleStatistics();
@@ -319,7 +322,7 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseT
         capturedHandle,
         DescriptorWriteItem::StructuredBuffer_UAV(0u, storageBuffer.get())
     ));
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     auto commandList = device.createCommandList();
     ASSERT_TRUE(commandList);
@@ -346,7 +349,7 @@ TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseT
     EXPECT_EQ(recordedStatistics.pendingRetiredSlotCount, baselineStatistics.pendingRetiredSlotCount + 1u);
     EXPECT_EQ(recordedStatistics.acceptedHeapUseCount, baselineStatistics.acceptedHeapUseCount);
     EXPECT_EQ(recordedStatistics.unsubmittedHeapUseCount, baselineStatistics.unsubmittedHeapUseCount + 1u);
-    EXPECT_EQ(storageBuffer->getReferenceCount(), 2u);
+    EXPECT_EQ(storageBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     CommandList* commandLists[] = { commandList.get() };
     const QueueSubmissionToken submissionToken = device.executeCommandLists(
@@ -417,8 +420,8 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapFixedMetadataResizesAndRecy
     const usize resourceReferencesBeforeHeap = storageBuffer->getReferenceCount();
     const usize samplerReferencesBeforeHeap = sampler->getReferenceCount();
 
-    constexpr u32 s_InitialResourceCapacity = 2u;
-    constexpr u32 s_InitialSamplerCapacity = 2u;
+    constexpr u32 s_InitialResourceCapacity = s_ExpectedDualCount;
+    constexpr u32 s_InitialSamplerCapacity = s_ExpectedDualCount;
     ASSERT_TRUE(heap.initialize(makeHeapDesc(s_InitialResourceCapacity, s_InitialSamplerCapacity)));
     EXPECT_EQ(heap.lifecycleStatistics().resourceCapacity, s_InitialResourceCapacity);
     EXPECT_EQ(heap.lifecycleStatistics().samplerCapacity, s_InitialSamplerCapacity);

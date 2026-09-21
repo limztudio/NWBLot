@@ -19,6 +19,9 @@
 namespace __hidden_ecs_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -297,18 +300,18 @@ TEST(Ecs, ComponentMutationVersion){
     EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 1u);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), s_ExpectedDualCount);
 
     entity.removeComponent<VelocityComponent>();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), 2u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<VelocityComponent>(), s_ExpectedDualCount);
 
     entity.destroy();
-    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 2u);
+    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), s_ExpectedDualCount);
 }
 
 TEST(Ecs, ComponentPoolsPreserveSparseTypeLookupAndWorldIsolation){
     const auto typeIds = RegisterPoolSlotTypes(IndexSequence<
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
+        0u, 1u, s_ExpectedDualCount, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
         32u, 33u, 34u, 35u, 36u, 37u, 38u, 39u, 40u, 41u, 42u, 43u, 44u, 45u, 46u, 47u,
         48u, 49u, 50u, 51u, 52u, 53u, 54u, 55u, 56u, 57u, 58u, 59u, 60u, 61u, 62u, 63u
@@ -429,7 +432,7 @@ TEST(Ecs, MessageBus){
     EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 0u);
 
     testWorld.world.swapMessageBuffers();
-    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), 2u);
+    EXPECT_EQ(testWorld.world.messageCount<TickMessage>(), s_ExpectedDualCount);
 
     u32 consumedCount = 0;
     u32 consumedValueSum = 0;
@@ -439,7 +442,7 @@ TEST(Ecs, MessageBus){
             consumedValueSum += message.value;
         }
     );
-    EXPECT_EQ(consumedCount, 2u);
+    EXPECT_EQ(consumedCount, s_ExpectedDualCount);
     EXPECT_EQ(consumedValueSum, 18u);
 
     testWorld.world.clearMessages();
@@ -533,7 +536,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
 
         if((i & 1u) == 0u){
             auto& velocity = entity.addComponent<VelocityComponent>();
-            velocity.x = static_cast<i32>(i * 2u);
+            velocity.x = static_cast<i32>(i * s_ExpectedDualCount);
         }
     }
 
@@ -567,7 +570,7 @@ TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
         }
     );
 
-    EXPECT_EQ(pairVisits.load(MemoryOrder::relaxed), s_EntityCount / 2u);
+    EXPECT_EQ(pairVisits.load(MemoryOrder::relaxed), s_EntityCount / s_ExpectedDualCount);
 }
 
 TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
@@ -687,7 +690,7 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
 
 TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     s_EcsCallerThread = true;
@@ -713,7 +716,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
 
 TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
     NWB::Core::ECS::World world(arena, taskScheduler);
     static constexpr usize s_EntityCount = 512u;
     for(usize i = 0u; i < s_EntityCount; ++i)
@@ -742,7 +745,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
 
 TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
     NWB::Core::ECS::World world(arena, taskScheduler);
     const auto positionType = NWB::Core::ECS::ComponentType<PositionComponent>();
     Atomic<i32> value{ 0 };
@@ -768,7 +771,7 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
 
 TEST(Ecs, WorldClearDoesNotWaitForUnrelatedSchedulerTasks){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(2u);
+    NWB::Core::CpuTaskScheduler taskScheduler(s_ExpectedDualCount);
     NWB::Core::CpuTaskScope unrelatedTasks(taskScheduler);
     NWB::Core::ECS::World world(arena, taskScheduler);
     Atomic<bool> started{ false };

@@ -19,11 +19,15 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct BlockingGpuTimingSampleCapture{
-    GpuTimingSample samples[2u] = {};
+    GpuTimingSample samples[s_ThirdElementIndex] = {};
     AtomicFlag firstCallbackEntered;
     AtomicFlag releaseFirstCallback;
     u32 sampleCount = 0u;
@@ -312,7 +316,7 @@ TEST_F(DescriptorBufferRoundTripTest, ScopedFeedbackUnsubscribeRetiresAcceptedSc
     timing.collect(device, 408u);
 
     EXPECT_EQ(removedOwnerSamples.sampleCount, 0u);
-    ASSERT_EQ(survivingSamples.sampleCount, 2u);
+    ASSERT_EQ(survivingSamples.sampleCount, s_ExpectedDualCount);
     ASSERT_EQ(replacementSamples.sampleCount, 1u);
     const GpuTimingSample* const survivingReplacementSample = survivingSamples.find(replacementAttribution);
     const GpuTimingSample* const replacementSample = replacementSamples.find(replacementAttribution);
@@ -354,7 +358,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimingRetirementSurvivesConcurrentUnaccept
         MakeNotNull(&s_FrameTimingRetirementDiscardScope.identity),
         1u
     ));
-    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingRetirementDiscardScope.identity, device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_FrameTimingRetirementDiscardScope.identity, device, s_ExpectedDualCount));
 
     const GpuTimingSampleAttribution firstAttribution = timing.allocateSampleAttribution();
     const GpuTimingSampleAttribution secondAttribution = timing.allocateSampleAttribution();
@@ -445,7 +449,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimingRetirementSurvivesConcurrentUnaccept
     EXPECT_EQ(observingSamples.samples[0u].physicalQueue, physicalQueue);
     EXPECT_EQ(observingSamples.samples[0u].attribution, firstAttribution);
     EXPECT_FALSE(observingSamples.samples[0u].published);
-    ASSERT_EQ(secondarySamples.sampleCount, 2u);
+    ASSERT_EQ(secondarySamples.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(secondarySamples.samples[0u].scopeName, s_FrameTimingRetirementDiscardScope.identity);
     EXPECT_EQ(secondarySamples.samples[0u].sourceFrameIndex, 91u);
     EXPECT_EQ(secondarySamples.samples[0u].physicalQueue, physicalQueue);

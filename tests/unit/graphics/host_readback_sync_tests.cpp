@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -99,9 +102,9 @@ TEST(HostReadbackSync, BuildsExactWholeBufferHostDependency){
 
 TEST(HostReadbackSync, CollectsEveryExactQueueFamilyWithoutLegacyLaneGatesOrFixedCapacity){
     constexpr GpuPhysicalQueueInfo s_Queues[] = {
-        { .familyIndex = 2u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
+        { .familyIndex = s_ExpectedDualCount, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
         { .familyIndex = 4u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
-        { .familyIndex = 2u, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
+        { .familyIndex = s_ExpectedDualCount, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
         { .familyIndex = 6u, .id = {}, .queueClass = CommandQueue::Compute, .capabilities = GpuQueueCapability::Compute },
         { .familyIndex = 8u, .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer },
         { .familyIndex = 10u, .id = {}, .queueClass = CommandQueue::Transfer, .capabilities = GpuQueueCapability::Transfer },
@@ -111,7 +114,7 @@ TEST(HostReadbackSync, CollectsEveryExactQueueFamilyWithoutLegacyLaneGatesOrFixe
         { .familyIndex = 18u, .id = {}, .queueClass = CommandQueue::Graphics, .capabilities = GpuQueueCapability::Graphics },
         { .familyIndex = VK_QUEUE_FAMILY_IGNORED, .id = {} },
     };
-    constexpr u32 s_ExpectedFamilies[] = { 2u, 4u, 6u, 8u, 10u, 12u, 14u, 16u, 18u };
+    constexpr u32 s_ExpectedFamilies[] = { s_ExpectedDualCount, 4u, 6u, 8u, 10u, 12u, 14u, 16u, 18u };
     Alloc::ScratchArena scratchArena(s_HostReadbackTestArena);
     Vector<u32, Alloc::ScratchArena> familyIndices(scratchArena);
 
@@ -140,7 +143,7 @@ TEST(HostReadbackSync, BuildsCheckedPerPhysicalQueueBreadcrumbLayout){
     EXPECT_FALSE(HostSync::TryBuildAmdBreadcrumbRingLayout({}, 256u, layout));
     EXPECT_FALSE(HostSync::TryBuildAmdBreadcrumbRingLayout(topology, 0u, layout));
     EXPECT_FALSE(HostSync::TryBuildAmdBreadcrumbRingLayout(
-        GpuPhysicalQueueTopology{ queues.data(), 2u },
+        GpuPhysicalQueueTopology{ queues.data(), s_ExpectedDualCount },
         Limit<usize>::s_Max,
         layout
     ));
@@ -232,7 +235,7 @@ TEST(HostReadbackSync, BuildsPairUniqueBreadcrumbReservationsUntilHonestTerminal
 
     ASSERT_TRUE(HostSync::TryBuildNextAmdBreadcrumbReservation(256u, s_SlotsPerQueue, reservation));
     EXPECT_EQ(reservation.serial, 257u);
-    EXPECT_EQ(reservation.marker, 2u);
+    EXPECT_EQ(reservation.marker, s_ExpectedDualCount);
     EXPECT_EQ(reservation.localSlot, 0u);
 
     ASSERT_TRUE(HostSync::TryBuildNextAmdBreadcrumbReservation(
@@ -279,9 +282,9 @@ TEST(HostReadbackSync, DeduplicatesNativeBuffersAndAppendsOneBarrierEach){
     EXPECT_TRUE(tracker.registerBuffer(first));
     EXPECT_FALSE(tracker.registerBuffer(first));
     EXPECT_TRUE(tracker.registerBuffer(second));
-    EXPECT_EQ(tracker.size(), 2u);
+    EXPECT_EQ(tracker.size(), s_ExpectedDualCount);
     tracker.appendBarriers(barriers);
-    ASSERT_EQ(barriers.size(), 2u);
+    ASSERT_EQ(barriers.size(), s_ExpectedDualCount);
     EXPECT_EQ(barriers[0u].buffer, first);
     EXPECT_EQ(barriers[1u].buffer, second);
 

@@ -26,6 +26,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -124,7 +127,7 @@ static_assert(sizeof(HalfPixel) == 8u);
 }
 
 [[nodiscard]] Float4U PriorVisibility(const u32 y, const u32 height){
-    return y == height / 2u ? Float4U{ 0.0f, 0.0f, 0.0f, 1.0f } : Float4U{ 0.25f, 0.5f, 0.75f, 1.0f };
+    return y == height / s_ExpectedDualCount ? Float4U{ 0.0f, 0.0f, 0.0f, 1.0f } : Float4U{ 0.25f, 0.5f, 0.75f, 1.0f };
 }
 
 void ExpectPixelNear(const Float4U& actual, const Float4U& expected){
@@ -135,8 +138,8 @@ void ExpectPixelNear(const Float4U& actual, const Float4U& expected){
 }
 
 void ExpectInteriorRamp(const ResolveCase& testCase, const Pixels& actual){
-    for(u32 y = 2u; y + 3u < testCase.height; ++y){
-        for(u32 x = 2u; x + 3u < testCase.width; ++x){
+    for(u32 y = s_ExpectedDualCount; y + 3u < testCase.height; ++y){
+        for(u32 x = s_ExpectedDualCount; x + 3u < testCase.width; ++x){
             SCOPED_TRACE(x);
             SCOPED_TRACE(y);
             // Production trace/downsample guidance is located at full-resolution pixels 2*h.
@@ -183,7 +186,7 @@ void RunResolveCase(
             if(testCase.pattern == Pattern::Uniform)
                 color = { 0.25f, 0.5f, 0.75f, 1.0f };
             else if(testCase.pattern == Pattern::Edge)
-                color = x < halfWidth / 2u ? Float4U{ 0.125f, 0.5f, 0.875f, 1.0f } : Float4U{ 0.875f, 0.5f, 0.125f, 1.0f };
+                color = x < halfWidth / s_ExpectedDualCount ? Float4U{ 0.125f, 0.5f, 0.875f, 1.0f } : Float4U{ 0.875f, 0.5f, 0.125f, 1.0f };
             Float4U guide{ 0.0f, 0.0f, 10.0f, 1.0f };
             if(testCase.guidance == Guidance::LinearDistanceOffset)
                 guide.z += static_cast<f32>(x);
@@ -299,7 +302,7 @@ void RunResolveCase(
     ASSERT_TRUE(commandList);
     commandList->open();
     for(u32 index = 0u; index < LengthOf(sources); ++index){
-        const usize pitch = (index < 2u || index == 5u ? halfWidth : testCase.width) * sizeof(HalfPixel);
+        const usize pitch = (index < s_ExpectedDualCount || index == 5u ? halfWidth : testCase.width) * sizeof(HalfPixel);
         const u32 sourceLayers = (index == 0u || index == 5u) ? layerCount : 1u;
         for(u32 layer = 0u; layer < sourceLayers; ++layer)
             ASSERT_TRUE(commandList->tryWriteTexture(*sources[index], layer, 0u, data[index]->data() + layer * halfCount, pitch));
@@ -528,7 +531,7 @@ TEST_F(ShadowResolveKernelTest, WaveletVariantsSmoothAnEdgeWithinItsVisibilityBo
                 const u32 width = DivideUp(testCase.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
                 const u32 height = DivideUp(testCase.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
                 ASSERT_EQ(actual.size(), static_cast<usize>(width) * height);
-                const usize edge = static_cast<usize>(height / 2u) * width + width / 2u;
+                const usize edge = static_cast<usize>(height / s_ExpectedDualCount) * width + width / s_ExpectedDualCount;
                 // A copy or wrong-stage dispatch cannot satisfy these strict changes on both sides of the half-resolution edge.
                 EXPECT_GT(actual[edge - 1u].x, 0.125f + 0.001f);
                 EXPECT_LT(actual[edge].x, 0.875f - 0.001f);
@@ -562,11 +565,11 @@ TEST_F(ShadowResolveKernelTest, FlatReceiverInterpolatesRampAndEdgeWithoutPaired
     ExpectInteriorRamp(testCase, actual);
     testCase.pattern = Pattern::Edge;
     ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
-    const u32 edge = testCase.width / 2u;
-    const usize row = static_cast<usize>(testCase.height / 2u) * testCase.width;
-    EXPECT_GT(actual[row + edge - 1u].x - actual[row + edge - 2u].x, 0.03f);
+    const u32 edge = testCase.width / s_ExpectedDualCount;
+    const usize row = static_cast<usize>(testCase.height / s_ExpectedDualCount) * testCase.width;
+    EXPECT_GT(actual[row + edge - 1u].x - actual[row + edge - s_ExpectedDualCount].x, 0.03f);
     EXPECT_GT(actual[row + edge].x - actual[row + edge - 1u].x, 0.03f);
-    EXPECT_GT(actual[row + edge - 2u].z - actual[row + edge - 1u].z, 0.03f);
+    EXPECT_GT(actual[row + edge - s_ExpectedDualCount].z - actual[row + edge - 1u].z, 0.03f);
     EXPECT_GT(actual[row + edge - 1u].z - actual[row + edge].z, 0.03f);
     for(u32 x = 1u; x < testCase.width; ++x){
         EXPECT_GE(actual[row + x].x + 0.001f, actual[row + x - 1u].x);
@@ -586,8 +589,8 @@ TEST_F(ShadowResolveKernelTest, VaryingDistanceGuidanceFitsRegularizedColorAtOff
     ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
     // An interior quadratic B-spline footprint has distance variance 1/4 at both integer and half-texel phases. The affine color fit therefore has a closed form; no shader tap enumeration is copied into this oracle.
     constexpr f32 s_DistanceVariance = 0.25f;
-    for(u32 y = 2u; y + 3u < testCase.height; ++y){
-        for(u32 x = 2u; x + 3u < testCase.width; ++x){
+    for(u32 y = s_ExpectedDualCount; y + 3u < testCase.height; ++y){
+        for(u32 x = s_ExpectedDualCount; x + 3u < testCase.width; ++x){
             SCOPED_TRACE(x);
             SCOPED_TRACE(y);
             const f32 sampleX = static_cast<f32>(x) * 0.5f;
@@ -615,8 +618,8 @@ TEST_F(ShadowResolveKernelTest, ScalarOpaqueResolveInterpolatesTheSameSampleLatt
     const ResolveCase testCase;
     Pixels actual(scratchArena);
     ASSERT_NO_FATAL_FAILURE(RunResolveCase(device(), *pipeline, testCase, scratchArena, actual));
-    for(u32 y = 2u; y + 3u < testCase.height; ++y){
-        for(u32 x = 2u; x + 3u < testCase.width; ++x){
+    for(u32 y = s_ExpectedDualCount; y + 3u < testCase.height; ++y){
+        for(u32 x = s_ExpectedDualCount; x + 3u < testCase.width; ++x){
             SCOPED_TRACE(x);
             SCOPED_TRACE(y);
             const f32 expected = Ramp(static_cast<f32>(x) * 0.5f, static_cast<f32>(y) * 0.5f).x;
@@ -702,9 +705,9 @@ TEST_F(ShadowResolveKernelTest, OddAndTinyExtentsKeepNormalizedFiniteBoundaryVal
                 const Float4U& pixel = actual[index];
                 EXPECT_TRUE(IsFinite(pixel.x) && IsFinite(pixel.y) && IsFinite(pixel.z));
                 EXPECT_GE(pixel.x, 0.125f - 0.001f);
-                EXPECT_LE(pixel.x, 0.125f + 0.0625f * static_cast<f32>((testCase.width - 1u) / 2u) + 0.001f);
+                EXPECT_LE(pixel.x, 0.125f + 0.0625f * static_cast<f32>((testCase.width - 1u) / s_ExpectedDualCount) + 0.001f);
                 EXPECT_GE(pixel.y, 0.1875f - 0.001f);
-                EXPECT_LE(pixel.y, 0.1875f + 0.03125f * static_cast<f32>((testCase.height - 1u) / 2u) + 0.001f);
+                EXPECT_LE(pixel.y, 0.1875f + 0.03125f * static_cast<f32>((testCase.height - 1u) / s_ExpectedDualCount) + 0.001f);
                 EXPECT_GE(pixel.z, 0.0f);
                 EXPECT_LE(pixel.z, 1.0f);
                 EXPECT_FLOAT_EQ(pixel.w, 1.0f);

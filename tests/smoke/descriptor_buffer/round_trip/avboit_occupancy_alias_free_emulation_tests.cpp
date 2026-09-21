@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -281,7 +285,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamPayload;
     streamPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamPayload.expectationCount = 2u;
+    streamPayload.expectationCount = s_ExpectedDualCount;
     streamPayload.recordOrdinal = &recordOrdinal;
     streamPayload.expectedOrdinal = 1u;
     streamPayload.timingTicket = &preTimingTicket;
@@ -302,9 +306,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload clearPayload;
     clearPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     clearPayload.expectations[1u] = { coverage.get(), ResourceStates::CopyDest };
-    clearPayload.expectationCount = 2u;
+    clearPayload.expectationCount = s_ExpectedDualCount;
     clearPayload.recordOrdinal = &recordOrdinal;
-    clearPayload.expectedOrdinal = 2u;
+    clearPayload.expectedOrdinal = s_ExpectedDualCount;
     clearPayload.timingTicket = &preTimingTicket;
     clearPayload.recorded = &clearRecorded;
     clearPayload.acceptedToken = &clearAcceptedToken;
@@ -323,7 +327,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload producerPayload;
     producerPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     producerPayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-    producerPayload.expectations[2u] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
+    producerPayload.expectations[s_ThirdElementIndex] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectations[3u] = { generatedVertexB.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectationCount = 4u;
     producerPayload.recordOrdinal = &recordOrdinal;
@@ -353,7 +357,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload occupancyPayload;
     occupancyPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     occupancyPayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-    occupancyPayload.expectations[2u] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
+    occupancyPayload.expectations[s_ThirdElementIndex] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
     occupancyPayload.expectations[3u] = { generatedVertexB.get(), ResourceStates::VertexBuffer };
     occupancyPayload.expectations[4u] = { coverage.get(), ResourceStates::UnorderedAccess };
     occupancyPayload.expectationCount = 5u;
@@ -406,7 +410,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     ASSERT_EQ(analysis.topologicalOrder().size(), 5u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], preTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], streamTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], clearTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], clearTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], producerTask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], occupancyTask);
 
@@ -446,7 +450,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyAliasFreeC
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], preTask);
     EXPECT_EQ(packetTasks[1u], streamTask);
-    EXPECT_EQ(packetTasks[2u], clearTask);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], clearTask);
     EXPECT_EQ(packetTasks[3u], producerTask);
     EXPECT_EQ(packetTasks[4u], occupancyTask);
 

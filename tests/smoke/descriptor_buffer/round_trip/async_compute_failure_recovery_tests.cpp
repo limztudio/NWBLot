@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -231,7 +234,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         if(failurePoint == FailurePoint::Effects || failurePoint == FailurePoint::Recovery)
             ASSERT_TRUE(submissionObserver.armSubmissionFailures(
                 nativeGraphicsQueue,
-                failurePoint == FailurePoint::Recovery ? 2u : 1u
+                failurePoint == FailurePoint::Recovery ? s_ExpectedDualCount : 1u
             ));
         CommandList* effectsCommandLists[] = { effects.get() };
         const QueueSubmissionToken effectsToken = device.executeCommandLists(
@@ -262,7 +265,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
             if(failurePoint == FailurePoint::Final)
                 ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue));
             const QueueSubmissionToken finalWaitTokens[] = { shadowToken, effectsToken };
-            const QueueSubmissionDesc finalSubmitDesc = QueueSubmissionDesc().setWaitTokens(finalWaitTokens, 2u);
+            const QueueSubmissionDesc finalSubmitDesc = QueueSubmissionDesc().setWaitTokens(finalWaitTokens, s_ExpectedDualCount);
             CommandList* finalCommandLists[] = { final.get() };
             const QueueSubmissionToken finalToken = device.executeCommandLists(
                 finalCommandLists,
@@ -305,7 +308,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncComputePacketFailureInjectionPreserve
         );
         if(failurePoint == FailurePoint::Recovery){
             EXPECT_FALSE(recoveryToken.valid());
-            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 2u);
+            EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), s_ExpectedDualCount);
             EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
             EXPECT_FALSE(submissionObserver.overflowed());
             EXPECT_TRUE(device.waitForIdle());

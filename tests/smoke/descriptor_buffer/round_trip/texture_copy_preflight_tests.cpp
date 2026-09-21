@@ -17,6 +17,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -84,14 +88,14 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
         .setDepth(1u)
         .setArraySize(1u)
         .setMipLevels(1u)
-        .setSampleCount(2u)
+        .setSampleCount(s_ExpectedDualCount)
     ;
-    invalidNativeDescs[2u]
+    invalidNativeDescs[s_ThirdElementIndex]
         .setDimension(TextureDimension::TextureCube)
         .setDepth(1u)
         .setArraySize(6u)
         .setMipLevels(1u)
-        .setSampleCount(2u)
+        .setSampleCount(s_ExpectedDualCount)
     ;
     constexpr const char* s_InvalidNativeLabels[] = {
         "nonzero sample quality",
@@ -212,7 +216,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
             destinationSlice.setSize(4u, 4u, 1u);
             break;
         case Operation::MismatchedSampleCount:
-            mutableDestinationDesc.setSampleCount(2u);
+            mutableDestinationDesc.setSampleCount(s_ExpectedDualCount);
             break;
         case Operation::MismatchedFormat:
             mutableDestinationDesc.setFormat(Format::RGBA8_UINT);
@@ -300,7 +304,7 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     }
 
     TextureSlice copiedSlice;
-    copiedSlice.setOrigin(2u, 2u, 0u).setSize(4u, 4u, 1u);
+    copiedSlice.setOrigin(s_ExpectedDualCount, s_ExpectedDualCount, 0u).setSize(4u, 4u, 1u);
     commandList->open();
     commandList->clearTextureFloat(
         *destination,
@@ -357,11 +361,11 @@ TEST_F(DescriptorBufferRoundTripTest, DirectTextureCopyRejectsAtomicallyAndRecov
     ASSERT_GE(rowPitch, static_cast<usize>(s_Width) * 4u);
     for(u32 row = 0u; row < s_Height; ++row){
         for(u32 column = 0u; column < s_Width; ++column){
-            const bool copied = column >= 2u && column < 6u && row >= 2u && row < 6u;
+            const bool copied = column >= s_ExpectedDualCount && column < 6u && row >= s_ExpectedDualCount && row < 6u;
             const usize pixelOffset = static_cast<usize>(row) * rowPitch + static_cast<usize>(column) * 4u;
             EXPECT_EQ(readbackBytes[pixelOffset + 0u], copied ? 0u : 255u);
             EXPECT_EQ(readbackBytes[pixelOffset + 1u], copied ? 255u : 0u);
-            EXPECT_EQ(readbackBytes[pixelOffset + 2u], 0u);
+            EXPECT_EQ(readbackBytes[pixelOffset + s_ExpectedDualCount], 0u);
             EXPECT_EQ(readbackBytes[pixelOffset + 3u], 255u);
         }
     }

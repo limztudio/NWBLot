@@ -14,6 +14,10 @@
 namespace __hidden_telemetry_frame_graph_physical_queue_statistics_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 using EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation = void(*)(
@@ -136,10 +140,10 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
-            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
-            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
-            + (sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u)
-            + (sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount)
+            + (sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * s_ExpectedDualCount)
+            + (sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * s_ExpectedDualCount)
             + sizeof("GBuffer Pass")
             + sizeof("Albedo Texture")
             + sizeof("Lighting Pass"));
@@ -147,8 +151,8 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
-    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
-    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    EXPECT_EQ(header.runtimeStatisticsCount, s_ExpectedDualCount);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
@@ -156,7 +160,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     EXPECT_TRUE(parsed.physicalQueueRuntimeStatisticsPresent);
     EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
     EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
     const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& first =
         parsed.physicalQueueRuntimeStatistics[0u].statistics
     ;
@@ -195,9 +199,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRoundTripAndWireO
     const usize physicalQueueRuntimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
-        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * s_ExpectedDualCount
     ;
     const auto readU8 = [&payload, physicalQueueRuntimeStatisticsOffset](const usize wireOffset){
         u8 value = 0u;
@@ -285,8 +289,8 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsV5PayloadDefaultsRecover
     Telemetry::EncodedFrameGraphPayloadHeaderV5 header;
     NWB_MEMCPY(&header, sizeof(header), legacyPayload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion);
-    EXPECT_EQ(header.runtimeStatisticsCount, 2u);
-    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, 2u);
+    EXPECT_EQ(header.runtimeStatisticsCount, s_ExpectedDualCount);
+    EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(
@@ -297,7 +301,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsV5PayloadDefaultsRecover
     ));
     EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion);
     EXPECT_TRUE(parsed.physicalQueueRuntimeStatisticsPresent);
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
     EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.recoverySubmissionCount, 0u);
     EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.submission.recoverySubmissionCount, 0u);
     EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.submission.recoverySubmissionCount, 0u);
@@ -362,7 +366,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     records[0u].statistics.compile.taskCount = 29u;
-    records[0u].statistics.compile.mergedTaskCount = 2u;
+    records[0u].statistics.compile.mergedTaskCount = s_ExpectedDualCount;
     EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     ++records[0u].statistics.submission.plannedWaitTokenCount;
@@ -398,9 +402,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
     const usize statisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
-        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8) * s_ExpectedDualCount
     ;
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     for(

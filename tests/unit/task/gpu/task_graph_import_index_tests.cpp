@@ -18,6 +18,9 @@
 namespace __hidden_task_graph_import_index_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -108,7 +111,7 @@ struct ImportContext{
                 IndexedName(Name("tests/graph_import_index/generic"), index), Core::GpuGraphResourceType::HazardDomain
             );
             const Name typedIdentity = IndexedName(Name("tests/graph_import_index/typed"), index);
-            if(index % 2u == 0u){
+            if(index % s_ExpectedDualCount == 0u){
                 buffers[index] = makeBuffer(typedIdentity);
                 typedDescriptions[index] = ResourceDescription(typedIdentity, Core::GpuGraphResourceType::Buffer);
             }
@@ -231,14 +234,14 @@ TEST(TaskGraphImportIndex, PointerAliasesKeepFirstIdentityAndLabelWhileConflicti
     EXPECT_EQ(view.resourceAt(bufferId.index).identity, bufferDescription.identity);
     EXPECT_EQ(view.resourceAt(bufferId.index).markerLabel, "Graph Import Index Resource");
     EXPECT_EQ(view.resourceAt(textureId.index).markerLabel, "Graph Import Index Resource");
-    EXPECT_EQ(buffer->getReferenceCount(), 2u);
-    EXPECT_EQ(texture->getReferenceCount(), 2u);
+    EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
+    EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
     EXPECT_EQ(otherBuffer->getReferenceCount(), 1u);
 }
 
 TEST(TaskGraphImportIndex, ReimportsRevalidateCurrentDescriptorsButPointerQueriesRetainTheirOriginalAliases){
     ImportContext context;
-    context.prepare(2u);
+    context.prepare(s_ExpectedDualCount);
     const auto bufferId = context.importTyped(0u);
     const auto textureId = context.importTyped(1u);
     ASSERT_TRUE(bufferId.valid());
@@ -307,7 +310,7 @@ TEST(TaskGraphImportIndex, EveryNameHashLaneParticipatesAndResourceSetIdentityHa
 
 TEST(TaskGraphImportIndex, RejectedAppendDoesNotReserveIdentityOrAcquireOwnership){
     ImportContext context;
-    context.prepare(2u);
+    context.prepare(s_ExpectedDualCount);
     const GraphStamp empty = ReadStamp(context.graph);
     auto invalidBuffer = context.typedDescriptions[0u];
     invalidBuffer.initialAvailabilityCompletion = { .generation = empty.generation, .index = 0u };
@@ -333,8 +336,8 @@ TEST(TaskGraphImportIndex, RejectedAppendDoesNotReserveIdentityOrAcquireOwnershi
     EXPECT_FALSE(context.graph.importResourceSet(invalidSet).valid());
     ASSERT_NO_FATAL_FAILURE(ExpectUnchanged(context.graph, populated));
     ASSERT_TRUE(context.graph.importResourceSet(context.setDescriptions[0u]).valid());
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
-    EXPECT_EQ(context.textures[1u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
+    EXPECT_EQ(context.textures[1u]->getReferenceCount(), s_ExpectedDualCount);
 }
 
 TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSidesOfTheSmallRegistryBoundary){
@@ -393,8 +396,8 @@ TEST(TaskGraphImportIndex, RejectedImportsAndRetriesPreserveOwnershipOnBothSides
         EXPECT_EQ(setId.index, prefixCount);
         EXPECT_EQ(context.importTyped(0u), context.resources[0u]);
         EXPECT_EQ(context.graph.importResourceSet(context.setDescriptions[0u]), context.sets[0u]);
-        EXPECT_EQ(buffer->getReferenceCount(), 2u);
-        EXPECT_EQ(texture->getReferenceCount(), 2u);
+        EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
         const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
         ASSERT_TRUE(view.valid());
         EXPECT_EQ(view.findImportedBuffer(context.buffers[0u]), context.resources[0u]);
@@ -418,7 +421,7 @@ TEST(TaskGraphImportIndex, DeclarationReadClaimsRejectAllMutatingImportsWithoutP
         EXPECT_FALSE(context.graph.importResource(context.genericDescriptions[0u]).valid());
         EXPECT_FALSE(context.importTyped(0u).valid());
         EXPECT_FALSE(context.importTyped(1u).valid());
-        EXPECT_FALSE(context.importTyped(2u).valid());
+        EXPECT_FALSE(context.importTyped(s_ExpectedDualCount).valid());
         EXPECT_FALSE(context.importTyped(3u).valid());
         EXPECT_FALSE(context.graph.importResourceSet(context.setDescriptions[0u]).valid());
         EXPECT_FALSE(context.graph.importResourceSet(context.setDescriptions[1u]).valid());
@@ -430,7 +433,7 @@ TEST(TaskGraphImportIndex, DeclarationReadClaimsRejectAllMutatingImportsWithoutP
     }
     EXPECT_EQ(context.importTyped(0u), context.resources[0u]);
     EXPECT_EQ(context.importTyped(1u), context.resources[1u]);
-    ASSERT_TRUE(context.importTyped(2u).valid());
+    ASSERT_TRUE(context.importTyped(s_ExpectedDualCount).valid());
     ASSERT_TRUE(context.importTyped(3u).valid());
     ASSERT_TRUE(context.graph.importResource(context.genericDescriptions[0u]).valid());
     EXPECT_EQ(context.graph.importResourceSet(context.setDescriptions[0u]), context.sets[0u]);
@@ -652,11 +655,11 @@ static void BenchmarkImports(const usize count, const usize cycles, const usize 
         for(usize index = 0u; index < count; ++index){
             if(context.buffers[index]){
                 EXPECT_EQ(view.bufferForResource(context.resources[index]), context.buffers[index].get());
-                EXPECT_EQ(context.buffers[index]->getReferenceCount(), 2u);
+                EXPECT_EQ(context.buffers[index]->getReferenceCount(), s_ExpectedDualCount);
             }
             else{
                 EXPECT_EQ(view.textureForResource(context.resources[index]), context.textures[index].get());
-                EXPECT_EQ(context.textures[index]->getReferenceCount(), 2u);
+                EXPECT_EQ(context.textures[index]->getReferenceCount(), s_ExpectedDualCount);
             }
         }
     }
@@ -693,7 +696,7 @@ TEST(TaskGraphImportIndexBenchmark, DISABLED_Resources32){
 }
 
 TEST(TaskGraphImportIndexBenchmark, DISABLED_Resources1024){
-    BenchmarkImports(1024u, 1u, 2u);
+    BenchmarkImports(1024u, 1u, s_ExpectedDualCount);
 }
 
 TEST(TaskGraphImportIndexBenchmark, DISABLED_Resources4096){

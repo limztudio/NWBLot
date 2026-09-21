@@ -21,6 +21,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -347,12 +351,12 @@ TEST_F(DescriptorBufferRoundTripTest, CrossTransactionAcceptanceReentryReturnsWh
     {
         const GpuTaskGraphReadViews firstViews(firstGraph, firstCompiledGraph);
         ASSERT_TRUE(firstViews.valid());
-        ASSERT_EQ(firstViews.compiled.packetCount(), 2u);
+        ASSERT_EQ(firstViews.compiled.packetCount(), s_ExpectedDualCount);
     }
     {
         const GpuTaskGraphReadViews secondViews(secondGraph, secondCompiledGraph);
         ASSERT_TRUE(secondViews.valid());
-        ASSERT_EQ(secondViews.compiled.packetCount(), 2u);
+        ASSERT_EQ(secondViews.compiled.packetCount(), s_ExpectedDualCount);
     }
 
     GpuRecordedGraph firstRecordedGraph(DescriptorBufferRoundTripTest::arena());
@@ -610,7 +614,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
             .setDependencies(mergedTransferDependencies, LengthOf(mergedTransferDependencies)),
         NativeTaskSubmissionSerializationTask::Payload{
             .context = &serializationContext,
-            .acceptanceOrderMarker = 2u,
+            .acceptanceOrderMarker = s_ExpectedDualCount,
         }
     );
     ASSERT_TRUE(mergedTransferTask.valid());
@@ -691,7 +695,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     ASSERT_NE(suffixPacket, recoveryPacket);
     const GpuTaskId* const transferPacketTasks = views.compiled.packet(transferPacket).tasks;
     ASSERT_NE(transferPacketTasks, nullptr);
-    ASSERT_EQ(views.compiled.packet(transferPacket).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(transferPacket).plan->taskCount, s_ExpectedDualCount);
     EXPECT_EQ(transferPacketTasks[0u], transferTask);
     EXPECT_EQ(transferPacketTasks[1u], mergedTransferTask);
     ASSERT_TRUE(views.compiled.packet(recoveryPacket).plan->joinsAcceptedQueueFrontier);
@@ -699,7 +703,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     const GpuSubmissionPacketRange ordinaryRange = views.compiled.packetRangeForTasks(transferTask, suffixTask);
     ASSERT_TRUE(ordinaryRange.valid());
     ASSERT_EQ(ordinaryRange.first, transferPacket);
-    ASSERT_EQ(ordinaryRange.packetCount, 2u);
+    ASSERT_EQ(ordinaryRange.packetCount, s_ExpectedDualCount);
 
     GpuRecordedGraph recordedGraph(transferScope.arena());
     GpuGraphSubmissionTransaction transaction(transferScope.arena());
@@ -779,7 +783,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
         serializationContext.taskCallbackEntered.wait(false, MemoryOrder::acquire);
     EXPECT_TRUE(serializationContext.callbackInputsValid);
     EXPECT_FALSE(serializationContext.acceptanceOrderOverflow);
-    EXPECT_EQ(serializationContext.typedAcceptedCount, 2u);
+    EXPECT_EQ(serializationContext.typedAcceptedCount, s_ExpectedDualCount);
     EXPECT_EQ(serializationContext.taskAcceptedCount, 1u);
     EXPECT_TRUE(serializationContext.typedAcceptedToken.valid());
     EXPECT_TRUE(serializationContext.taskAcceptedToken.valid());
@@ -796,8 +800,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     EXPECT_EQ(secondTaskAcceptance.acceptedCount, 0u);
     ASSERT_EQ(acceptanceOrder.invocationCount, 3u);
     EXPECT_EQ(acceptanceOrder.markers[0u], 1u);
-    EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
-    EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
+    EXPECT_EQ(acceptanceOrder.markers[1u], s_ExpectedDualCount);
+    EXPECT_EQ(acceptanceOrder.markers[s_ThirdElementIndex], 3u);
 
     AtomicFlag recoveryReadyToSubmit;
     bool recoverySubmissionResult = false;
@@ -836,8 +840,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     EXPECT_FALSE(serializationContext.acceptanceOrderOverflow);
     ASSERT_EQ(acceptanceOrder.invocationCount, 4u);
     EXPECT_EQ(acceptanceOrder.markers[0u], 1u);
-    EXPECT_EQ(acceptanceOrder.markers[1u], 2u);
-    EXPECT_EQ(acceptanceOrder.markers[2u], 3u);
+    EXPECT_EQ(acceptanceOrder.markers[1u], s_ExpectedDualCount);
+    EXPECT_EQ(acceptanceOrder.markers[s_ThirdElementIndex], 3u);
     EXPECT_EQ(acceptanceOrder.markers[3u], 4u);
     const QueueSubmissionToken transferToken = transaction.packetToken(transferPacket);
     const QueueSubmissionToken suffixToken = transaction.packetToken(suffixPacket);
@@ -849,8 +853,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
     EXPECT_EQ(transferToken.value, serializationContext.taskAcceptedToken.value);
     EXPECT_EQ(transferToken.value, secondTaskAcceptance.lastToken.value);
     EXPECT_FALSE(submissionObserver.overflowed());
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
     VulkanTestQueueSubmit2Capture transferCapture;
     VulkanTestQueueSubmit2Capture recoveryCapture;
@@ -885,7 +889,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativeTaskAcceptedCallbacksGateAcceptedFro
         LengthOf(taskAcceptedCallbacks)
     ));
     EXPECT_EQ(retryFailedPacket, transferPacket);
-    EXPECT_EQ(serializationContext.typedAcceptedCount, 2u);
+    EXPECT_EQ(serializationContext.typedAcceptedCount, s_ExpectedDualCount);
     EXPECT_EQ(serializationContext.taskAcceptedCount, 1u);
     EXPECT_EQ(secondTaskAcceptance.acceptedCount, 1u);
     EXPECT_EQ(acceptanceOrder.invocationCount, acceptedOrderCount);

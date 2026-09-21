@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -392,8 +395,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
     ASSERT_TRUE(computeToken.valid());
     EXPECT_TRUE(computeToken.matchesPhysicalQueue(computeQueue.index, computeQueue.deviceGeneration));
     EXPECT_FALSE(submissionObserver.overflowed());
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
     VulkanTestQueueSubmit2Capture graphicsCapture;
     VulkanTestQueueSubmit2Capture computeCapture;
@@ -410,9 +413,9 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalStateOrdersOverlappingIndepen
 
     const GpuTaskGraphSubmissionStatistics submissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(submissionStatistics.valid());
-    EXPECT_EQ(submissionStatistics.acceptedPacketCount, 2u);
-    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
-    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.acceptedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
     EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 0u);
     EXPECT_EQ(submissionStatistics.timelineWaitCount, 1u);
@@ -448,7 +451,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             // Vulkan images are created in Undefined layout. The first graph tasks discard both mip contents, so
             // retain that physical fact instead of declaring an unproven Common state.
@@ -548,7 +551,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
         ASSERT_NE(mip0Packet, mip1Packet);
         const GpuCompiledExternalResourceExportView exportInfo = views.compiled.externalResourceExport(resource);
         ASSERT_TRUE(exportInfo.valid());
-        ASSERT_EQ(exportInfo.plan->sourceCount, 2u);
+        ASSERT_EQ(exportInfo.plan->sourceCount, s_ExpectedDualCount);
         EXPECT_FALSE(exportInfo.plan->producerTask.valid());
         EXPECT_FALSE(exportInfo.plan->sourceQueue.valid());
         initialRevision = views.declarations.declarationRevision();
@@ -685,8 +688,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffMergesMultipleTerminal
     EXPECT_EQ(handoff->resource, resource);
     EXPECT_EQ(handoff->destinationQueue, graphicsQueue);
     EXPECT_EQ(handoff->finalState, ResourceStates::ShaderResource);
-    EXPECT_EQ(handoff->terminalRangeCount, 2u);
-    ASSERT_EQ(handoff->producerCount, 2u);
+    EXPECT_EQ(handoff->terminalRangeCount, s_ExpectedDualCount);
+    ASSERT_EQ(handoff->producerCount, s_ExpectedDualCount);
     EXPECT_FALSE(handoff->producerTask.valid());
     EXPECT_FALSE(handoff->sourceQueue.valid());
     EXPECT_FALSE(handoff->token.valid());

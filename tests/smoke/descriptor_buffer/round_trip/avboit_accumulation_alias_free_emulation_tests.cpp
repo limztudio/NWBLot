@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -370,7 +374,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamPayload;
     streamPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamPayload.expectationCount = 2u;
+    streamPayload.expectationCount = s_ExpectedDualCount;
     streamPayload.recordOrdinal = &recordOrdinal;
     streamPayload.expectedOrdinal = 1u;
     streamPayload.timingTicket = &preTimingTicket;
@@ -391,11 +395,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload producerPayload;
     producerPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     producerPayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-    producerPayload.expectations[2u] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
+    producerPayload.expectations[s_ThirdElementIndex] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectations[3u] = { generatedVertexB.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectationCount = 4u;
     producerPayload.recordOrdinal = &recordOrdinal;
-    producerPayload.expectedOrdinal = 2u;
+    producerPayload.expectedOrdinal = s_ExpectedDualCount;
     producerPayload.device = &device;
     producerPayload.timing = &timing;
     producerPayload.timingTicket = &preTimingTicket;
@@ -421,12 +425,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload rasterPayload;
     rasterPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     rasterPayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-    rasterPayload.expectations[2u] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
+    rasterPayload.expectations[s_ThirdElementIndex] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
     rasterPayload.expectations[3u] = { generatedVertexB.get(), ResourceStates::VertexBuffer };
     rasterPayload.expectationCount = 4u;
     rasterPayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::RenderTarget };
     rasterPayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::RenderTarget };
-    rasterPayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::DepthRead };
+    rasterPayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::DepthRead };
     rasterPayload.textureExpectationCount = 3u;
     rasterPayload.recordOrdinal = &recordOrdinal;
     rasterPayload.expectedOrdinal = 3u;
@@ -457,7 +461,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     finalizerPayload.expectationCount = 1u;
     finalizerPayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::ShaderResource };
-    finalizerPayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::ShaderResource };
+    finalizerPayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectationCount = 3u;
     finalizerPayload.recordOrdinal = &recordOrdinal;
     finalizerPayload.expectedOrdinal = 4u;
@@ -501,7 +505,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     ASSERT_EQ(analysis.topologicalOrder().size(), 5u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], preTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], streamTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], producerTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], producerTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], rasterTask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], finalizerTask);
 
@@ -541,7 +545,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitAccumulationAliasFr
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], preTask);
     EXPECT_EQ(packetTasks[1u], streamTask);
-    EXPECT_EQ(packetTasks[2u], producerTask);
+    EXPECT_EQ(packetTasks[s_ThirdElementIndex], producerTask);
     EXPECT_EQ(packetTasks[3u], rasterTask);
     EXPECT_EQ(packetTasks[4u], finalizerTask);
 

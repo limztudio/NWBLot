@@ -19,6 +19,10 @@
 namespace __hidden_material_sampled_texture_collection_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -122,8 +126,8 @@ TEST(MaterialSampledTextureCollection, PassKeepsFirstHandleOrderAcrossMeshComput
     CollectionContext context;
     for(usize index = 0u; index < 5u; ++index)
         ASSERT_EQ(context.addTexture(), index);
-    ASSERT_EQ(context.addTexture(true, context.textures[2u]), 5u);
-    const Name first = context.addMaterial({ 2u, 0u, 2u });
+    ASSERT_EQ(context.addTexture(true, context.textures[s_ThirdElementIndex]), 5u);
+    const Name first = context.addMaterial({ s_ExpectedDualCount, 0u, s_ExpectedDualCount });
     const Name second = context.addMaterial({ 1u, 5u });
     const Name third = context.addMaterial({ 3u });
     Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/pass_order"));
@@ -138,9 +142,9 @@ TEST(MaterialSampledTextureCollection, PassKeepsFirstHandleOrderAcrossMeshComput
     output.push_back(context.textures[4u]);
     ASSERT_TRUE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, LengthOf(sets), output, scratch));
     ASSERT_EQ(output.size(), 4u);
-    EXPECT_EQ(output[0u], context.textures[2u]);
+    EXPECT_EQ(output[0u], context.textures[s_ThirdElementIndex]);
     EXPECT_EQ(output[1u], context.textures[0u]);
-    EXPECT_EQ(output[2u], context.textures[1u]);
+    EXPECT_EQ(output[s_ThirdElementIndex], context.textures[1u]);
     EXPECT_EQ(output[3u], context.textures[3u]);
 }
 
@@ -158,11 +162,11 @@ TEST(MaterialSampledTextureCollection, PassFailureKeepsOnlyTheSequentialPrefixAn
     AppendDraw(secondSet.computeDrawItems, second);
     ScratchTextureVector output(scratch);
     const MaterialPassDrawItems* sets[] = { &firstSet, &secondSet };
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 2u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, s_ExpectedDualCount, output, scratch));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
     sets[1u] = nullptr;
-    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 2u, output, scratch));
+    EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, s_ExpectedDualCount, output, scratch));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
     EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, nullptr, 1u, output, scratch));
@@ -184,7 +188,7 @@ TEST(MaterialSampledTextureCollection, SurfaceRechecksEveryCurrentResourceAndPre
         switch(failure){
         case 0u: material.resourceReferencesResolved = false; break;
         case 1u: reference.resourceKind = MaterialResourceKind::None; break;
-        case 2u: reference.resourceSource = MaterialResourceSource::None; break;
+        case s_ExpectedDualCount: reference.resourceSource = MaterialResourceSource::None; break;
         case 3u: reference.textureAsset.reset(); break;
         case 4u: EXPECT_EQ(context.resources.textureAssetCache.erase(reference.textureAsset.name()), 1u); break;
         case 5u: context.resources.textureAssetCache.at(reference.textureAsset.name()).reset(); break;
@@ -228,18 +232,18 @@ TEST(MaterialSampledTextureCollection, ShadowResourceFailurePublishesNoPartOfThe
     context.resources.textureAssetCache.at(context.textureAssets[1u].name())->format = Core::Format::UNKNOWN;
     Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/shadow_atomic"));
     TextureVector output(context.testArena.arena);
-    output.push_back(context.textures[2u]);
+    output.push_back(context.textures[s_ThirdElementIndex]);
     const auto firstReferences = context.textures[0u]->getReferenceCount();
     ShadowMaterialSampledTextureCollector collector(output, scratch);
     EXPECT_FALSE(context.appendShadow(material, collector));
     ASSERT_EQ(output.size(), 1u);
-    EXPECT_EQ(output[0u], context.textures[2u]);
+    EXPECT_EQ(output[0u], context.textures[s_ThirdElementIndex]);
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), firstReferences);
     context.resources.textureAssetCache.at(context.textureAssets[1u].name())->format = Core::Format::RGBA8_UNORM;
     ASSERT_TRUE(context.appendShadow(material, collector));
     ASSERT_EQ(output.size(), 3u);
     EXPECT_EQ(output[1u], context.textures[0u]);
-    EXPECT_EQ(output[2u], context.textures[1u]);
+    EXPECT_EQ(output[s_ThirdElementIndex], context.textures[1u]);
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), firstReferences + 1u);
 }
 
@@ -247,16 +251,16 @@ TEST(MaterialSampledTextureCollection, ShadowMissingCreationNamePreservesOnlyThe
     CollectionContext context;
     ASSERT_EQ(context.addTexture(), 0u);
     ASSERT_EQ(context.addTexture(false), 1u);
-    ASSERT_EQ(context.addTexture(), 2u);
-    const Name material = context.addMaterial({ 0u, 0u, 1u, 2u });
+    ASSERT_EQ(context.addTexture(), s_ExpectedDualCount);
+    const Name material = context.addMaterial({ 0u, 0u, 1u, s_ExpectedDualCount });
     Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/shadow_name"));
     TextureVector output(context.testArena.arena);
-    const auto laterReferences = context.textures[2u]->getReferenceCount();
+    const auto laterReferences = context.textures[s_ThirdElementIndex]->getReferenceCount();
     ShadowMaterialSampledTextureCollector collector(output, scratch);
     EXPECT_FALSE(context.appendShadow(material, collector));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
-    EXPECT_EQ(context.textures[2u]->getReferenceCount(), laterReferences);
+    EXPECT_EQ(context.textures[s_ThirdElementIndex]->getReferenceCount(), laterReferences);
     EXPECT_FALSE(context.appendShadow(material, collector));
     EXPECT_EQ(output.size(), 1u);
 }
@@ -277,13 +281,13 @@ TEST(MaterialSampledTextureCollection, RepeatedMaterialCallsObserveReplacementHa
     resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 0u);
     resource.texture = context.makeTexture(original->getCreationDescription().name);
     ASSERT_TRUE(context.appendShadow(material, collector));
-    ASSERT_EQ(output.size(), 2u);
+    ASSERT_EQ(output.size(), s_ExpectedDualCount);
     EXPECT_EQ(output[0u], original);
     EXPECT_EQ(output[1u], resource.texture);
     EXPECT_NE(output[0u].get(), output[1u].get());
     context.materials.at(material).resourceReferencesResolved = false;
     EXPECT_FALSE(context.appendShadow(material, collector));
-    EXPECT_EQ(output.size(), 2u);
+    EXPECT_EQ(output.size(), s_ExpectedDualCount);
 }
 
 TEST(MaterialSampledTextureCollection, SeparateHardwareAndSoftwareCollectionsRetainFirstOwnershipAcrossLargePrefixes){
@@ -331,7 +335,7 @@ TEST(MaterialSampledTextureCollection, PromotedPassPreservesFirstPointersAndReva
         ASSERT_EQ(context.addTexture(), index);
     ASSERT_EQ(context.addTexture(true, context.textures[7u]), 80u);
     const Name first = context.addMaterialRange(80u, true);
-    const Name alias = context.addMaterial({ 80u, 2u, 80u });
+    const Name alias = context.addMaterial({ 80u, s_ExpectedDualCount, 80u });
     Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/promoted_pass"));
     MaterialPassDrawItems draws(scratch);
     AppendDraw(draws.meshDrawItems, first);
@@ -376,7 +380,7 @@ TEST(MaterialSampledTextureCollection, ReusedPromotedPendingStorageClearsFailure
     ASSERT_EQ(output.size(), 80u);
     EXPECT_EQ(output[0u], context.textures[1u]);
     EXPECT_EQ(output[1u], context.textures[0u]);
-    for(usize index = 2u; index < output.size(); ++index)
+    for(usize index = s_ExpectedDualCount; index < output.size(); ++index)
         EXPECT_EQ(output[index], context.textures[index]);
     const auto warm = scratch.memoryStats();
     for(usize iteration = 0u; iteration < 8u; ++iteration){
@@ -403,23 +407,23 @@ TEST(MaterialSampledTextureCollection, SeededDuplicatesRemainOrderedAndEmptyOrRe
         ShadowMaterialSampledTextureCollector unused(output, scratch);
     }
     EXPECT_EQ(scratch.memoryStats().allocationCount, empty.allocationCount);
-    output.push_back(context.textures[2u]);
+    output.push_back(context.textures[s_ThirdElementIndex]);
     output.push_back(context.textures[0u]);
-    output.push_back(context.textures[2u]);
-    const auto prefixReferences = context.textures[2u]->getReferenceCount();
+    output.push_back(context.textures[s_ThirdElementIndex]);
+    const auto prefixReferences = context.textures[s_ThirdElementIndex]->getReferenceCount();
     {
         MaterialSampledTextureCollector<Core::Alloc::GlobalArena> collector(output, scratch);
         for(usize iteration = 0u; iteration < 1024u; ++iteration){
-            collector.append(context.textures[2u]);
+            collector.append(context.textures[s_ThirdElementIndex]);
             collector.append(context.textures[1u]);
         }
     }
     ASSERT_EQ(output.size(), 4u);
-    EXPECT_EQ(output[0u], context.textures[2u]);
+    EXPECT_EQ(output[0u], context.textures[s_ThirdElementIndex]);
     EXPECT_EQ(output[1u], context.textures[0u]);
-    EXPECT_EQ(output[2u], context.textures[2u]);
+    EXPECT_EQ(output[s_ThirdElementIndex], context.textures[s_ThirdElementIndex]);
     EXPECT_EQ(output[3u], context.textures[1u]);
-    EXPECT_EQ(context.textures[2u]->getReferenceCount(), prefixReferences);
+    EXPECT_EQ(context.textures[s_ThirdElementIndex]->getReferenceCount(), prefixReferences);
     EXPECT_EQ(scratch.memoryStats().allocationCount, empty.allocationCount);
 }
 
@@ -494,7 +498,7 @@ static void BenchmarkCollection(
             Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/benchmark"));
             if(shadow){
                 shadowOutput.clear();
-                for(usize phase = 0u; phase < (hybrid ? 2u : 1u); ++phase){
+                for(usize phase = 0u; phase < (hybrid ? s_ExpectedDualCount : 1u); ++phase){
                     ShadowMaterialSampledTextureCollector collector(shadowOutput, scratch);
                     for(usize index = 0u; index < drawCount; ++index){
                         if(!context.appendShadow(materialNames[index % uniqueTextures], collector)){
@@ -522,7 +526,7 @@ static void BenchmarkCollection(
     RecordUnsignedProperty(MakeNotNull("material_texture_unique_count"), uniqueTextures);
     RecordUnsignedProperty(MakeNotNull("material_texture_draw_count"), drawCount);
     RecordUnsignedProperty(MakeNotNull("material_texture_iterations"), iterations);
-    RecordUnsignedProperty(MakeNotNull("material_texture_reference_count"), drawCount * 2u * (hybrid ? 2u : 1u) * iterations);
+    RecordUnsignedProperty(MakeNotNull("material_texture_reference_count"), drawCount * s_ExpectedDualCount * (hybrid ? s_ExpectedDualCount : 1u) * iterations);
     RecordUnsignedProperty(MakeNotNull("material_texture_scratch_peak_bytes"), scratchPeak);
     RecordUnsignedProperty(MakeNotNull("material_texture_scratch_reserved_bytes"), scratchReserved);
 }
@@ -540,7 +544,7 @@ TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_PassUnique1024Textures)
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_PassSharedEightTextures4096Draws){
-    BenchmarkCollection(8u, 4096u, 2u, false);
+    BenchmarkCollection(8u, 4096u, s_ExpectedDualCount, false);
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_ShadowSingleTexture){
@@ -556,7 +560,7 @@ TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_ShadowUnique1024Texture
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_ShadowSharedEightTextures4096Instances){
-    BenchmarkCollection(8u, 4096u, 2u, true);
+    BenchmarkCollection(8u, 4096u, s_ExpectedDualCount, true);
 }
 
 TEST(MaterialSampledTextureCollectionBenchmark, DISABLED_HybridUnique128Textures){

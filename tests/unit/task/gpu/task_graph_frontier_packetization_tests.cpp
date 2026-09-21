@@ -16,6 +16,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -103,7 +106,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     {
         const Graphics::GpuCompiledGraph::ReadView explicitMergePlan(explicitMergeGraph);
 
-        ASSERT_EQ(explicitMergePlan.packetCount(), 2u);
+        ASSERT_EQ(explicitMergePlan.packetCount(), s_ExpectedDualCount);
         const Graphics::GpuSubmissionPacketId explicitFirstPacket = explicitMergePlan.packetForTask(first);
         const Graphics::GpuSubmissionPacketId explicitUnrelatedPacket = explicitMergePlan.packetForTask(unrelatedGraphics);
         const Graphics::GpuSubmissionPacketId explicitConsumerPacket = explicitMergePlan.packetForTask(computeConsumer);
@@ -210,7 +213,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
     const Graphics::GpuSubmissionPacketId successorPacket = compiledPlan.packetForTask(successor);
     ASSERT_TRUE(producerPacket.valid());
     EXPECT_EQ(producerPacket, successorPacket);
-    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->taskCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(producerPacket).plan->taskCount, s_ExpectedDualCount);
     EXPECT_EQ(
         compiledPlan.packetizationDecisionForTask(producer),
         Graphics::GpuTaskPacketizationDecision::FirstTask
@@ -342,7 +345,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
     EXPECT_NE(compiledPlan.packetForTask(first), compiledPlan.packetForTask(successor));
     EXPECT_EQ(
         compiledPlan.packetizationDecisionForTask(successor),
@@ -495,7 +498,7 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
     const Graphics::GpuSubmissionPacketId explicitPacket = compiledPlan.packetForTask(explicitTask);
@@ -951,7 +954,7 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
     EXPECT_EQ(firstPacket, immediateFinalizePacket);
     EXPECT_NE(firstPacket, unrelatedPacket);
     EXPECT_NE(unrelatedPacket, consumerPacket);
-    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, s_ExpectedDualCount);
     EXPECT_EQ(compiledPlan.packet(unrelatedPacket).plan->taskCount, 1u);
     EXPECT_TRUE(analysis.hasExplicitEdge(first, computeConsumer));
     ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
@@ -1034,7 +1037,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, frontierOptions));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-    ASSERT_EQ(compiledPlan.packetCount(), 2u);
+    ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
     const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
@@ -1042,7 +1045,7 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueu
     ASSERT_TRUE(firstPacket.valid());
     EXPECT_EQ(firstPacket, producerPacket);
     EXPECT_NE(producerPacket, consumerPacket);
-    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, 2u);
+    EXPECT_EQ(compiledPlan.packet(firstPacket).plan->taskCount, s_ExpectedDualCount);
     EXPECT_NE(compiledPlan.packet(firstPacket).plan->queue, compiledPlan.packet(consumerPacket).plan->queue);
     ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);

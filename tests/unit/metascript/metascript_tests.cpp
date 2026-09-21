@@ -17,6 +17,10 @@
 namespace __hidden_metascript_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -181,7 +185,7 @@ TEST(Metascript, ListSelfAppendCopiesOriginalValues){
 
     list += list;
 
-    ASSERT_EQ(list.asList().size(), 2u);
+    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
     CheckStringListElement(list.asList()[0u], text);
     CheckStringListElement(list.asList()[1u], text);
 }
@@ -196,7 +200,7 @@ TEST(Metascript, AppendSelfMoveCopiesOriginalValue){
     list.append(Move(list));
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), 2u);
+    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
     CheckStringListElement(list.asList()[0u], text);
     ASSERT_TRUE(list.asList()[1u].isList());
     ASSERT_EQ(list.asList()[1u].asList().size(), 1u);
@@ -214,7 +218,7 @@ TEST(Metascript, AppendExistingListElementMoveCopiesBeforeDestroy){
     list.append(Move(list.asList()[0u]));
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), 2u);
+    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
     EXPECT_TRUE(list.asList()[0u].isNull());
     CheckStringListElement(list.asList()[1u], text);
 }
@@ -229,7 +233,7 @@ TEST(Metascript, ListAppendExistingElementCopiesBeforeReallocation){
     list += list.asList()[0u];
 
     ASSERT_TRUE(list.isList());
-    ASSERT_EQ(list.asList().size(), 2u);
+    ASSERT_EQ(list.asList().size(), s_ExpectedDualCount);
     CheckStringListElement(list.asList()[0u], text);
     CheckStringListElement(list.asList()[1u], text);
 }
@@ -317,7 +321,7 @@ TEST(Metascript, ParsesLargeNumericList){
     constexpr usize s_ValueCount = 8192u;
     DestinationArena arena;
     AString source("number asset; asset.values = [");
-    source.reserve(source.size() + s_ValueCount * 2u + 2u);
+    source.reserve(source.size() + s_ValueCount * s_ExpectedDualCount + s_ExpectedDualCount);
     for(usize index = 0u; index < s_ValueCount; ++index)
         source += "1,";
     source += "];";
@@ -355,11 +359,11 @@ TEST(Metascript, ExponentDoubleLiterals){
 
     EXPECT_TRUE(list[0u].isDouble());
     EXPECT_TRUE(list[1u].isDouble());
-    EXPECT_TRUE(list[2u].isDouble());
+    EXPECT_TRUE(list[s_ThirdElementIndex].isDouble());
     EXPECT_TRUE(list[3u].isDouble());
     EXPECT_LT(Abs(list[0u].asDouble() - 0.0000289785676), 0.0000000001);
     EXPECT_LT(Abs(list[1u].asDouble() + 0.000000366009772), 0.0000000001);
-    EXPECT_LT(Abs(list[2u].asDouble() - 1000.0), 0.0000000001);
+    EXPECT_LT(Abs(list[s_ThirdElementIndex].asDouble() - 1000.0), 0.0000000001);
     EXPECT_LT(Abs(list[3u].asDouble() - 200.0), 0.0000000001);
 }
 
@@ -411,7 +415,7 @@ TEST(Metascript, BindStyleStructDeclarations){
     const Value* surfaceFields = FindTestField(*surfaceStruct, LiteralView("fields"));
     ASSERT_NE(surfaceFields, nullptr);
     ASSERT_TRUE(surfaceFields->isList());
-    ASSERT_EQ(surfaceFields->asList().size(), 2u);
+    ASSERT_EQ(surfaceFields->asList().size(), s_ExpectedDualCount);
 
     const Value& baseColorField = surfaceFields->asList()[0u];
     CheckStringField(baseColorField, LiteralView("type"), LiteralView("float4"));
@@ -433,7 +437,7 @@ TEST(Metascript, BindStyleStructDeclarations){
     const Value* instances = FindTestField(asset, LiteralView("instances"));
     ASSERT_NE(instances, nullptr);
     ASSERT_TRUE(instances->isList());
-    ASSERT_EQ(instances->asList().size(), 2u);
+    ASSERT_EQ(instances->asList().size(), s_ExpectedDualCount);
 
     CheckStringField(instances->asList()[0u], LiteralView("type"), LiteralView("NwbProjectBxdfSurfaceMaterial"));
     CheckStringField(instances->asList()[0u], LiteralView("name"), LiteralView("surface"));
@@ -494,13 +498,13 @@ TEST(Metascript, GenericDeclarationsAndReferences){
     EXPECT_EQ(document.declarations()[0u].variable, LiteralView("model"));
     EXPECT_EQ(document.declarations()[1u].type, LiteralView("mesh"));
     EXPECT_EQ(document.declarations()[1u].variable, LiteralView("mesh"));
-    EXPECT_EQ(document.declarations()[2u].type, LiteralView("asset_bunch"));
-    EXPECT_EQ(document.declarations()[2u].variable, LiteralView("bunch"));
+    EXPECT_EQ(document.declarations()[s_ThirdElementIndex].type, LiteralView("asset_bunch"));
+    EXPECT_EQ(document.declarations()[s_ThirdElementIndex].variable, LiteralView("bunch"));
 
     const Value* bunch = document.findVariable(LiteralView("bunch"));
     ASSERT_NE(bunch, nullptr);
     ASSERT_TRUE(bunch->isList());
-    ASSERT_EQ(bunch->asList().size(), 2u);
+    ASSERT_EQ(bunch->asList().size(), s_ExpectedDualCount);
 
     CheckReferenceListElement(bunch->asList()[0u], LiteralView("model"));
     CheckReferenceListElement(bunch->asList()[1u], LiteralView("mesh"));

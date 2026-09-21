@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -440,7 +444,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload occupancyPayload;
     occupancyPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     occupancyPayload.expectations[1u] = { coverage.get(), ResourceStates::UnorderedAccess };
-    occupancyPayload.expectationCount = 2u;
+    occupancyPayload.expectationCount = s_ExpectedDualCount;
     occupancyPayload.recordOrdinal = &recordOrdinal;
     occupancyPayload.expectedOrdinal = 1u;
     occupancyPayload.timingTicket = &preTimingTicket;
@@ -461,11 +465,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload depthWarpPayload;
     depthWarpPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     depthWarpPayload.expectations[1u] = { coverage.get(), ResourceStates::UnorderedAccess };
-    depthWarpPayload.expectations[2u] = { depthWarp.get(), ResourceStates::UnorderedAccess };
+    depthWarpPayload.expectations[s_ThirdElementIndex] = { depthWarp.get(), ResourceStates::UnorderedAccess };
     depthWarpPayload.expectations[3u] = { control.get(), ResourceStates::UnorderedAccess };
     depthWarpPayload.expectationCount = 4u;
     depthWarpPayload.recordOrdinal = &recordOrdinal;
-    depthWarpPayload.expectedOrdinal = 2u;
+    depthWarpPayload.expectedOrdinal = s_ExpectedDualCount;
     depthWarpPayload.timingTicket = &preTimingTicket;
     depthWarpPayload.recorded = &depthWarpRecorded;
     depthWarpPayload.acceptedToken = &depthWarpAcceptedToken;
@@ -484,7 +488,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamPayload;
     streamPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamPayload.expectationCount = 2u;
+    streamPayload.expectationCount = s_ExpectedDualCount;
     streamPayload.recordOrdinal = &recordOrdinal;
     streamPayload.expectedOrdinal = 3u;
     streamPayload.timingTicket = &preTimingTicket;
@@ -520,7 +524,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     };
     GpuTaskId sharedPhaseTasks[LengthOf(sharedPhaseIdentities)] = {};
     for(usize phaseIndex = 0u; phaseIndex < LengthOf(sharedPhaseTasks); ++phaseIndex){
-        const bool isRaster = phaseIndex % 2u != 0u;
+        const bool isRaster = phaseIndex % s_ExpectedDualCount != 0u;
         const GpuTaskId dependency = phaseIndex == 0u ? streamTask : sharedPhaseTasks[phaseIndex - 1u];
         GpuTaskDesc phaseDesc;
         phaseDesc
@@ -538,7 +542,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
         phasePayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
         phasePayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
         if(isRaster){
-            phasePayload.expectations[2u] = { depthWarp.get(), ResourceStates::ShaderResource };
+            phasePayload.expectations[s_ThirdElementIndex] = { depthWarp.get(), ResourceStates::ShaderResource };
             phasePayload.expectations[3u] = { control.get(), ResourceStates::ShaderResource };
             phasePayload.expectations[4u] = { generatedVertex.get(), ResourceStates::VertexBuffer };
             phasePayload.expectations[5u] = { extinction.get(), ResourceStates::UnorderedAccess };
@@ -548,7 +552,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
             phasePayload.textureExpectationCount = 1u;
         }
         else{
-            phasePayload.expectations[2u] = { generatedVertex.get(), ResourceStates::UnorderedAccess };
+            phasePayload.expectations[s_ThirdElementIndex] = { generatedVertex.get(), ResourceStates::UnorderedAccess };
             phasePayload.expectationCount = 3u;
         }
         phasePayload.recordOrdinal = &recordOrdinal;
@@ -574,7 +578,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     }
     const GpuTaskId dispatchATask = sharedPhaseTasks[0u];
     const GpuTaskId rasterATask = sharedPhaseTasks[1u];
-    const GpuTaskId dispatchBTask = sharedPhaseTasks[2u];
+    const GpuTaskId dispatchBTask = sharedPhaseTasks[s_ThirdElementIndex];
     const GpuTaskId rasterBTask = sharedPhaseTasks[3u];
     const GpuTaskId dispatchCTask = sharedPhaseTasks[4u];
     const GpuTaskId rasterCTask = sharedPhaseTasks[5u];
@@ -582,7 +586,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload integrationPayload;
     integrationPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     integrationPayload.expectations[1u] = { extinction.get(), ResourceStates::ShaderResource };
-    integrationPayload.expectations[2u] = { control.get(), ResourceStates::ShaderResource };
+    integrationPayload.expectations[s_ThirdElementIndex] = { control.get(), ResourceStates::ShaderResource };
     integrationPayload.expectations[3u] = { extinctionOverflow.get(), ResourceStates::ShaderResource };
     integrationPayload.expectations[4u] = { transmittance.get(), ResourceStates::UnorderedAccess };
     integrationPayload.expectationCount = 5u;
@@ -610,7 +614,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload accumulationPayload;
     accumulationPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     accumulationPayload.expectations[1u] = { transmittance.get(), ResourceStates::ShaderResource };
-    accumulationPayload.expectationCount = 2u;
+    accumulationPayload.expectationCount = s_ExpectedDualCount;
     accumulationPayload.recordOrdinal = &recordOrdinal;
     accumulationPayload.expectedOrdinal = 11u;
     accumulationPayload.timingTicket = &preTimingTicket;
@@ -904,7 +908,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitExtinctionSharedOut
     EXPECT_TRUE(streamRecorded);
     EXPECT_TRUE(sharedPhaseRecorded[0u]);
     EXPECT_TRUE(sharedPhaseRecorded[1u]);
-    EXPECT_TRUE(sharedPhaseRecorded[2u]);
+    EXPECT_TRUE(sharedPhaseRecorded[s_ThirdElementIndex]);
     EXPECT_TRUE(sharedPhaseRecorded[3u]);
     EXPECT_TRUE(sharedPhaseRecorded[4u]);
     EXPECT_TRUE(sharedPhaseRecorded[5u]);

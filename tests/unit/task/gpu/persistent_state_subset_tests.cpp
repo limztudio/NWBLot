@@ -21,6 +21,10 @@
 namespace __hidden_persistent_state_subset_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -59,7 +63,7 @@ struct SubsetContext{
         textures.reserve(count);
         for(usize index = 0u; index < count; ++index){
             Core::Texture* const texture = Tests::NewMetadataOnlyTexture(
-                arena, context, allocator, Core::TextureDesc{}.setMipLevels(2u).setArraySize(2u)
+                arena, context, allocator, Core::TextureDesc{}.setMipLevels(s_ExpectedDualCount).setArraySize(s_ExpectedDualCount)
             );
             textures.emplace_back(texture, Core::TextureHandle::deleter_type(&arena), AdoptRef);
         }
@@ -91,7 +95,7 @@ struct SubsetContext{
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
         textureStates.push_back({
-            .texture = textures[2u].get(), .mipLevel = 0u, .arraySlice = 0u,
+            .texture = textures[s_ThirdElementIndex].get(), .mipLevel = 0u, .arraySlice = 0u,
             .state = Core::ResourceStates::CopyDest,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = {}, .releaseDestinationQueue = {},
@@ -113,7 +117,7 @@ struct SubsetContext{
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
         Access::stateHandoffBuffers(source).push_back({
-            .buffer = buffers[2u].get(), .state = Core::ResourceStates::CopyDest,
+            .buffer = buffers[s_ThirdElementIndex].get(), .state = Core::ResourceStates::CopyDest,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
@@ -168,7 +172,7 @@ TEST(PersistentStateSubset, PreservesSourceOrderSubresourcesAndAllFourStateCateg
     ASSERT_TRUE(result.buildResourceSubset(context.source, textures, LengthOf(textures), buffers, LengthOf(buffers), scratch));
     EXPECT_EQ(result.deviceGeneration(), s_DeviceGeneration);
     const auto& textureStates = Access::stateHandoffTextures(result);
-    ASSERT_EQ(textureStates.size(), 2u);
+    ASSERT_EQ(textureStates.size(), s_ExpectedDualCount);
     EXPECT_EQ(textureStates[0u].texture, context.textures[0u].get());
     EXPECT_EQ(textureStates[0u].mipLevel, 0u);
     EXPECT_EQ(textureStates[0u].arraySlice, 1u);
@@ -224,8 +228,8 @@ TEST(PersistentStateSubset, InvalidRawInputsPreserveTheDestinationSnapshot){
 TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchingState){
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
     SubsetContext context;
-    context.addBuffers(2u);
-    context.addTextures(2u);
+    context.addBuffers(s_ExpectedDualCount);
+    context.addTextures(s_ExpectedDualCount);
     Access::validateStateHandoff(context.source, s_DeviceGeneration);
     const Core::BufferHandle buffers[] = { context.buffers[1u], {}, context.buffers[0u], context.buffers[1u] };
     const Core::TextureHandle textures[] = { context.textures[1u], {}, context.textures[1u] };
@@ -242,7 +246,7 @@ TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchin
     ASSERT_TRUE(cache.commit(candidate));
     EXPECT_TRUE(cache.valid());
     EXPECT_TRUE(cache.empty());
-    EXPECT_EQ(cache.retainedBufferCount(), 2u);
+    EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
     EXPECT_EQ(cache.retainedTextureCount(), 1u);
     EXPECT_FALSE(candidate.valid());
     EXPECT_FALSE(cache.commit(candidate));
@@ -251,7 +255,7 @@ TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchin
 TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocationReplacement){
     SubsetContext context;
     context.addBuffers(3u);
-    context.addTextures(2u);
+    context.addTextures(s_ExpectedDualCount);
     context.fillBufferStates();
     for(auto& state : Access::stateHandoffBuffers(context.source)){
         state.state = Core::ResourceStates::Common;
@@ -285,7 +289,7 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
     EXPECT_TRUE(Access::stateHandoffTextures(*filtered.source()).empty());
     ASSERT_EQ(Access::stateHandoffBuffers(*filtered.source()).size(), 1u);
     EXPECT_EQ(Access::stateHandoffBuffers(*filtered.source())[0u].buffer, unrelated[0u]);
-    for(u32 frame = 0u; frame < 2u; ++frame){
+    for(u32 frame = 0u; frame < s_ExpectedDualCount; ++frame){
         Cache::Candidate accepted(cache);
         ASSERT_TRUE(cache.buildMergedResourceSubset(
             accepted, inactive, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
@@ -294,7 +298,7 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
         ASSERT_EQ(Access::stateHandoffTextures(*cache.source()).size(), 1u);
         EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].texture, liveTextures[0u].get());
         EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
-        ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 2u);
+        ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), s_ExpectedDualCount);
         EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, liveBuffers[0u].get());
         EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
         EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[1u].state, Core::ResourceStates::UnorderedAccess);
@@ -323,7 +327,7 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
     ExpectSameHandoff(*cache.source(), reactivated);
 
     // Selection follows the owner generation: replacement cannot inherit state from an old allocation.
-    const Core::BufferHandle replacementBuffers[] = { context.buffers[2u], context.buffers[1u] };
+    const Core::BufferHandle replacementBuffers[] = { context.buffers[s_ThirdElementIndex], context.buffers[1u] };
     const Core::TextureHandle replacementTextures[] = { context.textures[1u] };
     Cache::Candidate replacement(cache);
     ASSERT_TRUE(cache.buildMergedResourceSubset(
@@ -335,17 +339,17 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
     ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 1u);
     EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, unrelated[0u]);
     EXPECT_EQ(cache.retainedTextureCount(), 1u);
-    EXPECT_EQ(cache.retainedBufferCount(), 2u);
+    EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
 }
 
 TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandidateDies){
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
     SubsetContext context;
-    context.addBuffers(2u);
+    context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
     Cache cache(context.arena);
     ASSERT_TRUE(cache.replaceBufferSubset(context.source, &context.buffers[0u], 1u, scratch));
-    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
+    EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     {
         Cache::Candidate candidate(cache);
         ASSERT_TRUE(cache.buildFilteredBufferSubset(candidate, context.source, &context.buffers[1u], 1u, scratch));
@@ -355,8 +359,8 @@ TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandid
         const ArenaMemoryStats beforeCommit = context.arena.memoryStats();
         ASSERT_TRUE(cache.commit(candidate));
         EXPECT_EQ(context.arena.memoryStats().allocationCount, beforeCommit.allocationCount);
-        EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 2u);
-        EXPECT_EQ(context.buffers[1u]->getReferenceCount(), 2u);
+        EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
+        EXPECT_EQ(context.buffers[1u]->getReferenceCount(), s_ExpectedDualCount);
         ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 1u);
         EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, context.buffers[1u].get());
     }
@@ -371,7 +375,7 @@ TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandid
 
 TEST(PersistentStateSubset, PreservesFilteredMergedAndReplacementFailureDistinctions){
     SubsetContext context;
-    context.addBuffers(2u);
+    context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/failure"));
     Cache cache(context.arena);
@@ -387,14 +391,14 @@ TEST(PersistentStateSubset, PreservesFilteredMergedAndReplacementFailureDistinct
     EXPECT_FALSE(cache.buildFilteredBufferSubset(candidate, invalid, nullptr, 0u, scratch));
     EXPECT_FALSE(candidate.valid());
     EXPECT_TRUE(cache.valid());
-    EXPECT_EQ(cache.retainedBufferCount(), 2u);
+    EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
 
     Handoff foreignGeneration(context.arena);
     ASSERT_TRUE(foreignGeneration.copyFrom(context.source));
     Access::validateStateHandoff(foreignGeneration, s_DeviceGeneration + 1u);
     EXPECT_FALSE(cache.mergeBufferSubset(foreignGeneration, context.buffers.data(), context.buffers.size(), scratch));
     EXPECT_EQ(cache.source()->deviceGeneration(), s_DeviceGeneration);
-    EXPECT_EQ(cache.retainedBufferCount(), 2u);
+    EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
     ASSERT_TRUE(cache.buildMergedBufferSubset(candidate, context.source, &context.buffers[1u], 1u, scratch));
     EXPECT_TRUE(candidate.valid());
     ASSERT_TRUE(cache.commit(candidate));
@@ -447,7 +451,7 @@ TEST(PersistentStateSubset, RebuildsLargeSelectionsAndMergesUpdatedStatesWithout
 
 TEST(PersistentStateSubset, MergeCapturesAnAliasedCandidateBeforeResetWhileFilteredSelfSourceRejects){
     SubsetContext context;
-    context.addBuffers(2u);
+    context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
     Access::stateHandoffBuffers(context.source)[1u].state = Core::ResourceStates::CopyDest;
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/candidate_alias"));
@@ -459,7 +463,7 @@ TEST(PersistentStateSubset, MergeCapturesAnAliasedCandidateBeforeResetWhileFilte
         candidate, *candidate.source(), context.buffers.data(), context.buffers.size(), scratch
     ));
     const auto& merged = Access::stateHandoffBuffers(*candidate.source());
-    ASSERT_EQ(merged.size(), 2u);
+    ASSERT_EQ(merged.size(), s_ExpectedDualCount);
     EXPECT_EQ(merged[0u].buffer, context.buffers[0u].get());
     EXPECT_EQ(merged[1u].buffer, context.buffers[1u].get());
     EXPECT_EQ(merged[1u].state, Core::ResourceStates::CopyDest);
@@ -476,10 +480,10 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/operation"));
     SubsetContext context;
     context.addTextures(64u);
-    context.addBuffers(2u);
+    context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
     for(usize index = 0u; index < context.textures.size(); ++index){
-        if(index % 2u == 0u){
+        if(index % s_ExpectedDualCount == 0u){
             Access::stateHandoffTextures(context.source).push_back({
                 .texture = context.textures[index].get(), .mipLevel = 0u, .arraySlice = 1u,
                 .state = Core::ResourceStates::ShaderResource,
@@ -520,9 +524,9 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
     ASSERT_EQ(transientStates.size(), 48u);
     ASSERT_EQ(permanentStates.size(), 24u);
     for(usize index = 0u; index < 24u; ++index){
-        const auto& first = transientStates[index * 2u];
-        const auto& second = transientStates[index * 2u + 1u];
-        EXPECT_EQ(first.texture, context.textures[8u + index * 2u].get());
+        const auto& first = transientStates[index * s_ExpectedDualCount];
+        const auto& second = transientStates[index * s_ExpectedDualCount + 1u];
+        EXPECT_EQ(first.texture, context.textures[8u + index * s_ExpectedDualCount].get());
         EXPECT_EQ(first.mipLevel, 0u);
         EXPECT_EQ(first.arraySlice, 1u);
         EXPECT_EQ(first.ownerQueue, s_OwnerQueue);
@@ -531,7 +535,7 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
         EXPECT_EQ(second.mipLevel, 1u);
         EXPECT_EQ(second.arraySlice, 0u);
         EXPECT_EQ(second.queueSharing, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-        EXPECT_EQ(permanentStates[index].texture, context.textures[9u + index * 2u].get());
+        EXPECT_EQ(permanentStates[index].texture, context.textures[9u + index * s_ExpectedDualCount].get());
         EXPECT_EQ(permanentStates[index].ownerQueue, s_OwnerQueue);
         EXPECT_EQ(permanentStates[index].releaseDestinationQueue, s_ReleaseQueue);
     }
@@ -597,7 +601,7 @@ TEST(PersistentStateSubset, SelectionResolvesForcedCollisionsGrowthAndFirstInput
         ASSERT_EQ(selection.size(), 3u);
         EXPECT_EQ(selection.entries()[0u].inputIndex, 11u);
         EXPECT_EQ(selection.entries()[1u].inputIndex, 12u);
-        EXPECT_EQ(selection.entries()[2u].inputIndex, 21u);
+        EXPECT_EQ(selection.entries()[s_ThirdElementIndex].inputIndex, 21u);
     }
     EXPECT_EQ(scratch.memoryStats().allocationCount, initial.allocationCount);
     {
@@ -629,7 +633,7 @@ TEST(PersistentStateSubset, SelectionResolvesForcedCollisionsGrowthAndFirstInput
         ASSERT_TRUE(selection.addBuffer(sameAddress, 41u));
         EXPECT_TRUE(selection.containsTexture(texture));
         EXPECT_TRUE(selection.containsBuffer(sameAddress));
-        EXPECT_EQ(selection.size(), ordered.size() + 2u);
+        EXPECT_EQ(selection.size(), ordered.size() + s_ExpectedDualCount);
         EXPECT_EQ(selection.textureCount(), 1u);
         EXPECT_EQ(selection.entries()[ordered.size()].inputIndex, 31u);
         EXPECT_EQ(selection.entries()[ordered.size() + 1u].inputIndex, 41u);

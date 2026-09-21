@@ -20,6 +20,9 @@
 namespace __hidden_allocator_owner_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -82,7 +85,7 @@ TEST(AllocationOwners, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
     EXPECT_EQ(OwnerStats(s_Owner).reservedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().allocationCount, 1u);
-    EXPECT_EQ(arena.memoryStats().reallocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().reallocationCount, s_ExpectedDualCount);
     EXPECT_EQ(arena.memoryStats().deallocationCount, 1u);
 }
 
@@ -103,8 +106,8 @@ TEST(AllocationOwners, ObjectAndZeroSizeReallocationReleaseChargedBytes){
     EXPECT_EQ(arena.reallocate(allocation, 64u, 0u), nullptr);
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(arena.memoryStats().reservedBytes, 0u);
-    EXPECT_EQ(arena.memoryStats().allocationCount, 2u);
-    EXPECT_EQ(arena.memoryStats().deallocationCount, 2u);
+    EXPECT_EQ(arena.memoryStats().allocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(arena.memoryStats().deallocationCount, s_ExpectedDualCount);
     EXPECT_EQ(OwnerStats(s_Owner).usedBytes, 0u);
 }
 
@@ -132,8 +135,8 @@ TEST(AllocationOwners, SharedNameAggregatesBytesAndRetainsIndividualHighwater){
     const ArenaMemoryStats after = OwnerStats(s_Owner);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
     EXPECT_EQ(after.reservedBytes, before.reservedBytes);
-    EXPECT_EQ(after.allocationCount - before.allocationCount, 2u);
-    EXPECT_EQ(after.deallocationCount - before.deallocationCount, 2u);
+    EXPECT_EQ(after.allocationCount - before.allocationCount, s_ExpectedDualCount);
+    EXPECT_EQ(after.deallocationCount - before.deallocationCount, s_ExpectedDualCount);
     EXPECT_EQ(after.peakUsedBytes, Max(before.peakUsedBytes, largestArenaBytes));
 }
 
@@ -215,8 +218,8 @@ TEST(AllocationOwners, ResetPreservesRetiredCountersAndIndividualPeakExactlyOnce
         EXPECT_EQ(tracker.snapshot().peakUsedBytes, 0u);
         EXPECT_EQ(resetOwner.reservedBytes, before.reservedBytes + 256u);
         EXPECT_EQ(resetOwner.usedBytes, before.usedBytes);
-        EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, 2u);
-        EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, 2u);
+        EXPECT_EQ(resetOwner.allocationCount - before.allocationCount, s_ExpectedDualCount);
+        EXPECT_EQ(resetOwner.deallocationCount - before.deallocationCount, s_ExpectedDualCount);
         EXPECT_EQ(resetOwner.peakUsedBytes, Max(before.peakUsedBytes, u64{ 192u }));
         tracker.recordAllocation(16u);
         tracker.reset();

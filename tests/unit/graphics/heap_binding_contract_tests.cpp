@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -149,12 +153,12 @@ TEST(HeapBindingContract, FiltersProtectedAndIncompatibleMemoryTypes){
     properties.memoryTypeCount = 3u;
     properties.memoryTypes[0u].propertyFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
     properties.memoryTypes[1u].propertyFlags = VK_MEMORY_PROPERTY_PROTECTED_BIT;
-    properties.memoryTypes[2u].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    properties.memoryTypes[s_ThirdElementIndex].propertyFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 
     EXPECT_EQ(Binding::BuildNonProtectedMemoryTypeBits(properties), 0x5u);
     EXPECT_TRUE(Binding::IsHeapMemoryTypeCompatible(properties, 0u, 0x3u));
     EXPECT_FALSE(Binding::IsHeapMemoryTypeCompatible(properties, 1u, 0x3u));
-    EXPECT_FALSE(Binding::IsHeapMemoryTypeCompatible(properties, 2u, 0x3u));
+    EXPECT_FALSE(Binding::IsHeapMemoryTypeCompatible(properties, s_ExpectedDualCount, 0x3u));
     EXPECT_FALSE(Binding::IsHeapMemoryTypeCompatible(properties, 3u, UINT32_MAX));
 
     VkMemoryDedicatedRequirements dedicatedRequirements{};

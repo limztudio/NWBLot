@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -174,7 +177,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
     ASSERT_TRUE(compiler.compile(compilationDeclarations, analysis, topology, assignments, compiledGraph, scratchArena, frontierOptions));
     EXPECT_TRUE(analysis.hasExplicitEdge(producerTask, rasterTask));
     EXPECT_TRUE(analysis.hasInferredEdge(producerTask, rasterTask));
-    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producerTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], rasterTask);
 
@@ -195,7 +198,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
     EXPECT_TRUE(views.compiled.taskPrecedesOrSharesPacket(producerTask, rasterTask));
     EXPECT_EQ(views.compiled.packet(packet).plan->queue, primaryGraphicsQueue);
     EXPECT_EQ(views.compiled.packet(packet).plan->dependencyCount, 0u);
-    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, s_ExpectedDualCount);
     const GpuTaskId* const packetTasks = views.compiled.packet(packet).tasks;
     ASSERT_NE(packetTasks, nullptr);
     EXPECT_EQ(packetTasks[0u], producerTask);

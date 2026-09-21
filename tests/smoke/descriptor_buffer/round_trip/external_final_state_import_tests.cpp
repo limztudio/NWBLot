@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -33,7 +36,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInitialState(ResourceStates::Unknown)
     );
@@ -192,7 +195,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     }
     const GpuTaskGraphExternalResourceHandoff* const handoff = handoffSnapshot.value();
     ASSERT_NE(handoff, nullptr);
-    ASSERT_EQ(handoff->terminalRangeCount, 2u);
+    ASSERT_EQ(handoff->terminalRangeCount, s_ExpectedDualCount);
     ASSERT_NE(handoff->terminalRanges, nullptr);
     ASSERT_EQ(handoff->waitTokenCount, 1u);
 
@@ -218,7 +221,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsIntoLaterGraph)
     ASSERT_TRUE(incompleteSourceCompletion.valid());
     const GpuGraphInitialOwnerHandoffSourceDesc incompleteSource{
         .range = GpuTaskResourceRange{
-            .textureSubresources = TextureSubresourceSet(0u, 2u, 0u, 1u),
+            .textureSubresources = TextureSubresourceSet(0u, s_ExpectedDualCount, 0u, 1u),
         },
         .sourceQueue = handoff->terminalRanges[0u].sourceQueue,
         .destinationQueue = handoff->destinationQueue,
@@ -550,7 +553,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInUAV(true)
             .setInitialState(ResourceStates::Unknown)
@@ -657,7 +660,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
         EXPECT_EQ(compiledCompute.plan->queue, computeQueue);
         const GpuCompiledExternalResourceExportView exportInfo = views.compiled.externalResourceExport(resource);
         ASSERT_TRUE(exportInfo.valid());
-        ASSERT_EQ(exportInfo.plan->sourceCount, 2u);
+        ASSERT_EQ(exportInfo.plan->sourceCount, s_ExpectedDualCount);
         EXPECT_FALSE(exportInfo.plan->producerTask.valid());
     }
 
@@ -732,8 +735,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
     }
     const GpuTaskGraphExternalResourceHandoff* const handoff = handoffSnapshot.value();
     ASSERT_NE(handoff, nullptr);
-    ASSERT_EQ(handoff->producerCount, 2u);
-    ASSERT_EQ(handoff->waitTokenCount, 2u);
+    ASSERT_EQ(handoff->producerCount, s_ExpectedDualCount);
+    ASSERT_EQ(handoff->waitTokenCount, s_ExpectedDualCount);
     EXPECT_EQ(handoff->producers[0u].sourceQueue, graphicsQueue);
     EXPECT_EQ(handoff->producers[1u].sourceQueue, computeQueue);
     EXPECT_TRUE(handoff->waitTokens[0u].valid());
@@ -752,7 +755,7 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffImportsCrossQueueTextu
         }
         return static_cast<const QueueSubmissionToken*>(nullptr);
     };
-    ASSERT_EQ(handoff->terminalRangeCount, 2u);
+    ASSERT_EQ(handoff->terminalRangeCount, s_ExpectedDualCount);
     ASSERT_NE(handoff->terminalRanges, nullptr);
     const QueueSubmissionToken* const mip0Wait = waitTokenForRange(handoff->terminalRanges[0u]);
     const QueueSubmissionToken* const mip1Wait = waitTokenForRange(handoff->terminalRanges[1u]);

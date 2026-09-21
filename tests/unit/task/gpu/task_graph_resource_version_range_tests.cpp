@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -44,8 +47,8 @@ TEST(GpuTaskGraphResourceVersion, RejectsTypedRangesOutsideBackendBoundsAndAccep
         context,
         allocator,
         Graphics::TextureDesc()
-            .setMipLevels(2u)
-            .setArraySize(2u)
+            .setMipLevels(s_ExpectedDualCount)
+            .setArraySize(s_ExpectedDualCount)
             .setDimension(Graphics::TextureDimension::Texture2DArray)
             .setInitialState(Graphics::ResourceStates::Common)
     );
@@ -123,7 +126,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsTypedRangesOutsideBackendBoundsAndAccep
             graph,
             resource,
             Graphics::GpuGraphResourceVersionOrigin::ImportedRoot,
-            TextureRange(1u, 2u, 0u, 2u)
+            TextureRange(1u, s_ExpectedDualCount, 0u, s_ExpectedDualCount)
         );
         ASSERT_TRUE(resource.valid());
         ASSERT_TRUE(version.valid());

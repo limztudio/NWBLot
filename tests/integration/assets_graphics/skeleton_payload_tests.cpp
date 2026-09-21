@@ -19,6 +19,10 @@
 namespace __hidden_skeleton_payload_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -59,18 +63,18 @@ TEST(SkeletonPayload, ResolvesEarlierParentsAndBuildsExactChildRanges){
     EXPECT_EQ(inputs.skeleton.findJointIndex(Name("missing")), s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[0u].parentIndex, s_SkeletonInvalidJointIndex);
     EXPECT_EQ(inputs.skeleton.joints()[1u].parentIndex, 0u);
-    EXPECT_EQ(inputs.skeleton.joints()[2u].parentIndex, 0u);
+    EXPECT_EQ(inputs.skeleton.joints()[s_ThirdElementIndex].parentIndex, 0u);
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, 1u);
     ASSERT_EQ(inputs.skeleton.jointChildRanges().size(), 4u);
     ASSERT_EQ(inputs.skeleton.jointChildIndices().size(), 3u);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[0u].firstChild, 0u);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[0u].childCount, 2u);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].firstChild, 2u);
+    EXPECT_EQ(inputs.skeleton.jointChildRanges()[0u].childCount, s_ExpectedDualCount);
+    EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].firstChild, s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].childCount, 1u);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[2u].childCount, 0u);
+    EXPECT_EQ(inputs.skeleton.jointChildRanges()[s_ThirdElementIndex].childCount, 0u);
     EXPECT_EQ(inputs.skeleton.jointChildIndices()[0u], 1u);
-    EXPECT_EQ(inputs.skeleton.jointChildIndices()[1u], 2u);
-    EXPECT_EQ(inputs.skeleton.jointChildIndices()[2u], 3u);
+    EXPECT_EQ(inputs.skeleton.jointChildIndices()[1u], s_ExpectedDualCount);
+    EXPECT_EQ(inputs.skeleton.jointChildIndices()[s_ThirdElementIndex], 3u);
 }
 
 TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
@@ -82,7 +86,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
         switch(invalidCase){
         case 0u: inputs.entry.joints[0u].parent = Name("left"); break;
         case 1u: inputs.entry.joints[1u].parent = Name("left"); break;
-        case 2u: inputs.entry.joints[3u].parent = Name("missing"); break;
+        case s_ExpectedDualCount: inputs.entry.joints[3u].parent = Name("missing"); break;
         case 3u: inputs.entry.joints[1u].parent = Name("right"); break;
         }
         EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.skeleton)) << invalidCase;
@@ -115,20 +119,20 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
         EXPECT_TRUE(inputs.skeleton.jointChildRanges().empty());
         EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
     }
-    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
 }
 
 TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatrices){
     SkeletonInputs inputs;
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
-    inputs.entry.joints[2u].parent = NAME_NONE;
+    inputs.entry.joints[s_ThirdElementIndex].parent = NAME_NONE;
     inputs.entry.joints[3u].parent = Name("right");
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
-    EXPECT_EQ(inputs.skeleton.rootJointCount(), 2u);
-    EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, 2u);
+    EXPECT_EQ(inputs.skeleton.rootJointCount(), s_ExpectedDualCount);
+    EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].childCount, 0u);
-    EXPECT_EQ(inputs.skeleton.jointChildRanges()[2u].childCount, 1u);
+    EXPECT_EQ(inputs.skeleton.jointChildRanges()[s_ThirdElementIndex].childCount, 1u);
 
     Core::Assets::AssetBytes bytes(inputs.arena);
     SkeletonAssetCodec codec;
@@ -136,7 +140,7 @@ TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatri
     Skeleton loaded(inputs.arena, inputs.entry.virtualPath);
     ASSERT_TRUE(loaded.loadBinary(bytes));
     ASSERT_EQ(loaded.jointCount(), inputs.skeleton.jointCount());
-    EXPECT_EQ(loaded.rootJointCount(), 2u);
+    EXPECT_EQ(loaded.rootJointCount(), s_ExpectedDualCount);
     for(usize jointIndex = 0u; jointIndex < inputs.entry.joints.size(); ++jointIndex){
         EXPECT_EQ(loaded.findJointIndex(inputs.entry.joints[jointIndex].name), jointIndex);
         EXPECT_EQ(loaded.joints()[jointIndex].parentIndex, inputs.skeleton.joints()[jointIndex].parentIndex);
@@ -144,8 +148,8 @@ TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatri
         EXPECT_FLOAT_EQ(loaded.joints()[jointIndex].localBindPose._24, inputs.entry.joints[jointIndex].localBindPose._24);
     }
     EXPECT_EQ(loaded.jointChildRanges()[0u].childCount, 1u);
-    EXPECT_EQ(loaded.jointChildRanges()[2u].childCount, 1u);
-    ASSERT_EQ(loaded.jointChildIndices().size(), 2u);
+    EXPECT_EQ(loaded.jointChildRanges()[s_ThirdElementIndex].childCount, 1u);
+    ASSERT_EQ(loaded.jointChildIndices().size(), s_ExpectedDualCount);
     EXPECT_EQ(loaded.jointChildIndices()[0u], 1u);
     EXPECT_EQ(loaded.jointChildIndices()[1u], 3u);
 }

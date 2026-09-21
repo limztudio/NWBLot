@@ -28,6 +28,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -67,7 +70,7 @@ struct NativeQueueFamilySet{
         return false;
     }
     [[nodiscard]] VkSharingMode sharingMode()const noexcept{
-        return familyIndices.size() >= 2u ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
+        return familyIndices.size() >= s_ExpectedDualCount ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE;
     }
     [[nodiscard]] u32 size()const noexcept{
         NWB_ASSERT(familyIndices.size() <= Limit<u32>::s_Max);
@@ -568,9 +571,9 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
     graphicsDesc.setQueueSharing(ResourceQueueSharing::Graphics);
     const Object nativeBuffer(static_cast<u64>(0x22d00110u));
     const u32 queueFamilyIndex = 0u;
-    const Array<u32, 2u> queueFamilies = { 0u, 1u };
-    const Array<u32, 2u> duplicateQueueFamilies = { 0u, 0u };
-    const Array<u32, 2u> outOfRangeQueueFamilies = { 0u, VK_QUEUE_FAMILY_IGNORED };
+    const Array<u32, s_ExpectedDualCount> queueFamilies = { 0u, 1u };
+    const Array<u32, s_ExpectedDualCount> duplicateQueueFamilies = { 0u, 0u };
+    const Array<u32, s_ExpectedDualCount> outOfRangeQueueFamilies = { 0u, VK_QUEUE_FAMILY_IGNORED };
     const auto expectDiagnosticRejection = [](const auto& operation){
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
         EXPECT_DEATH_IF_SUPPORTED({ EXPECT_FALSE(operation()); }, "");
@@ -643,7 +646,7 @@ TEST_F(BufferGpuReadinessTest, NativeProvenanceRejectsMalformedSharingAndProtect
                 .queueFamilyIndices = nullptr,
                 .usage = s_NativeUsage,
                 .sharingMode = VK_SHARING_MODE_CONCURRENT,
-                .queueFamilyIndexCount = 2u,
+                .queueFamilyIndexCount = s_ExpectedDualCount,
             }
         ).get() != nullptr;
     });
@@ -842,16 +845,16 @@ TEST_F(BufferGpuReadinessTest, ConcurrentNativeSharingCopiesFamiliesAndEnforcesE
         allQueueFamilies.append(topology.queues[queueIndex].familyIndex);
     if(allQueueFamilies.size() >= 3u){
         __hidden_buffer_gpu_readiness::NativeQueueFamilySet omittedQueueFamilies(scratchArena);
-        omittedQueueFamilies.familyIndices.reserve(2u);
+        omittedQueueFamilies.familyIndices.reserve(s_ExpectedDualCount);
         const u32 omittedLogicalFamily = nativeQueueFamilies.familyIndices[0u];
         for(const u32 familyIndex : allQueueFamilies.familyIndices){
             if(familyIndex == omittedLogicalFamily)
                 continue;
             omittedQueueFamilies.append(familyIndex);
-            if(omittedQueueFamilies.size() == 2u)
+            if(omittedQueueFamilies.size() == s_ExpectedDualCount)
                 break;
         }
-        ASSERT_EQ(omittedQueueFamilies.size(), 2u);
+        ASSERT_EQ(omittedQueueFamilies.size(), s_ExpectedDualCount);
         expectDiagnosticRejection([&](){
             return device.createHandleForNativeBuffer(
                 GraphicsBackend::ObjectTypes::VK_Buffer,
@@ -874,7 +877,7 @@ TEST_F(BufferGpuReadinessTest, ConcurrentNativeSharingCopiesFamiliesAndEnforcesE
             continue;
         if(!unadmittedQueue)
             unadmittedQueue = &candidate;
-        if(nativeQueueFamilies.size() >= 2u || !nativeQueueFamilies.contains(candidate.familyIndex)){
+        if(nativeQueueFamilies.size() >= s_ExpectedDualCount || !nativeQueueFamilies.contains(candidate.familyIndex)){
             unadmittedQueue = &candidate;
             nativeQueueFamilies.append(candidate.familyIndex);
             break;
@@ -1251,7 +1254,7 @@ TEST_F(BufferGpuReadinessTest, NullUnknownScopeConflictAndRetentionContractsAreE
     permanentList->setPermanentBufferState(permanent.get(), ResourceStates::Common);
     EXPECT_FALSE(permanentList->commandRecordingFailed());
     EXPECT_EQ(permanentList->getPermanentBufferState(permanent.get()), ResourceStates::Common);
-    EXPECT_EQ(permanent->getReferenceCount(), permanentReferences + 2u);
+    EXPECT_EQ(permanent->getReferenceCount(), permanentReferences + s_ExpectedDualCount);
     permanentList->close();
     ASSERT_TRUE(permanentList->hasCommandBuffer());
 
@@ -1357,7 +1360,7 @@ TEST_F(BufferGpuReadinessTest, BufferUavBarrierPolicyOwnsItsBufferAndRewritesAre
     ASSERT_EQ(rawBuffer->getReferenceCount(), 1u);
 
     BufferHandle observer(rawBuffer, BufferHandle::deleter_type(&BufferGpuReadinessTest::arena()));
-    ASSERT_EQ(rawBuffer->getReferenceCount(), 2u);
+    ASSERT_EQ(rawBuffer->getReferenceCount(), s_ExpectedDualCount);
     commandList.reset();
     EXPECT_EQ(observer->getReferenceCount(), 1u);
 }

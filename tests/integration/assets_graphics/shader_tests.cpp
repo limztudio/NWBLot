@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -453,7 +456,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
 
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
     ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-    ASSERT_EQ(records.size(), 2u);
+    ASSERT_EQ(records.size(), s_ExpectedDualCount);
     const Name shaderNames[] = { Name("project/shaders/standalone_ps"), Name("project/shaders/exact_entry_point_ps") };
     for(const Name& shaderName : shaderNames){
         Name virtualPath;
@@ -473,7 +476,7 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     EXPECT_GT(logger.errorCount(), 0u);
     records.clear();
     ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-    ASSERT_EQ(records.size(), 2u);
+    ASSERT_EQ(records.size(), s_ExpectedDualCount);
     u64 preservedChecksum = 0u;
     ASSERT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, shaderNames[0], Name("ps"), preservedChecksum));
     EXPECT_EQ(preservedChecksum, originalChecksum);

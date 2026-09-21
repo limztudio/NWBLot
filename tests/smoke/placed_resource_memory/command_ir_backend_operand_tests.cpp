@@ -30,6 +30,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -360,7 +364,7 @@ struct BackendOperandGraph{
             GpuClearTextureTaskDesc clearDesc;
             clearDesc.subresources = TextureSubresourceSet(0u, 1u, 0u, 1u);
             clearDesc.valueType = GpuClearTextureTaskValueType::UInt;
-            clearDesc.uintValue = UIntColor(1u, 2u, 3u, 4u);
+            clearDesc.uintValue = UIntColor(1u, s_ExpectedDualCount, 3u, 4u);
             return capture.captureClearTexture(
                 m_targetTask,
                 m_targetPacket,
@@ -395,10 +399,10 @@ struct ReplayMutationSnapshot{
     usize m_captureByteCount = 0u;
     usize m_captureRecordCount = 0u;
     u32 m_referenceCounts[7u] = {};
-    ResourceStates::Mask m_bufferStates[2u] = {};
-    ResourceStates::Mask m_textureStates[2u] = {};
-    ResourceStates::Mask m_permanentBufferStates[2u] = {};
-    ResourceStates::Mask m_permanentTextureStates[2u] = {};
+    ResourceStates::Mask m_bufferStates[s_ThirdElementIndex] = {};
+    ResourceStates::Mask m_textureStates[s_ThirdElementIndex] = {};
+    ResourceStates::Mask m_permanentBufferStates[s_ThirdElementIndex] = {};
+    ResourceStates::Mask m_permanentTextureStates[s_ThirdElementIndex] = {};
     u64 m_recordingLease = 0u;
     bool m_isRecording = false;
     bool m_recordingFailed = false;
@@ -418,7 +422,7 @@ struct ReplayMutationSnapshot{
     NWB_MEMCPY(snapshot.m_captureBytes, sizeof(snapshot.m_captureBytes), bytes.data(), bytes.size());
     snapshot.m_referenceCounts[0u] = resources.m_readyBufferSource->getReferenceCount();
     snapshot.m_referenceCounts[1u] = resources.m_readyBufferDestination->getReferenceCount();
-    snapshot.m_referenceCounts[2u] = resources.m_unboundBufferDestination->getReferenceCount();
+    snapshot.m_referenceCounts[s_ThirdElementIndex] = resources.m_unboundBufferDestination->getReferenceCount();
     snapshot.m_referenceCounts[3u] = resources.m_unboundPrefixSource->getReferenceCount();
     snapshot.m_referenceCounts[4u] = resources.m_readyTextureSource->getReferenceCount();
     snapshot.m_referenceCounts[5u] = resources.m_readyTextureDestination->getReferenceCount();
@@ -672,7 +676,7 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
     ASSERT_TRUE(resources.captureInvalidPrefix(retryCapture));
     ASSERT_TRUE(resources.captureReadyBufferCopy(retryCapture));
 
-    for(u32 directIndex = 0u; directIndex < 2u; ++directIndex){
+    for(u32 directIndex = 0u; directIndex < s_ExpectedDualCount; ++directIndex){
         SCOPED_TRACE(directIndex);
         const bool directVulkan = directIndex != 0u;
         CommandListParameters parameters;
@@ -709,7 +713,7 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
             )
         ;
         EXPECT_EQ(rejected.error, GpuCommandIrReplayError::BackendResourceNotReady);
-        EXPECT_EQ(rejected.recordIndex, 2u);
+        EXPECT_EQ(rejected.recordIndex, s_ExpectedDualCount);
         EXPECT_TRUE(rejected.streamValidation.valid());
         ExpectReplayMutationSnapshotUnchanged(before, resources, rejectedCapture, *commandList);
 
@@ -731,7 +735,7 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundBufferIsAtomicForNormalAndDirectR
             )
         ;
         EXPECT_TRUE(retry.valid());
-        EXPECT_EQ(retry.recordIndex, 2u);
+        EXPECT_EQ(retry.recordIndex, s_ExpectedDualCount);
         EXPECT_TRUE(retry.streamValidation.valid());
         ExpectCaptureUnchanged(retryBefore, retryCapture);
         EXPECT_TRUE(commandList->matchesRecordingLease(before.m_recordingLease));
@@ -778,7 +782,7 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundTextureLeavesEarlierSelectedBuffe
         *commandList
     );
     EXPECT_EQ(rejected.error, GpuCommandIrReplayError::BackendResourceNotReady);
-    EXPECT_EQ(rejected.recordIndex, 2u);
+    EXPECT_EQ(rejected.recordIndex, s_ExpectedDualCount);
     EXPECT_TRUE(rejected.streamValidation.valid());
     ExpectReplayMutationSnapshotUnchanged(before, resources, rejectedCapture, *commandList);
 
@@ -791,7 +795,7 @@ TEST_F(CommandIrBackendOperandTest, LateUnboundTextureLeavesEarlierSelectedBuffe
         *commandList
     );
     EXPECT_TRUE(retry.valid());
-    EXPECT_EQ(retry.recordIndex, 2u);
+    EXPECT_EQ(retry.recordIndex, s_ExpectedDualCount);
     EXPECT_TRUE(retry.streamValidation.valid());
     ExpectCaptureUnchanged(retryBefore, retryCapture);
     EXPECT_TRUE(commandList->matchesRecordingLease(before.m_recordingLease));

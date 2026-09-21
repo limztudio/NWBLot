@@ -22,6 +22,9 @@
 namespace __hidden_tangent_frame_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -131,7 +134,7 @@ TEST(Global, DegenerateUvsUseStableTangentFallback){
     TangentFrameRebuildResult result;
     EXPECT_TRUE(::RebuildTangentFrames(scratchArena, vertices, indices, &result));
     EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
-    EXPECT_EQ(result.degenerateUvTriangleCount, 2u);
+    EXPECT_EQ(result.degenerateUvTriangleCount, s_ExpectedDualCount);
     EXPECT_EQ(result.fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){

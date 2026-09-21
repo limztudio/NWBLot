@@ -27,6 +27,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -277,8 +280,8 @@ TEST_F(DescriptorHeapBindLivenessTest, RetainedBufferAndTextureMustRemainReadyAt
     ASSERT_TRUE(textureHandle.valid());
     ASSERT_TRUE(heap.write(bufferHandle, DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer.get())));
     ASSERT_TRUE(heap.write(textureHandle, DescriptorWriteItem::Texture_SRV(0u, texture.get())));
-    ASSERT_EQ(buffer->getReferenceCount(), 2u);
-    ASSERT_EQ(texture->getReferenceCount(), 2u);
+    ASSERT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
+    ASSERT_EQ(texture->getReferenceCount(), s_ExpectedDualCount);
     const GpuDescriptorHeapLifecycleStatistics populated = heap.lifecycleStatistics();
 
     {

@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -400,8 +404,8 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
     const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
-    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 2u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, s_ExpectedDualCount);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
 
     const Graphics::GpuCompiledBarrier* const consumerBarriers = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(consumerBarriers, nullptr);
@@ -639,7 +643,7 @@ TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWit
 
     const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
     ASSERT_NE(compiledTask, nullptr);
-    ASSERT_EQ(compiledTask->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledTask->prologueBarrierCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).prologueBarriers;
     ASSERT_NE(barriers, nullptr);
 
@@ -838,7 +842,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         ASSERT_TRUE(exclusiveComputePacket.valid());
         EXPECT_EQ(compiledPlan.packetIdAt(0u), concurrentGraphicsPacket);
         EXPECT_EQ(compiledPlan.packetIdAt(1u), concurrentComputePacket);
-        EXPECT_EQ(compiledPlan.packetIdAt(2u), defaultConcurrentGraphicsPacket);
+        EXPECT_EQ(compiledPlan.packetIdAt(s_ThirdElementIndex), defaultConcurrentGraphicsPacket);
         EXPECT_EQ(compiledPlan.packetIdAt(3u), defaultConcurrentComputePacket);
         EXPECT_EQ(compiledPlan.packetIdAt(4u), exclusiveGraphicsPacket);
         EXPECT_EQ(compiledPlan.packetIdAt(5u), exclusiveComputePacket);

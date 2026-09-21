@@ -24,6 +24,9 @@
 namespace __hidden_cpu_task_submission_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -151,7 +154,7 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
         return -1;
     }, handleError, [](){ return -2; });
     EXPECT_EQ(scopeResult, static_cast<int>(s_ConstructionException));
-    EXPECT_EQ(handled, 2u);
+    EXPECT_EQ(handled, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
     EXPECT_EQ(scheduler.statistics().canceledTasks, 0u);

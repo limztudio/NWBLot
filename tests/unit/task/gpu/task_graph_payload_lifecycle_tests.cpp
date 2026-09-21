@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -437,7 +440,7 @@ TEST(GpuTaskGraph, DiscardsTypedPayloadLifecycleOnlyOnceWhenGraphIsAbandoned){
     }
 
     EXPECT_EQ(acceptedCount, 0u);
-    EXPECT_EQ(discardedCount, 2u);
+    EXPECT_EQ(discardedCount, s_ExpectedDualCount);
 }
 
 TEST(GpuTaskGraph, DiscardsTypedPayloadWhenDeclarationIsRejected){

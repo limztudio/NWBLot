@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -149,7 +152,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     ASSERT_TRUE(lightingBaseState.buildResourceSubset(
         prefixState,
         lightingBaseTextures,
-        2u,
+        s_ExpectedDualCount,
         lightingBaseBuffers,
         1u,
         fanInScratchArena
@@ -186,7 +189,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
     ASSERT_TRUE(avboitCompositeState.buildResourceSubset(
         avboitState,
         compositeBaseTextures,
-        2u,
+        s_ExpectedDualCount,
         nullptr,
         0u,
         fanInScratchArena
@@ -204,7 +207,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueKeepsDeferredLighting
         &avboitCompositeState,
         &opaqueCompositeState,
     };
-    ASSERT_TRUE(compositeInputState.buildFanIn(compositeBaseState, compositeBranches, 2u, fanInScratchArena));
+    ASSERT_TRUE(compositeInputState.buildFanIn(compositeBaseState, compositeBranches, s_ExpectedDualCount, fanInScratchArena));
 
     composite->open(&compositeInputState);
     EXPECT_EQ(composite->getTextureSubresourceState(opaqueColor.get(), 0u, 0u), ResourceStates::Common);

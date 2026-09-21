@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -408,7 +412,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload integrationPayload;
     integrationPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     integrationPayload.expectations[1u] = { integrationOutput.get(), ResourceStates::UnorderedAccess };
-    integrationPayload.expectationCount = 2u;
+    integrationPayload.expectationCount = s_ExpectedDualCount;
     integrationPayload.recordOrdinal = &recordOrdinal;
     integrationPayload.expectedOrdinal = 0u;
     integrationPayload.recorded = &integrationRecorded;
@@ -427,7 +431,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamUploadPayload;
     streamUploadPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamUploadPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamUploadPayload.expectationCount = 2u;
+    streamUploadPayload.expectationCount = s_ExpectedDualCount;
     streamUploadPayload.recordOrdinal = &recordOrdinal;
     streamUploadPayload.expectedOrdinal = 1u;
     streamUploadPayload.recorded = &streamUploadRecorded;
@@ -447,12 +451,12 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload producerPayload;
     producerPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     producerPayload.expectations[1u] = { integrationOutput.get(), ResourceStates::ShaderResource };
-    producerPayload.expectations[2u] = { materialStream.get(), ResourceStates::ShaderResource };
+    producerPayload.expectations[s_ThirdElementIndex] = { materialStream.get(), ResourceStates::ShaderResource };
     producerPayload.expectations[3u] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectations[4u] = { generatedVertexB.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectationCount = 5u;
     producerPayload.recordOrdinal = &recordOrdinal;
-    producerPayload.expectedOrdinal = 2u;
+    producerPayload.expectedOrdinal = s_ExpectedDualCount;
     producerPayload.device = &device;
     producerPayload.timing = &timing;
     producerPayload.timingTicket = &accumulationTimingTicket;
@@ -478,13 +482,13 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload rasterPayload;
     rasterPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     rasterPayload.expectations[1u] = { integrationOutput.get(), ResourceStates::ShaderResource };
-    rasterPayload.expectations[2u] = { materialStream.get(), ResourceStates::ShaderResource };
+    rasterPayload.expectations[s_ThirdElementIndex] = { materialStream.get(), ResourceStates::ShaderResource };
     rasterPayload.expectations[3u] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
     rasterPayload.expectations[4u] = { generatedVertexB.get(), ResourceStates::VertexBuffer };
     rasterPayload.expectationCount = 5u;
     rasterPayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::RenderTarget };
     rasterPayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::RenderTarget };
-    rasterPayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::DepthRead };
+    rasterPayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::DepthRead };
     rasterPayload.textureExpectationCount = 3u;
     rasterPayload.recordOrdinal = &recordOrdinal;
     rasterPayload.expectedOrdinal = 3u;
@@ -515,7 +519,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     finalizerPayload.expectationCount = 1u;
     finalizerPayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::ShaderResource };
-    finalizerPayload.textureExpectations[2u] = { deferredDepth.get(), ResourceStates::ShaderResource };
+    finalizerPayload.textureExpectations[s_ThirdElementIndex] = { deferredDepth.get(), ResourceStates::ShaderResource };
     finalizerPayload.textureExpectationCount = 3u;
     finalizerPayload.recordOrdinal = &recordOrdinal;
     finalizerPayload.expectedOrdinal = 4u;
@@ -538,7 +542,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     compositePayload.expectationCount = 1u;
     compositePayload.textureExpectations[0u] = { accumColor.get(), ResourceStates::ShaderResource };
     compositePayload.textureExpectations[1u] = { accumExtinction.get(), ResourceStates::ShaderResource };
-    compositePayload.textureExpectationCount = 2u;
+    compositePayload.textureExpectationCount = s_ExpectedDualCount;
     compositePayload.recordOrdinal = &recordOrdinal;
     compositePayload.expectedOrdinal = 5u;
     compositePayload.recorded = &compositeRecorded;
@@ -585,7 +589,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     ASSERT_EQ(analysis.topologicalOrder().size(), 6u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], integrationTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], streamUploadTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], producerTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], producerTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], rasterTask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], finalizerTask);
     EXPECT_EQ(analysis.topologicalOrder()[5u], compositeTask);
@@ -620,7 +624,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     EXPECT_NE(accumulationPacket, compositePacket);
     EXPECT_EQ(views.compiled.packetIdAt(0u), integrationPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), accumulationPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), compositePacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), compositePacket);
     EXPECT_TRUE(views.compiled.taskPrecedesOrSharesPacket(integrationTask, streamUploadTask));
     EXPECT_TRUE(views.compiled.tasksSharePacket(streamUploadTask, producerTask));
     EXPECT_TRUE(views.compiled.tasksSharePacket(producerTask, rasterTask));
@@ -637,7 +641,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitAccumulationComputeEmulationSha
     ASSERT_NE(accumulationPacketTasks, nullptr);
     EXPECT_EQ(accumulationPacketTasks[0u], streamUploadTask);
     EXPECT_EQ(accumulationPacketTasks[1u], producerTask);
-    EXPECT_EQ(accumulationPacketTasks[2u], rasterTask);
+    EXPECT_EQ(accumulationPacketTasks[s_ThirdElementIndex], rasterTask);
     EXPECT_EQ(accumulationPacketTasks[3u], finalizerTask);
     ASSERT_EQ(accumulationPacketPlan.plan->dependencyCount, 1u);
     EXPECT_EQ(views.compiled.packet(accumulationPacket).dependencies[0u].producer, integrationPacket);

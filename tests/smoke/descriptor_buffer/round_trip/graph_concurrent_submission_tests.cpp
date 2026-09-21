@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -155,7 +158,7 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId firstPacket = views.compiled.packetForTask(firstTask);
     const GpuSubmissionPacketId secondPacket = views.compiled.packetForTask(secondTask);
     ASSERT_TRUE(firstPacket.valid());
@@ -251,11 +254,11 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
     });
     const Timer overlapWaitBegin = TimerNow();
     while(
-        submissionObserver.capturedSubmissionCount() < 2u
+        submissionObserver.capturedSubmissionCount() < s_ExpectedDualCount
         && DurationInSeconds<f64>(TimerNow(), overlapWaitBegin) < 5.0
     )
         YieldThread();
-    const bool nativeSubmissionsOverlapped = submissionObserver.capturedSubmissionCount() >= 2u;
+    const bool nativeSubmissionsOverlapped = submissionObserver.capturedSubmissionCount() >= s_ExpectedDualCount;
 
     EXPECT_FALSE(transaction.packetToken(firstPacket).valid());
     EXPECT_FALSE(transaction.packetToken(secondPacket).valid());
@@ -278,11 +281,11 @@ TEST_F(DescriptorBufferRoundTripTest, IndependentPacketsOverlapNativeSubmitBefor
     EXPECT_TRUE(secondToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_GT(secondToken.value, firstToken.value);
     EXPECT_FALSE(submissionObserver.overflowed());
-    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     const GpuTaskGraphSubmissionStatistics statistics = transaction.submissionStatistics();
-    EXPECT_EQ(statistics.acceptedPacketCount, 2u);
-    EXPECT_EQ(statistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(statistics.acceptedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_TRUE(device.waitForIdle());
 }
 

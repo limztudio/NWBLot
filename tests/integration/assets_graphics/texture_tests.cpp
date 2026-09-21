@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -157,16 +161,16 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(
 static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 7u, 5u, 2u, 2u, 0u, 64u });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 3u, 2u, 1u, 1u, 64u, 16u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 7u, 5u, s_ExpectedDualCount, s_ExpectedDualCount, 0u, 64u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 3u, s_ExpectedDualCount, 1u, 1u, 64u, 16u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 80u, 16u });
     return mipLevels;
 }
 
 static NWB::Impl::Texture::MipLevelVector MakeTextureCubeTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
-    mipLevels.reserve(2u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 2u, 2u, 1u, 1u, 0u, 96u, 6u });
+    mipLevels.reserve(s_ExpectedDualCount);
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ s_ExpectedDualCount, s_ExpectedDualCount, 1u, 1u, 0u, 96u, 6u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 96u, 96u, 6u });
     return mipLevels;
 }
@@ -174,8 +178,8 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureCubeTestMipLevels(TestArena
 static NWB::Impl::Texture::MipLevelVector MakeTextureVolumeTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 4u, 2u, 1u, 1u, 0u, 48u, 3u });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 2u, 1u, 1u, 1u, 48u, 16u, 1u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 4u, s_ExpectedDualCount, 1u, 1u, 0u, 48u, 3u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ s_ExpectedDualCount, 1u, 1u, 1u, 48u, 16u, 1u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 64u, 16u, 1u });
     return mipLevels;
 }
@@ -195,8 +199,8 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestHdrPayload(TestArena& testAr
 static NWB::Impl::Texture::MipLevelVector MakeTextureHdrTestMipLevels(TestArena& testArena){
     NWB::Impl::Texture::MipLevelVector mipLevels(testArena.arena);
     mipLevels.reserve(3u);
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 4u, 2u, 1u, 1u, 0u, 16u });
-    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 2u, 1u, 1u, 1u, 16u, 16u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ 4u, s_ExpectedDualCount, 1u, 1u, 0u, 16u });
+    mipLevels.push_back(NWB::Impl::TextureMipLevel{ s_ExpectedDualCount, 1u, 1u, 1u, 16u, 16u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 32u, 16u });
     return mipLevels;
 }
@@ -247,17 +251,17 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
 
     EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
         NWB::Impl::TextureDimension::TextureCube,
-        2u,
-        2u,
+        s_ExpectedDualCount,
+        s_ExpectedDualCount,
         1u,
         mipCount
     ));
-    EXPECT_EQ(mipCount, 2u);
+    EXPECT_EQ(mipCount, s_ExpectedDualCount);
 
     EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeCompleteMipCount(
         NWB::Impl::TextureDimension::Texture3D,
         4u,
-        2u,
+        s_ExpectedDualCount,
         3u,
         mipCount
     ));
@@ -267,14 +271,14 @@ TEST(AssetsGraphics, TextureFormatComputesSharedMipAndUastcBlockLayouts){
     u32 blocksY = 0u;
     u64 planeByteCount = 0u;
     EXPECT_TRUE(NWB::Impl::TextureFormat::ComputePlaneBlockLayout(7u, 5u, blocksX, blocksY, planeByteCount));
-    EXPECT_EQ(blocksX, 2u);
-    EXPECT_EQ(blocksY, 2u);
+    EXPECT_EQ(blocksX, s_ExpectedDualCount);
+    EXPECT_EQ(blocksY, s_ExpectedDualCount);
     EXPECT_EQ(planeByteCount, 64u);
 
     EXPECT_TRUE(NWB::Impl::TextureFormat::ComputeMipPlaneBlockLayout(
         NWB::Impl::TexturePayloadFormat::UastcHdr4x4,
         4u,
-        2u,
+        s_ExpectedDualCount,
         blocksX,
         blocksY,
         planeByteCount
@@ -337,7 +341,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV2UastcLdrMipPayload){
     EXPECT_EQ(loadedTexture.mipLevels()[0u].sliceCount, 1u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].sizeBytes, 64u);
     EXPECT_EQ(loadedTexture.mipLevels()[1u].offsetBytes, 64u);
-    EXPECT_EQ(loadedTexture.mipLevels()[2u].offsetBytes, 80u);
+    EXPECT_EQ(loadedTexture.mipLevels()[s_ThirdElementIndex].offsetBytes, 80u);
     ASSERT_EQ(loadedTexture.uastcBlocks().size(), 96u);
     for(usize index = 0u; index < loadedTexture.uastcBlocks().size(); ++index)
         EXPECT_EQ(loadedTexture.uastcBlocks()[index], static_cast<u8>(index));
@@ -355,7 +359,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
         NWB::Impl::TextureColorSpace::Linear,
         true,
         4u,
-        2u,
+        s_ExpectedDualCount,
         MakeTextureHdrTestMipLevels(testArena),
         MakeTextureTestHdrPayload(testArena),
         NWB::Impl::TextureDimension::Texture2D,
@@ -395,8 +399,8 @@ TEST(AssetsGraphics, TextureCodecRoundTripPreservesV3UastcHdrAndTrailingAlphaPay
     ASSERT_EQ(loadedTexture.mipLevels().size(), 3u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].blockCountX, 1u);
     EXPECT_EQ(loadedTexture.mipLevels()[0u].blockCountY, 1u);
-    EXPECT_EQ(loadedTexture.mipLevels()[2u].offsetBytes, 32u);
-    EXPECT_EQ(loadedTexture.mipLevels()[2u].sizeBytes, 16u);
+    EXPECT_EQ(loadedTexture.mipLevels()[s_ThirdElementIndex].offsetBytes, 32u);
+    EXPECT_EQ(loadedTexture.mipLevels()[s_ThirdElementIndex].sizeBytes, 16u);
     EXPECT_EQ(loadedTexture.primaryPayloadByteCount(), 48u);
     ASSERT_EQ(loadedTexture.payloadBytes().size(), 96u);
     ASSERT_NE(loadedTexture.alphaUastcBlocks(), nullptr);
@@ -420,8 +424,8 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
         cube.setPayload(
             NWB::Impl::TextureColorSpace::Srgb,
             false,
-            2u,
-            2u,
+            s_ExpectedDualCount,
+            s_ExpectedDualCount,
             MakeTextureCubeTestMipLevels(testArena),
             MakeTextureTestUastcPayload(testArena, 192u, 0x40u),
             NWB::Impl::TextureDimension::TextureCube,
@@ -431,7 +435,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
 
         NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         ASSERT_TRUE(codec.serialize(cube, binary));
-        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + 2u * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
+        ASSERT_EQ(binary.size(), sizeof(NWB::Impl::TextureBinaryPayload::HeaderBinaryV2) + s_ExpectedDualCount * sizeof(NWB::Impl::TextureBinaryPayload::MipLevelBinary) + 192u);
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         ASSERT_TRUE(codec.deserialize(testArena.arena, cube.virtualPath(), binary, loadedAsset));
@@ -439,7 +443,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
         const NWB::Impl::Texture& loadedCube = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
         EXPECT_EQ(loadedCube.dimension(), NWB::Impl::TextureDimension::TextureCube);
         EXPECT_EQ(loadedCube.depth(), 1u);
-        ASSERT_EQ(loadedCube.mipLevels().size(), 2u);
+        ASSERT_EQ(loadedCube.mipLevels().size(), s_ExpectedDualCount);
         EXPECT_EQ(loadedCube.mipLevels()[0u].sliceCount, 6u);
         EXPECT_EQ(loadedCube.mipLevels()[1u].sliceCount, 6u);
         EXPECT_EQ(loadedCube.uastcBlocks().size(), 192u);
@@ -451,7 +455,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
             NWB::Impl::TextureColorSpace::Linear,
             true,
             4u,
-            2u,
+            s_ExpectedDualCount,
             MakeTextureVolumeTestMipLevels(testArena),
             MakeTextureTestUastcPayload(testArena, 80u, 0x80u),
             NWB::Impl::TextureDimension::Texture3D,
@@ -472,7 +476,7 @@ TEST(AssetsGraphics, TextureCodecRoundTripsCubeAndVolumePayloads){
         ASSERT_EQ(loadedVolume.mipLevels().size(), 3u);
         EXPECT_EQ(loadedVolume.mipLevels()[0u].sliceCount, 3u);
         EXPECT_EQ(loadedVolume.mipLevels()[1u].sliceCount, 1u);
-        EXPECT_EQ(loadedVolume.mipLevels()[2u].sliceCount, 1u);
+        EXPECT_EQ(loadedVolume.mipLevels()[s_ThirdElementIndex].sliceCount, 1u);
         EXPECT_EQ(loadedVolume.uastcBlocks().size(), 80u);
     }
 
@@ -580,12 +584,12 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
     EXPECT_EQ(texture.alphaConstantUnorm8(), 255u);
     EXPECT_TRUE(texture.hasAlpha());
     EXPECT_EQ(texture.width(), 4u);
-    EXPECT_EQ(texture.height(), 2u);
+    EXPECT_EQ(texture.height(), s_ExpectedDualCount);
     ASSERT_EQ(texture.mipLevels().size(), 3u);
     EXPECT_EQ(texture.mipLevels()[0u].blockCountX, 1u);
     EXPECT_EQ(texture.mipLevels()[0u].blockCountY, 1u);
-    EXPECT_EQ(texture.mipLevels()[2u].offsetBytes, 32u);
-    EXPECT_EQ(texture.mipLevels()[2u].sizeBytes, 16u);
+    EXPECT_EQ(texture.mipLevels()[s_ThirdElementIndex].offsetBytes, 32u);
+    EXPECT_EQ(texture.mipLevels()[s_ThirdElementIndex].sizeBytes, 16u);
     EXPECT_EQ(texture.primaryPayloadByteCount(), 48u);
     EXPECT_EQ(texture.payloadBytes().size(), 96u);
     ASSERT_NE(texture.alphaUastcBlocks(), nullptr);
@@ -630,7 +634,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     const NWB::Impl::Texture& cube = static_cast<const NWB::Impl::Texture&>(*cubeAsset);
     EXPECT_EQ(cube.dimension(), NWB::Impl::TextureDimension::TextureCube);
     EXPECT_EQ(cube.depth(), 1u);
-    ASSERT_EQ(cube.mipLevels().size(), 2u);
+    ASSERT_EQ(cube.mipLevels().size(), s_ExpectedDualCount);
     EXPECT_EQ(cube.mipLevels()[0u].sliceCount, 6u);
 
     UniquePtr<NWB::Core::Assets::IAsset> volumeAsset;

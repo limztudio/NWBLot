@@ -14,6 +14,9 @@
 namespace __hidden_light_space_plan_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -26,7 +29,7 @@ TEST(LightSpacePlan, PacksDirectionalAndEveryPointFaceWithoutPixelOrLayerOverlap
     };
     LightSpacePlan plan;
     ASSERT_TRUE(BuildLightSpacePlan(SoftwareShadowSettings{}, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, 2u);
+    ASSERT_EQ(plan.lightCount, s_ExpectedDualCount);
     ASSERT_EQ(plan.viewCount, 7u);
     EXPECT_EQ(plan.textureResolution, 512u);
     EXPECT_EQ(plan.totalPixels, 655360u);
@@ -95,14 +98,14 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
     const LightSpaceLightRequest requests[] = {
         { 0u, 0u, Scene::LightType::Spot },
         { 1u, 1u, Scene::LightType::Directional, false },
-        { 2u, 2u, Scene::LightType::Point },
+        { s_ExpectedDualCount, s_ExpectedDualCount, Scene::LightType::Point },
     };
     LightSpacePlan plan;
     SoftwareShadowSettings settings;
     settings.backend = SoftwareShadowBackend::LightSpace;
     ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
     ASSERT_EQ(plan.lightCount, 1u);
-    EXPECT_EQ(plan.lights[0].lightIndex, 2u);
+    EXPECT_EQ(plan.lights[0].lightIndex, s_ExpectedDualCount);
     EXPECT_EQ(plan.viewCount, 6u);
     settings.backend = SoftwareShadowBackend::SoftwareTrace;
     ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
@@ -118,18 +121,18 @@ TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
     EXPECT_FALSE(BuildLightSpacePlan(settings, nullptr, 1u, Limit<u32>::s_Max, 20u, plan));
     EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 9u, Limit<u32>::s_Max, 20u, plan));
     requests[1].shadowSlot = 0u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 2u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
     requests[1].shadowSlot = 1u;
     requests[1].lightIndex = 0u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 2u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
     requests[1].lightIndex = 64u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 2u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
     requests[1].lightIndex = 1u;
     requests[1].shadowSlot = 8u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 2u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
     requests[1].shadowSlot = 1u;
     requests[1].type = Scene::LightType::kCount;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 2u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
     EXPECT_EQ(plan.totalByteSize, 123u);
     EXPECT_TRUE(BuildLightSpacePlan(settings, nullptr, 0u, Limit<u32>::s_Max, 0u, plan));
     EXPECT_EQ(plan.totalByteSize, 0u);
@@ -180,7 +183,7 @@ TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
     EXPECT_EQ(plan.lightCount, 0u); // One six-face 2048 map exceeds the shader address range.
     settings.pointResolution = 1024u;
     ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, 2u);
+    ASSERT_EQ(plan.lightCount, s_ExpectedDualCount);
     EXPECT_LE(plan.eventByteSize, Limit<u32>::s_Max);
     EXPECT_LE(plan.totalByteSize, settings.memoryBudgetBytes);
     settings.memoryBudgetBytes = 0u;

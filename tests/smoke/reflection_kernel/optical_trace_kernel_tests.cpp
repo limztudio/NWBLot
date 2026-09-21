@@ -26,6 +26,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -152,15 +155,15 @@ void BuildCases(Cases& cases){
     half.planes[0].model = 1u;
     half.expectedRadiance = { 0.1875f, 0.25f, 0.3125f };
     auto& full = AddCase(cases, "alpha one terminates");
-    full.planes[0].model = 2u;
+    full.planes[0].model = s_ExpectedDualCount;
     full.expectedRadiance = { 0.25f, 0.25f, 0.125f };
     full.expectedTermination = NWB_OPTICAL_TERMINATION_OPAQUE;
-    full.expectedQueries = 2u;
+    full.expectedQueries = s_ExpectedDualCount;
     auto& zero = AddCase(cases, "alpha zero keeps environment");
     zero.planes[0].model = 3u;
     zero.expectedRadiance = { 0.125f, 0.25f, 0.5f };
     auto& overlap = AddCase(cases, "overlapping alpha silhouettes");
-    overlap.planeCount = 2u;
+    overlap.planeCount = s_ExpectedDualCount;
     overlap.planes[1].z = 2.0f;
     overlap.planes[1].model = 1u;
     overlap.expectedRadiance = { 0.25f, 0.25f, 0.3125f };
@@ -171,14 +174,14 @@ void BuildCases(Cases& cases){
     cases.back().name = "reversed TLAS insertion";
     cases.back().reverseOrder = true;
     auto& opaqueAfter = AddCase(cases, "opaque behind alpha");
-    opaqueAfter.planeCount = 2u;
+    opaqueAfter.planeCount = s_ExpectedDualCount;
     opaqueAfter.planes[1].z = 2.0f;
     opaqueAfter.planes[1].transparent = false;
     opaqueAfter.expectedRadiance = { 0.34375f, 0.25f, 0.21875f };
     opaqueAfter.expectedDistance = 2.0f;
     opaqueAfter.expectedTermination = NWB_OPTICAL_TERMINATION_OPAQUE;
     auto& opaqueBefore = AddCase(cases, "near opaque is last TLAS instance");
-    opaqueBefore.planeCount = 2u;
+    opaqueBefore.planeCount = s_ExpectedDualCount;
     opaqueBefore.planes[0].z = 2.0f;
     opaqueBefore.planes[1].transparent = false;
     opaqueBefore.expectedRadiance = { 0.375f, 0.25f, 0.25f };
@@ -216,8 +219,8 @@ void BuildCases(Cases& cases){
     AddCase(cases, "coplanar indexed seam").ray.originTMin.x = 0.25f;
     AddCase(cases, "mirrored instance").mirrored = true;
     auto& coincidence = AddCase(cases, "independent coincident alpha is ambiguous");
-    coincidence.planeCount = 2u;
-    ExpectRejected(coincidence, 2u, NWB_OPTICAL_TERMINATION_AMBIGUOUS);
+    coincidence.planeCount = s_ExpectedDualCount;
+    ExpectRejected(coincidence, s_ExpectedDualCount, NWB_OPTICAL_TERMINATION_AMBIGUOUS);
     const u32 invalidModels[] = { 4u, 5u, 6u, 7u, 8u, 9u };
     constexpr AStringView invalidNames[] = {
         "unspecified nonunit IOR", "nonfinite IOR", "nonfinite alpha coverage", "nonfinite absorption tint", "IOR below one", "infinite IOR"
@@ -225,11 +228,11 @@ void BuildCases(Cases& cases){
     for(u32 index = 0u; index < LengthOf(invalidModels); ++index){
         auto& invalid = AddCase(cases, invalidNames[index]);
         invalid.planes[0].model = invalidModels[index];
-        ExpectRejected(invalid, invalidModels[index] == 6u ? 2u : 1u);
+        ExpectRejected(invalid, invalidModels[index] == 6u ? s_ExpectedDualCount : 1u);
     }
     auto& unknown = AddCase(cases, "unknown boundary policy rejected");
     unknown.planes[0].mode = 0x7fffffffu;
-    ExpectRejected(unknown, 2u);
+    ExpectRejected(unknown, s_ExpectedDualCount);
     auto& instanceBounds = AddCase(cases, "invalid transparent instance bounds");
     instanceBounds.planes[0].boundsValid = false;
     ExpectRejected(instanceBounds, 1u);
@@ -351,7 +354,7 @@ void RunCase(
     });
     const f32 extent = testCase.extent;
     const Float3U positions[] = { { -extent, -extent, 0.0f }, { extent, -extent, 0.0f }, { extent, extent, 0.0f }, { -extent, extent, 0.0f } };
-    const u32 indices[] = { 0u, 2u, 1u, 0u, 3u, 2u };
+    const u32 indices[] = { 0u, s_ExpectedDualCount, 1u, 0u, 3u, s_ExpectedDualCount };
     const Attribute attributes[LengthOf(indices)]{};
     Vector<MeshInstance, Alloc::ScratchArena> instances(testCase.planeCount, scratchArena);
     Vector<Material, Alloc::ScratchArena> materials(testCase.planeCount, scratchArena);
@@ -391,7 +394,7 @@ void RunCase(
             desc.setIsConstantBuffer(true);
         else
             desc.setCanHaveRawViews(true);
-        if(index < 2u)
+        if(index < s_ExpectedDualCount)
             desc.setIsAccelStructBuildInput(true);
         buffers[index] = device.createBuffer(desc);
         ASSERT_TRUE(buffers[index]);
@@ -441,7 +444,7 @@ void RunCase(
         hardwareInstances[index].setBLAS(blas.get()).setInstanceID(index).setTransform(transform).setInstanceMask(mask);
     }
     if(testCase.reverseOrder){
-        for(usize index = 0u; index < hardwareInstances.size() / 2u; ++index)
+        for(usize index = 0u; index < hardwareInstances.size() / s_ExpectedDualCount; ++index)
             Swap(hardwareInstances[index], hardwareInstances[hardwareInstances.size() - index - 1u]);
     }
     ray.slots[0] = descriptors[4].slot();
@@ -516,7 +519,7 @@ void RunCase(
     NWB_MEMCPY(specializedWords, sizeof(specializedWords), &observations[2], sizeof(Observation));
     for(u32 word = 0u; word < sizeof(Observation) / sizeof(u32); ++word)
         EXPECT_EQ(generalWords[word], specializedWords[word]) << "result word " << word;
-    for(u32 variant = 1u; variant <= 2u; ++variant){
+    for(u32 variant = 1u; variant <= s_ExpectedDualCount; ++variant){
         SCOPED_TRACE(variant);
         const Observation& actual = observations[variant];
         for(u32 channel = 0u; channel < 3u; ++channel){

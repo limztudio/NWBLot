@@ -13,6 +13,11 @@
 namespace __hidden_telemetry_frame_graph_codec_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 
@@ -37,7 +42,7 @@ TEST(Telemetry, FrameGraphLegacyV1PayloadRoundTrip){
     EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphLegacyPayloadVersion);
     EXPECT_EQ(parsed.frameIndex, 905u);
     ASSERT_EQ(parsed.nodes.size(), 3u);
-    ASSERT_EQ(parsed.edges.size(), 2u);
+    ASSERT_EQ(parsed.edges.size(), s_ExpectedDualCount);
     EXPECT_EQ(parsed.nodes[0u].name, Name("gbuffer"));
     EXPECT_EQ(parsed.nodes[0u].label, "GBuffer Pass");
     EXPECT_EQ(parsed.nodes[0u].kind, Telemetry::FrameGraphNodeKind::Pass);
@@ -45,18 +50,18 @@ TEST(Telemetry, FrameGraphLegacyV1PayloadRoundTrip){
     EXPECT_EQ(parsed.nodes[1u].name, Name("albedo"));
     EXPECT_EQ(parsed.nodes[1u].label, "Albedo Texture");
     EXPECT_EQ(parsed.nodes[1u].kind, Telemetry::FrameGraphNodeKind::Resource);
-    EXPECT_EQ(parsed.nodes[2u].name, Name("lighting"));
-    EXPECT_EQ(parsed.nodes[2u].label, "Lighting Pass");
+    EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].name, Name("lighting"));
+    EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].label, "Lighting Pass");
     EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
     EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
     EXPECT_EQ(parsed.edges[0u].kind, Telemetry::FrameGraphEdgeKind::Writes);
     EXPECT_EQ(parsed.edges[1u].fromNodeIndex, 1u);
-    EXPECT_EQ(parsed.edges[1u].toNodeIndex, 2u);
+    EXPECT_EQ(parsed.edges[1u].toNodeIndex, s_ExpectedDualCount);
     EXPECT_EQ(parsed.edges[1u].kind, Telemetry::FrameGraphEdgeKind::Reads);
-    EXPECT_EQ(parsed.edges[1u].flags, 2u);
+    EXPECT_EQ(parsed.edges[1u].flags, s_ExpectedDualCount);
     EXPECT_FALSE(parsed.nodes[0u].queueAssignment.present);
     EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
-    EXPECT_FALSE(parsed.nodes[2u].queueAssignment.present);
+    EXPECT_FALSE(parsed.nodes[s_ThirdElementIndex].queueAssignment.present);
     EXPECT_TRUE(parsed.physicalQueueRuntimeStatistics.empty());
 
     Telemetry::EncodedFrameGraphPayloadHeader legacyHeader;
@@ -78,7 +83,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
-            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
             + sizeof("GBuffer Pass")
             + sizeof("Albedo Texture")
             + sizeof("Lighting Pass"));
@@ -86,7 +91,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     Telemetry::EncodedFrameGraphPayloadHeaderV2 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphQueueAssignmentPayloadVersion);
-    EXPECT_EQ(header.queueAssignmentCount, 2u);
+    EXPECT_EQ(header.queueAssignmentCount, s_ExpectedDualCount);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
@@ -98,7 +103,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_EQ(changed.initialQueue.deviceGeneration, 17u);
     EXPECT_EQ(changed.plannedQueue.index, 3u);
     EXPECT_EQ(changed.acceptedQueue, changed.plannedQueue);
-    EXPECT_EQ(changed.previousAcceptedQueue.index, 2u);
+    EXPECT_EQ(changed.previousAcceptedQueue.index, s_ExpectedDualCount);
     EXPECT_EQ(changed.previousAcceptedQueue.deviceGeneration, 17u);
     EXPECT_EQ(changed.queueClass, Telemetry::FrameGraphQueueClass::Compute);
     EXPECT_EQ(changed.reason, Telemetry::FrameGraphQueueAssignmentReason::Fallback);
@@ -114,12 +119,12 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_EQ(changed.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
 
     EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
-    const Telemetry::FrameGraphQueueAssignment& notAccepted = parsed.nodes[2u].queueAssignment;
+    const Telemetry::FrameGraphQueueAssignment& notAccepted = parsed.nodes[s_ThirdElementIndex].queueAssignment;
     EXPECT_TRUE(notAccepted.present);
     EXPECT_EQ(notAccepted.initialQueue.index, 4u);
     EXPECT_EQ(notAccepted.plannedQueue.index, 5u);
     EXPECT_FALSE(notAccepted.acceptedQueue.valid());
-    EXPECT_EQ(notAccepted.previousAcceptedQueue.index, 2u);
+    EXPECT_EQ(notAccepted.previousAcceptedQueue.index, s_ExpectedDualCount);
     EXPECT_EQ(notAccepted.queueClass, Telemetry::FrameGraphQueueClass::Transfer);
     EXPECT_EQ(notAccepted.reason, Telemetry::FrameGraphQueueAssignmentReason::ScoredAny);
     EXPECT_EQ(notAccepted.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback);
@@ -139,8 +144,8 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
     EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
-            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u)
-            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * 2u)
+            + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
+            + (sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount)
             + sizeof("GBuffer Pass")
             + sizeof("Albedo Texture")
             + sizeof("Lighting Pass"));
@@ -148,8 +153,8 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
     Telemetry::EncodedFrameGraphPayloadHeaderV3 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     EXPECT_EQ(header.version, Telemetry::s_FrameGraphCompiledTaskPayloadVersion);
-    EXPECT_EQ(header.queueAssignmentCount, 2u);
-    EXPECT_EQ(header.compiledTaskCount, 2u);
+    EXPECT_EQ(header.queueAssignmentCount, s_ExpectedDualCount);
+    EXPECT_EQ(header.compiledTaskCount, s_ExpectedDualCount);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
@@ -163,11 +168,11 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
         Telemetry::FrameGraphTaskPacketizationDecision::FirstTask
     );
     EXPECT_FALSE(parsed.nodes[1u].compiledTask.present);
-    EXPECT_TRUE(parsed.nodes[2u].compiledTask.present);
-    EXPECT_EQ(parsed.nodes[2u].compiledTask.planGeneration, 41u);
-    EXPECT_EQ(parsed.nodes[2u].compiledTask.packetIndex, 7u);
+    EXPECT_TRUE(parsed.nodes[s_ThirdElementIndex].compiledTask.present);
+    EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].compiledTask.planGeneration, 41u);
+    EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].compiledTask.packetIndex, 7u);
     EXPECT_EQ(
-        parsed.nodes[2u].compiledTask.packetizationDecision,
+        parsed.nodes[s_ThirdElementIndex].compiledTask.packetizationDecision,
         Telemetry::FrameGraphTaskPacketizationDecision::MergedExplicit
     );
 }
@@ -229,7 +234,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords){
         payload.data() + assignmentOffset + sizeof(first),
         sizeof(second)
     );
-    first.nodeIndex = 2u;
+    first.nodeIndex = s_ExpectedDualCount;
     second.nodeIndex = 0u;
     NWB_MEMCPY(payload.data() + assignmentOffset, payload.size() - assignmentOffset, &first, sizeof(first));
     NWB_MEMCPY(
@@ -282,7 +287,7 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
     const usize compiledTaskOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
-        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * 2u
+        + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount
     ;
     Telemetry::EncodedFrameGraphCompiledTask first;
     Telemetry::EncodedFrameGraphCompiledTask second;

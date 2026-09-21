@@ -28,6 +28,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -379,7 +383,7 @@ TEST(RayTracingShaderTableContractTest, NamedFailureAndAlignmentHelpersAreDeterm
 
     u64 recordByteSize = 0u;
     EXPECT_TRUE(GraphicsBackend::VulkanDetail::ComputeShaderTableByteSize(
-        2u,
+        s_ExpectedDualCount,
         64u,
         recordByteSize,
         NWB_TEXT("test shader table size")
@@ -647,7 +651,7 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     EXPECT_EQ(rayGenerationAndMissTable->addMissShader("unique_miss"), 1u);
     ExpectShaderTableRecordRejection([&](){ return rayGenerationAndMissTable->addMissShader("main"); });
     ExpectShaderTableRecordRejection([&](){ return rayGenerationAndMissTable->addMissShader("unknown_export"); });
-    EXPECT_EQ(rayGenerationAndMissTable->addMissShader("shared_export"), 2u);
+    EXPECT_EQ(rayGenerationAndMissTable->addMissShader("shared_export"), s_ExpectedDualCount);
 
     const RayTracingPipelineHandle hitPipeline = CreateShaderTablePipeline(device(), arena(), ShaderTablePipelineShape::Hit);
     ASSERT_TRUE(hitPipeline);
@@ -656,7 +660,7 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     EXPECT_EQ(hitTable->addHitGroup("unique_hit"), 0u);
     EXPECT_EQ(hitTable->addHitGroup("second_hit"), 1u);
     ExpectShaderTableRecordRejection([&](){ return hitTable->addHitGroup("hit_ray_generation"); });
-    EXPECT_EQ(hitTable->addHitGroup("unique_hit"), 2u);
+    EXPECT_EQ(hitTable->addHitGroup("unique_hit"), s_ExpectedDualCount);
 
     const RayTracingPipelineHandle callablePipeline = CreateShaderTablePipeline(
         device(),
@@ -670,7 +674,7 @@ TEST_F(RayTracingShaderTableIngressTest, TypedLookupRejectsEmptyWrongKindAndSame
     EXPECT_EQ(callableTable->addCallableShader("callable_first"), 0u);
     EXPECT_EQ(callableTable->addCallableShader("callable_second"), 1u);
     ExpectShaderTableRecordRejection([&](){ return callableTable->addCallableShader("unknown_export"); });
-    EXPECT_EQ(callableTable->addCallableShader("callable_first"), 2u);
+    EXPECT_EQ(callableTable->addCallableShader("callable_first"), s_ExpectedDualCount);
 
     const RayTracingPipelineHandle ambiguousRayGenerationAndMissPipeline = CreateShaderTablePipeline(
         device(),
@@ -740,7 +744,7 @@ TEST_F(RayTracingShaderTableIngressTest, ImmutableGroupMetadataSurvivesDescripti
     mutableShaderDesc.shaderType = ShaderType::Miss;
     mutableDesc.shaders[0u].exportName.assign("mutated_ray_generation");
     mutableDesc.shaders[1u].exportName.assign("mutated_fallback");
-    mutableDesc.shaders[2u].exportName.assign("mutated_miss");
+    mutableDesc.shaders[s_ThirdElementIndex].exportName.assign("mutated_miss");
 
     const RayTracingShaderTableHandle table = pipeline->createShaderTable();
     ASSERT_TRUE(table);
@@ -769,7 +773,7 @@ TEST_F(RayTracingShaderTableIngressTest, ImmutableGroupMetadataSurvivesDescripti
     );
     ASSERT_TRUE(callablePipeline);
     RayTracingPipelineDesc& mutableCallableDesc = const_cast<RayTracingPipelineDesc&>(callablePipeline->getDescription());
-    ASSERT_GE(mutableCallableDesc.shaders.size(), 2u);
+    ASSERT_GE(mutableCallableDesc.shaders.size(), s_ExpectedDualCount);
     mutableCallableDesc.shaders[1u].exportName.assign("mutated_callable");
     const RayTracingShaderTableHandle callableTable = callablePipeline->createShaderTable();
     ASSERT_TRUE(callableTable);

@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -64,7 +67,7 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
             ::Vector<u8, NWB::Core::Alloc::ScratchArena> payload{ scratchArena };
             payload.reserve(4u);
             payload.push_back(1u);
-            payload.push_back(2u);
+            payload.push_back(s_ExpectedDualCount);
             payload.push_back(3u);
             payload.push_back(4u);
 
@@ -83,7 +86,7 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
                     if(loaded){
                         ASSERT_EQ(readback.size(), 4u);
                         EXPECT_EQ(readback[0], 1u);
-                        EXPECT_EQ(readback[1], 2u);
+                        EXPECT_EQ(readback[1], s_ExpectedDualCount);
                         EXPECT_EQ(readback[2], 3u);
                         EXPECT_EQ(readback[3], 4u);
                     }
@@ -176,8 +179,8 @@ static bool FindNewAssetObjectCachePath(
     if(!FindAssetObjectCachePaths(testArena, cacheDirectory, objectPaths))
         return false;
 
-    EXPECT_EQ(objectPaths.size(), 2u);
-    if(objectPaths.size() != 2u)
+    EXPECT_EQ(objectPaths.size(), s_ExpectedDualCount);
+    if(objectPaths.size() != s_ExpectedDualCount)
         return false;
 
     usize newPathCount = 0u;
@@ -229,7 +232,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     const Path assetRoot = root / "assets";
     const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
-    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
 
     Path objectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", objectPath));
@@ -240,7 +243,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
 
-    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path unchangedObjectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / "cache", unchangedObjectPath));
     EXPECT_EQ(unchangedObjectPath, objectPath);
@@ -250,7 +253,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     EXPECT_TRUE(AssetBytesEqual(firstObjectBytes, unchangedObjectBytes));
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
-    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, 2u));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path changedObjectPath(testArena.arena);
     ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / "cache", objectPath, changedObjectPath));
     EXPECT_NE(changedObjectPath, objectPath);
@@ -332,7 +335,7 @@ static NWB::Impl::Mesh BuildMinimalMesh(TestArena& testArena){
     auto meshletPrimitiveIndices = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
     meshletPrimitiveIndices.push_back(0u);
     meshletPrimitiveIndices.push_back(1u);
-    meshletPrimitiveIndices.push_back(2u);
+    meshletPrimitiveIndices.push_back(s_ExpectedDualCount);
 
     auto meshletPositionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
     auto meshletAttributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
@@ -376,7 +379,7 @@ TEST(AssetsGraphics, MeshCodecRoundTrip){
     EXPECT_EQ(loadedMesh.positionStream()[1].x, 0.5f);
     EXPECT_EQ(LoadHalf4U(loadedMesh.normalStream()[1]).z, 1.f);
     EXPECT_EQ(LoadHalf4U(loadedMesh.colorStream()[1]).y, 1.f);
-    EXPECT_EQ(loadedMesh.meshletPrimitiveIndices()[2], 2u);
+    EXPECT_EQ(loadedMesh.meshletPrimitiveIndices()[2], s_ExpectedDualCount);
 }
 
 

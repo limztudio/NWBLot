@@ -17,6 +17,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -72,9 +76,9 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
 
     const Graphics::GpuExternalCompletionId secondExternalDependencies[] = {
         completions[0u],
-        completions[2u],
+        completions[s_ThirdElementIndex],
         completions[1u],
-        completions[2u],
+        completions[s_ThirdElementIndex],
     };
     Graphics::GpuTaskSchedulingHint secondScheduling;
     secondScheduling.allowPacketMerge = true;
@@ -110,9 +114,9 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     EXPECT_EQ(analysisDependencies[0u].consumer, first);
     EXPECT_EQ(analysisDependencies[1u].completion, completions[0u]);
     EXPECT_EQ(analysisDependencies[1u].consumer, first);
-    EXPECT_EQ(analysisDependencies[2u].completion, completions[0u]);
-    EXPECT_EQ(analysisDependencies[2u].consumer, second);
-    EXPECT_EQ(analysisDependencies[3u].completion, completions[2u]);
+    EXPECT_EQ(analysisDependencies[s_ThirdElementIndex].completion, completions[0u]);
+    EXPECT_EQ(analysisDependencies[s_ThirdElementIndex].consumer, second);
+    EXPECT_EQ(analysisDependencies[3u].completion, completions[s_ThirdElementIndex]);
     EXPECT_EQ(analysisDependencies[3u].consumer, second);
     EXPECT_EQ(analysisDependencies[4u].completion, completions[1u]);
     EXPECT_EQ(analysisDependencies[4u].consumer, second);
@@ -120,13 +124,13 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(first);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(compiledPlan.packetForTask(second), packet);
-    ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(packet).plan->taskCount, s_ExpectedDualCount);
     ASSERT_EQ(compiledPlan.packet(packet).plan->externalDependencyCount, 3u);
     const Graphics::GpuExternalCompletionId* const packetDependencies = compiledPlan.packet(packet).externalDependencies;
     ASSERT_NE(packetDependencies, nullptr);
     EXPECT_EQ(packetDependencies[0u], completions[1u]);
     EXPECT_EQ(packetDependencies[1u], completions[0u]);
-    EXPECT_EQ(packetDependencies[2u], completions[2u]);
+    EXPECT_EQ(packetDependencies[s_ThirdElementIndex], completions[s_ThirdElementIndex]);
     EXPECT_EQ(compiledPlan.compileStatistics().declaredExternalDependencyCount, analysisDependencies.size());
     EXPECT_EQ(compiledPlan.compileStatistics().packetExternalDependencyCount, 3u);
 }
@@ -251,7 +255,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         ASSERT_EQ(compiledQueueTopology.queueCount, LengthOf(queues));
         EXPECT_EQ(compiledQueueTopology.queues[0u].id, queues[0u].id);
         EXPECT_EQ(compiledQueueTopology.queues[1u].id, queues[1u].id);
-        EXPECT_EQ(compiledQueueTopology.queues[2u].id, queues[2u].id);
+        EXPECT_EQ(compiledQueueTopology.queues[s_ThirdElementIndex].id, queues[s_ThirdElementIndex].id);
 
         const Graphics::GpuTaskGraphCompileStatistics compileStatistics = compiledPlan.compileStatistics();
         ASSERT_TRUE(compileStatistics.valid());
@@ -275,7 +279,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         EXPECT_EQ(compileStatistics.recordingFrontierCount, 1u);
         EXPECT_EQ(
             compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Graphics],
-            2u
+            s_ExpectedDualCount
         );
         EXPECT_EQ(
             compileStatistics.taskCountByQueueClass[Graphics::CommandQueue::Compute],
@@ -287,7 +291,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         );
         EXPECT_EQ(
             compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Graphics],
-            2u
+            s_ExpectedDualCount
         );
         EXPECT_EQ(
             compileStatistics.packetCountByQueueClass[Graphics::CommandQueue::Compute],
@@ -356,7 +360,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         ASSERT_TRUE(firstTwoPacketRange.valid());
         EXPECT_TRUE(compiledPlan.validPacketRange(firstTwoPacketRange));
         EXPECT_EQ(firstTwoPacketRange.first, firstPacket);
-        EXPECT_EQ(firstTwoPacketRange.packetCount, 2u);
+        EXPECT_EQ(firstTwoPacketRange.packetCount, s_ExpectedDualCount);
         const Graphics::GpuSubmissionPacketRange firstTwoTaskRange = compiledPlan.packetRangeForTasks(first, second);
         ASSERT_TRUE(firstTwoTaskRange.valid());
         EXPECT_EQ(firstTwoTaskRange.first, firstPacket);
@@ -485,7 +489,7 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, 1u);
     ASSERT_EQ(compiledPlan.packet(thirdPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(compiledPlan.packet(thirdPacket).dependencies[0u].producer, firstPacket);
-    ASSERT_EQ(compiledPlan.packet(fourthPacket).plan->dependencyCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(fourthPacket).plan->dependencyCount, s_ExpectedDualCount);
     bool hasSecondProducer = false;
     bool hasThirdProducer = false;
     for(const Graphics::GpuPacketDependency& dependency : {
@@ -546,7 +550,7 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     ASSERT_EQ(producers.taskCount, LengthOf(consumerDependencies));
     EXPECT_EQ(producers[0u], third.index);
     EXPECT_EQ(producers[1u], first.index);
-    EXPECT_EQ(producers[2u], second.index);
+    EXPECT_EQ(producers[s_ThirdElementIndex], second.index);
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
     const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
@@ -561,7 +565,7 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     ASSERT_NE(dependencies, nullptr);
     EXPECT_EQ(dependencies[0u].producer, thirdPacket);
     EXPECT_EQ(dependencies[1u].producer, firstPacket);
-    EXPECT_EQ(dependencies[2u].producer, secondPacket);
+    EXPECT_EQ(dependencies[s_ThirdElementIndex].producer, secondPacket);
 }
 
 TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
@@ -650,8 +654,8 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(compiledPlan.packet(producerPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(compiledPlan.packet(consumerPacket).plan->recordingFrontier, 1u);
-    EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, 2u);
-    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 2u);
+    EXPECT_EQ(compiledPlan.compileStatistics().recordingFrontierCount, s_ExpectedDualCount);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     // The state seed projects producerPacket a second time after both scheduling dependencies. Deduplication retains
@@ -733,7 +737,7 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     ASSERT_NE(compiledPlan.packet(prefixPacket).tasks, nullptr);
     EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[0u], prefix);
     EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[1u], suffix);
-    EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[2u], finalSuffix);
+    EXPECT_EQ(compiledPlan.packet(prefixPacket).tasks[s_ThirdElementIndex], finalSuffix);
     EXPECT_EQ(packet.dependencyCount, 0u);
     EXPECT_EQ(
         compiledPlan.packetizationDecisionForTask(prefix),
@@ -755,7 +759,7 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     EXPECT_EQ(queueCompileStatistics.queue, queues[0u].id);
     EXPECT_EQ(queueCompileStatistics.taskCount, 3u);
     EXPECT_EQ(queueCompileStatistics.packetCount, 1u);
-    EXPECT_EQ(queueCompileStatistics.mergedTaskCount, 2u);
+    EXPECT_EQ(queueCompileStatistics.mergedTaskCount, s_ExpectedDualCount);
     EXPECT_EQ(queueCompileStatistics.prologueBarrierCount, 0u);
     EXPECT_EQ(queueCompileStatistics.epilogueBarrierCount, 0u);
 }
@@ -849,7 +853,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
         generatedVertexBuffer,
         Graphics::GpuTaskHazardType::ReadAfterWrite
     ));
-    ASSERT_EQ(analysis.topologicalOrder().size(), 2u);
+    ASSERT_EQ(analysis.topologicalOrder().size(), s_ExpectedDualCount);
     EXPECT_EQ(analysis.topologicalOrder()[0u], producer);
     EXPECT_EQ(analysis.topologicalOrder()[1u], raster);
 
@@ -879,7 +883,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     const Graphics::GpuSubmissionPacket& packet = *compiledPlan.packet(producerPacket).plan;
     EXPECT_EQ(packet.queue, queue.id);
     EXPECT_EQ(packet.dependencyCount, 0u);
-    ASSERT_EQ(packet.taskCount, 2u);
+    ASSERT_EQ(packet.taskCount, s_ExpectedDualCount);
     ASSERT_NE(compiledPlan.packet(producerPacket).tasks, nullptr);
     EXPECT_EQ(compiledPlan.packet(producerPacket).tasks[0u], producer);
     EXPECT_EQ(compiledPlan.packet(producerPacket).tasks[1u], raster);

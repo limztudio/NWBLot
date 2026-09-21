@@ -34,6 +34,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -578,7 +581,7 @@ TEST_F(GpuResourceReadinessTest, OrderedUploadCopyDestConflictRejectsMergedPacke
     EXPECT_FALSE(acceptedToken.valid());
     const GpuTaskGraph::DeclarationReadView taskDeclarations(graph);
     const GpuTaskGraphTaskView uploadView = taskDeclarations.taskAt(uploadTask.index);
-    ASSERT_EQ(uploadView.resourceUseCount, 2u);
+    ASSERT_EQ(uploadView.resourceUseCount, s_ExpectedDualCount);
     EXPECT_EQ(uploadView.resourceUses[0u].requiredState, ResourceStates::CopyDest);
     EXPECT_EQ(uploadView.resourceUses[1u].requiredState, ResourceStates::ShaderResource);
 

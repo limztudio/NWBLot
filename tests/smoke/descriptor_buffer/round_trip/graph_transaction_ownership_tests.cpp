@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -423,7 +426,7 @@ TEST_F(DescriptorBufferRoundTripTest, AcceptedObserverExceptionPreservesTokenAnd
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId firstPacket = views.compiled.packetForTask(firstTask);
     const GpuSubmissionPacketId secondPacket = views.compiled.packetForTask(secondTask);
     ASSERT_TRUE(firstPacket.valid());
@@ -647,7 +650,7 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentTransactionsClaimOneGraphAttempt
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId firstPacket = views.compiled.packetForTask(firstTask);
     const GpuSubmissionPacketId secondPacket = views.compiled.packetForTask(secondTask);
     ASSERT_TRUE(firstPacket.valid());
@@ -674,7 +677,7 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentTransactionsClaimOneGraphAttempt
     VulkanTestQueueSubmit2Observer submissionObserver(device);
     ASSERT_TRUE(submissionObserver.valid());
 
-    Latch submissionsReady(2u);
+    Latch submissionsReady(s_ExpectedDualCount);
     bool firstSubmissionResult = false;
     bool secondSubmissionResult = false;
     Thread firstSubmissionThread([&](){
@@ -753,9 +756,9 @@ TEST_F(DescriptorBufferRoundTripTest, ConcurrentTransactionsClaimOneGraphAttempt
         winnerTransaction,
         winnerCompletionScratch
     ));
-    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
     EXPECT_TRUE(winnerTransaction.packetToken(remainingPacket).valid());
-    EXPECT_EQ(winnerTransaction.submissionStatistics().acceptedPacketCount, 2u);
+    EXPECT_EQ(winnerTransaction.submissionStatistics().acceptedPacketCount, s_ExpectedDualCount);
     EXPECT_TRUE(winnerTransaction.tryReset(compiledGraph));
     EXPECT_TRUE(device.waitForIdle());
 }

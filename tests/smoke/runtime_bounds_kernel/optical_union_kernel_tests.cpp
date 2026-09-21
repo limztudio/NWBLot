@@ -24,6 +24,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -216,7 +219,7 @@ void RunCase(
     SCOPED_TRACE(testCase.label.data());
     auto& heap = device.getDescriptorHeap();
     const u32 transparentCount = testCase.runtimeCount + testCase.staticCount;
-    const u32 instanceCount = transparentCount == 0u ? 0u : transparentCount + 2u;
+    const u32 instanceCount = transparentCount == 0u ? 0u : transparentCount + s_ExpectedDualCount;
     const usize sourceBytes = sizeof(Header) + instanceCount * sizeof(Instance);
     constexpr u32 guard = 0x6b6b6b6bu;
     Vector<u32, Alloc::ScratchArena> scene(sourceBytes / sizeof(u32), 0u, scratchArena);
@@ -235,19 +238,19 @@ void RunCase(
     });
     for(usize index = 0u; index < buffers.size(); ++index){
         const usize bytes = index == 0u ? sourceBytes : (index == 1u ? inputs.size() * sizeof(RuntimeInput)
-            : (index == 2u ? sentinels.size() * sizeof(u32) : sizeof(Bounds)));
+            : (index == s_ExpectedDualCount ? sentinels.size() * sizeof(u32) : sizeof(Bounds)));
         BufferDesc desc;
         desc
-            .setByteSize(bytes).setCanHaveRawViews(true).setCanHaveUAVs(index == 2u)
+            .setByteSize(bytes).setCanHaveRawViews(true).setCanHaveUAVs(index == s_ExpectedDualCount)
             .setInitialState(ResourceStates::Common).setKeepInitialState(true)
         ;
-        if(index == 2u)
+        if(index == s_ExpectedDualCount)
             desc.setCpuAccess(CpuAccessMode::Read);
         buffers[index] = device.createBuffer(desc);
         ASSERT_TRUE(buffers[index]);
         descriptors[index] = heap.allocate(GpuDescriptorClass::StorageBuffer);
         ASSERT_TRUE(descriptors[index].valid());
-        ASSERT_TRUE(heap.write(descriptors[index], index == 2u ? DescriptorWriteItem::RawBuffer_UAV(0u, buffers[index].get())
+        ASSERT_TRUE(heap.write(descriptors[index], index == s_ExpectedDualCount ? DescriptorWriteItem::RawBuffer_UAV(0u, buffers[index].get())
             : DescriptorWriteItem::RawBuffer_SRV(0u, buffers[index].get())));
     }
     Header header;
@@ -297,7 +300,7 @@ void RunCase(
     for(u32 index = 0u; index < testCase.runtimeCount; ++index)
         ASSERT_TRUE(commandList->tryWriteBuffer(*buffers[3u + index], &localBounds[index], sizeof(Bounds)));
     for(usize index = 0u; index < buffers.size(); ++index){
-        const ResourceStates::Mask state = index == 2u ? ResourceStates::UnorderedAccess : ResourceStates::ShaderResource;
+        const ResourceStates::Mask state = index == s_ExpectedDualCount ? ResourceStates::UnorderedAccess : ResourceStates::ShaderResource;
         commandList->setBufferState(buffers[index].get(), state);
     }
     commandList->commitBarriers();
@@ -381,18 +384,18 @@ TEST_F(RuntimeBoundsKernelTest, OpticalUnionEnclosesAffineCornerOracleAndRejects
         { "static only", 0u, 1u },
         { "empty complete scene", 0u, 0u },
         { "empty incomplete scene", 0u, 0u, Mode::IncompleteStatic },
-        { "missing local selector", 2u, 1u, Mode::MissingSlot },
+        { "missing local selector", s_ExpectedDualCount, 1u, Mode::MissingSlot },
         { "invalid final contributor poisons union", 65u, 0u, Mode::InvalidLocalFlag },
-        { "nonfinite local bounds", 2u, 0u, Mode::NonfiniteLocal },
-        { "inverted local bounds", 2u, 0u, Mode::InvertedLocal },
-        { "nonfinite transform", 2u, 1u, Mode::NonfiniteTransform },
-        { "infinite translation", 2u, 0u, Mode::InfiniteTranslation },
-        { "overflowing finite transform", 2u, 0u, Mode::OverflowedTransform },
-        { "invalid emitted instance index", 2u, 0u, Mode::InvalidInstanceIndex },
-        { "opaque runtime contributor", 2u, 0u, Mode::OpaqueContributor },
-        { "incomplete static subset", 2u, 1u, Mode::IncompleteStatic },
-        { "nonfinite static subset", 2u, 1u, Mode::NonfiniteStatic },
-        { "runtime count exceeds transparent count", 2u, 0u, Mode::RuntimeCountMismatch },
+        { "nonfinite local bounds", s_ExpectedDualCount, 0u, Mode::NonfiniteLocal },
+        { "inverted local bounds", s_ExpectedDualCount, 0u, Mode::InvertedLocal },
+        { "nonfinite transform", s_ExpectedDualCount, 1u, Mode::NonfiniteTransform },
+        { "infinite translation", s_ExpectedDualCount, 0u, Mode::InfiniteTranslation },
+        { "overflowing finite transform", s_ExpectedDualCount, 0u, Mode::OverflowedTransform },
+        { "invalid emitted instance index", s_ExpectedDualCount, 0u, Mode::InvalidInstanceIndex },
+        { "opaque runtime contributor", s_ExpectedDualCount, 0u, Mode::OpaqueContributor },
+        { "incomplete static subset", s_ExpectedDualCount, 1u, Mode::IncompleteStatic },
+        { "nonfinite static subset", s_ExpectedDualCount, 1u, Mode::NonfiniteStatic },
+        { "runtime count exceeds transparent count", s_ExpectedDualCount, 0u, Mode::RuntimeCountMismatch },
     };
     for(const Case& testCase : cases)
         RunCase(device(), *pipeline, testCase, scratchArena);

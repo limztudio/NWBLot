@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -568,7 +572,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     combinePayload.expectationCount = 1u;
     combinePayload.textureExpectations[0u] = { removedIntervalDepth.get(), ResourceStates::UnorderedAccess };
     combinePayload.textureExpectations[1u] = { removedIntervalCapNormal.get(), ResourceStates::UnorderedAccess };
-    combinePayload.textureExpectations[2u] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
+    combinePayload.textureExpectations[s_ThirdElementIndex] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
     combinePayload.textureExpectations[3u] = { removedIntervalCount.get(), ResourceStates::UnorderedAccess };
     combinePayload.textureExpectationCount = 4u;
     combinePayload.recordOrdinal = &recordOrdinal;
@@ -592,7 +596,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     receiverRangesUploadPayload.expectations[0u] = { receiverRanges.get(), ResourceStates::CopyDest };
     receiverRangesUploadPayload.expectationCount = 1u;
     receiverRangesUploadPayload.recordOrdinal = &recordOrdinal;
-    receiverRangesUploadPayload.expectedOrdinal = 2u;
+    receiverRangesUploadPayload.expectedOrdinal = s_ExpectedDualCount;
     receiverRangesUploadPayload.timingTicket = &preTimingTicket;
     receiverRangesUploadPayload.recorded = &receiverRangesUploadRecorded;
     receiverRangesUploadPayload.acceptedToken = &receiverRangesUploadAcceptedToken;
@@ -671,14 +675,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload producerPayload;
     producerPayload.expectations[0u] = { receiverRanges.get(), ResourceStates::ShaderResource };
     producerPayload.expectations[1u] = { cutters.get(), ResourceStates::ShaderResource };
-    producerPayload.expectations[2u] = { clipContextSlots.get(), ResourceStates::ConstantBuffer };
+    producerPayload.expectations[s_ThirdElementIndex] = { clipContextSlots.get(), ResourceStates::ConstantBuffer };
     producerPayload.expectations[3u] = { intervalSampleState.get(), ResourceStates::ConstantBuffer };
     producerPayload.expectations[4u] = { generatedVertexA.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectations[5u] = { generatedVertexB.get(), ResourceStates::UnorderedAccess };
     producerPayload.expectationCount = 6u;
     producerPayload.textureExpectations[0u] = { removedIntervalDepth.get(), ResourceStates::UnorderedAccess };
     producerPayload.textureExpectations[1u] = { removedIntervalCapNormal.get(), ResourceStates::UnorderedAccess };
-    producerPayload.textureExpectations[2u] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
+    producerPayload.textureExpectations[s_ThirdElementIndex] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
     producerPayload.textureExpectations[3u] = { removedIntervalCount.get(), ResourceStates::UnorderedAccess };
     producerPayload.textureExpectationCount = 4u;
     producerPayload.recordOrdinal = &recordOrdinal;
@@ -708,7 +712,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload occupancyPayload;
     occupancyPayload.expectations[0u] = { coverage.get(), ResourceStates::UnorderedAccess };
     occupancyPayload.expectations[1u] = { receiverRanges.get(), ResourceStates::ShaderResource };
-    occupancyPayload.expectations[2u] = { cutters.get(), ResourceStates::ShaderResource };
+    occupancyPayload.expectations[s_ThirdElementIndex] = { cutters.get(), ResourceStates::ShaderResource };
     occupancyPayload.expectations[3u] = { clipContextSlots.get(), ResourceStates::ConstantBuffer };
     occupancyPayload.expectations[4u] = { intervalSampleState.get(), ResourceStates::ConstantBuffer };
     occupancyPayload.expectations[5u] = { generatedVertexA.get(), ResourceStates::VertexBuffer };
@@ -716,7 +720,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     occupancyPayload.expectationCount = 7u;
     occupancyPayload.textureExpectations[0u] = { removedIntervalDepth.get(), ResourceStates::UnorderedAccess };
     occupancyPayload.textureExpectations[1u] = { removedIntervalCapNormal.get(), ResourceStates::UnorderedAccess };
-    occupancyPayload.textureExpectations[2u] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
+    occupancyPayload.textureExpectations[s_ThirdElementIndex] = { removedIntervalData.get(), ResourceStates::UnorderedAccess };
     occupancyPayload.textureExpectations[3u] = { removedIntervalCount.get(), ResourceStates::UnorderedAccess };
     occupancyPayload.textureExpectationCount = 4u;
     occupancyPayload.recordOrdinal = &recordOrdinal;
@@ -775,7 +779,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancyCsgAliasFr
     ASSERT_EQ(analysis.topologicalOrder().size(), 8u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], preTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], combineTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], receiverRangesUploadTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], receiverRangesUploadTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], cuttersUploadTask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], clipContextSlotsUploadTask);
     EXPECT_EQ(analysis.topologicalOrder()[5u], clearTask);

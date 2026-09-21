@@ -21,6 +21,10 @@
 namespace __hidden_filesystem_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -147,7 +151,7 @@ protected:
 protected:
     void benchmarkMetadataFlush(const usize fileCount, const usize iterations){
         m_desc.metadataSize = fileCount == 1u ? 512u : 512u * 1024u;
-        m_desc.segmentSize = m_desc.metadataSize * 2u;
+        m_desc.segmentSize = m_desc.metadataSize * s_ExpectedDualCount;
         auto filesystem = CreateFilesystem(m_arena, m_desc);
         ASSERT_TRUE(filesystem);
         filesystem->reserveFileCapacity(fileCount);
@@ -292,10 +296,10 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         hash.qwords[0u] = 7u;
     hashes[0u].qwords[s_NameHashLaneCount - 1u] = 30u;
     hashes[1u].qwords[s_NameHashLaneCount - 1u] = 10u;
-    hashes[2u].qwords[s_NameHashLaneCount - 1u] = 20u;
+    hashes[s_ThirdElementIndex].qwords[s_NameHashLaneCount - 1u] = 20u;
     const Array<u8, 3u> payload{ 4u, 5u, 6u };
     ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[0u]), payload));
-    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[2u]), payload));
+    ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[s_ThirdElementIndex]), payload));
     ASSERT_TRUE(filesystem->writeFileDeferred(Name(hashes[1u]), nullptr, 0u));
     ASSERT_TRUE(filesystem->flush());
 
@@ -306,7 +310,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
     actual.reserve(static_cast<usize>(m_desc.segmentSize));
     const Array<VolumeIndexEntryDisk, 3u> records{
         VolumeIndexEntryDisk{ hashes[1u], 518u, 0u },
-        VolumeIndexEntryDisk{ hashes[2u], 515u, 3u },
+        VolumeIndexEntryDisk{ hashes[s_ThirdElementIndex], 515u, 3u },
         VolumeIndexEntryDisk{ hashes[0u], 512u, 3u }
     };
     const Path segmentPath = MakeVolumeSegmentPath(m_directory, m_desc.volumeName.view(), 0u);
@@ -389,7 +393,7 @@ TEST(FilesystemFactory, UsesCapturedProjectBackendWithoutNativeVolumeFiles){
     Array<u8, 4> tail{};
     usize bytesRead = 0;
     ASSERT_TRUE(filesystem->readFile(cursor, tail.data(), tail.size(), bytesRead));
-    EXPECT_EQ(bytesRead, 2u);
+    EXPECT_EQ(bytesRead, s_ExpectedDualCount);
     EXPECT_EQ(tail[0], 7u);
     EXPECT_EQ(tail[1], 6u);
     EXPECT_TRUE(filesystem->flush());

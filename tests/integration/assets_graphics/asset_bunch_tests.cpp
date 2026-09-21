@@ -21,6 +21,9 @@
 namespace __hidden_asset_bunch_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -55,14 +58,14 @@ asset_bunch bunch = [second, first];
 
 
 static void VerifyOwnedOutput(const ExpandedAssetMetadataVector& output, const Metascript::Document& document){
-    ASSERT_EQ(output.size(), 2u);
+    ASSERT_EQ(output.size(), s_ExpectedDualCount);
     EXPECT_EQ(output[0u].assetType, Name("probe"));
     EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
     EXPECT_EQ(output[1u].virtualPath, Name("project/fixtures/bundle/first"));
     const Value* const items = output[0u].value.findField("items");
     ASSERT_NE(items, nullptr);
     ASSERT_TRUE(items->isList());
-    ASSERT_EQ(items->asList().size(), 2u);
+    ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
     const Value* const label = items->asList()[0u].findField("label");
     ASSERT_NE(label, nullptr);
     EXPECT_EQ(label->asString(), "a separately owned metadata string");
@@ -165,7 +168,7 @@ static void BenchmarkDeclarationExpansion(const usize assetCount, const usize it
     RecordUnsignedProperty(MakeNotNull("bunch_expand_iterations"), iterations);
     RecordUnsignedProperty(MakeNotNull("bunch_declaration_count"), fixture.document.declarations().size());
     RecordUnsignedProperty(MakeNotNull("bunch_export_count"), assetCount);
-    RecordUnsignedProperty(MakeNotNull("bunch_reference_count"), assetCount * 2u);
+    RecordUnsignedProperty(MakeNotNull("bunch_reference_count"), assetCount * s_ExpectedDualCount);
     RecordUnsignedProperty(MakeNotNull("bunch_heap_allocations"), afterHeap.allocationCount - beforeHeap.allocationCount);
     RecordUnsignedProperty(MakeNotNull("bunch_scratch_reserved_bytes"), fixture.scratchArena.memoryStats().reservedBytes);
 }
@@ -256,13 +259,13 @@ TEST(AssetBunchOwnership, LongExportAndReferencePathsReuseCallerScratchWithoutRe
             sentinel[index] = static_cast<u8>(index + 73u);
         {
             ExpandedAssetMetadataVector output(scratch);
-            output.reserve(2u);
+            output.reserve(s_ExpectedDualCount);
             ArenaMemoryStats warm;
             for(usize iteration = 0u; iteration < 16u; ++iteration){
                 ASSERT_TRUE(AssetsBunchCook::ExpandAssetBunch(
                     fixture.assetRoot, AStringView(virtualRoot), filePath, fixture.document, output, scratch
                 ));
-                ASSERT_EQ(output.size(), 2u);
+                ASSERT_EQ(output.size(), s_ExpectedDualCount);
                 EXPECT_EQ(output[0u].virtualPath, secondIdentity);
                 EXPECT_EQ(output[1u].virtualPath, firstIdentity);
                 const Value* const nested = output[0u].value.findField("nested");
@@ -307,11 +310,11 @@ TEST(AssetBunchOwnership, ValuesOutliveTheirSourceDocumentWhileItsArenaRemainsAl
             ));
             VerifyOwnedOutput(output, sourceDocument);
         }
-        ASSERT_EQ(output.size(), 2u);
+        ASSERT_EQ(output.size(), s_ExpectedDualCount);
         const Value* const items = output[0u].value.findField("items");
         ASSERT_NE(items, nullptr);
         ASSERT_TRUE(items->isList());
-        ASSERT_EQ(items->asList().size(), 2u);
+        ASSERT_EQ(items->asList().size(), s_ExpectedDualCount);
         const Value* const label = items->asList()[0u].findField("label");
         ASSERT_NE(label, nullptr);
         EXPECT_EQ(label->asString(), "a separately owned metadata string");
@@ -460,7 +463,7 @@ ASSET_BUNCH bunch = [second, first];
         ASSERT_TRUE(AssetsBunchCook::ExpandAssetBunch(
             fixture.assetRoot, "project", fixture.filePath, fixture.document, output, fixture.scratchArena
         ));
-        ASSERT_EQ(output.size(), 2u);
+        ASSERT_EQ(output.size(), s_ExpectedDualCount);
         EXPECT_EQ(output[0u].virtualPath, Name("project/fixtures/bundle/second"));
         EXPECT_EQ(output[1u].virtualPath, Name("project/fixtures/bundle/first"));
         const Value* const firstValues = output[1u].value.findField("values");

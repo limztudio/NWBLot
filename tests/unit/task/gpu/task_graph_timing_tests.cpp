@@ -23,6 +23,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -369,7 +373,7 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
         ASSERT_TRUE(declarations.valid());
         graphGeneration = declarations.generation();
     }
-    const Graphics::GpuTaskId futureEarly{ .generation = graphGeneration, .index = 2u };
+    const Graphics::GpuTaskId futureEarly{ .generation = graphGeneration, .index = s_ExpectedDualCount };
     const Graphics::GpuTaskId late = AddTask(
         graph,
         Name("tests/task_graph_timing/topological_late"),
@@ -401,14 +405,14 @@ TEST(GpuTaskGraphTiming, ResolvesEnvelopeByTopologicalPositionInsteadOfTaskIndex
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], prefix);
     EXPECT_EQ(analysis.topologicalOrder()[1u], early);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], late);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], late);
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
         EXPECT_LT(views.compiled.packetForTask(early).index, views.compiled.packetForTask(late).index);
         const Graphics::GpuSubmissionPacketRange range = views.compiled.packetTimingEnvelopeRange();
         ASSERT_TRUE(range.valid());
-        EXPECT_EQ(range.packetCount, 2u);
+        EXPECT_EQ(range.packetCount, s_ExpectedDualCount);
     }
 
     options.packetTimingEnvelope = { .firstTask = late, .lastTask = early };

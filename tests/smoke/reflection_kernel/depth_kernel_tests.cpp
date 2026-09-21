@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -44,7 +47,7 @@ struct DepthInterval{
 };
 
 static_assert(sizeof(DepthPushConstants) == NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES);
-static_assert(sizeof(DepthInterval) == sizeof(f32) * 2u);
+static_assert(sizeof(DepthInterval) == sizeof(f32) * s_ExpectedDualCount);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,7 +88,7 @@ static void RunDepthCase(
     if((device.queryFormatSupport(outputFormat) & requiredSupport) != requiredSupport)
         outputFormat = Format::RGBA32_FLOAT;
     ASSERT_EQ(device.queryFormatSupport(outputFormat) & requiredSupport, requiredSupport);
-    const usize outputTexelBytes = outputFormat == Format::RG32_FLOAT ? sizeof(f32) * 2u : sizeof(f32) * 4u;
+    const usize outputTexelBytes = outputFormat == Format::RG32_FLOAT ? sizeof(f32) * s_ExpectedDualCount : sizeof(f32) * 4u;
     TextureDesc outputDesc;
     outputDesc
         .setWidth(width)
@@ -104,7 +107,7 @@ static void RunDepthCase(
     ASSERT_TRUE(readback);
 
     auto& heap = device.getDescriptorHeap();
-    GpuDescriptorHandle descriptors[1u + 2u * NWB_REFLECTION_MAX_DEPTH_MIPS]{};
+    GpuDescriptorHandle descriptors[1u + s_ExpectedDualCount * NWB_REFLECTION_MAX_DEPTH_MIPS]{};
     ScopeExit releaseDescriptors([&]()noexcept{
         for(GpuDescriptorHandle handle : descriptors){
             if(handle.valid())
@@ -117,15 +120,15 @@ static void RunDepthCase(
     ASSERT_TRUE(heap.write(descriptors[0], DescriptorWriteItem::Texture_SRV(0u, source.get())));
     for(u32 mip = 0u; mip < mipCount; ++mip){
         const TextureSubresourceSet subresources(mip, 1u, 0u, 1u);
-        descriptors[1u + mip * 2u] = heap.allocate(GpuDescriptorClass::SampledImage);
-        descriptors[2u + mip * 2u] = heap.allocate(GpuDescriptorClass::StorageImage);
-        ASSERT_TRUE(descriptors[1u + mip * 2u].valid());
-        ASSERT_TRUE(descriptors[2u + mip * 2u].valid());
+        descriptors[1u + mip * s_ExpectedDualCount] = heap.allocate(GpuDescriptorClass::SampledImage);
+        descriptors[s_ExpectedDualCount + mip * s_ExpectedDualCount] = heap.allocate(GpuDescriptorClass::StorageImage);
+        ASSERT_TRUE(descriptors[1u + mip * s_ExpectedDualCount].valid());
+        ASSERT_TRUE(descriptors[s_ExpectedDualCount + mip * s_ExpectedDualCount].valid());
         ASSERT_TRUE(heap.write(
-            descriptors[1u + mip * 2u], DescriptorWriteItem::Texture_SRV(0u, pyramid.get(), outputFormat, subresources)
+            descriptors[1u + mip * s_ExpectedDualCount], DescriptorWriteItem::Texture_SRV(0u, pyramid.get(), outputFormat, subresources)
         ));
         ASSERT_TRUE(heap.write(
-            descriptors[2u + mip * 2u], DescriptorWriteItem::Texture_UAV(0u, pyramid.get(), outputFormat, subresources)
+            descriptors[s_ExpectedDualCount + mip * s_ExpectedDualCount], DescriptorWriteItem::Texture_UAV(0u, pyramid.get(), outputFormat, subresources)
         ));
     }
 
@@ -151,8 +154,8 @@ static void RunDepthCase(
         commandList->setComputeState(state);
         heap.bindCompute(*commandList, pipeline);
         const DepthPushConstants push{
-            mip == 0u ? descriptors[0].slot() : descriptors[1u + (mip - 1u) * 2u].slot(),
-            descriptors[2u + mip * 2u].slot(),
+            mip == 0u ? descriptors[0].slot() : descriptors[1u + (mip - 1u) * s_ExpectedDualCount].slot(),
+            descriptors[s_ExpectedDualCount + mip * s_ExpectedDualCount].slot(),
             sourceWidth,
             sourceHeight,
             mipWidth,
@@ -209,10 +212,10 @@ static void RunDepthCase(
                     }
                 }
                 else{
-                    const u32 beginX = sourceWidth == mipWidth ? x : x * 2u;
-                    const u32 beginY = sourceHeight == mipHeight ? y : y * 2u;
-                    const u32 endX = beginX + (sourceWidth == mipWidth ? 1u : 2u + (sourceWidth & 1u));
-                    const u32 endY = beginY + (sourceHeight == mipHeight ? 1u : 2u + (sourceHeight & 1u));
+                    const u32 beginX = sourceWidth == mipWidth ? x : x * s_ExpectedDualCount;
+                    const u32 beginY = sourceHeight == mipHeight ? y : y * s_ExpectedDualCount;
+                    const u32 endX = beginX + (sourceWidth == mipWidth ? 1u : s_ExpectedDualCount + (sourceWidth & 1u));
+                    const u32 endY = beginY + (sourceHeight == mipHeight ? 1u : s_ExpectedDualCount + (sourceHeight & 1u));
                     for(u32 inputY = beginY; inputY < endY; ++inputY){
                         for(u32 inputX = beginX; inputX < endX; ++inputX){
                             const DepthInterval depth = previous[static_cast<usize>(inputY) * sourceWidth + inputX];
@@ -284,7 +287,7 @@ TEST_F(ReflectionKernelTest, CookedReflectionDepthKernelPreservesEveryNativeMip)
     RunDepthCase(device, *pipeline, 1u, 3u, NotNull<const f32*>(line), Format::R32_FLOAT, scratchArena, lineExpected);
     const f32 square[] = { 0.25f, 0.5f, 0.75f, 1.0f };
     const DepthInterval squareExpected[] = { { 0.25f, 1.0f }, { 0.25f, 1.0f }, { 0.25f, 1.0f }, { 0.25f, 1.0f } };
-    RunDepthCase(device, *pipeline, 2u, 2u, NotNull<const f32*>(square), Format::R32_FLOAT, scratchArena, squareExpected);
+    RunDepthCase(device, *pipeline, s_ExpectedDualCount, s_ExpectedDualCount, NotNull<const f32*>(square), Format::R32_FLOAT, scratchArena, squareExpected);
 
     const u32 dimensions[][2] = { {1u,17u}, {17u,1u}, {7u,9u}, {8u,8u}, {9u,7u}, {17u,19u}, {31u,33u}, {45u,23u}, {960u,720u} };
     Vector<f32, Alloc::ScratchArena> input(scratchArena);

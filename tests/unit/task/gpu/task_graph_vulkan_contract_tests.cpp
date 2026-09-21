@@ -16,6 +16,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -391,7 +394,7 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
 
     EXPECT_TRUE(IsPushConstantByteSizeValid(4u, 128u));
     EXPECT_FALSE(IsPushConstantByteSizeValid(0u, 128u));
-    EXPECT_FALSE(IsPushConstantByteSizeValid(2u, 128u));
+    EXPECT_FALSE(IsPushConstantByteSizeValid(s_ExpectedDualCount, 128u));
     EXPECT_FALSE(IsPushConstantByteSizeValid(132u, 128u));
     EXPECT_TRUE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)));
     EXPECT_FALSE(IsTextureSubresourceRangeValid(Graphics::TextureSubresourceSet(0u, 0u, 0u, 1u)));
@@ -450,9 +453,9 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     EXPECT_EQ(implicitScissor.extent.width, 11u);
     EXPECT_EQ(implicitScissor.extent.height, 7u);
 
-    const Graphics::TextureSubresourceSet firstRange(0u, 1u, 0u, 2u);
+    const Graphics::TextureSubresourceSet firstRange(0u, 1u, 0u, s_ExpectedDualCount);
     EXPECT_TRUE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(0u, 1u, 1u, 1u)));
-    EXPECT_FALSE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(1u, 1u, 0u, 2u)));
+    EXPECT_FALSE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(1u, 1u, 0u, s_ExpectedDualCount)));
 
     Graphics::TextureDesc textureDesc;
     textureDesc.setDimension(Graphics::TextureDimension::TextureCube);
@@ -470,7 +473,7 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
         Graphics::TextureDimension::Texture2D
     );
     EXPECT_EQ(
-        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 2u)),
+        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, s_ExpectedDualCount)),
         Graphics::TextureDimension::Unknown
     );
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
@@ -487,27 +490,27 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
-        Graphics::TextureSubresourceSet(0u, 1u, 3u, 2u)
+        Graphics::TextureSubresourceSet(0u, 1u, 3u, s_ExpectedDualCount)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2D),
         Graphics::TextureSubresourceSet(0u, 1u, 1u, 1u)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
-        Graphics::TextureDesc().setMipLevels(2u),
-        Graphics::TextureSubresourceSet(2u, 1u, 0u, 1u)
+        Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
+        Graphics::TextureSubresourceSet(s_ExpectedDualCount, 1u, 0u, 1u)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
-        Graphics::TextureDesc().setMipLevels(2u),
+        Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
         Graphics::TextureSubresourceSet(0u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
     ));
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
-        Graphics::TextureDesc().setMipLevels(2u),
+        Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
         Graphics::TextureSubresourceSet(1u, Graphics::TextureSubresourceSet::AllMipLevels, 0u, 1u)
     ));
     EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc(),
-        Graphics::TextureSubresourceSet(0u, 1u, 0u, 2u)
+        Graphics::TextureSubresourceSet(0u, 1u, 0u, s_ExpectedDualCount)
     ));
 
     Graphics::BufferDesc bufferDesc;
@@ -524,19 +527,19 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     EXPECT_FALSE(IsIndexDrawRangeValid(bufferDesc, Limit<u64>::s_Max, 1u, 1u, sizeof(u32)));
     EXPECT_TRUE(IsIndirectCommandRangeValid(bufferDesc, 0u, 16u, 4u));
     EXPECT_TRUE(IsIndirectCommandRangeValid(bufferDesc, 48u, 16u, 1u));
-    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 2u, 16u, 1u));
+    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, s_ExpectedDualCount, 16u, 1u));
     EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 52u, 16u, 1u));
-    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 0u, Limit<u64>::s_Max, 2u));
+    EXPECT_FALSE(IsIndirectCommandRangeValid(bufferDesc, 0u, Limit<u64>::s_Max, s_ExpectedDualCount));
     EXPECT_FALSE(IsIndirectDrawCountValid(0u, 8u, true));
-    EXPECT_FALSE(IsIndirectDrawCountValid(2u, 8u, false));
-    EXPECT_TRUE(IsIndirectDrawCountValid(2u, 8u, true));
+    EXPECT_FALSE(IsIndirectDrawCountValid(s_ExpectedDualCount, 8u, false));
+    EXPECT_TRUE(IsIndirectDrawCountValid(s_ExpectedDualCount, 8u, true));
     EXPECT_FALSE(IsIndirectDrawCountValid(9u, 8u, true));
 
     constexpr u32 s_MaximumMeshGroupCounts[] = { 4u, 5u, 6u };
     EXPECT_TRUE(AreMeshDispatchGroupCountsValid(4u, 5u, 1u, s_MaximumMeshGroupCounts, 20u));
     EXPECT_FALSE(AreMeshDispatchGroupCountsValid(0u, 5u, 1u, s_MaximumMeshGroupCounts, 20u));
     EXPECT_FALSE(AreMeshDispatchGroupCountsValid(1u, 1u, 1u, nullptr, 20u));
-    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(4u, 5u, 2u, s_MaximumMeshGroupCounts, 20u));
+    EXPECT_FALSE(AreMeshDispatchGroupCountsValid(4u, 5u, s_ExpectedDualCount, s_MaximumMeshGroupCounts, 20u));
     EXPECT_FALSE(AreMeshDispatchGroupCountsValid(
         Limit<u32>::s_Max,
         Limit<u32>::s_Max,
@@ -545,7 +548,7 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
         Limit<u32>::s_Max
     ));
     VkPhysicalDeviceMeshShaderPropertiesEXT meshProperties{};
-    meshProperties.maxTaskWorkGroupCount[0u] = 2u;
+    meshProperties.maxTaskWorkGroupCount[0u] = s_ExpectedDualCount;
     meshProperties.maxTaskWorkGroupTotalCount = 3u;
     meshProperties.maxMeshWorkGroupCount[0u] = 5u;
     meshProperties.maxMeshWorkGroupTotalCount = 7u;
@@ -665,14 +668,14 @@ TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
     using Graphics::GraphicsBackend::VulkanStateTrackingDetail::ImageBarrierOverlapsTextureSubresources;
 
     const VkImage image = reinterpret_cast<VkImage>(static_cast<usize>(1u));
-    const VkImage otherImage = reinterpret_cast<VkImage>(static_cast<usize>(2u));
-    constexpr Graphics::TextureSubresourceSet s_AttachmentSubresources(2u, 1u, 3u, 2u);
+    const VkImage otherImage = reinterpret_cast<VkImage>(static_cast<usize>(s_ExpectedDualCount));
+    constexpr Graphics::TextureSubresourceSet s_AttachmentSubresources(s_ExpectedDualCount, 1u, 3u, s_ExpectedDualCount);
     auto barrier = Graphics::GraphicsBackend::VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(
         VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2
     );
     barrier.image = image;
     barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 2u;
+    barrier.subresourceRange.baseMipLevel = s_ExpectedDualCount;
     barrier.subresourceRange.levelCount = 1u;
     barrier.subresourceRange.baseArrayLayer = 4u;
     barrier.subresourceRange.layerCount = 1u;
@@ -716,7 +719,7 @@ TEST(VulkanStateTracking, DetectsExactActiveAttachmentBarrierOverlap){
         VK_IMAGE_ASPECT_COLOR_BIT,
         s_AttachmentSubresources
     ));
-    barrier.subresourceRange.baseArrayLayer = 2u;
+    barrier.subresourceRange.baseArrayLayer = s_ExpectedDualCount;
     barrier.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     EXPECT_TRUE(ImageBarrierOverlapsTextureSubresources(
         barrier,

@@ -18,6 +18,9 @@
 namespace __hidden_reflection_history_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,7 +28,7 @@ using namespace NWB;
 using namespace NWB::Impl;
 
 [[nodiscard]] ReflectionSceneContentStamp Stamp(){
-    return ReflectionSceneContentStamp{1u, 2u, 3u, 4u, true};
+    return ReflectionSceneContentStamp{1u, s_ExpectedDualCount, 3u, 4u, true};
 }
 
 [[nodiscard]] Core::QueueSubmissionToken Token(const u64 value = 1u){
@@ -156,7 +159,7 @@ TEST(ReflectionHistory, DiscardedLateHardwareResetKeepsHistoryUntilAnAcceptedRet
     EXPECT_EQ(next.previousBank, retry.currentBank);
     EXPECT_EQ(stable.epoch, lateReset.epoch);
     EXPECT_EQ(stable.sampleIndex, 1u);
-    EXPECT_EQ(stable.sampleCount, 2u);
+    EXPECT_EQ(stable.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(stable.historyStartGraphicsFrame, 12u);
     EXPECT_TRUE(stable.reused);
     EXPECT_FALSE(stable.reset);
@@ -184,7 +187,7 @@ TEST(ReflectionHistory, EverySceneDomainAndViewChangeResetsOnce){
             ++stamp.geometry;
         else if(domain == 1u)
             ++stamp.material;
-        else if(domain == 2u)
+        else if(domain == s_ExpectedDualCount)
             ++stamp.lighting;
         else
             ++stamp.view;
@@ -207,7 +210,7 @@ TEST(ReflectionHistory, SeedAndBudgetChangesRestartTheSamplingSequence){
     ReflectionSettings settings;
     Accept(state, state.plan(Stamp(), settings, 1u));
     ++settings.samplingSeed;
-    const auto seed = state.plan(Stamp(), settings, 2u);
+    const auto seed = state.plan(Stamp(), settings, s_ExpectedDualCount);
     EXPECT_EQ(seed.resetReason, ReflectionHistoryResetReason::SettingsChanged);
     EXPECT_EQ(seed.sampleIndex, 0u);
     Accept(state, seed);
@@ -230,7 +233,7 @@ TEST(ReflectionHistory, SpatialAndDiagnosticSettingsDoNotResetUnfilteredHistory)
     settings.spatialRadius = 3u;
     settings.diagnosticsEnabled = true;
     settings.debugView = ReflectionDebugView::TraceSource;
-    const auto next = state.plan(Stamp(), settings, 2u);
+    const auto next = state.plan(Stamp(), settings, s_ExpectedDualCount);
     EXPECT_TRUE(next.reused);
     EXPECT_FALSE(next.reset);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::None);
@@ -242,7 +245,7 @@ TEST(ReflectionHistory, RejectedDisabledTransitionCannotOverwriteAcceptedHistory
     const auto first = state.plan(Stamp(), settings, 1u);
     Accept(state, first);
     settings.temporalEnabled = false;
-    const auto disabled = state.plan(Stamp(), settings, 2u);
+    const auto disabled = state.plan(Stamp(), settings, s_ExpectedDualCount);
     EXPECT_FALSE(disabled.eligible);
     EXPECT_NE(disabled.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(disabled));
@@ -260,7 +263,7 @@ TEST(ReflectionHistory, RejectedUntrustedTransitionCannotOverwriteAcceptedHistor
     Accept(state, first);
     auto stamp = Stamp();
     stamp.trusted = false;
-    const auto untrusted = state.plan(stamp, ReflectionSettings{}, 2u);
+    const auto untrusted = state.plan(stamp, ReflectionSettings{}, s_ExpectedDualCount);
     EXPECT_FALSE(untrusted.eligible);
     EXPECT_NE(untrusted.currentBank, first.currentBank);
     ASSERT_TRUE(state.reserve(untrusted));
@@ -276,7 +279,7 @@ TEST(ReflectionHistory, StableUntrustedSceneNeverAccumulatesButDoesAdvanceAccept
     EXPECT_EQ(first.resetReason, ReflectionHistoryResetReason::UntrustedScene);
     EXPECT_EQ(ResolveReflectionHistoryOutcome(first, false).sampleCount, 0u);
     Accept(state, first, false);
-    const auto next = state.plan(stamp, ReflectionSettings{}, 2u);
+    const auto next = state.plan(stamp, ReflectionSettings{}, s_ExpectedDualCount);
     EXPECT_FALSE(next.reset);
     EXPECT_FALSE(next.eligible);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::None);
@@ -299,13 +302,13 @@ TEST(ReflectionHistory, ActualHardwareReadinessResetMatchesNextAcceptedState){
     EXPECT_EQ(stableOutcome.epoch, outcome.epoch);
     EXPECT_FALSE(stableOutcome.reset);
     EXPECT_EQ(stableOutcome.sampleIndex, 1u);
-    EXPECT_EQ(stableOutcome.sampleCount, 2u);
+    EXPECT_EQ(stableOutcome.sampleCount, s_ExpectedDualCount);
 }
 
 TEST(ReflectionHistory, StalePlanCannotReserveAfterAnotherFrameAccepts){
     ReflectionHistoryState state(1u);
     const auto old = state.plan(Stamp(), ReflectionSettings{}, 1u);
-    const auto accepted = state.plan(Stamp(), ReflectionSettings{}, 2u);
+    const auto accepted = state.plan(Stamp(), ReflectionSettings{}, s_ExpectedDualCount);
     Accept(state, accepted);
     EXPECT_FALSE(state.reserve(old));
     state.discard(old);
@@ -317,15 +320,15 @@ TEST(ReflectionHistory, ResourceGenerationRejectsOldAcceptanceAndResetsEpoch){
     ReflectionHistoryState state(1u);
     const auto old = state.plan(Stamp(), ReflectionSettings{}, 1u);
     ASSERT_TRUE(state.reserve(old));
-    state.reset(2u);
+    state.reset(s_ExpectedDualCount);
     state.accept(old, Token(), true);
-    const auto next = state.plan(Stamp(), ReflectionSettings{}, 2u);
+    const auto next = state.plan(Stamp(), ReflectionSettings{}, s_ExpectedDualCount);
     EXPECT_GT(next.generation, old.generation);
     EXPECT_EQ(next.resetReason, ReflectionHistoryResetReason::ResourcesChanged);
     EXPECT_EQ(next.sampleIndex, 0u);
     ASSERT_TRUE(state.reserve(next));
     Core::QueueSubmissionToken token = Token();
-    token.deviceGeneration = 2u;
+    token.deviceGeneration = s_ExpectedDualCount;
     state.accept(next, token, false);
     EXPECT_EQ(state.plan(Stamp(), ReflectionSettings{}, 3u).previousSampleCount, 1u);
 }
@@ -339,7 +342,7 @@ TEST(ReflectionHistory, GraphRejectionAndResetReleaseUnacceptedLease){
     EXPECT_FALSE(graph.addTask<LeaseTask>(Core::GpuTaskDesc{}, LeaseTask::Payload{ReflectionHistoryReservation(control, rejected)}).valid());
     Core::GpuTaskDesc desc;
     desc.setIdentity(Name("tests.history.lease")).setMarkerLabel("History Lease");
-    const auto pending = control->plan(Stamp(), ReflectionSettings{}, 2u);
+    const auto pending = control->plan(Stamp(), ReflectionSettings{}, s_ExpectedDualCount);
     ASSERT_TRUE(graph.addTask<LeaseTask>(desc, LeaseTask::Payload{ReflectionHistoryReservation(control, pending)}).valid());
     graph.reset();
     const auto retry = control->plan(Stamp(), ReflectionSettings{}, 3u);

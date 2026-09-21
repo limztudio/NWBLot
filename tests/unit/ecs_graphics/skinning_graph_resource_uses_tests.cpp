@@ -16,6 +16,10 @@
 namespace __hidden_skinning_graph_resource_uses_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -25,7 +29,7 @@ using namespace NWB::Impl;
 [[nodiscard]] MeshSkinningGraphDispatchPlan Plan(const u32 offset = 0u, const u64 generation = 1u){
     MeshSkinningGraphDispatchPlan plan;
     plan.bindlessResourceSlotsResource = { .generation = generation, .index = static_cast<u32>(offset + 1u) };
-    plan.restPositionResource = { .generation = generation, .index = static_cast<u32>(offset + 2u) };
+    plan.restPositionResource = { .generation = generation, .index = static_cast<u32>(offset + s_ExpectedDualCount) };
     plan.restNormalResource = { .generation = generation, .index = static_cast<u32>(offset + 3u) };
     plan.restTangentResource = { .generation = generation, .index = static_cast<u32>(offset + 4u) };
     plan.skinnedPositionResource = { .generation = generation, .index = static_cast<u32>(offset + 5u) };
@@ -68,7 +72,7 @@ TEST(SkinningGraphResourceUses, PreservesOrderedRolesAndIndependentPhaseStates){
     MeshSkinningGraphResourceUses uses(scratch);
     const MeshSkinningGraphDispatchPlan plan = Plan();
     ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch, uses));
-    constexpr u32 deformation[] = { 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 10u, 11u, 14u, 15u, 16u };
+    constexpr u32 deformation[] = { 1u, s_ExpectedDualCount, 3u, 4u, 5u, 6u, 7u, 8u, 10u, 11u, 14u, 15u, 16u };
     constexpr u32 postDispatch[] = { 1u, 5u, 8u, 10u, 12u, 13u, 9u, 18u, 6u, 11u, 17u };
     constexpr u32 localBounds[] = { 1u, 18u, 19u };
     constexpr u32 finalizer[] = { 5u, 6u, 7u, 9u, 19u, 17u };
@@ -91,7 +95,7 @@ TEST(SkinningGraphResourceUses, PreservesOrderedRolesAndIndependentPhaseStates){
             writes ? Core::GpuTaskResourceAccess::Write : Core::GpuTaskResourceAccess::Read);
     }
     for(usize index = 0u; index < LengthOf(localBounds); ++index){
-        const bool writes = index == 2u;
+        const bool writes = index == s_ExpectedDualCount;
         const auto state = index == 0u ? Core::ResourceStates::ConstantBuffer
             : writes ? Core::ResourceStates::UnorderedAccess : Core::ResourceStates::ShaderResource;
         VerifyUse(uses.localBounds[index], { .generation = 1u, .index = localBounds[index] }, state,
@@ -106,17 +110,17 @@ TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChan
     MeshSkinningGraphResourceUses uses(scratch);
     MeshSkinningGraphDispatchPlan plans[] = { Plan(), Plan(), Plan(100u) };
     Swap(plans[1u].restPositionResource, plans[1u].restNormalResource);
-    plans[2u].meshletDescResource = plans[0u].meshletDescResource;
+    plans[s_ThirdElementIndex].meshletDescResource = plans[0u].meshletDescResource;
     ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
     ASSERT_EQ(uses.deformation.size(), 25u);
     ASSERT_EQ(uses.postDispatch.size(), 21u);
     ASSERT_EQ(uses.localBounds.size(), 6u);
     ASSERT_EQ(uses.finalizer.size(), 12u);
     EXPECT_EQ(uses.deformation[1u].resource, plans[0u].restPositionResource);
-    EXPECT_EQ(uses.deformation[2u].resource, plans[0u].restNormalResource);
-    EXPECT_EQ(uses.deformation[13u].resource, plans[2u].bindlessResourceSlotsResource);
-    EXPECT_EQ(uses.postDispatch[11u].resource, plans[2u].bindlessResourceSlotsResource);
-    EXPECT_EQ(uses.finalizer[6u].resource, plans[2u].skinnedPositionResource);
+    EXPECT_EQ(uses.deformation[s_ThirdElementIndex].resource, plans[0u].restNormalResource);
+    EXPECT_EQ(uses.deformation[13u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses.postDispatch[11u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses.finalizer[6u].resource, plans[s_ThirdElementIndex].skinnedPositionResource);
 }
 
 TEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags){
@@ -143,7 +147,7 @@ TEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChange
     plans[0u].updatesMeshletBounds = true;
     ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, 1u, scratch, uses));
     ASSERT_EQ(uses.localBounds.size(), 3u);
-    ASSERT_EQ(uses.finalizer.size(), 2u);
+    ASSERT_EQ(uses.finalizer.size(), s_ExpectedDualCount);
     EXPECT_EQ(uses.finalizer[0u].resource, plans[0u].meshletBoundsResource);
     ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(nullptr, 0u, scratch, uses));
     EXPECT_TRUE(uses.deformation.empty());
@@ -166,7 +170,7 @@ TEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRec
         case 1u:
             plan.skinResource = {};
             break;
-        case 2u:
+        case s_ExpectedDualCount:
             plan.hasActiveSkin = false;
             plan.skinnedPositionResource = plan.meshletBoundsResource;
             break;
@@ -221,20 +225,20 @@ TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndR
         MeshSkinningGraphDispatchPlan plans[] = { Plan(), Plan(100u), Plan(200u) };
         ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
         if(failure == 0u)
-            plans[2u].restPositionResource = plans[1u].skinnedPositionResource;
+            plans[s_ThirdElementIndex].restPositionResource = plans[1u].skinnedPositionResource;
         else if(failure == 1u)
-            plans[2u].meshletDescResource = plans[0u].meshletBoundsResource;
+            plans[s_ThirdElementIndex].meshletDescResource = plans[0u].meshletBoundsResource;
         else{
-            plans[2u].hasActiveSkin = false;
-            plans[2u].repacksNormals = false;
-            plans[2u].skinnedNormalResource = {};
+            plans[s_ThirdElementIndex].hasActiveSkin = false;
+            plans[s_ThirdElementIndex].repacksNormals = false;
+            plans[s_ThirdElementIndex].skinnedNormalResource = {};
         }
         EXPECT_FALSE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
         EXPECT_TRUE(uses.deformation.empty());
         EXPECT_TRUE(uses.postDispatch.empty());
         EXPECT_TRUE(uses.localBounds.empty());
         EXPECT_TRUE(uses.finalizer.empty());
-        plans[2u] = Plan(200u);
+        plans[s_ThirdElementIndex] = Plan(200u);
         ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
         EXPECT_EQ(uses.deformation.size(), 39u);
         EXPECT_EQ(uses.postDispatch.size(), 33u);

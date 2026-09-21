@@ -16,6 +16,9 @@
 namespace __hidden_cpu_task_wait_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -127,7 +130,7 @@ TEST(CpuTaskWaitTests, NewDependencyInvalidatesAnEarlierUnrelatedSearch){
     u32 unrelated = 0u;
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
-    const auto prerequisite = scheduler.submit([&](){ EXPECT_EQ(++sequence, 2u); });
+    const auto prerequisite = scheduler.submit([&](){ EXPECT_EQ(++sequence, s_ExpectedDualCount); });
     ASSERT_TRUE(prerequisite.valid());
     ASSERT_TRUE(scheduler.submit([&](){ ++unrelated; }).valid());
     ASSERT_TRUE(scope.submit([&](){
@@ -158,7 +161,7 @@ TEST(CpuTaskWaitTests, ReusedUnrelatedSlotCanBecomeAScopedDescendant){
         EXPECT_NE(child.generation, unrelated.generation);
     }).valid());
     scope.wait();
-    EXPECT_EQ(callbacks, 2u);
+    EXPECT_EQ(callbacks, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
@@ -177,7 +180,7 @@ TEST(CpuTaskWaitTests, NestedScopesUseIndependentSearchIdentities){
     ASSERT_TRUE(outer.submit([&](){
         EXPECT_EQ(innerCallbacks, 0u);
         inner.wait();
-        EXPECT_EQ(innerCallbacks, 2u);
+        EXPECT_EQ(innerCallbacks, s_ExpectedDualCount);
     }).valid());
     outer.wait();
     EXPECT_EQ(unrelatedCallbacks, 0u);
@@ -193,7 +196,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     Atomic<u32> visitsA{ 0u };
     Atomic<u32> visitsB{ 0u };
     CpuTaskSchedulerConfig config;
-    config.workerCount = 2u;
+    config.workerCount = s_ExpectedDualCount;
     config.heterogeneous = false;
     CpuTaskScheduler scheduler(config);
     CpuTaskScope scopeA(scheduler);
@@ -212,7 +215,7 @@ TEST(CpuTaskWaitTests, ConcurrentScopeWaitersCanSwitchTheSharedSearchCache){
     });
     ASSERT_TRUE(waiterA.valid());
     ASSERT_TRUE(waiterB.valid());
-    while(entered.load(MemoryOrder::acquire) != 2u)
+    while(entered.load(MemoryOrder::acquire) != s_ExpectedDualCount)
         SleepMS(1u);
     for(u32 index = 0u; index < 32u; ++index){
         const auto prerequisiteB = scheduler.submit([](){});

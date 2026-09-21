@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -34,14 +37,14 @@ public:
     virtual bool prepareResources(Framebuffer*)override{
         EXPECT_EQ(QueryCurrentThreadId(), m_mainThread);
         EXPECT_EQ(m_completed.load(MemoryOrder::acquire), m_index);
-        m_events.push_back(m_index * 2u);
+        m_events.push_back(m_index * s_ExpectedDualCount);
         getGraphics().waitTasks();
         return true;
     }
 
     virtual void render(Framebuffer*)override{
         EXPECT_EQ(QueryCurrentThreadId(), m_mainThread);
-        m_events.push_back(m_index * 2u + 1u);
+        m_events.push_back(m_index * s_ExpectedDualCount + 1u);
         const auto child = getGraphics().scheduleGraphicsTask([this](){
             m_completed.fetch_add(1u, MemoryOrder::release);
         });
@@ -81,7 +84,7 @@ TEST_F(DescriptorBufferRoundTripTest, RenderPassTasksPreserveMainThreadInterleav
     ASSERT_EQ(events.size(), 4u);
     for(u32 index = 0u; index < 4u; ++index)
         EXPECT_EQ(events[index], index);
-    EXPECT_EQ(completed.load(MemoryOrder::acquire), 2u);
+    EXPECT_EQ(completed.load(MemoryOrder::acquire), s_ExpectedDualCount);
 }
 
 struct FrameCpuTimingCallbackState{
@@ -132,7 +135,7 @@ TEST_F(DescriptorBufferRoundTripTest, FramePublishesMainThreadCpuTimingScopes){
 
     const u64 sampleFrameIndex = frame.graphics().getFrameIndex();
     ASSERT_TRUE(frame.update(0.f));
-    EXPECT_EQ(callbackState.invocationCount, 2u);
+    EXPECT_EQ(callbackState.invocationCount, s_ExpectedDualCount);
 
     const Perf::TimingView cpuTiming = frame.perfSession().cpuTimingView();
     const Perf::TimingStats& projectUpdateStats = cpuTiming.stats(Name("frame.project_update"));

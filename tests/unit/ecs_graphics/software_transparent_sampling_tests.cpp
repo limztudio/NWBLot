@@ -13,6 +13,9 @@
 namespace __hidden_software_transparent_sampling_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -73,19 +76,19 @@ TEST(SoftwareTransparentSampling, EveryLightInputAndSlotOrderInvalidatesTrust){
     for(const auto field : s_Fields){
         SoftwareTransparentSamplingHistory history;
         history.prepareScene(scene);
-        history.prepareLighting(original, 2u);
+        history.prepareLighting(original, s_ExpectedDualCount);
         history.accept();
         ECSRenderDetail::SceneLightGpuData changed[] = { original[0], original[1] };
         (changed[0].*field).x += 0.125f;
-        history.prepareLighting(changed, 2u);
+        history.prepareLighting(changed, s_ExpectedDualCount);
         EXPECT_FALSE(history.usable());
     }
     SoftwareTransparentSamplingHistory history;
     history.prepareScene(scene);
-    history.prepareLighting(original, 2u);
+    history.prepareLighting(original, s_ExpectedDualCount);
     history.accept();
     ECSRenderDetail::SceneLightGpuData reversed[] = { original[1], original[0] };
-    history.prepareLighting(reversed, 2u);
+    history.prepareLighting(reversed, s_ExpectedDualCount);
     EXPECT_FALSE(history.usable());
     history.prepareLighting(original, 1u);
     EXPECT_FALSE(history.usable());

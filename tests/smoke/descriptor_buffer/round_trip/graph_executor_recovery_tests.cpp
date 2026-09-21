@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -367,7 +371,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorRejectsNonTerminalFront
     const GpuSubmissionPacketId normalPacket = views.compiled.packetForTask(normalTask);
     ASSERT_TRUE(frontierPacket.valid());
     ASSERT_TRUE(normalPacket.valid());
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     EXPECT_EQ(views.compiled.packetIdAt(0u), frontierPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), normalPacket);
     EXPECT_TRUE(views.compiled.packet(frontierPacket).plan->joinsAcceptedQueueFrontier);
@@ -487,17 +491,17 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierTaskRangeHelperPreservesRecov
     ASSERT_EQ(views.compiled.packetCount(), 3u);
     EXPECT_EQ(views.compiled.packetIdAt(0u), prefixPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), rejectedPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), recoveryPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), recoveryPacket);
     EXPECT_TRUE(views.compiled.packet(recoveryPacket).plan->joinsAcceptedQueueFrontier);
     const GpuSubmissionPacketRange normalTaskRange = views.compiled.packetRangeForTasks(prefixTask, rejectedTask);
     ASSERT_TRUE(views.compiled.validPacketRange(normalTaskRange));
-    EXPECT_EQ(normalTaskRange.packetCount, 2u);
+    EXPECT_EQ(normalTaskRange.packetCount, s_ExpectedDualCount);
 
     GpuRecordedGraph recordedGraph(DescriptorBufferRoundTripTest::arena());
     GpuGraphSubmissionTransaction transaction(DescriptorBufferRoundTripTest::arena());
     transaction.reset(compiledGraph);
     const GpuNativePacketRecorder recorder(device);
-    CpuTaskScheduler recordingWorkers(2u);
+    CpuTaskScheduler recordingWorkers(s_ExpectedDualCount);
     const GpuTaskScheduler submitter(device);
     GpuSubmissionPacketId failedPacket;
 

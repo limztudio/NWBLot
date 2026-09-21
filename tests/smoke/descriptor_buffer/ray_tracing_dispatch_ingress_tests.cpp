@@ -29,6 +29,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -51,7 +55,7 @@ struct NativeTraceRaysCommand{
 };
 
 struct NativeTraceRaysCapture{
-    NativeTraceRaysCommand commands[2u] = {};
+    NativeTraceRaysCommand commands[s_ThirdElementIndex] = {};
     u32 commandCount = 0u;
     bool overflowed = false;
 };
@@ -358,7 +362,7 @@ TEST(RayTracingDispatchContractTest, DimensionValidationCoversTotalAxisAndOverfl
 
     GraphicsBackend::VulkanDetail::RayDispatchLimits axisLimits;
     axisLimits.maxInvocationCount = Limit<u64>::s_Max;
-    axisLimits.maxAxisCounts = { 2u, 3u, 4u };
+    axisLimits.maxAxisCounts = { s_ExpectedDualCount, 3u, 4u };
     axisLimits.maxAxisSizes = { 5u, 7u, 11u };
     arguments.setDimensions(10u, 21u, 44u);
     EXPECT_TRUE(GraphicsBackend::VulkanDetail::ValidateRayDispatchDimensions(arguments, axisLimits));
@@ -369,7 +373,7 @@ TEST(RayTracingDispatchContractTest, DimensionValidationCoversTotalAxisAndOverfl
     arguments.setDimensions(1u, 1u, 45u);
     EXPECT_FALSE(GraphicsBackend::VulkanDetail::ValidateRayDispatchDimensions(arguments, axisLimits));
 
-    arguments.setDimensions(Limit<u32>::s_Max, Limit<u32>::s_Max, 2u);
+    arguments.setDimensions(Limit<u32>::s_Max, Limit<u32>::s_Max, s_ExpectedDualCount);
     EXPECT_FALSE(GraphicsBackend::VulkanDetail::ValidateRayDispatchDimensions(arguments, axisLimits));
 
     GraphicsBackend::VulkanDetail::RayDispatchLimits invalidLimits;
@@ -506,7 +510,7 @@ TEST_F(RayTracingDispatchIngressTest, NativeFourRegionAddressesChangeAfterMutati
     }
     ASSERT_EQ(nativeContext.deviceDispatch->vkCmdTraceRaysKHR, originalCmdTraceRays);
 
-    ASSERT_EQ(nativeCapture.commandCount, 2u);
+    ASSERT_EQ(nativeCapture.commandCount, s_ExpectedDualCount);
     ASSERT_FALSE(nativeCapture.overflowed);
     const auto& original = nativeCapture.commands[0u];
     const auto& replacement = nativeCapture.commands[1u];

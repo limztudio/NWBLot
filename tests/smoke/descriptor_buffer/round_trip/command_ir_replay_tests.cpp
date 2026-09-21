@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -245,7 +248,7 @@ TEST_F(DescriptorBufferRoundTripTest, CommandIrPacketReplayPreflightsThenLowersC
         nullptr,
         &capture
     ));
-    ASSERT_EQ(capture.recordCount(), 2u);
+    ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     const GpuCommandIrBuiltinTaskRecord* const firstCapture = capture.recordAt(0u);
     const GpuCommandIrBuiltinTaskRecord* const secondCapture = capture.recordAt(1u);
     ASSERT_NE(firstCapture, nullptr);

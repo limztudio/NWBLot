@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -50,7 +53,7 @@ TEST_F(DescriptorBufferRoundTripTest, GarbageCollectionRetiresCompletedCommandBu
     );
     ASSERT_TRUE(token.valid());
     buffer.reset();
-    ASSERT_EQ(retainedBuffer->getReferenceCount(), 2u);
+    ASSERT_EQ(retainedBuffer->getReferenceCount(), s_ExpectedDualCount);
 
     for(u32 retry = 0u; retry < 5000u && retainedBuffer->getReferenceCount() != 1u; ++retry){
         device.runGarbageCollection();
@@ -532,7 +535,7 @@ TEST_F(DescriptorBufferRoundTripTest, TimerQueryCommandsRetainQueryThroughAbando
     endOnly->open();
     ASSERT_TRUE(endOnly->endTimerQuery(*query, abandonedQueryRecording));
     endOnly->close();
-    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 2u);
+    EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + s_ExpectedDualCount);
 
     beginOnly.reset();
     EXPECT_EQ(retainedQuery->getReferenceCount(), referencesBeforeRecord + 1u);

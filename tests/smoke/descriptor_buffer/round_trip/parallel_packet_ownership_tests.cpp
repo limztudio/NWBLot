@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -48,7 +51,7 @@ struct ParallelRecordingDiscardTask{
         if(!payload.state || !commandList.isRecording())
             return false;
         const u32 arrivalIndex = payload.state->recordingArrivalCount.fetch_add(1u, MemoryOrder::acq_rel);
-        const u32 recordingPhase = arrivalIndex / 2u;
+        const u32 recordingPhase = arrivalIndex / s_ExpectedDualCount;
         if((arrivalIndex & 1u) != 0u){
             payload.state->completedRecordingPhaseCount.store(recordingPhase + 1u, MemoryOrder::release);
             payload.state->completedRecordingPhaseCount.notify_all();
@@ -71,7 +74,7 @@ struct ParallelRecordingDiscardTask{
         if(CurrentThreadId() != payload.state->expectedThreadId)
             payload.state->foreignThreadObserved.store(true, MemoryOrder::relaxed);
         const u32 discardIndex = payload.state->nextDiscardIndex.fetch_add(1u, MemoryOrder::relaxed);
-        if(discardIndex % 2u != payload.discardIndex)
+        if(discardIndex % s_ExpectedDualCount != payload.discardIndex)
             payload.state->outOfOrderObserved.store(true, MemoryOrder::relaxed);
         payload.state->activeDiscardCount.fetch_sub(1u, MemoryOrder::release);
     }
@@ -146,7 +149,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId firstPacket = views.compiled.packetForTask(firstTask);
     const GpuSubmissionPacketId secondPacket = views.compiled.packetForTask(secondTask);
     ASSERT_TRUE(firstPacket.valid());
@@ -169,7 +172,7 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierSerializesFailedPacketDiscard
     EXPECT_EQ(failedPacket, firstPacket);
     EXPECT_FALSE(recordedGraph.packetSnapshot(firstPacket).has_value());
     EXPECT_FALSE(recordedGraph.packetSnapshot(secondPacket).has_value());
-    EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), 2u);
+    EXPECT_EQ(state.nextDiscardIndex.load(MemoryOrder::relaxed), s_ExpectedDualCount);
     EXPECT_EQ(state.activeDiscardCount.load(MemoryOrder::relaxed), 0u);
     EXPECT_FALSE(state.foreignThreadObserved.load(MemoryOrder::relaxed));
     EXPECT_FALSE(state.outOfOrderObserved.load(MemoryOrder::relaxed));
@@ -424,9 +427,9 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
         views.compiled
     );
     ASSERT_TRUE(recordingStatistics.valid());
-    EXPECT_EQ(recordingStatistics.packetCount, 2u);
-    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, 2u);
-    EXPECT_EQ(recordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(recordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.workerRoutedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.parallelPacketCount, s_ExpectedDualCount);
     EXPECT_EQ(recordingStatistics.recordingElapsedSeconds, recordingStatistics.readyFrontierElapsedSeconds);
     EXPECT_EQ(
         recordingStatistics.readyFrontierWorkerBusySeconds,
@@ -457,9 +460,9 @@ TEST_F(DescriptorBufferRoundTripTest, ReadyFrontierRecorderUsesWorkerAffinedComm
     EXPECT_EQ(graphicsQueueRecordingStatistics.deviceGeneration, views.compiled.deviceGeneration());
     EXPECT_EQ(graphicsQueueRecordingStatistics.queue, graphicsQueue.id);
     EXPECT_EQ(graphicsQueueRecordingStatistics.queueClass, CommandQueue::Graphics);
-    EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, 2u);
-    EXPECT_EQ(graphicsQueueRecordingStatistics.workerRoutedPacketCount, 2u);
-    EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, 2u);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.workerRoutedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(graphicsQueueRecordingStatistics.parallelPacketCount, s_ExpectedDualCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.packetCount, recordingStatistics.packetCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.taskCount, recordingStatistics.taskCount);
     EXPECT_EQ(graphicsQueueRecordingStatistics.commandListCount, recordingStatistics.commandListCount);

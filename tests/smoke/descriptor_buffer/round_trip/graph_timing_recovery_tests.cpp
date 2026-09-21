@@ -23,6 +23,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -145,7 +149,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTimingBindingsResolveFromGraph
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
-        ASSERT_EQ(views.compiled.packetCount(), 2u);
+        ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
         beginPacket = views.compiled.packetForTask(beginTask);
         endPacket = views.compiled.packetForTask(endTask);
         ASSERT_NE(beginPacket, endPacket);
@@ -534,7 +538,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     ASSERT_EQ(views.compiled.packetCount(), 3u);
     EXPECT_EQ(views.compiled.packetIdAt(0u), transferPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), rejectedSuffixPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), recoveryPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), recoveryPacket);
     ASSERT_EQ(views.compiled.packet(rejectedSuffixPacket).plan->dependencyCount, 1u);
     EXPECT_EQ(views.compiled.packet(rejectedSuffixPacket).dependencies[0u].producer, transferPacket);
     EXPECT_EQ(views.compiled.packet(recoveryPacket).plan->dependencyCount, 0u);
@@ -616,7 +620,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_EQ(rejectedGraphicsQueueStatistics.recoverySubmissionCount, 0u);
     EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
     EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
     VulkanTestQueueSubmit2Capture rejectedSuffixCapture;
     ASSERT_TRUE(submissionObserver.capturedSubmission(1u, rejectedSuffixCapture));
     EXPECT_EQ(rejectedSuffixCapture.queue, nativeGraphicsQueue);
@@ -639,12 +643,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
     EXPECT_TRUE(recoveryToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration));
     EXPECT_FALSE(submissionObserver.overflowed());
     ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
     VulkanTestQueueSubmit2Capture transferCapture;
     VulkanTestQueueSubmit2Capture recoveryCapture;
     ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
-    ASSERT_TRUE(submissionObserver.capturedSubmission(2u, recoveryCapture));
+    ASSERT_TRUE(submissionObserver.capturedSubmission(s_ExpectedDualCount, recoveryCapture));
     __hidden_descriptor_buffer_round_trip_tests::ExpectNativeTimelineDependency(
         transferCapture,
         nativeTransferQueue,
@@ -688,7 +692,7 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecoveryJoinsAcceptedDedicated
 
     const GpuTaskGraphSubmissionStatistics recoveredSubmissionStatistics = transaction.submissionStatistics();
     ASSERT_TRUE(recoveredSubmissionStatistics.valid());
-    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(recoveredSubmissionStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(recoveredSubmissionStatistics.acceptedFrontierSubmissionCount, 1u);
     EXPECT_EQ(recoveredSubmissionStatistics.recoverySubmissionCount, 1u);
     EXPECT_EQ(

@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -92,13 +96,13 @@ TEST(GpuTaskUseIndex, ChainsKeepAscendingDeclarationIndicesIncludingUnknownState
     ASSERT_TRUE(index.build(task));
     ASSERT_TRUE(index.validFor(task));
     EXPECT_EQ(index.first(s_A), 0u);
-    EXPECT_EQ(index.next(0u), 2u);
-    EXPECT_EQ(index.next(2u), 4u);
+    EXPECT_EQ(index.next(0u), s_ExpectedDualCount);
+    EXPECT_EQ(index.next(s_ExpectedDualCount), 4u);
     EXPECT_EQ(index.next(4u), s_NoUse);
     EXPECT_EQ(index.first(s_B), 1u);
     EXPECT_EQ(index.next(1u), 3u);
     EXPECT_EQ(index.next(3u), s_NoUse);
-    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ .generation = 1u, .index = 2u }), s_NoUse);
+    EXPECT_EQ(index.first(Graphics::GpuGraphResourceId{ .generation = 1u, .index = s_ExpectedDualCount }), s_NoUse);
     EXPECT_EQ(index.next(LengthOf(uses)), s_NoUse);
 }
 
@@ -116,7 +120,7 @@ TEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews){
     EXPECT_EQ(index.first(s_B), 0u);
     EXPECT_EQ(index.next(0u), s_NoUse);
     Graphics::GpuTaskGraphTaskView detached = b;
-    detached.id.index = 2u;
+    detached.id.index = s_ExpectedDualCount;
     EXPECT_FALSE(index.validFor(detached));
     detached = b;
     detached.resourceUses = first;
@@ -125,7 +129,7 @@ TEST(GpuTaskUseIndex, RebuildResetsOnlyThePreviousTaskAndRejectsDetachedViews){
     detached.resourceUseCount = 0u;
     EXPECT_FALSE(index.validFor(detached));
     Graphics::GpuTaskGraphTaskView empty{};
-    empty.id = { .generation = 1u, .index = 2u };
+    empty.id = { .generation = 1u, .index = s_ExpectedDualCount };
     ASSERT_TRUE(index.build(empty));
     EXPECT_TRUE(index.validFor(empty));
     EXPECT_EQ(index.first(s_B), s_NoUse);
@@ -137,10 +141,10 @@ TEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableInd
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     Graphics::GpuTaskResourceUse uses[] = { BufferUse(s_A, 0u, 16u), BufferUse(s_B, 0u, 8u) };
     const auto task = TaskView(uses);
-    TaskResourceUseIndex index(2u, 1u, LengthOf(uses), scratchArena);
+    TaskResourceUseIndex index(s_ExpectedDualCount, 1u, LengthOf(uses), scratchArena);
     for(
         const Graphics::GpuGraphResourceId invalid : {
-            Graphics::GpuGraphResourceId{}, Graphics::GpuGraphResourceId{ .generation = 2u, .index = 0u }, Graphics::GpuGraphResourceId{ .generation = 1u, .index = 2u },
+            Graphics::GpuGraphResourceId{}, Graphics::GpuGraphResourceId{ .generation = s_ExpectedDualCount, .index = 0u }, Graphics::GpuGraphResourceId{ .generation = 1u, .index = s_ExpectedDualCount },
         }
     ){
         uses[0u].resource = invalid;
@@ -151,7 +155,7 @@ TEST(GpuTaskUseIndex, InvalidGenerationIdentityAndCapacityNeverPublishAUsableInd
         ASSERT_TRUE(index.build(task));
     }
     Graphics::GpuTaskGraphTaskView invalid = task;
-    invalid.id.generation = 2u;
+    invalid.id.generation = s_ExpectedDualCount;
     EXPECT_FALSE(index.build(invalid));
     invalid = task;
     invalid.id = {};
@@ -229,12 +233,12 @@ TEST(GpuTaskUseIndex, CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInv
     TaskResourceUseIndex index(declarations.resourceCount(), declarations.generation(), LengthOf(uses), scratchArena);
     ASSERT_TRUE(index.build(task));
     Ranges ranges(scratchArena);
-    ranges.reserve(2u);
-    ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 2u, resource, uses[2u].range, scratchArena, ranges));
+    ranges.reserve(s_ExpectedDualCount);
+    ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, s_ExpectedDualCount, resource, uses[s_ThirdElementIndex].range, scratchArena, ranges));
     EXPECT_TRUE(ranges.empty());
     uses[0u].range = BufferUse(buffer, 0u, 8u).range;
     ASSERT_TRUE(index.build(task));
-    EXPECT_FALSE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 2u, resource, uses[2u].range, scratchArena, ranges));
+    EXPECT_FALSE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, s_ExpectedDualCount, resource, uses[s_ThirdElementIndex].range, scratchArena, ranges));
 }
 
 TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
@@ -250,7 +254,7 @@ TEST(GpuTaskUseIndex, SymbolicBufferTailSurvivesFinitePreviousUse){
     TaskResourceUseIndex index(declarations.resourceCount(), declarations.generation(), LengthOf(uses), scratchArena);
     ASSERT_TRUE(index.build(task));
     Ranges ranges(scratchArena);
-    ranges.reserve(2u);
+    ranges.reserve(s_ExpectedDualCount);
     ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 1u, resource, uses[1u].range, scratchArena, ranges));
     const Graphics::BufferRange expected[] = { { 0u, 16u }, { 32u, Graphics::BufferRange::AllBytes } };
     ExpectBufferRanges(ranges, expected);
@@ -275,7 +279,7 @@ TEST(GpuTaskUseIndex, TextureRectangleKeepsMipThenSliceRemainderOrder){
     ranges.reserve(4u);
     ASSERT_TRUE(CollectResourceFirstUseRangesWithinTask(declarations, task, index, 1u, resource, uses[1u].range, scratchArena, ranges));
     const Graphics::TextureSubresourceSet expected[] = {
-        { 0u, 1u, 0u, 3u }, { 2u, 2u, 0u, 3u }, { 1u, 1u, 0u, 1u }, { 1u, 1u, 2u, 1u },
+        { 0u, 1u, 0u, 3u }, { s_ExpectedDualCount, s_ExpectedDualCount, 0u, 3u }, { 1u, 1u, 0u, 1u }, { 1u, 1u, s_ExpectedDualCount, 1u },
     };
     ASSERT_EQ(ranges.size(), LengthOf(expected));
     for(usize index = 0u; index < LengthOf(expected); ++index)
@@ -334,7 +338,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
         EXPECT_EQ(barrier.resource, expectedResources[index]);
         EXPECT_EQ(barrier.range.bufferRange, expectedRanges[index]);
         EXPECT_EQ(barrier.before, Graphics::ResourceStates::Common);
-        EXPECT_EQ(barrier.after, index < 2u ? Graphics::ResourceStates::CopyDest : Graphics::ResourceStates::ShaderResource);
+        EXPECT_EQ(barrier.after, index < s_ExpectedDualCount ? Graphics::ResourceStates::CopyDest : Graphics::ResourceStates::ShaderResource);
         EXPECT_TRUE(barrier.isGraphInitialState);
     }
 }
@@ -369,7 +373,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
     const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
     const auto view = plan.findTask(task);
     ASSERT_NE(view.plan, nullptr);
-    ASSERT_EQ(view.plan->prologueBarrierCount, 2u);
+    ASSERT_EQ(view.plan->prologueBarrierCount, s_ExpectedDualCount);
     ASSERT_NE(view.prologueBarriers, nullptr);
     EXPECT_EQ(view.prologueBarriers[0u].resource, acceleration);
     EXPECT_EQ(view.prologueBarriers[0u].before, Graphics::ResourceStates::Common);

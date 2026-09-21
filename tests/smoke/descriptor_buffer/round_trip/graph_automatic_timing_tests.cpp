@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -195,7 +198,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAutomaticTimingPublishesPolicySc
     ASSERT_TRUE(outsideSuffixPacket.valid());
     EXPECT_EQ(views.compiled.packetIdAt(0u), outsidePrefixPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), envelopeOnlyPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), packetOnlyPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), packetOnlyPacket);
     EXPECT_EQ(views.compiled.packetIdAt(3u), taskPacket);
     EXPECT_EQ(views.compiled.packetIdAt(4u), outsideSuffixPacket);
     EXPECT_NE(outsidePrefixPacket, envelopeOnlyPacket);

@@ -14,6 +14,9 @@
 namespace __hidden_reflection_settings_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -26,7 +29,7 @@ TEST(ReflectionSettings, DefaultsAndZeroHardwareBudgetAreValid){
     EXPECT_TRUE(settings.temporalEnabled);
     EXPECT_TRUE(settings.spatialFilterEnabled);
     EXPECT_EQ(settings.temporalMaxSamples, 16u);
-    EXPECT_EQ(settings.spatialRadius, 2u);
+    EXPECT_EQ(settings.spatialRadius, s_ExpectedDualCount);
     settings.screenFeedbackEnabled = true;
     settings.maxHardwareRaysPerFrame = 0u;
     EXPECT_TRUE(ValidateReflectionSettings(settings));

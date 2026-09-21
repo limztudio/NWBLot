@@ -25,6 +25,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -146,9 +149,9 @@ static void FillSource(const Case& testCase, const Source::Enum source, Vector<P
             switch(source){
             case Source::Depth:
                 value.r = testCase.pattern == Pattern::Empty
-                    || (testCase.pattern == Pattern::Gaps && ((x / 3u + y / 2u) & 1u) != 0u) ? 1.0f : depth;
+                    || (testCase.pattern == Pattern::Gaps && ((x / 3u + y / s_ExpectedDualCount) & 1u) != 0u) ? 1.0f : depth;
                 if(testCase.pattern == Pattern::Invalid && x % 5u == 0u)
-                    value.r = x % 2u == 0u ? nan : -0.25f;
+                    value.r = x % s_ExpectedDualCount == 0u ? nan : -0.25f;
                 break;
             case Source::Position:
                 value = { worldX, worldY, z, 1.0f };
@@ -157,7 +160,7 @@ static void FillSource(const Case& testCase, const Source::Enum source, Vector<P
                 break;
             case Source::Normal:
                 value = { 0.5f + 0.5f * slope * inverseNormalLength, 0.5f, 0.5f - 0.5f * inverseNormalLength, 1.0f };
-                if(testCase.pattern == Pattern::Invalid && x % 5u == 2u)
+                if(testCase.pattern == Pattern::Invalid && x % 5u == s_ExpectedDualCount)
                     value.g = nan;
                 break;
             case Source::Specular:
@@ -183,7 +186,7 @@ static void FillRays(const Case& testCase, Vector<Ray, Alloc::ScratchArena>& ray
     for(u32 row = 0u; row < 3u; ++row){
         for(u32 direction = 0u; direction < 4u; ++direction){
             const f32 signX = (direction & 1u) == 0u ? 1.0f : -1.0f;
-            const f32 signZ = (direction & 2u) == 0u ? 1.0f : -1.0f;
+            const f32 signZ = (direction & s_ExpectedDualCount) == 0u ? 1.0f : -1.0f;
             const f32 y = -0.5f + static_cast<f32>(row) * 0.5f;
             Ray ray{
                 { -0.9f * signX, y, signZ > 0.0f ? 0.05f : 0.95f },
@@ -205,7 +208,7 @@ static void FillRays(const Case& testCase, Vector<Ray, Alloc::ScratchArena>& ray
     Ray vertical = rays[0];
     vertical.position = { 0.0f, -0.9f, 0.05f };
     vertical.direction = { 0.0f, 0.8f, 0.6f };
-    vertical.sourceX = testCase.width / 2u;
+    vertical.sourceX = testCase.width / s_ExpectedDualCount;
     vertical.sourceY = testCase.height - 1u;
     rays.push_back(vertical);
     vertical.direction.x = 1e-22f;
@@ -244,10 +247,10 @@ static void RunCase(
     constexpr u32 slotsDescriptor = pyramidDescriptor + 1u;
     constexpr u32 viewDescriptor = slotsDescriptor + 1u;
     constexpr u32 parametersDescriptor = viewDescriptor + 1u;
-    constexpr u32 raysDescriptor = parametersDescriptor + 2u;
+    constexpr u32 raysDescriptor = parametersDescriptor + s_ExpectedDualCount;
     constexpr u32 outputsDescriptor = raysDescriptor + 1u;
-    constexpr u32 mipsDescriptor = outputsDescriptor + 2u;
-    GpuDescriptorHandle descriptors[mipsDescriptor + 2u * NWB_REFLECTION_MAX_DEPTH_MIPS]{};
+    constexpr u32 mipsDescriptor = outputsDescriptor + s_ExpectedDualCount;
+    GpuDescriptorHandle descriptors[mipsDescriptor + s_ExpectedDualCount * NWB_REFLECTION_MAX_DEPTH_MIPS]{};
     auto& heap = device.getDescriptorHeap();
     ScopeExit releaseDescriptors([&]()noexcept{
         for(const GpuDescriptorHandle handle : descriptors){
@@ -278,16 +281,16 @@ static void RunCase(
     ASSERT_TRUE(heap.write(descriptors[pyramidDescriptor], DescriptorWriteItem::Texture_SRV(0u, pyramid.get())));
     for(u32 mip = 0u; mip < mipCount; ++mip){
         const TextureSubresourceSet subresources(mip, 1u, 0u, 1u);
-        descriptors[mipsDescriptor + mip * 2u] = heap.allocate(GpuDescriptorClass::SampledImage);
-        descriptors[mipsDescriptor + mip * 2u + 1u] = heap.allocate(GpuDescriptorClass::StorageImage);
-        ASSERT_TRUE(descriptors[mipsDescriptor + mip * 2u].valid());
-        ASSERT_TRUE(descriptors[mipsDescriptor + mip * 2u + 1u].valid());
+        descriptors[mipsDescriptor + mip * s_ExpectedDualCount] = heap.allocate(GpuDescriptorClass::SampledImage);
+        descriptors[mipsDescriptor + mip * s_ExpectedDualCount + 1u] = heap.allocate(GpuDescriptorClass::StorageImage);
+        ASSERT_TRUE(descriptors[mipsDescriptor + mip * s_ExpectedDualCount].valid());
+        ASSERT_TRUE(descriptors[mipsDescriptor + mip * s_ExpectedDualCount + 1u].valid());
         ASSERT_TRUE(heap.write(
-            descriptors[mipsDescriptor + mip * 2u],
+            descriptors[mipsDescriptor + mip * s_ExpectedDualCount],
             DescriptorWriteItem::Texture_SRV(0u, pyramid.get(), Format::RGBA32_FLOAT, subresources)
         ));
         ASSERT_TRUE(heap.write(
-            descriptors[mipsDescriptor + mip * 2u + 1u],
+            descriptors[mipsDescriptor + mip * s_ExpectedDualCount + 1u],
             DescriptorWriteItem::Texture_UAV(0u, pyramid.get(), Format::RGBA32_FLOAT, subresources)
         ));
     }
@@ -311,7 +314,7 @@ static void RunCase(
     ASSERT_TRUE(descriptors[raysDescriptor].valid());
     ASSERT_TRUE(heap.write(descriptors[raysDescriptor], DescriptorWriteItem::RawBuffer_SRV(0u, rayInputs.get())));
     BufferHandle outputs[2];
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         BufferDesc desc;
         desc
             .setByteSize(static_cast<u64>(outputWords) * sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
@@ -364,8 +367,8 @@ static void RunCase(
         commandList->setComputeState(state);
         heap.bindCompute(*commandList, depthPipeline);
         const DepthPush push{
-            mip == 0u ? descriptors[Source::Depth].slot() : descriptors[mipsDescriptor + (mip - 1u) * 2u].slot(),
-            descriptors[mipsDescriptor + mip * 2u + 1u].slot(), sourceWidth, sourceHeight, width, height,
+            mip == 0u ? descriptors[Source::Depth].slot() : descriptors[mipsDescriptor + (mip - 1u) * s_ExpectedDualCount].slot(),
+            descriptors[mipsDescriptor + mip * s_ExpectedDualCount + 1u].slot(), sourceWidth, sourceHeight, width, height,
         };
         commandList->setPushConstants(&push, sizeof(push));
         commandList->dispatch(DivideUp(width, NWB_REFLECTION_DEPTH_GROUP_SIZE), DivideUp(height, NWB_REFLECTION_DEPTH_GROUP_SIZE), 1u);
@@ -403,7 +406,7 @@ static void RunCase(
     initial.resize(outputWords, s_Sentinel);
     Vector<u32, Alloc::ScratchArena> expected(scratchArena);
     expected.resize(outputWords);
-    constexpr u32 budgets[] = { 0u, 1u, 2u, 3u, 4u, 8u, 16u, 96u, 256u, 300u };
+    constexpr u32 budgets[] = { 0u, 1u, s_ExpectedDualCount, 3u, 4u, 8u, 16u, 96u, 256u, 300u };
     for(const u32 budget : budgets){
         u32 singleMipIterations = 0u;
         for(const u32 selectedMips : { 0u, 1u, mipCount }){
@@ -418,11 +421,11 @@ static void RunCase(
             commandList->setBufferState(rayInputs.get(), ResourceStates::ShaderResource);
             commandList->setBufferState(constants[0].get(), ResourceStates::ConstantBuffer);
             commandList->setBufferState(constants[1].get(), ResourceStates::ConstantBuffer);
-            for(u32 arm = 0u; arm < 2u; ++arm){
+            for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                 parameters.queueSlot = descriptors[outputsDescriptor + arm].slot();
-                ASSERT_TRUE(commandList->tryWriteBuffer(*constants[2u + arm], &parameters, sizeof(parameters)));
+                ASSERT_TRUE(commandList->tryWriteBuffer(*constants[s_ExpectedDualCount + arm], &parameters, sizeof(parameters)));
                 ASSERT_TRUE(commandList->tryWriteBuffer(*outputs[arm], initial.data(), outputWords * sizeof(u32)));
-                commandList->setBufferState(constants[2u + arm].get(), ResourceStates::ConstantBuffer);
+                commandList->setBufferState(constants[s_ExpectedDualCount + arm].get(), ResourceStates::ConstantBuffer);
                 commandList->setBufferState(outputs[arm].get(), ResourceStates::UnorderedAccess);
                 commandList->commitBarriers();
                 ComputePipeline& pipeline = arm == 0u ? reference : candidate;
@@ -439,7 +442,7 @@ static void RunCase(
             ASSERT_FALSE(commandList->commandRecordingFailed());
             ASSERT_TRUE(device.executeCommandLists(submitted, LengthOf(submitted), commandList->getDescription().physicalQueue, QueueSubmissionDesc{}).valid());
             ASSERT_TRUE(device.waitForIdle());
-            for(u32 arm = 0u; arm < 2u; ++arm){
+            for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                 const u32* const mapped = static_cast<const u32*>(device.mapBuffer(*outputs[arm], CpuAccessMode::Read));
                 ASSERT_NE(mapped, nullptr);
                 ScopeExit unmap([&]()noexcept{ device.unmapBuffer(*outputs[arm]); });
@@ -471,9 +474,9 @@ static void RunCase(
                 }
             }
             // Ray zero first skips a finite mip-zero cell, then must fetch the deliberately invalid mip one.
-            if(testCase.invalidCoarseMip && selectedMips > 1u && budget >= 2u){
+            if(testCase.invalidCoarseMip && selectedMips > 1u && budget >= s_ExpectedDualCount){
                 ASSERT_EQ(expected[0], 0u);
-                ASSERT_EQ(expected[1], 2u);
+                ASSERT_EQ(expected[1], s_ExpectedDualCount);
                 ASSERT_EQ(expected[2], 0u);
             }
             if(selectedMips == 1u)

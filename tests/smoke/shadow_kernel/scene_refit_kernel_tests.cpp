@@ -24,6 +24,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -148,7 +151,7 @@ static_assert(sizeof(Observation) == 16u);
     // Independent FP64 corner oracle; no interval-product selection or shader padding formula is reproduced.
     for(u32 corner = 0u; corner < 8u; ++corner){
         const f64 x = (corner & 1u) != 0u ? local.maximum.x : local.minimum.x;
-        const f64 y = (corner & 2u) != 0u ? local.maximum.y : local.minimum.y;
+        const f64 y = (corner & s_ExpectedDualCount) != 0u ? local.maximum.y : local.minimum.y;
         const f64 z = (corner & 4u) != 0u ? local.maximum.z : local.minimum.z;
         for(usize axis = 0u; axis < 3u; ++axis){
             const Float4U& row = input.rows[axis];
@@ -190,7 +193,7 @@ void StoreBounds(Node& node, const Bounds& bounds){
         nodes[index].right = 1u | ((first & 1u) == 0u ? NWB_BVH_TRANSPARENT_SUBTREE_FLAG : 0u);
         return index;
     }
-    const u32 leftCount = count / 2u;
+    const u32 leftCount = count / s_ExpectedDualCount;
     const u32 left = AppendSceneTree(nodes, inputs, oldRoot, first, leftCount);
     const u32 right = AppendSceneTree(nodes, inputs, oldRoot, first + leftCount, count - leftCount);
     nodes[index].minimum = {
@@ -357,14 +360,14 @@ void SceneRefitKernelTest::runCase(
     auto& graphicsDevice = device();
     auto& heap = graphicsDevice.getDescriptorHeap();
     const u32 count = testCase.instanceCount;
-    const u32 nodeCount = count == 0u ? 0u : count * 2u - 1u;
+    const u32 nodeCount = count == 0u ? 0u : count * s_ExpectedDualCount - 1u;
     Node roots[] = {
         { { 9.0f, -1.0f, 1.0f }, NWB_BVH_LEAF_FLAG, { 11.0f, 1.0f, 1.0f }, 1u },
         { { -1.0f, -1.0f, 1.0f }, NWB_BVH_LEAF_FLAG, { 1.0f, 1.0f, 1.0f }, 1u },
     };
     const Float3U dynamicPositions[] = { { 9.0f, -1.0f, 1.0f }, { 11.0f, -1.0f, 1.0f }, { 10.0f, 1.0f, 1.0f } };
     const Float3U staticPositions[] = { { -1.0f, -1.0f, 1.0f }, { 1.0f, -1.0f, 1.0f }, { 0.0f, 1.0f, 1.0f } };
-    const u32 indices[] = { 0u, 1u, 2u };
+    const u32 indices[] = { 0u, 1u, s_ExpectedDualCount };
     const Attribute attributes[3]{};
     Vector<RefitInput, Alloc::ScratchArena> inputs(Max(count, 1u), scratchArena);
     Vector<Instance, Alloc::ScratchArena> instances(Max(count, 1u), scratchArena);
@@ -535,8 +538,8 @@ void SceneRefitKernelTest::runCase(
     ScopeExit unmapOutput([&]()noexcept{ graphicsDevice.unmapBuffer(*buffers[BufferIndex::Output]); });
     EXPECT_EQ(NWB_MEMCMP(&observed[2], &observations[2], sizeof(Observation)), 0);
     if(trace){
-        EXPECT_EQ(observed[0].directStatus, 2u);
-        EXPECT_EQ(observed[1].directStatus, 2u);
+        EXPECT_EQ(observed[0].directStatus, s_ExpectedDualCount);
+        EXPECT_EQ(observed[1].directStatus, s_ExpectedDualCount);
         for(usize channel = 0u; channel < 3u; ++channel){
             EXPECT_FLOAT_EQ(observed[0].transmission[channel], 1.0f);
             EXPECT_FLOAT_EQ(observed[1].transmission[channel], 0.0f);
@@ -560,7 +563,7 @@ TEST_F(SceneRefitKernelTest, PosedRootsRefitSceneBoundsBeforeSoftwareTraversal){
     ASSERT_TRUE(loadKernel(scratchArena, true, trace));
     const Case cases[] = {
         { "singleton moved beyond bind bounds", 1u },
-        { "mixed fixed and moving roots", 2u, true },
+        { "mixed fixed and moving roots", s_ExpectedDualCount, true },
         { "node count crosses workgroup", 65u, true },
         { "strided leaves beyond workgroup", 130u, true },
         { "mirrored nonuniform singleton", 1u, false, true },

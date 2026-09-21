@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -161,7 +165,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     };
     const Graphics::GpuTaskResourceRange initialTailRange{
         .textureSubresources = Graphics::TextureSubresourceSet(
-            2u,
+            s_ExpectedDualCount,
             Graphics::TextureSubresourceSet::AllMipLevels,
             0u,
             Graphics::TextureSubresourceSet::AllArraySlices
@@ -230,7 +234,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_NE(compiledTransfer, nullptr);
     ASSERT_NE(compiledCompute, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_EQ(compiledTransfer->queue, queues[2u].id);
+    EXPECT_EQ(compiledTransfer->queue, queues[s_ThirdElementIndex].id);
     EXPECT_EQ(compiledCompute->queue, queues[1u].id);
     EXPECT_EQ(compiledConsumer->queue, queues[0u].id);
 
@@ -240,7 +244,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_TRUE(transferPacket.valid());
     ASSERT_TRUE(computePacket.valid());
     ASSERT_TRUE(consumerPacket.valid());
-    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, s_ExpectedDualCount);
     const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumerTask).prologueStateSeeds;
     ASSERT_NE(seeds, nullptr);
     bool hasTransferSeed = false;
@@ -262,7 +266,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     EXPECT_TRUE(hasTransferSeed);
     EXPECT_TRUE(hasComputeSeed);
 
-    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, 2u);
+    ASSERT_EQ(compiledPlan.packet(consumerPacket).plan->dependencyCount, s_ExpectedDualCount);
     const Graphics::GpuPacketDependency* const dependencies = compiledPlan.packet(consumerPacket).dependencies;
     ASSERT_NE(dependencies, nullptr);
     bool waitsForTransfer = false;
@@ -282,7 +286,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
     ASSERT_NE(computeRelease, nullptr);
     EXPECT_EQ(transferRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
     EXPECT_EQ(transferRelease[0u].range.textureSubresources, transferRange.textureSubresources);
-    EXPECT_EQ(transferRelease[0u].sourceQueue, queues[2u].id);
+    EXPECT_EQ(transferRelease[0u].sourceQueue, queues[s_ThirdElementIndex].id);
     EXPECT_EQ(transferRelease[0u].destinationQueue, queues[0u].id);
     EXPECT_EQ(computeRelease[0u].type, Graphics::GpuCompiledBarrierType::TextureOwnershipRelease);
     EXPECT_EQ(computeRelease[0u].range.textureSubresources, computeRange.textureSubresources);
@@ -303,7 +307,7 @@ TEST(GpuTaskGraph, FansInTerminalTextureStateFragmentsForBroadCrossQueueConsumer
             barrier.type == Graphics::GpuCompiledBarrierType::TextureOwnershipAcquire
             && barrier.range.textureSubresources == transferRange.textureSubresources
             && barrier.before == Graphics::ResourceStates::CopyDest
-            && barrier.sourceQueue == queues[2u].id
+            && barrier.sourceQueue == queues[s_ThirdElementIndex].id
             && barrier.destinationQueue == queues[0u].id
         );
         hasComputeAcquire = hasComputeAcquire || (

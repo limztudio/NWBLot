@@ -14,6 +14,9 @@
 namespace __hidden_lighting_content_stamp_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -38,7 +41,7 @@ TEST(LightingContentStamp, OnlyTheSelectedLightPrefixContributes){
     lights[1].position.x = 3.f;
     lights[1].colorIntensity.w = 0.f;
     EXPECT_EQ(ComputeSceneLightingContentHash(shading, lights, 1u), original);
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, 2u), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount), original);
     EXPECT_EQ(ComputeSceneLightingContentHash(shading, nullptr, 0u), ComputeSceneLightingContentHash(shading, lights, 0u));
 }
 
@@ -64,11 +67,11 @@ TEST(LightingContentStamp, LightSelectionOrderAndObserverStateArePreserved){
     ECSRenderDetail::SceneLightGpuData lights[2];
     lights[0].colorIntensity.x = 0.2f;
     lights[1].colorIntensity.y = 0.7f;
-    const u64 original = ComputeSceneLightingContentHash(shading, lights, 2u);
+    const u64 original = ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount);
     const ECSRenderDetail::SceneLightGpuData reversed[2] = {lights[1], lights[0]};
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, reversed, 2u), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, reversed, s_ExpectedDualCount), original);
     shading.cameraPositionLightCount.x = 0.25f;
-    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, 2u), original);
+    EXPECT_NE(ComputeSceneLightingContentHash(shading, lights, s_ExpectedDualCount), original);
 }
 
 

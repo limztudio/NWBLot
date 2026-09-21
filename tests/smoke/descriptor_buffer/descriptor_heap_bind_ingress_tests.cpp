@@ -28,6 +28,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -295,7 +298,7 @@ TEST_F(DescriptorHeapBindIngressTest, ImmutablePipelineSnapshotBindsAndPublicShu
 TEST_F(DescriptorHeapBindIngressTest, ShiftedDescriptorSetAbiIsRejectedBeforeHeapInitialization){
     GpuDescriptorHeapDesc shiftedDesc = MakeSmallHeapDesc();
     shiftedDesc.bindlessHeapAbi.resourceSetIndex = 1u;
-    shiftedDesc.bindlessHeapAbi.samplerSetIndex = 2u;
+    shiftedDesc.bindlessHeapAbi.samplerSetIndex = s_ExpectedDualCount;
     shiftedDesc.bindlessHeapAbi.accelStructSetIndex = 3u;
 
     GraphicsBackend::GpuDescriptorHeap shiftedHeap(device());
@@ -417,7 +420,7 @@ TEST_F(DescriptorHeapBindIngressTest, ManagerRolloverRejectsStaleHeapAndRecordin
     ASSERT_TRUE(handle.valid());
     const DescriptorWriteItem writeItem = DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer.get());
     ASSERT_TRUE(heap.write(handle, writeItem));
-    ASSERT_EQ(buffer->getReferenceCount(), 2u);
+    ASSERT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
 
     CommandListHandle commandList = localDevice.createCommandList();
     ASSERT_TRUE(commandList);
@@ -436,7 +439,7 @@ TEST_F(DescriptorHeapBindIngressTest, ManagerRolloverRejectsStaleHeapAndRecordin
 
     ExpectHeapAllocateRejection([&](){ return heap.allocate(GpuDescriptorClass::StorageBuffer); });
     ExpectHeapWriteRejection([&](){ return heap.write(handle, writeItem); });
-    EXPECT_EQ(buffer->getReferenceCount(), 2u);
+    EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     ExpectHeapStatisticsEqual(beforeRollover, heap.lifecycleStatistics());
 
     commandList->close();
@@ -714,7 +717,7 @@ TEST_F(DescriptorHeapBindIngressTest, QueueHeapLifecycleHierarchyCompletesConten
     }
 
     const GpuDescriptorHeapLifecycleStatistics recorded = heap.lifecycleStatistics();
-    ASSERT_EQ(recorded.unsubmittedHeapUseCount, 2u);
+    ASSERT_EQ(recorded.unsubmittedHeapUseCount, s_ExpectedDualCount);
 
     VulkanTestQueueSubmit2Observer submissionObserver(localDevice);
     ASSERT_TRUE(submissionObserver.valid());
@@ -771,7 +774,7 @@ TEST_F(DescriptorHeapBindIngressTest, QueueHeapLifecycleHierarchyCompletesConten
     EXPECT_TRUE(submissionToken.valid());
     EXPECT_TRUE(initializationSucceeded);
     const GpuDescriptorHeapLifecycleStatistics accepted = heap.lifecycleStatistics();
-    EXPECT_EQ(accepted.acceptedHeapUseCount, 2u);
+    EXPECT_EQ(accepted.acceptedHeapUseCount, s_ExpectedDualCount);
     EXPECT_EQ(accepted.unsubmittedHeapUseCount, 0u);
     ASSERT_TRUE(localDevice.waitForIdle());
     heap.collectRetired();

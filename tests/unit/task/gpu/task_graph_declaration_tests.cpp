@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -270,7 +273,7 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
         ASSERT_EQ(byteSize, sizeof(sourceBytes));
         EXPECT_EQ(storedBytes[0u], 0x17u);
         EXPECT_EQ(storedBytes[1u], 0x3au);
-        EXPECT_EQ(storedBytes[2u], 0x5cu);
+        EXPECT_EQ(storedBytes[s_ThirdElementIndex], 0x5cu);
         EXPECT_EQ(storedBytes[3u], 0x8eu);
     }
 

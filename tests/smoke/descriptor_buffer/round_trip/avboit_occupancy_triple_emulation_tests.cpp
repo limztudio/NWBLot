@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -296,7 +300,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload streamPayload;
     streamPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     streamPayload.expectations[1u] = { materialStream.get(), ResourceStates::CopyDest };
-    streamPayload.expectationCount = 2u;
+    streamPayload.expectationCount = s_ExpectedDualCount;
     streamPayload.recordOrdinal = &recordOrdinal;
     streamPayload.expectedOrdinal = 1u;
     streamPayload.timingTicket = &preTimingTicket;
@@ -317,9 +321,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload clearPayload;
     clearPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     clearPayload.expectations[1u] = { coverage.get(), ResourceStates::CopyDest };
-    clearPayload.expectationCount = 2u;
+    clearPayload.expectationCount = s_ExpectedDualCount;
     clearPayload.recordOrdinal = &recordOrdinal;
-    clearPayload.expectedOrdinal = 2u;
+    clearPayload.expectedOrdinal = s_ExpectedDualCount;
     clearPayload.timingTicket = &preTimingTicket;
     clearPayload.recorded = &clearRecorded;
     clearPayload.acceptedToken = &clearAcceptedToken;
@@ -353,7 +357,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     };
     GpuTaskId sharedPhaseTasks[LengthOf(sharedPhaseIdentities)] = {};
     for(usize phaseIndex = 0u; phaseIndex < LengthOf(sharedPhaseTasks); ++phaseIndex){
-        const bool isRaster = phaseIndex % 2u != 0u;
+        const bool isRaster = phaseIndex % s_ExpectedDualCount != 0u;
         const GpuTaskId dependency = phaseIndex == 0u ? clearTask : sharedPhaseTasks[phaseIndex - 1u];
         GpuTaskDesc phaseDesc;
         phaseDesc
@@ -370,7 +374,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
         NativePacketAsyncAvboitExtinctionLifecycleTask::Payload phasePayload;
         phasePayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
         phasePayload.expectations[1u] = { materialStream.get(), ResourceStates::ShaderResource };
-        phasePayload.expectations[2u] = {
+        phasePayload.expectations[s_ThirdElementIndex] = {
             generatedVertex.get(),
             isRaster ? ResourceStates::VertexBuffer : ResourceStates::UnorderedAccess,
         };
@@ -400,7 +404,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     }
     const GpuTaskId dispatchATask = sharedPhaseTasks[0u];
     const GpuTaskId rasterATask = sharedPhaseTasks[1u];
-    const GpuTaskId dispatchBTask = sharedPhaseTasks[2u];
+    const GpuTaskId dispatchBTask = sharedPhaseTasks[s_ThirdElementIndex];
     const GpuTaskId rasterBTask = sharedPhaseTasks[3u];
     const GpuTaskId dispatchCTask = sharedPhaseTasks[4u];
     const GpuTaskId rasterCTask = sharedPhaseTasks[5u];
@@ -408,7 +412,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload depthWarpPayload;
     depthWarpPayload.expectations[0u] = { stateProbe.get(), ResourceStates::ConstantBuffer };
     depthWarpPayload.expectations[1u] = { coverage.get(), ResourceStates::UnorderedAccess };
-    depthWarpPayload.expectations[2u] = { depthWarp.get(), ResourceStates::UnorderedAccess };
+    depthWarpPayload.expectations[s_ThirdElementIndex] = { depthWarp.get(), ResourceStates::UnorderedAccess };
     depthWarpPayload.expectationCount = 3u;
     depthWarpPayload.recordOrdinal = &recordOrdinal;
     depthWarpPayload.expectedOrdinal = 9u;
@@ -462,7 +466,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedUnsplitAvboitOccupancySharedOutp
     ASSERT_EQ(analysis.topologicalOrder().size(), 10u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], preTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], streamTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], clearTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], clearTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], dispatchATask);
     EXPECT_EQ(analysis.topologicalOrder()[4u], rasterATask);
     EXPECT_EQ(analysis.topologicalOrder()[5u], dispatchBTask);

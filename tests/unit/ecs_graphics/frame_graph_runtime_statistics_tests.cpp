@@ -23,6 +23,9 @@
 namespace __hidden_frame_graph_runtime_statistics_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -43,15 +46,15 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.compile.graphGeneration = 11u;
     snapshots.compile.planGeneration = 12u;
     snapshots.compile.deviceGeneration = 7u;
-    snapshots.compile.queue = { .index = 2u, .deviceGeneration = 7u };
+    snapshots.compile.queue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u };
     snapshots.compile.queueClass = NWB::Core::CommandQueue::Compute;
     snapshots.compile.taskCount = 3u;
-    snapshots.compile.packetCount = 2u;
+    snapshots.compile.packetCount = s_ExpectedDualCount;
     snapshots.compile.mergedTaskCount = 1u;
-    snapshots.compile.prologueBarrierCount = 2u;
+    snapshots.compile.prologueBarrierCount = s_ExpectedDualCount;
     snapshots.compile.epilogueBarrierCount = 1u;
     snapshots.compile.ownershipReleaseBarrierCount = 1u;
-    snapshots.compile.incomingLogicalOwnershipTransferCount = 2u;
+    snapshots.compile.incomingLogicalOwnershipTransferCount = s_ExpectedDualCount;
     snapshots.compile.incomingLogicalOwnershipTransferSignatureCount = 1u;
     snapshots.compile.incomingRepeatedOwnershipTransferSignatureCount = 1u;
     snapshots.compile.concurrentSharingAdviceResourceCount = 1u;
@@ -62,9 +65,9 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.recording.deviceGeneration = 7u;
     snapshots.recording.queue = snapshots.compile.queue;
     snapshots.recording.queueClass = NWB::Core::CommandQueue::Compute;
-    snapshots.recording.packetCount = 2u;
+    snapshots.recording.packetCount = s_ExpectedDualCount;
     snapshots.recording.taskCount = 3u;
-    snapshots.recording.commandListCount = 2u;
+    snapshots.recording.commandListCount = s_ExpectedDualCount;
     snapshots.recording.barrierCount = 3u;
     snapshots.recording.workerRoutedPacketCount = 1u;
     snapshots.recording.parallelPacketCount = 1u;
@@ -79,13 +82,13 @@ struct PhysicalQueueRuntimeSnapshots{
     snapshots.submission.deviceGeneration = 7u;
     snapshots.submission.queue = snapshots.compile.queue;
     snapshots.submission.queueClass = NWB::Core::CommandQueue::Compute;
-    snapshots.submission.acceptedPacketCount = 2u;
+    snapshots.submission.acceptedPacketCount = s_ExpectedDualCount;
     snapshots.submission.acceptedTaskCount = 3u;
-    snapshots.submission.nativeSubmissionCount = 2u;
-    snapshots.submission.nativeCommandListCount = 2u;
+    snapshots.submission.nativeSubmissionCount = s_ExpectedDualCount;
+    snapshots.submission.nativeCommandListCount = s_ExpectedDualCount;
     snapshots.submission.plannedWaitTokenCount = 4u;
     snapshots.submission.sameQueueWaitElisionCount = 1u;
-    snapshots.submission.timelineWaitCount = 2u;
+    snapshots.submission.timelineWaitCount = s_ExpectedDualCount;
     snapshots.submission.mergedTimelineWaitCount = 1u;
     snapshots.submission.acceptedFrontierSubmissionCount = 1u;
     snapshots.submission.recoverySubmissionCount = 1u;
@@ -100,7 +103,7 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.compile.deviceGeneration = 7u;
     statistics.compile.taskCount = 1u;
     statistics.compile.resourceCount = 1u;
-    statistics.compile.resourceVersionCount = 2u;
+    statistics.compile.resourceVersionCount = s_ExpectedDualCount;
     statistics.compile.resourceVersionEdgeCount = 1u;
     statistics.compile.packetCount = 1u;
 
@@ -120,7 +123,7 @@ struct PhysicalQueueRuntimeSnapshots{
     statistics.submission.acceptedTaskCount = 1u;
     statistics.submission.nativeSubmissionCount = 1u;
     statistics.submission.nativeCommandListCount = 1u;
-    statistics.submission.plannedWaitTokenCount = 2u;
+    statistics.submission.plannedWaitTokenCount = s_ExpectedDualCount;
     statistics.submission.sameQueueWaitElisionCount = 1u;
     statistics.submission.timelineWaitCount = 1u;
     statistics.submission.acceptedFrontierSubmissionCount = 1u;
@@ -136,14 +139,14 @@ MakeValidPacketSubmissionStatistics()noexcept{
         .planGeneration = 12u,
         .recordingAttemptGeneration = 13u,
         .packet = { .generation = 12u, .index = 0u },
-        .queue = { .index = 2u, .deviceGeneration = 7u },
+        .queue = { .index = s_ExpectedDualCount, .deviceGeneration = 7u },
         .queueClass = NWB::Core::CommandQueue::Compute,
         .deviceGeneration = 7u,
         .joinsAcceptedQueueFrontier = true,
         .isRecoverySubmission = true,
         .taskCount = 1u,
         .nativeCommandListCount = 1u,
-        .plannedWaitTokenCount = 2u,
+        .plannedWaitTokenCount = s_ExpectedDualCount,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 0u,
@@ -203,11 +206,11 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsMapsCoherentSnapshots)
     EXPECT_EQ(telemetry.planGeneration, 12u);
     EXPECT_EQ(telemetry.recordingAttemptGeneration, 13u);
     EXPECT_EQ(telemetry.deviceGeneration, 7u);
-    EXPECT_EQ(telemetry.queue.index, 2u);
+    EXPECT_EQ(telemetry.queue.index, s_ExpectedDualCount);
     EXPECT_EQ(telemetry.queueClass, NWB::Core::Telemetry::FrameGraphQueueClass::Compute);
     EXPECT_EQ(telemetry.compile.taskCount, 3u);
-    EXPECT_EQ(telemetry.compile.incomingLogicalOwnershipTransferCount, 2u);
-    EXPECT_EQ(telemetry.recording.commandListCount, 2u);
+    EXPECT_EQ(telemetry.compile.incomingLogicalOwnershipTransferCount, s_ExpectedDualCount);
+    EXPECT_EQ(telemetry.recording.commandListCount, s_ExpectedDualCount);
     EXPECT_DOUBLE_EQ(telemetry.recording.recordingSeconds, 0.004);
     EXPECT_EQ(telemetry.submission.plannedWaitTokenCount, 4u);
     EXPECT_EQ(telemetry.submission.acceptedFrontierSubmissionCount, 1u);
@@ -247,7 +250,7 @@ TEST(EcsGraphics, FrameGraphPhysicalQueueRuntimeStatisticsRejectsMixedSnapshots)
     ));
 
     snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
-    snapshots.submission.recoverySubmissionCount = 2u;
+    snapshots.submission.recoverySubmissionCount = s_ExpectedDualCount;
     EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
         NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             snapshots.compile,
@@ -269,12 +272,12 @@ TEST(EcsGraphics, FrameGraphPacketSubmissionStatisticsMapsExactNativePacket){
     EXPECT_EQ(telemetry.ownerNodeIndex, 4u);
     EXPECT_EQ(telemetry.packetIndex, 0u);
     EXPECT_EQ(telemetry.packetGeneration, 12u);
-    EXPECT_EQ(telemetry.queue.index, 2u);
+    EXPECT_EQ(telemetry.queue.index, s_ExpectedDualCount);
     EXPECT_EQ(telemetry.queue.deviceGeneration, 7u);
     EXPECT_EQ(telemetry.queueClass, NWB::Core::Telemetry::FrameGraphQueueClass::Compute);
     EXPECT_EQ(telemetry.taskCount, 1u);
     EXPECT_EQ(telemetry.commandListCount, 1u);
-    EXPECT_EQ(telemetry.plannedWaitTokenCount, 2u);
+    EXPECT_EQ(telemetry.plannedWaitTokenCount, s_ExpectedDualCount);
     EXPECT_EQ(telemetry.sameQueueWaitElisionCount, 1u);
     EXPECT_EQ(telemetry.timelineWaitCount, 1u);
     EXPECT_EQ(telemetry.mergedTimelineWaitCount, 0u);
@@ -384,7 +387,7 @@ TEST(EcsGraphics, FrameGraphRegistryRecordsExactPacketSubmissionStatistics){
     ASSERT_EQ(payload.packetSubmissionStatistics.size(), 1u);
     EXPECT_EQ(payload.packetSubmissionStatistics[0u].ownerNodeIndex, 0u);
     EXPECT_EQ(payload.packetSubmissionStatistics[0u].packetIndex, 0u);
-    EXPECT_EQ(payload.packetSubmissionStatistics[0u].plannedWaitTokenCount, 2u);
+    EXPECT_EQ(payload.packetSubmissionStatistics[0u].plannedWaitTokenCount, s_ExpectedDualCount);
 }
 
 TEST(EcsGraphics, FrameGraphExportsEveryCompiledPhysicalQueueAsStructuredRuntimeTelemetry){

@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -176,7 +179,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingReusedSlotsPublishSourceBoundsWit
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(scopeDefinition.identity, device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(scopeDefinition.identity, device, s_ExpectedDualCount));
     GpuTimingSampleCapture completedSamples;
     ScopedGpuTimingSampleListener sampleListener(timing, completedSamples);
     ASSERT_TRUE(sampleListener.valid());
@@ -232,7 +235,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingReusedSlotsPublishSourceBoundsWit
     ASSERT_TRUE(device.waitForIdle());
 
     timing.collect(device, 52u);
-    ASSERT_EQ(completedSamples.sampleCount, 2u);
+    ASSERT_EQ(completedSamples.sampleCount, s_ExpectedDualCount);
     const GpuTimingSample& first = completedSamples.samples[0u];
     const GpuTimingSample& last = completedSamples.samples[1u];
     EXPECT_EQ(first.sourceFrameIndex, 51u);
@@ -242,7 +245,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingReusedSlotsPublishSourceBoundsWit
     EXPECT_TRUE(first.published);
     EXPECT_TRUE(last.published);
     const Perf::TimingStats& stats = timingSink.stats(scopeDefinition.identity);
-    ASSERT_EQ(stats.sampleCount, 2u);
+    ASSERT_EQ(stats.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(stats.publishFrameIndex, 52u);
     EXPECT_EQ(stats.firstSampleFrameIndex, 50u);
     EXPECT_EQ(stats.lastSampleFrameIndex, 51u);
@@ -250,10 +253,10 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingReusedSlotsPublishSourceBoundsWit
     EXPECT_DOUBLE_EQ(stats.minSeconds, Min(first.durationSeconds, last.durationSeconds));
     EXPECT_DOUBLE_EQ(stats.maxSeconds, Max(first.durationSeconds, last.durationSeconds));
     EXPECT_DOUBLE_EQ(stats.lastSeconds, last.durationSeconds);
-    EXPECT_EQ(timing.statistics(device).materializedQueryCount, 2u);
+    EXPECT_EQ(timing.statistics(device).materializedQueryCount, s_ExpectedDualCount);
 
     timing.collect(device, 53u);
-    EXPECT_EQ(completedSamples.sampleCount, 2u);
+    EXPECT_EQ(completedSamples.sampleCount, s_ExpectedDualCount);
     EXPECT_FALSE(timingSink.stats(scopeDefinition.identity).valid());
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

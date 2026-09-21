@@ -22,6 +22,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -66,8 +69,8 @@ TEST_F(DescriptorBufferRoundTripTest, InputLayoutOwnsSharedAndSparseBindingDescr
     EXPECT_EQ(layout->getAttributeDescription(0u)->offset, 0u);
     EXPECT_EQ(layout->getAttributeDescription(1u)->bufferIndex, 1u);
     EXPECT_EQ(layout->getAttributeDescription(1u)->offset, 4u);
-    EXPECT_EQ(layout->getAttributeDescription(2u)->bufferIndex, 3u);
-    EXPECT_TRUE(layout->getAttributeDescription(2u)->isInstanced);
+    EXPECT_EQ(layout->getAttributeDescription(s_ExpectedDualCount)->bufferIndex, 3u);
+    EXPECT_TRUE(layout->getAttributeDescription(s_ExpectedDualCount)->isInstanced);
     EXPECT_EQ(layout->getAttributeDescription(3u), nullptr);
 
     InputLayoutHandle second = device().createInputLayout(&attributes[1], 1u, nullptr);
@@ -101,7 +104,7 @@ TEST_F(DescriptorBufferRoundTripTest, DISABLED_InputLayoutCreationBenchmark){
         for(usize iteration = 0u; iteration < s_Iterations; ++iteration){
             InputLayoutHandle layout = device().createInputLayout(attributes.data(), static_cast<u32>(attributes.size()), nullptr);
             ASSERT_TRUE(layout);
-            checksum = checksum + layout->getNumAttributes() + layout->getAttributeDescription(2u)->bufferIndex;
+            checksum = checksum + layout->getNumAttributes() + layout->getAttributeDescription(s_ExpectedDualCount)->bufferIndex;
         }
         if(sample >= s_WarmupSamples)
             elapsed[sample - s_WarmupSamples] = DurationInNS<u64>(TimerNow(), begin);
@@ -109,7 +112,7 @@ TEST_F(DescriptorBufferRoundTripTest, DISABLED_InputLayoutCreationBenchmark){
     const auto heapAfter = HeapBackingMemoryStats();
     Sort(elapsed.begin(), elapsed.end());
     EXPECT_EQ(checksum, (s_WarmupSamples + s_MeasuredSamples) * s_Iterations * 6u);
-    __hidden_input_layout_storage_tests::RecordInputLayoutProperty("median_ns", elapsed[15u] + (elapsed[16u] - elapsed[15u]) / 2u);
+    __hidden_input_layout_storage_tests::RecordInputLayoutProperty("median_ns", elapsed[15u] + (elapsed[16u] - elapsed[15u]) / s_ExpectedDualCount);
     __hidden_input_layout_storage_tests::RecordInputLayoutProperty("p95_ns", elapsed[30u]);
     __hidden_input_layout_storage_tests::RecordInputLayoutProperty("iterations_per_sample", s_Iterations);
     __hidden_input_layout_storage_tests::RecordInputLayoutProperty("heap_allocations_per_layout",

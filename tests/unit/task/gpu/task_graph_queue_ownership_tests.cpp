@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -61,7 +65,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         ASSERT_NE(consumerQueue, nullptr);
         EXPECT_EQ(consumerQueue->queueClass, Graphics::CommandQueue::Transfer);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
         ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
 
         const Graphics::GpuCompiledBarrier* const release = compiledProducerView.epilogueBarriers;
@@ -207,7 +211,7 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
         .textureSubresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u),
     };
     const Graphics::GpuTaskResourceRange secondRange{
-        .textureSubresources = Graphics::TextureSubresourceSet(2u, 1u, 0u, 1u),
+        .textureSubresources = Graphics::TextureSubresourceSet(s_ExpectedDualCount, 1u, 0u, 1u),
     };
     const Graphics::GpuTaskResourceUse producerUses[] = {
         Graphics::GpuTaskResourceUse{
@@ -294,12 +298,12 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
     const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
-    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
-    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
-    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, s_ExpectedDualCount);
     EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 1u);
     EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 0u);
-    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 2u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, s_ExpectedDualCount);
     EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerStatistics =
@@ -310,29 +314,29 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
     ;
     ASSERT_TRUE(producerStatistics.valid());
     ASSERT_TRUE(consumerStatistics.valid());
-    EXPECT_EQ(producerStatistics.ownershipReleaseBarrierCount, 2u);
+    EXPECT_EQ(producerStatistics.ownershipReleaseBarrierCount, s_ExpectedDualCount);
     EXPECT_EQ(producerStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(producerStatistics.outgoingLogicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(producerStatistics.outgoingLogicalOwnershipTransferCount, s_ExpectedDualCount);
     EXPECT_EQ(producerStatistics.incomingLogicalOwnershipTransferCount, 0u);
     EXPECT_EQ(producerStatistics.outgoingLogicalOwnershipTransferSignatureCount, 1u);
     EXPECT_EQ(producerStatistics.outgoingRepeatedOwnershipTransferSignatureCount, 0u);
     EXPECT_EQ(producerStatistics.concurrentSharingAdviceResourceCount, 0u);
     EXPECT_EQ(consumerStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(consumerStatistics.ownershipAcquireBarrierCount, 2u);
+    EXPECT_EQ(consumerStatistics.ownershipAcquireBarrierCount, s_ExpectedDualCount);
     EXPECT_EQ(consumerStatistics.outgoingLogicalOwnershipTransferCount, 0u);
-    EXPECT_EQ(consumerStatistics.incomingLogicalOwnershipTransferCount, 2u);
+    EXPECT_EQ(consumerStatistics.incomingLogicalOwnershipTransferCount, s_ExpectedDualCount);
     EXPECT_EQ(consumerStatistics.incomingLogicalOwnershipTransferSignatureCount, 1u);
     EXPECT_EQ(consumerStatistics.incomingRepeatedOwnershipTransferSignatureCount, 0u);
     EXPECT_EQ(consumerStatistics.concurrentSharingAdviceResourceCount, 0u);
 
-    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 2u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), s_ExpectedDualCount);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
         compiledPlan.logicalOwnershipTransfers()
     ;
     ASSERT_NE(ownershipTransfers, nullptr);
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
     EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), ownershipTransfers + 1u);
-    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(2u), nullptr);
+    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(s_ThirdElementIndex), nullptr);
     usize firstRangeCount = 0u;
     usize secondRangeCount = 0u;
     for(usize transferIndex = 0u; transferIndex < compiledPlan.logicalOwnershipTransferCount(); ++transferIndex){
@@ -457,7 +461,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
     EXPECT_EQ(compiledCompute->queue, queues[1u].id);
     EXPECT_EQ(compiledSecondGraphics->queue, queues[0u].id);
 
-    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 2u);
+    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), s_ExpectedDualCount);
     const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
         compiledPlan.logicalOwnershipTransfers()
     ;
@@ -496,16 +500,16 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
 
     const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
     ASSERT_TRUE(statistics.valid());
-    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, 2u);
-    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, 2u);
-    EXPECT_EQ(statistics.logicalOwnershipTransferCount, 2u);
-    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 2u);
+    EXPECT_EQ(statistics.ownershipReleaseBarrierCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.ownershipAcquireBarrierCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.logicalOwnershipTransferCount, s_ExpectedDualCount);
+    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, s_ExpectedDualCount);
     EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 1u);
-    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, 2u);
+    EXPECT_EQ(statistics.concurrentSharingCouldAvoidTransferCount, s_ExpectedDualCount);
     EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 1u);
     EXPECT_EQ(
         statistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
-        2u
+        s_ExpectedDualCount
     );
 
     const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics graphicsStatistics =

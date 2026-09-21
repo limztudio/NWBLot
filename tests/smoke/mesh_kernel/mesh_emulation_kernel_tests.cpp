@@ -28,6 +28,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -37,7 +40,7 @@ namespace __hidden_mesh_emulation_kernel_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_MeshletCapacity = 2u;
+constexpr u32 s_MeshletCapacity = s_ExpectedDualCount;
 constexpr u32 s_VertexCapacity = NWB_MESH_SHADER_MAX_VERTICES;
 constexpr u32 s_PrimitiveCapacity = NWB_MESH_SHADER_MAX_TRIANGLES;
 constexpr u32 s_OutputVertexCapacity = s_MeshletCapacity * (s_PrimitiveCapacity * 3u + 3u) + 7u;
@@ -46,7 +49,7 @@ constexpr u32 s_IndexByteStride = sizeof(u32);
 constexpr u32 s_OutputIndexBytes = s_OutputVertexCapacity * s_IndexByteStride;
 constexpr u32 s_IndexedOutputBytes = s_CompactVertexCapacity * NWB_MESH_EMULATION_VERTEX_BYTE_SIZE + s_OutputIndexBytes;
 constexpr u32 s_IndexedOutputByteCapacity = AlignUp(s_IndexedOutputBytes, NWB_MESH_EMULATION_VERTEX_BYTE_SIZE);
-constexpr u32 s_PositionCapacity = 2u + s_MeshletCapacity * s_VertexCapacity;
+constexpr u32 s_PositionCapacity = s_ExpectedDualCount + s_MeshletCapacity * s_VertexCapacity;
 constexpr u32 s_AttributeCapacity = 3u + s_MeshletCapacity * s_VertexCapacity;
 constexpr u32 s_ReferenceBytes = 8u + s_MeshletCapacity * s_VertexCapacity * 4u * 4u;
 
@@ -188,7 +191,7 @@ void BuildInputs(const Case& testCase, Inputs& inputs){
         meshlet.counts = Impl::PackMeshletCounts(
             testCase.vertexCount, testCase.primitiveCount, positionCount, testCase.vertexCount
         );
-        meshlet.positionBase = 2u + meshletIndex * positionCount;
+        meshlet.positionBase = s_ExpectedDualCount + meshletIndex * positionCount;
         meshlet.normalBase = 3u + meshletIndex * testCase.vertexCount;
         meshlet.tangentBase = meshlet.normalBase;
         meshlet.uv0Base = meshlet.normalBase;
@@ -219,8 +222,8 @@ void BuildInputs(const Case& testCase, Inputs& inputs){
             };
             const u32 attribute = meshlet.normalBase + vertex;
             const u32 axis = vertex % 4u;
-            inputs.normals[attribute] = PackHalf4(axis == 1u ? 1.0f : 0.0f, axis == 2u ? 1.0f : 0.0f, axis == 0u ? 1.0f : 0.0f, 0.0f);
-            inputs.tangents[attribute] = PackHalf4(axis == 3u ? 0.0f : 1.0f, 0.0f, 0.0f, vertex % 2u == 0u ? 1.0f : -1.0f);
+            inputs.normals[attribute] = PackHalf4(axis == 1u ? 1.0f : 0.0f, axis == s_ExpectedDualCount ? 1.0f : 0.0f, axis == 0u ? 1.0f : 0.0f, 0.0f);
+            inputs.tangents[attribute] = PackHalf4(axis == 3u ? 0.0f : 1.0f, 0.0f, 0.0f, vertex % s_ExpectedDualCount == 0u ? 1.0f : -1.0f);
             inputs.uv0[attribute] = Float2U(static_cast<f32>(vertex) * 0.03125f, static_cast<f32>(meshletIndex) + 0.125f);
             inputs.colors[attribute] = PackHalf4(static_cast<f32>(vertex) * 0.0078125f, 0.25f, 0.5f, 0.75f);
         }
@@ -352,7 +355,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     ASSERT_LE(indexedByteSize, s_IndexedOutputByteCapacity);
     const u32 cacheIndexByteOffset = compactVertexCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
     const u32 cacheByteSize = AlignUp(
-        cacheIndexByteOffset + s_OutputIndexBytes + 2u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, NWB_MESH_OBJECT_VERTEX_BYTE_SIZE
+        cacheIndexByteOffset + s_OutputIndexBytes + s_ExpectedDualCount * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE, NWB_MESH_OBJECT_VERTEX_BYTE_SIZE
     );
     if(objectKernels != nullptr){
         BufferDesc desc;
@@ -361,16 +364,16 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             .setInitialState(ResourceStates::Common).setKeepInitialState(true);
         objectCache = device.createBuffer(desc);
         ASSERT_TRUE(objectCache);
-        descriptors[bufferCount + 2u] = heap.allocate(GpuDescriptorClass::StorageBuffer);
-        ASSERT_TRUE(descriptors[bufferCount + 2u].valid());
-        ASSERT_TRUE(heap.write(descriptors[bufferCount + 2u], DescriptorWriteItem::RawBuffer_UAV(0u, objectCache.get())));
+        descriptors[bufferCount + s_ExpectedDualCount] = heap.allocate(GpuDescriptorClass::StorageBuffer);
+        ASSERT_TRUE(descriptors[bufferCount + s_ExpectedDualCount].valid());
+        ASSERT_TRUE(heap.write(descriptors[bufferCount + s_ExpectedDualCount], DescriptorWriteItem::RawBuffer_UAV(0u, objectCache.get())));
         NWB_MEMSET(sentinels, 0x39, sizeof(sentinels));
         ASSERT_LE(cacheByteSize, sizeof(sentinels));
         ASSERT_TRUE(commandList->tryWriteBuffer(*objectCache, sentinels, cacheByteSize));
     }
     const usize outputByteSizes[] = { sizeof(sentinels), indexedByteSize };
     ComputePipeline* const pipelines[] = { &reference, &candidate };
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         BufferDesc outputDesc;
         outputDesc
             .setByteSize(outputByteSizes[arm])
@@ -418,9 +421,9 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             commandList->setComputeState(decodeState);
             heap.bindCompute(*commandList, *objectKernels->decode);
             ComputePushConstants decodePush{ inputs.push, { cacheIndexByteOffset, 0u, 0u, 0u } };
-            decodePush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + 2u].slot();
+            decodePush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_GENERATED_VERTEX] = descriptors[bufferCount + s_ExpectedDualCount].slot();
             commandList->setPushConstants(&decodePush, sizeof(decodePush));
-            commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
+            commandList->dispatch(testCase.meshletCount + s_ExpectedDualCount, 1u, 1u);
             commandList->setBufferState(objectCache.get(), ResourceStates::ShaderResource);
             inputs.instances[1] = currentInstance;
             inputs.view = currentView;
@@ -439,7 +442,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             commandList->setPushConstants(&computePush, sizeof(computePush));
         }
         // Two excess workgroups exercise the uniform count guard; partial vertex/primitive lanes remain active cases.
-        commandList->dispatch(testCase.meshletCount + 2u, 1u, 1u);
+        commandList->dispatch(testCase.meshletCount + s_ExpectedDualCount, 1u, 1u);
         if(arm == 1u && objectKernels != nullptr){
             commandList->setBufferState(outputs[arm].get(), ResourceStates::UnorderedAccess, true);
             commandList->commitBarriers();
@@ -449,7 +452,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             heap.bindCompute(*commandList, *objectKernels->transform);
             ComputePushConstants transformPush{ inputs.push, { indexByteOffset, 0u, 0u, 0u } };
             transformPush.mesh.dispatch[2] = compactVertexCount;
-            transformPush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED] = descriptors[bufferCount + 2u].slot();
+            transformPush.mesh.frameHeapSlots[NWB_MESH_FRAME_HEAP_SLOT_MATERIAL_TYPED] = descriptors[bufferCount + s_ExpectedDualCount].slot();
             commandList->setPushConstants(&transformPush, sizeof(transformPush));
             commandList->dispatch((compactVertexCount + 63u) / 64u + 1u, 1u, 1u);
         }
@@ -468,12 +471,12 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
     ScopeExit unmap([&]()noexcept{
         if(mappedCache != nullptr)
             device.unmapBuffer(*objectCache);
-        for(u32 arm = 0u; arm < 2u; ++arm){
+        for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
             if(mapped[arm] != nullptr)
                 device.unmapBuffer(*outputs[arm]);
         }
     });
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         mapped[arm] = static_cast<const GeneratedVertex*>(device.mapBuffer(*outputs[arm], CpuAccessMode::Read));
         ASSERT_NE(mapped[arm], nullptr);
     }
@@ -554,7 +557,7 @@ void RunCase(GraphicsBackend::Device& device, ComputePipeline& reference, Comput
             const GeneratedVertex* const triangleVertices[] = { &mapped[0][outputIndex], &mapped[1][vertexIndex] };
             // Expand the actual GPU indices, then compare every legacy vertex byte, including packed halves and raster flags.
             EXPECT_EQ(NWB_MEMCMP(triangleVertices[0], triangleVertices[1], sizeof(GeneratedVertex)), 0) << outputIndex;
-            for(u32 arm = 0u; arm < 2u; ++arm){
+            for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                 const auto& vertex = *triangleVertices[arm];
                 if(expectCulled){
                     EXPECT_EQ(NWB_MEMCMP(&vertex, &culled, sizeof(vertex)), 0) << outputIndex;
@@ -620,11 +623,11 @@ TEST_F(MeshKernelTest, ProductionEntrypointsPreserveEveryVertexByteAcrossSeamsAn
     ComputePipelineHandle candidate;
     ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference));
     ASSERT_TRUE(loadMeshKernel(true, scratchArena, candidate));
-    constexpr u32 shapes[][2] = { { 3u, 1u }, { 6u, 2u }, { 96u, 1u }, { 96u, 126u } };
+    constexpr u32 shapes[][2] = { { 3u, 1u }, { 6u, s_ExpectedDualCount }, { 96u, 1u }, { 96u, 126u } };
     for(const auto& shape : shapes){
         for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
             for(u32 pose = Pose::Identity; pose <= Pose::ResolvedDeformed; ++pose){
-                for(u32 meshlets = 1u; meshlets <= 2u; ++meshlets){
+                for(u32 meshlets = 1u; meshlets <= s_ExpectedDualCount; ++meshlets){
                     const Case testCase{
                         shape[0], shape[1], meshlets, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width),
                         static_cast<Pose::Enum>(pose), Cull::None
@@ -644,14 +647,14 @@ TEST_F(MeshKernelTest, ProductionEntrypointsPreserveCullWritesAndUniformGroupGua
     ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference));
     ASSERT_TRUE(loadMeshKernel(true, scratchArena, candidate));
     for(u32 cull = Cull::Frustum; cull <= Cull::KeptWithFlags; ++cull){
-        for(u32 meshlets = 1u; meshlets <= 2u; ++meshlets){
+        for(u32 meshlets = 1u; meshlets <= s_ExpectedDualCount; ++meshlets){
             const Case testCase{
                 96u, 126u, meshlets, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, static_cast<Cull::Enum>(cull)
             };
             ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, testCase));
         }
     }
-    const Case mixed{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, Cull::FirstMeshletOnly };
+    const Case mixed{ 96u, 126u, s_ExpectedDualCount, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, Cull::FirstMeshletOnly };
     ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, mixed));
     const Case empty{ 3u, 1u, 0u, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, Cull::None };
     ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *candidate, empty));
@@ -672,18 +675,18 @@ TEST_F(MeshKernelTest, ObjectCachePreservesSeamsCullsAndCurrentTransforms){
         for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
             for(u32 pose = Pose::Identity; pose <= Pose::Mirrored; ++pose){
                 const Case testCase{
-                    96u, 126u, 2u, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), static_cast<Pose::Enum>(pose), Cull::None
+                    96u, 126u, s_ExpectedDualCount, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), static_cast<Pose::Enum>(pose), Cull::None
                 };
                 ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, testCase, &kernels));
             }
         }
         for(u32 cull = Cull::Frustum; cull <= Cull::FirstMeshletOnly; ++cull){
-            const Case testCase{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, static_cast<Cull::Enum>(cull) };
+            const Case testCase{ 96u, 126u, s_ExpectedDualCount, Impl::MeshletRefDeltaWidth::U16, Pose::Identity, static_cast<Cull::Enum>(cull) };
             ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, testCase, &kernels));
         }
-        const Case partial{ 6u, 2u, 1u, Impl::MeshletRefDeltaWidth::U8, Pose::Transformed, Cull::None };
+        const Case partial{ 6u, s_ExpectedDualCount, 1u, Impl::MeshletRefDeltaWidth::U8, Pose::Transformed, Cull::None };
         ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, partial, &kernels));
-        const Case reversed{ 96u, 126u, 2u, Impl::MeshletRefDeltaWidth::U32, Pose::Mirrored, Cull::None, true };
+        const Case reversed{ 96u, 126u, s_ExpectedDualCount, Impl::MeshletRefDeltaWidth::U32, Pose::Mirrored, Cull::None, true };
         ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, reversed, &kernels));
         const Case empty{ 3u, 1u, 0u, Impl::MeshletRefDeltaWidth::U8, Pose::Identity, Cull::None };
         ASSERT_NO_FATAL_FAILURE(RunCase(device(), *reference, *indexedReference, empty, &kernels));
@@ -707,7 +710,7 @@ TEST_F(MeshKernelTest, AuthoredClipChangesRetainCompletedVertexCulling){
     ASSERT_TRUE(loadMeshKernel(false, scratchArena, reference, true));
     ASSERT_TRUE(loadMeshKernel(true, scratchArena, candidate, true));
     for(u32 width = Impl::MeshletRefDeltaWidth::U8; width <= Impl::MeshletRefDeltaWidth::U32; ++width){
-        for(u32 meshlets = 1u; meshlets <= 2u; ++meshlets){
+        for(u32 meshlets = 1u; meshlets <= s_ExpectedDualCount; ++meshlets){
             // Source positions are visible; only the authored vertex builder moves the triangles outside the clip volume.
             const Case testCase{
                 96u, 126u, meshlets, static_cast<Impl::MeshletRefDeltaWidth::Enum>(width), Pose::Identity, Cull::AuthoredClip

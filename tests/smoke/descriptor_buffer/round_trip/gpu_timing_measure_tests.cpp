@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -128,7 +131,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcome
     EXPECT_TRUE(unpreparedStatistics.queryCollectionEnabled);
     EXPECT_TRUE(unpreparedStatistics.timingSinkEnabled);
     EXPECT_TRUE(unpreparedStatistics.collectionActive);
-    EXPECT_EQ(unpreparedStatistics.scopeAttemptCount, 2u);
+    EXPECT_EQ(unpreparedStatistics.scopeAttemptCount, s_ExpectedDualCount);
     EXPECT_EQ(
         unpreparedStatistics.skippedScopeCountByReason[GpuTimingScopeSkipReason::ScopeNotPrepared],
         1u
@@ -189,7 +192,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingStatisticsDistinguishSkipsOutcome
 
     const GpuTimingRecorderStatistics completedStatistics = timing.statistics(device);
     EXPECT_EQ(completedStatistics.scopeAttemptCount, 4u);
-    EXPECT_EQ(completedStatistics.recordedScopeCount, 2u);
+    EXPECT_EQ(completedStatistics.recordedScopeCount, s_ExpectedDualCount);
     EXPECT_EQ(completedStatistics.acceptedScopeCount, 1u);
     EXPECT_EQ(completedStatistics.publishedSampleCount, 1u);
     EXPECT_EQ(completedStatistics.unpublishedSampleCount, 0u);
@@ -365,7 +368,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingMeasureRefusesToCloseAnotherOwner
     {
         GpuTimingMeasure timingMeasure(timing, s_AbandonedTimingMarkerScope, device, *commandList);
         EXPECT_FALSE(timingMeasure.valid());
-        ASSERT_EQ(GraphicsBackend::VulkanTestDispatchAccess::markerDepth(*commandList), 2u);
+        ASSERT_EQ(GraphicsBackend::VulkanTestDispatchAccess::markerDepth(*commandList), s_ExpectedDualCount);
 
         commandList->endMarker();
         ASSERT_EQ(GraphicsBackend::VulkanTestDispatchAccess::markerDepth(*commandList), 1u);

@@ -21,6 +21,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -177,19 +180,19 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
 
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuTaskGraphCompileStatistics& compileStatistics = views.compiled.compileStatistics();
     ASSERT_TRUE(compileStatistics.valid());
-    EXPECT_EQ(compileStatistics.taskCount, 2u);
+    EXPECT_EQ(compileStatistics.taskCount, s_ExpectedDualCount);
     EXPECT_EQ(compileStatistics.resourceCount, 1u);
-    EXPECT_EQ(compileStatistics.packetCount, 2u);
+    EXPECT_EQ(compileStatistics.packetCount, s_ExpectedDualCount);
     EXPECT_EQ(compileStatistics.explicitDependencyCount, 1u);
     EXPECT_GE(compileStatistics.inferredDependencyCount, 1u);
     EXPECT_EQ(compileStatistics.packetDependencyCount, 1u);
     EXPECT_EQ(compileStatistics.crossQueuePacketDependencyCount, 0u);
     EXPECT_GE(compileStatistics.prologueBarrierCount, 1u);
-    EXPECT_EQ(compileStatistics.taskCountByQueueClass[CommandQueue::Graphics], 2u);
-    EXPECT_EQ(compileStatistics.packetCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(compileStatistics.taskCountByQueueClass[CommandQueue::Graphics], s_ExpectedDualCount);
+    EXPECT_EQ(compileStatistics.packetCountByQueueClass[CommandQueue::Graphics], s_ExpectedDualCount);
     EXPECT_GE(compileStatistics.analysisSeconds, 0.0);
     EXPECT_GE(compileStatistics.queueAssignmentSeconds, 0.0);
     EXPECT_GE(compileStatistics.planningSeconds, 0.0);
@@ -234,9 +237,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(recordingStatistics.graphGeneration, views.compiled.generation());
     EXPECT_EQ(recordingStatistics.planGeneration, views.compiled.planGeneration());
     EXPECT_EQ(recordingStatistics.deviceGeneration, views.compiled.deviceGeneration());
-    EXPECT_EQ(recordingStatistics.packetCount, 2u);
-    EXPECT_EQ(recordingStatistics.taskCount, 2u);
-    EXPECT_EQ(recordingStatistics.commandListCount, 2u);
+    EXPECT_EQ(recordingStatistics.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.taskCount, s_ExpectedDualCount);
+    EXPECT_EQ(recordingStatistics.commandListCount, s_ExpectedDualCount);
     EXPECT_EQ(
         recordingStatistics.barrierCount,
         compileStatistics.prologueBarrierCount + compileStatistics.epilogueBarrierCount
@@ -422,18 +425,18 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(submissionStatistics.graphGeneration, views.compiled.generation());
     EXPECT_EQ(submissionStatistics.planGeneration, views.compiled.planGeneration());
     EXPECT_EQ(submissionStatistics.deviceGeneration, views.compiled.deviceGeneration());
-    EXPECT_EQ(submissionStatistics.acceptedPacketCount, 2u);
-    EXPECT_EQ(submissionStatistics.acceptedTaskCount, 2u);
-    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(submissionStatistics.acceptedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.acceptedTaskCount, s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.rejectedSubmissionCount, 0u);
-    EXPECT_EQ(submissionStatistics.nativeCommandListCount, 2u);
+    EXPECT_EQ(submissionStatistics.nativeCommandListCount, s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.plannedWaitTokenCount, 1u);
     EXPECT_EQ(submissionStatistics.sameQueueWaitElisionCount, 1u);
     EXPECT_EQ(submissionStatistics.timelineWaitCount, 0u);
     EXPECT_EQ(submissionStatistics.mergedTimelineWaitCount, 0u);
     EXPECT_EQ(submissionStatistics.acceptedFrontierSubmissionCount, 0u);
-    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], 2u);
-    EXPECT_EQ(submissionStatistics.nativeCommandListCountByQueueClass[CommandQueue::Graphics], 2u);
+    EXPECT_EQ(submissionStatistics.nativeSubmissionCountByQueueClass[CommandQueue::Graphics], s_ExpectedDualCount);
+    EXPECT_EQ(submissionStatistics.nativeCommandListCountByQueueClass[CommandQueue::Graphics], s_ExpectedDualCount);
     EXPECT_EQ(submissionStatistics.timelineWaitCountByQueueClass[CommandQueue::Graphics], 0u);
     EXPECT_GE(submissionStatistics.submissionSeconds, 0.0);
 
@@ -449,13 +452,13 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
     EXPECT_EQ(queueStatistics.deviceGeneration, views.compiled.deviceGeneration());
     EXPECT_EQ(queueStatistics.queue, queue.id);
     EXPECT_EQ(queueStatistics.queueClass, CommandQueue::Graphics);
-    EXPECT_EQ(queueStatistics.acceptedPacketCount, 2u);
-    EXPECT_EQ(queueStatistics.acceptedTaskCount, 2u);
+    EXPECT_EQ(queueStatistics.acceptedPacketCount, s_ExpectedDualCount);
+    EXPECT_EQ(queueStatistics.acceptedTaskCount, s_ExpectedDualCount);
     EXPECT_EQ(queueStatistics.rejectedPacketCount, 0u);
     EXPECT_EQ(queueStatistics.rejectedTaskCount, 0u);
-    EXPECT_EQ(queueStatistics.nativeSubmissionCount, 2u);
+    EXPECT_EQ(queueStatistics.nativeSubmissionCount, s_ExpectedDualCount);
     EXPECT_EQ(queueStatistics.rejectedSubmissionCount, 0u);
-    EXPECT_EQ(queueStatistics.nativeCommandListCount, 2u);
+    EXPECT_EQ(queueStatistics.nativeCommandListCount, s_ExpectedDualCount);
     EXPECT_EQ(queueStatistics.plannedWaitTokenCount, 1u);
     EXPECT_EQ(queueStatistics.sameQueueWaitElisionCount, 1u);
     EXPECT_EQ(queueStatistics.timelineWaitCount, 0u);
@@ -470,9 +473,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         transaction
     );
     ASSERT_TRUE(runtimeStatistics.valid());
-    EXPECT_EQ(runtimeStatistics.compile.packetCount, 2u);
-    EXPECT_EQ(runtimeStatistics.recording.commandListCount, 2u);
-    EXPECT_EQ(runtimeStatistics.submission.nativeSubmissionCount, 2u);
+    EXPECT_EQ(runtimeStatistics.compile.packetCount, s_ExpectedDualCount);
+    EXPECT_EQ(runtimeStatistics.recording.commandListCount, s_ExpectedDualCount);
+    EXPECT_EQ(runtimeStatistics.submission.nativeSubmissionCount, s_ExpectedDualCount);
 }
 
 
@@ -671,7 +674,7 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
     EXPECT_LT(consumerPacket.index, independentPacket.index);
     EXPECT_EQ(views.compiled.packet(frontierPacket).plan->recordingFrontier, 0u);
     EXPECT_EQ(views.compiled.packet(producerPacket).plan->recordingFrontier, 1u);
-    EXPECT_EQ(views.compiled.packet(consumerPacket).plan->recordingFrontier, 2u);
+    EXPECT_EQ(views.compiled.packet(consumerPacket).plan->recordingFrontier, s_ExpectedDualCount);
     EXPECT_EQ(views.compiled.packet(independentPacket).plan->recordingFrontier, 0u);
     const GpuCompiledTaskView compiledProducer = views.compiled.findTask(producerTask);
     const GpuCompiledTaskView compiledConsumer = views.compiled.findTask(consumerTask);

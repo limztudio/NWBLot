@@ -21,6 +21,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -97,7 +100,7 @@ TEST_F(BufferRangeGpuTest, NativeTransitionsPreserveAdjacentByteStates){
     commands->setBufferState(buffer.get(), ResourceStates::CopyDest, false, BufferRange(192u, 64u));
     commands->commitBarriers();
     ASSERT_FALSE(commands->commandRecordingFailed());
-    ASSERT_EQ(capture.barriers.size(), 2u);
+    ASSERT_EQ(capture.barriers.size(), s_ExpectedDualCount);
     EXPECT_EQ(capture.barriers[0u].offset, 64u);
     EXPECT_EQ(capture.barriers[0u].size, 64u);
     EXPECT_EQ(capture.barriers[1u].offset, 192u);
@@ -163,8 +166,8 @@ TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
     const u32 firstWords[] = { 11u, 22u, 33u, 44u };
     const u32 secondWords[] = { 55u, 66u, 77u, 88u };
     constexpr u64 s_HalfSize = sizeof(firstWords);
-    auto buffer = device.createBuffer(BufferDesc().setByteSize(s_HalfSize * 2u));
-    auto readback = device.createBuffer(BufferDesc().setByteSize(s_HalfSize * 2u).setCpuAccess(CpuAccessMode::Read));
+    auto buffer = device.createBuffer(BufferDesc().setByteSize(s_HalfSize * s_ExpectedDualCount));
+    auto readback = device.createBuffer(BufferDesc().setByteSize(s_HalfSize * s_ExpectedDualCount).setCpuAccess(CpuAccessMode::Read));
     ASSERT_TRUE(buffer);
     ASSERT_TRUE(readback);
     GpuTaskGraph graph(BufferRangeGpuTest::arena());
@@ -208,7 +211,7 @@ TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
     const GpuCopyBufferTaskRegion copyRegion{
         .source = bufferResource,
         .destination = readbackResource,
-        .dataSizeBytes = s_HalfSize * 2u,
+        .dataSizeBytes = s_HalfSize * s_ExpectedDualCount,
     };
     const GpuTaskId copy = graph.addCopyBufferTask(
         taskDesc.setIdentity(Name("tests/buffer_range/copy")),
@@ -226,7 +229,7 @@ TEST_F(BufferRangeGpuTest, GraphDisjointUploadsFanInToFullBufferReadback){
     ASSERT_TRUE(compiler.compile(declarations, analysis, device.getPhysicalQueueTopology(), assignments, compiled, scratchArena));
     const GpuTaskGraphReadViews views(graph, compiled);
     ASSERT_TRUE(views.valid());
-    EXPECT_EQ(views.compiled.findTask(copy).plan->prologueStateSeedCount, 2u);
+    EXPECT_EQ(views.compiled.findTask(copy).plan->prologueStateSeedCount, s_ExpectedDualCount);
     for(const GpuTaskDependencyEdge& edge : analysis.edges())
         EXPECT_FALSE(edge.producer == first && edge.consumer == second);
 

@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -664,7 +667,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesR
     const GpuSubmissionPacketId packet = views.compiled.packetForTask(prepareTask);
     ASSERT_TRUE(packet.valid());
     EXPECT_EQ(views.compiled.packetForTask(normalizeTask), packet);
-    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, 2u);
+    ASSERT_EQ(views.compiled.packet(packet).plan->taskCount, s_ExpectedDualCount);
 
     const GpuCompiledTaskView compiledPrepare = views.compiled.findTask(prepareTask);
     const GpuCompiledTaskView compiledNormalize = views.compiled.findTask(normalizeTask);

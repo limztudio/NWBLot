@@ -17,6 +17,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -225,14 +228,14 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
         EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 1u);
         EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
         ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
-        EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+        EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
         EXPECT_EQ(submissionObserver.successfulWaitCount(), 1u);
         VulkanTestQueueSubmit2Capture transferCapture;
         VulkanTestQueueSubmit2Capture failedGraphicsCapture;
         VulkanTestQueueSubmit2Capture recoveryCapture;
         ASSERT_TRUE(submissionObserver.capturedSubmission(0u, transferCapture));
         ASSERT_TRUE(submissionObserver.capturedSubmission(1u, failedGraphicsCapture));
-        ASSERT_TRUE(submissionObserver.capturedSubmission(2u, recoveryCapture));
+        ASSERT_TRUE(submissionObserver.capturedSubmission(s_ExpectedDualCount, recoveryCapture));
         EXPECT_EQ(failedGraphicsCapture.queue, nativeGraphicsQueue);
         EXPECT_EQ(failedGraphicsCapture.result, VK_ERROR_OUT_OF_HOST_MEMORY);
         EXPECT_FALSE(failedGraphicsCapture.overflowed);
@@ -290,7 +293,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
     {
         VulkanTestQueueSubmit2Observer submissionObserver(device);
         ASSERT_TRUE(submissionObserver.valid());
-        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue, 2u));
+        ASSERT_TRUE(submissionObserver.armSubmissionFailures(nativeGraphicsQueue, s_ExpectedDualCount));
         EXPECT_FALSE(graphics.submitStandaloneTaskGraph(
             &unrecoveredContext,
             &DeclareStandaloneGraphAcceptedFrontierRecovery,
@@ -298,7 +301,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphRecoversAcceptedTransferFro
             graphicsQueue
         ));
         EXPECT_FALSE(submissionObserver.overflowed());
-        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), 2u);
+        EXPECT_EQ(submissionObserver.injectedSubmissionFailureCount(), s_ExpectedDualCount);
         EXPECT_EQ(submissionObserver.pendingSubmissionFailureCount(), 0u);
         EXPECT_EQ(submissionObserver.capturedSubmissionCount(), 3u);
         EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 1u);

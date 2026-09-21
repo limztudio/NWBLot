@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -102,7 +106,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
     {
         const GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(declarations.taskAt(copyTask.index).hasPayload);
-        ASSERT_EQ(declarations.taskAt(copyTask.index).resourceUseCount, 2u);
+        ASSERT_EQ(declarations.taskAt(copyTask.index).resourceUseCount, s_ExpectedDualCount);
     }
 
     const u32 graphicsFamily = device.getQueueFamilyIndex(CommandQueue::Graphics);
@@ -111,7 +115,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyTextureTaskRecordsAndPublishesA
         && transferFamily != Limit<u32>::s_Max
         && transferFamily != graphicsFamily
     ;
-    GpuPhysicalQueueInfo queues[2u] = {
+    GpuPhysicalQueueInfo queues[s_ThirdElementIndex] = {
         GpuPhysicalQueueInfo{
             .familyIndex = graphicsFamily,
             .queueIndex = 0u,

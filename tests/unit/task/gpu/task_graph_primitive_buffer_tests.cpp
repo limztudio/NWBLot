@@ -16,6 +16,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -62,7 +65,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     );
     ASSERT_TRUE(destinationResource.valid());
 
-    const u8 uploadBytes[] = { 0u, 1u, 2u, 3u };
+    const u8 uploadBytes[] = { 0u, 1u, s_ExpectedDualCount, 3u };
     const Graphics::GpuUploadBlobId alignedBlob = graph.copyUploadData(uploadBytes, sizeof(uploadBytes), alignof(u32));
     const Graphics::GpuUploadBlobId unalignedBlob = graph.copyUploadData(
         uploadBytes,
@@ -146,7 +149,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Graphics::GpuTaskGraphTaskView finalStateView = declarations.taskAt(finalStateTask.index);
 
-    ASSERT_EQ(finalStateView.resourceUseCount, 2u);
+    ASSERT_EQ(finalStateView.resourceUseCount, s_ExpectedDualCount);
     ASSERT_NE(finalStateView.resourceUses, nullptr);
     EXPECT_EQ(finalStateView.resourceUses[0u].resource, destinationResource);
     EXPECT_EQ(finalStateView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
@@ -451,7 +454,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
     EXPECT_TRUE(graph.addClearBufferTask(desc, clearDesc).valid());
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-    EXPECT_EQ(declarations.taskCount(), 2u);
+    EXPECT_EQ(declarations.taskCount(), s_ExpectedDualCount);
 }
 
 TEST(GpuTaskGraph, CopyBufferRegionsDeclareExactIntervalsAndReplayOnlyCoveredBytes){

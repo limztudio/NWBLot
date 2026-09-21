@@ -14,6 +14,10 @@
 namespace __hidden_telemetry_capture_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 static u32 s_ExistingDiagnosticCallbackCount = 0u;
@@ -55,10 +59,10 @@ TEST(Telemetry, CaptureSessionCaptureScopeRecordsLogAndDiagnostic){
         .message = "ignored after scope",
     });
 
-    EXPECT_EQ(previousLogger.messageCount(), 2u);
+    EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
     EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
-    EXPECT_EQ(session.eventCount(), 2u);
+    EXPECT_EQ(session.eventCount(), s_ExpectedDualCount);
 
     const Telemetry::EventRecord* logEvent = session.view().eventAt(0u);
     const Telemetry::EventRecord* diagnosticEvent = session.view().eventAt(1u);

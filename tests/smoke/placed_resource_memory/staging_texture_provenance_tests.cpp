@@ -27,6 +27,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -152,10 +155,10 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     EXPECT_EQ(ResourceQueueSharing::ForQueueClass(CommandQueue::kCount), ResourceQueueSharing::Exclusive);
 
     const TextureFormatBlockLayout sixByteFormat{ 1u, 1u, 6u };
-    const StagingTextureMipLayout validMip{ 0u, 24u, 48u, 4u, 2u };
+    const StagingTextureMipLayout validMip{ 0u, 24u, 48u, 4u, s_ExpectedDualCount };
     const TextureSlice validSlice = TextureSlice()
-        .setOrigin(2u, 1u, 1u)
-        .setSize(2u, 2u, 2u)
+        .setOrigin(s_ExpectedDualCount, 1u, 1u)
+        .setSize(s_ExpectedDualCount, s_ExpectedDualCount, s_ExpectedDualCount)
         .setArraySlice(1u)
     ;
     StagingTextureRange range;
@@ -173,7 +176,7 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     EXPECT_EQ(range.byteSize, 84u);
     EXPECT_EQ(range.rowPitch, 24u);
     EXPECT_EQ(range.bufferRowLength, 4u);
-    EXPECT_EQ(range.bufferImageHeight, 2u);
+    EXPECT_EQ(range.bufferImageHeight, s_ExpectedDualCount);
 
     ASSERT_TRUE(BuildStagingTextureRange(
         validSlice,
@@ -204,10 +207,10 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     const StagingTextureMipLayout unitMip{ 0u, 1u, 1u, 1u, 1u };
     SCOPED_TRACE("array offset multiplication overflows");
     __hidden_staging_texture_provenance_tests::ExpectRangeRejected(
-        TextureSlice().setArraySlice(2u),
+        TextureSlice().setArraySlice(s_ExpectedDualCount),
         unitMip,
         oneByteFormat,
-        UINT64_MAX / 2u + 1u,
+        UINT64_MAX / s_ExpectedDualCount + 1u,
         UINT64_MAX,
         0u
     );
@@ -216,7 +219,7 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     overflowMip.slicePitch = UINT64_MAX;
     SCOPED_TRACE("z offset multiplication overflows");
     __hidden_staging_texture_provenance_tests::ExpectRangeRejected(
-        TextureSlice().setOrigin(0u, 0u, 2u),
+        TextureSlice().setOrigin(0u, 0u, s_ExpectedDualCount),
         overflowMip,
         oneByteFormat,
         UINT64_MAX,
@@ -225,7 +228,7 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     );
     SCOPED_TRACE("tail size overflows");
     __hidden_staging_texture_provenance_tests::ExpectRangeRejected(
-        TextureSlice().setDepth(2u),
+        TextureSlice().setDepth(s_ExpectedDualCount),
         overflowMip,
         oneByteFormat,
         UINT64_MAX,
@@ -237,7 +240,7 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
     overflowMip.rowPitch = UINT64_MAX;
     SCOPED_TRACE("y offset multiplication overflows");
     __hidden_staging_texture_provenance_tests::ExpectRangeRejected(
-        TextureSlice().setOrigin(0u, 2u, 0u),
+        TextureSlice().setOrigin(0u, s_ExpectedDualCount, 0u),
         overflowMip,
         oneByteFormat,
         UINT64_MAX,
@@ -245,7 +248,7 @@ TEST(StagingTextureProvenanceCpuTest, CheckedAlignmentAndRangeArithmeticRejectWi
         0u
     );
 
-    const TextureFormatBlockLayout twoByteFormat{ 1u, 1u, 2u };
+    const TextureFormatBlockLayout twoByteFormat{ 1u, 1u, s_ExpectedDualCount };
     overflowMip = unitMip;
     overflowMip.byteOffset = UINT64_MAX - 1u;
     SCOPED_TRACE("x offset addition overflows");
@@ -381,9 +384,9 @@ TEST_F(StagingTextureProvenanceTest, MappingUsesImmutableMipAndArrayBoundsAndRec
         TextureDesc& publicDesc = const_cast<TextureDesc&>(staging.getDescription());
         const auto forgedMapWasAccepted = [&](const TextureSlice& slice, const bool forgeMip){
             if(forgeMip)
-                publicDesc.mipLevels = 2u;
+                publicDesc.mipLevels = s_ExpectedDualCount;
             else
-                publicDesc.arraySize = 2u;
+                publicDesc.arraySize = s_ExpectedDualCount;
             usize pitch = s_UnchangedPitch;
             void* const memory = device().mapStagingTexture(staging, slice, access, &pitch);
             publicDesc.mipLevels = 1u;
@@ -461,7 +464,7 @@ TEST_F(StagingTextureProvenanceTest, ForgedArrayCopyDirectionsRejectAtomicallyAn
             *texture,
             [&](CommandList& commandList){
                 TextureDesc& publicDesc = const_cast<TextureDesc&>(upload->getDescription());
-                publicDesc.arraySize = 2u;
+                publicDesc.arraySize = s_ExpectedDualCount;
                 commandList.copyTexture(*texture, imageSlice, *upload, forgedStagingSlice);
                 publicDesc.arraySize = 1u;
             }
@@ -477,7 +480,7 @@ TEST_F(StagingTextureProvenanceTest, ForgedArrayCopyDirectionsRejectAtomicallyAn
             *texture,
             [&](CommandList& commandList){
                 TextureDesc& publicDesc = const_cast<TextureDesc&>(readback->getDescription());
-                publicDesc.arraySize = 2u;
+                publicDesc.arraySize = s_ExpectedDualCount;
                 commandList.copyTexture(*readback, forgedStagingSlice, *texture, imageSlice);
                 publicDesc.arraySize = 1u;
             }
@@ -650,7 +653,7 @@ TEST_F(StagingTextureProvenanceTest, ConcurrentSharingRequiresImmutableQueueClas
             if(firstInFamily)
                 ++uniqueFamilyCount;
         }
-        if(uniqueFamilyCount < 2u)
+        if(uniqueFamilyCount < s_ExpectedDualCount)
             continue;
 
         for(usize candidateIndex = 0u; candidateIndex < topology.queueCount; ++candidateIndex){

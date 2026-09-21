@@ -23,6 +23,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -257,7 +260,7 @@ TEST(TimerQueryResult, ConvertsStraightSixtyFourBitTickRange){
         .beginTicks = 100u,
         .endTicks = 145u,
         .secondsPerTick = 0.25,
-        .physicalQueue = { .index = 2u, .deviceGeneration = 11u },
+        .physicalQueue = { .index = s_ExpectedDualCount, .deviceGeneration = 11u },
         .timestampValidBits = 64u,
         .comparableAcrossSubmissions = true,
     };
@@ -307,7 +310,7 @@ TEST(TimerQueryResult, WrapsFullWidthWithoutShiftingBySixtyFour){
 TEST(TimerQueryResult, RetainsNearFullWidthDurationWithoutPublishingAbsoluteRange){
     const Core::TimerQueryResult result{
         .beginTicks = (u64{ 1u } << 63u) - 3u,
-        .endTicks = 2u,
+        .endTicks = s_ExpectedDualCount,
         .secondsPerTick = 0.5,
         .physicalQueue = { .index = 1u, .deviceGeneration = 3u },
         .timestampValidBits = 63u,
@@ -387,7 +390,7 @@ TEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversio
 
     Core::GpuComparableTimestampRange disjoint = second;
     disjoint.beginTicks = first.endTicks;
-    disjoint.endTicks = first.endTicks + 2u;
+    disjoint.endTicks = first.endTicks + s_ExpectedDualCount;
     ASSERT_TRUE(Core::TryComputeGpuTimestampOverlap(first, disjoint, overlapTicks));
     EXPECT_EQ(overlapTicks, 0u);
 
@@ -440,7 +443,7 @@ TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConf
     EXPECT_EQ(timing.scopeCount(), 1u);
 
     EXPECT_TRUE(correlator.prepareOverlapMetric(firstScope, thirdScope, alternateOutputScope));
-    EXPECT_EQ(timing.scopeCount(), 2u);
+    EXPECT_EQ(timing.scopeCount(), s_ExpectedDualCount);
 }
 
 TEST(GpuTimingOverlapRegistration, ReversedDuplicatePublishesOneSample){
@@ -521,7 +524,7 @@ TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLas
     correlator.recordTimestampRange(firstScope, 51u, firstRange, samples, scratchArena);
     correlator.recordTimestampRange(secondScope, 51u, newerRange, samples, scratchArena);
     correlator.recordTimestampRange(secondScope, 50u, olderRange, samples, scratchArena);
-    ASSERT_EQ(samples.size(), 2u);
+    ASSERT_EQ(samples.size(), s_ExpectedDualCount);
     EXPECT_EQ(samples[0u].sourceFrameIndex, 51u);
     EXPECT_EQ(samples[1u].sourceFrameIndex, 50u);
     EXPECT_DOUBLE_EQ(samples[0u].durationSeconds, 3.0);
@@ -531,7 +534,7 @@ TEST(GpuTimingOverlapRegistration, CatchUpBatchBoundsSourceFramesAndPreservesLas
     timing.publishFrame(52u);
 
     const Core::Perf::TimingStats& stats = timing.stats(outputScope);
-    ASSERT_EQ(stats.sampleCount, 2u);
+    ASSERT_EQ(stats.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(stats.publishFrameIndex, 52u);
     EXPECT_EQ(stats.firstSampleFrameIndex, 50u);
     EXPECT_EQ(stats.lastSampleFrameIndex, 51u);
@@ -813,7 +816,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, RejectsOutputRoleAndPhysicalQueueCollisions
 
 TEST(GpuTimingPacketEnvelopeMetrics, RetainsSuccessfulOutputRolesWhenSinkRegistrationFails){
     TestArena testArena;
-    FailOnceTimingSink timing(2u);
+    FailOnceTimingSink timing(s_ExpectedDualCount);
     Core::GpuTimingMetricCorrelator correlator(testArena.arena, timing);
     const Name firstScope("tests/timing/envelope/failure_first");
     const Name secondScope("tests/timing/envelope/failure_second");
@@ -901,7 +904,7 @@ TEST(GpuTimingPacketEnvelopeMetrics, IsolatesFramesRejectsWrongQueuesPrunesIncom
     ));
 
     const Core::GpuComparableTimestampRange firstRange{
-        .beginTicks = 2u,
+        .beginTicks = s_ExpectedDualCount,
         .endTicks = 8u,
         .secondsPerTick = 0.5,
         .physicalQueue = firstQueue,

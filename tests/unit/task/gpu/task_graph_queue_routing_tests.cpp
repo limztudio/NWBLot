@@ -16,6 +16,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -223,8 +227,8 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
 
     Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(1u);
     firstAuxiliary.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondAuxiliary = GraphicsQueue(2u);
-    secondAuxiliary.queueIndex = 2u;
+    Graphics::GpuPhysicalQueueInfo secondAuxiliary = GraphicsQueue(s_ExpectedDualCount);
+    secondAuxiliary.queueIndex = s_ExpectedDualCount;
     Graphics::GpuPhysicalQueueInfo thirdAuxiliary = GraphicsQueue(3u);
     thirdAuxiliary.queueIndex = 3u;
     const Graphics::GpuPhysicalQueueInfo queues[] = {
@@ -312,10 +316,10 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
         }
     };
 
-    Graphics::GpuPhysicalQueueInfo firstComputeAuxiliary = DedicatedComputeQueue(2u);
+    Graphics::GpuPhysicalQueueInfo firstComputeAuxiliary = DedicatedComputeQueue(s_ExpectedDualCount);
     firstComputeAuxiliary.queueIndex = 1u;
     Graphics::GpuPhysicalQueueInfo secondComputeAuxiliary = DedicatedComputeQueue(3u);
-    secondComputeAuxiliary.queueIndex = 2u;
+    secondComputeAuxiliary.queueIndex = s_ExpectedDualCount;
     Graphics::GpuPhysicalQueueInfo thirdComputeAuxiliary = DedicatedComputeQueue(4u);
     thirdComputeAuxiliary.queueIndex = 3u;
     runCase(
@@ -331,7 +335,7 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
     Graphics::GpuPhysicalQueueInfo firstTransferAuxiliary = DedicatedTransferQueue(3u);
     firstTransferAuxiliary.queueIndex = 1u;
     Graphics::GpuPhysicalQueueInfo secondTransferAuxiliary = DedicatedTransferQueue(4u);
-    secondTransferAuxiliary.queueIndex = 2u;
+    secondTransferAuxiliary.queueIndex = s_ExpectedDualCount;
     Graphics::GpuPhysicalQueueInfo thirdTransferAuxiliary = DedicatedTransferQueue(5u);
     thirdTransferAuxiliary.queueIndex = 3u;
     runCase(
@@ -586,9 +590,9 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
     ASSERT_EQ(analysis.topologicalOrder().size(), 3u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], first);
     EXPECT_EQ(analysis.topologicalOrder()[1u], second);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], consumer);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], consumer);
     const Graphics::GpuTaskGraphSchedulingTaskIndexView producers = analysis.schedulingProducers(consumer);
-    ASSERT_EQ(producers.taskCount, 2u);
+    ASSERT_EQ(producers.taskCount, s_ExpectedDualCount);
     EXPECT_EQ(producers[0u], second.index);
     EXPECT_EQ(producers[1u], first.index);
 
@@ -761,7 +765,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(compiledPlan.packet(consumerPacket).dependencies[0u].producer, producerPacket);
     ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
 
     const Graphics::GpuCompiledBarrier& release = compiledPlan.findTask(producer).epilogueBarriers[0u];
     EXPECT_EQ(release.type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
@@ -791,7 +795,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(producerQueueCompileStatistics.epilogueBarrierCount, 1u);
     EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
     EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.prologueBarrierCount, 2u);
+    EXPECT_EQ(consumerQueueCompileStatistics.prologueBarrierCount, s_ExpectedDualCount);
     EXPECT_EQ(consumerQueueCompileStatistics.epilogueBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
     EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
@@ -999,7 +1003,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         EXPECT_EQ(compiledConsumer->queue, auxiliaryQueue.id);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
         ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-        ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
 
         const Graphics::GpuCompiledBarrier* const release = compiledPlan.findTask(producer).epilogueBarriers;
         const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
@@ -1132,7 +1136,7 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
     EXPECT_EQ(release[0u].sourceQueue, queues[0u].id);
     EXPECT_EQ(release[0u].destinationQueue, queues[1u].id);
 
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
     const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
     ASSERT_NE(acquireAndTransition, nullptr);
     EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);

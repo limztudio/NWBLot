@@ -11,6 +11,9 @@
 namespace __hidden_ecs_graphics_task_graph_shadow_contract_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -375,7 +378,7 @@ TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoute
     EXPECT_TRUE(ContainsText(report, "if(m_rayTracingState.m_swShadowDispatchLogged)"));
     EXPECT_TRUE(ContainsText(report, "m_rayTracingState.m_swShadowDispatchLogged = true;"));
     EXPECT_TRUE(ContainsText(report, "RendererSystem: dispatched software shadow traversal"));
-    EXPECT_EQ(CountText(monolithic, "reportSoftwareShadowTraversal(targets);"), 2u);
+    EXPECT_EQ(CountText(monolithic, "reportSoftwareShadowTraversal(targets);"), s_ExpectedDualCount);
     EXPECT_FALSE(ContainsText(monolithic, "const auto logSoftwareShadowTraversal"));
 }
 

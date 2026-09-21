@@ -18,6 +18,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -91,7 +94,7 @@ TEST_F(DescriptorBufferRoundTripTest, DedicatedComputeQueueTransfersExclusiveBuf
     // Passing both producer tokens from one physical queue is legal API use. The submission folds them into the
     // single greatest timeline wait Vulkan permits for that semaphore.
     const QueueSubmissionToken computeWaits[] = { computeToken, computeToken };
-    const QueueSubmissionDesc graphicsSubmissionDesc = QueueSubmissionDesc().setWaitTokens(computeWaits, 2u);
+    const QueueSubmissionDesc graphicsSubmissionDesc = QueueSubmissionDesc().setWaitTokens(computeWaits, s_ExpectedDualCount);
     CommandList* graphicsConsumerLists[] = { graphicsConsumer.get() };
     const QueueSubmissionToken graphicsToken = device.executeCommandLists(
         graphicsConsumerLists,

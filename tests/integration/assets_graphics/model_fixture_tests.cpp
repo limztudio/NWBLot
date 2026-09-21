@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -229,7 +232,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::AssetTypeName());
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
     EXPECT_EQ(model.skeletonObjects().size(), 1u);
-    EXPECT_EQ(model.skinnedMeshObjects().size(), 2u);
+    EXPECT_EQ(model.skinnedMeshObjects().size(), s_ExpectedDualCount);
     if(model.skeletonObjects().size() != 1u)
         return;
 

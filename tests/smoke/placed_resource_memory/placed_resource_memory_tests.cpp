@@ -28,6 +28,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -119,7 +123,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_NE(liveSecondUploadWords, nullptr);
     ASSERT_NE(device.mapBuffer(*firstUpload, CpuAccessMode::Write), nullptr);
     firstUpload.reset();
-    EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedUploadHeap->getReferenceCount(), s_ExpectedDualCount);
     for(usize wordIndex = 0u; wordIndex < LengthOf(s_SecondWords); ++wordIndex)
         EXPECT_EQ(liveSecondUploadWords[wordIndex], s_SecondWords[wordIndex]);
 
@@ -136,7 +140,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     device.unmapBuffer(*replacementUpload);
     device.unmapBuffer(*secondUpload);
     uploadHeap.reset();
-    EXPECT_EQ(retainedUploadHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedUploadHeap->getReferenceCount(), s_ExpectedDualCount);
 
     const BufferDesc readbackDesc = BufferDesc()
         .setByteSize(sizeof(s_FirstWords))
@@ -174,7 +178,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     Heap* const retainedReadbackHeap = readbackHeap.get();
     EXPECT_EQ(retainedReadbackHeap->getReferenceCount(), 3u);
     readbackHeap.reset();
-    EXPECT_EQ(retainedReadbackHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedReadbackHeap->getReferenceCount(), s_ExpectedDualCount);
 
     const BufferDesc directReadbackDesc = BufferDesc()
         .setByteSize(sizeof(s_FirstWords))
@@ -252,7 +256,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
 
     const u32* const firstReadbackWords = mappedReadbackWords[0u];
     const u32* const secondReadbackWords = mappedReadbackWords[1u];
-    const u32* const directReadbackWords = mappedReadbackWords[2u];
+    const u32* const directReadbackWords = mappedReadbackWords[s_ThirdElementIndex];
     ASSERT_NE(firstReadbackWords, nullptr);
     ASSERT_NE(secondReadbackWords, nullptr);
     ASSERT_NE(directReadbackWords, nullptr);
@@ -274,8 +278,8 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
 TEST_F(PlacedResourceMemoryTest, StagingTextureReadbackDirectionsAreAtomicAndHostSynchronized){
     auto& device = PlacedResourceMemoryTest::device();
     static constexpr u32 s_Width = 4u;
-    static constexpr u32 s_Height = 2u;
-    static constexpr u32 s_ArraySize = 2u;
+    static constexpr u32 s_Height = s_ExpectedDualCount;
+    static constexpr u32 s_ArraySize = s_ExpectedDualCount;
     static constexpr u32 s_SlicePixels[] = {
         0x10293847u,
         0xa5c3e17bu,
@@ -413,7 +417,7 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     const BufferDesc volatileReadDesc = BufferDesc()
         .setByteSize(256u)
         .setIsVolatile(true)
-        .setMaxVersions(2u)
+        .setMaxVersions(s_ExpectedDualCount)
         .setCpuAccess(CpuAccessMode::Read)
     ;
     expectDiagnosticRejection([&](){ return device.createBuffer(volatileReadDesc).get() != nullptr; });

@@ -22,6 +22,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -105,16 +108,16 @@ void RunResolveCase(
     SCOPED_TRACE(static_cast<u32>(pattern));
     const usize pixelCount = static_cast<usize>(width) * height;
     const bool invalidRightCase = pattern == Pattern::InvalidRightNear || pattern == Pattern::InvalidRightFar;
-    ASSERT_TRUE(!invalidRightCase || width >= step + 2u);
-    const u32 centerX = invalidRightCase ? step : width / 2u;
-    const u32 centerY = height / 2u;
+    ASSERT_TRUE(!invalidRightCase || width >= step + s_ExpectedDualCount);
+    const u32 centerX = invalidRightCase ? step : width / s_ExpectedDualCount;
+    const u32 centerY = height / s_ExpectedDualCount;
     Vector<HalfPixel, Alloc::ScratchArena> colors(scratchArena);
     Vector<HalfPixel, Alloc::ScratchArena> geometry(scratchArena);
     colors.reserve(pixelCount);
     geometry.reserve(pixelCount);
     for(u32 y = 0u; y < height; ++y){
         for(u32 x = 0u; x < width; ++x){
-            HalfPixel color = (x + 2u * y) % 3u == 0u ? Pixel(0.0f, 0.0f, 0.0f, 7.0f) : Pixel(0.5f, 0.25f, 1.0f, 7.0f);
+            HalfPixel color = (x + s_ExpectedDualCount * y) % 3u == 0u ? Pixel(0.0f, 0.0f, 0.0f, 7.0f) : Pixel(0.5f, 0.25f, 1.0f, 7.0f);
             HalfPixel world = Pixel(static_cast<f32>(x) * 0.25f, static_cast<f32>(y) * 0.25f, 2.0f, 1.0f);
             if(pattern == Pattern::Uniform){
                 color = Pixel(1.0f, 0.5f, 0.25f, 7.0f);
@@ -222,7 +225,7 @@ void RunResolveCase(
         commandList->setComputeState(state);
         heap.bindCompute(*commandList, *pipelines[index]);
         const ResolvePushConstants push{
-            width * 2u, height * 2u, width, height, 1.0f, step, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, 0u,
+            width * s_ExpectedDualCount, height * s_ExpectedDualCount, width, height, 1.0f, step, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, 0u,
             descriptors[1].slot(), descriptors[1].slot(), descriptors[0].slot(), descriptors[1].slot(),
             descriptors[2].slot(), descriptors[3u + index].slot()
         };
@@ -326,7 +329,7 @@ TEST_F(CausticKernelTest, CookedWaveletMatchesFrozenProductionAcrossTilesAndInva
     ASSERT_TRUE(loadResolveKernel(false, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, candidate));
     ASSERT_TRUE(loadResolveKernel(true, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, reference));
     const u32 dimensions[][2] = { { 1u, 1u }, { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u }, { 35u, 33u } };
-    const u32 steps[] = { 1u, 2u, 4u, 8u, 16u };
+    const u32 steps[] = { 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     for(const auto& dimension : dimensions){
         for(const u32 step : steps){
             for(u32 pattern = Pattern::Uniform; pattern <= Pattern::AllInvalid; ++pattern){
@@ -358,7 +361,7 @@ TEST_F(CausticKernelTest, DirectWaveletVariantMatchesFrozenProductionAtBothLarge
                     static_cast<Pattern::Enum>(pattern), scratchArena, observation
                 );
             }
-            if(dimension[0] < step + 2u)
+            if(dimension[0] < step + s_ExpectedDualCount)
                 continue;
             Observation nearResult;
             Observation farResult;
@@ -378,10 +381,10 @@ TEST_F(CausticKernelTest, InvalidRightRawCoordinatesChangeActualSpacingWithoutJo
     ASSERT_TRUE(loadResolveKernel(false, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, candidate));
     ASSERT_TRUE(loadResolveKernel(true, NWB_CAUSTIC_RESOLVE_STAGE_WAVELET, scratchArena, reference));
     const u32 dimensions[][2] = { { 7u, 9u }, { 8u, 8u }, { 9u, 7u }, { 9u, 9u }, { 35u, 33u } };
-    const u32 steps[] = { 1u, 2u, 4u, 8u, 16u };
+    const u32 steps[] = { 1u, s_ExpectedDualCount, 4u, 8u, 16u };
     for(const auto& dimension : dimensions){
         for(const u32 step : steps){
-            if(dimension[0] < step + 2u)
+            if(dimension[0] < step + s_ExpectedDualCount)
                 continue;
             Observation nearResult;
             Observation farResult;

@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -364,7 +368,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
     auto& device = DescriptorBufferRoundTripTest::device();
 
     u8 mip0Bytes[4u * 4u * 4u];
-    u8 mip1Bytes[2u * 2u * 4u];
+    u8 mip1Bytes[s_ExpectedDualCount * s_ExpectedDualCount * 4u];
     for(usize byteIndex = 0u; byteIndex < sizeof(mip0Bytes); ++byteIndex)
         mip0Bytes[byteIndex] = static_cast<u8>(byteIndex * 13u + 7u);
     for(usize byteIndex = 0u; byteIndex < sizeof(mip1Bytes); ++byteIndex)
@@ -378,7 +382,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInitialState(ResourceStates::ShaderResource)
             .setKeepInitialState(true)
@@ -398,8 +402,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
         GraphicsRuntime::TextureUploadRegion{
             .data = mip1Bytes,
             .dataSize = sizeof(mip1Bytes),
-            .rowPitch = 2u * 4u,
-            .depthPitch = 2u * 2u * 4u,
+            .rowPitch = s_ExpectedDualCount * 4u,
+            .depthPitch = s_ExpectedDualCount * s_ExpectedDualCount * 4u,
             .arraySlice = 0u,
             .mipLevel = 1u,
         },
@@ -423,8 +427,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedTextureUploadBatchCopiesMipsAndP
     ASSERT_TRUE(device.waitForIdle());
 
     const u8* const expectedMips[] = { expectedMip0, expectedMip1 };
-    const u32 mipWidths[] = { 4u, 2u };
-    const u32 mipHeights[] = { 4u, 2u };
+    const u32 mipWidths[] = { 4u, s_ExpectedDualCount };
+    const u32 mipHeights[] = { 4u, s_ExpectedDualCount };
     for(u32 mipLevel = 0u; mipLevel < LengthOf(expectedMips); ++mipLevel){
         StagingTextureHandle readback = device.createStagingTexture(destination->getDescription(), CpuAccessMode::Read);
         ASSERT_NE(readback.get(), nullptr);
@@ -475,15 +479,15 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
 
     const TextureHandle destination = graphics.createTexture(
         TextureDesc()
-            .setWidth(2u)
-            .setHeight(2u)
+            .setWidth(s_ExpectedDualCount)
+            .setHeight(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInitialState(ResourceStates::ShaderResource)
             .setKeepInitialState(true)
     );
     ASSERT_NE(destination.get(), nullptr);
 
-    u8 uploadBytes[2u * 2u * 4u] = {};
+    u8 uploadBytes[s_ExpectedDualCount * s_ExpectedDualCount * 4u] = {};
     for(usize byteIndex = 0u; byteIndex < LengthOf(uploadBytes); ++byteIndex)
         uploadBytes[byteIndex] = static_cast<u8>(byteIndex * 19u + 5u);
 
@@ -494,7 +498,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
         .destination = destination,
         .bytes = uploadBytes,
         .byteCount = sizeof(uploadBytes),
-        .rowPitch = 2u * 4u,
+        .rowPitch = s_ExpectedDualCount * 4u,
         .recorded = &rejectedRecorded,
         .accepted = &rejectedAccepted,
         .discarded = &rejectedDiscarded,
@@ -529,7 +533,7 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphTextureUploadDiscardsThenAc
         .destination = destination,
         .bytes = uploadBytes,
         .byteCount = sizeof(uploadBytes),
-        .rowPitch = 2u * 4u,
+        .rowPitch = s_ExpectedDualCount * 4u,
         .recorded = &acceptedRecorded,
         .accepted = &accepted,
         .discarded = &acceptedDiscarded,
@@ -574,13 +578,13 @@ TEST_F(DescriptorBufferRoundTripTest, StandaloneGraphReadyFrontierUploadsUseWork
     u32 firstWords[] = {
         s_FirstExpectedWords[0u],
         s_FirstExpectedWords[1u],
-        s_FirstExpectedWords[2u],
+        s_FirstExpectedWords[s_ThirdElementIndex],
         s_FirstExpectedWords[3u],
     };
     u32 secondWords[] = {
         s_SecondExpectedWords[0u],
         s_SecondExpectedWords[1u],
-        s_SecondExpectedWords[2u],
+        s_SecondExpectedWords[s_ThirdElementIndex],
         s_SecondExpectedWords[3u],
     };
     const auto createDestination = [&device]{
@@ -666,7 +670,7 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMi
         TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setInitialState(ResourceStates::ShaderResource)
             .setKeepInitialState(true)
@@ -741,7 +745,7 @@ TEST_F(DescriptorBufferRoundTripTest, RetainedTextureTypedImportsTrackAcceptedMi
     const CommandListHandle secondUpload = device.createCommandList();
     ASSERT_NE(secondUpload.get(), nullptr);
     secondUpload->open();
-    ASSERT_TRUE(secondUpload->tryWriteTexture(*texture, 0u, 1u, uploadBytes, 2u * 4u));
+    ASSERT_TRUE(secondUpload->tryWriteTexture(*texture, 0u, 1u, uploadBytes, s_ExpectedDualCount * 4u));
     secondUpload->setTextureState(texture.get(), TextureSubresourceSet(1u, 1u, 0u, 1u), ResourceStates::ShaderResource);
     secondUpload->close();
 

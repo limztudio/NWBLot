@@ -45,6 +45,10 @@
 namespace __hidden_ecs_graphics_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -276,7 +280,7 @@ TEST(EcsGraphics, SceneBvhTransparentSubtreeClassificationPropagatesToRoot){
     IndexVector indices{ scratchArena };
     indices.push_back(0u);
     indices.push_back(1u);
-    indices.push_back(2u);
+    indices.push_back(s_ExpectedDualCount);
     NodeVector nodes{ scratchArena };
     const u32 root = NWB::Impl::RayTracingDetail::BuildSceneBvhNode(
         indices.data(),
@@ -389,7 +393,7 @@ TEST(EcsGraphics, MaterialInstanceComponentSetters){
         0.75f
     ));
     EXPECT_EQ(materialInstance.overrides.size(), 1u);
-    EXPECT_EQ(materialInstance.revision, 2u);
+    EXPECT_EQ(materialInstance.revision, s_ExpectedDualCount);
     EXPECT_EQ(materialInstance.overrides[0u].value.raw[0u], TestFloatBits(0.75f));
 
     EXPECT_TRUE(NWB::Impl::SetMaterialMutableFloat4(
@@ -399,13 +403,13 @@ TEST(EcsGraphics, MaterialInstanceComponentSetters){
         "runtime.tint",
         Float4(1.0f, 0.5f, 0.25f, 0.125f)
     ));
-    EXPECT_EQ(materialInstance.overrides.size(), 2u);
+    EXPECT_EQ(materialInstance.overrides.size(), s_ExpectedDualCount);
     EXPECT_EQ(materialInstance.revision, 3u);
     EXPECT_EQ(materialInstance.overrides[1u].parameterName, Name("runtime.tint"));
     EXPECT_EQ(materialInstance.overrides[1u].fieldType, NWB::Impl::MaterialLayoutFieldType::Float4);
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[0u], TestFloatBits(1.0f));
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[1u], TestFloatBits(0.5f));
-    EXPECT_EQ(materialInstance.overrides[1u].value.raw[2u], TestFloatBits(0.25f));
+    EXPECT_EQ(materialInstance.overrides[1u].value.raw[s_ThirdElementIndex], TestFloatBits(0.25f));
     EXPECT_EQ(materialInstance.overrides[1u].value.raw[3u], TestFloatBits(0.125f));
 
     EXPECT_TRUE(NWB::Impl::SetMaterialMutableHalf4(
@@ -415,7 +419,7 @@ TEST(EcsGraphics, MaterialInstanceComponentSetters){
         "runtime.color_tint",
         Float4(1.0f, 0.5f, 0.25f, 0.125f)
     ));
-    const NWB::Impl::MaterialInstanceParameter& half4Override = materialInstance.overrides[2u];
+    const NWB::Impl::MaterialInstanceParameter& half4Override = materialInstance.overrides[s_ThirdElementIndex];
     const Half4U expectedHalf4 = MakeHalf4U(1.0f, 0.5f, 0.25f, 0.125f);
     EXPECT_EQ(materialInstance.overrides.size(), 3u);
     EXPECT_EQ(materialInstance.revision, 4u);
@@ -447,7 +451,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
 
     ByteVector firstBytes{scratchArena};
     firstBytes.push_back(1u);
-    firstBytes.push_back(2u);
+    firstBytes.push_back(s_ExpectedDualCount);
     firstBytes.push_back(3u);
     firstBytes.push_back(4u);
 
@@ -477,7 +481,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
 
     ByteVector secondBytes{scratchArena};
     secondBytes.push_back(1u);
-    secondBytes.push_back(2u);
+    secondBytes.push_back(s_ExpectedDualCount);
     secondBytes.push_back(3u);
     secondBytes.push_back(5u);
     NWB::Impl::ECSRenderDetail::MaterialTypedByteRange secondRange;
@@ -490,7 +494,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
     EXPECT_EQ(secondRange.byteOffset, 4u);
     EXPECT_EQ(secondRange.byteCount, 4u);
     EXPECT_EQ(uploadBytes.size(), 8u);
-    EXPECT_EQ(ranges.size(), 2u);
+    EXPECT_EQ(ranges.size(), s_ExpectedDualCount);
 
     ByteVector emptyBytes{scratchArena};
     NWB::Impl::ECSRenderDetail::MaterialTypedByteRange emptyRange;
@@ -509,7 +513,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeDeduplicatesContent){
         const u8 packedValue = static_cast<u8>(64u + (instanceIndex % 32u));
         overrideBytes.push_back(packedValue);
         overrideBytes.push_back(static_cast<u8>(packedValue + 1u));
-        overrideBytes.push_back(static_cast<u8>(packedValue + 2u));
+        overrideBytes.push_back(static_cast<u8>(packedValue + s_ExpectedDualCount));
         overrideBytes.push_back(static_cast<u8>(packedValue + 3u));
 
         NWB::Impl::ECSRenderDetail::MaterialTypedByteRange stressRange;
@@ -733,7 +737,7 @@ TEST(EcsGraphics, SkeletonPoseBuildsHierarchicalPalette){
     u32 skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     ASSERT_TRUE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
     EXPECT_EQ(skinningMode, NWB::Impl::SkeletonSkinningMode::LinearBlend);
-    ASSERT_EQ(resolvedJoints.size(), 2u);
+    ASSERT_EQ(resolvedJoints.size(), s_ExpectedDualCount);
     EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[0].w, 1.0f));
     EXPECT_TRUE(NearlyEqual(resolvedJoints[0u].rows[1].w, 0.0f));
     EXPECT_TRUE(NearlyEqual(resolvedJoints[1u].rows[0].w, 1.0f));
@@ -802,7 +806,7 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
 
     NWB::Impl::MeshSkinningRuntimeInstance outsidePalette = instance;
     outsidePalette.skin[0u] = MakeSingleJointSkin(1u);
-    outsidePalette.skeletonJointCount = 2u;
+    outsidePalette.skeletonJointCount = s_ExpectedDualCount;
     outsidePalette.inverseBindMatrices.clear();
     joints.joints.resize(1u, ::Float34Identity());
     EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinJointPalette(outsidePalette, joints.joints, joints.skinningMode, jointMatrices));

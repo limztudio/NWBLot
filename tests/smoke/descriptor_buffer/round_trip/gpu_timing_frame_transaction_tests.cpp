@@ -20,6 +20,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -521,7 +524,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingFrameTransactionAcceptedBeginOnly
     timing.collect(device, 210u);
 
     const GpuTimingRecorderStatistics statistics = timing.statistics(device);
-    EXPECT_EQ(statistics.quarantinedScopeCount, 2u);
+    EXPECT_EQ(statistics.quarantinedScopeCount, s_ExpectedDualCount);
     EXPECT_EQ(statistics.materializedQueryCount, 4u);
 
     s_scope->setGpuTimingEnabled(false);

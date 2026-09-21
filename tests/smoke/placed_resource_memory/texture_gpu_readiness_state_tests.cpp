@@ -24,6 +24,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -324,7 +327,7 @@ TEST_F(TextureGpuReadinessStateTest, TextureUavPolicyRetainsOnceAndPersistsAcros
     commandList->open();
     commandList->setEnableUavBarriersForTexture(rawTexture, false);
     const u32 retainedReferences = rawTexture->getReferenceCount();
-    EXPECT_EQ(retainedReferences, 2u);
+    EXPECT_EQ(retainedReferences, s_ExpectedDualCount);
     commandList->setEnableUavBarriersForTexture(rawTexture, true);
     EXPECT_EQ(rawTexture->getReferenceCount(), retainedReferences);
     texture.reset();
@@ -343,7 +346,7 @@ TEST_F(TextureGpuReadinessStateTest, TextureUavPolicyRetainsOnceAndPersistsAcros
 
 TEST_F(TextureGpuReadinessStateTest, OwnershipLateConflictPublishesNoEarlierSubresource){
     const GpuPhysicalQueueTopology topology = device().getPhysicalQueueTopology();
-    if(!topology.queues || topology.queueCount < 2u)
+    if(!topology.queues || topology.queueCount < s_ExpectedDualCount)
         GTEST_SKIP() << "Texture ownership atomicity needs two distinct physical queues.";
 
     GpuPhysicalQueueId firstDestination = topology.queues[0u].id;
@@ -357,7 +360,7 @@ TEST_F(TextureGpuReadinessStateTest, OwnershipLateConflictPublishesNoEarlierSubr
     if(!secondDestination.valid())
         GTEST_SKIP() << "Texture ownership atomicity needs two distinct physical queue identities.";
 
-    TextureDesc desc = ordinaryTextureDesc().setMipLevels(2u).setKeepInitialState(true);
+    TextureDesc desc = ordinaryTextureDesc().setMipLevels(s_ExpectedDualCount).setKeepInitialState(true);
     TextureHandle texture = device().createTexture(desc);
     ASSERT_TRUE(texture);
     CommandListHandle commandList = device().createCommandList();

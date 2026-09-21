@@ -16,6 +16,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -501,7 +504,7 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
         Graphics::TextureDesc()
             .setWidth(4u)
             .setHeight(4u)
-            .setMipLevels(2u)
+            .setMipLevels(s_ExpectedDualCount)
             .setFormat(Graphics::Format::RGBA8_UNORM)
             .setInitialState(Graphics::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
@@ -565,7 +568,7 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         const Graphics::GpuTaskGraphTaskView uploadTaskView = declarations.taskAt(uploadTask.index);
 
-        ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+        ASSERT_EQ(uploadTaskView.resourceUseCount, s_ExpectedDualCount);
         ASSERT_NE(uploadTaskView.resourceUses, nullptr);
         EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destination);
         EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
@@ -597,7 +600,7 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     EXPECT_TRUE(graph.addClearTextureTask(clearTaskDesc, clearDesc).valid());
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
 
-    EXPECT_EQ(declarations.taskCount(), 2u);
+    EXPECT_EQ(declarations.taskCount(), s_ExpectedDualCount);
 }
 
 TEST(GpuTaskGraph, RetainedTextureStateCompletenessHasNoProductionTestMutationHook){

@@ -25,6 +25,10 @@
 namespace __hidden_cpu_task_scheduler_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -166,7 +170,7 @@ TEST(CpuTaskSchedulerTests, DependencyFanInWaitsForEveryPredecessorIncludingDupl
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     TaskGate rootGate;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+    CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
     ScopeExit releaseRoot([&]()noexcept{ rootGate.open(); });
     Atomic<u32> completedBits{ 0u };
     Atomic<u32> observedBits{ 0u };
@@ -236,7 +240,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
     Atomic<u32> total{ 0u };
     Atomic<u32> retirementsSeenByDependent{ 0u };
     Atomic<bool> rejected{ false };
-    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+    CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
     ScopeExit releaseGrandchild([&]()noexcept{ grandchildGate.open(); });
     const auto parent = scheduler.submit([
         &scheduler, &grandchildGate, &retirements, &total, &rejected, parentCapture = LifetimeProbe(retirements, 11u)
@@ -278,7 +282,7 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     TaskGate unrelatedGate;
-    CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+    CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
     CpuTaskScope unrelated(scheduler);
     CpuTaskScope owned(scheduler);
     ScopeExit releaseUnrelated([&]()noexcept{ unrelatedGate.open(); });
@@ -415,9 +419,9 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     scheduler.wait();
     EXPECT_FALSE(occupied.expired.load());
     EXPECT_EQ(cursor.load(), 3u);
-    EXPECT_EQ(order[0u], 2u);
+    EXPECT_EQ(order[0u], s_ExpectedDualCount);
     EXPECT_EQ(order[1u], 1u);
-    EXPECT_EQ(order[2u], 0u);
+    EXPECT_EQ(order[s_ThirdElementIndex], 0u);
 }
 
 
@@ -429,14 +433,14 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     CpuTaskScope scope(scheduler);
     u32 invoked = 0u;
     const auto predecessor = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)](){ invoked += capture.value; });
-    const auto dependent = scheduler.submit([&invoked, capture = LifetimeProbe(retired, 2u)](){ invoked += capture.value; }, predecessor);
+    const auto dependent = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)](){ invoked += capture.value; }, predecessor);
     scope.cancel();
     EXPECT_FALSE(scope.submit([&](){ ++invoked; }).valid());
     scheduler.wait(dependent);
     scope.wait();
     EXPECT_EQ(invoked, 0u);
-    EXPECT_EQ(retired.load(), 2u);
-    EXPECT_EQ(scheduler.statistics().canceledTasks, 2u);
+    EXPECT_EQ(retired.load(), s_ExpectedDualCount);
+    EXPECT_EQ(scheduler.statistics().canceledTasks, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().completedTasks, 0u);
 }
 
@@ -465,7 +469,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
     EXPECT_FALSE(parentGate.expired.load());
     EXPECT_EQ(childInvocations.load(), 0u);
     EXPECT_EQ(continuationInvocations.load(), 0u);
-    EXPECT_GE(scheduler.statistics().canceledTasks, 2u);
+    EXPECT_GE(scheduler.statistics().canceledTasks, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
 
@@ -474,8 +478,8 @@ TEST(CpuTaskSchedulerTests, StatisticsAccountForQueuedCompletedAndCanceledTasks)
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(0u);
-    CpuTaskHandle predecessors[2u] = { scheduler.submit([](){}), scheduler.submit([](){}) };
-    const auto joined = scheduler.submit([](){}, {}, predecessors, 2u);
+    CpuTaskHandle predecessors[s_ThirdElementIndex] = { scheduler.submit([](){}), scheduler.submit([](){}) };
+    const auto joined = scheduler.submit([](){}, {}, predecessors, s_ExpectedDualCount);
     const auto queued = scheduler.statistics();
     EXPECT_EQ(queued.outstandingTasks, 3u);
     EXPECT_EQ(queued.peakOutstandingTasks, 3u);
@@ -488,7 +492,7 @@ TEST(CpuTaskSchedulerTests, StatisticsAccountForQueuedCompletedAndCanceledTasks)
     }
     const auto finished = scheduler.statistics();
     EXPECT_EQ(finished.completedTasks, 3u);
-    EXPECT_EQ(finished.canceledTasks, 2u);
+    EXPECT_EQ(finished.canceledTasks, s_ExpectedDualCount);
     EXPECT_EQ(finished.outstandingTasks, 0u);
     EXPECT_EQ(finished.peakOutstandingTasks, 3u);
     EXPECT_EQ(finished.performanceTasks + finished.efficiencyTasks + finished.unclassifiedTasks, 3u);
@@ -501,7 +505,7 @@ TEST(CpuTaskSchedulerTests, IsolatedHeavyAndLightTasksUseTheirMatchingPhysicalCa
     DeadlineGuard deadline;
     InteropVector<CpuWorkerPlacement> topology;
     ASSERT_TRUE(QueryCpuWorkerPlacements(topology));
-    CpuTaskScheduler scheduler(2u);
+    CpuTaskScheduler scheduler(s_ExpectedDualCount);
     const auto workers = scheduler.statistics();
     if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
         GTEST_SKIP() << "The permitted CPUs do not provide both capacity classes.";
@@ -528,7 +532,7 @@ TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsO
     DeadlineGuard deadline;
     TaskGate preferredGate;
     TaskGate spillGate;
-    CpuTaskScheduler scheduler(2u);
+    CpuTaskScheduler scheduler(s_ExpectedDualCount);
     ScopeExit releaseWorkers([&]()noexcept{ preferredGate.open(); spillGate.open(); });
     const auto workers = scheduler.statistics();
     if(workers.performanceWorkers == 0u || workers.efficiencyWorkers == 0u)
@@ -678,7 +682,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         if(!rejected)
             ExitTestProcess(1u);
         scheduler.wait(parent);
-        ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
+        ExitTestProcess(scheduler.statistics().outstandingTasks == 0u ? 0u : s_ExpectedDualCount);
     }, testing::ExitedWithCode(0), "");
 }
 
@@ -702,7 +706,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         if(!rejected)
             ExitTestProcess(1u);
         scheduler.wait(dependent);
-        ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : 2u);
+        ExitTestProcess(continuations == 3u && scheduler.statistics().outstandingTasks == 0u ? 0u : s_ExpectedDualCount);
     }, testing::ExitedWithCode(0), "");
 }
 
@@ -712,7 +716,7 @@ TEST(CpuTaskSchedulerTests, DescendantOnAnotherWorkerCannotJoinItsAncestorsScope
         using namespace __hidden_cpu_task_scheduler_tests;
         DeadlineGuard deadline(true);
         TaskGate parentGate;
-        CpuTaskScheduler scheduler(HomogeneousWorkers(2u));
+        CpuTaskScheduler scheduler(HomogeneousWorkers(s_ExpectedDualCount));
         CpuTaskScope scope(scheduler);
         Atomic<usize> parentWorker{ 0u };
         EXPECT_TRUE(scope.submit([&](){

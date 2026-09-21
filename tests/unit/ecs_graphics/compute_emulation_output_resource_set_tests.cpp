@@ -21,6 +21,10 @@
 namespace __hidden_compute_emulation_output_resource_set_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -121,7 +125,7 @@ TEST(ComputeEmulationOutputResourceSet, PreservesOrderAndReusesAnExistingUnnamed
     EXPECT_EQ(view.resourceAt(existing.index).identity, Name("tests/compute_output_set/existing_alias"));
     EXPECT_EQ(view.resourceAt(existing.index).markerLabel, "Existing Output Buffer");
     EXPECT_EQ(view.resourceAt(1u).identity, first->getCreationDescription().debugName);
-    EXPECT_EQ(view.resourceAt(2u).identity, last->getCreationDescription().debugName);
+    EXPECT_EQ(view.resourceAt(s_ThirdElementIndex).identity, last->getCreationDescription().debugName);
     description = unnamed->getCreationDescription();
 }
 
@@ -163,7 +167,7 @@ TEST(ComputeEmulationOutputResourceSet, LateInvalidInputsKeepOnlyTheImportedPref
             context.plan.outputBuffers[s_FailureIndex] = nullptr;
         else if(failureKind == 1u)
             context.plan.outputBuffers[s_FailureIndex] = context.makeBuffer(NAME_NONE);
-        else if(failureKind == 2u){
+        else if(failureKind == s_ExpectedDualCount){
             const Name identity = context.plan.outputBuffers[s_FailureIndex]->getCreationDescription().debugName;
             conflict = context.makeBuffer(identity);
             ASSERT_TRUE(context.importExisting(conflict, identity).valid());
@@ -209,7 +213,7 @@ TEST(ComputeEmulationOutputResourceSet, LargeMixedImportsPreserveAliasesOrderAnd
     }
     for(usize remaining = s_Count; remaining != 0u; --remaining){
         const usize index = remaining - 1u;
-        if(index % 2u == 0u){
+        if(index % s_ExpectedDualCount == 0u){
             existing[index] = context.importExisting(
                 context.buffers[index], IndexedName(Name("tests/compute_output_set/large_alias"), index)
             );
@@ -245,7 +249,7 @@ TEST(ComputeEmulationOutputResourceSet, LargeMixedImportsPreserveAliasesOrderAnd
     }
     context.plan.reset();
     for(const auto& buffer : context.buffers)
-        EXPECT_EQ(buffer->getReferenceCount(), 2u);
+        EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     context.graph.reset();
     for(const auto& buffer : context.buffers)
         EXPECT_EQ(buffer->getReferenceCount(), 1u);
@@ -303,7 +307,7 @@ TEST(ComputeEmulationOutputResourceSet, ConflictingSetIdentityStillImportsNewBuf
     ASSERT_TRUE(view.valid());
     EXPECT_TRUE(view.validResourceSet(originalSet));
     EXPECT_TRUE(view.findImportedBuffer(replacement).valid());
-    EXPECT_EQ(view.resourceCount(), 2u);
+    EXPECT_EQ(view.resourceCount(), s_ExpectedDualCount);
     EXPECT_EQ(view.resourceSetCount(), 1u);
 }
 
@@ -387,7 +391,7 @@ TEST(ComputeEmulationOutputResourceSet, RepeatedRequestsRetainOnlyGraphOwnedHand
             const auto resource = view.findImportedBuffer(buffer);
             ASSERT_TRUE(resource.valid());
             EXPECT_EQ(view.bufferForResource(resource), buffer.get());
-            EXPECT_EQ(buffer->getReferenceCount(), 2u);
+            EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
         }
         EXPECT_FALSE(view.findImportedBuffer({}).valid());
         const ArenaMemoryStats memory = scratch.memoryStats();

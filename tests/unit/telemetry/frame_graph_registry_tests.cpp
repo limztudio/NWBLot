@@ -14,6 +14,10 @@
 namespace __hidden_telemetry_frame_graph_registry_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
+
 using namespace TelemetryTestDetail;
 
 class PendingNameFrameGraphContributor final : public Telemetry::IFrameGraphContributor{
@@ -50,8 +54,8 @@ public:
     for(u32 packetIndex = 0u; packetIndex < 19u; ++packetIndex){
         Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
             .packetGeneration = 52u,
-            .taskCount = packetIndex == 0u ? 2u : 1u,
-            .commandListCount = packetIndex == 0u ? 2u : 1u,
+            .taskCount = packetIndex == 0u ? s_ExpectedDualCount : 1u,
+            .commandListCount = packetIndex == 0u ? s_ExpectedDualCount : 1u,
             .ownerNodeIndex = owner.index,
             .packetIndex = packetIndex,
             .queue = { .index = 1u, .deviceGeneration = 17u },
@@ -69,7 +73,7 @@ public:
             statistics.timelineWaitCount = 1u;
         }
         else{
-            statistics.mergedTimelineWaitCount = packetIndex == 13u ? 2u : 1u;
+            statistics.mergedTimelineWaitCount = packetIndex == 13u ? s_ExpectedDualCount : 1u;
             statistics.plannedWaitTokenCount = statistics.mergedTimelineWaitCount;
         }
         if(!builder.addPacketSubmissionStatistics(owner, statistics))
@@ -80,7 +84,7 @@ public:
         Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
             .packetGeneration = 52u,
             .taskCount = 1u,
-            .commandListCount = queuePacketIndex == 0u ? 2u : 1u,
+            .commandListCount = queuePacketIndex == 0u ? s_ExpectedDualCount : 1u,
             .ownerNodeIndex = owner.index,
             .packetIndex = 19u + queuePacketIndex,
             .queue = { .index = 3u, .deviceGeneration = 17u },
@@ -97,7 +101,7 @@ public:
             statistics.plannedWaitTokenCount = 6u;
             statistics.timelineWaitCount = 6u;
         }
-        else if(queuePacketIndex == 2u){
+        else if(queuePacketIndex == s_ExpectedDualCount){
             statistics.plannedWaitTokenCount = 11u;
             statistics.mergedTimelineWaitCount = 11u;
         }
@@ -222,7 +226,7 @@ TEST(Telemetry, FrameGraphRegistryPreservesRuntimeStatistics){
     EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.compile.uploadBlobBytes, 30u);
     EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.recording.parallelPacketCount, 29u);
     EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.acceptedFrontierSubmissionCount, 28u);
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 2u);
+    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
     EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].ownerNodeIndex, 0u);
     EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.queue.index, 1u);
     EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.queue.index, 3u);
@@ -273,7 +277,7 @@ TEST(Telemetry, FrameGraphBuilderCopiesPhysicalQueueRuntimeStatistics){
         MakeFrameGraphPhysicalQueueRuntimeStatistics(3u)
     ;
     derivedOutOfBounds.compile.taskCount = 29u;
-    derivedOutOfBounds.compile.mergedTaskCount = 2u;
+    derivedOutOfBounds.compile.mergedTaskCount = s_ExpectedDualCount;
     derivedOutOfBounds.recording.taskCount = 13u;
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(derivedOutOfBounds));
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(
@@ -339,7 +343,7 @@ TEST(Telemetry, RecordFrameGraphUsesTelemetryEvent){
     EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 909u);
     EXPECT_EQ(parsed.nodes.size(), 3u);
-    EXPECT_EQ(parsed.edges.size(), 2u);
+    EXPECT_EQ(parsed.edges.size(), s_ExpectedDualCount);
 }
 
 TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
@@ -366,7 +370,7 @@ TEST(Telemetry, CaptureSessionRecordsFrameGraphWithContext){
     EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 910u);
     EXPECT_EQ(parsed.nodes.size(), 3u);
-    EXPECT_EQ(parsed.edges.size(), 2u);
+    EXPECT_EQ(parsed.edges.size(), s_ExpectedDualCount);
 }
 
 

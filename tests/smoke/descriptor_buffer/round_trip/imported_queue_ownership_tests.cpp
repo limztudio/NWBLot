@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -287,8 +290,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionUsesStoredToke
     EXPECT_TRUE(consumerToken.valid());
     EXPECT_TRUE(acceptedToken.valid());
     EXPECT_FALSE(submissionObserver.overflowed());
-    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), 2u);
-    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), 2u);
+    ASSERT_EQ(submissionObserver.capturedSubmissionCount(), s_ExpectedDualCount);
+    EXPECT_EQ(submissionObserver.successfulSubmissionCount(), s_ExpectedDualCount);
     EXPECT_EQ(submissionObserver.successfulWaitCount(), 0u);
     VulkanTestQueueSubmit2Capture consumerCapture;
     ASSERT_TRUE(submissionObserver.capturedSubmission(1u, consumerCapture));
@@ -473,7 +476,7 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
         const GpuCompiledTaskView compiledTask = views.compiled.findTask(task);
         ASSERT_TRUE(compiledTask.valid());
         EXPECT_EQ(compiledTask.plan->queue, graphicsQueue);
-        ASSERT_EQ(compiledTask.plan->prologueBarrierCount, 2u);
+        ASSERT_EQ(compiledTask.plan->prologueBarrierCount, s_ExpectedDualCount);
         ASSERT_NE(compiledTask.prologueBarriers, nullptr);
         EXPECT_EQ(compiledTask.prologueBarriers[0u].type, GpuCompiledBarrierType::BufferOwnershipAcquire);
         EXPECT_TRUE(compiledTask.prologueBarriers[0u].isInitialOwnerHandoff);

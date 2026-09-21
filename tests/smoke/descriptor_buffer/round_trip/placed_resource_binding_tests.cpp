@@ -17,6 +17,8 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -32,7 +34,7 @@ TEST_F(DescriptorBufferRoundTripTest, PipelineLocalResourceLayoutsAreRejected){
     leafDesc.setVisibility(ShaderType::Compute);
     leafDesc.addItem(BindingLayoutItem::ConstantBuffer(0u, 1u));
     leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(1u, 1u));
-    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(2u, 1u));
+    leafDesc.addItem(BindingLayoutItem::StructuredBuffer_SRV(s_ExpectedDualCount, 1u));
 #if defined(NWB_DEBUG) || defined(NWB_OPTIMIZE)
     EXPECT_DEATH_IF_SUPPORTED({
         EXPECT_FALSE(device.createBindingLayout(leafDesc));
@@ -251,9 +253,9 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
     HeapHandle concurrentHeap = device.createHeap(heapDesc);
     ASSERT_TRUE(concurrentBuffer);
     ASSERT_TRUE(concurrentHeap);
-    Latch bindersReady(2u);
-    bool bindingResults[2u] = {};
-    Thread binders[2u];
+    Latch bindersReady(s_ExpectedDualCount);
+    bool bindingResults[s_ExpectedDualCount] = {};
+    Thread binders[s_ExpectedDualCount];
     for(u32 binderIndex = 0u; binderIndex < LengthOf(binders); ++binderIndex){
         binders[binderIndex] = Thread([&, binderIndex](){
             bindersReady.count_down();
@@ -269,7 +271,7 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
     Heap* const retainedHeap = heap.get();
     EXPECT_EQ(retainedHeap->getReferenceCount(), 3u);
     heap.reset();
-    EXPECT_EQ(retainedHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedHeap->getReferenceCount(), s_ExpectedDualCount);
     secondBuffer.reset();
     EXPECT_EQ(retainedHeap->getReferenceCount(), 1u);
     reusedBuffer.reset();
@@ -347,7 +349,7 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedTextureAndCrossClassBindingsReserveR
     Heap* const retainedMixedHeap = mixedHeap.get();
     EXPECT_EQ(retainedMixedHeap->getReferenceCount(), 3u);
     mixedHeap.reset();
-    EXPECT_EQ(retainedMixedHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedMixedHeap->getReferenceCount(), s_ExpectedDualCount);
     const Object retainedView = secondTexture->getNativeView(
         GraphicsBackend::ObjectTypes::VK_ImageView,
         Format::RGBA8_UNORM,
@@ -400,7 +402,7 @@ TEST_F(DescriptorBufferRoundTripTest, VirtualAccelStructRequirementsCoverBacking
         GTEST_SKIP() << "Heap memory type is incompatible with acceleration-structure storage on this device.";
 
     Heap* const retainedHeap = heap.get();
-    EXPECT_EQ(retainedHeap->getReferenceCount(), 2u);
+    EXPECT_EQ(retainedHeap->getReferenceCount(), s_ExpectedDualCount);
     heap.reset();
     EXPECT_EQ(retainedHeap->getReferenceCount(), 1u);
     EXPECT_NE(

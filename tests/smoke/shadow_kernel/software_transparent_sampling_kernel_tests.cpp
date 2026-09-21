@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -33,8 +36,8 @@ struct Input{
     Float4U current{ 0.0f, 0.0f, 10.0f, 1.0f };
     Float4U previous{ 0.0f, 0.0f, 10.0f, 1.0f };
     Float4U moments{ 0.5f, 0.25f, 16.0f, 0.0f };
-    u32 pixelX = 2u;
-    u32 pixelY = 2u;
+    u32 pixelX = s_ExpectedDualCount;
+    u32 pixelY = s_ExpectedDualCount;
     u32 width = 16u;
     u32 height = 16u;
     u32 historyValid = 1u;
@@ -57,8 +60,8 @@ static_assert(sizeof(Push) == 12u);
     result.height = height;
     result.pixelX = x;
     result.pixelY = y;
-    result.world.x = (static_cast<f32>(x * 2u) + 0.5f) / static_cast<f32>(width) * 2.0f - 1.0f;
-    result.world.y = 1.0f - (static_cast<f32>(y * 2u) + 0.5f) / static_cast<f32>(height) * 2.0f;
+    result.world.x = (static_cast<f32>(x * s_ExpectedDualCount) + 0.5f) / static_cast<f32>(width) * 2.0f - 1.0f;
+    result.world.y = 1.0f - (static_cast<f32>(y * s_ExpectedDualCount) + 0.5f) / static_cast<f32>(height) * 2.0f;
     return result;
 }
 
@@ -137,16 +140,16 @@ TEST_F(ShadowKernelTest, SoftwareTransparentSamplingRejectsLocalDisocclusionMoti
     for(const u32 width : { 1u, 15u, 16u, 17u }){
         for(const u32 height : { 1u, 15u, 16u, 17u }){
             append(Stable(width, height, 0u, 0u), 1u);
-            append(Stable(width, height, (width - 1u) / 2u, (height - 1u) / 2u), 1u);
+            append(Stable(width, height, (width - 1u) / s_ExpectedDualCount, (height - 1u) / s_ExpectedDualCount), 1u);
         }
     }
-    const Input stable = Stable(16u, 16u, 2u, 2u);
+    const Input stable = Stable(16u, 16u, s_ExpectedDualCount, s_ExpectedDualCount);
     for(u32 fault = 0u; fault < 20u; ++fault){
         Input test = stable;
         switch(fault){
         case 0u: test.historyValid = 0u; break;
         case 1u: test.current.w = 0.0f; break;
-        case 2u: test.previous.w = 0.0f; break;
+        case s_ExpectedDualCount: test.previous.w = 0.0f; break;
         case 3u: test.current.z = 12.0f; break;
         case 4u: test.previous.x = 1.0f; test.previous.y = 1.0f; break;
         case 5u: test.world.x += 0.125f; break;

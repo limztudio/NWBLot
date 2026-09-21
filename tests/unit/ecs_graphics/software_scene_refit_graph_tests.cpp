@@ -23,6 +23,9 @@
 namespace __hidden_software_scene_refit_graph_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -57,10 +60,10 @@ struct RefitContext{
         snapshot->sceneNodes = makeBuffer(Name("tests/software_scene_refit/scene"));
         root = makeBuffer(Name("tests/software_scene_refit/root"));
         snapshot->inputDescriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u);
-        snapshot->sceneDescriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 2u);
+        snapshot->sceneDescriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
         snapshot->queue = { .index = 0u, .deviceGeneration = 1u };
         snapshot->nodeCount = 3u;
-        for(u32 instance = 0u; instance < 2u; ++instance){
+        for(u32 instance = 0u; instance < s_ExpectedDualCount; ++instance){
             snapshot->inputs.push_back({ {}, 3u, {} });
             snapshot->meshNodes.push_back(root);
         }
@@ -100,7 +103,7 @@ struct RefitContext{
             .setIdentity(Name("tests/software_scene_refit/predecessor"))
             .setMarkerLabel("Prepared Mesh and Scene Producer")
             .setQueue(RendererTaskGraphDetail::GraphicsComputeUploadQueueRequest())
-            .setResourceUses(uses, importRoot && meshBuild ? 2u : 1u)
+            .setResourceUses(uses, importRoot && meshBuild ? s_ExpectedDualCount : 1u)
         ;
         predecessor = graph.addTask(desc);
     }
@@ -182,7 +185,7 @@ TEST(SoftwareSceneRefitGraph, RetainedInputUploadCompilesAndOwnsTheSrvTransition
             const auto input = view.findImportedBuffer(context.snapshot->inputBuffer);
             ASSERT_TRUE(input.valid());
             const auto upload = view.taskAt(tasks.inputUpload.index);
-            ASSERT_EQ(upload.resourceUseCount, 2u);
+            ASSERT_EQ(upload.resourceUseCount, s_ExpectedDualCount);
             EXPECT_EQ(upload.resourceUses[0u].requiredState, Core::ResourceStates::CopyDest);
             EXPECT_EQ(upload.resourceUses[1u].requiredState, Core::ResourceStates::Common);
             EXPECT_EQ(view.resourceAt(input.index).externalFinalState, Core::ResourceStates::Common);

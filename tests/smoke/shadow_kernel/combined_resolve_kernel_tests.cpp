@@ -27,6 +27,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_HalfDivisor = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -101,7 +105,7 @@ static_assert(sizeof(HalfPixel) == 8u);
 }
 
 [[nodiscard]] HalfPixel InitialPixel(const u32 x, const u32 y, const u32 layer){
-    return Pack({ 0.125f + 0.0625f * static_cast<f32>(layer), y % 2u == 0u ? 0.5f : 0.0f, 0.75f, x % 2u == 0u ? 0.25f : 0.375f });
+    return Pack({ 0.125f + 0.0625f * static_cast<f32>(layer), y % s_ExpectedDualCount == 0u ? 0.5f : 0.0f, 0.75f, x % s_ExpectedDualCount == 0u ? 0.25f : 0.375f });
 }
 
 void RunCase(
@@ -118,10 +122,10 @@ void RunCase(
     SCOPED_TRACE(testCase.fit.receiverOffset);
     SCOPED_TRACE(static_cast<u32>(testCase.fit.mask));
     constexpr u32 layers = ShadowResolveGuidedFit::s_LayerCount;
-    const u32 halfWidth = DivideUp(testCase.width, 2u);
-    const u32 halfHeight = DivideUp(testCase.height, 2u);
+    const u32 halfWidth = DivideUp(testCase.width, s_HalfDivisor);
+    const u32 halfHeight = DivideUp(testCase.height, s_HalfDivisor);
     const u32 outputWidth = testCase.width + 3u;
-    const u32 outputHeight = testCase.height + 2u;
+    const u32 outputHeight = testCase.height + s_ExpectedDualCount;
     const usize halfCount = static_cast<usize>(halfWidth) * halfHeight;
     const ShadowResolveGuidedFit::ReferenceInput rgbReference{ .slotStart = testCase.slotStart, .slotCount = testCase.slotCount };
     ShadowResolveGuidedFit::ReferenceInput opaqueReference = s_OpaqueInput;
@@ -188,11 +192,11 @@ void RunCase(
     });
     for(u32 index = 0u; index < LengthOf(sources); ++index){
         ASSERT_TRUE(sources[index]);
-        descriptors[index] = heap.allocate(index < 2u ? GpuDescriptorClass::SampledImage2DArray : GpuDescriptorClass::SampledImage);
+        descriptors[index] = heap.allocate(index < s_ExpectedDualCount ? GpuDescriptorClass::SampledImage2DArray : GpuDescriptorClass::SampledImage);
         ASSERT_TRUE(descriptors[index].valid());
         ASSERT_TRUE(heap.write(descriptors[index], DescriptorWriteItem::Texture_SRV(0u, sources[index].get())));
     }
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         outputs[arm] = device.createTexture(outputDesc);
         readbacks[arm] = device.createStagingTexture(outputDesc, CpuAccessMode::Read);
         ASSERT_TRUE(outputs[arm]);
@@ -216,7 +220,7 @@ void RunCase(
     commands->open();
     for(u32 index = 0u; index < LengthOf(sources); ++index){
         const u32 sourceWidth = index < 3u ? halfWidth : testCase.width;
-        const u32 sourceLayers = index < 2u ? layers : 1u;
+        const u32 sourceLayers = index < s_ExpectedDualCount ? layers : 1u;
         for(u32 layer = 0u; layer < sourceLayers; ++layer)
             ASSERT_TRUE(commands->tryWriteTexture(*sources[index], layer, 0u, data[index]->data() + layer * halfCount, sourceWidth * sizeof(HalfPixel)));
         commands->setTextureState(sources[index].get(), s_AllSubresources, ResourceStates::ShaderResource);
@@ -224,7 +228,7 @@ void RunCase(
     const Float4U camera{ 0.0f, 0.0f, 0.0f, 1.0f };
     ASSERT_TRUE(commands->tryWriteBuffer(*scene, &camera, sizeof(camera)));
     commands->setBufferState(scene.get(), ResourceStates::ConstantBuffer);
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         for(u32 layer = 0u; layer < layers; ++layer){
             const usize offset = static_cast<usize>(layer) * outputWidth * outputHeight;
             ASSERT_TRUE(commands->tryWriteTexture(*outputs[arm], layer, 0u, initial.data() + offset, outputWidth * sizeof(HalfPixel)));
@@ -259,7 +263,7 @@ void RunCase(
     push.outputStorageSlot = descriptors[7].slot();
     push.upsampleFold = 0u;
     dispatch(combinedPipeline);
-    for(u32 arm = 0u; arm < 2u; ++arm){
+    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
         for(u32 layer = 0u; layer < layers; ++layer)
             commands->copyTexture(*readbacks[arm], TextureSlice{}.setArraySlice(layer), *outputs[arm], TextureSlice{}.setArraySlice(layer));
     }
@@ -298,12 +302,12 @@ void RunCase(
                 const bool active = layer >= testCase.slotStart && layer < Min(testCase.slotStart + testCase.slotCount, layers);
                 if(!active || x >= testCase.width || y >= testCase.height){
                     const HalfPixel expected = InitialPixel(x, y, layer);
-                    for(u32 arm = 0u; arm < 2u; ++arm)
+                    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm)
                         EXPECT_EQ(NWB_MEMCMP(&pixels[arm], &expected, sizeof(HalfPixel)), 0);
                 }
                 else if(x == 0u || y == 0u || testCase.fit.mask == ShadowResolveGuidedFit::Mask::AllInvalid){
                     const HalfPixel expected = Pack({ 1.0f, 1.0f, 1.0f, 1.0f });
-                    for(u32 arm = 0u; arm < 2u; ++arm)
+                    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm)
                         EXPECT_EQ(NWB_MEMCMP(&pixels[arm], &expected, sizeof(HalfPixel)), 0);
                 }
                 else{
@@ -319,7 +323,7 @@ void RunCase(
                         { pixels[0].r, pixels[0].g, pixels[0].b },
                         { pixels[1].r, pixels[1].g, pixels[1].b }
                     };
-                    for(u32 arm = 0u; arm < 2u; ++arm){
+                    for(u32 arm = 0u; arm < s_ExpectedDualCount; ++arm){
                         EXPECT_EQ(pixels[arm].a, ConvertFloatToHalf(1.0f));
                         for(u32 channel = 0u; channel < 3u; ++channel){
                             const f32 value = ConvertHalfToFloat(words[arm][channel]);
@@ -394,13 +398,13 @@ bool CombinedShadowResolveKernelTest::loadPipelines(Alloc::ScratchArena& scratch
             .stage = entry.stage.view(),
             .targetProfile = entry.targetProfile.view(),
             .entryPoint = AStringView(entry.entryPoint.data(), entry.entryPoint.size()),
-            .variantName = index == 2u ? "default" : "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2",
+            .variantName = index == s_ExpectedDualCount ? "default" : "NWB_SHADOW_RESOLVE_COMPILED_STAGE=2",
             .defines = &definition,
             .includeDirectories = includes,
             .dependencies = dependencies,
             .sourcePath = sourcePath,
             .outputPath = outputPath,
-            .defineCount = index == 2u ? 0u : 1u,
+            .defineCount = index == s_ExpectedDualCount ? 0u : 1u,
             .optimizationLevel = entry.optimizationLevel
         };
         Impl::ShaderCook::CookVector<u8> bytecode(memoryArena);

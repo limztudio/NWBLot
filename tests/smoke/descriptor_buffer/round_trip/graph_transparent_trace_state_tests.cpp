@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -658,7 +662,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
     const GpuGraphResourceId softwareTraceGeometryMembers[] = {
         shaderBufferResources[0u],
         shaderBufferResources[1u],
-        shaderBufferResources[2u],
+        shaderBufferResources[s_ThirdElementIndex],
         shaderBufferResources[3u],
     };
     const GpuGraphResourceSetId softwareTraceGeometrySet = graph.importResourceSet(
@@ -732,7 +736,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftTransparentTraceEntryStatesR
     }
     const GpuTaskGraphReadViews views(graph, compiledGraph);
     ASSERT_TRUE(views.valid());
-    ASSERT_EQ(views.compiled.packetCount(), 2u);
+    ASSERT_EQ(views.compiled.packetCount(), s_ExpectedDualCount);
     const GpuSubmissionPacketId prefixPacket = views.compiled.packetForTask(prefixTask);
     const GpuSubmissionPacketId tracePacket = views.compiled.packetForTask(traceTask);
     ASSERT_TRUE(prefixPacket.valid());

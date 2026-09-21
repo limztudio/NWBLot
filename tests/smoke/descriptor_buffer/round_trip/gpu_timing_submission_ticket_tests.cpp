@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -249,7 +253,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketRejectsIncomplete
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 1u);
     EXPECT_TRUE(timingSink.stats(s_SubmissionTicketScope.identity).valid());
-    ASSERT_EQ(completedSamples.sampleCount, 2u);
+    ASSERT_EQ(completedSamples.sampleCount, s_ExpectedDualCount);
     EXPECT_EQ(completedSamples.samples[1u].scopeName, s_SubmissionTicketScope.identity);
     EXPECT_EQ(completedSamples.samples[1u].attribution, acceptedTimingAttribution);
     EXPECT_TRUE(completedSamples.samples[1u].published);
@@ -305,12 +309,12 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketRejectsIncomplete
 
     s_scope->setGpuTimingEnabled(false);
     ASSERT_EQ(completedSamples.sampleCount, 3u);
-    EXPECT_EQ(completedSamples.samples[2u].scopeName, s_SubmissionTicketScope.identity);
-    EXPECT_EQ(completedSamples.samples[2u].attribution, retiredTimingAttribution);
-    EXPECT_FALSE(completedSamples.samples[2u].published);
-    EXPECT_EQ(completedSamples.samples[2u].durationSeconds, 0.0);
-    EXPECT_EQ(completedSamples.samples[2u].physicalQueue, retiredQueue);
-    EXPECT_FALSE(completedSamples.samples[2u].comparableRange.valid());
+    EXPECT_EQ(completedSamples.samples[s_ThirdElementIndex].scopeName, s_SubmissionTicketScope.identity);
+    EXPECT_EQ(completedSamples.samples[s_ThirdElementIndex].attribution, retiredTimingAttribution);
+    EXPECT_FALSE(completedSamples.samples[s_ThirdElementIndex].published);
+    EXPECT_EQ(completedSamples.samples[s_ThirdElementIndex].durationSeconds, 0.0);
+    EXPECT_EQ(completedSamples.samples[s_ThirdElementIndex].physicalQueue, retiredQueue);
+    EXPECT_FALSE(completedSamples.samples[s_ThirdElementIndex].comparableRange.valid());
     timing.resetQueries();
 }
 
@@ -331,7 +335,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketRejectsReplacedEn
     timing.resetQueries();
     s_scope->setGpuTimingEnabled(true);
     ASSERT_TRUE(timing.prepareScopeQueries(s_SubmissionTicketEndFailedScope.identity, device, 1u));
-    timing.beginFrame(2u);
+    timing.beginFrame(s_ExpectedDualCount);
 
     auto producer = device.createCommandList();
     auto replacedConsumer = device.createCommandList();
@@ -479,7 +483,7 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     auto& timingSink = s_scope->gpuTimingSink();
 
     s_scope->setGpuTimingEnabled(true);
-    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, device, 2u));
+    ASSERT_TRUE(timing.prepareScopeQueries(s_ConcurrentSubmissionTicketScope.identity, device, s_ExpectedDualCount));
 
     auto resetCommandList = device.createCommandList();
     ASSERT_NE(resetCommandList.get(), nullptr);
@@ -541,10 +545,10 @@ TEST_F(DescriptorBufferRoundTripTest, GpuTimingSubmissionTicketReservesConcurren
     ASSERT_TRUE(secondRecorded);
 
     CommandList* commandLists[] = { firstCommandList.get(), secondCommandList.get() };
-    ASSERT_TRUE(timingTicket.submit(device, commandLists, 2u));
+    ASSERT_TRUE(timingTicket.submit(device, commandLists, s_ExpectedDualCount));
     ASSERT_TRUE(device.waitForIdle());
     timing.collect(device, 1u);
-    EXPECT_EQ(timingSink.stats(s_ConcurrentSubmissionTicketScope.identity).sampleCount, 2u);
+    EXPECT_EQ(timingSink.stats(s_ConcurrentSubmissionTicketScope.identity).sampleCount, s_ExpectedDualCount);
 
     s_scope->setGpuTimingEnabled(false);
     timing.resetQueries();

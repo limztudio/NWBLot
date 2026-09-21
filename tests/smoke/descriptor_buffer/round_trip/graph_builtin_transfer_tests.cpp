@@ -19,6 +19,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -118,7 +122,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInUploadTextureTaskRecordsGraphOwnedB
     {
         const GpuTaskGraph::DeclarationReadView declarations(graph);
         const GpuTaskGraphTaskView uploadTaskView = declarations.taskAt(uploadTask.index);
-        ASSERT_EQ(uploadTaskView.resourceUseCount, 2u);
+        ASSERT_EQ(uploadTaskView.resourceUseCount, s_ExpectedDualCount);
         ASSERT_NE(uploadTaskView.resourceUses, nullptr);
         const TextureSubresourceSet uploadRange(0u, 1u, 0u, 1u);
         EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destinationResource);
@@ -472,7 +476,7 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         && transferFamily != Limit<u32>::s_Max
         && transferFamily != graphicsFamily
     ;
-    GpuPhysicalQueueInfo queues[2u] = {
+    GpuPhysicalQueueInfo queues[s_ThirdElementIndex] = {
         GpuPhysicalQueueInfo{
             .familyIndex = graphicsFamily,
             .queueIndex = 0u,

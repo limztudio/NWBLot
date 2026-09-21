@@ -21,6 +21,10 @@
 namespace __hidden_material_texture_import_tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -65,7 +69,7 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
     ASSERT_EQ(ImportMaterialSampledTextureResources(context.graph, requested.data(), requested.size(), "New Material Texture", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 5u);
     EXPECT_EQ(resources[0u], existing);
-    EXPECT_EQ(resources[0u], resources[2u]);
+    EXPECT_EQ(resources[0u], resources[s_ThirdElementIndex]);
     EXPECT_EQ(resources[1u], resources[4u]);
     EXPECT_NE(resources[1u], resources[3u]);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
@@ -88,7 +92,7 @@ TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntac
     EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, nullptr, 0u, "Unused", resources), SampledTextureImportResult::Success);
     ASSERT_EQ(resources.size(), 1u);
     EXPECT_EQ(ImportMaterialSampledTextureResources(context.graph, &unnamed, 1u, "New Label", resources), SampledTextureImportResult::Success);
-    ASSERT_EQ(resources.size(), 2u);
+    ASSERT_EQ(resources.size(), s_ExpectedDualCount);
     EXPECT_EQ(resources[1u], existing);
 }
 
@@ -103,7 +107,7 @@ TEST(MaterialTextureImport, SingletonFailuresPreserveExistingOutputAndUseTheComp
         if(failureKind != 0u){
             const Name identity = failureKind == 1u
                 ? NAME_NONE
-                : failureKind == 2u ? prefixIdentity : Name("tests/texture_import/singleton_changed")
+                : failureKind == s_ExpectedDualCount ? prefixIdentity : Name("tests/texture_import/singleton_changed")
             ;
             texture = context.makeTexture(identity);
         }
@@ -115,7 +119,7 @@ TEST(MaterialTextureImport, SingletonFailuresPreserveExistingOutputAndUseTheComp
         Core::Alloc::ScratchArena scratch(Name("tests/texture_import/singleton_failure"));
         ResourceVector resources(scratch);
         resources.push_back(prefix);
-        const auto expected = failureKind < 2u
+        const auto expected = failureKind < s_ExpectedDualCount
             ? SampledTextureImportResult::MissingIdentity
             : SampledTextureImportResult::ImportFailed
         ;
@@ -152,7 +156,7 @@ TEST(MaterialTextureImport, MissingIdentityKeepsTheImportedPrefixAndDoesNotProce
         ASSERT_TRUE(view.valid());
         EXPECT_EQ(view.resourceCount(), 1u);
         EXPECT_EQ(view.textureForResource(resources[0u]), requested[0u].get());
-        EXPECT_FALSE(view.findImportedTexture(requested[2u]).valid());
+        EXPECT_FALSE(view.findImportedTexture(requested[s_ThirdElementIndex]).valid());
     }
 }
 
@@ -171,9 +175,9 @@ TEST(MaterialTextureImport, IdentityConflictIsAnImportFailureAfterTheValidPrefix
     ASSERT_EQ(resources.size(), 1u);
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
-    EXPECT_EQ(view.resourceCount(), 2u);
+    EXPECT_EQ(view.resourceCount(), s_ExpectedDualCount);
     EXPECT_FALSE(view.findImportedTexture(requested[1u]).valid());
-    EXPECT_FALSE(view.findImportedTexture(requested[2u]).valid());
+    EXPECT_FALSE(view.findImportedTexture(requested[s_ThirdElementIndex]).valid());
 }
 
 TEST(MaterialTextureImport, NewCallAfterResetUsesCurrentGenerationAndReplacementHandle){
@@ -210,7 +214,7 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
     }
     for(usize remaining = s_TextureCount; remaining != 0u; --remaining){
         const usize index = remaining - 1u;
-        if(index % 2u != 0u)
+        if(index % s_ExpectedDualCount != 0u)
             continue;
         char indexText[32u] = {};
         const Name alias = DeriveName(Name("tests/texture_import/promoted_alias"), FormatDecimal(index, indexText));
@@ -242,8 +246,8 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
     EXPECT_EQ(view.resourceCount(), s_TextureCount);
     for(usize index = 0u; index < s_TextureCount; ++index){
         const usize textureIndex = (index * 17u) % s_TextureCount;
-        const auto resource = resources[index * 2u + 1u];
-        EXPECT_EQ(resource, resources[index * 2u + 2u]);
+        const auto resource = resources[index * s_ExpectedDualCount + 1u];
+        EXPECT_EQ(resource, resources[index * s_ExpectedDualCount + s_ExpectedDualCount]);
         EXPECT_EQ(view.textureForResource(resource), context.textures[textureIndex].get());
         if(existing[textureIndex].valid()){
             EXPECT_EQ(resource, existing[textureIndex]);
@@ -274,7 +278,7 @@ TEST(MaterialTextureImport, PromotedFailuresKeepOnlyTheAcceptedPrefixAndDoNotSki
             context.textures[s_FailureIndex] = nullptr;
         else if(failureKind == 1u)
             context.textures[s_FailureIndex] = context.makeTexture(NAME_NONE);
-        else if(failureKind == 2u){
+        else if(failureKind == s_ExpectedDualCount){
             const Name identity = context.textures[s_FailureIndex]->getCreationDescription().name;
             conflictingTexture = context.makeTexture(identity);
             ASSERT_TRUE(context.importExisting(conflictingTexture, identity).valid());
@@ -288,7 +292,7 @@ TEST(MaterialTextureImport, PromotedFailuresKeepOnlyTheAcceptedPrefixAndDoNotSki
         }
         Core::Alloc::ScratchArena scratch(Name("tests/texture_import/failure_scratch"));
         ResourceVector resources(scratch);
-        const auto expected = failureKind < 2u
+        const auto expected = failureKind < s_ExpectedDualCount
             ? SampledTextureImportResult::MissingIdentity
             : SampledTextureImportResult::ImportFailed
         ;
@@ -342,7 +346,7 @@ TEST(MaterialTextureImport, PromotedCallsRebuildAfterResetAndLeaveTextureOwnersh
     for(usize index = 0u; index < s_TextureCount; ++index){
         retained[index] = context.textures[index].get();
         EXPECT_NE(resources[index].generation, oldResource.generation);
-        EXPECT_EQ(retained[index]->getReferenceCount(), 2u);
+        EXPECT_EQ(retained[index]->getReferenceCount(), s_ExpectedDualCount);
     }
     context.textures.clear();
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);

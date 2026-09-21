@@ -17,6 +17,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -462,7 +466,7 @@ TEST(GpuTaskGraph, ScoresComputeIndependenceOwnershipAndStrictTiePolicy){
         const Graphics::GpuTaskResourceUse computeUses[] = {
             { .resource = resources[0u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
             { .resource = resources[1u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
-            { .resource = resources[2u], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
+            { .resource = resources[s_ThirdElementIndex], .range = {}, .requiredState = Graphics::ResourceStates::ShaderResource, .access = Graphics::GpuTaskResourceAccess::Read },
         };
         Graphics::GpuTaskDesc computeDesc;
         computeDesc
@@ -577,7 +581,7 @@ TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_EQ(analysis.edges().size(), 3u);
-    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), s_ExpectedDualCount);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
     const Graphics::GpuTaskGraphQueueTopology topology{
         .queues = queues,
@@ -671,7 +675,7 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     ASSERT_EQ(analysis.inferredEdges().size(), 6u);
-    ASSERT_EQ(analysis.schedulingEdges().size(), 2u);
+    ASSERT_EQ(analysis.schedulingEdges().size(), s_ExpectedDualCount);
 
     const Graphics::GpuPhysicalQueueInfo separateFamilyQueues[] = {
         GraphicsQueue(),

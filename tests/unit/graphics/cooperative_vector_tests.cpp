@@ -19,6 +19,9 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -44,33 +47,33 @@ TEST(CooperativeVectorMatrixStride, PadsEveryStandardLayoutByOneElement){
         { CooperativeVectorDataType::SInt8, 1u },
         { CooperativeVectorDataType::UInt8Packed, 1u },
         { CooperativeVectorDataType::SInt8Packed, 1u },
-        { CooperativeVectorDataType::UInt16, 2u },
-        { CooperativeVectorDataType::SInt16, 2u },
+        { CooperativeVectorDataType::UInt16, s_ExpectedDualCount },
+        { CooperativeVectorDataType::SInt16, s_ExpectedDualCount },
         { CooperativeVectorDataType::UInt32, 4u },
         { CooperativeVectorDataType::SInt32, 4u },
         { CooperativeVectorDataType::UInt64, 8u },
         { CooperativeVectorDataType::SInt64, 8u },
         { CooperativeVectorDataType::FloatE4M3, 1u },
         { CooperativeVectorDataType::FloatE5M2, 1u },
-        { CooperativeVectorDataType::Float16, 2u },
-        { CooperativeVectorDataType::BFloat16, 2u },
+        { CooperativeVectorDataType::Float16, s_ExpectedDualCount },
+        { CooperativeVectorDataType::BFloat16, s_ExpectedDualCount },
         { CooperativeVectorDataType::Float32, 4u },
         { CooperativeVectorDataType::Float64, 8u },
     };
 
     for(const TypeCase& typeCase : s_TypeCases){
         const usize rowByteSize = typeCase.byteSize * 3u;
-        const usize columnByteSize = typeCase.byteSize * 2u;
+        const usize columnByteSize = typeCase.byteSize * s_ExpectedDualCount;
         const usize rowStride = GetCooperativeVectorOptimalMatrixStride(
             typeCase.type,
             CooperativeVectorMatrixLayout::RowMajor,
-            2u,
+            s_ExpectedDualCount,
             3u
         );
         const usize columnStride = GetCooperativeVectorOptimalMatrixStride(
             typeCase.type,
             CooperativeVectorMatrixLayout::ColumnMajor,
-            2u,
+            s_ExpectedDualCount,
             3u
         );
 
@@ -85,38 +88,38 @@ TEST(CooperativeVectorMatrixStride, FailsClosedForInvalidOrDriverOptimalInputs){
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,
         CooperativeVectorMatrixLayout::InferencingOptimal,
-        2u,
-        2u
+        s_ExpectedDualCount,
+        s_ExpectedDualCount
     ), 0u);
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,
         CooperativeVectorMatrixLayout::TrainingOptimal,
-        2u,
-        2u
+        s_ExpectedDualCount,
+        s_ExpectedDualCount
     ), 0u);
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,
         CooperativeVectorMatrixLayout::RowMajor,
         0u,
-        2u
+        s_ExpectedDualCount
     ), 0u);
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,
         CooperativeVectorMatrixLayout::ColumnMajor,
-        2u,
+        s_ExpectedDualCount,
         0u
     ), 0u);
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         static_cast<CooperativeVectorDataType::Enum>(Limit<u8>::s_Max),
         CooperativeVectorMatrixLayout::RowMajor,
-        2u,
-        2u
+        s_ExpectedDualCount,
+        s_ExpectedDualCount
     ), 0u);
     EXPECT_EQ(GetCooperativeVectorOptimalMatrixStride(
         CooperativeVectorDataType::Float32,
         static_cast<CooperativeVectorMatrixLayout::Enum>(Limit<u8>::s_Max),
-        2u,
-        2u
+        s_ExpectedDualCount,
+        s_ExpectedDualCount
     ), 0u);
 }
 

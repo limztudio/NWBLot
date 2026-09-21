@@ -20,6 +20,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -238,7 +242,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload depthWarpPayload;
     depthWarpPayload.expectations[0u] = { depthWarp.get(), ResourceStates::UnorderedAccess };
     depthWarpPayload.expectations[1u] = { control.get(), ResourceStates::UnorderedAccess };
-    depthWarpPayload.expectationCount = 2u;
+    depthWarpPayload.expectationCount = s_ExpectedDualCount;
     depthWarpPayload.recordOrdinal = &recordOrdinal;
     depthWarpPayload.expectedOrdinal = 0u;
     depthWarpPayload.recorded = &depthWarpRecorded;
@@ -282,12 +286,12 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload extinctionPayload;
     extinctionPayload.expectations[0u] = { depthWarp.get(), ResourceStates::ShaderResource };
     extinctionPayload.expectations[1u] = { control.get(), ResourceStates::ShaderResource };
-    extinctionPayload.expectations[2u] = { generatedVertex.get(), ResourceStates::VertexBuffer };
+    extinctionPayload.expectations[s_ThirdElementIndex] = { generatedVertex.get(), ResourceStates::VertexBuffer };
     extinctionPayload.expectations[3u] = { extinction.get(), ResourceStates::UnorderedAccess };
     extinctionPayload.expectations[4u] = { extinctionOverflow.get(), ResourceStates::UnorderedAccess };
     extinctionPayload.expectationCount = 5u;
     extinctionPayload.recordOrdinal = &recordOrdinal;
-    extinctionPayload.expectedOrdinal = 2u;
+    extinctionPayload.expectedOrdinal = s_ExpectedDualCount;
     extinctionPayload.device = &device;
     extinctionPayload.timing = &timing;
     extinctionPayload.timingTicket = &extinctionTimingTicket;
@@ -311,7 +315,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     NativePacketAsyncAvboitExtinctionLifecycleTask::Payload integrationPayload;
     integrationPayload.expectations[0u] = { extinction.get(), ResourceStates::ShaderResource };
     integrationPayload.expectations[1u] = { control.get(), ResourceStates::ShaderResource };
-    integrationPayload.expectations[2u] = { extinctionOverflow.get(), ResourceStates::ShaderResource };
+    integrationPayload.expectations[s_ThirdElementIndex] = { extinctionOverflow.get(), ResourceStates::ShaderResource };
     integrationPayload.expectationCount = 3u;
     integrationPayload.recordOrdinal = &recordOrdinal;
     integrationPayload.expectedOrdinal = 3u;
@@ -356,7 +360,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     ASSERT_EQ(analysis.topologicalOrder().size(), 4u);
     EXPECT_EQ(analysis.topologicalOrder()[0u], depthWarpTask);
     EXPECT_EQ(analysis.topologicalOrder()[1u], producerTask);
-    EXPECT_EQ(analysis.topologicalOrder()[2u], extinctionTask);
+    EXPECT_EQ(analysis.topologicalOrder()[s_ThirdElementIndex], extinctionTask);
     EXPECT_EQ(analysis.topologicalOrder()[3u], integrationTask);
 
     const auto expectAssignment = [&](const GpuTaskId task, const GpuPhysicalQueueId queue, const CommandQueue::Enum queueClass){
@@ -385,7 +389,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_NE(extinctionPacket, integrationPacket);
     EXPECT_EQ(views.compiled.packetIdAt(0u), depthWarpPacket);
     EXPECT_EQ(views.compiled.packetIdAt(1u), extinctionPacket);
-    EXPECT_EQ(views.compiled.packetIdAt(2u), integrationPacket);
+    EXPECT_EQ(views.compiled.packetIdAt(s_ThirdElementIndex), integrationPacket);
     EXPECT_TRUE(views.compiled.taskPrecedesOrSharesPacket(depthWarpTask, producerTask));
     EXPECT_TRUE(views.compiled.tasksSharePacket(producerTask, extinctionTask));
     EXPECT_TRUE(views.compiled.taskPrecedesOrSharesPacket(extinctionTask, integrationTask));
@@ -401,7 +405,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     EXPECT_EQ(depthWarpPacketPlan.plan->queue, primaryComputeQueue);
     EXPECT_EQ(extinctionPacketPlan.plan->queue, primaryGraphicsQueue);
     EXPECT_EQ(integrationPacketPlan.plan->queue, primaryComputeQueue);
-    ASSERT_EQ(extinctionPacketPlan.plan->taskCount, 2u);
+    ASSERT_EQ(extinctionPacketPlan.plan->taskCount, s_ExpectedDualCount);
     const GpuTaskId* const extinctionPacketTasks = views.compiled.packet(extinctionPacket).tasks;
     ASSERT_NE(extinctionPacketTasks, nullptr);
     EXPECT_EQ(extinctionPacketTasks[0u], producerTask);
@@ -424,12 +428,12 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitExtinctionComputeEmulationShare
     ASSERT_TRUE(compiledIntegration.valid());
     EXPECT_EQ(compiledDepthWarp.plan->prologueStateSeedCount, 0u);
     EXPECT_EQ(compiledProducer.plan->prologueStateSeedCount, 0u);
-    ASSERT_EQ(compiledExtinction.plan->prologueStateSeedCount, 2u);
+    ASSERT_EQ(compiledExtinction.plan->prologueStateSeedCount, s_ExpectedDualCount);
     ASSERT_EQ(compiledIntegration.plan->prologueStateSeedCount, 3u);
-    ASSERT_EQ(compiledDepthWarp.plan->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledDepthWarp.plan->prologueBarrierCount, s_ExpectedDualCount);
     ASSERT_EQ(compiledProducer.plan->prologueBarrierCount, 1u);
     ASSERT_EQ(compiledExtinction.plan->prologueBarrierCount, 5u);
-    ASSERT_EQ(compiledIntegration.plan->prologueBarrierCount, 2u);
+    ASSERT_EQ(compiledIntegration.plan->prologueBarrierCount, s_ExpectedDualCount);
     const auto hasStateSeed = [&](const GpuTaskId task, const GpuGraphResourceId resource, const GpuSubmissionPacketId sourcePacket){
         const GpuCompiledTaskView compiledTask = views.compiled.findTask(task);
         const GpuPacketStateSeed* const seeds = views.compiled.findTask(task).prologueStateSeeds;
@@ -767,19 +771,19 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
         taskTimingTickets[1u],
         1u
     );
-    tasks[2u] = addTask(
+    tasks[s_ThirdElementIndex] = addTask(
         Name("tests/descriptor_buffer/async_avboit_semantic_extinction"),
         "AVBOIT Extinction",
         graphicsQueue,
         tasks[1u],
-        taskTimingTickets[2u],
-        2u
+        taskTimingTickets[s_ThirdElementIndex],
+        s_ExpectedDualCount
     );
     tasks[3u] = addTask(
         Name("tests/descriptor_buffer/async_avboit_semantic_auxiliary"),
         "AVBOIT Compiler Auxiliary",
         graphicsQueue,
-        tasks[2u],
+        tasks[s_ThirdElementIndex],
         taskTimingTickets[3u],
         3u
     );
@@ -874,7 +878,7 @@ TEST_F(DescriptorBufferRoundTripTest, AsyncAvboitSemanticRangeAcceptsAuxiliaryCo
     const GpuTaskGraphTaskTimingTicket timingBindings[] = {
         GpuTaskGraphTaskTimingTicket{ .task = tasks[0u], .timingTicket = taskTimingTickets[0u] },
         GpuTaskGraphTaskTimingTicket{ .task = tasks[1u], .timingTicket = taskTimingTickets[1u] },
-        GpuTaskGraphTaskTimingTicket{ .task = tasks[2u], .timingTicket = taskTimingTickets[2u] },
+        GpuTaskGraphTaskTimingTicket{ .task = tasks[s_ThirdElementIndex], .timingTicket = taskTimingTickets[s_ThirdElementIndex] },
         GpuTaskGraphTaskTimingTicket{ .task = tasks[4u], .timingTicket = taskTimingTickets[4u] },
         GpuTaskGraphTaskTimingTicket{ .task = tasks[5u], .timingTicket = taskTimingTickets[5u] },
     };

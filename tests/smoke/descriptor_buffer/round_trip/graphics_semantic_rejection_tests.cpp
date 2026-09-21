@@ -18,6 +18,10 @@ NWB_BEGIN
 namespace Tests{
 
 
+constexpr u32 s_ExpectedDualCount = 2u;
+constexpr u32 s_ThirdElementIndex = 2u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -70,7 +74,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
         TextureDesc()
             .setWidth(8u)
             .setHeight(8u)
-            .setDepth(2u)
+            .setDepth(s_ExpectedDualCount)
             .setFormat(Format::RGBA8_UNORM)
             .setDimension(TextureDimension::Texture3D)
             .setInRenderTarget(true)
@@ -358,7 +362,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
                         IndexBufferBinding()
                             .setBuffer(indexBuffer.get())
                             .setFormat(Format::R32_UINT)
-                            .setOffset(2u)
+                            .setOffset(s_ExpectedDualCount)
                     )
             );
             break;
@@ -463,7 +467,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
                     .setIndirectParams(indirectBuffer.get())
             );
             ASSERT_FALSE(commandList->commandRecordingFailed());
-            commandList->drawIndirect(2u, 1u);
+            commandList->drawIndirect(s_ExpectedDualCount, 1u);
             break;
         case Operation::IndirectRangeOutOfBounds:
             commandList->setGraphicsState(
@@ -536,7 +540,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
     lastAcceptedToken = zeroWorkToken;
 
     constexpr u32 s_Index = 0u;
-    DrawIndirectArguments indirectArguments[2u];
+    DrawIndirectArguments indirectArguments[s_ThirdElementIndex];
     indirectArguments[0u].setVertexCount(1u);
     indirectArguments[1u].setVertexCount(1u);
     DrawIndexedIndirectArguments indexedIndirectArguments;
@@ -575,7 +579,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
     );
     commandList->draw(DrawArguments().setVertexCount(1u));
     commandList->drawIndexed(DrawArguments().setVertexCount(1u));
-    commandList->drawIndirect(16u, 2u);
+    commandList->drawIndirect(16u, s_ExpectedDualCount);
     commandList->drawIndexedIndirect(64u, 1u);
     commandList->setGraphicsState(
         GraphicsState()
@@ -604,7 +608,7 @@ TEST_F(DescriptorBufferRoundTripTest, GraphicsSemanticRejectionsDiscardPriorWork
                 IndexBufferBinding()
                     .setBuffer(shortIndexBuffer.get())
                     .setFormat(Format::R16_UINT)
-                    .setOffset(2u)
+                    .setOffset(s_ExpectedDualCount)
             )
     );
     ASSERT_FALSE(commandList->commandRecordingFailed());
@@ -698,10 +702,10 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
     seededDestinationDesc.setInitialState(ResourceStates::ResolveDest);
 
     TextureDesc mismatchedExtentDesc = destinationDesc;
-    mismatchedExtentDesc.setWidth(s_Width / 2u).setHeight(s_Height / 2u);
+    mismatchedExtentDesc.setWidth(s_Width / s_ExpectedDualCount).setHeight(s_Height / s_ExpectedDualCount);
 
     TextureDesc layerCountSourceDesc = sourceDesc;
-    layerCountSourceDesc.setArraySize(2u).setDimension(TextureDimension::Texture2DMSArray);
+    layerCountSourceDesc.setArraySize(s_ExpectedDualCount).setDimension(TextureDimension::Texture2DMSArray);
 
     const TextureHandle source = device.createTexture(sourceDesc);
     const TextureHandle destination = device.createTexture(destinationDesc);
@@ -914,7 +918,7 @@ TEST_F(DescriptorBufferRoundTripTest, ResolveTextureRejectionsDiscardRenderingAn
             const usize pixelOffset = static_cast<usize>(row) * rowPitch + static_cast<usize>(column) * 4u;
             EXPECT_EQ(readbackBytes[pixelOffset + 0u], 255u);
             EXPECT_EQ(readbackBytes[pixelOffset + 1u], 0u);
-            EXPECT_EQ(readbackBytes[pixelOffset + 2u], 0u);
+            EXPECT_EQ(readbackBytes[pixelOffset + s_ExpectedDualCount], 0u);
             EXPECT_EQ(readbackBytes[pixelOffset + 3u], 255u);
         }
     }

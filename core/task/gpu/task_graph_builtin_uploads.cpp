@@ -76,8 +76,8 @@ struct UploadTexturePayload{
         usize rowPitch = 0u;
         usize depthPitch = 0u;
         ResourceStates::Mask finalState = ResourceStates::CopyDest;
-        QueueSubmissionToken* acceptedToken = nullptr;
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
+        QueueSubmissionToken* acceptedToken = nullptr;
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{

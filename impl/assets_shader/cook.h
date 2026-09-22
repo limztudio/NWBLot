@@ -131,7 +131,6 @@ public:
         ACompactString stage;
         ACompactString archiveStage;
         ACompactString targetProfile;
-        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         CookString entryPoint;
         CookString source;
 
@@ -141,6 +140,7 @@ public:
         CookVector<CookString> includeRoots;
         CookMap<CookString, DefineEntry> defineValues;
         CookMap<CookString, CookString> implicitDefines;
+        ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         bool emitMeshComputeShadow = true;
 
         explicit ShaderEntry(CookArena& memoryArena)

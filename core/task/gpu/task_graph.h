@@ -732,10 +732,10 @@ private:
 
     struct GpuGraphPipelineNode{
         Name identity = NAME_NONE;
-        GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
-        u16 deviceGeneration = 0u;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
+        u16 deviceGeneration = 0u;
+        GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
         GraphicsPipelineHandle graphicsPipeline;
         ComputePipelineHandle computePipeline;
         MeshletPipelineHandle meshletPipeline;

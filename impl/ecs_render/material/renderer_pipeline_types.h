@@ -114,11 +114,11 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 
 struct MaterialPipelineKey{
     Name material = NAME_NONE;
+    Name csgEvaluatorVariant = NAME_NONE;
     Core::FramebufferInfo framebufferInfo;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     bool twoSided = false;
     MaterialPipelineCsgMode::Enum csgMode = MaterialPipelineCsgMode::None;
-    Name csgEvaluatorVariant = NAME_NONE;
 };
 
 struct MaterialPipelineCsgBindingUse{

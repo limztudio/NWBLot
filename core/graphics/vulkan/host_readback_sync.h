@@ -24,17 +24,17 @@ namespace VulkanDetail{
 
 
 struct AmdBreadcrumbRingLayout{
-    u16 deviceGeneration = 0u;
     usize physicalQueueCount = 0u;
     usize slotsPerQueue = 0u;
     usize totalSlotCount = 0u;
     VkDeviceSize totalByteSize = 0u;
+    u16 deviceGeneration = 0u;
 };
 
 struct AmdBreadcrumbReservation{
     u64 serial = 0u;
-    u32 marker = 0u;
     usize localSlot = 0u;
+    u32 marker = 0u;
 };
 
 

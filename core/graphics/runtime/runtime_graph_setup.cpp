@@ -160,10 +160,10 @@ struct StandaloneTaskGraphRecoveryTask{
 
 struct SetupUploadSubmissionData{
     GraphicsBackend::Device& device;
-    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
     void* userData = nullptr;
     GraphicsModuleDetail::GraphTaskDeclaration declareTask = nullptr;
+    ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
+    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
     bool bridgePrimaryUploadQueue = false;
 };
 
@@ -571,10 +571,10 @@ bool SubmitGraphOwnedSetupUpload(
     auto& device = graphics.getDevice();
     __hidden_graphics_graph_setup::SetupUploadSubmissionData submissionData{
         .device = device,
-        .queueSharing = queueSharing,
-        .uploadQueue = uploadQueue,
         .userData = userData,
         .declareTask = declareTask,
+        .queueSharing = queueSharing,
+        .uploadQueue = uploadQueue,
         .bridgePrimaryUploadQueue = bridgePrimaryUploadQueue,
     };
     QueueSubmissionToken terminalToken;

@@ -28,13 +28,13 @@ namespace ECSRenderDetail{
 struct GeneratedGeometryEquivalenceKey{
     Name meshKey = NAME_NONE;
     Name material = NAME_NONE;
-    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
+    const Core::Buffer* outputBuffer = nullptr;
     u32 instanceIndex = 0u;
     u32 materialConstantByteOffset = 0u;
     u32 shadingModelId = 0u;
-    const Core::Buffer* outputBuffer = nullptr;
     u32 outputHeapSlot = 0u;
     u32 emulationIndexByteOffset = 0u;
+    MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     bool indexedGeometryOutput = false;
 
     [[nodiscard]] bool matches(const MaterialPassDrawItem& drawItem)const noexcept{

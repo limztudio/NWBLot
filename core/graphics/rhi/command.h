@@ -123,7 +123,6 @@ struct GpuPhysicalQueueTopology{
 
 // Current backend-native command storage for one physical queue. Snapshots sample thread-safe counters, so fields may advance during recording/submission. The storage estimate covers client-visible pool and command-buffer handles only, not opaque driver memory or wrapper capacity.
 struct GpuCommandArenaStatistics{
-    GpuPhysicalQueueId queue;
     u64 workerArenaCount = 0u;
     u64 commandPoolEpochCount = 0u;
     u64 pendingCommandPoolEpochCount = 0u;
@@ -135,6 +134,7 @@ struct GpuCommandArenaStatistics{
     u64 growthEventCount = 0u;
     u64 resetEventCount = 0u;
     u64 nativeHandleStorageLowerBoundBytes = 0u;
+    GpuPhysicalQueueId queue;
 
 
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
@@ -421,12 +421,11 @@ struct GraphicsState{
     ViewportState viewport;
     VariableRateShadingState shadingRateState;
     Color blendConstantColor{};
-    u8 dynamicStencilRefValue = 0;
-
     FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
 
     Buffer* indirectParams = nullptr;
+    u8 dynamicStencilRefValue = 0;
 
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value){ pipeline = value; return *this; }
     constexpr GraphicsState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }
@@ -505,9 +504,8 @@ struct MeshletState{
     Framebuffer* framebuffer = nullptr;
     ViewportState viewport;
     Color blendConstantColor{};
-    u8 dynamicStencilRefValue = 0;
-
     Buffer* indirectParams = nullptr;
+    u8 dynamicStencilRefValue = 0;
 
     constexpr MeshletState& setPipeline(MeshletPipeline* value){ pipeline = value; return *this; }
     constexpr MeshletState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }

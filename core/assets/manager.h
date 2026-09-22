@@ -52,9 +52,9 @@ public:
 
 struct AssetLoadResult{
     u64 requestId = 0;
+    UniquePtr<IAsset> asset;
     AssetLoadState::Enum state = AssetLoadState::Invalid;
     bool success = false;
-    UniquePtr<IAsset> asset;
 };
 
 

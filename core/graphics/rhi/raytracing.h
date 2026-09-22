@@ -464,14 +464,11 @@ struct RayTracingClusterOperationSizeInfo{
 };
 
 struct RayTracingClusterOperationMoveParams{
-    RayTracingClusterOperationMoveType::Enum type = RayTracingClusterOperationMoveType::BottomLevel;
     u32 maxBytes = 0;
+    RayTracingClusterOperationMoveType::Enum type = RayTracingClusterOperationMoveType::BottomLevel;
 };
 
 struct RayTracingClusterOperationClasBuildParams{
-    // Vertex format accepted by the backend cluster acceleration structure implementation.
-    Format::Enum vertexFormat = Format::RGB32_FLOAT;
-
     // Index of the last geometry in a single CLAS
     u32 maxGeometryIndex = 0;
 
@@ -492,6 +489,9 @@ struct RayTracingClusterOperationClasBuildParams{
 
     // Minimum number of bits to be truncated in vertex positions across all CLAS (in the current cluster operation)
     u32 minPositionTruncateBitCount = 0;
+
+    // Vertex format accepted by the backend cluster acceleration structure implementation.
+    Format::Enum vertexFormat = Format::RGB32_FLOAT;
 };
 
 struct RayTracingClusterOperationBlasBuildParams{

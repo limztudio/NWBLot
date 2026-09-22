@@ -64,10 +64,8 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
 #include "push_constants.slangi"
 #undef NWB_AVBOIT_PUSH_CONSTANTS
 
-// AVBOIT's five work buffers and the target-generation slot payload are global heap entries. The push block carries
-// only the UniformBuffer descriptor index for that shared payload; the payload then selects every StorageBuffer
-// entry. This keeps the transparent draw ABI at the portable 128-byte limit while removing pass-local buffer/CBV
-// descriptors entirely.
+// AVBOIT's five work buffers and the target-generation slot payload are global heap entries. The push block carries only the UniformBuffer descriptor index for that shared payload; the payload then selects every StorageBuffer entry.
+// This keeps the transparent draw ABI at the portable 128-byte limit while removing pass-local buffer/CBV descriptors entirely.
 #define NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT \
     g_NwbAvboitDraw.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
 #include "heap_resources.slangi"
@@ -168,10 +166,8 @@ float2 nwbAvboitFullUvFromLowFragCoord(float2 fragCoord){
 bool nwbAvboitPrimaryRefractionInstance(float2 fullUv, uint instanceIndex){
     if(!nwbAvboitRefractionEnabled())
         return false;
-    // All transparent passes gather the same instance ordering. Zero denotes no selected refractor; the +1
-    // encoding preserves instance zero while allowing a single-channel float render target on all backends.
-    const float encodedInstance = NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w)
-        .SampleLevel(NwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
+    // All transparent passes gather the same instance ordering. Zero denotes no selected refractor; the +1 encoding preserves instance zero while allowing a single-channel float render target on all backends.
+    const float encodedInstance = NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).SampleLevel(NwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
     return encodedInstance >= 0.5 && uint(encodedInstance + 0.5) == instanceIndex + 1u;
 }
 

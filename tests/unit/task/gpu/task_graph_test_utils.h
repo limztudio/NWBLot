@@ -16,7 +16,6 @@
 
 #include <core/task/gpu/capture/command_ir.h>
 #include <core/task/gpu/capture/command_ir_internal.h>
-#include <core/task/gpu/compiler.h>
 #include <core/task/gpu/compiler_internal.h>
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>

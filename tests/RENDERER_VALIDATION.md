@@ -1,6 +1,6 @@
 # Renderer error cleanup (September 12, 2026)
 
-This cleanup repairs the failures left open by the [optical appearance experiment](smoke/REFLECTION_OPTICAL_EXPERIMENT.md) and the additional failures found by broad validation. The final full debug run has zero failures, and every applicable optimized target has a passing result across the full campaign and focused repair runs. The rejected optical optimization remains removed. No performance improvement is claimed by this cleanup.
+This cleanup repairs the failures left open by the [optical appearance experiment](smoke/REFLECTION_OPTICAL_EXPERIMENT.md) and the additional failures found by broad validation. The final full debug run has zero failures, and every applicable optimized target has a passing result across the full campaign and focused repair runs. The rejected optical optimization remains removed. No performance improvement is claimed by this cleanup. Target counts and headless-GPU evidence below are historical: the headless smoke-test surface was later retired.
 
 ## Repairs and ownership
 
@@ -28,7 +28,7 @@ Validation uses Windows ARM64, the `windows-clang-arm64-opt` and `windows-clang-
 | Final complete optimized build | Passed | `complete_opt_build.log` |
 | Final complete debug build | Passed | `complete_dbg_build.log` |
 | Full optimized CTest campaign before smoke repairs | 87 targets: 83 passed, two failed, two capability skips | `final_full_opt_tests.log`, `final_opt_junit.xml` |
-| Repaired optimized descriptor target | Passed | `descriptor_opt_tests.log`, `descriptor_opt_junit.xml` |
+| Repaired optimized headless GPU target (retired) | Passed | `descriptor_opt_tests.log`, `descriptor_opt_junit.xml` |
 | Repaired optimized capture harness and all three CSG poses | Four targets passed; the harness contains 59 Python tests | `repaired_opt_tests.log`, `repaired_opt_junit.xml` |
 | Full final debug CTest run | 89 targets: 87 passed, zero failed, two capability skips; 1232.53 seconds | `complete_dbg_tests.log`, `complete_dbg_junit.xml`, `complete_dbg_ctest_details.log` |
 
@@ -68,9 +68,8 @@ ctest --preset windows-clang-arm64-opt -j 1 --output-on-failure
 ctest --preset windows-clang-arm64-dbg -j 1 --output-on-failure
 ```
 
-The focused optimized repair commands were:
+The focused optimized capture repair command was:
 
 ```powershell
-ctest --preset windows-clang-arm64-opt -j 1 --output-on-failure -R '^nwb_descriptor_buffer_tests$'
 ctest --preset windows-clang-arm64-opt -j 1 --output-on-failure -R '^(nwb_testbed_window_capture_unit|nwb_transparent_csg_capture_(early|mid|late)_smoke)$'
 ```

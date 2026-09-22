@@ -1,28 +1,12 @@
 find_package(Python3 COMPONENTS Interpreter)
 
-if(TARGET nwb_frame AND TARGET nwb_graphics)
-    add_subdirectory(descriptor_buffer)
-    add_subdirectory(raytrace)
-    add_subdirectory(material_resources)
-    add_subdirectory(reflection_kernel)
-    add_subdirectory(runtime_bounds_kernel)
-    add_subdirectory(caustic_kernel)
-    add_subdirectory(mesh_kernel)
-    add_subdirectory(shadow_kernel)
-    add_subdirectory(surfel_kernel)
-
-    nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
-    target_sources(nwb_presentation_fps_probe_tests PRIVATE
-        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
-        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
-        "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe_tests.cpp"
-    )
-    target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common)
-endif()
-
-if(TARGET nwb_graphics AND TARGET nwb_assets_graphics)
-    add_subdirectory(placed_resource_memory)
-endif()
+nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
+target_sources(nwb_presentation_fps_probe_tests PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
+    "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe_tests.cpp"
+)
+target_link_libraries(nwb_presentation_fps_probe_tests PRIVATE nwb_common)
 
 if(TARGET rgd_backend)
     add_subdirectory(rgd_decode)

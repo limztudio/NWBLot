@@ -67,107 +67,11 @@ namespace __hidden_gpu_packet_runtime_submission_tasks{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskScheduler::submitPacketRangeInCompileOrder(
+bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
-    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
-    const usize taskTimingTicketCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket,
-    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount,
-    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
-)const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-
-    return submitPacketRangeInCompileOrderWithOperationPolicy(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        range,
-        PacketRangeSubmissionOperationPolicy::PerPacket,
-        externalCompletionTokens,
-        externalCompletionTokenCount,
-        taskTimingTickets,
-        taskTimingTicketCount,
-        transaction,
-        scratchArena,
-        outFailedPacket,
-        taskAcceptedCallbacks,
-        taskAcceptedCallbackCount,
-        taskSubmissionHooks,
-        taskSubmissionHookCount
-    );
-}
-
-
-bool GpuTaskScheduler::submitTaskRangeInCompileOrder(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuTaskId firstTask,
-    const GpuTaskId lastTask,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
-    const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
-    const usize taskTimingTicketCount,
-    GpuGraphSubmissionTransaction& transaction,
-    Alloc::ScratchArena& scratchArena,
-    GpuSubmissionPacketId* const outFailedPacket,
-    const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount,
-    const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount
-)const{
-    if(outFailedPacket)
-        *outFailedPacket = {};
-    DeviceOperation deviceOperation(*this);
-    if(!deviceOperation.m_admitted)
-        return false;
-
-    GpuSubmissionPacketRange range;
-    {
-        GpuCompiledGraph::ReadView planAccess(compiledGraph);
-        if(!planAccess.valid())
-            return false;
-        range = planAccess.packetRangeForTasks(firstTask, lastTask);
-    }
-    return submitPacketRangeInCompileOrder(
-        graph,
-        compiledGraph,
-        recordedGraph,
-        range,
-        externalCompletionTokens,
-        externalCompletionTokenCount,
-        taskTimingTickets,
-        taskTimingTicketCount,
-        transaction,
-        scratchArena,
-        outFailedPacket,
-        taskAcceptedCallbacks,
-        taskAcceptedCallbackCount,
-        taskSubmissionHooks,
-        taskSubmissionHookCount
-    );
-}
-
-
-bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
-    GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    const GpuRecordedGraph& recordedGraph,
-    const GpuSubmissionPacketRange& range,
-    const PacketRangeSubmissionOperationPolicy operationPolicy,
     const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
     const usize externalCompletionTokenCount,
     const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
@@ -190,23 +94,8 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
     if(!artifactOperation.valid()){
         return false;
     }
-    Optional<GpuGraphSubmissionTransaction::SubmissionOperation> preflightOperation;
-    if(operationPolicy == PacketRangeSubmissionOperationPolicy::PerPacket){
-        preflightOperation.emplace(
-            transaction,
-            GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket,
-            &artifactOperation
-        );
-    }
-    if(
-        (preflightOperation && !preflightOperation->valid())
-        || (
-            operationPolicy == PacketRangeSubmissionOperationPolicy::ActiveExclusiveBarrier
-            && !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
-        )
-    ){
+    if(!GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction))
         return false;
-    }
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
         return false;
@@ -287,8 +176,7 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
         for(const ResolvedTaskTimingTicket& existing : packetTimingTickets){
             if(existing.timingTicket != binding.timingTicket)
                 continue;
-            // One ticket is a one-shot native-submission transaction. Semantic aliases may share it only when the
-            // compiler resolves every anchor to the same merged packet.
+            // One ticket is a one-shot native-submission transaction. Semantic aliases may share it only when the compiler resolves every anchor to the same merged packet.
             if(existing.packet != packet)
                 return false;
             ticketAlreadyBound = true;
@@ -342,8 +230,7 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
             return false;
 
         for(const ResolvedTaskSubmissionHook& existing : packetSubmissionHooks){
-            // A native submission can emit one unambiguous one-shot signal. Do not silently choose between two
-            // semantic targets that the compiler merged into one packet.
+            // A native submission can emit one unambiguous one-shot signal. Do not silently choose between two semantic targets that the compiler merged into one packet.
             if(existing.packet == packet)
                 return false;
         }
@@ -375,18 +262,14 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
     }
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena> resolvedTimingTickets{ scratchArena };
     resolvedTimingTickets.reserve(packetTimingTickets.size());
-    // Per-packet admission keeps independent native queues concurrent. Release the range preflight reader only after
-    // every mutable recorded-artifact query and every scratch allocation is complete; packet work cannot allocate
-    // outside the operation that owns its exception cleanup.
+    // The owning composite admission remains active. Release the nested reader only after every mutable artifact query and scratch allocation completes; packet work cannot allocate outside exception-cleanup ownership.
     preflightExceptionScope.complete();
-    preflightOperation.reset();
 
     for(usize packetIndex = range.first.index; packetIndex < rangeEnd; ++packetIndex){
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
             return false;
-        const GpuSubmissionPacket& packetPlan = *packetView.plan;
         resolvedTimingTickets.clear();
         for(const ResolvedTaskTimingTicket& ticket : packetTimingTickets){
             if(ticket.packet == packet)
@@ -398,21 +281,6 @@ bool GpuTaskScheduler::submitPacketRangeInCompileOrderWithOperationPolicy(
                 preSubmitHook = &hook.hook;
                 break;
             }
-        }
-        Optional<GpuGraphSubmissionTransaction::SubmissionOperation> submissionOperation;
-        if(operationPolicy == PacketRangeSubmissionOperationPolicy::PerPacket){
-            submissionOperation.emplace(
-                transaction,
-                packetPlan.joinsAcceptedQueueFrontier || preSubmitHook
-                    ? GpuGraphSubmissionTransaction::SubmissionOperationMode::WaitExclusiveBarrier
-                    : GpuGraphSubmissionTransaction::SubmissionOperationMode::OrdinaryPacket,
-                &artifactOperation
-            );
-        }
-        if(submissionOperation && !submissionOperation->valid()){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
         }
         SubmissionAttemptExceptionScope packetExceptionScope(
             graph,

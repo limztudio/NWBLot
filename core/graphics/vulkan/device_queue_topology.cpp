@@ -61,6 +61,34 @@ const GpuPhysicalQueueInfo* Device::getPhysicalQueueInfo(const GpuPhysicalQueueI
     return info.id == queue ? &info : nullptr;
 }
 
+GpuQueueTimelineSnapshot Device::getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue){
+    if(isDeviceLost())
+        return {};
+
+    Queue* const physicalQueue = getQueue(queue);
+    if(!physicalQueue)
+        return {};
+
+    VkResult result = VK_SUCCESS;
+    GpuQueueTimelineSnapshot snapshot;
+    {
+        ScopedLock lock(physicalQueue->m_mutex);
+        result = physicalQueue->updateLastFinishedID();
+        snapshot = GpuQueueTimelineSnapshot{
+            .queue = queue,
+            .submittedValue = physicalQueue->m_lastSubmittedID,
+            .completedValue = physicalQueue->m_lastFinishedID,
+        };
+    }
+    if(result == VK_ERROR_DEVICE_LOST)
+        captureDeviceLoss("queue timeline snapshot");
+    if(result != VK_SUCCESS){
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to snapshot queue timeline semaphore: {}"), ResultToString(result));
+        return {};
+    }
+    return snapshot;
+}
+
 GpuCommandArenaStatistics Device::getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept{
     if(!getPhysicalQueueInfo(queue) || queue.index >= m_physicalQueues.size())
         return {};

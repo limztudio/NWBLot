@@ -188,6 +188,7 @@ private:
         const Core::GpuCompiledGraph::ReadView& compiledGraph,
         Core::Alloc::ScratchArena& scratchArena
     );
+    [[nodiscard]] bool scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena);
     void commitFrameTargets(DeferredFrameTargets&& targets);
     void resetFrameTargets();
     void resetDeferredTaskGraphRuntime();
@@ -532,7 +533,9 @@ private:
     bool m_graphicsPrefixSceneShadingSetupReady = false;
     bool m_deferredFrameRecoveryArmed = false;
     bool m_deferredFrameRecoveryRetiresTiming = false;
-    bool m_deferredLightingTaskGraphValid = false;
+    f64 m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
+    bool m_deferredLightingTaskGraphDeclared = false;
+    bool m_deferredLightingTaskGraphScheduled = false;
     bool m_deferredPresentationOverlayRequired = false;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
 

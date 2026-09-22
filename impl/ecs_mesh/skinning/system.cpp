@@ -403,8 +403,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             __hidden_system::ResolveSkeletonComponents(m_world, entity, binding.skeletonEntity, jointPalette, skeletonPose);
             const auto foundResources = m_runtimeResources.find(instance->handle.value);
             RuntimeSkinPayloadScratch payload{ scratchArena };
-            // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready
-            // mesh from declaring its immutable packet plan.
+            // Preserve the direct path's per-mesh retry semantics: an invalid pose never prevents another ready mesh from declaring its immutable packet plan.
             if(!MeshSkinningPayload::BuildRuntimeSkinPayload(*instance, jointPalette, skeletonPose, payload)){
                 instance->deformationState.invalidateCurrent();
                 return;
@@ -929,15 +928,24 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     Core::GpuCompiledGraph compiledGraph(m_arena);
     Core::GpuRecordedGraph recordedGraph(m_arena);
     Core::GpuGraphSubmissionTransaction transaction(m_arena);
-    const Core::GpuTaskGraphCompiler compiler;
     Core::GpuTaskGraphCompileOptions compileOptions;
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
-    if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, compileOptions)){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to compile graph-owned skinning work"));
+    const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
+    if(!scheduler.scheduleGraph(
+        graph,
+        analysis,
+        assignments,
+        compiledGraph,
+        recordedGraph,
+        transaction,
+        scratchArena,
+        compileOptions
+    )){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to prepare graph-owned skinning work"));
         return false;
     }
 
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     const Core::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
     if(!declarations.valid() || !compiledPlan.validFor(declarations)){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to retain graph-owned skinning compiler inputs"));
@@ -956,7 +964,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         return false;
     }
 
-    transaction.reset(compiledGraph);
     // Live-buffer list is reused member storage; only capacity growth may allocate, never per-frame creation.
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
     liveBuffers.clear();
@@ -1037,15 +1044,13 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     normalExecution.taskTimingTicketCount = LengthOf(timingTickets);
     normalExecution.taskAcceptedCallbacks = &acceptedCallback;
     normalExecution.taskAcceptedCallbackCount = 1u;
-    const Core::GpuNativePacketRecorder recorder(device);
-    const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
-    const bool skinningSubmitted = submitter.submit(
+    const bool skinningGraphAccepted = scheduler.executeGraph(
         graph,
         compiledGraph,
-        recorder,
         recordedGraph,
         normalExecution,
         transaction,
+        nullptr,
         scratchArena
     );
     const Core::QueueSubmissionToken skinningToken = transaction.taskToken(compiledPlan, terminalTask);
@@ -1064,7 +1069,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning submission was rejected"));
         return false;
     }
-    if(!skinningSubmitted || !skinningState.stateAccepted){
+    if(!skinningGraphAccepted || !skinningState.stateAccepted){
         m_graphics.requestDeviceRecreation();
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: accepted graph-owned skinning submission lost its retained state"));
         return false;

@@ -89,6 +89,7 @@ namespace GpuTaskGraphQueueAssignmentStatus{
         Success,
         InvalidGraphAnalysis,
         InvalidQueueTopology,
+        InvalidQueueLoad,
         InvalidTimingFeedback,
         NoCompatibleQueue,
     };
@@ -111,38 +112,37 @@ struct GpuTaskQueueAssignment{
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
-// Migration starts with explicitly requested compatible merges. Frontier-safe packetization preserves those requests
-// unless a task already in the preceding packet enables a consumer on another physical queue; that producer needs
-// its own signal point so the consumer does not wait for unrelated later same-queue work.
+// Migration starts with explicitly requested compatible merges. Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue; that producer needs its own signal point so the consumer does not wait for unrelated later same-queue work.
 namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
         FrontierSafe,
-        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has
-        // no cross-queue consumer frontier. Existing renderer paths retain ExplicitMerge until each packet boundary
-        // has its own acceptance/timing proof.
+        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has no cross-queue consumer frontier. Existing renderer paths retain ExplicitMerge until each packet boundary has its own acceptance/timing proof.
         FrontierScored,
 
         kCount,
     };
 };
 
-// The timing system owns these immutable observations. Queue assignment only consumes a snapshot, so graph
-// validation and packet/barrier correctness remain independent from late query completion and history mutation.
+// The timing system owns these immutable observations. Queue assignment only consumes a snapshot, so graph validation and packet/barrier correctness remain independent from late query completion and history mutation.
+struct GpuTaskQueueLoad{
+    GpuPhysicalQueueId queue;
+    u64 estimatedCost = 0u;
+};
+
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an
-    // in-progress queue assignment. The history remains an explicitly immutable snapshot owned by its producer.
+    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes; required capabilities and strict preferences remain authoritative.
+    const GpuTaskQueueLoad* queueLoads = nullptr;
+    usize queueLoadCount = 0u;
+    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment. The history remains an explicitly immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
     usize timingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;
 };
 
-// Optional semantic anchors for one compiler-owned normal-execution packet timing envelope. Both omitted disables
-// the envelope; a partial pair is invalid. Configured endpoints must belong to this graph, occur in compiler order,
-// and resolve before every accepted-queue-frontier recovery packet. The resolved range includes each endpoint's
-// complete containing packet, so explicitly merged neighbors share the same packet timing scope.
+// Optional semantic anchors for one compiler-owned normal-execution packet timing envelope. Both omitted disables the envelope; a partial pair is invalid. Configured endpoints must belong to this graph, occur in compiler order, and resolve before every accepted-queue-frontier recovery packet. The resolved range includes each endpoint's complete containing packet, so explicitly merged neighbors share the same packet timing scope.
 struct GpuTaskGraphPacketTimingEnvelopeOptions{
     GpuTaskId firstTask;
     GpuTaskId lastTask;
@@ -154,10 +154,7 @@ struct GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     f64 declarationSeconds = 0.0;
-    // Caller-owned wall time spent declaring/building the graph before this compiler begins. Accepted plans retain
-    // finite nonnegative values separately from the compiler-only total duration; other values normalize to zero.
-    // Native packet recording requires every task to retain a payload and record thunk. Tooling-only callers that
-    // compile metadata graphs may opt out explicitly; executable graph paths must retain the default.
+    // Caller-owned wall time spent declaring/building the graph before scheduler admission begins. Accepted plans retain finite nonnegative values separately from the compiler-only total duration; other values normalize to zero. Native packet recording requires every task to retain a payload and record thunk. Internal tooling that compiles metadata graphs may opt out explicitly; executable graph paths must retain the default.
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     bool allowMetadataOnlyTasks = false;
 };
@@ -204,11 +201,9 @@ public:
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;
     [[nodiscard]] const GpuTaskGraphAnalysisDiagnostic& diagnostic()const noexcept{ return m_diagnostic; }
-    // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including
-    // edges that are transitively redundant for scheduling.
+    // Raw dependency pairs retain direct declarations and hazard reasons for validation and diagnostics, including edges that are transitively redundant for scheduling.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& edges()const noexcept{ return m_edges; }
-    // Scheduling consumers use the stable transitive reduction so redundant raw relationships do not add queue
-    // crossings, signal frontiers, or packet waits.
+    // Scheduling consumers use the stable transitive reduction so redundant raw relationships do not add queue crossings, signal frontiers, or packet waits.
     [[nodiscard]] const GraphicsVector<GpuTaskDependencyEdge>& schedulingEdges()const noexcept{
         return m_schedulingEdges;
     }
@@ -258,8 +253,7 @@ private:
     bool m_valid = false;
 };
 
-// Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording
-// selection; graph core never creates a command list or submits work.
+// Queue assignment is a separate immutable compile result. Renderer integrations may use it for native-recording selection; graph core never creates a command list or submits work.
 class GpuTaskGraphQueueAssignments final : NoCopy{
     friend class GpuTaskGraphCompiler;
 
@@ -294,48 +288,6 @@ private:
     usize m_taskCount = 0u;
     bool m_valid = false;
 };
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class GpuTaskGraphCompiler final : NoCopy{
-public:
-    // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier,
-    // recording, and submission stages can consume one validated, immutable analysis result.
-    [[nodiscard]] bool analyze(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        GpuTaskGraphAnalysis& outAnalysis,
-        Alloc::ScratchArena& scratchArena
-    )const;
-
-    // This produces only a physical-queue decision. It never creates a command list or changes submission; the
-    // caller supplies the concrete topology discovered from its current device.
-    [[nodiscard]] bool assignQueues(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        const GpuTaskGraphAnalysis& analysis,
-        const GpuTaskGraphQueueTopology& topology,
-        GpuTaskGraphQueueAssignments& outAssignments,
-        Alloc::ScratchArena& scratchArena,
-        const GpuTaskGraphQueueAssignmentOptions& options = {}
-    )const;
-
-    // The packet compiler reuses the independently exposed analysis and queue-assignment results so telemetry and
-    // live packet creation consume exactly the same immutable decisions.  Tasks retain one packet by default;
-    // explicitly requested compatible successors may merge into the preceding packet.
-    [[nodiscard]] bool compile(
-        const GpuTaskGraph::DeclarationReadView& graph,
-        GpuTaskGraphAnalysis& outAnalysis,
-        const GpuTaskGraphQueueTopology& topology,
-        GpuTaskGraphQueueAssignments& outAssignments,
-        GpuCompiledGraph& outCompiledGraph,
-        Alloc::ScratchArena& scratchArena,
-        const GpuTaskGraphCompileOptions& options = {}
-    )const;
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 NWB_CORE_END

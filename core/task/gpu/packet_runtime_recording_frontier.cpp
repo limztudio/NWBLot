@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "packet_runtime.h"
+#include "packet_runtime_internal.h"
 
 #include "task_graph.h"
 
@@ -114,6 +114,9 @@ bool GpuNativePacketRecorder::recordPreparedPacketRangeInCompileOrder(
     }
     return true;
 }
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 namespace __hidden_gpu_packet_runtime_recording_frontier{
@@ -376,8 +379,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 workerBusySeconds += recordedPacket->recordingSeconds;
         }
 
-        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots. Keeping the entire
-        // successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
+        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots. Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
         const f64 logicalWorkerSlotCount = static_cast<f64>(cpuScheduler.workerThreadCount()) + 1.0;
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
         outRecordedGraph.addReadyFrontierStatistics(
@@ -388,9 +390,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         );
     };
 
-    // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing
-    // record order and rollback contract. This path records directly after the shared prepare step so the enclosing
-    // ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
+    // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing record order and rollback contract. This path records directly after the shared prepare step so the enclosing ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
     if(
         commandIrCapture
         || !cpuScheduler.isParallelEnabled()
@@ -440,8 +440,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         }
         return true;
     };
-    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent
-    // packet may lower the frontier again; sort that sparse case once instead of rescanning every packet per depth.
+    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again; sort that sparse case once instead of rescanning every packet per depth.
     if(!recordingFrontiersAreMonotonic){
         Sort(
             recordingEntries.begin(),
@@ -513,9 +512,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                     parallelResults[parallelIndex] = 0u;
                     return;
                 }
-                // Reserve zero for serial/direct command lists. The scheduler's caller is worker zero, so shift every
-                // ready-frontier lease by one. The stable scheduler domain prevents a second scheduler with the same
-                // local worker index from aliasing this native command-pool shard.
+                // Reserve zero for serial/direct command lists. The scheduler's caller is worker zero, so shift every ready-frontier lease by one. The stable scheduler domain prevents a second scheduler with the same local worker index from aliasing this native command-pool shard.
                 parallelResults[parallelIndex] = recordPacket(
                     graph,
                     compiledGraph,

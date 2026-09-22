@@ -85,6 +85,18 @@ bool GpuTaskGraphCompiler::assignQueues(
     if(!IsValidQueueTopology(topology))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueTopology);
 
+    if(options.queueLoadCount != 0u && !options.queueLoads)
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueLoad);
+    for(usize queueLoadIndex = 0u; queueLoadIndex < options.queueLoadCount; ++queueLoadIndex){
+        const GpuTaskQueueLoad& queueLoad = options.queueLoads[queueLoadIndex];
+        if(!FindPhysicalQueueInfo(topology, queueLoad.queue))
+            return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueLoad);
+        for(usize previousIndex = 0u; previousIndex < queueLoadIndex; ++previousIndex){
+            if(options.queueLoads[previousIndex].queue == queueLoad.queue)
+                return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueLoad);
+        }
+    }
+
     if(
         options.timingFeedbackPolicy.enabled
         && !options.timingFeedbackPolicy.valid()
@@ -107,10 +119,9 @@ bool GpuTaskGraphCompiler::assignQueues(
     GpuTaskSchedulingReachability schedulingReachability(scratchArena);
     if(!BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
-    const GpuTaskQueueScoringData scoringData(graph, analysis, scratchArena);
+    const GpuTaskQueueScoringData scoringData(graph, analysis, options, scratchArena);
 
-    // Establish a legal route for every task before scoring. Outgoing crossings and ownership costs must see a
-    // complete provisional plan instead of treating later consumers as if they did not exist.
+    // Establish a legal route for every task before scoring. Outgoing crossings and ownership costs must see a complete provisional plan instead of treating later consumers as if they did not exist.
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
         if(
             !taskID.valid()
@@ -253,8 +264,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     if(outAssignments.m_assignments.size() != outAssignments.m_assignmentIndicesByTask.size())
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
 
-    // Evaluate movable Compute and Any tasks against the same complete provisional plan, then publish their class
-    // decisions together. This keeps topology iteration order and partially-updated future routes out of scoring.
+    // Evaluate movable Compute and Any tasks against the same complete provisional plan, then publish their class decisions together. This keeps topology iteration order and partially-updated future routes out of scoring.
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> scoredQueues(outAssignments.m_assignments.size(), scratchArena);
     Vector<GpuTaskQueueAssignmentReason::Enum, Alloc::ScratchArena> scoredReasons(outAssignments.m_assignments.size(), scratchArena);
     for(usize assignmentIndex = 0u; assignmentIndex < outAssignments.m_assignments.size(); ++assignmentIndex){

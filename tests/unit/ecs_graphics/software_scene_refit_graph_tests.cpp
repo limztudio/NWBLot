@@ -8,7 +8,7 @@
 
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/timing.h>
-#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/compiler_internal.h>
 #include <core/task/gpu/scheduler.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>

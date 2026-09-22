@@ -187,6 +187,68 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingComputeTasksOnGraphics){
     EXPECT_EQ(noFallbackAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::DedicatedCompute);
 }
 
+TEST(GpuTaskGraph, RoutesMovableComputeWorkAroundExternalQueueLoad){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuQueueRequest graphicsRequest;
+    graphicsRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    graphicsRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    graphicsRequest.allowFallback = false;
+    graphicsRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskSchedulingHint graphicsScheduling;
+    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    ASSERT_TRUE(AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/external_load_graphics"),
+        "External Load Graphics",
+        graphicsRequest,
+        graphicsScheduling
+    ).valid());
+
+    Graphics::GpuQueueRequest computeRequest;
+    computeRequest.requiredCapabilities = Graphics::GpuQueueCapability::Compute;
+    computeRequest.preferredQueue = Graphics::GpuQueuePreference::Compute;
+    computeRequest.allowFallback = true;
+    computeRequest.compilerMayOverridePreference = true;
+    const Graphics::GpuTaskId computeTask = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/external_load_compute"),
+        "External Load Compute",
+        computeRequest
+    );
+    ASSERT_TRUE(computeTask.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    Graphics::GpuTaskGraphQueueAssignments idleAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, idleAssignments));
+    const Graphics::GpuTaskQueueAssignment* const idleAssignment = idleAssignments.find(computeTask);
+    ASSERT_NE(idleAssignment, nullptr);
+    EXPECT_EQ(idleAssignment->queueClass, Graphics::CommandQueue::Compute);
+
+    const Graphics::GpuTaskQueueLoad queueLoads[]{
+        {
+            .queue = DedicatedComputeQueue().id,
+            .estimatedCost = 32u,
+        },
+    };
+    Graphics::GpuTaskGraphQueueAssignmentOptions options;
+    options.queueLoads = queueLoads;
+    options.queueLoadCount = LengthOf(queueLoads);
+    Graphics::GpuTaskGraphQueueAssignments loadedAssignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, loadedAssignments, options));
+    const Graphics::GpuTaskQueueAssignment* const loadedAssignment = loadedAssignments.find(computeTask);
+    ASSERT_NE(loadedAssignment, nullptr);
+    EXPECT_EQ(loadedAssignment->queueClass, Graphics::CommandQueue::Graphics);
+    EXPECT_EQ(loadedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::CompilerOverride);
+    EXPECT_EQ(loadedAssignment->score.queueLoad, 8);
+}
+
 TEST(GpuTaskGraph, FallsBackOnlyWhenConcretePreferenceIsUnavailableAndFallbackIsAllowed){
     const auto runCase = [](const bool compilerMayOverridePreference, const bool allowFallback, const bool expectedResult){
         TestArena testArena;

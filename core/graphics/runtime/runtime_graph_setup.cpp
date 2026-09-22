@@ -26,8 +26,7 @@ namespace __hidden_graphics_graph_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first;
-// callers that know a small upload benefits can still request CommandQueue::Transfer explicitly.
+// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first; callers that know a small upload benefits can still request CommandQueue::Transfer explicitly.
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
 inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
@@ -45,8 +44,7 @@ inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_tas
 }
 
 
-// A returned setup resource has no external-completion object for later direct consumers. Record one explicit
-// graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
+// A returned setup resource has no external-completion object for later direct consumers. Record one explicit graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
 struct SetupUploadReadinessBridgeGraphTask{
     struct Payload{};
 
@@ -63,8 +61,7 @@ struct SetupUploadReadinessBridgeGraphTask{
     }
 };
 
-// A standalone graph owns no renderer finalization packet. Predeclare this no-op Graphics tail so a later
-// rejection can join every accepted physical queue before this call returns.
+// A standalone graph owns no renderer finalization packet. Predeclare this no-op Graphics tail so a later rejection can join every accepted physical queue before this call returns.
 struct StandaloneTaskGraphRecoveryTask{
     struct Payload{};
 
@@ -154,8 +151,7 @@ struct StandaloneTaskGraphRecoveryTask{
         if(!appendBridge(consumerQueue))
             return {};
     }
-    // Append this last so the synchronous standalone caller can verify that the returned-handle bridge resolved to
-    // the exact primary physical upload queue even when the descriptor names additional consumer classes.
+    // Append this last so the synchronous standalone caller can verify that the returned-handle bridge resolved to the exact primary physical upload queue even when the descriptor names additional consumer classes.
     if(bridgePrimaryUploadQueue && (!device.getQueue(uploadQueue) || !appendBridge(uploadQueue)))
         return {};
     return terminalTask;
@@ -230,8 +226,7 @@ struct FrameTimingResetGraphTask{
 [[nodiscard]] static GpuTaskSchedulingHint FrameTimingResetScheduling()noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = GpuTaskCostHint::Tiny;
-    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their
-    // timestamp scopes after this packet accepts, so it must not merge with unrelated graph work.
+    // The reset is a complete, CPU-visible preamble boundary. Later renderer submissions may only reserve their timestamp scopes after this packet accepts, so it must not merge with unrelated graph work.
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
     scheduling.overlapPreferred = false;
@@ -427,8 +422,7 @@ GpuTaskSchedulingHint SetupUploadGraphScheduling(
 }
 
 ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask declaredInitialState)noexcept{
-    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state; CopyDest is
-    // exactly what the native write leaves behind when the old setup path has no declared final transition.
+    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state; CopyDest is exactly what the native write leaves behind when the old setup path has no declared final transition.
     return declaredInitialState == ResourceStates::Unknown
         ? ResourceStates::CopyDest
         : declaredInitialState
@@ -451,10 +445,6 @@ bool SubmitGraphOwnedStandaloneTask(
 
     auto& device = graphics.getDevice();
 
-    const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
-    if(!topology.queues || topology.queueCount == 0u)
-        return false;
-
     GpuTaskGraph graph(graphArena);
     const GpuTaskId terminalTask = declareTask(userData, graph);
     if(!terminalTask.valid())
@@ -469,11 +459,19 @@ bool SubmitGraphOwnedStandaloneTask(
     GpuRecordedGraph recordedGraph(graphArena);
     GpuGraphSubmissionTransaction transaction(graphArena);
     Alloc::ScratchArena scratchArena(__hidden_graphics_graph_setup::s_StandaloneTaskGraphScratchArena);
-    const GpuTaskGraphCompiler compiler;
-    const GpuTaskGraph::DeclarationReadView declarations(graph);
-    if(!compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena))
+    const GpuTaskScheduler& scheduler = graphics.gpuTasks();
+    if(!scheduler.scheduleGraph(
+        graph,
+        analysis,
+        assignments,
+        compiledGraph,
+        recordedGraph,
+        transaction,
+        scratchArena
+    ))
         return false;
 
+    const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
     if(!declarations.valid() || !compiledPlan.validFor(declarations))
         return false;
@@ -509,31 +507,26 @@ bool SubmitGraphOwnedStandaloneTask(
     )
         return false;
 
-    transaction.reset(compiledGraph);
-    const GpuNativePacketRecorder recorder(device);
-    const GpuTaskScheduler& submitter = graphics.gpuTasks();
-    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary
-    // supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides
-    // whether it can safely opt into ready-frontier worker recording.
+    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides whether it can safely opt into ready-frontier worker recording.
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
-    const bool submitted = submitter.submit(
+    const bool graphAccepted = scheduler.executeGraph(
         graph,
         compiledGraph,
-        recorder,
         recordedGraph,
         normalExecution,
         transaction,
+        nullptr,
         scratchArena
     );
-    if(!submitted){
-        const bool recovered = !transaction.hasAcceptedPackets() || submitter.recordAndSubmitAcceptedFrontierTask(
+    if(!graphAccepted){
+        const bool recovered = !transaction.hasAcceptedPackets() || scheduler.executeAcceptedFrontierTask(
             graph,
             compiledGraph,
-            recorder,
             recordedGraph,
             recoveryTask,
             transaction,
+            nullptr,
             scratchArena
         );
         const bool discarded = transaction.discardUnaccepted(
@@ -596,8 +589,7 @@ bool SubmitGraphOwnedSetupUpload(
         return false;
 
     if(!outUploadToken.valid()){
-        // The producer's accepted callback supplies the public token. A successful bridge graph without that token
-        // would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
+        // The producer's accepted callback supplies the public token. A successful bridge graph without that token would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
         return false;
     }
     return true;

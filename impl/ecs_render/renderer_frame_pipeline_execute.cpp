@@ -53,7 +53,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     m_frameGraphSourceFrameIndex = m_graphics.getFrameIndex();
 
     // Preserve the accepted frontier; artifacts below reset for the next frame.
-    if(m_deferredLightingTaskGraphValid){
+    if(m_deferredLightingTaskGraphScheduled){
         Core::Alloc::ScratchArena queueAssignmentTelemetryScratchArena(RendererArenaScope::s_TaskGraphArena);
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
         const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
@@ -430,7 +430,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         priorLaggedLightingHistoryWriterDrainToken,
         requestsLaggedLightingHistoryCapture
     );
-    if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphValid){
+    if(requestsLaggedLightingHistoryCapture && !m_deferredLightingTaskGraphDeclared){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph build with optional lagged lighting-history capture failed; retrying without the tail"));
         buildDeferredLightingTaskGraph(
             frameGraphFeatures,
@@ -486,6 +486,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             false
         );
     }
+    Core::Alloc::ScratchArena deferredGraphSchedulingScratchArena(RendererArenaScope::s_TaskGraphArena);
+    const bool deferredGraphScheduled = scheduleDeferredLightingTaskGraphForExecution(
+        deferredGraphSchedulingScratchArena
+    );
     const Core::GpuTaskGraph::DeclarationReadView deferredTaskGraphView(m_deferredLightingTaskGraph);
     const Core::GpuCompiledGraph::ReadView deferredCompiledPlan(m_deferredLightingCompiledGraph);
     const bool captureLaggedLightingHistory = m_deferredLaggedLightingHistoryTask.valid();
@@ -634,7 +638,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             timingTicket->discard();
     };
     if(
-        !m_deferredLightingTaskGraphValid
+        !deferredGraphScheduled
+        || !m_deferredLightingTaskGraphScheduled
         || !m_deferredShadowPrepareTask.valid()
         || !taskIsCompiled(m_deferredShadowPrepareTask)
         || !shadowPrepareSoftwareBvhBuildsMerged
@@ -879,7 +884,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
 
     // Prep/prefix stay serial; later upload packets may use workers.
-    const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());
     Core::Alloc::ScratchArena shadowPrepareStateScratchArena(RendererArenaScope::s_TaskGraphArena);
     ECSRenderDetail::MeshRetainedAccelerationStateBufferVector meshAccelerationStateBuffers{ shadowPrepareStateScratchArena };
     m_meshSystem.collectRetainedAccelerationStateBuffers(meshAccelerationStateBuffers);
@@ -922,7 +926,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_shadowPreparePersistentState);
     m_avboitSystem.markFrameTargetUsage(hasTransparentRenderers);
 
-    const auto submitFrameRecoveryPacket = [&]() -> bool {
+    const auto executeFrameRecoveryTask = [&]() -> bool {
         // Retire the scope after rejection; Graphics order needs no extra wait.
         if(device.requiresRecreation()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: frame recovery packet skipped because the graphics device requires recreation"));
@@ -932,7 +936,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
             return false;
         }
         if(
-            !m_deferredLightingTaskGraphValid
+            !m_deferredLightingTaskGraphScheduled
             || !m_deferredFrameRecoveryTask.valid()
             || !deferredCompiledPlan.findTask(m_deferredFrameRecoveryTask).valid()
         ){
@@ -951,14 +955,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_deferredFrameRecoveryArmed = true;
         m_deferredFrameRecoveryRetiresTiming = retireTiming;
         Core::Alloc::ScratchArena recoveryScratchArena(RendererArenaScope::s_TaskGraphArena);
-        const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
-        const bool recoveryAccepted = submitter.recordAndSubmitAcceptedFrontierTask(
+        const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
+        const bool recoveryAccepted = scheduler.executeAcceptedFrontierTask(
             m_deferredLightingTaskGraph,
             m_deferredLightingCompiledGraph,
-            deferredRecorder,
             m_deferredLightingRecordedGraph,
             m_deferredFrameRecoveryTask,
             m_deferredLightingSubmissionTransaction,
+            &m_graphics.gpuTiming(),
             recoveryScratchArena
         );
         if(!recoveryAccepted){
@@ -969,7 +973,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     const auto recoverPendingFrameSubmission = [&]() -> bool {
         return (m_deferredLightingSubmissionTransaction.hasAcceptedPackets() || frameTimingTransaction.needsRetirement())
-            ? submitFrameRecoveryPacket()
+            ? executeFrameRecoveryTask()
             : true
         ;
     };
@@ -1836,14 +1840,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         : 0u
     ;
 
-    const Core::GpuTaskScheduler& normalSubmitter = m_graphics.gpuTasks();
-    const bool normalGraphAccepted = normalSubmitter.submit(
+    const Core::GpuTaskScheduler& normalScheduler = m_graphics.gpuTasks();
+    const bool normalGraphAccepted = normalScheduler.executeGraph(
         m_deferredLightingTaskGraph,
         m_deferredLightingCompiledGraph,
-        deferredRecorder,
         m_deferredLightingRecordedGraph,
         normalExecution,
         m_deferredLightingSubmissionTransaction,
+        &m_graphics.gpuTiming(),
         normalExecutionScratchArena
     );
 
@@ -2042,7 +2046,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         // No normal-frame consumer; record only after Present.
         const bool readbackTailAvailable =
             finalPresentationSubmissionToken.valid()
-            && m_deferredLightingTaskGraphValid
+            && m_deferredLightingTaskGraphScheduled
             && deferredCompiledPlan.findTask(m_deferredSurfelGiCounterReadbackTask).valid()
             && surfelGiCounterReadbackQueue
             && (static_cast<u8>(surfelGiCounterReadbackQueue->capabilities)
@@ -2126,16 +2130,15 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .context = &readbackContext,
                 .invoke = acceptReadbackFinalState,
             };
-            const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
-            const bool readbackAccepted = submitter.recordAndSubmitTask(
+            const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
+            const bool readbackAccepted = scheduler.executeTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
-                recorder,
                 m_deferredLightingRecordedGraph,
                 m_deferredSurfelGiCounterReadbackTask,
                 &readbackRecordedCallback,
                 m_deferredLightingSubmissionTransaction,
+                &m_graphics.gpuTiming(),
                 scratchArena,
                 nullptr,
                 &readbackAcceptedCallback
@@ -2170,14 +2173,14 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         // The history copy depends on Present; publication needs accepted presentation.
         if(
             !finalPresentationSubmissionToken.valid()
-            || !m_deferredLightingTaskGraphValid
+            || !m_deferredLightingTaskGraphScheduled
             || !m_deferredLaggedLightingHistoryTask.valid()
             || !taskIsCompiled(m_deferredLaggedLightingHistoryTask)
             || !deferredLaggedLightingHistoryQueue
             || (static_cast<u8>(deferredLaggedLightingHistoryQueue->capabilities)
                 & static_cast<u8>(Core::GpuQueueCapability::Transfer)) == 0u
         ){
-            if(m_deferredLightingTaskGraphValid){
+            if(m_deferredLightingTaskGraphScheduled){
                 if(!m_deferredLightingSubmissionTransaction.discardUnaccepted(
                     m_deferredLightingTaskGraph,
                     m_deferredLightingCompiledGraph,
@@ -2304,16 +2307,15 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 .context = &historyCopyAcceptance,
                 .invoke = acceptHistoryCopyFinalState,
             };
-            const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());
-            const Core::GpuTaskScheduler& submitter = m_graphics.gpuTasks();
-            const bool historyCopyAccepted = submitter.recordAndSubmitTask(
+            const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
+            const bool historyCopyAccepted = scheduler.executeTask(
                 m_deferredLightingTaskGraph,
                 m_deferredLightingCompiledGraph,
-                recorder,
                 m_deferredLightingRecordedGraph,
                 m_deferredLaggedLightingHistoryTask,
                 &historyCopyRecordedCallback,
                 m_deferredLightingSubmissionTransaction,
+                &m_graphics.gpuTiming(),
                 scratchArena,
                 nullptr,
                 &historyCopyAcceptedCallback
@@ -2325,7 +2327,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
                 )
             ;
             if(historyCopySubmissionToken.valid() && (!historyCopyAccepted || !historyCopyAcceptance.acceptedStateReady)){
-                if(!submitFrameRecoveryPacket())
+                if(!executeFrameRecoveryTask())
                     failFrameRenderRecovery();
                 // The accepted copy cannot be replayed.
                 failFrameRenderRecovery();

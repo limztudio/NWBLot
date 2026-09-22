@@ -23,6 +23,8 @@ Correctness takes priority over an apparent timing reduction. Shader candidates 
 
 The initial audit and complete fresh rough-filter measurements remain under `__artifacts/reflection_optimization_audit_20260912/`. Implementation evidence is kept under `__artifacts/reflection_optimization_steps/`. Those generated files are local diagnostics; completed outcomes and reproducible commands are recorded here.
 
+The native headless fixtures mentioned in historical steps below were retired with the headless smoke-test surface. Their captured results remain evidence for the original decisions, but they are not current CTest targets or reproduction commands.
+
 ## Benchmark preparation
 
 The transparent smoke fixture has an opt-in `NWB_AVBOIT_SMOKE_TIMING=1` pass that reserves 32 complete in-flight timing ranges for the frame, six AVBOIT passes, and five deferred/control passes. It also requests the existing unfocused-render policy. Normal smoke behavior is unchanged when the flag is absent. The helper belongs to `tests/smoke`; production scheduling and timing policy are unchanged.
@@ -79,7 +81,7 @@ JUnit evidence is under `__artifacts/reflection_optimization_steps/step2/`; comp
 
 The spatial kernel first loads each in-bounds pixel's radiance, specular and depth eligibility inputs. A workgroup-wide flag decides whether any pixel can filter. Uniformly ineligible tiles copy their source values without loading halo, position or normal data. Active tiles reuse their eligibility inputs and populate disjoint center/halo cache entries before the existing bilateral filter. Every lane participates in the synchronization, including partial-image tails. Radius-zero, alpha, finite-value, roughness and F0 rules are unchanged. The extra shared flag costs four bytes and two additional group barriers; timing, rather than source operation counts, determines whether that tradeoff is useful.
 
-The new `tests/smoke/reflection_kernel` target compiles the actual authored kernels through the production shader cooker and runs validation-enabled native dispatch/readback. Its 160 spatial scenarios compare every RGBA16 output word against a frozen copy of the pre-change production shader, with separate copy/alpha/zero-value checks and distinct output sentinels to catch missing stores. Radius 0-3, tiny and non-power-of-two images, partial groups, dense/sparse eligibility and material/geometry discontinuities all passed. The same fixture has 39 full-chain depth cases for Step 7, using native R32/D32 inputs, the production RG32/RGBA32 storage fallback, literal tiny cases and a separate scalar footprint oracle. Both tests passed in optimized and debug configurations, with no skips or validation errors. The ECS graphics suite, 14 roughness captures, 12 temporal/reset captures, and benchmark analysis suites passed. The renderer A/B analysis suite now contains 28 tests and supports the fixed reflection workloads without changing the reflection runner's cap-aware contracts.
+At the time of this experiment, a native headless fixture compiled the authored kernels through the production shader cooker and ran validation-enabled dispatch/readback parity cases. That fixture was retired with the headless smoke-test surface; its optimized/debug results remain historical evidence. The ECS graphics suite, roughness captures, temporal/reset captures, and benchmark analysis suites remain the current regression coverage.
 
 Three predeclared campaigns ran 48 launches in 24 balanced blocks, with 288 retained reports and 35,630 completed GPU frames. All required scope counts and frozen identities passed. Both arms used executable SHA256 `e65b5afbe0376a9b0ac232ab643ca54ef8353d869021bc646179ae0ff2d444ea`. Authored-volume SHA256 changed from `9e72a8699fdfada987c8dfb18ff9748377cdaea72af909d122a9aa804f61c595` to `a5e7ff4ab129877b1397ed2e911e69fd0bf8c53f41f797dd06f3c735fa8f4d12`. The workload settings are 960x720, Hardware reflection, seed zero, budget 1,382,400, optical cap 16, feedback/diagnostics/capture off; the combined-filter case uses temporal cap 16. Each campaign has eight balanced AB/BA blocks, two warm-up reports and at least six retained reports per launch.
 
@@ -93,7 +95,7 @@ Retained because the mirror/ineligible workload clears the practical full-frame 
 
 Evidence is under `__artifacts/reflection_optimization_steps/step3/`, including frozen arms, raw logs, timing reports, JUnit results and power records. Balanced power and 79% battery were reported at both endpoints; frequency/thermal telemetry was unavailable. No build, cook, GPU test or other acquisition overlapped the campaigns. Report SHA256 values are `50715f876937c979484787455a960ff7aecdb4fd277dc02be9411ba986a21328` (mirror), `6adfbc00718a810fc8262946359aaf5f28271b38440a8f6cd3fe82172560f864` (rough), and `30606a489790060af7bc801a9833195bf658b8d86752ec5a2aaaac90d1a8de40` (filtered).
 
-Use the common frozen-arm command above with `--workload reflection-mirror-spatial`, `reflection-rough-spatial` or `reflection-rough-filtered`, and a new output directory for each complete campaign. Run the direct kernel proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_reflection_kernel_tests$" -j1` (or the debug preset).
+Use the common frozen-arm command above with `--workload reflection-mirror-spatial`, `reflection-rough-spatial` or `reflection-rough-filtered`, and a new output directory for each complete campaign.
 
 
 ## Step 4: reuse the latest accepted optical metadata upload
@@ -117,7 +119,7 @@ The runner reports `control_uncertain`: opaque and deferred-lighting intervals d
 
 Evidence: `__artifacts/reflection_optimization_steps/step4/`, including `opt_unit_native_junit.xml`, the preserved initial `opt_capture_junit.xml` failure, `opt_fixed_capture_junit.xml`, `dbg_junit.xml`, frozen arms, raw campaign logs and `benchmark_optical_clear/report.json`. Report SHA256 is `52f7b9d03518387336689a54f3cd45487f0a5743b2a3c92717aa7fa6da5f78d1`. Balanced power and 78% battery were reported before and after acquisition; frequency/thermal telemetry was unavailable. No build, cook or GPU test overlapped timing.
 
-Reproduce the native proof with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_ecs_graphics_tests|nwb_raytrace_tests)$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.
+Reproduce the surviving source-contract coverage with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_ecs_graphics_tests$" -j1` and the debug preset. Use the common A/B command with `--workload reflection-optical-clear` and independent frozen arms for timing.
 
 ## CPU measurement prerequisite: correct asynchronous source-frame bounds
 
@@ -127,7 +129,7 @@ The performance owner now maintains the minimum and maximum source frames. Sampl
 
 A CPU regression drives the real overlap correlator with distinct durations and reversed frame completion. A native regression actually releases and reuses one of two timer-query slots, checks callback order 51 then 50, and verifies aggregate bounds 50..51 without duplicate publication. Both optimized and debug graphics-resource, telemetry and native descriptor-buffer suites passed; the existing main-thread frame timing lifecycle test also passed. The new native regression did not skip. Evidence is under `__artifacts/reflection_optimization_steps/step5/benchmark_support_fixed_opt_junit.xml`, `benchmark_support_dbg_junit.xml`, and `benchmark_support_dbg_full_ctest.log`; the reviewed proposal is under `timing_source_span/`.
 
-This is a measurement correctness fix, with no rendering speedup claim. Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset.
+This is a measurement correctness fix, with no rendering speedup claim. Reproduce with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_graphics_resource_tests|nwb_telemetry_tests)$" -j1` and the debug preset.
 
 ## Compiler scaling prerequisite: linear resource-fragment ordering
 
@@ -141,7 +143,7 @@ The compiler-fixed, Step5-absent fixture completed all six functional workloads,
 
 Evidence is under `__artifacts/reflection_optimization_steps/compiler_fragment_order/` (`opt_unit_native_junit.xml`, `opt_unit_native_full.log`, `dbg_junit.xml`, `dbg_full.log`, `opt_captures_junit.xml`) and `cpu_gather_benchmark/` (`baseline_unique_stack_diagnostic`, frozen `compiler_baseline_v3`/`compiler_candidate_v4`, and `compiler_fixed_all_timing_pilot`). Initial invalid target invocation is retained in `opt_build.log`; the corrected target build passed. The proposal patch SHA256 is `b8b5f0c71260565c31f0978848de25773d2f0a3e4c3789176e304e55e4489dc4`.
 
-Reproduce ordering and native handoff qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^(nwb_gpu_task_tests|nwb_descriptor_buffer_tests)$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.
+Reproduce ordering qualification with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_gpu_task_tests$" -j1` and the debug preset. Subsequent renderer comparisons must include this same compiler fix in both arms.
 
 ## CPU gathering measurement support
 
@@ -224,9 +226,9 @@ The predeclared `reflection-screen-depth` campaign completed all 16 launches in 
 
 The runner reports `unresolved`; the practical full-frame threshold was 0.107963 ms. Neither the pyramid nor the frame establishes an improvement, so the additional shared storage and synchronization are rejected. No regression or speedup is claimed. All trials are retained without extension or removal. Balanced power and 78% battery were reported at both endpoints; frequency and thermal telemetry were unavailable, and no build/cook/GPU test overlapped acquisition.
 
-The original shader was restored to exact SHA256 `ad1cae197a45b33d14a8786eaf5f3dea9592645022d090458c604b0a9882cbf7`. Optimized and debug native checks passed again; the rebuilt ordinary Opt executable/dependencies and authored runtime exactly match the qualified baseline identities. The rejected shader remains only in the experiment artifacts. The shared kernel test fixture is retained because it also qualifies the accepted spatial change.
+The original shader was restored to exact SHA256 `ad1cae197a45b33d14a8786eaf5f3dea9592645022d090458c604b0a9882cbf7`. Optimized and debug native checks passed again; the rebuilt ordinary Opt executable/dependencies and authored runtime exactly match the qualified baseline identities. The rejected shader remains only in the experiment artifacts. The shared kernel fixture was later retired with the headless smoke-test surface.
 
-Evidence is under `__artifacts/reflection_optimization_steps/step7/`: frozen arms and native modules, baseline/candidate/restored native JUnit and full logs, both capture suites, `capture_comparison_v1/report.json`, `packed_depth_delta.json`, and `timing_screen_v1/report.json`. Reproduce native checks with `ctest --preset windows-clang-arm64-opt --output-on-failure -R "^nwb_reflection_kernel_tests$" -j1` and the debug preset; use the common eight-block runner with `--workload reflection-screen-depth` for timing. The new generic freeze helper's offline validation ran 36 cases: 35 passed and the symlink-creation case explicitly skipped because Windows did not grant that privilege. Both real frozen arms subsequently passed the complete source/absence/copy/delta checks.
+Evidence is under `__artifacts/reflection_optimization_steps/step7/`: frozen arms and native modules, baseline/candidate/restored native JUnit and full logs, both capture suites, `capture_comparison_v1/report.json`, `packed_depth_delta.json`, and `timing_screen_v1/report.json`. Use the common eight-block runner with `--workload reflection-screen-depth` for timing. The new generic freeze helper's offline validation ran 36 cases: 35 passed and the symlink-creation case explicitly skipped because Windows did not grant that privilege. Both real frozen arms subsequently passed the complete source/absence/copy/delta checks.
 
 Timing report SHA256: `023a8eb8d24d447cbe1e9a6a1e50652b7cc291193a3a8acfabc4df3274114c0c`.
 

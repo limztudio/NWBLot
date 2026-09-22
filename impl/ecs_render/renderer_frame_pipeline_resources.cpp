@@ -143,7 +143,6 @@ void RendererFramePipeline::invalidateResources(){
     resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_deferredLightingTaskGraphValid = false;
     m_deferredShadowPrepareTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildFirstTask = {};
     m_deferredShadowPrepareSoftwareBvhBuildLastTask = {};
@@ -160,8 +159,7 @@ void RendererFramePipeline::invalidateResources(){
     m_reflectionSystem.invalidateResources();
     m_raytracingSystem.invalidateResources();
     resetFrameTargets();
-    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material
-    // clears the layout owner.
+    // AVBOIT pipelines also consume Material's shared push layout, so release those pipelines before Material clears the layout owner.
     m_avboitSystem.invalidateResources();
     m_shaderSystem.invalidateResources();
     m_meshSystem.invalidateResources();
@@ -177,8 +175,7 @@ void RendererFramePipeline::update(Core::ECS::World& world, f32 delta){
 
 bool RendererFramePipeline::prepareGpuTimingScopes(){
     auto& device = m_graphics.getDevice();
-    // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges;
-    // the sort and interval-clear scopes each emit two ranges.
+    // A timestamp range consumes a begin/end query pair. High-frequency raster/mesh scopes may emit many ranges; the sort and interval-clear scopes each emit two ranges.
     static constexpr u32 s_GpuTimingQueriesPerRange = 2u;
     static constexpr u32 s_GpuTimingQueriesPerTwoRangeScope = 2u * s_GpuTimingQueriesPerRange;
     static constexpr u32 s_GpuTimingHighFrequencyScopeQueryBudget = 128u;
@@ -324,6 +321,9 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingTaskGraphAnalysis.reset();
     m_deferredLightingTaskGraphQueueAssignments.reset();
     m_deferredLightingCompiledGraph.reset();
+    m_deferredLightingTaskGraphDeclarationSeconds = 0.0;
+    m_deferredLightingTaskGraphDeclared = false;
+    m_deferredLightingTaskGraphScheduled = false;
 }
 
 void RendererFramePipeline::resetGraphicsPrefixTaskState(){
@@ -412,7 +412,6 @@ void RendererFramePipeline::resetFrameTaskState(){
     resetGraphicsPrefixTaskState();
     m_graphicsPrefixMeshViewSetupReady = false;
     m_graphicsPrefixSceneShadingSetupReady = false;
-    m_deferredLightingTaskGraphValid = false;
     resetSharedDeferredFrameTaskState();
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
@@ -478,9 +477,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(hasCsgFrameWork && !deferredTargets.csgIntervalTargetsValid())
         return false;
 
-    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one
-    // range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete
-    // renderer view is the safe prepass capacity bound for either material pass.
+    // CSG receiver ranges are addressed by material-pass instance index.  A CSG-active material pass reserves one range for every compatible renderer, not only the renderers that receive CSG clipping, so the complete renderer view is the safe prepass capacity bound for either material pass.
     const usize csgReceiverRangeCount = hasCsgFrameWork
         ? m_world.view<RendererComponent>().candidateCount()
         : 0u
@@ -501,16 +498,14 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching
-    // Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
+    // Material owns capacity growth. Once every material domain pass is prepared, publish exactly one matching Mesh-owned descriptor generation for the frame and retain the prior generation on any failed refresh.
     const ECSRenderDetail::MaterialPassBufferSnapshot materialBuffers = m_materialSystem.materialPassBufferSnapshot();
     if(materialBuffers.valid() && !m_meshSystem.prepareMeshFrameBindings(materialBuffers))
         return false;
     if(hasCsgFrameWork && !materialBuffers.valid())
         return false;
 
-    // All material passes have now established their frame buffers. Create CSG resources once from this
-    // renderer-owned prepass so draw paths only consume the prepared layouts and handles.
+    // All material passes have now established their frame buffers. Create CSG resources once from this renderer-owned prepass so draw paths only consume the prepared layouts and handles.
     if(
         hasCsgFrameWork
         && !m_csgSystem.prepareCsgFrameResources(
@@ -520,8 +515,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    // Resource selection and capacity growth happen before shared-graph compilation.  The first deferred packet
-    // records the corresponding GPU work later, after every selected handle has been imported declaratively.
+    // Resource selection and capacity growth happen before shared-graph compilation.  The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
     m_raytracingSystem.discardSurfelResourceInitialization();
     if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
         m_shadowPreparationOutcome.resourcesValid = false;
@@ -530,17 +524,13 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
     m_shadowPreparationOutcome.resourcesValid = true;
-    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its
-    // neutral material context only after that preflight has selected the current generation.
-    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware
-        || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
+    // The shared ray scene already prepares geometry independently of shadow-light count. Reflection borrows its neutral material context only after that preflight has selected the current generation.
+    const bool reflectionHardwareRequested = m_reflectionSettings.traceMode == ReflectionTraceMode::Hardware || m_reflectionSettings.traceMode == ReflectionTraceMode::Hybrid;
     m_preparedReflectionSceneAvailable = reflectionHardwareRequested && m_raytracingSystem.prepareSceneQueryResources();
     ++m_reflectionFrameIndex;
 
-    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the
-    // render-time graph build only consumes the prepared snapshot and never creates resources.
-    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers
-        && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
+    // Refraction pipelines load shaders and create GPU pipelines. Hoist that creation into preparation so the render-time graph build only consumes the prepared snapshot and never creates resources.
+    const bool opticalCaptureRequested = m_preparedHasTransparentRenderers && (m_refractionEnabled || m_reflectionSettings.traceMode != ReflectionTraceMode::Disabled);
     m_preparedRefractionActive = opticalCaptureRequested && m_raytracingSystem.prepareRefractionResources();
     m_preparedRefractionResources = m_raytracingSystem.snapshotRefractionGraphResources();
     m_preparedRefractionResources.refractionEnabled = m_refractionEnabled;

@@ -729,7 +729,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
     builder.addEdge(deferredComposite, deferredPresent, Edge::DependsOn);
     builder.addEdge(deferredPresent, backBuffer, Edge::Writes);
 
-    if(m_deferredLightingTaskGraphValid){
+    if(m_deferredLightingTaskGraphScheduled){
         Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
         if(!m_deferredLightingTaskGraphQueueAssignmentTelemetry.update(
             deferredTaskGraphView,

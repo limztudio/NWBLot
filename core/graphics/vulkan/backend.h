@@ -651,8 +651,7 @@ struct VulkanContext{
     VkPhysicalDeviceRayTracingPipelinePropertiesKHR rayTracingPipelineProperties{};
 
     VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{};
-    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone
-    // are not capability answers because an enabled extension may have had its feature bit disabled.
+    // These are the feature bits actually enabled through vkCreateDevice's pNext chain.  Extension names alone are not capability answers because an enabled extension may have had its feature bit disabled.
     bool accelerationStructureFeatureEnabled = false;
     bool rayTracingPipelineFeatureEnabled = false;
     bool rayQueryFeatureEnabled = false;
@@ -660,8 +659,7 @@ struct VulkanContext{
     bool clusterAccelerationStructureFeatureEnabled = false;
     bool rayTracingInvocationReorderFeatureEnabled = false;
     bool rayTracingInvocationReorderExtFeatureEnabled = false;
-    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair
-    // completes a device-domain probe. It is immutable after Device construction.
+    // True only after an enabled calibrated-timestamp extension exposes the DEVICE domain and its dispatch pair completes a device-domain probe. It is immutable after Device construction.
     bool comparableGpuTimestamps = false;
     bool hostQueryResetFeatureEnabled = false;
     bool textureCompressionBcFeatureEnabled = false;
@@ -684,8 +682,7 @@ struct VulkanContext{
     VkPhysicalDeviceSubgroupProperties subgroupProperties{};
     DescriptorBufferManager* descriptorBufferManager = nullptr;
 
-    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. Every auxiliary family is
-    // invalid unless the optional cross-family same-class route registered that physical transport on this Device.
+    // Physical families used for Graphics/AsyncCompute/Transfer resource sharing. Every auxiliary family is invalid unless the optional cross-family same-class route registered that physical transport on this Device.
     i32 graphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 auxiliaryGraphicsQueueFamilyIndex = s_InvalidQueueFamilyIndex;
     i32 asyncComputeQueueFamilyIndex = s_InvalidQueueFamilyIndex;
@@ -980,8 +977,7 @@ private:
 
     u64 m_recordingID = 0;
     u64 m_submissionID = 0;
-    // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity
-    // until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
+    // Explicit graph-worker leases own one queue-local Vulkan pool each. Recycled buffers retain that identity until the queue timeline retires them; default/direct lease zero instead keeps its private pool.
     u64 m_recordingWorkerDomain = 0u;
     u32 m_recordingWorkerIndex = 0u;
 
@@ -1103,11 +1099,9 @@ private:
         TrackedCommandBufferArenaState::Enum nextState
     )noexcept;
     void unregisterCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
-    // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline
-    // has completed their submission, then preserves each worker-affine lease in its own reusable pool.
+    // Requires m_mutex. Releases native command-buffer resource/staging references only after the queue timeline has completed their submission, then preserves each worker-affine lease in its own reusable pool.
     void collectCompletedCommandBuffers();
-    // Default/direct lease zero stays private per command buffer because external callers may record it from
-    // unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
+    // Default/direct lease zero stays private per command buffer because external callers may record it from unrelated threads. Explicit graph workers use one Vulkan pool shard per physical queue and worker identity.
     [[nodiscard]] TrackedCommandBufferPtr createCommandBuffer(
         VkCommandPool commandPool,
         Futex* sharedCommandPoolMutex,
@@ -1143,8 +1137,7 @@ private:
     u32 m_queueFamilyIndex;
     CommandQueue::Enum m_queueID;
 
-    // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication.
-    // Acquire before m_mutex when both are required.
+    // Serializes reusable Device::executeCommandLists workspace through accepted post-submit publication. Acquire before m_mutex when both are required.
     Futex m_submissionWorkspaceMutex;
     // Always acquire before m_nativeQueue.hostMutex when both are required.
     Futex m_mutex;
@@ -1153,8 +1146,7 @@ private:
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
-    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without
-    // allocation or deallocation after vkQueueSubmit2 accepts the submission.
+    // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without allocation or deallocation after vkQueueSubmit2 accepts the submission.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;
     Vector<TrackedCommandBuffer*, Alloc::GlobalArena> m_submitValidatedTimerQueryCommandBuffers;
     Vector<VkSemaphoreSubmitInfo, Alloc::GlobalArena> m_submitWaitInfos;
@@ -1172,8 +1164,7 @@ private:
     CommandBufferList m_commandBuffersInFlight;
     CommandBufferList m_commandBuffersPool;
     Vector<WorkerCommandArena*, Alloc::GlobalArena> m_workerCommandArenas;
-    // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients
-    // before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
+    // Published worker nodes are append-only while the queue is usable. Device teardown joins recording clients before destroyWorkerCommandArenas() clears the head and reclaims the stable nodes.
     Atomic<WorkerCommandArena*> m_workerCommandArenaHead = nullptr;
 
     Atomic<u64> m_explicitWorkerArenaCount = 0u;
@@ -1342,8 +1333,7 @@ private:
     };
     using BufferChunkPtr = RefCountPtr<BufferChunk>;
     using BufferChunkList = List<BufferChunkPtr, Alloc::GlobalArena>;
-    // The owning list keeps every chunk address stable. Accepted submissions traverse only this intrusive active
-    // chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
+    // The owning list keeps every chunk address stable. Accepted submissions traverse only this intrusive active chain, so accumulated retired storage cannot increase the post-native-accept commit cost.
     struct QueueChunkLedger{
         GpuPhysicalQueueId queue;
         BufferChunkList chunks;
@@ -1986,6 +1976,7 @@ inline void AttachPipelineBindingState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Descriptor-buffer manager: host-mapped resource/sampler segments bind by byte offset.
 
+
 namespace DescriptorBufferSegmentKind{
     static constexpr u8 kDescriptorBufferSegmentKindNoneBase = 0;
     enum Enum : u8{
@@ -2021,8 +2012,7 @@ class DescriptorBufferManager final : NoCopy{
 
 
 public:
-    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource
-    // descriptor buffer, so the optional third offset extends this fixed topology.
+    // Resource and sampler descriptor buffers are always bound in this order. A TLAS set reuses the resource descriptor buffer, so the optional third offset extends this fixed topology.
     static constexpr u32 s_ResourceDescriptorBufferIndex = 0u;
     static constexpr u32 s_SamplerDescriptorBufferIndex = 1u;
     static constexpr u32 s_PersistentDescriptorBufferCount = 2u;
@@ -2165,8 +2155,7 @@ class GpuDescriptorHeap final : NoCopy{
 
 
 private:
-    // Capacities are fixed per initialized generation. The shared pool outlives
-    // these typed allocations, including partially initialized tables.
+    // Capacities are fixed per initialized generation. The shared pool outlives these typed allocations, including partially initialized tables.
     template<typename T>
     class FixedTable final : NoCopy{
     public:
@@ -2266,8 +2255,7 @@ public:
 
 
 public:
-    // Prevents slot reuse while CPU snapshots may still record. The final overlapping release establishes the
-    // native heap-use boundary for every slot freed under the leases.
+    // Prevents slot reuse while CPU snapshots may still record. The final overlapping release establishes the native heap-use boundary for every slot freed under the leases.
     [[nodiscard]] PendingRecordingLease acquirePendingRecordingLease();
 
     bool initialize(const GpuDescriptorHeapDesc& desc);
@@ -2907,8 +2895,7 @@ public:
     [[nodiscard]] ResourceStates::Mask getPermanentBufferState(Buffer* buffer)const;
     [[nodiscard]] ResourceStates::Mask getTextureState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] ResourceStates::Mask getBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer)const;
-    // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor
-    // fallback deliberately does not count: graph lowering can still declare the first known graph state.
+    // Explicit state comes from this command list or an imported packet handoff. A keep-initial-state descriptor fallback deliberately does not count: graph lowering can still declare the first known graph state.
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
 
@@ -3083,21 +3070,17 @@ public:
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && hasCommandBufferUnchecked();
     }
-    // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use
-    // this predicate instead of treating ownership as an active recording scope.
+    // `hasCommandBuffer` remains true after close so queues can submit it. Tooling that emits commands must use this predicate instead of treating ownership as an active recording scope.
     [[nodiscard]] bool isRecording()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && isRecordingUnchecked();
     }
-    // Sticky for the open/close attempt: any failed capability or semantic check invalidates the list; close
-    // discards its native buffer and only open starts a fresh attempt.
+    // Sticky for the open/close attempt: any failed capability or semantic check invalidates the list; close discards its native buffer and only open starts a fresh attempt.
     [[nodiscard]] bool commandRecordingFailed()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable && commandRecordingFailedUnchecked();
     }
-    // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and
-    // replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or
-    // replaces the command buffer while claiming success.
+    // Every open attempt starts a distinct native-buffer lease, including failed attempts. Packet recorders and replay tooling capture this serial before invoking extensible lowering and reject a thunk that closes or replaces the command buffer while claiming success.
     [[nodiscard]] u64 recordingLeaseSerial()const noexcept{
         const GraphPublicationReadOwnership ownership(*this);
         return ownership.m_readable ? recordingLeaseSerialUnchecked() : 0u;
@@ -3170,9 +3153,7 @@ public:
     void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
     void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
-    // Experimental command-IR hook. The caller has already graph-preflighted the operands and lowered the
-    // authoritative CopySource/CopyDest state transitions into this list. This emits only vkCmdCopyBuffer and
-    // retains the resources; it intentionally does not mutate CommandList state tracking or synthesize barriers.
+    // Experimental command-IR hook. The caller has already graph-preflighted the operands and lowered the authoritative CopySource/CopyDest state transitions into this list. This emits only vkCmdCopyBuffer and retains the resources; it intentionally does not mutate CommandList state tracking or synthesize barriers.
     [[nodiscard]] bool recordPreflightedCopyBufferDirectVulkan(
         Buffer& dest,
         u64 destOffsetBytes,
@@ -3229,8 +3210,7 @@ public:
     [[nodiscard]] bool canResetTimerQueryHere()const;
     [[nodiscard]] bool beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& outToken);
     [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
-    // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention,
-    // diagnostics, or observers.
+    // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention, diagnostics, or observers.
     [[nodiscard]] bool endTimerQueryFromExistingClaim(
         TimerQuery& query,
         const TimerQueryRecordingToken& token
@@ -3240,8 +3220,7 @@ public:
     void abandonMarker()noexcept;
 
 #if defined(NWB_DEBUG)
-    // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
-    // actually consume so the packet recorder can reject a declaration that is incompatible with that task.
+    // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they actually consume so the packet recorder can reject a declaration that is incompatible with that task.
     void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities);
     [[nodiscard]] GpuQueueCapability::Mask endTaskCapabilityTracking();
     void cancelTaskCapabilityTracking();
@@ -3277,8 +3256,7 @@ private:
     }
     [[nodiscard]] bool canRecordTimerQueryHereUnchecked()const noexcept;
     [[nodiscard]] bool canResetTimerQueryHereUnchecked()const noexcept;
-    // False only when graph publication blocks inspection. True reports whether this exact native lease holds
-    // the requested cycle's begin and end claims.
+    // False only when graph publication blocks inspection. True reports whether this exact native lease holds the requested cycle's begin and end claims.
     [[nodiscard]] bool inspectExactTimerQueryRecordingEndpoints(
         const TimerQueryRecordingToken& token,
         u64 recordingLeaseSerial,
@@ -3288,15 +3266,13 @@ private:
     [[nodiscard]] bool beginGraphRecordingOwnership(u64 recordingLeaseSerial);
     void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
     void cancelGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
-    // A recorded graph may outlive its strong reference via a task-retained handle. Revoke only that graph's
-    // still-unsubmitted publication.
+    // A recorded graph may outlive its strong reference via a task-retained handle. Revoke only that graph's still-unsubmitted publication.
     void revokeGraphRecordingPublication(u64 recordingLeaseSerial)noexcept;
     [[nodiscard]] bool beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noexcept;
     void acceptGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void endGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void closeInternal(CommandListResourceStateHandoff* finalStates);
-    // Reusable attempt cancellation leaves publication and crash-tracker ownership to the enclosing capability.
-    // It never logs, invokes observers, polls a queue, or archives crash-marker strings.
+    // Reusable attempt cancellation leaves publication and crash-tracker ownership to the enclosing capability. It never logs, invokes observers, polls a queue, or archives crash-marker strings.
     void abortRecordingAttemptWithoutCallbacks()noexcept;
     void clearStateInternal();
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
@@ -3572,8 +3548,7 @@ public:
 public:
     // The caller owns this unaccepted recording transaction; its command buffers cannot submit concurrently.
     [[nodiscard]] bool discardUnacceptedRecording(const TimerQueryRecordingToken& token)noexcept;
-    // The caller has made its prior endpoint packet permanently non-submittable. Preserve the accepted begin cycle
-    // while relinquishing only the stale end owner so a recovery command buffer can record its replacement endpoint.
+    // The caller has made its prior endpoint packet permanently non-submittable. Preserve the accepted begin cycle while relinquishing only the stale end owner so a recovery command buffer can record its replacement endpoint.
     [[nodiscard]] bool releaseUnacceptedEndForRecovery(const TimerQueryRecordingToken& token)noexcept;
 
 
@@ -3720,8 +3695,7 @@ private:
         Futex slotMutex;
         Optional<Metadata> metadata;
 
-        // The caller supplies a validated, non-empty ring layout. Both arrays allocate once and retain their fixed
-        // device-lifetime backing, so their exact allocation spans are sufficient for the private persistent arena.
+        // The caller supplies a validated, non-empty ring layout. Both arrays allocate once and retain their fixed device-lifetime backing, so their exact allocation spans are sufficient for the private persistent arena.
         [[nodiscard]] bool initializeMetadata(
             const VulkanDetail::AmdBreadcrumbRingLayout& newLayout,
             const Name& allocationLog
@@ -3813,8 +3787,7 @@ public:
         Texture* texture,
         VkImageUsageFlags requiredUsage = 0u
     )const noexcept;
-    // The caller owns native binding and lifetime and must provide exact immutable creation provenance.
-    // Only one live Texture wrapper may name a VkImage per Device.
+    // The caller owns native binding and lifetime and must provide exact immutable creation provenance. Only one live Texture wrapper may name a VkImage per Device.
     [[nodiscard]] TextureHandle createHandleForNativeTexture(
         ObjectType objectType,
         Object texture,
@@ -3829,12 +3802,9 @@ public:
     void unmapBuffer(Buffer& buffer);
     [[nodiscard]] MemoryRequirements getBufferMemoryRequirements(Buffer& buffer);
     bool bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
-    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee.
-    // Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while
-    // managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
+    // Nonlogging backing-readiness snapshot for command/packet preflight; this is not a synchronization guarantee. Native wrappers trust caller-managed binding. Managed ordinary buffers require their VMA allocation, while managed virtual buffers require a retained, device-owned bound Heap allocation. CPU mapping is irrelevant.
     [[nodiscard]] bool isBufferReadyForGpuUse(Buffer* buffer, VkBufferUsageFlags requiredUsage = 0u)const noexcept;
-    // The caller owns native binding and lifetime and must provide the exact immutable creation provenance.
-    // Only one live Buffer wrapper may name a VkBuffer per Device.
+    // The caller owns native binding and lifetime and must provide the exact immutable creation provenance. Only one live Buffer wrapper may name a VkBuffer per Device.
     [[nodiscard]] BufferHandle createHandleForNativeBuffer(
         ObjectType objectType,
         Object buffer,
@@ -3933,16 +3903,15 @@ private:
 
 
 public:
-    // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated
-    // primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
+    // The registry owns every active native VkQueue. Broad CommandQueue calls resolve through the designated primary record only for legacy callers; graph recording/submission selects a concrete ID directly.
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_deviceGeneration; }
     [[nodiscard]] u16 getPhysicalQueueIndex(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueId getPrimaryPhysicalQueue(CommandQueue::Enum queue)const noexcept;
     [[nodiscard]] GpuPhysicalQueueTopology getPhysicalQueueTopology()const noexcept;
     [[nodiscard]] const GpuPhysicalQueueInfo* getPhysicalQueueInfo(const GpuPhysicalQueueId& queue)const noexcept;
+    [[nodiscard]] GpuQueueTimelineSnapshot getQueueTimelineSnapshot(const GpuPhysicalQueueId& queue);
     [[nodiscard]] bool supportsComparableGpuTimestamps()const noexcept{ return m_context.comparableGpuTimestamps; }
-    // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp.
-    // Partial-width timestamps remain valid for modular ordinary durations only.
+    // Absolute ranges require the extension-backed logical-device epoch and a complete 64-bit queue timestamp. Partial-width timestamps remain valid for modular ordinary durations only.
     [[nodiscard]] bool supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
         const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
         return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == 64u;
@@ -3959,11 +3928,9 @@ public:
         u16 deviceGeneration
     )const noexcept;
     [[nodiscard]] bool matchesPhysicalQueueIdentity(const GpuPhysicalQueueId& queue)const noexcept;
-    // Validates an accepted token as a current submission wait without changing queue state. The producer timeline
-    // is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
+    // Validates an accepted token as a current submission wait without changing queue state. The producer timeline is sampled under its queue mutex so a failed submit cannot expose its tentative value as available work.
     [[nodiscard]] bool validateSubmissionWaitToken(const QueueSubmissionToken& token)const noexcept;
-    // Blocks until one exact accepted queue timeline value completes. This is used to prove that a bridged WSI
-    // binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
+    // Blocks until one exact accepted queue timeline value completes. This is used to prove that a bridged WSI binary semaphore wait has consumed its signal before the acquire slot is reset and reused.
     [[nodiscard]] bool waitForSubmissionToken(const QueueSubmissionToken& token);
     // Native device loss permits loss-aware teardown. Logical quarantine still requires an idle join before freeing.
     [[nodiscard]] bool isDeviceLost()const noexcept{ return m_deviceLost.load(MemoryOrder::acquire); }
@@ -3971,8 +3938,7 @@ public:
         return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
     }
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
-    // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share
-    // a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
+    // Reports core Graphics+Compute timestamp-stage support only; it does not imply that distinct submissions share a comparable timestamp epoch. Use supportsComparableGpuTimestamps() for absolute ranges.
     [[nodiscard]] bool supportsGraphicsAndComputeTimestamps()const{
         return m_context.physicalDeviceProperties.limits.timestampComputeAndGraphics == VK_TRUE;
     }
@@ -3989,8 +3955,7 @@ public:
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures();
     usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns);
-    // Borrowed interoperability identity only. External queue operations remain the caller's responsibility and
-    // must not overlap engine submission, presentation, idle, or teardown.
+    // Borrowed interoperability identity only. External queue operations remain the caller's responsibility and must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
     bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
@@ -4047,13 +4012,10 @@ private:
     }
     [[nodiscard]] bool beginLifecycleDrain()noexcept;
     void endLifecycleDrain()noexcept;
-    // Records the prepare phase's idle-or-loss proof. Once sealed, the submission gate remains closed and the
-    // destructor must not issue another fallible Vulkan wait during the commit phase.
+    // Records the prepare phase's idle-or-loss proof. Once sealed, the submission gate remains closed and the destructor must not issue another fallible Vulkan wait during the commit phase.
     [[nodiscard]] bool sealLifecycleDrainForDestruction()noexcept;
     [[nodiscard]] bool submissionsBlocked()const noexcept{
-        return requiresRecreation()
-            || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u
-        ;
+        return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
     }
     [[nodiscard]] QueueSubmissionToken consumeAcquiredImageSemaphore(VkSemaphore semaphore);
     [[nodiscard]] bool presentNativeQueue(
@@ -4066,8 +4028,7 @@ private:
         NativeQueueState& nativeQueue
     );
     void configureLegacyQueueContext();
-    // Probed once at device initialization so compressed texture selection does not rely on
-    // a later optimistic format-property query.
+    // Probed once at device initialization so compressed texture selection does not rely on a later optimistic format-property query.
     void probeCompressedTextureFormats();
     [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const;
     [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;

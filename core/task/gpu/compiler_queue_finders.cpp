@@ -20,9 +20,7 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family
-// ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource
-// planning below then emits the paired exclusive ownership handoff when required.
+// Physical queues in one Vulkan family can exchange work through a timeline semaphore without a queue-family ownership transfer. Cross-family balancing is deliberately separate: opted-in tasks may use it, and resource planning below then emits the paired exclusive ownership handoff when required.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
@@ -53,6 +51,11 @@ namespace GpuTaskGraphCompilerDetail{
             const u64 cost = scoringData.taskCosts[assignment.task.index];
             load = load > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : load + cost;
         }
+        const u64 externalQueueLoad = scoringData.externalQueueLoad(candidate.id);
+        load = load > Limit<u64>::s_Max - externalQueueLoad
+            ? Limit<u64>::s_Max
+            : load + externalQueueLoad
+        ;
         const bool candidateIsNonPrimary = candidate.id != baseQueue.id;
         const bool resultIsNonPrimary = result && result->id != baseQueue.id;
         bool winsEqualLoad = IsBetterQueue(candidate, result);
@@ -123,9 +126,7 @@ namespace GpuTaskGraphCompilerDetail{
     ;
 }
 
-// Same-class routing retains its independent physical-queue opt-in. Every route into another Vulkan family keeps
-// the separate family opt-in. Cross-class timing is a stronger explicit opt-in and can only use classes already
-// admitted by a flexible queue request; candidate validation still owns capability and resource-sharing checks.
+// Same-class routing retains its independent physical-queue opt-in. Every route into another Vulkan family keeps the separate family opt-in. Cross-class timing is a stronger explicit opt-in and can only use classes already admitted by a flexible queue request; candidate validation still owns capability and resource-sharing checks.
 [[nodiscard]] bool IsLegalTimingFeedbackRoute(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,
@@ -241,9 +242,7 @@ namespace GpuTaskGraphCompilerDetail{
         if(!candidateHistory)
             continue;
 
-        // A fresh store can finish bounded calibration without committing any probe as an incumbent. In that
-        // state the deterministic static route is the baseline and the first evidence-backed choice has no prior
-        // switch whose dwell must elapse.
+        // A fresh store can finish bounded calibration without committing any probe as an incumbent. In that state the deterministic static route is the baseline and the first evidence-backed choice has no prior switch whose dwell must elapse.
         const bool canSwitch = assignmentState
             ? GpuTaskTimingFeedbackCanSwitch(
                 *incumbentHistory,
@@ -294,9 +293,7 @@ namespace GpuTaskGraphCompilerDetail{
     return result;
 }
 
-// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal opted-in
-// routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the incumbent is
-// meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
+// Calibration is deliberately bounded and narrower than adaptive selection. It only visits already-legal opted-in routes until each has enough accepted samples, then ordinary hysteresis resumes. Returning the incumbent is meaningful: it reserves this frame for a baseline sample instead of switching on incomplete data.
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphQueueTopology& topology,

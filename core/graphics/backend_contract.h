@@ -159,6 +159,7 @@ concept DeviceApi = requires(
     { device.getPrimaryPhysicalQueue(CommandQueue::Graphics) }->SameAs<GpuPhysicalQueueId>;
     { device.getPhysicalQueueTopology() }->SameAs<GpuPhysicalQueueTopology>;
     { device.getPhysicalQueueInfo(GpuPhysicalQueueId{}) }->SameAs<const GpuPhysicalQueueInfo*>;
+    { device.getQueueTimelineSnapshot(GpuPhysicalQueueId{}) }->SameAs<GpuQueueTimelineSnapshot>;
     { device.getCommandArenaStatistics(GpuPhysicalQueueId{}) }->SameAs<GpuCommandArenaStatistics>;
     { device.getCommandArenaWorkerStatistics(GpuPhysicalQueueId{}, u64{}, u32{}) }->SameAs<GpuCommandArenaWorkerStatistics>;
     { device.matchesPhysicalQueueIdentity(CommandQueue::Graphics, u16{}, u16{}) }->SameAs<bool>;

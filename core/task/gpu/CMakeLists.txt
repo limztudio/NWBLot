@@ -53,6 +53,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/queue_assignment_telemetry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/queue_assignment_telemetry.h"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/scheduler_compilation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler_record_range.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler.h"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler_lifecycle.cpp"

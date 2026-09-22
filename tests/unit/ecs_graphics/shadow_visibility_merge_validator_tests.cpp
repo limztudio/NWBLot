@@ -7,7 +7,7 @@
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 
-#include <core/task/gpu/compiler.h>
+#include <core/task/gpu/compiler_internal.h>
 
 #include <gtest/gtest.h>
 

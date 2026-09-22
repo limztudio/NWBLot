@@ -19,6 +19,41 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+class GpuTaskGraphCompiler final : NoCopy{
+public:
+    // Graph validation and hazards remain independent from physical queue policy, so later packet, barrier, recording, and submission stages can consume one validated, immutable analysis result.
+    [[nodiscard]] bool analyze(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        GpuTaskGraphAnalysis& outAnalysis,
+        Alloc::ScratchArena& scratchArena
+    )const;
+
+    // This produces only a physical-queue decision. It never creates a command list or changes submission; the scheduler supplies the concrete topology discovered from its current device.
+    [[nodiscard]] bool assignQueues(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        const GpuTaskGraphAnalysis& analysis,
+        const GpuTaskGraphQueueTopology& topology,
+        GpuTaskGraphQueueAssignments& outAssignments,
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphQueueAssignmentOptions& options = {}
+    )const;
+
+    // The packet compiler reuses the independently exposed analysis and queue-assignment results so scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions. Tasks retain one packet by default; explicitly requested compatible successors may merge into the preceding packet.
+    [[nodiscard]] bool compile(
+        const GpuTaskGraph::DeclarationReadView& graph,
+        GpuTaskGraphAnalysis& outAnalysis,
+        const GpuTaskGraphQueueTopology& topology,
+        GpuTaskGraphQueueAssignments& outAssignments,
+        GpuCompiledGraph& outCompiledGraph,
+        Alloc::ScratchArena& scratchArena,
+        const GpuTaskGraphCompileOptions& options = {}
+    )const;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GpuTaskGraphCompilerDetail{
 
 
@@ -196,11 +231,15 @@ struct GpuTaskQueueScoringData{
     Vector<u64, Alloc::ScratchArena> taskCosts;
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> ownershipEdges;
+    const GpuTaskQueueLoad* queueLoads = nullptr;
+    usize queueLoadCount = 0u;
 
 
+    [[nodiscard]] u64 externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
     GpuTaskQueueScoringData(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
+        const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena
     );
 };

@@ -24,9 +24,7 @@ using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
-// Timing availability and outcomes belong to the device-wide recorder rather than one compiled graph attempt. Keep
-// the snapshot by value, export explicit skip reasons, and enumerate every live physical queue even on no-graph
-// frames so unsupported capabilities remain distinguishable from measured zero-duration work.
+// Timing availability and outcomes belong to the device-wide recorder rather than one compiled graph attempt. Keep the snapshot by value, export explicit skip reasons, and enumerate every live physical queue even on no-graph frames so unsupported capabilities remain distinguishable from measured zero-duration work.
 TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -369,9 +367,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
 }
 
 
-// The frame timing query must record its published endpoint after the optional presentation contributor. A rejected
-// endpoint remains recoverable through the separate non-publishing recovery task instead of silently publishing a
-// partial frame duration.
+// The frame timing query must record its published endpoint after the optional presentation contributor. A rejected endpoint remains recoverable through the separate non-publishing recovery task instead of silently publishing a partial frame duration.
 TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -463,8 +459,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 }
 
 
-// Split measures retain non-owning links to their recording tickets. Declare each ticket first so reverse local
-// destruction keeps it alive while an incomplete measure relinquishes its scope during exception unwinding.
+// Split measures retain non-owning links to their recording tickets. Declare each ticket first so reverse local destruction keeps it alive while an incomplete measure relinquishes its scope during exception unwinding.
 TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -515,9 +510,7 @@ TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
 }
 
 
-// Every normal renderer packet from the packet containing Shadow Preparation through the accepted presentation
-// endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder
-// because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
+// Every normal renderer packet from the packet containing Shadow Preparation through the accepted presentation endpoint owns compiler-selected timing. All recorders for that compiled graph retain the shared timing recorder because even an untimed late-tail attempt validates the graph-owned plan before opening its native command list.
 TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -535,9 +528,9 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     const AStringView build(buildSource.data(), buildSource.size());
     const AStringView render(renderSource.data(), renderSource.size());
 
-    const usize buildOffset = build.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    ASSERT_NE(buildOffset, AStringView::npos);
-    const usize optionsOffset = build.find("Core::GpuTaskGraphCompileOptions compileOptions;", buildOffset);
+    const usize graphSchedulingOffset = build.find("bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution");
+    ASSERT_NE(graphSchedulingOffset, AStringView::npos);
+    const usize optionsOffset = build.find("Core::GpuTaskGraphCompileOptions compileOptions;", graphSchedulingOffset);
     ASSERT_NE(optionsOffset, AStringView::npos);
     const usize firstTaskOffset = build.find(
         "compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;",
@@ -549,20 +542,20 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
         firstTaskOffset
     );
     ASSERT_NE(lastTaskOffset, AStringView::npos);
-    const usize compilerOffset = build.find("if(!compiler.compile(", lastTaskOffset);
-    ASSERT_NE(compilerOffset, AStringView::npos);
+    const usize schedulerOffset = build.find("if(!scheduler.scheduleGraph(", lastTaskOffset);
+    ASSERT_NE(schedulerOffset, AStringView::npos);
     EXPECT_LT(optionsOffset, firstTaskOffset);
     EXPECT_LT(firstTaskOffset, lastTaskOffset);
-    EXPECT_LT(lastTaskOffset, compilerOffset);
+    EXPECT_LT(lastTaskOffset, schedulerOffset);
 
-    const AStringView compileSetup = build.substr(optionsOffset, compilerOffset - optionsOffset);
+    const AStringView compileSetup = build.substr(optionsOffset, schedulerOffset - optionsOffset);
     EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.firstTask"), 1u);
     EXPECT_EQ(CountText(compileSetup, "packetTimingEnvelope.lastTask"), 1u);
     EXPECT_FALSE(ContainsText(compileSetup, "m_deferredFrameRecoveryTask"));
 
     const usize metricHelperOffset = build.find("[[nodiscard]] bool PreparePacketEnvelopeMetrics(");
     ASSERT_NE(metricHelperOffset, AStringView::npos);
-    const AStringView metricHelper = build.substr(metricHelperOffset, buildOffset - metricHelperOffset);
+    const AStringView metricHelper = build.substr(metricHelperOffset, graphSchedulingOffset - metricHelperOffset);
     EXPECT_TRUE(ContainsText(metricHelper, "compiledGraph.packetTimingEnvelopeRange()"));
     EXPECT_TRUE(ContainsText(metricHelper, "const Core::GpuCompiledPacketView packetView = compiledGraph.packet(packetID);"));
     EXPECT_TRUE(ContainsText(metricHelper, "graph.taskAt(packetView.tasks[0u].index).identity"));
@@ -574,36 +567,45 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
     EXPECT_TRUE(ContainsText(metricHelper, "return __hidden_task_graph_deferred_lighting::PreparePacketEnvelopeMetrics("));
     EXPECT_TRUE(ContainsText(metricHelper, "m_graphics.gpuTiming(),"));
 
-    const usize metricPrepareOffset = build.find(
-        "|| !prepareDeferredGraphPacketEnvelopeMetrics(",
-        compilerOffset
-    );
-    const usize recordedGraphResetOffset = build.find("m_deferredLightingRecordedGraph.reset(", compilerOffset);
+    const usize metricPrepareOffset = build.find("if(!prepareDeferredGraphPacketEnvelopeMetrics(", schedulerOffset);
+    const usize scheduledPublicationOffset = build.find("m_deferredLightingTaskGraphScheduled = true;", metricPrepareOffset);
     ASSERT_NE(metricPrepareOffset, AStringView::npos);
-    ASSERT_NE(recordedGraphResetOffset, AStringView::npos);
-    EXPECT_LT(compilerOffset, metricPrepareOffset);
-    EXPECT_LT(metricPrepareOffset, recordedGraphResetOffset);
+    ASSERT_NE(scheduledPublicationOffset, AStringView::npos);
+    EXPECT_LT(schedulerOffset, metricPrepareOffset);
+    EXPECT_LT(metricPrepareOffset, scheduledPublicationOffset);
+
+    const usize buildOffset = build.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
+    const usize graphDeclarationOffset = build.find("m_deferredLightingTaskGraphDeclared = true;", buildOffset);
+    ASSERT_NE(buildOffset, AStringView::npos);
+    ASSERT_NE(graphDeclarationOffset, AStringView::npos);
+    EXPECT_LT(buildOffset, graphDeclarationOffset);
 
     const usize renderFunctionOffset = render.find("void RendererFramePipeline::render(");
     ASSERT_NE(renderFunctionOffset, AStringView::npos);
     const AStringView renderFunction = render.substr(renderFunctionOffset);
-    EXPECT_EQ(CountText(renderFunction, "const Core::GpuNativePacketRecorder"), 3u);
-    EXPECT_EQ(CountText(
-        renderFunction,
-        "const Core::GpuNativePacketRecorder deferredRecorder(device, m_graphics.gpuTiming());"
-    ), 1u);
-    EXPECT_EQ(CountText(
-        renderFunction,
-        "const Core::GpuNativePacketRecorder recorder(device, m_graphics.gpuTiming());"
-    ), s_ExpectedDualCount);
-    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder deferredRecorder(device);"));
-    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder recorder(device);"));
+    const usize graphBuildOffset = renderFunction.find("buildDeferredLightingTaskGraph(");
+    const usize executionSchedulingOffset = renderFunction.find(
+        "scheduleDeferredLightingTaskGraphForExecution(",
+        graphBuildOffset
+    );
+    const usize compiledPlanOffset = renderFunction.find(
+        "const Core::GpuCompiledGraph::ReadView deferredCompiledPlan",
+        executionSchedulingOffset
+    );
+    ASSERT_NE(graphBuildOffset, AStringView::npos);
+    ASSERT_NE(executionSchedulingOffset, AStringView::npos);
+    ASSERT_NE(compiledPlanOffset, AStringView::npos);
+    EXPECT_LT(graphBuildOffset, executionSchedulingOffset);
+    EXPECT_LT(executionSchedulingOffset, compiledPlanOffset);
+    EXPECT_TRUE(ContainsText(renderFunction, "normalScheduler.executeGraph("));
+    EXPECT_TRUE(ContainsText(renderFunction, "scheduler.executeAcceptedFrontierTask("));
+    EXPECT_EQ(CountText(renderFunction, "scheduler.executeTask("), s_ExpectedDualCount);
+    EXPECT_FALSE(ContainsText(renderFunction, "GpuNativePacketRecorder"));
+    EXPECT_FALSE(ContainsText(renderFunction, "scheduler.submit("));
 }
 
 
-// Queue timing feedback is deliberately opt-in, but the two graph-owned AVBOIT Compute tasks must route accepted
-// timestamp samples back into the next immutable compiler snapshot. Keep this source-level contract focused on the
-// renderer boundary rather than coupling it to one physical queue topology.
+// Queue timing feedback is deliberately opt-in, but the two graph-owned AVBOIT Compute tasks must route accepted timestamp samples back into the next immutable compiler snapshot. Keep this source-level contract focused on the renderer boundary rather than coupling it to one physical queue topology.
 TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -768,13 +770,16 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_FALSE(ContainsText(accept, ".erase("));
     EXPECT_FALSE(ContainsText(accept, "NWB_LOGGER"));
 
-    const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
-    const usize compilerOffset = taskGraph.find("if(!compiler.compile(", lightingOffset);
-    const usize feedbackOffset = taskGraph.find("m_deferredTaskTimingFeedback.configureCompileOptions(", lightingOffset);
-    ASSERT_NE(lightingOffset, AStringView::npos);
-    ASSERT_NE(compilerOffset, AStringView::npos);
+    const usize graphSchedulingOffset = taskGraph.find("bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution");
+    const usize schedulerOffset = taskGraph.find("if(!scheduler.scheduleGraph(", graphSchedulingOffset);
+    const usize feedbackOffset = taskGraph.find("m_deferredTaskTimingFeedback.configureCompileOptions(", graphSchedulingOffset);
+    ASSERT_NE(graphSchedulingOffset, AStringView::npos);
+    ASSERT_NE(schedulerOffset, AStringView::npos);
     ASSERT_NE(feedbackOffset, AStringView::npos);
-    EXPECT_LT(feedbackOffset, compilerOffset);
+    EXPECT_LT(feedbackOffset, schedulerOffset);
+
+    const usize lightingOffset = taskGraph.find("void RendererFramePipeline::buildDeferredLightingTaskGraph");
+    ASSERT_NE(lightingOffset, AStringView::npos);
 
     const usize depthWarpOffset = taskGraph.find("struct AvboitDepthWarpGraphTask");
     const usize extinctionComputeEmulationOffset = taskGraph.find(

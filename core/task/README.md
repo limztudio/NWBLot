@@ -7,7 +7,7 @@
 | CPU | `cpu/scheduler.h` | `nwb_cpu_task` | Callables, `CpuTaskScope`, CPU completion handles |
 | GPU | `gpu/scheduler.h` | `nwb_gpu_task` | Task graphs, compiled plans, GPU submission tokens |
 
-`Frame::cpuTasks()` and `Frame::gpuTasks()` expose the same instances borrowed by the graphics runtime and project context. GPU `submit()` coordinates recording and submission; `wait()` joins its device work and `wait(token)` joins a submitted operation. CPU and GPU completion remain distinct.
+`Frame::cpuTasks()` and `Frame::gpuTasks()` expose the same instances borrowed by the graphics runtime and project context. GPU scheduler admission compiles declared graphs from a current queue-pressure snapshot, then owns native recording and submission; `wait()` joins its device work and `wait(token)` joins a submitted operation. CPU and GPU completion remain distinct.
 
 The GPU scheduler owns its execution admission and binding lifetime, not the Vulkan device. `GraphicsRuntime` owns device creation, resources, render passes, and presentation in `core/graphics/runtime`. It binds the GPU scheduler before resource callbacks, joins work before teardown, and detaches before device destruction. A failed detach leaves the device binding intact. Swap-chain resizing keeps the same binding.
 

@@ -24,8 +24,7 @@ using namespace EcsGraphicsTaskGraphContractTestDetail;
 using EcsGraphicsTaskGraphContractTestDetail::AString;
 
 
-// Every surfel stage consumes the same packed [0,1] G-buffer normal contract. Keep the decode in one shader include so
-// spawn cannot silently store a different normal space from resolve and upsample.
+// Every surfel stage consumes the same packed [0,1] G-buffer normal contract. Keep the decode in one shader include so spawn cannot silently store a different normal space from resolve and upsample.
 TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
     TestArena testArena;
     const TestPath surfelDirectory = RepoRoot(testArena) / "impl" / "assets" / "graphics" / "gi" / "surfel";
@@ -58,9 +57,7 @@ TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
 }
 
 
-// Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the
-// graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource
-// sharing contract or lowering the required exclusive ownership transfer.
+// Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource sharing contract or lowering the required exclusive ownership transfer.
 TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -77,9 +74,7 @@ TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
 }
 
 
-// The persistent counter crosses the Compute GI packet and optional Transfer readback tail.  Its next-frame
-// imported cache must therefore be concurrently shared by each actual transport rather than retaining a stale
-// exclusive Transfer owner with no future release destination.
+// The persistent counter crosses the Compute GI packet and optional Transfer readback tail.  Its next-frame imported cache must therefore be concurrently shared by each actual transport rather than retaining a stale exclusive Transfer owner with no future release destination.
 TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -129,21 +124,19 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
         "                    context->renderer->m_raytracingSystem.confirmSurfelCountReadbackSubmission(token);"
     ));
     EXPECT_TRUE(ContainsText(rayTracingSystem, "m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;"));
-    const usize readbackSubmitOffset = system.find("const bool readbackAccepted = submitter.recordAndSubmitTask(");
+    const usize readbackExecutionOffset = system.find("const bool readbackAccepted = scheduler.executeTask(");
     const usize readbackTokenOffset = system.find(
         "const Core::QueueSubmissionToken readbackSubmissionToken =",
-        readbackSubmitOffset
+        readbackExecutionOffset
     );
-    ASSERT_NE(readbackSubmitOffset, AStringView::npos);
+    ASSERT_NE(readbackExecutionOffset, AStringView::npos);
     ASSERT_NE(readbackTokenOffset, AStringView::npos);
-    EXPECT_LT(readbackSubmitOffset, readbackTokenOffset);
+    EXPECT_LT(readbackExecutionOffset, readbackTokenOffset);
     EXPECT_TRUE(ContainsText(system, "else if(!readbackAccepted || !readbackContext.acceptedStateReady){"));
 }
 
 
-// The full irradiance clear is deliberately renderer-local: the generic helper conservatively declares Graphics
-// for render-pass lowering, while this native clear is constrained to the direct Compute GI packet and captures the
-// same typed command-IR record after the graph-owned CopyDest transition.
+// The full irradiance clear is deliberately renderer-local: the generic helper conservatively declares Graphics for render-pass lowering, while this native clear is constrained to the direct Compute GI packet and captures the same typed command-IR record after the graph-owned CopyDest transition.
 TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -180,9 +173,7 @@ TEST(EcsGraphics, SurfelIrradianceClearUsesComputeGraphCallback){
 }
 
 
-// Hardware Caustics is a separate Graphics-capable effect chain. Its clear and every independently created
-// temporal-accumulator prefix must carry the explicit cross-family opt-in so copied photon/resolve schedules
-// retain one selected physical Graphics queue without making a windowed present eligible for that queue.
+// Hardware Caustics is a separate Graphics-capable effect chain. Its clear and every independently created temporal-accumulator prefix must carry the explicit cross-family opt-in so copied photon/resolve schedules retain one selected physical Graphics queue without making a windowed present eligible for that queue.
 TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -202,8 +193,7 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
 }
 
 
-// Caustic resolve targets start Unknown after recreation. Geometry downsample and prepare must therefore publish
-// their first results as writes, while a warm hardware accumulator imports only accepted Graphics packet state.
+// Caustic resolve targets start Unknown after recreation. Geometry downsample and prepare must therefore publish their first results as writes, while a warm hardware accumulator imports only accepted Graphics packet state.
 TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAccumulatorState){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -328,8 +318,7 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
 }
 
 
-// FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own
-// one timing/acceptance packet, so every accumulator alternative and semantic tail must opt in explicitly.
+// FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own one timing/acceptance packet, so every accumulator alternative and semantic tail must opt in explicitly.
 TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -392,8 +381,7 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 }
 
 
-// A fully prepared soft-transparent frame selects the split graph route from production state alone. The retained
-// monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
+// A fully prepared soft-transparent frame selects the split graph route from production state alone. The retained monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
 TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -449,8 +437,7 @@ TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
 }
 
 
-// A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff. Keep the
-// narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
+// A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff. Keep the narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
 TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -516,8 +503,7 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
 }
 
 
-// Software-caustics scratch is private on both the dedicated Compute route and its legal Graphics fallback. Only
-// the cross-queue irradiance return cache is route-conditional; all retained state publishes from the exact task.
+// Software-caustics scratch is private on both the dedicated Compute route and its legal Graphics fallback. Only the cross-queue irradiance return cache is route-conditional; all retained state publishes from the exact task.
 TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -579,9 +565,7 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
 }
 
 
-// Depth Warp and Integration are each declared once as merge-capable, Compute-preferred semantic tasks. The
-// compiler may independently retain or collapse either stage, while any retained Compute route keeps the explicit
-// same-family and cross-family auxiliary-transport opt-ins.
+// Depth Warp and Integration are each declared once as merge-capable, Compute-preferred semantic tasks. The compiler may independently retain or collapse either stage, while any retained Compute route keeps the explicit same-family and cross-family auxiliary-transport opt-ins.
 TEST(EcsGraphics, NaturalAvboitComputeStagesPermitCompilerOwnedRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

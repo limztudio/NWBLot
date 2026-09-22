@@ -263,19 +263,32 @@ const GpuTaskQueueAssignment* FindQueueAssignment(
 }
 
 
+u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)const noexcept{
+    if(!queueLoads)
+        return 0u;
+    for(usize queueLoadIndex = 0u; queueLoadIndex < queueLoadCount; ++queueLoadIndex){
+        const GpuTaskQueueLoad& externalLoad = queueLoads[queueLoadIndex];
+        if(externalLoad.queue == queue)
+            return externalLoad.estimatedCost;
+    }
+    return 0u;
+}
+
 GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
+    const GpuTaskGraphQueueAssignmentOptions& options,
     Alloc::ScratchArena& scratchArena)
     : taskCosts(graph.taskCount(), scratchArena)
     , ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
     , ownershipEdges(scratchArena)
+    , queueLoads(options.queueLoads)
+    , queueLoadCount(options.queueLoadCount)
 {
     for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex)
         taskCosts[taskIndex] = QueueCostWeight(graph.taskAt(taskIndex).scheduling.cost);
 
-    // Hazard kinds and ranges remain available in analysis for diagnostics. Queue ownership scoring counts each
-    // producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
+    // Hazard kinds and ranges remain available in analysis for diagnostics. Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
@@ -358,6 +371,11 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         )
             overlap = overlap > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : overlap + cost;
     }
+    const u64 externalQueueLoad = scoringData.externalQueueLoad(candidate.id);
+    queueLoad = queueLoad > Limit<u64>::s_Max - externalQueueLoad
+        ? Limit<u64>::s_Max
+        : queueLoad + externalQueueLoad
+    ;
     score.overlap = SaturateQueueScoreTerm(overlap);
     score.queueLoad = SaturateQueueScoreTerm(queueLoad);
 

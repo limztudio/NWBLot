@@ -25,6 +25,7 @@
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/scheduler.h>
 #include <core/graphics/gpu_timing.h>
 
 #include <global/timer.h>
@@ -165,6 +166,53 @@ namespace __hidden_task_graph_deferred_lighting{
     );
 }
 
+bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::Alloc::ScratchArena& scratchArena){
+    m_deferredLightingTaskGraphScheduled = false;
+    if(!m_deferredLightingTaskGraphDeclared)
+        return false;
+
+    Core::GpuTaskGraphCompileOptions compileOptions;
+    // A graphics prefix can split immediately after work that enables a different physical queue. This exposes the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
+    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
+    // Time accepted normal-rendering packets through the graph-owned presentation endpoint. Late readback, history-copy, and recovery tails retain separate diagnostic/lifecycle policy.
+    compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;
+    compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;
+    m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
+    compileOptions.declarationSeconds = m_deferredLightingTaskGraphDeclarationSeconds;
+
+    const Core::GpuTaskScheduler& scheduler = m_graphics.gpuTasks();
+    if(!scheduler.scheduleGraph(
+        m_deferredLightingTaskGraph,
+        m_deferredLightingTaskGraphAnalysis,
+        m_deferredLightingTaskGraphQueueAssignments,
+        m_deferredLightingCompiledGraph,
+        m_deferredLightingRecordedGraph,
+        m_deferredLightingSubmissionTransaction,
+        scratchArena,
+        compileOptions
+    )){
+        const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
+        const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph scheduling failed: analysis={} task={} resource={} queue={} queueTask={}")
+            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
+            , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
+        );
+        return false;
+    }
+
+    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+    const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
+    if(!declarations.valid() || !compiledPlan.validFor(declarations)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph scheduling lost its compiler plan"));
+        return false;
+    }
+    if(!prepareDeferredGraphPacketEnvelopeMetrics(declarations, compiledPlan, scratchArena))
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
+
+    m_deferredLightingTaskGraphScheduled = true;
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -234,7 +282,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_raytracingSystem.snapshotSurfelPersistentResources()
     ;
 
-    m_deferredLightingTaskGraphValid = false;
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
@@ -262,7 +309,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredFrameRecoveryRetiresTiming = false;
     m_deferredPresentationOverlayRequired = false;
     resetDeferredTaskGraphRuntime();
-    // Declaration runs between artifact discard and core compilation.
+    // Declaration runs between artifact discard and execution-time compilation.
     const Timer declarationBegin = TimerNow();
 
     const auto& device = m_graphics.getDevice();
@@ -2394,54 +2441,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     m_deferredLaggedLightingHistoryTask = deferredFrameTailResult.historyCopyTask;
     m_deferredFrameRecoveryTask = deferredFrameTailResult.recoveryTask;
 
-    // The backend owns physical queue discovery and identity. The renderer consumes this immutable view directly so
-    // graph packets can target multiple same-class native queues without rebuilding a class-shaped topology here.
-    const Core::GpuTaskGraphQueueTopology topology = device.getPhysicalQueueTopology();
-    if(!topology.queues || topology.queueCount == 0u){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: no native physical queue registry is available for the deferred graph"));
-        return;
-    }
-    Core::Alloc::ScratchArena compileScratchArena(RendererArenaScope::s_TaskGraphArena);
-    const Core::GpuTaskGraphCompiler compiler;
-    Core::GpuTaskGraphCompileOptions compileOptions;
-    // A graphics prefix can now split immediately after work that enables a different physical queue. This exposes
-    // the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
-    compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
-    // Time the accepted normal-rendering packets from the packet containing frame-timing begin through the graph-owned
-    // presentation endpoint. Late readback, history-copy, and recovery tails retain separate diagnostic/lifecycle policy.
-    compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;
-    compileOptions.packetTimingEnvelope.lastTask = m_deferredFrameTimingEndTask;
-    m_deferredTaskTimingFeedback.configureCompileOptions(compileOptions, m_graphics.getFrameIndex());
-    compileOptions.declarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);
-    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-    if(!compiler.compile(
-        declarations,
-        m_deferredLightingTaskGraphAnalysis,
-        topology,
-        m_deferredLightingTaskGraphQueueAssignments,
-        m_deferredLightingCompiledGraph,
-        compileScratchArena,
-        compileOptions
-    )){
-        const auto& analysisDiagnostic = m_deferredLightingTaskGraphAnalysis.diagnostic();
-        const auto& queueDiagnostic = m_deferredLightingTaskGraphQueueAssignments.diagnostic();
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: deferred graph compilation failed: analysis={} task={} resource={} queue={} queueTask={}")
-            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
-            , static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
-        );
-        return;
-    }
-    const Core::GpuCompiledGraph::ReadView compiledPlan(m_deferredLightingCompiledGraph);
-    if(
-        !compiledPlan.validFor(declarations)
-        || !prepareDeferredGraphPacketEnvelopeMetrics(declarations, compiledPlan, compileScratchArena)
-    )
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not prepare deferred graph packet metrics"));
-    m_deferredLightingRecordedGraph.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingSubmissionTransaction.reset(m_deferredLightingCompiledGraph);
-    m_deferredLightingTaskGraphValid = true;
-
-
+    m_deferredLightingTaskGraphDeclarationSeconds = DurationInSeconds<f64>(TimerNow(), declarationBegin);
+    m_deferredLightingTaskGraphDeclared = true;
 }
 
 

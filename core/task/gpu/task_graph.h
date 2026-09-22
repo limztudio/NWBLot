@@ -806,7 +806,7 @@ public:
 
 
 public:
-    // Metadata-only tasks support graph analysis and scheduling. A task recorded by GpuNativePacketRecorder must provide a payload thunk through the templated overload below.
+    // Metadata-only tasks support graph analysis and scheduling. A task executed through scheduler-owned native recording must provide a payload thunk through the templated overload below.
     [[nodiscard]] GpuTaskId addTask(const GpuTaskDesc& desc);
 
     // Adds a graph-owned native buffer-copy task. The helper derives CopySource/CopyDest resource uses from its regions and retains the imported buffers through recording, so desc must declare Transfer capability and must not provide separate resource uses.

@@ -182,6 +182,55 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     );
 }
 
+TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuQueueRequest queueRequest;
+    queueRequest.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    queueRequest.preferredQueue = Graphics::GpuQueuePreference::Graphics;
+    queueRequest.allowFallback = false;
+    queueRequest.compilerMayOverridePreference = false;
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.allowSameClassQueueRouting = true;
+    const Graphics::GpuTaskId task = AddTaskWithQueue(
+        graph,
+        Name("tests/task_graph/external_load_same_class"),
+        "External Load Same Class",
+        queueRequest,
+        scheduling
+    );
+    ASSERT_TRUE(task.valid());
+
+    Graphics::GpuPhysicalQueueInfo secondaryGraphicsQueue = GraphicsQueue(1u);
+    secondaryGraphicsQueue.queueIndex = 1u;
+    const Graphics::GpuPhysicalQueueInfo queues[] = {
+        GraphicsQueue(),
+        secondaryGraphicsQueue,
+    };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    const Graphics::GpuTaskQueueLoad queueLoads[]{
+        {
+            .queue = queues[0u].id,
+            .estimatedCost = 32u,
+        },
+    };
+    Graphics::GpuTaskGraphQueueAssignmentOptions options;
+    options.queueLoads = queueLoads;
+    options.queueLoadCount = LengthOf(queueLoads);
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
+    const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queue, queues[1u].id);
+    EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
+    EXPECT_EQ(assignment->score.queueLoad, 0);
+}
+
 TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

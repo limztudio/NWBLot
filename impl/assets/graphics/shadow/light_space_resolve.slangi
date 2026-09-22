@@ -180,8 +180,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
             if(closed && facing == 3u)
                 continue;
             if(crossings == 0u){
-                absorption = half3(f16tof32(event.absorptionRG & 0xffffu), f16tof32(event.absorptionRG >> 16u),
-                    f16tof32(event.absorptionBInterface & 0xffffu));
+                absorption = half3(half(f16tof32(event.absorptionRG & 0xffffu)), half(f16tof32(event.absorptionRG >> 16u)),
+                    half(f16tof32(event.absorptionBInterface & 0xffffu)));
                 first = distance;
                 if(closed && facing == 2u)
                     inside = true;

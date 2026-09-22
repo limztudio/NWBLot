@@ -29,17 +29,18 @@ uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
 
 
 // R2 sequence with per-pixel Cranley-Patterson rotation.
+// The R2 fraction + jitter offset are (0, 1) bounded factors; half math is sufficient here (widened at the float2 return).
 float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
-    const float a1 = 0.75487766624669276005; // 1 / phi2
-    const float a2 = 0.56984029099805326591; // 1 / phi2^2
+    const half a1 = half(0.75487766624669276005); // 1 / phi2
+    const half a2 = half(0.56984029099805326591); // 1 / phi2^2
     // Mask before float conversion to preserve R2 fractional precision for large frame indices.
-    const float indexF = float((frameIndex & 0xffffu) + 1u);
-    const float2 r2 = frac(float2(a1, a2) * indexF);
+    const half indexF = half((frameIndex & 0xffffu) + 1u);
+    const half2 r2 = half2(frac(float2(float(a1), float(a2)) * float(indexF)));
 
     const uint seed = nwbShadowSeed(pixel, frameIndex);
-    const float2 offset = float2(float(seed & 0xffffu), float((seed >> 16u) & 0xffffu)) * (1.0 / 65536.0);
+    const half2 offset = half2(half(seed & 0xffffu), half((seed >> 16u) & 0xffffu)) * (half(1.0h) / half(65536.0));
 
-    return frac(r2 + offset);
+    return float2(frac(float2(r2 + offset)));
 }
 
 
@@ -53,23 +54,24 @@ void nwbShadowBuildBasis(const float3 axis, out float3 tangent, out float3 bitan
 
 
 // Uniform-solid-angle cone sample; zero angle returns the hard-shadow axis.
+// Cosine/angle blend factors are (0, 1) bounded; half math is sufficient here (widened at the normalize).
 float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float2 u){
     if(halfAngle <= 0.0)
         return axis;
 
-    const float cosHalfAngle = cos(halfAngle);
-    const float cosTheta = lerp(cosHalfAngle, 1.0, u.x);
-    const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
-    const float phi = NWB_SHADOW_FULL_TURN_RADIANS * u.y;
+    const half cosHalfAngle = half(cos(halfAngle));
+    const half cosTheta = half(lerp(float(cosHalfAngle), 1.0, u.x));
+    const half sinTheta = sqrt(max(half(1.0h) - cosTheta * cosTheta, half(0.0h)));
+    const half phi = half(NWB_SHADOW_FULL_TURN_RADIANS) * half(u.y);
 
     float3 tangent;
     float3 bitangent;
     nwbShadowBuildBasis(axis, tangent, bitangent);
 
     return normalize(
-        cos(phi) * sinTheta * tangent +
-        sin(phi) * sinTheta * bitangent +
-        cosTheta * axis
+        float(cos(float(phi)) * float(sinTheta)) * tangent +
+        float(sin(float(phi)) * float(sinTheta)) * bitangent +
+        float(cosTheta) * axis
     );
 }
 

@@ -28,8 +28,9 @@ void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinctio
     InterlockedAdd(nwbAvboitExtinctionUav()[wordIndex], packedExtinction << byteShift, previousWord);
     const uint previousByte = (previousWord >> byteShift) & NWB_AVBOIT_EXTINCTION_BYTE_MASK;
     const bool byteOverflow = previousByte + packedExtinction > NWB_AVBOIT_EXTINCTION_BYTE_MASK;
-    const float previousExtinction = float(previousByte) / nwbAvboitExtinctionFixedScale();
-    const bool rawOverflow = previousExtinction + extinction > nwbAvboitExtinctionSaturation();
+    // Previous-extinction readout is a bounded overflow-guard factor; half math is sufficient here.
+    const half previousExtinction = half(previousByte) / half(nwbAvboitExtinctionFixedScale());
+    const bool rawOverflow = previousExtinction + half(extinction) > half(nwbAvboitExtinctionSaturation());
     if(byteOverflow || rawOverflow)
         InterlockedMin(nwbAvboitExtinctionOverflowDepthUav()[nwbAvboitLowPixelIndex(lowPixel)], physicalSlice);
 }
@@ -37,14 +38,15 @@ void nwbAvboitSplatExtinction(uint2 lowPixel, uint virtualSlice, float extinctio
 void nwbAvboitSplatExtinctionFromDepth(uint2 lowPixel, float depth, float extinction){
     uint virtualSlice0;
     uint virtualSlice1;
-    float sliceWeight0;
-    float sliceWeight1;
+    // Slice blend weights are (0, 1) bounded factors; half math is sufficient here.
+    half sliceWeight0;
+    half sliceWeight1;
     nwbAvboitLinearVirtualSlicesFromDepth(depth, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
 
-    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        nwbAvboitSplatExtinction(lowPixel, virtualSlice0, extinction * sliceWeight0);
-    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
-        nwbAvboitSplatExtinction(lowPixel, virtualSlice1, extinction * sliceWeight1);
+    if(sliceWeight0 > half(NWB_AVBOIT_SPLAT_WEIGHT_EPSILON))
+        nwbAvboitSplatExtinction(lowPixel, virtualSlice0, extinction * float(sliceWeight0));
+    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > half(NWB_AVBOIT_SPLAT_WEIGHT_EPSILON))
+        nwbAvboitSplatExtinction(lowPixel, virtualSlice1, extinction * float(sliceWeight1));
 }
 
 

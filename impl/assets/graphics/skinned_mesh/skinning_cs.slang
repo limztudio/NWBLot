@@ -102,14 +102,15 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float3 skinnedPosition = float3(0.0);
-    float totalWeight = 0.0;
+    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
+    half totalWeight = half(0.0h);
     // Preserve the legacy influence filter: position skinning formerly passed this normal to the normal-matrix check.
     const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const float weight = skin.weight[influenceIndex];
+        const half weight = half(skin.weight[influenceIndex]);
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
+        if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 
         const float4x4 jointMatrix = nwbSkinnedMeshLoadJointMatrix(jointId);
@@ -118,14 +119,14 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
         if(!nwbSkinnedMeshTransformJointNormal(jointMatrix3, influenceValidationNormal, transformedValidationNormal))
             continue;
 
-        skinnedPosition += weight * mul(jointMatrix, float4(position, 1.0)).xyz;
+        skinnedPosition += float(weight) * mul(jointMatrix, float4(position, 1.0)).xyz;
         totalWeight += weight;
     }
 
-    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
+    if(abs(totalWeight) <= half(NWB_SKINNED_MESH_EPSILON))
         return true;
 
-    const float inverseTotalWeight = 1.0 / totalWeight;
+    const float inverseTotalWeight = 1.0 / float(totalWeight);
     position = skinnedPosition * inverseTotalWeight;
     return true;
 }
@@ -138,12 +139,13 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
-    float totalWeight = 0.0;
+    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
+    half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const float weight = skin.weight[influenceIndex];
+        const half weight = half(skin.weight[influenceIndex]);
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
+        if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 
         const float4x4 jointMatrix = nwbSkinnedMeshLoadJointMatrix(jointId);
@@ -152,15 +154,15 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
         if(!nwbSkinnedMeshTransformJointNormal(jointMatrix3, normal, transformedNormal))
             continue;
 
-        skinnedNormal += weight * transformedNormal;
-        skinnedTangent += weight * mul(jointMatrix3, tangent.xyz);
+        skinnedNormal += float(weight) * transformedNormal;
+        skinnedTangent += float(weight) * mul(jointMatrix3, tangent.xyz);
         totalWeight += weight;
     }
 
-    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
+    if(abs(totalWeight) <= half(NWB_SKINNED_MESH_EPSILON))
         return true;
 
-    const float inverseTotalWeight = 1.0 / totalWeight;
+    const float inverseTotalWeight = 1.0 / float(totalWeight);
     normal = skinnedNormal * inverseTotalWeight;
     tangent.xyz = skinnedTangent * inverseTotalWeight;
     return true;
@@ -183,12 +185,13 @@ bool nwbSkinnedMeshBuildDualQuaternionSkin(
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
     float4 referenceReal = float4(0.0);
     bool hasReference = false;
-    float totalWeight = 0.0;
+    // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
+    half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const float weight = skin.weight[influenceIndex];
+        const half weight = half(skin.weight[influenceIndex]);
         const uint jointId = skin.joint[influenceIndex];
-        if(abs(weight) <= NWB_SKINNED_MESH_EPSILON || jointId >= jointCount)
+        if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 
         const NwbSkinnedMeshJointMatrix jointPayload = nwbSkinnedMeshHeapJointPalette(g_NwbSkinnedMeshBindlessResources.streamSlots2.w)[jointId];
@@ -206,12 +209,12 @@ bool nwbSkinnedMeshBuildDualQuaternionSkin(
             dual = -dual;
         }
 
-        blendedReal += real * weight;
-        blendedDual += dual * weight;
+        blendedReal += real * float(weight);
+        blendedDual += dual * float(weight);
         totalWeight += weight;
     }
 
-    if(abs(totalWeight) <= NWB_SKINNED_MESH_EPSILON)
+    if(abs(totalWeight) <= half(NWB_SKINNED_MESH_EPSILON))
         return true;
     if(!nwbSkinnedMeshNormalizeDualQuaternion(blendedReal, blendedDual))
         return false;

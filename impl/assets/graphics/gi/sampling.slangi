@@ -23,26 +23,28 @@
 // Spherical Fibonacci direction for index i of N. Returns a unit vector on the sphere in a canonical frame (z = spiral
 // axis). Uses the Golden-Angle spiral point method (increment = golden angle ~ 2.39996); the caller rotates it into
 // its own frame. The (x, y) tangent components are rotated by the shared per-frame R2 rotation, z is kept.
+// Fibonacci unit-sphere coordinates are bounded factors; half math is sufficient here (widened at the float3 return).
 float3 nwbGiFibonacciDirection(const uint i, const uint N, const float2 rotation){
-    const float phi = float(i) * NWB_GI_FIBONACCI_GOLDEN_ANGLE;
-    const float z = 1.0 - (float(i) + 0.5) / float(N) * 2.0;
-    const float radius = sqrt(max(1.0 - z * z, 0.0));
-    const float x = cos(phi) * radius;
-    const float y = sin(phi) * radius;
+    const half phi = half(i) * half(NWB_GI_FIBONACCI_GOLDEN_ANGLE);
+    const half z = half(1.0h) - (half(i) + half(0.5h)) / half(N) * half(2.0h);
+    const half radius = sqrt(max(half(1.0h) - z * z, half(0.0h)));
+    const half x = half(cos(float(phi))) * radius;
+    const half y = half(sin(float(phi))) * radius;
 
-    const float ca = rotation.x;
-    const float sa = rotation.y;
-    return float3(x * ca - y * sa, x * sa + y * ca, z);
+    const half ca = half(rotation.x);
+    const half sa = half(rotation.y);
+    return float3(float(x * ca - y * sa), float(x * sa + y * ca), float(z));
 }
 
 
 // Per-frame R2 rotation (2D, returns (cos, sin) of the rotation angle). The frame index drives a low-discrepancy
 // rotation so consecutive frames decorrelate their ray sets without per-ray RNG (temporal stability over per-frame noise).
+// The rotation fraction/angle are bounded factors; half math is sufficient here (widened at the float2 return).
 float2 nwbGiFrameRotation(const uint frameIndex){
     // Golden ratio fractional part: a well-distributed 1D sequence in [0, 1).
-    const float frac = fract(float(frameIndex) * NWB_GI_FRAME_ROTATION_SEQUENCE_FRACTION);
-    const float angle = frac * NWB_GI_FULL_TURN_RADIANS;
-    return float2(cos(angle), sin(angle));
+    const half frac = half(fract(float(frameIndex) * NWB_GI_FRAME_ROTATION_SEQUENCE_FRACTION));
+    const half angle = frac * half(NWB_GI_FULL_TURN_RADIANS);
+    return float2(cos(float(angle)), sin(float(angle)));
 }
 
 

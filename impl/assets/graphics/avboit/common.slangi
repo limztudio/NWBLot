@@ -120,8 +120,8 @@ void nwbAvboitLinearVirtualSlicesFromDepth(
     float depth,
     out uint outSlice0,
     out uint outSlice1,
-    out float outWeight0,
-    out float outWeight1
+    out half outWeight0,
+    out half outWeight1
 ){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
@@ -130,8 +130,10 @@ void nwbAvboitLinearVirtualSlicesFromDepth(
 
     outSlice0 = uint(sliceBase);
     outSlice1 = min(outSlice0 + 1u, virtualSliceCount - 1u);
-    outWeight1 = outSlice1 != outSlice0 ? slicePosition - sliceBase : 0.0;
-    outWeight0 = 1.0 - outWeight1;
+    // Slice blend weights are (0, 1) bounded factors; half math is sufficient here.
+    const half blendWeight1 = outSlice1 != outSlice0 ? half(slicePosition - sliceBase) : half(0.0h);
+    outWeight1 = blendWeight1;
+    outWeight0 = half(1.0h) - blendWeight1;
 }
 
 uint nwbAvboitLowPixelIndex(uint2 lowPixel){

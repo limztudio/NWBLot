@@ -19,13 +19,14 @@ void nwbAvboitMarkCoverageSlice(uint virtualSlice){
 void nwbAvboitMarkCoverageFromDepth(float depth){
     uint virtualSlice0;
     uint virtualSlice1;
-    float sliceWeight0;
-    float sliceWeight1;
+    // Slice blend weights are (0, 1) bounded factors; half math is sufficient here.
+    half sliceWeight0;
+    half sliceWeight1;
     nwbAvboitLinearVirtualSlicesFromDepth(depth, virtualSlice0, virtualSlice1, sliceWeight0, sliceWeight1);
 
-    if(sliceWeight0 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+    if(sliceWeight0 > half(NWB_AVBOIT_SPLAT_WEIGHT_EPSILON))
         nwbAvboitMarkCoverageSlice(virtualSlice0);
-    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > NWB_AVBOIT_SPLAT_WEIGHT_EPSILON)
+    if(virtualSlice1 != virtualSlice0 && sliceWeight1 > half(NWB_AVBOIT_SPLAT_WEIGHT_EPSILON))
         nwbAvboitMarkCoverageSlice(virtualSlice1);
 }
 

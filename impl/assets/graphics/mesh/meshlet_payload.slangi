@@ -190,16 +190,16 @@ uint nwbMeshletLocalAttribute(const NwbMeshletLocalVertexRef localVertexRef){
     return localVertexRef.packed >> NWB_MESHLET_PACKED_HALFWORD_BITS;
 }
 
-uint nwbMeshPackUnorm8(const float value){
-    return uint(saturate(value) * NWB_MESHLET_UNORM8_MAX + NWB_MESHLET_UNORM8_ROUNDING_BIAS);
+uint nwbMeshPackUnorm8(const half value){
+    return uint(saturate(value) * half(NWB_MESHLET_UNORM8_MAX) + half(NWB_MESHLET_UNORM8_ROUNDING_BIAS));
 }
 
-uint nwbMeshPackConeCutoffUnorm8(const float value){
-    return uint(saturate(value) * NWB_MESHLET_UNORM8_MAX);
+uint nwbMeshPackConeCutoffUnorm8(const half value){
+    return uint(saturate(value) * half(NWB_MESHLET_UNORM8_MAX));
 }
 
-float nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
-    return float((value >> bitShift) & NWB_MESHLET_PACKED_BYTE_MASK) / NWB_MESHLET_UNORM8_MAX;
+half nwbMeshUnpackUnorm8(const uint value, const uint bitShift){
+    return half(value >> bitShift & NWB_MESHLET_PACKED_BYTE_MASK) / half(NWB_MESHLET_UNORM8_MAX);
 }
 
 uint nwbMeshPackConeOct16(float3 axis){
@@ -216,8 +216,8 @@ uint nwbMeshPackConeOct16(float3 axis){
     }
 
     return
-        (nwbMeshPackUnorm8(axis.x * 0.5 + 0.5) << NWB_MESHLET_CONE_AXIS_X_SHIFT)
-        | (nwbMeshPackUnorm8(axis.y * 0.5 + 0.5) << NWB_MESHLET_CONE_AXIS_Y_SHIFT)
+        (nwbMeshPackUnorm8(half(axis.x * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_X_SHIFT)
+        | (nwbMeshPackUnorm8(half(axis.y * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_Y_SHIFT)
     ;
 }
 
@@ -237,11 +237,12 @@ float3 nwbMeshUnpackConeOct16Axis(const uint conePacked){
 
 float nwbMeshConservativePackedConeCutoff(const float3 axis, const float cutoff, const uint packedAxis){
     const float3 unpackedAxis = nwbMeshUnpackConeOct16Axis(packedAxis);
-    const float axisDot = clamp(dot(nwbSafeNormalize(axis, unpackedAxis), unpackedAxis), -1.0, 1.0);
-    const float safeCutoff = saturate(cutoff);
-    const float sinTheta = sqrt(max(0.0, 1.0 - safeCutoff * safeCutoff));
-    const float sinAxisError = sqrt(max(0.0, 1.0 - axisDot * axisDot));
-    return safeCutoff * axisDot - sinTheta * sinAxisError;
+    // Cone cutoff + axis-dot are (0, 1) bounded visibility factors; half math is sufficient here.
+    const half axisDot = half(clamp(dot(nwbSafeNormalize(axis, unpackedAxis), unpackedAxis), -1.0, 1.0));
+    const half safeCutoff = saturate(half(cutoff));
+    const half sinTheta = sqrt(max(half(0.0h), half(1.0h) - safeCutoff * safeCutoff));
+    const half sinAxisError = sqrt(max(half(0.0h), half(1.0h) - axisDot * axisDot));
+    return float(safeCutoff * axisDot - sinTheta * sinAxisError);
 }
 
 uint nwbMeshPackCone(const float3 axis, const float cutoff){
@@ -250,7 +251,7 @@ uint nwbMeshPackCone(const float3 axis, const float cutoff){
 
     const uint packedAxis = nwbMeshPackConeOct16(axis);
     const uint packedCutoff = nwbMeshPackConeCutoffUnorm8(
-        nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis)
+        half(nwbMeshConservativePackedConeCutoff(axis, cutoff, packedAxis))
     );
     if(packedCutoff == 0u)
         return 0u;

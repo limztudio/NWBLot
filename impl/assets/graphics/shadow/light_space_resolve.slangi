@@ -16,6 +16,7 @@
 #if !defined(NWB_LIGHT_SPACE_OCCLUDER) || (NWB_LIGHT_SPACE_OCCLUDER != 0 && NWB_LIGHT_SPACE_OCCLUDER != 1)
 #error "light-space resolve requires the opaque or transparent compile-time class"
 #endif
+
 #define NWB_SW_SHADOW_OCCLUDER NWB_LIGHT_SPACE_OCCLUDER
 #define g_NwbSwShadowPush g_NwbLightSpacePush
 #define g_NwbSwShadowMaterialContextSlots NwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
@@ -23,6 +24,7 @@
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
 #include "../scene/buffer.slangi"
+
 #ifndef NWB_LIGHT_SPACE_MAP_ONLY
 #define NWB_LIGHT_SPACE_MAP_ONLY 0
 #endif
@@ -33,6 +35,7 @@
 #include "shadow_sampling.slangi"
 #include "shadow_ray_setup.slangi"
 #endif
+
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
 #include "light_space_receiver_plane.slangi"
 #endif
@@ -207,8 +210,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 #endif
 }
 
-// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation,
-// while overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
+// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation, while overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
 bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
     const NwbLightSpaceView centerView, out float distance){
     distance = 0.0;

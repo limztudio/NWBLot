@@ -1391,8 +1391,8 @@ TEST_F(BufferGpuReadinessTest, VirtualBufferBindsAfterRejectionAndFreshRecording
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/buffer_gpu_readiness/placed_heap"),
+        .type = HeapType::DeviceLocal,
     });
     ASSERT_TRUE(heap);
     if(!device.bindBufferMemory(*placed, *heap, 0u))

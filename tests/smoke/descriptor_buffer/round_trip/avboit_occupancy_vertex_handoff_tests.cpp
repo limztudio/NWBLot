@@ -125,11 +125,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
             .setResourceSetUses(&outputUavSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedStates,
             .acceptedToken = &producerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -155,11 +155,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitOccupancyGenerate
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::VertexBuffer,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
             .recorded = &rasterObservedStates,
             .acceptedToken = &rasterAcceptedToken,
+            .expectedState = ResourceStates::VertexBuffer,
+            .expectedAdditionalBufferState = ResourceStates::VertexBuffer,
         }
     );
     ASSERT_TRUE(rasterTask.valid());

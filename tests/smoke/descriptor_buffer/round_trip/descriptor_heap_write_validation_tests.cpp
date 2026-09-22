@@ -225,27 +225,27 @@ TEST_F(DescriptorBufferAllocationTest, DescriptorHeapValidatesSampledAndStorageI
     heap.free(multisampledHandle);
 
     struct SampledCase{
-        GpuDescriptorClass::Enum descriptorClass;
         TextureHandle* texture;
+        GpuDescriptorClass::Enum descriptorClass;
         TextureDimension::Enum dimension;
         Format::Enum format;
     };
     SampledCase sampledCases[] = {
-        { GpuDescriptorClass::SampledImage, &sampled2D, TextureDimension::Texture2D, Format::RGBA16_FLOAT },
+        { &sampled2D, GpuDescriptorClass::SampledImage, TextureDimension::Texture2D, Format::RGBA16_FLOAT },
         {
-            GpuDescriptorClass::SampledImage2DArray,
             &sampledArray,
+            GpuDescriptorClass::SampledImage2DArray,
             TextureDimension::Texture2DArray,
             Format::RGBA16_FLOAT,
         },
         {
-            GpuDescriptorClass::SampledImage2DArrayUint,
             &sampledArrayUint,
+            GpuDescriptorClass::SampledImage2DArrayUint,
             TextureDimension::Texture2DArray,
             Format::R32_UINT,
         },
-        { GpuDescriptorClass::SampledImage3D, &sampled3D, TextureDimension::Texture3D, Format::RGBA16_FLOAT },
-        { GpuDescriptorClass::SampledImageCube, &sampledCube, TextureDimension::TextureCube, Format::RGBA16_FLOAT },
+        { &sampled3D, GpuDescriptorClass::SampledImage3D, TextureDimension::Texture3D, Format::RGBA16_FLOAT },
+        { &sampledCube, GpuDescriptorClass::SampledImageCube, TextureDimension::TextureCube, Format::RGBA16_FLOAT },
     };
 
     for(const SampledCase& sampledCase : sampledCases){

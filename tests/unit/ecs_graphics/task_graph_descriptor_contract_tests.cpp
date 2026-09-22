@@ -245,7 +245,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     EXPECT_TRUE(ContainsText(heap, "m_pendingRecording[m_pendingRecordingCount] = handle;"));
     EXPECT_TRUE(ContainsText(heap, "++m_pendingRecordingCount;"));
     EXPECT_TRUE(ContainsText(heap, "allocator.slotStates[handle.slot()] = SlotState::Retired;"));
-    EXPECT_TRUE(ContainsText(heap, "m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };"));
+    EXPECT_TRUE(ContainsText(heap, "m_retired[m_retiredCount] = RetiredSlot{ m_lastHeapUseID, handle };"));
     EXPECT_TRUE(ContainsText(
         heap,
         "statistics.pendingRetiredSlotCount = m_pendingRecordingCount + m_retiredCount;"

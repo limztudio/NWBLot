@@ -231,10 +231,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketFutureWaitPreflightRemainsRetr
         taskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &recorded,
             .acceptedToken = &acceptedToken,
             .discardedCount = &discardedCount,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(task.valid());

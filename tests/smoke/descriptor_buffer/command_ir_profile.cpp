@@ -90,7 +90,6 @@ struct Result{
     u32 selectedAdapterVendorID = 0u;
     u32 selectedAdapterDeviceID = 0u;
     AdapterInfo::UUID selectedAdapterUUID = {};
-    bool selectedAdapterHasUUID = false;
     u32 graphicsFamily = Limit<u32>::s_Max;
     u32 recordCount = 0u;
     u32 warmupCount = 0u;
@@ -106,6 +105,7 @@ struct Result{
     u64 expectedHash = 0u;
     u64 observedHash = 0u;
     u64 directVulkanObservedHash = 0u;
+    bool selectedAdapterHasUUID = false;
     bool streamValid = false;
     bool checksumVerified = false;
     bool directVulkanChecksumVerified = false;

@@ -189,18 +189,18 @@ TEST_F(LightSpaceKernelTest, CapturesAndResolvesOpaqueAndOverlappingVolumesWithS
         { .label = "directional invalid event", .count = 2u, .corruptEvent = true },
         { .label = "background preserves lit output", .count = 2u, .background = true },
         { .label = "single sample", .count = 2u, .sampleCount = 1u },
-        { .label = "point positive X", .count = 2u, .point = true, .face = 0u },
-        { .label = "point negative X", .count = 2u, .point = true, .face = 1u },
-        { .label = "point positive Y", .count = 2u, .point = true, .face = 2u },
-        { .label = "point negative Y", .count = 2u, .point = true, .face = 3u },
-        { .label = "point positive Z", .count = 2u, .point = true, .face = 4u },
-        { .label = "point negative Z", .count = 2u, .point = true, .face = 5u },
+        { .label = "point positive X", .count = 2u, .face = 0u, .point = true },
+        { .label = "point negative X", .count = 2u, .face = 1u, .point = true },
+        { .label = "point positive Y", .count = 2u, .face = 2u, .point = true },
+        { .label = "point negative Y", .count = 2u, .face = 3u, .point = true },
+        { .label = "point positive Z", .count = 2u, .face = 4u, .point = true },
+        { .label = "point negative Z", .count = 2u, .face = 5u, .point = true },
         { .label = "point opaque", .point = true, .opaque = true },
         { .label = "point four volumes", .count = 4u, .point = true },
         { .label = "point overflow", .count = NWB_LIGHT_SPACE_EVENTS_PER_TEXEL / 2u + 1u, .point = true },
         { .label = "point missing selected face", .count = 2u, .point = true, .missingFace = true },
-        { .label = "point near X-Z seam X side", .count = 2u, .point = true, .seam = -1 },
-        { .label = "point near X-Z seam Z side", .count = 2u, .point = true, .seam = 1 },
+        { .label = "point near X-Z seam X side", .count = 2u, .seam = -1, .point = true },
+        { .label = "point near X-Z seam Z side", .count = 2u, .seam = 1, .point = true },
     };
     for(const Case& testCase : cases){
         runCase(testCase, programs);
@@ -227,11 +227,11 @@ TEST_F(LightSpaceKernelTest, FiniteSourcesPreserveInteriorVisibilityAndReproject
     ASSERT_TRUE(loadPrograms(scratchArena, programs));
     const Case interiors[] = {
         { .label = "finite directional all lit", .count = 0u, .sourceSize = 0.1f, .softExpectation = SoftExpectation::Lit },
-        { .label = "finite point all lit", .count = 0u, .point = true, .sourceSize = 0.25f, .softExpectation = SoftExpectation::Lit },
-        { .label = "finite directional fully blocked", .opaque = true, .sourceSize = 0.1f, .softExpectation = SoftExpectation::Blocked },
-        { .label = "finite point fully blocked", .point = true, .opaque = true, .sourceSize = 0.25f, .softExpectation = SoftExpectation::Blocked },
+        { .label = "finite point all lit", .count = 0u, .sourceSize = 0.25f, .point = true, .softExpectation = SoftExpectation::Lit },
+        { .label = "finite directional fully blocked", .sourceSize = 0.1f, .opaque = true, .softExpectation = SoftExpectation::Blocked },
+        { .label = "finite point fully blocked", .sourceSize = 0.25f, .point = true, .opaque = true, .softExpectation = SoftExpectation::Blocked },
         { .label = "finite directional tinted interior", .count = 2u, .sourceSize = 0.1f, .softExpectation = SoftExpectation::Interior },
-        { .label = "finite point tinted interior", .count = 2u, .point = true, .sourceSize = 0.2f, .softExpectation = SoftExpectation::Interior },
+        { .label = "finite point tinted interior", .count = 2u, .sourceSize = 0.2f, .point = true, .softExpectation = SoftExpectation::Interior },
     };
     for(const Case& testCase : interiors){
         runCase(testCase, programs);
@@ -243,14 +243,10 @@ TEST_F(LightSpaceKernelTest, FiniteSourcesPreserveInteriorVisibilityAndReproject
     Quality missingNeighbor;
     for(u32 frame = 0u; frame < 8u; ++frame){
         const Case cases[] = {
-            { .label = "finite directional edge", .opaque = true, .sourceSize = 0.15f, .receiverX = 1.0f,
-                .frameIndex = frame, .softExpectation = SoftExpectation::Edge },
-            { .label = "finite point edge", .point = true, .opaque = true, .sourceSize = 0.3f, .receiverX = 4.0f,
-                .frameIndex = frame, .softExpectation = SoftExpectation::Edge },
-            { .label = "finite point seam reprojects", .count = 2u, .point = true, .seam = 1, .sourceSize = 0.5f,
-                .frameIndex = frame, .softExpectation = SoftExpectation::Seam },
-            { .label = "finite point seam missing neighbor falls back", .count = 2u, .point = true, .seam = 1,
-                .sourceSize = 0.5f, .frameIndex = frame, .softExpectation = SoftExpectation::MissingNeighbor },
+            { .label = "finite directional edge", .sourceSize = 0.15f, .receiverX = 1.0f, .frameIndex = frame, .opaque = true, .softExpectation = SoftExpectation::Edge },
+            { .label = "finite point edge", .sourceSize = 0.3f, .receiverX = 4.0f, .frameIndex = frame, .point = true, .opaque = true, .softExpectation = SoftExpectation::Edge },
+            { .label = "finite point seam reprojects", .count = 2u, .seam = 1, .sourceSize = 0.5f, .frameIndex = frame, .point = true, .softExpectation = SoftExpectation::Seam },
+            { .label = "finite point seam missing neighbor falls back", .count = 2u, .seam = 1, .sourceSize = 0.5f, .frameIndex = frame, .point = true, .softExpectation = SoftExpectation::MissingNeighbor },
         };
         Quality* const outputs[] = { &directionalEdge, &pointEdge, &seam, &missingNeighbor };
         for(u32 index = 0u; index < LengthOf(cases); ++index){
@@ -287,38 +283,22 @@ TEST_F(LightSpaceKernelTest, ObliqueReceiversStayLitAndPreserveNearbyContacts){
     ASSERT_TRUE(loadPrograms(scratchArena, programs));
     const Case cases[] = {
         { .label = "half directional oblique self receiver", .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
-        { .label = "half directional reverse slope self receiver", .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Lit, .receiverSlopeX = -0.7f, .receiverSlopeY = 0.45f },
-        { .label = "half point oblique self receiver", .point = true, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Lit },
-        { .label = "half point reverse slope self receiver", .point = true, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Lit, .receiverSlopeX = -0.7f, .receiverSlopeY = 0.45f },
-        { .label = "directional contact gap 0.03", .count = 2u, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.03f },
-        { .label = "directional contact gap 0.006", .count = 2u, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.006f },
-        { .label = "point contact gap 0.03", .count = 2u, .point = true, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.03f },
-        { .label = "point contact gap 0.006", .count = 2u, .point = true, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.006f },
-        { .label = "directional plane below receiver stays lit", .count = 2u, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Lit, .receiverGap = -0.006f },
-        { .label = "point plane below receiver stays lit", .count = 2u, .point = true, .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Lit, .receiverGap = -0.006f },
-        { .label = "finite directional oblique self receiver", .opaque = true, .sourceSize = 0.04f,
-            .receiverExpectation = ReceiverExpectation::Lit },
-        { .label = "finite point oblique self receiver", .point = true, .opaque = true, .sourceSize = 0.05f,
-            .receiverExpectation = ReceiverExpectation::Lit },
-        { .label = "finite directional close contact", .count = 2u, .opaque = true, .sourceSize = 0.04f,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.006f },
-        { .label = "finite point close contact", .count = 2u, .point = true, .opaque = true, .sourceSize = 0.05f,
-            .receiverExpectation = ReceiverExpectation::Blocked, .receiverGap = 0.006f },
-        { .label = "finite point lower plane stays lit", .count = 2u, .point = true, .opaque = true, .sourceSize = 0.05f,
-            .receiverExpectation = ReceiverExpectation::Lit, .receiverGap = -0.006f },
-        { .label = "nonfinite neighboring transparent blocker invokes software", .count = 2u, .sourceSize = 0.12f,
-            .corruptNeighbor = true },
-        { .label = "singular directional receiver invokes software", .opaque = true,
-            .receiverExpectation = ReceiverExpectation::Singular, .receiverSlopeX = 4096.0f, .receiverHalf = false },
+        { .label = "half directional reverse slope self receiver", .receiverSlopeX = -0.7f, .receiverSlopeY = 0.45f, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "half point oblique self receiver", .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "half point reverse slope self receiver", .receiverSlopeX = -0.7f, .receiverSlopeY = 0.45f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "directional contact gap 0.03", .count = 2u, .receiverGap = 0.03f, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "directional contact gap 0.006", .count = 2u, .receiverGap = 0.006f, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "point contact gap 0.03", .count = 2u, .receiverGap = 0.03f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "point contact gap 0.006", .count = 2u, .receiverGap = 0.006f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "directional plane below receiver stays lit", .count = 2u, .receiverGap = -0.006f, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "point plane below receiver stays lit", .count = 2u, .receiverGap = -0.006f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "finite directional oblique self receiver", .sourceSize = 0.04f, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "finite point oblique self receiver", .sourceSize = 0.05f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "finite directional close contact", .count = 2u, .sourceSize = 0.04f, .receiverGap = 0.006f, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "finite point close contact", .count = 2u, .sourceSize = 0.05f, .receiverGap = 0.006f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Blocked },
+        { .label = "finite point lower plane stays lit", .count = 2u, .sourceSize = 0.05f, .receiverGap = -0.006f, .point = true, .opaque = true, .receiverExpectation = ReceiverExpectation::Lit },
+        { .label = "nonfinite neighboring transparent blocker invokes software", .count = 2u, .sourceSize = 0.12f, .corruptNeighbor = true },
+        { .label = "singular directional receiver invokes software", .receiverSlopeX = 4096.0f, .opaque = true, .receiverExpectation = ReceiverExpectation::Singular, .receiverHalf = false },
     };
     for(const Case& testCase : cases){
         runCase(testCase, programs);

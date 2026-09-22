@@ -164,10 +164,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
     const GpuTaskId occupancyTask = graph.addTask<NativePacketPrefixTask>(
         occupancyDesc,
         NativePacketPrefixTask::Payload{
-            // This probe deliberately performs no native transition or barrier; the packet prologue is the contract.
             .buffer = coverage.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &occupancyRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(occupancyTask.valid());
@@ -199,8 +198,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCoverageStateReco
         tailDesc,
         NativePacketPrefixTask::Payload{
             .buffer = coverage.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &tailRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(tailTask.valid());
@@ -740,10 +739,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityEntryStatesRecor
         lightingDesc,
         NativePacketPrefixTask::Payload{
             .buffer = lights.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .texture = shadowVisibility.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &lightingRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(lightingTask.valid());

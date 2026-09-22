@@ -500,8 +500,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitOccupancyCsgIntervalSample
         clearDesc,
         NativePacketPrefixTask::Payload{
             .buffer = coverage.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &clearRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(clearTask.valid());

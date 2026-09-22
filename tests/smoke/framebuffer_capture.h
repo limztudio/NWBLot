@@ -30,10 +30,10 @@ namespace Tests::Smoke{
 
 
 struct FramebufferCaptureOptions{
-    bool quitWhenReady = true;
     // Optional borrowed predicate context must remain alive until stop() completes.
     bool (*shouldCapture)(void*, u64) = nullptr;
     void* predicateContext = nullptr;
+    bool quitWhenReady = true;
 };
 
 // One-shot framebuffer observer for unattended smoke acceptance. Completion state is ref-counted independently so

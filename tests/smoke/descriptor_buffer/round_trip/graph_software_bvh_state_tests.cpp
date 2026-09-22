@@ -121,10 +121,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
         precursorDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::AccelStructBuildInput,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
             .recorded = &precursorRecorded,
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
         }
     );
     ASSERT_TRUE(precursorTask.valid());
@@ -153,10 +153,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedSoftwareBvhInputStatesRe
         prepareDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
             .recorded = &prepareRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(prepareTask.valid());
@@ -377,10 +377,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecord
         precursorDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::AccelStructBuildInput,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
             .recorded = &precursorRecorded,
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
         }
     );
     ASSERT_TRUE(precursorTask.valid());
@@ -409,10 +409,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedHybridSoftwareTailInputSetRecord
         hybridTailDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
             .recorded = &hybridTailRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(hybridTailTask.valid());
@@ -623,10 +623,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowPrepareSoftwareBvhBuildSta
         shadowPrepareDesc,
         NativePacketPrefixTask::Payload{
             .buffer = parent.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = sortScratch.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &recorded,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(shadowPrepareTask.valid());

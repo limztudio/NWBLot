@@ -84,8 +84,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerMatchesFirstPacketQueu
         taskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &taskRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(task.valid());
@@ -220,9 +220,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedExternalCompletionUsesStoredToke
         taskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &taskRecorded,
             .acceptedToken = &acceptedToken,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(task.valid());
@@ -456,8 +456,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
         taskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &taskRecorded,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(task.valid());
@@ -539,8 +539,8 @@ TEST_F(DescriptorBufferRoundTripTest, ImportedInitialOwnerHandoffWaitsAndAcquire
             staleTaskDesc,
             NativePacketPrefixTask::Payload{
                 .buffer = buffer.get(),
-                .expectedState = ResourceStates::ShaderResource,
                 .recorded = &staleTaskRecorded,
+                .expectedState = ResourceStates::ShaderResource,
             }
         );
         ASSERT_TRUE(staleTask.valid());

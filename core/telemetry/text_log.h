@@ -39,8 +39,8 @@ static_assert(IsStandardLayout_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPa
 static_assert(IsTriviallyCopyable_V<EncodedTextLogPayloadHeader>, "EncodedTextLogPayloadHeader must stay binary-serializable");
 
 struct TextLogPayload{
-    Common::LogType::Enum type = Common::LogType::Info;
     AString<TelemetryArena> messageUtf8;
+    Common::LogType::Enum type = Common::LogType::Info;
 
     explicit TextLogPayload(TelemetryArena& arena)
         : messageUtf8(arena)

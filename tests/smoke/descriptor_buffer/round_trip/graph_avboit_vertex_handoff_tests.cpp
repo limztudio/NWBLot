@@ -128,11 +128,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
             .setResourceSetUses(&outputUavSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedStates,
             .acceptedToken = &producerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -158,11 +158,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitExtinctionGenerat
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &rasterObservedStates,
             .acceptedToken = &rasterAcceptedToken,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         }
     );
     ASSERT_TRUE(rasterTask.valid());
@@ -395,11 +395,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
             .setResourceSetUses(&outputUavSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedStates,
             .acceptedToken = &producerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -425,11 +425,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeAvboitAccumulationGener
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &rasterObservedStates,
             .acceptedToken = &rasterAcceptedToken,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         }
     );
     ASSERT_TRUE(rasterTask.valid());

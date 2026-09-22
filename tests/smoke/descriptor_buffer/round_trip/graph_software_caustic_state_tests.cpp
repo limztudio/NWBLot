@@ -829,10 +829,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSoftwareCausticsEntryStatesRecor
         lightingDesc,
         NativePacketPrefixTask::Payload{
             .buffer = shaderBuffers[10u].get(),
-            .expectedState = ResourceStates::ShaderResource,
             .texture = causticIrradiance.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &lightingRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(lightingTask.valid());

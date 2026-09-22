@@ -157,28 +157,28 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
 
 TEST(RendererTaskTimingFeedbackState, PolicyTransitionHelpersPreserveEntirePolicyAcrossCollectionUpdates){
     const Core::GpuTaskTimingFeedbackPolicy originalPolicy{
-        .enabled = false,
-        .minimumSampleCount = 3u,
-        .calibrationIntervalFrames = 5u,
         .minimumAbsoluteBenefitSeconds = 0.001,
         .minimumRelativeBenefit = 0.2,
         .minimumFramesBetweenSwitches = 11u,
+        .minimumSampleCount = 3u,
+        .calibrationIntervalFrames = 5u,
+        .enabled = false,
     };
     const Core::GpuTaskTimingFeedbackPolicy enabledPolicy{
-        .enabled = true,
-        .minimumSampleCount = 7u,
-        .calibrationIntervalFrames = 9u,
         .minimumAbsoluteBenefitSeconds = 0.002,
         .minimumRelativeBenefit = 0.3,
         .minimumFramesBetweenSwitches = 13u,
+        .minimumSampleCount = 7u,
+        .calibrationIntervalFrames = 9u,
+        .enabled = true,
     };
     const Core::GpuTaskTimingFeedbackPolicy disabledPolicy{
-        .enabled = false,
-        .minimumSampleCount = 17u,
-        .calibrationIntervalFrames = 19u,
         .minimumAbsoluteBenefitSeconds = 0.004,
         .minimumRelativeBenefit = 0.4,
         .minimumFramesBetweenSwitches = 23u,
+        .minimumSampleCount = 17u,
+        .calibrationIntervalFrames = 19u,
+        .enabled = false,
     };
     Core::GpuTaskTimingFeedbackPolicy currentPolicy = originalPolicy;
 

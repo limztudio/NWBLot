@@ -100,8 +100,8 @@ bool GpuDescriptorHeap::trackCommandBufferUseLocked(
     m_heapUses.push_back(HeapUse{
         .commandBuffer = &commandBuffer,
         .submissionToken = {},
-        .physicalQueue = physicalQueue,
         .id = ++m_lastHeapUseID,
+        .physicalQueue = physicalQueue,
     });
     return true;
 }
@@ -219,7 +219,7 @@ void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferG
         const GpuDescriptorHandle handle = m_pendingRecording[pendingIndex];
         SlotAllocator& allocator = allocatorForClass(handle.descriptorClass());
         allocator.slotStates[handle.slot()] = SlotState::Retired;
-        m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };
+        m_retired[m_retiredCount] = RetiredSlot{ m_lastHeapUseID, handle };
         ++m_retiredCount;
     }
     m_pendingRecordingCount = 0u;

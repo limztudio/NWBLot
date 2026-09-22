@@ -252,8 +252,8 @@ TEST_F(GpuResourceReadinessTest, TexturePredicateTracksVirtualMemoryBinding){
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/gpu_readiness/texture_heap"),
+        .type = HeapType::DeviceLocal,
     });
     ASSERT_TRUE(heap);
     if(!device.bindTextureMemory(*placed, *heap, 0u))
@@ -868,8 +868,8 @@ TEST_F(GpuResourceReadinessTest, AccelStructPredicateTracksVirtualMemoryBinding)
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/gpu_readiness/accel_struct_heap"),
+        .type = HeapType::DeviceLocal,
     });
     ASSERT_TRUE(heap);
     if(!device.bindAccelStructMemory(*accelStruct, *heap, 0u))

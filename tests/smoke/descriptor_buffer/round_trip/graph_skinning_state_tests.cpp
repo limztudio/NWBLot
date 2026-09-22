@@ -767,8 +767,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
             .setResourceUses(producerUses, LengthOf(producerUses)),
         NativePacketPrefixTask::Payload{
             .buffer = generatedOutput.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedUnorderedAccess,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -795,9 +795,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedSkinningOutputStatesFinalizeInGr
             .setResourceUses(finalizerUses, LengthOf(finalizerUses)),
         NativePacketPrefixTask::Payload{
             .buffer = generatedOutput.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &finalizerObservedShaderResource,
             .acceptedToken = &finalizerAcceptedToken,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(finalizerTask.valid());

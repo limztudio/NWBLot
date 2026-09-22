@@ -33,10 +33,10 @@ constexpr u32 s_ExpectedDualCount = 2u;
 struct NativePacketRecordedStateProducerTask{
     struct Payload{
         Buffer* prerequisiteBuffer = nullptr;
-        ResourceStates::Mask expectedPrerequisiteState = ResourceStates::Unknown;
         Buffer* producedBuffer = nullptr;
-        ResourceStates::Mask producedState = ResourceStates::Unknown;
         bool* recorded = nullptr;
+        ResourceStates::Mask expectedPrerequisiteState = ResourceStates::Unknown;
+        ResourceStates::Mask producedState = ResourceStates::Unknown;
     };
 
     [[nodiscard]] static bool record(
@@ -115,8 +115,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         writerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &writerRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(writer.valid());
@@ -151,8 +151,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketTraversesCompilerPacketRanges)
         readerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &readerRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(reader.valid());
@@ -553,8 +553,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
             .setResourceUses(&frontierWriteUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = frontierBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &frontierRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(frontierTask.valid());
@@ -584,10 +584,10 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
             .setResourceUses(producerUses, LengthOf(producerUses)),
         NativePacketRecordedStateProducerTask::Payload{
             .prerequisiteBuffer = frontierBuffer.get(),
-            .expectedPrerequisiteState = ResourceStates::ShaderResource,
             .producedBuffer = recordedStateBuffer.get(),
-            .producedState = ResourceStates::ShaderResource,
             .recorded = &producerRecorded,
+            .expectedPrerequisiteState = ResourceStates::ShaderResource,
+            .producedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -609,8 +609,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
             .setResourceUses(&consumerUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = recordedStateBuffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &consumerRecorded,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(consumerTask.valid());
@@ -633,8 +633,8 @@ TEST_F(DescriptorBufferRoundTripTest, NormalGraphExecutorOrdersNonmonotonicReady
             .setResourceUses(&independentUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = independentBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &independentRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(independentTask.valid());

@@ -387,8 +387,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         producerTaskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = source.get(),
-            .expectedState = ResourceStates::CopySource,
             .recorded = &producerRecorded,
+            .expectedState = ResourceStates::CopySource,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -467,8 +467,8 @@ TEST_F(DescriptorBufferRoundTripTest, BuiltInCopyBufferTaskRecordsAndPublishesAc
         consumerTaskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = destination.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &consumerRecorded,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(consumerTask.valid());

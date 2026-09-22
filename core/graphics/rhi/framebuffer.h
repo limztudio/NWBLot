@@ -52,9 +52,9 @@ struct FramebufferDesc{
 
 struct FramebufferInfo{
     FixedVector<Format::Enum, s_MaxRenderTargets> colorFormats;
-    Format::Enum depthFormat = Format::UNKNOWN;
     u32 sampleCount = 1;
     u32 sampleQuality = 0;
+    Format::Enum depthFormat = Format::UNKNOWN;
 
     FramebufferInfo() = default;
     FramebufferInfo(const FramebufferDesc& desc);

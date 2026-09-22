@@ -45,10 +45,10 @@ public:
         // caller preference; Transfer and Compute still fall back to an available physical transport. Upload
         // offsets and byte sizes must be 4-byte aligned; a non-retained Unknown initial state publishes CopyDest,
         // while a retained upload requires a concrete initial state.
-        CommandQueue::Enum queue = CommandQueue::kCount;
         // Written only after the upload submission and every declared consumer-queue readiness bridge have been
         // accepted. Async callers must keep this storage alive until their setup job completes.
         QueueSubmissionToken* acceptedToken = nullptr;
+        CommandQueue::Enum queue = CommandQueue::kCount;
     };
 
     struct TextureSetupDesc{

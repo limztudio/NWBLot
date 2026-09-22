@@ -176,8 +176,8 @@ struct GpuTaskTimingHistory{
 
 struct GpuTaskTimingHistoryEntry{
     GpuTaskTimingKey key;
-    GpuPhysicalQueueId physicalQueue;
     GpuTaskTimingHistory history;
+    GpuPhysicalQueueId physicalQueue;
 
     [[nodiscard]] bool valid()const noexcept{
         return key.valid() && physicalQueue.valid() && history.valid();
@@ -206,15 +206,15 @@ struct GpuTaskTimingAssignmentState{
 // Disabled by default.  A caller supplies this policy and one immutable history snapshot to the compiler; neither
 // missing timing nor an invalid/empty snapshot may change the ordinary deterministic queue assignment.
 struct GpuTaskTimingFeedbackPolicy{
-    bool enabled = false;
+    f64 minimumAbsoluteBenefitSeconds = 0.0;
+    f64 minimumRelativeBenefit = 0.0;
+    u64 minimumFramesBetweenSwitches = 30u;
     u32 minimumSampleCount = 8u;
     // While a legal candidate lacks enough samples, one opted-in route is selected every N frames. Every
     // cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class
     // timing opt-in. Zero disables calibration. Probes stop after every legal route reaches minimumSampleCount.
     u32 calibrationIntervalFrames = 1u;
-    f64 minimumAbsoluteBenefitSeconds = 0.0;
-    f64 minimumRelativeBenefit = 0.0;
-    u64 minimumFramesBetweenSwitches = 30u;
+    bool enabled = false;
 
     [[nodiscard]] bool valid()const noexcept;
 };

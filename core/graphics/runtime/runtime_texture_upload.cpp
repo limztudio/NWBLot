@@ -228,8 +228,8 @@ struct TextureUploadBatchSubmissionData{
                 .rowPitch = region.rowPitch,
                 .depthPitch = region.depthPitch,
                 .finalState = submissionData.setupDesc.finalState,
-                .acceptedToken = regionIndex + 1u == submissionData.setupDesc.regionCount ? &submissionData.uploadToken : nullptr,
                 .aspect = region.aspect,
+                .acceptedToken = regionIndex + 1u == submissionData.setupDesc.regionCount ? &submissionData.uploadToken : nullptr,
             }
         );
         if(!uploadTask.valid())

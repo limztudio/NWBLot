@@ -35,9 +35,9 @@ struct SoftShadowResolveState{
     SoftShadowResolveChannelState m_scalar;
     SoftShadowResolveChannelState m_rgb;
     SoftShadowResolveStageState m_combinedUpsample;
-    bool m_combinedUpsampleFailed = false;
     Core::BindingLayoutHandle m_combinedWaveletBindingLayout;
     SoftShadowResolveStageState m_combinedWavelet;
+    bool m_combinedUpsampleFailed = false;
     bool m_combinedWaveletFailed = false;
 };
 

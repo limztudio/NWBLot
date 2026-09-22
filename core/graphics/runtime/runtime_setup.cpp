@@ -192,8 +192,8 @@ struct TextureSetupSubmissionData{
             .rowPitch = submissionData.setupDesc.rowPitch,
             .depthPitch = submissionData.setupDesc.depthPitch,
             .finalState = GraphicsModuleDetail::SetupUploadGraphFinalState(submissionData.uploadDesc.initialState),
-            .acceptedToken = &submissionData.uploadToken,
             .aspect = submissionData.setupDesc.aspect,
+            .acceptedToken = &submissionData.uploadToken,
         }
     );
 }

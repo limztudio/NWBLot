@@ -40,7 +40,6 @@ struct MemoryScopeId{
 
 struct MemorySnapshot{
     Name scopeName = NAME_NONE;
-    MemorySource::Enum source = MemorySource::ExplicitScope;
     u64 frameIndex = 0u;
     u64 reservedBytes = 0u;
     u64 usedBytes = 0u;
@@ -48,6 +47,7 @@ struct MemorySnapshot{
     u64 allocationCount = 0u;
     u64 reallocationCount = 0u;
     u64 deallocationCount = 0u;
+    MemorySource::Enum source = MemorySource::ExplicitScope;
 
     [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE; }
 };

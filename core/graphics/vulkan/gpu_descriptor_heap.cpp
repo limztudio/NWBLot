@@ -702,7 +702,7 @@ void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){
                 return;
             }
             allocator.slotStates[handle.slot()] = SlotState::Retired;
-            m_retired[m_retiredCount] = RetiredSlot{ handle, m_lastHeapUseID };
+            m_retired[m_retiredCount] = RetiredSlot{ m_lastHeapUseID, handle };
             ++m_retiredCount;
         }
     }

@@ -26,18 +26,18 @@ namespace Tests{
 struct NativePacketPrefixTask{
     struct Payload{
         Buffer* buffer = nullptr;
-        ResourceStates::Mask expectedState = ResourceStates::Unknown;
         Buffer* additionalBuffer = nullptr;
-        ResourceStates::Mask expectedAdditionalBufferState = ResourceStates::Unknown;
         Texture* texture = nullptr;
-        ResourceStates::Mask expectedTextureState = ResourceStates::Unknown;
         Texture* additionalTexture = nullptr;
-        ResourceStates::Mask expectedAdditionalTextureState = ResourceStates::Unknown;
         Texture* thirdTexture = nullptr;
-        ResourceStates::Mask expectedThirdTextureState = ResourceStates::Unknown;
         bool* recorded = nullptr;
         QueueSubmissionToken* acceptedToken = nullptr;
         u32* discardedCount = nullptr;
+        ResourceStates::Mask expectedState = ResourceStates::Unknown;
+        ResourceStates::Mask expectedAdditionalBufferState = ResourceStates::Unknown;
+        ResourceStates::Mask expectedTextureState = ResourceStates::Unknown;
+        ResourceStates::Mask expectedAdditionalTextureState = ResourceStates::Unknown;
+        ResourceStates::Mask expectedThirdTextureState = ResourceStates::Unknown;
     };
 
     [[nodiscard]] static bool record(

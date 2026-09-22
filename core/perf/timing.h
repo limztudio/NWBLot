@@ -38,11 +38,11 @@ struct TimingStats{
     f64 maxSeconds = 0.0;
     // Duration of the last recorded sample, independent of its source-frame position.
     f64 lastSeconds = 0.0;
-    u32 sampleCount = 0u;
     u64 publishFrameIndex = 0u;
     // Inclusive source-frame bounds; asynchronous samples can arrive out of frame order.
     u64 firstSampleFrameIndex = 0u;
     u64 lastSampleFrameIndex = 0u;
+    u32 sampleCount = 0u;
 
     [[nodiscard]] bool valid()const{ return sampleCount != 0u; }
 };

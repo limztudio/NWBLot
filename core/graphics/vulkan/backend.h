@@ -1273,9 +1273,9 @@ class Heap final : public RefCounter<GraphicsResource>, NoCopy{
 private:
     struct BindingReservation{
         const void* owner = nullptr;
+        VulkanDetail::HeapBindingRange range;
         VulkanDetail::HeapBindingResourceClass::Enum resourceClass =
             VulkanDetail::HeapBindingResourceClass::Buffer;
-        VulkanDetail::HeapBindingRange range;
     };
 
 
@@ -1324,10 +1324,10 @@ private:
         BufferChunk* previousActiveChunk;
         BufferChunk* nextActiveChunk;
         u64 nativeRecordingID;
-        GpuPhysicalQueueId physicalQueue;
         u64 size;
         u64 allocated;
         u64 version;
+        GpuPhysicalQueueId physicalQueue;
 
 
         BufferChunk(
@@ -1453,10 +1453,10 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
 
 private:
     struct BufferViewEntry{
-        Format::Enum format = Format::UNKNOWN;
         u64 byteOffset = 0;
         u64 byteSize = 0;
         VkBufferView view = VK_NULL_HANDLE;
+        Format::Enum format = Format::UNKNOWN;
     };
 
 
@@ -1548,10 +1548,10 @@ inline UploadManager::BufferChunk::BufferChunk(
     , previousActiveChunk(nullptr)
     , nextActiveChunk(nullptr)
     , nativeRecordingID(chunkNativeRecordingID)
-    , physicalQueue(queue)
     , size(sz)
     , allocated(0)
     , version(0)
+    , physicalQueue(queue)
 {}
 inline UploadManager::BufferChunk::~BufferChunk() = default;
 
@@ -1927,8 +1927,8 @@ struct PipelineBindingState{
     BindingLayoutVector m_bindingLayoutsAtCreation;
     Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
     VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
-    bool m_ownsPipelineLayout = false;
     u32 m_pushConstantByteSize = 0;
+    bool m_ownsPipelineLayout = false;
 };
 
 
@@ -1996,13 +1996,13 @@ namespace DescriptorBufferSegmentKind{
 };
 
 struct DescriptorBufferSegment{
-    DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
-    u32 offsetBytes = 0;
-    u32 sizeBytes = 0;
     // Process-unique identity of the exact resource or sampler storage.
     u64 storageIdentity = 0;
     // Prevents stale handles from writing a recycled byte range.
     u64 allocationSerial = 0;
+    u32 offsetBytes = 0;
+    u32 sizeBytes = 0;
+    DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
 
     [[nodiscard]] bool valid()const{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
@@ -2223,15 +2223,15 @@ private:
         void clear()noexcept;
     };
     struct RetiredSlot{
-        GpuDescriptorHandle handle;
         u64 lastRequiredHeapUseID = 0u;
+        GpuDescriptorHandle handle;
     };
     static_assert(IsTriviallyCopyable_V<RetiredSlot>, "descriptor retirement publication must remain a scalar journal write");
     struct HeapUse{
         TrackedCommandBuffer* commandBuffer = nullptr;
         QueueSubmissionToken submissionToken;
-        GpuPhysicalQueueId physicalQueue;
         u64 id = 0u;
+        GpuPhysicalQueueId physicalQueue;
     };
 
 
@@ -2832,13 +2832,13 @@ class StateTracker final : NoCopy{
 
 private:
     struct PermanentTextureStateValue{
-        ResourceStates::Mask state = ResourceStates::Unknown;
         TextureHandle texture;
+        ResourceStates::Mask state = ResourceStates::Unknown;
     };
 
     struct PermanentBufferStateValue{
-        ResourceStates::Mask state = ResourceStates::Unknown;
         BufferHandle buffer;
+        ResourceStates::Mask state = ResourceStates::Unknown;
     };
 
     struct BufferRangeState{
@@ -2849,13 +2849,13 @@ private:
     using BufferRangeStates = Vector<BufferRangeState, Alloc::GlobalArena>;
 
     struct BufferUavBarrierPolicyValue{
-        bool enableBarriers = true;
         BufferHandle buffer;
+        bool enableBarriers = true;
     };
 
     struct TextureUavBarrierPolicyValue{
-        bool enableBarriers = true;
         TextureHandle texture;
+        bool enableBarriers = true;
     };
 
     using PermanentTextureStateMap = HashMap<

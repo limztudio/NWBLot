@@ -241,10 +241,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAdaptiveShadowPrimitiveChainReco
         shadowDesc,
         NativePacketPrefixTask::Payload{
             .buffer = edgeStats.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = edgeCounter.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &shadowRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(shadow.valid());
@@ -910,10 +910,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
         shadowDesc,
         NativePacketPrefixTask::Payload{
             .buffer = constants.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = shadowVisibility.get(),
-            .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &shadowRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(shadowTask.valid());
@@ -950,10 +950,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedShadowVisibilityAllLitClearRecor
         lightingDesc,
         NativePacketPrefixTask::Payload{
             .buffer = constants.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = shadowVisibility.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &lightingRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(lightingTask.valid());

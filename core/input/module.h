@@ -225,8 +225,8 @@ namespace HandlerMutationType{
 class InputDispatcher{
 private:
     struct HandlerMutation{
-        HandlerMutationType::Enum type = HandlerMutationType::Remove;
         IInputEventHandler* handler = nullptr;
+        HandlerMutationType::Enum type = HandlerMutationType::Remove;
     };
 
     using HandlerList = List<IInputEventHandler*, Alloc::GlobalArena>;

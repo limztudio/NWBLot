@@ -351,8 +351,8 @@ TEST_F(DescriptorBufferRoundTripTest, ExternalFinalHandoffReleasesToDedicatedCom
         taskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &taskRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(task.valid());

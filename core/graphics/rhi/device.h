@@ -248,12 +248,12 @@ struct GpuCrashReport{
     AString<Alloc::PersistentArena> context;
     AString<Alloc::PersistentArena> details;
 
+    const u8* binaryDump = nullptr;
+    usize binaryDumpSize = 0u;
     // Optional vendor-neutral binary GPU crash dump (e.g. an NVIDIA Aftermath '.nv-gpudmp'),
     // captured alongside the text 'details'. Non-owning view into the capturer's buffer; valid
     // only for the duration of the synchronous DispatchGpuCrash call.
     GpuCrashDumpKind::Enum binaryDumpKind = GpuCrashDumpKind::None;
-    const u8* binaryDump = nullptr;
-    usize binaryDumpSize = 0u;
 
     explicit GpuCrashReport(Alloc::PersistentArena& arena)
         : context(arena)
@@ -309,18 +309,17 @@ struct AdapterInfo{
 
 
 struct InstanceParameters{
+    GraphicsString backendLibraryName;
+    GraphicsVector<GraphicsString> requiredBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> requiredBackendLayers;
+    GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
+    GraphicsVector<GraphicsString> optionalBackendLayers;
     bool enableDebugRuntime = false;
     bool enableWarningsAsErrors = false;
     bool headlessDevice = false;
     bool enableGpuCrashDiagnostics = true;
     bool logBufferLifetime = false;
     bool enablePerMonitorDPI = false;
-
-    GraphicsString backendLibraryName;
-    GraphicsVector<GraphicsString> requiredBackendInstanceExtensions;
-    GraphicsVector<GraphicsString> requiredBackendLayers;
-    GraphicsVector<GraphicsString> optionalBackendInstanceExtensions;
-    GraphicsVector<GraphicsString> optionalBackendLayers;
 
     explicit InstanceParameters(GraphicsArena& arena)
         : backendLibraryName(arena)

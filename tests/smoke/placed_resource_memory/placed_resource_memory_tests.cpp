@@ -93,8 +93,8 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_LE(secondUploadRequirements.size, Limit<u64>::s_Max - secondUploadOffset);
     const HeapDesc uploadHeapDesc{
         .capacity = secondUploadOffset + secondUploadRequirements.size,
-        .type = HeapType::Upload,
         .debugName = Name("tests/placed_upload_heap"),
+        .type = HeapType::Upload,
     };
     HeapHandle uploadHeap = device.createHeap(uploadHeapDesc);
     ASSERT_TRUE(uploadHeap);
@@ -169,8 +169,8 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBuffersMapPaddedSlicesRetainAn
     ASSERT_LE(secondReadbackRequirements.size, Limit<u64>::s_Max - secondReadbackOffset);
     const HeapDesc readbackHeapDesc{
         .capacity = secondReadbackOffset + secondReadbackRequirements.size,
-        .type = HeapType::Readback,
         .debugName = Name("tests/placed_readback_heap"),
+        .type = HeapType::Readback,
     };
     HeapHandle readbackHeap = device.createHeap(readbackHeapDesc);
     ASSERT_TRUE(readbackHeap);
@@ -480,13 +480,13 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ASSERT_GT(writeRequirements.size, 0u);
     const HeapDesc wrongWriteHeapDesc{
         .capacity = writeRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_write_wrong_heap"),
+        .type = HeapType::DeviceLocal,
     };
     const HeapDesc writeHeapDesc{
         .capacity = writeRequirements.size,
-        .type = HeapType::Upload,
         .debugName = Name("tests/placed_write_retry_heap"),
+        .type = HeapType::Upload,
     };
     HeapHandle wrongWriteHeap = device.createHeap(wrongWriteHeapDesc);
     HeapHandle writeHeap = device.createHeap(writeHeapDesc);
@@ -526,13 +526,13 @@ TEST_F(PlacedResourceMemoryTest, PlacedHostVisibleBufferRejectionsAreAtomicAndRe
     ASSERT_GT(readRequirements.size, 0u);
     const HeapDesc wrongReadHeapDesc{
         .capacity = readRequirements.size,
-        .type = HeapType::Upload,
         .debugName = Name("tests/placed_read_wrong_heap"),
+        .type = HeapType::Upload,
     };
     const HeapDesc readHeapDesc{
         .capacity = readRequirements.size,
-        .type = HeapType::Readback,
         .debugName = Name("tests/placed_read_retry_heap"),
+        .type = HeapType::Readback,
     };
     HeapHandle wrongReadHeap = device.createHeap(wrongReadHeapDesc);
     HeapHandle readHeap = device.createHeap(readHeapDesc);

@@ -192,10 +192,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         geometryBuildInputDesc,
         NativePacketPrefixTask::Payload{
             .buffer = blasPosition.get(),
-            .expectedState = ResourceStates::AccelStructBuildInput,
             .additionalBuffer = blasIndex.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
             .recorded = &geometryBuildInputRecorded,
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
         }
     );
     ASSERT_TRUE(geometryBuildInputTask.valid());
@@ -229,10 +229,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         buildDesc,
         NativePacketPrefixTask::Payload{
             .buffer = tlasBacking.get(),
-            .expectedState = ResourceStates::AccelStructWrite,
             .additionalBuffer = blasBacking.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructWrite,
             .recorded = &buildRecorded,
+            .expectedState = ResourceStates::AccelStructWrite,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructWrite,
         }
     );
     ASSERT_TRUE(buildTask.valid());
@@ -265,10 +265,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedAccelStructStateFinalize
         finalizeDesc,
         NativePacketPrefixTask::Payload{
             .buffer = tlasBacking.get(),
-            .expectedState = ResourceStates::AccelStructRead,
             .additionalBuffer = blasBacking.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructRead,
             .recorded = &finalizeRecorded,
+            .expectedState = ResourceStates::AccelStructRead,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructRead,
         }
     );
     ASSERT_TRUE(finalizeTask.valid());
@@ -517,8 +517,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
         producerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = backingBuffer,
-            .expectedState = ResourceStates::AccelStructWrite,
             .recorded = &producerRecorded,
+            .expectedState = ResourceStates::AccelStructWrite,
         }
     );
     ASSERT_TRUE(producer.valid());
@@ -544,8 +544,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
         consumerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = backingBuffer,
-            .expectedState = ResourceStates::AccelStructWrite,
             .recorded = &consumerRecorded,
+            .expectedState = ResourceStates::AccelStructWrite,
         }
     );
     ASSERT_TRUE(consumer.valid());
@@ -613,8 +613,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnsAccelStructPacketStateAndExternal
         driftTaskDesc,
         NativePacketPrefixTask::Payload{
             .buffer = backingBuffer,
-            .expectedState = ResourceStates::AccelStructWrite,
             .recorded = &driftTaskRecorded,
+            .expectedState = ResourceStates::AccelStructWrite,
         }
     );
     ASSERT_TRUE(driftTask.valid());

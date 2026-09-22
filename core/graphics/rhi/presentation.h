@@ -53,9 +53,9 @@ namespace BeginFrameStatus{
 
 struct BeginFrameResult{
     AcquiredBackBuffer backBuffer;
-    BeginFrameStatus::Enum status = BeginFrameStatus::Failed;
     u32 suggestedWidth = 0u;
     u32 suggestedHeight = 0u;
+    BeginFrameStatus::Enum status = BeginFrameStatus::Failed;
 
     [[nodiscard]] bool acquired()const noexcept{
         return status == BeginFrameStatus::Acquired && backBuffer.valid();

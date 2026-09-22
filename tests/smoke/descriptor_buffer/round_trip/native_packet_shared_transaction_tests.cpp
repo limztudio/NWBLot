@@ -113,8 +113,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         hardwareDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &hardwareRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(hardwareTask.valid());
@@ -151,10 +151,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         avboitPreDesc,
         NativePacketPrefixTask::Payload{
             .buffer = avboitPrefixBuffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = avboitOutput.get(),
-            .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &avboitPreRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(avboitPreTask.valid());
@@ -186,8 +186,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         lightingDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &lightingRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(lightingTask.valid());
@@ -229,10 +229,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketStagesHardwareAvboitLightingCo
         compositeDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .texture = avboitOutput.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .recorded = &compositeRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(compositeTask.valid());
@@ -500,9 +500,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         sourceProducerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = sourceBuffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &sourceProducerRecorded,
             .acceptedToken = &sourceProducerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(sourceProducerTask.valid());
@@ -536,9 +536,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         presentDesc,
         NativePacketPrefixTask::Payload{
             .buffer = presentationBuffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &presentRecorded,
             .acceptedToken = &presentAcceptedToken,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(presentTask.valid());
@@ -580,9 +580,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
         historyDesc,
         NativePacketPrefixTask::Payload{
             .buffer = sourceBuffer.get(),
-            .expectedState = ResourceStates::CopySource,
             .recorded = &historyRecorded,
             .acceptedToken = &historyAcceptedToken,
+            .expectedState = ResourceStates::CopySource,
         }
     );
     ASSERT_TRUE(historyTask.valid());
@@ -617,8 +617,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
         NativePacketPrefixTask::Payload{
             .buffer = historyBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &rejectedTailRecorded,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(rejectedTailTask.valid());
@@ -640,9 +640,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
         NativePacketPrefixTask::Payload{
             .buffer = historyBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &preflightRejectedRecorded,
             .discardedCount = &preflightRejectedDiscardedCount,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(preflightRejectedTailTask.valid());
@@ -664,9 +664,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
         NativePacketPrefixTask::Payload{
             .buffer = historyBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &invalidAcceptedCallbackRecorded,
             .discardedCount = &invalidAcceptedCallbackDiscardedCount,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(invalidAcceptedCallbackTailTask.valid());
@@ -688,9 +688,9 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setResourceUses(rejectedTailUses, LengthOf(rejectedTailUses)),
         NativePacketPrefixTask::Payload{
             .buffer = historyBuffer.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &mismatchedAcceptedCallbackRecorded,
             .discardedCount = &mismatchedAcceptedCallbackDiscardedCount,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(mismatchedAcceptedCallbackTailTask.valid());
@@ -720,10 +720,10 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketLateRecordsHistoryTailInShared
             .setResourceUses(callbackFalseUses, LengthOf(callbackFalseUses)),
         NativePacketPrefixTask::Payload{
             .buffer = callbackFalseBuffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &callbackFalseRecorded,
             .acceptedToken = &callbackFalseTypedToken,
             .discardedCount = &callbackFalseDiscardedCount,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(callbackFalseTask.valid());

@@ -699,14 +699,14 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         accumulationDesc,
         NativePacketPrefixTask::Payload{
             .buffer = stateProbe.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = accumColor.get(),
-            .expectedTextureState = ResourceStates::RenderTarget,
             .additionalTexture = accumExtinction.get(),
-            .expectedAdditionalTextureState = ResourceStates::RenderTarget,
             .thirdTexture = deferredDepth.get(),
-            .expectedThirdTextureState = ResourceStates::DepthRead,
             .recorded = &accumulationRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::RenderTarget,
+            .expectedAdditionalTextureState = ResourceStates::RenderTarget,
+            .expectedThirdTextureState = ResourceStates::DepthRead,
         }
     );
     ASSERT_TRUE(accumulationTask.valid());
@@ -750,16 +750,15 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
     const GpuTaskId finalizerTask = graph.addTask<NativePacketPrefixTask>(
         finalizeDesc,
         NativePacketPrefixTask::Payload{
-            // This probe deliberately only observes graph-established attachment states.
             .buffer = stateProbe.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = accumColor.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .additionalTexture = accumExtinction.get(),
-            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
             .thirdTexture = deferredDepth.get(),
-            .expectedThirdTextureState = ResourceStates::ShaderResource,
             .recorded = &finalizerRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
+            .expectedThirdTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(finalizerTask.valid());
@@ -799,12 +798,12 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAvboitAccumulationAttachmentStat
         compositeDesc,
         NativePacketPrefixTask::Payload{
             .buffer = stateProbe.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = accumColor.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .additionalTexture = accumExtinction.get(),
-            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
             .recorded = &compositeRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .expectedAdditionalTextureState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(compositeTask.valid());

@@ -123,9 +123,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setResourceUses(clearUses, LengthOf(clearUses)),
         NativePacketPrefixTask::Payload{
             .buffer = receiverEvent.get(),
-            .expectedState = ResourceStates::CopyDest,
             .recorded = &clearObservedCopyDest,
             .acceptedToken = &clearAcceptedToken,
+            .expectedState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(clearTask.valid());
@@ -160,9 +160,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setResourceUses(producerUses, LengthOf(producerUses)),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedUnorderedAccess,
             .acceptedToken = &producerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -194,9 +194,9 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedOpaqueCsgReceiverComputeHandoffM
             .setResourceUses(gbufferUses, LengthOf(gbufferUses)),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertex.get(),
-            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .recorded = &gbufferObservedVertexBuffer,
             .acceptedToken = &gbufferAcceptedToken,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
         }
     );
     ASSERT_TRUE(gbufferTask.valid());
@@ -494,11 +494,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             .setResourceUses(combineUses, LengthOf(combineUses)),
         NativePacketPrefixTask::Payload{
             .buffer = csgClipContext.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = removedInterval.get(),
-            .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &combineObservedStates,
             .acceptedToken = &combineAcceptedToken,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(combineTask.valid());
@@ -519,13 +519,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             .setResourceSetUses(&outputUavSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .texture = removedInterval.get(),
-            .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &computeEmulationObservedStates,
             .acceptedToken = &computeEmulationAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
+            .expectedTextureState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(computeEmulationTask.valid());
@@ -543,13 +543,13 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedAliasFreeOpaqueCsgIntervalSample
             .setResourceSetUses(&outputVertexBufferSetUse, 1u),
         NativePacketPrefixTask::Payload{
             .buffer = generatedVertexA.get(),
-            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .additionalBuffer = generatedVertexB.get(),
-            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
             .texture = removedInterval.get(),
-            .expectedTextureState = ResourceStates::UnorderedAccess,
             .recorded = &sampleObservedStates,
             .acceptedToken = &sampleAcceptedToken,
+            .expectedState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
+            .expectedAdditionalBufferState = Impl::ECSRenderDetail::s_GeneratedGeometryRasterState,
+            .expectedTextureState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(sampleTask.valid());

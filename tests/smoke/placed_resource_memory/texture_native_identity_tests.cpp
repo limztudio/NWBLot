@@ -306,8 +306,8 @@ TEST_F(TextureNativeIdentityTest, ManagedOrdinaryAndVirtualTexturesKeepCanonical
     ASSERT_GT(requirements.size, 0u);
     HeapHandle heap = device.createHeap(HeapDesc{
         .capacity = requirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/texture_native_identity/virtual_heap"),
+        .type = HeapType::DeviceLocal,
     });
     ASSERT_TRUE(heap);
     if(!device.bindTextureMemory(*placed, *heap, 0u))

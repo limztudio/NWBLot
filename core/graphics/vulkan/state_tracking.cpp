@@ -90,8 +90,8 @@ void StateTracker::setPermanentTextureState(Texture& texture, ResourceStates::Ma
     if(!m_permanentTextureStates.emplace(
         &texture,
         PermanentTextureStateValue{
-            state,
-            TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena))
+            TextureHandle(&texture, TextureHandle::deleter_type(&texture.m_context.objectArena)),
+            state
         }
     ).second){
         if(m_recordingAttemptActive)
@@ -114,8 +114,8 @@ void StateTracker::setPermanentBufferState(Buffer& buffer, ResourceStates::Mask 
     if(!m_permanentBufferStates.emplace(
         &buffer,
         PermanentBufferStateValue{
-            state,
-            BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena))
+            BufferHandle(&buffer, BufferHandle::deleter_type(&buffer.m_context.objectArena)),
+            state
         }
     ).second){
         if(m_recordingAttemptActive)
@@ -309,8 +309,8 @@ void StateTracker::setEnableUavBarriersForTexture(Texture& texture, bool enableB
     if(!m_textureUavBarriers.emplace(
         &texture,
         TextureUavBarrierPolicyValue{
-            enableBarriers,
-            TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena))
+            TextureHandle(&texture, TextureHandle::deleter_type(&m_context.objectArena)),
+            enableBarriers
         }
     ).second)
         NWB_ASSERT(false);
@@ -326,8 +326,8 @@ void StateTracker::setEnableUavBarriersForBuffer(Buffer& buffer, bool enableBarr
     if(!m_bufferUavBarriers.emplace(
         &buffer,
         BufferUavBarrierPolicyValue{
-            enableBarriers,
-            BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena))
+            BufferHandle(&buffer, BufferHandle::deleter_type(&m_context.objectArena)),
+            enableBarriers
         }
     ).second)
         NWB_ASSERT(false);

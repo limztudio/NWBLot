@@ -212,8 +212,8 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
         matchingDesc,
         NativePacketPrefixTask::Payload{
             .buffer = matchingBuffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &matchingRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     const GpuTaskId transitionMismatchTask = graph.addTask<NativePacketCaptureRetryTask>(
@@ -227,9 +227,9 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
         exportPrefixDesc,
         NativePacketPrefixTask::Payload{
             .buffer = exportMismatchBuffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &exportPrefixRecorded,
             .discardedCount = &exportPrefixDiscardedCount,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     const GpuTaskId exportDependencies[] = { exportPrefixTask };
@@ -243,9 +243,9 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferStateValidatesMatchingUavAn
         exportMismatchDesc,
         NativePacketPrefixTask::Payload{
             .buffer = exportMismatchBuffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &exportMismatchRecorded,
             .discardedCount = &exportMismatchDiscardedCount,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(matchingTask.valid());
@@ -592,9 +592,9 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
         producerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &producerRecorded,
             .discardedCount = &producerDiscardedCount,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());
@@ -617,8 +617,8 @@ TEST_F(DescriptorBufferRoundTripTest, PermanentBufferOwnershipReleaseFailsClosed
         consumerDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .recorded = &consumerRecorded,
+            .expectedState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(consumerTask.valid());

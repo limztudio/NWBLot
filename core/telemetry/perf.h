@@ -96,10 +96,10 @@ static_assert(IsStandardLayout_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMe
 static_assert(IsTriviallyCopyable_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 
 struct PerfTimingPayload{
-    PerfTimingSource::Enum source = PerfTimingSource::Unknown;
     Name scopeName = NAME_NONE;
     AString<TelemetryArena> scopeText;
     Perf::TimingStats stats;
+    PerfTimingSource::Enum source = PerfTimingSource::Unknown;
 
     explicit PerfTimingPayload(TelemetryArena& arena)
         : scopeText(arena)
@@ -118,10 +118,10 @@ struct PerfMemoryPayload{
 };
 
 struct PerfSessionRecordResult{
-    bool succeeded = true;
     u32 cpuTimingEvents = 0u;
     u32 gpuTimingEvents = 0u;
     u32 memoryEvents = 0u;
+    bool succeeded = true;
 
     [[nodiscard]] bool ok()const{ return succeeded; }
     [[nodiscard]] u32 eventCount()const{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }

@@ -139,10 +139,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphNativeRejectionMatrixPreserve
         ProbeCount,
     };
     struct ProbeState{
-        bool recorded = false;
         QueueSubmissionToken acceptedToken;
         u32 acceptedCount = 0u;
         u32 discardedCount = 0u;
+        bool recorded = false;
         bool timingAccepted = false;
     };
     struct RejectionArm{
@@ -715,10 +715,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphRejectsDedicatedFirstComputeA
     }
 
     struct ProbeState{
-        bool recorded = false;
         QueueSubmissionToken acceptedToken;
         u32 acceptedCount = 0u;
         u32 discardedCount = 0u;
+        bool recorded = false;
         bool timingAccepted = false;
     };
     struct RejectionArm{

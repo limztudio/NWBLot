@@ -262,10 +262,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversal
         rebuildDesc,
         NativePacketPrefixTask::Payload{
             .buffer = sortKeys.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .additionalBuffer = parent.get(),
-            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
             .recorded = &rebuildRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
+            .expectedAdditionalBufferState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(rebuild.valid());
@@ -293,8 +293,8 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversal
         refitDesc,
         NativePacketPrefixTask::Payload{
             .buffer = visitCounter.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &refitRecorded,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(refit.valid());
@@ -321,11 +321,11 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPureSoftwareBvhAndSceneTraversal
         shadowPrepareDesc,
         NativePacketPrefixTask::Payload{
             .buffer = node.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .additionalBuffer = sceneNodes.get(),
-            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
             .recorded = &shadowPrepareRecorded,
             .acceptedToken = &acceptedToken,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(shadowPrepare.valid());
@@ -593,10 +593,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesR
         prepareDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::AccelStructBuildInput,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
             .recorded = &prepareRecorded,
+            .expectedState = ResourceStates::AccelStructBuildInput,
+            .expectedAdditionalBufferState = ResourceStates::AccelStructBuildInput,
         }
     );
     ASSERT_TRUE(prepareTask.valid());
@@ -632,10 +632,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedPreparedTailFreeBlasInputStatesR
         normalizeDesc,
         NativePacketPrefixTask::Payload{
             .buffer = position.get(),
-            .expectedState = ResourceStates::ShaderResource,
             .additionalBuffer = index.get(),
-            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
             .recorded = &normalizeRecorded,
+            .expectedState = ResourceStates::ShaderResource,
+            .expectedAdditionalBufferState = ResourceStates::ShaderResource,
         }
     );
     ASSERT_TRUE(normalizeTask.valid());

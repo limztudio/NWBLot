@@ -52,8 +52,8 @@ namespace SpirvExecutionModel{
 };
 
 struct SpirvEntryPointInstruction{
-    ShaderType::Mask shaderType = ShaderType::None;
     AStringView name;
+    ShaderType::Mask shaderType = ShaderType::None;
 };
 
 

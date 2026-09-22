@@ -115,8 +115,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         meshViewSetupDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .recorded = &nativeMeshViewSetupRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
         }
     );
     ASSERT_TRUE(meshViewSetupTask.valid());
@@ -151,8 +151,8 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         sceneSetupDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .recorded = &nativeSceneSetupRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
         }
     );
     ASSERT_TRUE(sceneSetupTask.valid());
@@ -199,12 +199,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         clearDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = texture.get(),
-            .expectedTextureState = ResourceStates::CopyDest,
             .additionalTexture = additionalTexture.get(),
-            .expectedAdditionalTextureState = ResourceStates::CopyDest,
             .recorded = &nativeClearRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::CopyDest,
+            .expectedAdditionalTextureState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(clearTask.valid());
@@ -245,12 +245,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         gbufferDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = texture.get(),
-            .expectedTextureState = ResourceStates::RenderTarget,
             .additionalTexture = additionalTexture.get(),
-            .expectedAdditionalTextureState = ResourceStates::CopyDest,
             .recorded = &nativeGbufferRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::RenderTarget,
+            .expectedAdditionalTextureState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(gbufferTask.valid());
@@ -291,12 +291,12 @@ TEST_F(DescriptorBufferRoundTripTest, NativePacketRecordsPrefixSequenceAndExport
         normalizeDesc,
         NativePacketPrefixTask::Payload{
             .buffer = buffer.get(),
-            .expectedState = ResourceStates::ConstantBuffer,
             .texture = texture.get(),
-            .expectedTextureState = ResourceStates::ShaderResource,
             .additionalTexture = additionalTexture.get(),
-            .expectedAdditionalTextureState = ResourceStates::CopyDest,
             .recorded = &nativeNormalizeRecorded,
+            .expectedState = ResourceStates::ConstantBuffer,
+            .expectedTextureState = ResourceStates::ShaderResource,
+            .expectedAdditionalTextureState = ResourceStates::CopyDest,
         }
     );
     ASSERT_TRUE(normalizeTask.valid());

@@ -80,12 +80,6 @@ struct CooperativeVectorMatrixLayoutDesc{
     // Offset in bytes from the start of the buffer where the matrix starts.
     u64 offset = 0;
 
-    // Data type of the matrix elements.
-    CooperativeVectorDataType::Enum type = CooperativeVectorDataType::UInt8;
-
-    // Layout of the matrix in memory.
-    CooperativeVectorMatrixLayout::Enum layout = CooperativeVectorMatrixLayout::RowMajor;
-
     // Size in bytes of the matrix.
     usize size = 0;
 
@@ -93,6 +87,12 @@ struct CooperativeVectorMatrixLayoutDesc{
     // For RowMajor and ColumnMajor layouts, stride may be zero, in which case it is computed automatically.
     // For InferencingOptimal and TrainingOptimal layouts, stride does not matter and should be zero.
     usize stride = 0;
+
+    // Data type of the matrix elements.
+    CooperativeVectorDataType::Enum type = CooperativeVectorDataType::UInt8;
+
+    // Layout of the matrix in memory.
+    CooperativeVectorMatrixLayout::Enum layout = CooperativeVectorMatrixLayout::RowMajor;
 };
 
 // Describes a single matrix layout conversion operation.

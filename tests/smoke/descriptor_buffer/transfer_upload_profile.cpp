@@ -80,7 +80,6 @@ struct Result{
     u32 selectedAdapterVendorID = 0u;
     u32 selectedAdapterDeviceID = 0u;
     AdapterInfo::UUID selectedAdapterUUID = {};
-    bool selectedAdapterHasUUID = false;
     u32 graphicsFamily = Limit<u32>::s_Max;
     u32 transferFamily = Limit<u32>::s_Max;
     u32 producerFamily = Limit<u32>::s_Max;
@@ -97,9 +96,10 @@ struct Result{
     f64 completionSeconds = 0.0;
     u64 expectedHash = 0u;
     u64 observedHash = 0u;
+    u32 loggerErrors = 0u;
+    bool selectedAdapterHasUUID = false;
     bool checksumVerified = false;
     bool graphicsReadinessVerified = false;
-    u32 loggerErrors = 0u;
 };
 
 

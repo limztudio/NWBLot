@@ -49,10 +49,10 @@ struct CpuTaskProfileLabel{
 };
 
 struct CpuTaskOptions{
+    CpuTaskProfileLabel profileLabel = {};
     CpuTaskCost::Enum cost = CpuTaskCost::Heavy;
     CpuTaskPriority::Enum priority = CpuTaskPriority::Normal;
     CpuTaskTarget::Enum target = CpuTaskTarget::Worker;
-    CpuTaskProfileLabel profileLabel = {};
 };
 
 struct CpuTaskSchedulerConfig{

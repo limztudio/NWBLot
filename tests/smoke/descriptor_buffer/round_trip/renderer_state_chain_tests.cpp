@@ -369,10 +369,10 @@ TEST_F(DescriptorBufferRoundTripTest, RendererGraphShadowPrepareStateChainThroug
             desc,
             NativePacketPrefixTask::Payload{
                 .buffer = buffer,
-                .expectedState = expectedBufferState,
                 .texture = texture,
-                .expectedTextureState = expectedTextureState,
                 .recorded = recorded,
+                .expectedState = expectedBufferState,
+                .expectedTextureState = expectedTextureState,
             }
         );
     };

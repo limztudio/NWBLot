@@ -269,11 +269,10 @@ TEST_F(DescriptorBufferRoundTripTest, GraphOwnedComputeEmulationGeneratedVertexH
             .setScheduling(producerScheduling)
             .setResourceUses(producerUses, LengthOf(producerUses)),
         NativePacketPrefixTask::Payload{
-            // This callback only observes the graph-owned UAV entry state.
             .buffer = generatedVertex.get(),
-            .expectedState = ResourceStates::UnorderedAccess,
             .recorded = &producerObservedUnorderedAccess,
             .acceptedToken = &producerAcceptedToken,
+            .expectedState = ResourceStates::UnorderedAccess,
         }
     );
     ASSERT_TRUE(producerTask.valid());

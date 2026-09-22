@@ -90,8 +90,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
 
     const HeapDesc heapDesc{
         .capacity = Max(bufferRequirements.size, textureRequirements.size),
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_resource_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);
@@ -154,13 +154,13 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
 
     const HeapDesc localBufferHeapDesc{
         .capacity = bufferRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_local_buffer_retry_heap"),
+        .type = HeapType::DeviceLocal,
     };
     const HeapDesc localTextureHeapDesc{
         .capacity = textureRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_local_texture_retry_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle localBufferHeap = device.createHeap(localBufferHeapDesc);
     HeapHandle localTextureHeap = device.createHeap(localTextureHeapDesc);
@@ -180,13 +180,13 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedResourceBindingInputsAreRejectedWith
     ASSERT_GT(foreignTextureRequirements.size, 0u);
     const HeapDesc foreignBufferHeapDesc{
         .capacity = foreignBufferRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_foreign_buffer_retry_heap"),
+        .type = HeapType::DeviceLocal,
     };
     const HeapDesc foreignTextureHeapDesc{
         .capacity = foreignTextureRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_foreign_texture_retry_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle foreignBufferHeap = foreignDevice.createHeap(foreignBufferHeapDesc);
     HeapHandle foreignTextureHeap = foreignDevice.createHeap(foreignTextureHeapDesc);
@@ -232,8 +232,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedBufferBindingsReserveRetrySerializeA
     ASSERT_LE(bufferRequirements.size, Limit<u64>::s_Max - secondBufferOffset);
     const HeapDesc heapDesc{
         .capacity = secondBufferOffset + bufferRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_buffer_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);
@@ -330,8 +330,8 @@ TEST_F(DescriptorBufferRoundTripTest, PlacedTextureAndCrossClassBindingsReserveR
     ASSERT_LE(textureRequirements.size, Limit<u64>::s_Max - textureOffset);
     const HeapDesc mixedHeapDesc{
         .capacity = textureOffset + textureRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/placed_buffer_texture_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle mixedHeap = device.createHeap(mixedHeapDesc);
     ASSERT_TRUE(mixedHeap);
@@ -396,8 +396,8 @@ TEST_F(DescriptorBufferRoundTripTest, VirtualAccelStructRequirementsCoverBacking
 
     const HeapDesc heapDesc{
         .capacity = accelRequirements.size,
-        .type = HeapType::DeviceLocal,
         .debugName = Name("tests/virtual_accel_struct_heap"),
+        .type = HeapType::DeviceLocal,
     };
     HeapHandle heap = device.createHeap(heapDesc);
     ASSERT_TRUE(heap);

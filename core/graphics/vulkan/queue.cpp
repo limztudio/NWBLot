@@ -108,7 +108,6 @@ GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
     const u64 commandPoolEpochCount = directCommandBufferCount + explicitWorkerArenaCount;
 
     return GpuCommandArenaStatistics{
-        .queue = m_physicalQueue,
         .workerArenaCount = explicitWorkerArenaCount + (directCommandBufferCount > 0u ? 1u : 0u),
         .commandPoolEpochCount = commandPoolEpochCount,
         .pendingCommandPoolEpochCount =
@@ -124,6 +123,7 @@ GpuCommandArenaStatistics Queue::commandArenaStatistics()const noexcept{
         .nativeHandleStorageLowerBoundBytes =
             commandPoolEpochCount * sizeof(VkCommandPool)
             + currentCommandBufferCount * sizeof(VkCommandBuffer),
+        .queue = m_physicalQueue,
     };
 }
 

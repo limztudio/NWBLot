@@ -1,10 +1,6 @@
 // limztudio@gmail.com
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Runtime smoke for the in-process Radeon GPU Detective decoder. It does not depend on an actual AMD TDR .rgd
-// capture (which cannot be produced on a non-AMD host); it proves the vendored RGD library stack is
-// runtime-callable and rejects invalid input gracefully — no crash, no exception crossing the
-// nwb_rgd::DecodeCrashDumpToText boundary — which is the failure behaviour the crash ingest relies on.
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Runtime smoke for the in-process Radeon GPU Detective decoder. It does not depend on an actual AMD TDR .rgd capture (which cannot be produced on a non-AMD host); it proves the vendored RGD library stack is runtime-callable and rejects invalid input gracefully — no crash, no exception crossing the nwb_rgd::DecodeCrashDumpToText boundary — which is the failure behaviour the crash ingest relies on.
 
 
 #include <tests/common/test_context.h>

@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
+#include <impl/ecs_render/execute/frame_execute_lifecycle.h>
 #include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
 #include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
@@ -991,17 +992,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_graphics.requestDeviceRecreation();
     };
 
-    struct ShadowPrepareStateLifecycleContext{
-        Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
-        RendererFramePipeline* renderer = nullptr;
-        Core::Alloc::ScratchArena& scratchArena;
-        Core::GpuPersistentResourceStateCache::Candidate* stateCandidate = nullptr;
-        const Core::BufferHandle* buffers = nullptr;
-        usize bufferCount = 0u;
-        bool stateCandidateRequired = false;
-        bool statePrepared = false;
-        bool stateReady = true;
-    } shadowPrepareStateLifecycle{
+    FrameExecuteLifecycle::ShadowPrepareStateLifecycleContext shadowPrepareStateLifecycle{
         .frameTimingTransaction = &frameTimingTransaction,
         .renderer = this,
         .scratchArena = shadowPrepareStateScratchArena,
@@ -1010,72 +1001,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .bufferCount = shadowPrepareLiveStateBuffers.size(),
         .stateCandidateRequired = shadowPrepareStateCandidateRequired,
     };
-    const auto prepareShadowPrepareTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        ShadowPrepareStateLifecycleContext* const context =
-            static_cast<ShadowPrepareStateLifecycleContext*>(rawContext)
-        ;
-        if(!context || !context->renderer || !context->stateCandidate || !finalState)
-            return false;
-        if(context->bufferCount != 0u && !context->buffers)
-            return false;
-
-        const bool candidateBuilt = context->renderer->m_shadowPreparePersistentState.buildMergedBufferSubset(
-            *context->stateCandidate,
-            *finalState,
-            context->buffers,
-            context->bufferCount,
-            context->scratchArena
-        );
-        const bool candidatePresent = context->stateCandidate->valid() && !context->stateCandidate->empty();
-        context->statePrepared = candidateBuilt && (candidatePresent || !context->stateCandidateRequired);
-        return context->statePrepared;
-    };
-    const auto acceptShadowPrepareTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        ShadowPrepareStateLifecycleContext* const context =
-            static_cast<ShadowPrepareStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->frameTimingTransaction
-            || !context->renderer
-            || !context->stateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        if(!context->frameTimingTransaction->confirmBeginSubmission(token)){
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: failed to confirm accepted frame timing prefix; quarantining timing without rejecting native work"));
-            context->frameTimingTransaction->discard();
-        }
-
-        RendererFramePipeline& renderer = *context->renderer;
-        if(
-            !context->stateCandidate->valid()
-            || (context->stateCandidate->empty() && context->stateCandidateRequired)
-        ){
-            context->stateReady = false;
-            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
-            return false;
-        }
-
-        context->stateReady = renderer.m_shadowPreparePersistentState.commit(*context->stateCandidate);
-        if(!context->stateReady){
-            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();
-            return false;
-        }
-        renderer.m_raytracingSystem.confirmPreparedSceneTlasBuild();
-        renderer.m_raytracingSystem.confirmPreparedMeshBlasBuilds();
-        renderer.m_raytracingSystem.confirmAcceptedShadowPrepareAccelStructStateHandoffs();
-        renderer.m_raytracingSystem.confirmPreparedMeshSwBvhBuilds();
-        return true;
-    };
-
     Core::Alloc::ScratchArena normalExecutionScratchArena(RendererArenaScope::s_TaskGraphArena);
     const Core::TextureHandle shadowVisibilityReturnTextures[] = {
         deferredTargets.shadowVisibility,
@@ -1115,22 +1040,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     Core::GpuPersistentResourceStateCache::Candidate shadowVisibilityReturnStateCandidate(m_shadowVisibilityReturnState);
     Core::GpuPersistentResourceStateCache::Candidate shadowComputeScratchStateCandidate(m_shadowComputePersistentState);
-    struct ShadowVisibilityStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
-        const Core::TextureHandle* returnTextures = nullptr;
-        const Core::TextureHandle* scratchTextures = nullptr;
-        const Core::BufferHandle* scratchBuffers = nullptr;
-        usize returnTextureCount = 0u;
-        usize scratchTextureCount = 0u;
-        usize scratchBufferCount = 0u;
-        bool runsOnCompute = false;
-        bool statePrepared = false;
-        bool stateReady = false;
-    } shadowVisibilityStateLifecycle{
+    FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext shadowVisibilityStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = this,
         .targets = &deferredTargets,
@@ -1144,78 +1054,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .scratchBufferCount = LengthOf(shadowComputeScratchBuffers),
         .runsOnCompute = shadowVisibilityRunsOnCompute,
     };
-    const auto prepareShadowVisibilityTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        ShadowVisibilityStateLifecycleContext* const context =
-            static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->returnStateCandidate
-            || !context->scratchStateCandidate
-            || !context->returnTextures
-            || !context->scratchTextures
-            || !context->scratchBuffers
-            || !finalState
-        )
-            return false;
-
-        // An inactive route retains its live allocation and accepted native state until that route runs again.
-        const bool scratchStateReady = context->renderer->m_shadowComputePersistentState.buildMergedResourceSubset(
-            *context->scratchStateCandidate,
-            *finalState,
-            context->scratchTextures,
-            context->scratchTextureCount,
-            context->scratchBuffers,
-            context->scratchBufferCount,
-            context->scratchArena
-        );
-        bool returnStateReady = true;
-        if(context->runsOnCompute){
-            returnStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(
-                *context->returnStateCandidate,
-                *finalState,
-                context->returnTextures,
-                context->returnTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            );
-        }
-        context->statePrepared = returnStateReady && scratchStateReady;
-        return context->statePrepared;
-    };
-    const auto acceptShadowVisibilityTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        static_cast<void>(token);
-        ShadowVisibilityStateLifecycleContext* const context =
-            static_cast<ShadowVisibilityStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->targets
-            || !context->returnStateCandidate
-            || !context->scratchStateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        bool returnStateReady = true;
-        if(context->runsOnCompute)
-            returnStateReady = context->renderer->m_shadowVisibilityReturnState.commit(*context->returnStateCandidate);
-        const bool scratchStateReady =
-            context->renderer->m_shadowComputePersistentState.commit(*context->scratchStateCandidate)
-        ;
-        context->stateReady = returnStateReady && scratchStateReady;
-        context->renderer->m_raytracingSystem.finalizeSoftShadowTemporalHistory(*context->targets);
-        return context->stateReady;
-    };
 
     const Core::TextureHandle causticsComputeScratchTextures[] = {
         deferredTargets.causticAccumulator,
@@ -1228,19 +1066,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     };
     Core::GpuPersistentResourceStateCache::Candidate causticReturnStateCandidate(m_causticIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate causticsScratchStateCandidate(m_causticsComputePersistentState);
-    struct SoftwareCausticsStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* scratchStateCandidate = nullptr;
-        const Core::TextureHandle* irradianceTextures = nullptr;
-        const Core::TextureHandle* scratchTextures = nullptr;
-        usize irradianceTextureCount = 0u;
-        usize scratchTextureCount = 0u;
-        bool runsOnCompute = false;
-        bool statePrepared = false;
-        bool stateReady = false;
-    } softwareCausticsStateLifecycle{
+    FrameExecuteLifecycle::SoftwareCausticsStateLifecycleContext softwareCausticsStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = this,
         .returnStateCandidate = &causticReturnStateCandidate,
@@ -1250,74 +1076,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .irradianceTextureCount = LengthOf(causticIrradianceTextures),
         .scratchTextureCount = LengthOf(causticsComputeScratchTextures),
         .runsOnCompute = softwareCausticsRunsOnCompute,
-    };
-    const auto prepareSoftwareCausticsTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        SoftwareCausticsStateLifecycleContext* const context =
-            static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->returnStateCandidate
-            || !context->scratchStateCandidate
-            || !context->irradianceTextures
-            || !context->scratchTextures
-            || !finalState
-        )
-            return false;
-
-        bool returnStateReady = true;
-        if(context->runsOnCompute){
-            returnStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(
-                *context->returnStateCandidate,
-                *finalState,
-                context->irradianceTextures,
-                context->irradianceTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            );
-        }
-        const bool scratchStateReady = context->renderer->m_causticsComputePersistentState.buildFilteredResourceSubset(
-            *context->scratchStateCandidate,
-            *finalState,
-            context->scratchTextures,
-            context->scratchTextureCount,
-            nullptr,
-            0u,
-            context->scratchArena
-        );
-        context->statePrepared = returnStateReady && scratchStateReady;
-        return context->statePrepared;
-    };
-    const auto acceptSoftwareCausticsTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        static_cast<void>(token);
-        SoftwareCausticsStateLifecycleContext* const context =
-            static_cast<SoftwareCausticsStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->returnStateCandidate
-            || !context->scratchStateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        bool returnStateReady = true;
-        if(context->runsOnCompute)
-            returnStateReady = context->renderer->m_causticIrradianceReturnState.commit(*context->returnStateCandidate);
-        const bool scratchStateReady =
-            context->renderer->m_causticsComputePersistentState.commit(*context->scratchStateCandidate)
-        ;
-        context->stateReady = returnStateReady && scratchStateReady;
-        return context->stateReady;
     };
 
     const Core::TextureHandle surfelIrradianceReturnTextures[] = {
@@ -1340,23 +1098,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate surfelIrradianceReturnStateCandidate(m_surfelIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate surfelGiCounterStateCandidate(m_surfelGiCounterPersistentState);
     Core::GpuPersistentResourceStateCache::Candidate surfelGiComputeStateCandidate(m_surfelGiComputePersistentState);
-    struct SurfelGiStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* returnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* counterStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* computeStateCandidate = nullptr;
-        const Core::TextureHandle* returnTextures = nullptr;
-        const Core::BufferHandle* counterBuffers = nullptr;
-        const Core::TextureHandle* computeTextures = nullptr;
-        const Core::BufferHandle* computeBuffers = nullptr;
-        usize returnTextureCount = 0u;
-        usize counterBufferCount = 0u;
-        usize computeTextureCount = 0u;
-        usize computeBufferCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
-    } surfelGiStateLifecycle{
+    FrameExecuteLifecycle::SurfelGiStateLifecycleContext surfelGiStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = this,
         .returnStateCandidate = &surfelIrradianceReturnStateCandidate,
@@ -1371,151 +1113,17 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .computeTextureCount = LengthOf(surfelGiComputeScratchTextures),
         .computeBufferCount = LengthOf(surfelGiComputeScratchBuffers),
     };
-    const auto prepareSurfelGiTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-        if(
-            !context
-            || !context->renderer
-            || !context->returnStateCandidate
-            || !context->counterStateCandidate
-            || !context->computeStateCandidate
-            || !context->returnTextures
-            || !context->counterBuffers
-            || !context->computeTextures
-            || !context->computeBuffers
-            || !finalState
-        )
-            return false;
-
-        const bool returnStateReady = context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(
-            *context->returnStateCandidate,
-            *finalState,
-            context->returnTextures,
-            context->returnTextureCount,
-            nullptr,
-            0u,
-            context->scratchArena
-        );
-        const bool counterStateReady = context->renderer->m_surfelGiCounterPersistentState.buildFilteredResourceSubset(
-            *context->counterStateCandidate,
-            *finalState,
-            nullptr,
-            0u,
-            context->counterBuffers,
-            context->counterBufferCount,
-            context->scratchArena
-        );
-        const bool computeStateReady =
-            context->renderer->m_surfelGiComputePersistentState.buildFilteredResourceSubset(
-                *context->computeStateCandidate,
-                *finalState,
-                context->computeTextures,
-                context->computeTextureCount,
-                context->computeBuffers,
-                context->computeBufferCount,
-                context->scratchArena
-            )
-        ;
-        context->statePrepared = returnStateReady && counterStateReady && computeStateReady;
-        return context->statePrepared;
-    };
-    const auto acceptSurfelGiTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        static_cast<void>(token);
-        SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
-        if(
-            !context
-            || !context->renderer
-            || !context->returnStateCandidate
-            || !context->counterStateCandidate
-            || !context->computeStateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        RendererFramePipeline& renderer = *context->renderer;
-        const bool returnStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->returnStateCandidate);
-        const bool counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(*context->counterStateCandidate);
-        const bool computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
-        context->stateReady = returnStateReady && counterStateReady && computeStateReady;
-        return context->stateReady;
-    };
 
     const Core::TextureHandle hardwareCausticAccumulatorTextures[] = {
         deferredTargets.causticAccumulator,
     };
     Core::GpuPersistentResourceStateCache::Candidate hardwareCausticAccumulatorStateCandidate(m_hardwareCausticAccumulatorPersistentState);
-    struct HardwareCausticsStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* accumulatorStateCandidate = nullptr;
-        const Core::TextureHandle* accumulatorTextures = nullptr;
-        usize accumulatorTextureCount = 0u;
-        bool statePrepared = false;
-        bool stateReady = false;
-    } hardwareCausticsStateLifecycle{
+    FrameExecuteLifecycle::HardwareCausticsStateLifecycleContext hardwareCausticsStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = this,
         .accumulatorStateCandidate = &hardwareCausticAccumulatorStateCandidate,
         .accumulatorTextures = hardwareCausticAccumulatorTextures,
         .accumulatorTextureCount = LengthOf(hardwareCausticAccumulatorTextures),
-    };
-    const auto prepareHardwareCausticsTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        HardwareCausticsStateLifecycleContext* const context =
-            static_cast<HardwareCausticsStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->accumulatorStateCandidate
-            || !context->accumulatorTextures
-            || !finalState
-        )
-            return false;
-
-        const bool accumulatorStateReady =
-            context->renderer->m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset(
-                *context->accumulatorStateCandidate,
-                *finalState,
-                context->accumulatorTextures,
-                context->accumulatorTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            )
-        ;
-        context->statePrepared = accumulatorStateReady;
-        return context->statePrepared;
-    };
-    const auto acceptHardwareCausticsTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        static_cast<void>(token);
-        HardwareCausticsStateLifecycleContext* const context =
-            static_cast<HardwareCausticsStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->accumulatorStateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        const bool accumulatorStateReady =
-            context->renderer->m_hardwareCausticAccumulatorPersistentState.commit(*context->accumulatorStateCandidate)
-        ;
-        context->stateReady = accumulatorStateReady;
-        return context->stateReady;
     };
 
     const Core::TextureHandle deferredLightingShadowReturnTextures[] = {
@@ -1530,24 +1138,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingShadowReturnStateCandidate(m_shadowVisibilityReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingCausticReturnStateCandidate(m_causticIrradianceReturnState);
     Core::GpuPersistentResourceStateCache::Candidate deferredLightingSurfelReturnStateCandidate(m_surfelIrradianceReturnState);
-    struct DeferredLightingStateLifecycleContext{
-        Core::Alloc::ScratchArena& scratchArena;
-        RendererFramePipeline* renderer = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* shadowReturnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* causticReturnStateCandidate = nullptr;
-        Core::GpuPersistentResourceStateCache::Candidate* surfelReturnStateCandidate = nullptr;
-        const Core::TextureHandle* shadowReturnTextures = nullptr;
-        const Core::TextureHandle* causticReturnTextures = nullptr;
-        const Core::TextureHandle* surfelReturnTextures = nullptr;
-        usize shadowReturnTextureCount = 0u;
-        usize causticReturnTextureCount = 0u;
-        usize surfelReturnTextureCount = 0u;
-        bool runsOnCompute = false;
-        bool usesLaggedHistory = false;
-        bool statePrepared = false;
-        bool stateReady = false;
-    } deferredLightingStateLifecycle{
+    FrameExecuteLifecycle::DeferredLightingStateLifecycleContext deferredLightingStateLifecycle{
         .scratchArena = normalExecutionScratchArena,
         .renderer = this,
         .targets = &deferredTargets,
@@ -1563,102 +1154,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .runsOnCompute = deferredLightingRunsOnCompute,
         .usesLaggedHistory = laggedAsyncLightingSchedule,
     };
-    const auto prepareDeferredLightingTask = [](
-        void* const rawContext,
-        const Core::CommandListResourceStateHandoff* const finalState
-    ) -> bool {
-        DeferredLightingStateLifecycleContext* const context =
-            static_cast<DeferredLightingStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->shadowReturnStateCandidate
-            || !context->causticReturnStateCandidate
-            || !context->surfelReturnStateCandidate
-            || !context->shadowReturnTextures
-            || !context->causticReturnTextures
-            || !context->surfelReturnTextures
-            || !finalState
-        )
-            return false;
-
-        bool shadowStateReady = true;
-        bool causticStateReady = true;
-        bool surfelStateReady = true;
-        if(context->runsOnCompute && !context->usesLaggedHistory){
-            shadowStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(
-                *context->shadowReturnStateCandidate,
-                *finalState,
-                context->shadowReturnTextures,
-                context->shadowReturnTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            );
-            causticStateReady = context->renderer->m_causticIrradianceReturnState.buildFilteredResourceSubset(
-                *context->causticReturnStateCandidate,
-                *finalState,
-                context->causticReturnTextures,
-                context->causticReturnTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            );
-            surfelStateReady = context->renderer->m_surfelIrradianceReturnState.buildFilteredResourceSubset(
-                *context->surfelReturnStateCandidate,
-                *finalState,
-                context->surfelReturnTextures,
-                context->surfelReturnTextureCount,
-                nullptr,
-                0u,
-                context->scratchArena
-            );
-        }
-        context->statePrepared = shadowStateReady && causticStateReady && surfelStateReady;
-        return context->statePrepared;
-    };
-    const auto acceptDeferredLightingTask = [](
-        void* const rawContext,
-        const Core::QueueSubmissionToken& token
-    ) -> bool {
-        static_cast<void>(token);
-        DeferredLightingStateLifecycleContext* const context =
-            static_cast<DeferredLightingStateLifecycleContext*>(rawContext)
-        ;
-        if(
-            !context
-            || !context->renderer
-            || !context->targets
-            || !context->shadowReturnStateCandidate
-            || !context->causticReturnStateCandidate
-            || !context->surfelReturnStateCandidate
-            || !context->statePrepared
-        )
-            return false;
-
-        RendererFramePipeline& renderer = *context->renderer;
-        if(context->usesLaggedHistory)
-            context->targets->laggedLightingHistory.slotsUploaded = true;
-        bool shadowStateReady = true;
-        bool causticStateReady = true;
-        bool surfelStateReady = true;
-        if(context->runsOnCompute && !context->usesLaggedHistory){
-            shadowStateReady = renderer.m_shadowVisibilityReturnState.commit(*context->shadowReturnStateCandidate);
-            causticStateReady = renderer.m_causticIrradianceReturnState.commit(*context->causticReturnStateCandidate);
-            surfelStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->surfelReturnStateCandidate);
-        }
-        context->stateReady = shadowStateReady && causticStateReady && surfelStateReady;
-        if(!context->stateReady)
-            return false;
-        if(context->usesLaggedHistory){
-            renderer.reportLaggedLightingTransition(
-                LaggedLightingReport::ActiveHistoryAccepted,
-                context->targets->laggedLightingHistory.generation
-            );
-        }
-        return true;
-    };
 
     Core::GpuTaskGraphTaskRecordedCallback normalRecordedCallbacks[
         RendererFramePipelineExecuteDetail::s_DeferredStateLifecycleCallbackCapacity
@@ -1667,36 +1162,36 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredShadowPrepareTask,
         .context = &shadowPrepareStateLifecycle,
-        .invoke = prepareShadowPrepareTask,
+        .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask,
     };
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredShadowVisibilityTask,
         .context = &shadowVisibilityStateLifecycle,
-        .invoke = prepareShadowVisibilityTask,
+        .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask,
     };
     if(!hardwareShadowSupported){
         normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
             .task = m_deferredSoftwareCausticsTask,
             .context = &softwareCausticsStateLifecycle,
-            .invoke = prepareSoftwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask,
         };
     }
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredSurfelGiTask,
         .context = &surfelGiStateLifecycle,
-        .invoke = prepareSurfelGiTask,
+        .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask,
     };
     if(hardwareShadowSupported){
         normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
             .task = m_deferredHardwareCausticsTask,
             .context = &hardwareCausticsStateLifecycle,
-            .invoke = prepareHardwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask,
         };
     }
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredLightingTask,
         .context = &deferredLightingStateLifecycle,
-        .invoke = prepareDeferredLightingTask,
+        .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask,
     };
     NWB_ASSERT(normalRecordedCallbackCount <= LengthOf(normalRecordedCallbacks));
 
@@ -1707,36 +1202,36 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredShadowPrepareTask,
         .context = &shadowPrepareStateLifecycle,
-        .invoke = acceptShadowPrepareTask,
+        .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,
     };
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredShadowVisibilityTask,
         .context = &shadowVisibilityStateLifecycle,
-        .invoke = acceptShadowVisibilityTask,
+        .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask,
     };
     if(!hardwareShadowSupported){
         normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
             .task = m_deferredSoftwareCausticsTask,
             .context = &softwareCausticsStateLifecycle,
-            .invoke = acceptSoftwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask,
         };
     }
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredSurfelGiTask,
         .context = &surfelGiStateLifecycle,
-        .invoke = acceptSurfelGiTask,
+        .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask,
     };
     if(hardwareShadowSupported){
         normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
             .task = m_deferredHardwareCausticsTask,
             .context = &hardwareCausticsStateLifecycle,
-            .invoke = acceptHardwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask,
         };
     }
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredLightingTask,
         .context = &deferredLightingStateLifecycle,
-        .invoke = acceptDeferredLightingTask,
+        .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask,
     };
     NWB_ASSERT(normalAcceptedCallbackCount <= LengthOf(normalAcceptedCallbacks));
 

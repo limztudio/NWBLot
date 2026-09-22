@@ -111,6 +111,7 @@ enum class DeferredGraphicsPrefixTimingSlot : u8{
 
 class RendererFramePipeline final : NoCopy{
     friend class OpaqueEmulationMergeValidator;
+    friend class FrameExecuteLifecycle;
     friend class ShadowPreparePacketValidator;
     friend class SurfelCausticsMergeValidator;
     friend class GraphicsPrefixTimingResolver;

@@ -862,7 +862,7 @@ Core::GpuTaskId UiSystem::declareTaskGraphPresentation(
             scratchArena,
             uploadedTextures,
             Name("ui.imgui_upload_completion"),
-            "ImGui Upload Completion"
+            MakeNotNull("ImGui Upload Completion")
         );
         completion.desc
             .setDependencies(dependencies.data(), dependencies.size())

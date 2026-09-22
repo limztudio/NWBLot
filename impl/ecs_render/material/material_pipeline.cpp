@@ -97,7 +97,7 @@ namespace __hidden_material_pipeline{
 
 struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<Shader>* materialShader = nullptr;
-    const char* debugName = nullptr;
+    NotNull<const char*> debugName = MakeNotNull("ECSRender_InvalidAvboitPixelShader");
 
     [[nodiscard]] bool materialDriven()const{ return materialShader != nullptr && materialShader->valid(); }
     [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : NAME_NONE; }
@@ -111,20 +111,20 @@ struct MaterialPipelineAvboitPixelShaderSelection{
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
         selection.materialShader = &materialInfo.avboitOccupancyPixelShader;
-        selection.debugName = "ECSRender_AvboitOccupancyPS";
+        selection.debugName = MakeNotNull("ECSRender_AvboitOccupancyPS");
         break;
     case MaterialPipelinePass::AvboitExtinction:
         selection.materialShader = &materialInfo.avboitExtinctionPixelShader;
-        selection.debugName = "ECSRender_AvboitExtinctionPS";
+        selection.debugName = MakeNotNull("ECSRender_AvboitExtinctionPS");
         break;
     case MaterialPipelinePass::AvboitAccumulate:
         selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
-        selection.debugName = "ECSRender_AvboitAccumulatePS";
+        selection.debugName = MakeNotNull("ECSRender_AvboitAccumulatePS");
         break;
     case MaterialPipelinePass::AvboitRefractionCapture:
         // The draw mode selects optical capture in the existing material-authored accumulation shader.
         selection.materialShader = &materialInfo.avboitAccumulatePixelShader;
-        selection.debugName = "ECSRender_AvboitRefractionCapturePS";
+        selection.debugName = MakeNotNull("ECSRender_AvboitRefractionCapturePS");
         break;
     default:
         break;
@@ -283,7 +283,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
     Name passPixelShaderName = NAME_NONE;
-    const char* passPixelShaderDebugName = nullptr;
+    NotNull<const char*> passPixelShaderDebugName = MakeNotNull("ECSRender_InvalidPassPixelShader");
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){
         avboitPixelShaderSelection = __hidden_material_pipeline::SelectAvboitPixelShader(
@@ -300,7 +300,7 @@ bool RendererMaterialSystem::createRendererPipeline(
         break;
     case MaterialPipelinePass::CsgReceiverSurface:
         passPixelShaderName = AssetsGraphicsCsg::s_ReceiverSurfacePixelShaderName;
-        passPixelShaderDebugName = "ECSRender_CsgReceiverSurfacePS";
+        passPixelShaderDebugName = MakeNotNull("ECSRender_CsgReceiverSurfacePS");
         break;
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
@@ -340,7 +340,7 @@ bool RendererMaterialSystem::createRendererPipeline(
                 passPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
                 Core::ShaderType::Pixel,
-                passPixelShaderDebugName
+                passPixelShaderDebugName.get()
             );
         }
         if(avboitCsgClipPipeline){
@@ -349,7 +349,7 @@ bool RendererMaterialSystem::createRendererPipeline(
                 passPixelShaderName,
                 AStringView(avboitCsgShaderVariant),
                 Core::ShaderType::Pixel,
-                passPixelShaderDebugName
+                passPixelShaderDebugName.get()
             );
         }
         if(!passPixelShader){
@@ -360,7 +360,7 @@ bool RendererMaterialSystem::createRendererPipeline(
                 passPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
                 Core::ShaderType::Pixel,
-                passPixelShaderDebugName
+                passPixelShaderDebugName.get()
             );
         }
         resources.pixelShader = passPixelShader;

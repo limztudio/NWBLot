@@ -38,18 +38,18 @@ bool MeshSkinningSystem::resolveRestToSkinnedCopyByteCounts(
     usize& outNormalBytes,
     usize& outTangentBytes
 ){
-    const auto resolvePayloadBytes = [](const usize count, const usize stride, usize& outBytes, const tchar* label){
+    const auto resolvePayloadBytes = [](const usize count, const usize stride, usize& outBytes, const NotNull<const tchar*> label){
         outBytes = 0u;
         if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
             return true;
 
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label.get());
         return false;
     };
     return
-        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, NWB_TEXT("rest position"))
-        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, NWB_TEXT("rest normal"))
-        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, NWB_TEXT("rest tangent"))
+        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, MakeNotNull(NWB_TEXT("rest position")))
+        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, MakeNotNull(NWB_TEXT("rest normal")))
+        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, MakeNotNull(NWB_TEXT("rest tangent")))
     ;
 }
 

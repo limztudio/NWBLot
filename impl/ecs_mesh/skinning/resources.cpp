@@ -37,10 +37,10 @@ static Core::BufferHandle SetupStructuredBuffer(
     const Name& debugName,
     const PayloadT* payload,
     const usize count,
-    const tchar* label
+    const NotNull<const tchar*> label
 ){
     if(MultiplyOverflows<usize>(count, sizeof(PayloadT))){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label.get());
         return {};
     }
 
@@ -301,7 +301,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
             skinBufferName,
             skinInfluences.data(),
             skinInfluences.size(),
-            NWB_TEXT("skin influence")
+            MakeNotNull(NWB_TEXT("skin influence"))
         );
         if(!rebuilt.skinBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skin buffer for runtime mesh '{}'"), instance.handle.value);
@@ -313,7 +313,7 @@ bool MeshSkinningSystem::ensureRuntimeResources(
             jointPaletteBufferName,
             payload.jointMatrices.data(),
             payload.jointMatrices.size(),
-            NWB_TEXT("joint palette")
+            MakeNotNull(NWB_TEXT("joint palette"))
         );
         if(!rebuilt.jointPaletteBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create joint palette buffer for runtime mesh '{}'"), instance.handle.value);

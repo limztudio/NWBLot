@@ -983,7 +983,7 @@ private:
     // Hardware shadow layouts are push-only; resources come from heap sets.
     void appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const;
     [[nodiscard]] bool ensureSwShadowPipeline();
-    [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const char* debugLabel);
+    [[nodiscard]] bool ensureSwShadowPassPipeline(Core::ShaderHandle& shader, Core::ComputePipelineHandle& pipeline, const Name& shaderName, const NotNull<const char*> debugLabel);
     [[nodiscard]] bool ensureSoftwareTransparentSamplingPipeline();
     [[nodiscard]] bool ensureSoftShadowResolvePipeline();
     [[nodiscard]] bool ensureShadowGeometryDownsamplePipeline();

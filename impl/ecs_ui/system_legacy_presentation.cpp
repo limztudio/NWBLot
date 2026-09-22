@@ -125,7 +125,7 @@ Core::GpuTaskId UiSystem::declareStandaloneTextureUploadGraph(Core::GpuTaskGraph
         scratchArena,
         uploadedTextures,
         Name("ui.imgui_standalone_texture_upload_completion"),
-        "ImGui Standalone Texture Upload Completion"
+        MakeNotNull("ImGui Standalone Texture Upload Completion")
     );
     completion.desc
         .setDependencies(uploadTasks.data(), uploadTasks.size())

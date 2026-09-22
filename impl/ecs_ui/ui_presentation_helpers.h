@@ -84,7 +84,7 @@ struct UploadCompletionDeclare{
     Core::Alloc::ScratchArena& scratchArena,
     const Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& uploadedTextures,
     const Name& identity,
-    const char* markerLabel
+    const NotNull<const char*> markerLabel
 ){
     UploadCompletionDeclare result{ Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena) };
     result.resourceUses.reserve(uploadedTextures.size());
@@ -96,7 +96,7 @@ struct UploadCompletionDeclare{
     result.scheduling.allowPacketMerge = false;
     result.desc
         .setIdentity(identity)
-        .setMarkerLabel(markerLabel)
+        .setMarkerLabel(markerLabel.get())
         .setQueue(Core::GpuQueueRequest{
             Core::GpuQueueCapability::Graphics,
             Core::GpuQueuePreference::Graphics,

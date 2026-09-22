@@ -13,17 +13,11 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GI ray-sampling math: a spherical-Fibonacci direction sequence + a per-frame R2 rotation. Shared by any GI producer that casts a deterministic low-discrepancy ray set with one rotation per frame (the surfel trace folds a ray set to the upper hemisphere via the surfel-normal TBN). Grid-free -- no probe volume, no atlas, no constant buffer.
 
 
-// GI ray-sampling math: a spherical-Fibonacci direction sequence + a per-frame R2 rotation. Shared by any GI producer
-// that casts a deterministic low-discrepancy ray set with one rotation per frame (the surfel trace folds a ray set to
-// the upper hemisphere via the surfel-normal TBN). Grid-free -- no probe volume, no atlas, no constant buffer.
-
-
-// Spherical Fibonacci direction for index i of N. Returns a unit vector on the sphere in a canonical frame (z = spiral
-// axis). Uses the Golden-Angle spiral point method (increment = golden angle ~ 2.39996); the caller rotates it into
-// its own frame. The (x, y) tangent components are rotated by the shared per-frame R2 rotation, z is kept.
-// Fibonacci unit-sphere coordinates are bounded factors; half math is sufficient here (widened at the float3 return).
+// Spherical Fibonacci direction for index i of N. Returns a unit vector on the sphere in a canonical frame (z = spiral axis). Uses the Golden-Angle spiral point method (increment = golden angle ~ 2.39996); the caller rotates it into its own frame.
+// The (x, y) tangent components are rotated by the shared per-frame R2 rotation, z is kept. Fibonacci unit-sphere coordinates are bounded factors; half math is sufficient here (widened at the float3 return).
 float3 nwbGiFibonacciDirection(const uint i, const uint N, const float2 rotation){
     const half phi = half(i) * half(NWB_GI_FIBONACCI_GOLDEN_ANGLE);
     const half z = half(1.0h) - (half(i) + half(0.5h)) / half(N) * half(2.0h);
@@ -37,9 +31,7 @@ float3 nwbGiFibonacciDirection(const uint i, const uint N, const float2 rotation
 }
 
 
-// Per-frame R2 rotation (2D, returns (cos, sin) of the rotation angle). The frame index drives a low-discrepancy
-// rotation so consecutive frames decorrelate their ray sets without per-ray RNG (temporal stability over per-frame noise).
-// The rotation fraction/angle are bounded factors; half math is sufficient here (widened at the float2 return).
+// Per-frame R2 rotation (2D, returns (cos, sin) of the rotation angle). The frame index drives a low-discrepancy rotation so consecutive frames decorrelate their ray sets without per-ray RNG (temporal stability over per-frame noise). The rotation fraction/angle are bounded factors; half math is sufficient here (widened at the float2 return).
 float2 nwbGiFrameRotation(const uint frameIndex){
     // Golden ratio fractional part: a well-distributed 1D sequence in [0, 1).
     const half frac = half(fract(float(frameIndex) * NWB_GI_FRAME_ROTATION_SEQUENCE_FRACTION));

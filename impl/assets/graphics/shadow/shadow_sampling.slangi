@@ -7,8 +7,6 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 // One low-discrepancy cone sample per pixel/frame feeds the soft-shadow resolve.
 
 
@@ -28,8 +26,7 @@ uint nwbShadowSeed(const uint2 pixel, const uint frameIndex){
 }
 
 
-// R2 sequence with per-pixel Cranley-Patterson rotation.
-// The R2 fraction + jitter offset are (0, 1) bounded factors; half math is sufficient here (widened at the float2 return).
+// R2 sequence with per-pixel Cranley-Patterson rotation. The R2 fraction + jitter offset are (0, 1) bounded factors; half math is sufficient here (widened at the float2 return).
 float2 nwbShadowLowDiscrepancy2D(const uint2 pixel, const uint frameIndex){
     const half a1 = half(0.75487766624669276005); // 1 / phi2
     const half a2 = half(0.56984029099805326591); // 1 / phi2^2
@@ -53,8 +50,7 @@ void nwbShadowBuildBasis(const float3 axis, out float3 tangent, out float3 bitan
 }
 
 
-// Uniform-solid-angle cone sample; zero angle returns the hard-shadow axis.
-// Cosine/angle blend factors are (0, 1) bounded; half math is sufficient here (widened at the normalize).
+// Uniform-solid-angle cone sample; zero angle returns the hard-shadow axis. Cosine/angle blend factors are (0, 1) bounded; half math is sufficient here (widened at the normalize).
 float3 nwbShadowJitterCone(const float3 axis, const float halfAngle, const float2 u){
     if(halfAngle <= 0.0)
         return axis;

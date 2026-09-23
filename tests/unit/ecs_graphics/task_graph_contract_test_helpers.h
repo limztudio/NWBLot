@@ -118,6 +118,8 @@ inline bool ReadGraphicsRuntimeSources(const TestPath& repoRoot, AString& outSou
 
 inline bool ReadRendererFramePipelineRuntimeSources(const TestPath& repoRoot, AString& outSource){
     static constexpr StringView s_SourceNames[] = {
+        "execute/frame_execute_lifecycle.h",
+        "execute/frame_execute_lifecycle.cpp",
         "renderer_frame_pipeline.cpp",
         "renderer_frame_pipeline_resources.cpp",
         "renderer_frame_pipeline_execute.cpp",

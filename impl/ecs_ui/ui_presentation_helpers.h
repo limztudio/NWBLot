@@ -86,7 +86,11 @@ struct UploadCompletionDeclare{
     const Name& identity,
     const NotNull<const char*> markerLabel
 ){
-    UploadCompletionDeclare result{ Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena) };
+    UploadCompletionDeclare result{
+        Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>(scratchArena),
+        Core::GpuTaskSchedulingHint{},
+        Core::GpuTaskDesc{},
+    };
     result.resourceUses.reserve(uploadedTextures.size());
     for(const Core::GpuGraphResourceId texture : uploadedTextures)
         AppendTextureReadUse(result.resourceUses, texture);

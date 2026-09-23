@@ -65,7 +65,10 @@ static bool ReturnsAfterFailedBuilderCall(const AStringView text, const AStringV
     if(depth != 0u || !ContainsText(text.substr(callOffset, offset - callOffset), phase))
         return false;
     offset = text.find_first_not_of(" \t\r\n", offset);
-    return offset != AStringView::npos && text.substr(offset, 7u) == "return;";
+    if(offset == AStringView::npos)
+        return false;
+    const AStringView tail = text.substr(offset, 13u);
+    return tail == "return;" || tail.substr(0u, 12u) == "return false";
 }
 
 static TestPath RepoRoot(TestArena& testArena){
@@ -179,7 +182,10 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "material" / "material_surface.cpp", materialSurfaceSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingSystemHeader));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh_scene_swbvh.cpp", swBvhSource));
+    AString swBvhTlasSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh_scene_tlas.cpp", swBvhTlasSource));
+    swBvhSource.insert(swBvhSource.end(), swBvhTlasSource.begin(), swBvhTlasSource.end());
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "assets" / "graphics" / "shadow" / "sw_shadow_traverse.slangi", swShadowTraceSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "impl" / "assets" / "graphics" / "shadow" / "hardware_transparent_evaluate.slangi", hwShadowTraceSource
@@ -277,8 +283,17 @@ TEST(EcsGraphics, PreparedMaterialGraphDeclarationsFailClosedWhenResourceSetsAre
     AString deferredLightingTaskGraphSource;
     AString transparentCsgIntervalBuilderSource;
     AString avboitGeometryPreparationBuilderSource;
+    AString avboitOccupancyGraphSource;
+    AString avboitExtinctionGraphSource;
+    AString avboitAccumulationGraphSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graphics_prefix.cpp", graphicsPrefixTaskGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", deferredLightingTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_occupancy.cpp", avboitOccupancyGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_extinction.cpp", avboitExtinctionGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_accumulation.cpp", avboitAccumulationGraphSource));
+    deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitOccupancyGraphSource.begin(), avboitOccupancyGraphSource.end());
+    deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitExtinctionGraphSource.begin(), avboitExtinctionGraphSource.end());
+    deferredLightingTaskGraphSource.insert(deferredLightingTaskGraphSource.end(), avboitAccumulationGraphSource.begin(), avboitAccumulationGraphSource.end());
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "csg" / "transparent_csg_interval_builder.cpp", transparentCsgIntervalBuilderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "avboit" / "geometry_preparation_builder.cpp", avboitGeometryPreparationBuilderSource));
     const AStringView graphicsPrefixTaskGraph(graphicsPrefixTaskGraphSource.data(), graphicsPrefixTaskGraphSource.size());

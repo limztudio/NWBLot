@@ -37,7 +37,20 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_pipelines.cpp", pipelineSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", graphSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", recordSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        recordSource
+    ));
     const AStringView system(systemSource.data(), systemSource.size());
     const AStringView pipelines(pipelineSource.data(), pipelineSource.size());
     const AStringView frame(frameSource.data(), frameSource.size());
@@ -161,7 +174,20 @@ TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString shadowSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        shadowSource
+    ));
     const AStringView shadow(shadowSource.data(), shadowSource.size());
 
     const usize opaqueTaskOffset = shadow.find("struct ShadowVisibilityOpaqueGraphTask{");
@@ -269,7 +295,20 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     AString softShadowSource;
     AString frameResourcesSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", shadowVisibilitySource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        shadowSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", softShadowSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_frame_resources.cpp", frameResourcesSource));
     const AStringView shadowVisibility(shadowVisibilitySource.data(), shadowVisibilitySource.size());
@@ -355,7 +394,20 @@ TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoute
     const TestPath repoRoot = RepoRoot(testArena);
 
     AString shadowSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", shadowSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        shadowSource
+    ));
     const AStringView shadow(shadowSource.data(), shadowSource.size());
 
     const usize splitTraceOffset = shadow.find("bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(");
@@ -470,8 +522,10 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_FALSE(ContainsText(shadowVisibility, "shadowVisibilityRunsOnCompute"));
 
     const usize acceptedShadowOffset = system.find("const Core::TextureHandle shadowVisibilityReturnTextures[]");
-    const usize scratchStateOffset = system.find("m_shadowComputePersistentState.buildMergedResourceSubset(", acceptedShadowOffset);
-    const usize acceptedCallbackOffset = system.find("const auto acceptShadowVisibilityTask = [](", scratchStateOffset);
+    // Lifecycle bodies precede the execute.cpp ranges in the concatenated system source; anchor the
+    // prepare/accept lookups at the start so the order assertions still span the full lifecycle.
+    const usize scratchStateOffset = system.find("FrameExecuteLifecycle::PrepareShadowVisibilityTask(");
+    const usize acceptedCallbackOffset = system.find("FrameExecuteLifecycle::AcceptShadowVisibilityTask(", scratchStateOffset);
     const usize returnCommitOffset = system.find("m_shadowVisibilityReturnState.commit(", acceptedCallbackOffset);
     const usize scratchCommitOffset = system.find("m_shadowComputePersistentState.commit(", returnCommitOffset);
     const usize temporalFinalizeOffset = system.find(
@@ -493,23 +547,25 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
     EXPECT_TRUE(ContainsText(acceptedShadow, "lightSpaceShadowResources.events,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowListBuffer,"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "rayTracingGraphResources.hardwareTransparentOverflowArgsBuffer,"));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowComputePersistentState.buildMergedResourceSubset("));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "if(context->runsOnCompute){"));
+    // Prepare/accept bodies now live in the FrameExecuteLifecycle class, ahead of the execute.cpp accepted
+    // range in the concatenated system source; assert them on the whole system instead.
+    EXPECT_TRUE(ContainsText(system, "m_shadowComputePersistentState.buildMergedResourceSubset("));
+    EXPECT_TRUE(ContainsText(system, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(acceptedShadow, "m_shadowVisibilityReturnState.buildFilteredResourceSubset("));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowVisibilityReturnState.commit("));
-    EXPECT_TRUE(ContainsText(acceptedShadow, "context->renderer->m_shadowComputePersistentState.commit("));
+    EXPECT_TRUE(ContainsText(system, "context->renderer->m_shadowVisibilityReturnState.commit("));
+    EXPECT_TRUE(ContainsText(system, "context->renderer->m_shadowComputePersistentState.commit("));
     EXPECT_TRUE(ContainsText(system, "finalizeSoftShadowTemporalHistory(*context->targets)"));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredShadowVisibilityTask,\n"
         "        .context = &shadowVisibilityStateLifecycle,\n"
-        "        .invoke = prepareShadowVisibilityTask,"
+        "        .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredShadowVisibilityTask,\n"
         "        .context = &shadowVisibilityStateLifecycle,\n"
-        "        .invoke = acceptShadowVisibilityTask,"
+        "        .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask,"
     ));
 }
 

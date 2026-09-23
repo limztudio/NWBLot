@@ -471,8 +471,16 @@ TEST(SwapChainPresentation, CanonicalNativeQueueStateSerializesEveryInternalHost
     EXPECT_NE(fullNativeStateHeader.find("VkQueue queue = VK_NULL_HANDLE;"), AStringView::npos);
     EXPECT_NE(fullNativeStateHeader.find("Futex hostMutex;"), AStringView::npos);
 
+    AString queueHeader;
+    AString deviceHeader;
+    AString commandListHeader;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_queue.h", queueHeader));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_device.h", deviceHeader));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_command_list.h", commandListHeader));
     AString backendHeader;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeader));
+    backendHeader.insert(backendHeader.end(), queueHeader.begin(), queueHeader.end());
+    backendHeader.insert(backendHeader.end(), deviceHeader.begin(), deviceHeader.end());
+    backendHeader.insert(backendHeader.end(), commandListHeader.begin(), commandListHeader.end());
     const AStringView fullBackendHeader(backendHeader.data(), backendHeader.size());
     const usize queueClassOffset = fullBackendHeader.find("class Queue final : NoCopy{");
     const usize eventQueryClassOffset = fullBackendHeader.find("class EventQuery final", queueClassOffset);
@@ -754,7 +762,12 @@ TEST(SwapChainPresentation, SubmissionDrainAndAcceptedCommitRemainNoThrowAfterPu
     AString stateTrackingSource;
     AString commandMarkersSource;
     AString rayTracingBuildSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    AString queueDomainHeaderSource;
+    AString deviceDomainHeaderSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_queue.h", queueDomainHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_device.h", deviceDomainHeaderSource));
+    backendHeaderSource.insert(backendHeaderSource.end(), queueDomainHeaderSource.begin(), queueDomainHeaderSource.end());
+    backendHeaderSource.insert(backendHeaderSource.end(), deviceDomainHeaderSource.begin(), deviceDomainHeaderSource.end());
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "device_submission_lifecycle.cpp",
         lifecycleSource
@@ -996,7 +1009,15 @@ TEST(SwapChainPresentation, UploadChunkRetirementIsBoundedAndNoThrowAfterNativeA
     AString uploadSource;
     AString deviceQueueSource;
     AString frameSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    AString memoryUploadDomainHeaderSource;
+    AString queueDomainHeaderSource;
+    AString deviceDomainHeaderSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_memory_upload.h", memoryUploadDomainHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_queue.h", queueDomainHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_device.h", deviceDomainHeaderSource));
+    backendHeaderSource.insert(backendHeaderSource.end(), memoryUploadDomainHeaderSource.begin(), memoryUploadDomainHeaderSource.end());
+    backendHeaderSource.insert(backendHeaderSource.end(), queueDomainHeaderSource.begin(), queueDomainHeaderSource.end());
+    backendHeaderSource.insert(backendHeaderSource.end(), deviceDomainHeaderSource.begin(), deviceDomainHeaderSource.end());
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "submitted_command_buffer_owner_lookup.h",
         ownerLookupSource
@@ -1177,7 +1198,7 @@ TEST(SwapChainPresentation, LogicalQuarantineRemainsDistinctFromNativeDeviceLoss
     AString diagnosticSource;
     AString presentationSource;
     AString submissionLifecycleSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", backendHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_device.h", backendHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device.cpp", deviceSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "device_diagnostics.cpp", diagnosticSource));
     ASSERT_TRUE(ReadTextFile(

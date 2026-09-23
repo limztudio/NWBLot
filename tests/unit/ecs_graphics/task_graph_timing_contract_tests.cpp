@@ -432,7 +432,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredFrameTimingEndTask)"));
 
-    const usize shadowPrepareAcceptanceOffset = system.find("const auto acceptShadowPrepareTask = [](");
+    const usize shadowPrepareAcceptanceOffset = system.find("FrameExecuteLifecycle::AcceptShadowPrepareTask(");
     ASSERT_NE(shadowPrepareAcceptanceOffset, AStringView::npos);
     const usize normalTimingCallbacksOffset = system.find(
         "Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[",
@@ -445,7 +445,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     );
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, "context->frameTimingTransaction->confirmBeginSubmission(token)"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
-    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = acceptShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(system, "frameTimingTransaction.confirmEndSubmission(finalPresentationSubmissionToken, true)"));
     EXPECT_TRUE(ContainsText(system, "surfelCounterReadbackFollowsPresentation"));
     EXPECT_TRUE(ContainsText(system, "laggedLightingHistoryFollowsPresentation"));
@@ -517,8 +517,13 @@ TEST(EcsGraphics, DeferredGraphConfiguresCompilerOwnedPacketTiming){
 
     AString buildSource;
     AString renderSource;
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp",
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "renderer_frame_pipeline_graph.cpp",
+            "renderer_frame_pipeline_graph_schedule.cpp",
+            "renderer_frame_pipeline_graph_packet_metrics.cpp",
+        },
         buildSource
     ));
     ASSERT_TRUE(ReadTextFile(
@@ -630,6 +635,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
             "avboit/task_graph_accumulation_tasks.cpp",
             "avboit/task_graph_timing_metadata.h",
             "renderer_frame_pipeline_graph.cpp",
+            "renderer_frame_pipeline_graph_schedule.cpp",
         },
         taskGraphSource
     ));

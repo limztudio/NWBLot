@@ -129,6 +129,26 @@ static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
 
+// Source contracts name only their implementation owners. A file split must extend the read list, not sweep
+// unrelated sources: concatenate each owning split file so moved content keeps its contract.
+static bool ReadRendererSources(
+    const TestPath& repoRoot,
+    const InitializerList<StringView> sourcePaths,
+    AString& outSource
+){
+    const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";
+    outSource.clear();
+    for(const StringView sourcePath : sourcePaths){
+        AString source;
+        if(!ReadTextFile(rendererDirectory / sourcePath.data(), source))
+            return false;
+        if(!outSource.empty())
+            outSource += "\n\n";
+        outSource.append(source.data(), source.size());
+    }
+    return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -284,10 +304,33 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_private.h", rayTracingPrivateSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_caustics.cpp",
+            "raytrace/rt_caustics_tasks.h",
+            "raytrace/rt_caustics_tasks.cpp",
+            "raytrace/rt_caustics_gpu_render.cpp",
+            "raytrace/rt_caustics_software.cpp",
+            "raytrace/rt_caustics_pipelines.cpp",
+        },
+        rayTracingCausticsSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_swbvh.cpp",
+            "raytrace/rt_swbvh_mesh_blas.cpp",
+            "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
+            "raytrace/rt_swbvh_mesh_build.cpp",
+            "raytrace/rt_swbvh_scene_tlas.cpp",
+            "raytrace/rt_swbvh_scene_swbvh.cpp",
+            "raytrace/rt_swbvh_bvh_infra.cpp",
+        },
+        rayTracingSwBvhSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_state.h", meshStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "shared" / "renderer_frame_bindings.h", frameBindingsSource));
 
@@ -371,11 +414,61 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", rayTracingSwBvhSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", rayTracingShadowSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_swbvh.cpp",
+            "raytrace/rt_swbvh_mesh_blas.cpp",
+            "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
+            "raytrace/rt_swbvh_mesh_build.cpp",
+            "raytrace/rt_swbvh_scene_tlas.cpp",
+            "raytrace/rt_swbvh_scene_swbvh.cpp",
+            "raytrace/rt_swbvh_bvh_infra.cpp",
+        },
+        rayTracingSwBvhSource
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        rayTracingShadowSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_caustics.cpp",
+            "raytrace/rt_caustics_tasks.h",
+            "raytrace/rt_caustics_tasks.cpp",
+            "raytrace/rt_caustics_gpu_render.cpp",
+            "raytrace/rt_caustics_software.cpp",
+            "raytrace/rt_caustics_pipelines.cpp",
+            "raytrace/rt_caustics_emission_targets.cpp",
+            "raytrace/rt_caustics_accumulator.cpp",
+            "raytrace/rt_caustics_graph_dispatch.cpp",
+        },
+        rayTracingCausticsSource
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_surfel_gi.cpp",
+            "raytrace/rt_surfel_tasks.h",
+            "raytrace/rt_surfel_tasks.cpp",
+            "raytrace/rt_surfel_pipelines.cpp",
+            "raytrace/rt_surfel_resources.cpp",
+            "raytrace/rt_surfel_render.cpp",
+        },
+        rayTracingSurfelSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_private.h", rayTracingPrivateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline.h", pipelineHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "CMakeLists.txt", rendererCmakeSource));
@@ -890,7 +983,8 @@ TEST(EcsGraphics, CsgOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "Core::GpuDescriptorHandlem_clipContextSlotsHeapHandle=Core::GpuDescriptorHandle::invalid();"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "Core::GpuDescriptorHandlem_intervalSampleStateHeapHandle=Core::GpuDescriptorHandle::invalid();"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_frameStateCacheValid=false;"));
-    EXPECT_TRUE(ContainsText(compactStateHeader, "static_assert(sizeof(RendererCsgState)==328u,"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "s_RendererCsgStateByteSize=328u;"));
+    EXPECT_TRUE(ContainsText(compactStateHeader, "static_assert(sizeof(RendererCsgState)==s_RendererCsgStateByteSize,"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererCsgState::invalidateResources(){"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_clipBindingLayout.reset();"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "m_intervalPeelBindingLayout.reset();"));
@@ -1164,11 +1258,24 @@ TEST(EcsGraphics, CsgConsumesTheActiveDeferredTargetContractWithoutDeferredState
     EXPECT_TRUE(ContainsText(transparentIntervals, "(*inputs.csgResources),(*inputs.frameBindings),"));
     EXPECT_EQ(CountText(materialUploads, "prepareCsgClipContextSlotData("), 1u);
     EXPECT_TRUE(ContainsText(materialUploads, "*inputs.csgResources,*inputs.frameBindings,"));
-    for(const StringView phaseStorage : { "Occupancy", "Extinction", "Accumulation" }){
-        AString phase(".phase=AvboitMaterialUploadPhase::");
-        phase.append(phaseStorage.data(), phaseStorage.size());
-        EXPECT_EQ(CountText(compactRootGraph, phase), 1u);
-    }
+    AString occupancyUploadChainSource;
+    AString extinctionUploadChainSource;
+    AString accumulationUploadChainSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_occupancy.cpp", occupancyUploadChainSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_extinction.cpp", extinctionUploadChainSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_accumulation.cpp", accumulationUploadChainSource));
+    const AString compactOccupancyUploadChainStorage = CompactSource(AStringView(occupancyUploadChainSource.data(), occupancyUploadChainSource.size()));
+    const AStringView compactOccupancyUploadChain(compactOccupancyUploadChainStorage.data(), compactOccupancyUploadChainStorage.size());
+    const AString compactExtinctionUploadChainStorage = CompactSource(AStringView(extinctionUploadChainSource.data(), extinctionUploadChainSource.size()));
+    const AStringView compactExtinctionUploadChain(compactExtinctionUploadChainStorage.data(), compactExtinctionUploadChainStorage.size());
+    const AString compactAccumulationUploadChainStorage = CompactSource(AStringView(accumulationUploadChainSource.data(), accumulationUploadChainSource.size()));
+    const AStringView compactAccumulationUploadChain(compactAccumulationUploadChainStorage.data(), compactAccumulationUploadChainStorage.size());
+    EXPECT_EQ(CountText(compactOccupancyUploadChain, ".phase=AvboitMaterialUploadPhase::Occupancy,"), 1u);
+    EXPECT_EQ(CountText(compactExtinctionUploadChain, ".phase=AvboitMaterialUploadPhase::Extinction,"), 1u);
+    EXPECT_EQ(CountText(compactAccumulationUploadChain, ".phase=AvboitMaterialUploadPhase::Accumulation,"), 1u);
+    EXPECT_EQ(CountText(compactRootGraph, ".phase=AvboitMaterialUploadPhase::Occupancy,"), 0u);
+    EXPECT_EQ(CountText(compactRootGraph, ".phase=AvboitMaterialUploadPhase::Extinction,"), 0u);
+    EXPECT_EQ(CountText(compactRootGraph, ".phase=AvboitMaterialUploadPhase::Accumulation,"), 0u);
     EXPECT_FALSE(ContainsText(compactCsgHeader, "CsgGraphResourceBuffers"));
     EXPECT_FALSE(ContainsText(compactCsgResources, "CsgGraphResourceBuffers"));
     EXPECT_FALSE(ContainsText(compactCsgHeader, "csgFrameBuffersReady"));
@@ -1489,12 +1596,24 @@ TEST(EcsGraphics, GraphMaterialRecordingUsesCapturedMeshFrameBindingGeneration){
     EXPECT_TRUE(ContainsText(opaqueUploads, "MeshFrameBindingSnapshot&frameBindings=*inputs.frameBindings;"));
     EXPECT_EQ(CountText(transparentIntervals, "(*inputs.frameBindings).frameReady("), 1u);
     EXPECT_EQ(CountText(passUploads, "inputs.frameBindings->frameReady("), 1u);
-    for(const StringView phaseStorage : { "occupancy", "extinction", "accumulation" }){
-        AString preparation("if(!");
-        preparation.append(phaseStorage.data(), phaseStorage.size());
-        preparation += "UploadHelper.gather(";
-        EXPECT_EQ(CountText(compactRootGraph, preparation), 1u);
-    }
+    AString occupancyUploadChainSource;
+    AString extinctionUploadChainSource;
+    AString accumulationUploadChainSource;
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_occupancy.cpp", occupancyUploadChainSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_extinction.cpp", extinctionUploadChainSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "graph" / "frame_graph_avboit_accumulation.cpp", accumulationUploadChainSource));
+    const AString compactOccupancyUploadChainStorage = CompactSource(AStringView(occupancyUploadChainSource.data(), occupancyUploadChainSource.size()));
+    const AStringView compactOccupancyUploadChain(compactOccupancyUploadChainStorage.data(), compactOccupancyUploadChainStorage.size());
+    const AString compactExtinctionUploadChainStorage = CompactSource(AStringView(extinctionUploadChainSource.data(), extinctionUploadChainSource.size()));
+    const AStringView compactExtinctionUploadChain(compactExtinctionUploadChainStorage.data(), compactExtinctionUploadChainStorage.size());
+    const AString compactAccumulationUploadChainStorage = CompactSource(AStringView(accumulationUploadChainSource.data(), accumulationUploadChainSource.size()));
+    const AStringView compactAccumulationUploadChain(compactAccumulationUploadChainStorage.data(), compactAccumulationUploadChainStorage.size());
+    EXPECT_EQ(CountText(compactOccupancyUploadChain, "if(!occupancyUploadHelper.gather("), 1u);
+    EXPECT_EQ(CountText(compactExtinctionUploadChain, "if(!extinctionUploadHelper.gather("), 1u);
+    EXPECT_EQ(CountText(compactAccumulationUploadChain, "if(!accumulationUploadHelper.gather("), 1u);
+    EXPECT_EQ(CountText(compactRootGraph, "if(!occupancyUploadHelper.gather("), 0u);
+    EXPECT_EQ(CountText(compactRootGraph, "if(!extinctionUploadHelper.gather("), 0u);
+    EXPECT_EQ(CountText(compactRootGraph, "if(!accumulationUploadHelper.gather("), 0u);
     EXPECT_EQ(CountText(compactPrefix, "materialPassDrawBuffersReady("), 0u);
     EXPECT_EQ(CountText(compactRootGraph, "materialPassDrawBuffersReady("), 0u);
 }
@@ -1764,10 +1883,48 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_shadow.cpp", rayTracingShadowSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
+        },
+        rayTracingShadowSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_caustics.cpp", rayTracingCausticsSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_surfel_gi.cpp", rayTracingSurfelSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_caustics.cpp",
+            "raytrace/rt_caustics_tasks.h",
+            "raytrace/rt_caustics_tasks.cpp",
+            "raytrace/rt_caustics_gpu_render.cpp",
+            "raytrace/rt_caustics_software.cpp",
+            "raytrace/rt_caustics_pipelines.cpp",
+            "raytrace/rt_caustics_emission_targets.cpp",
+            "raytrace/rt_caustics_accumulator.cpp",
+            "raytrace/rt_caustics_graph_dispatch.cpp",
+        },
+        rayTracingCausticsSource
+    ));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_surfel_gi.cpp",
+            "raytrace/rt_surfel_tasks.h",
+            "raytrace/rt_surfel_tasks.cpp",
+            "raytrace/rt_surfel_pipelines.cpp",
+            "raytrace/rt_surfel_resources.cpp",
+            "raytrace/rt_surfel_render.cpp",
+        },
+        rayTracingSurfelSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "renderer_deferred_state.h", deferredStateSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph.cpp", rootGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_graph_shadow_visibility.cpp", rootShadowSource));

@@ -107,9 +107,35 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
             "csg/csg_interval_resources.cpp",
             "mesh/mesh_bindings.cpp",
             "raytrace/rt_shadow.cpp",
+            "raytrace/rt_shadow_tasks.h",
+            "raytrace/rt_shadow_material_context.cpp",
+            "raytrace/rt_shadow_visibility_target.cpp",
+            "raytrace/rt_shadow_opaque.cpp",
+            "raytrace/rt_shadow_transparent.cpp",
+            "raytrace/rt_shadow_gpu_visibility.cpp",
+            "raytrace/rt_shadow_pipelines.cpp",
             "raytrace/rt_caustics.cpp",
+            "raytrace/rt_caustics_tasks.h",
+            "raytrace/rt_caustics_tasks.cpp",
+            "raytrace/rt_caustics_gpu_render.cpp",
+            "raytrace/rt_caustics_software.cpp",
+            "raytrace/rt_caustics_pipelines.cpp",
+            "raytrace/rt_caustics_emission_targets.cpp",
+            "raytrace/rt_caustics_accumulator.cpp",
+            "raytrace/rt_caustics_graph_dispatch.cpp",
             "raytrace/rt_surfel_gi.cpp",
+            "raytrace/rt_surfel_tasks.h",
+            "raytrace/rt_surfel_tasks.cpp",
+            "raytrace/rt_surfel_pipelines.cpp",
+            "raytrace/rt_surfel_resources.cpp",
+            "raytrace/rt_surfel_render.cpp",
             "raytrace/rt_swbvh.cpp",
+            "raytrace/rt_swbvh_mesh_blas.cpp",
+            "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
+            "raytrace/rt_swbvh_mesh_build.cpp",
+            "raytrace/rt_swbvh_scene_tlas.cpp",
+            "raytrace/rt_swbvh_scene_swbvh.cpp",
+            "raytrace/rt_swbvh_bvh_infra.cpp",
         },
         rendererSource
     ));
@@ -187,9 +213,7 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     AString slotAllocatorSource;
     AString nativeBindingSource;
     AString rendererExecutionSource;
-    AString smokeSource;
-    AString rayTracingSmokeSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", heapHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_pipeline_state.h", heapHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap.cpp", heapSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "gpu_descriptor_heap_retirement.cpp",
@@ -207,14 +231,6 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         repoRoot / "impl" / "ecs_render" / "renderer_frame_pipeline_execute.cpp",
         rendererExecutionSource
     ));
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "tests" / "smoke" / "descriptor_buffer" / "round_trip" / "descriptor_heap_recording_lease_tests.cpp",
-        smokeSource
-    ));
-    ASSERT_TRUE(ReadTextFile(
-        repoRoot / "tests" / "smoke" / "descriptor_buffer" / "round_trip" / "ray_tracing_descriptor_layout_tests.cpp",
-        rayTracingSmokeSource
-    ));
     const AStringView heapHeader(heapHeaderSource.data(), heapHeaderSource.size());
     const AStringView heap(heapSource.data(), heapSource.size());
     const AStringView heapRetirement(heapRetirementSource.data(), heapRetirementSource.size());
@@ -226,8 +242,6 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
     const AStringView descriptorWrite(descriptorWriteSource.data(), descriptorWriteSource.size());
     const AStringView nativeBinding(nativeBindingSource.data(), nativeBindingSource.size());
     const AStringView rendererExecution(rendererExecutionSource.data(), rendererExecutionSource.size());
-    const AStringView smoke(smokeSource.data(), smokeSource.size());
-    const AStringView rayTracingSmoke(rayTracingSmokeSource.data(), rayTracingSmokeSource.size());
 
     EXPECT_TRUE(ContainsText(heapHeader, "enum class SlotState : u8{"));
     EXPECT_TRUE(ContainsText(heapHeader, "PendingRecording,"));
@@ -325,31 +339,17 @@ TEST(EcsGraphics, DescriptorHeapPendingRecordingLeaseBridgesFrameSnapshotsToNati
         "Core::GpuDescriptorHeap::PendingRecordingLease descriptorHeapPendingRecordingLease"
     ), 1u);
 
+    // The admission-time smoke suites were retired with the scheduler centralization; assert the lease
+    // lifetime bridge directly on the heap sources instead of deleted smoke files.
+    EXPECT_TRUE(ContainsText(heap, "GpuDescriptorHeap::PendingRecordingLease GpuDescriptorHeap::acquirePendingRecordingLease(){"));
+    EXPECT_TRUE(ContainsText(heapRetirement, "void GpuDescriptorHeap::releasePendingRecordingLease(const u64 descriptorBufferGeneration)noexcept{"));
     EXPECT_TRUE(ContainsText(
-        smoke,
-        "TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseProtectsCapturedSlots)"
+        nativeBinding,
+        "managerSnapshot.generation != heap.m_descriptorBufferGeneration"
     ));
     EXPECT_TRUE(ContainsText(
-        smoke,
-        "TEST_F(DescriptorBufferAllocationTest, "
-        "DescriptorHeapPendingRecordingLeaseRejectsReinitializeAndRecyclesWithoutRecording)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        smoke,
-        "TEST_F(DescriptorBufferAllocationTest, DescriptorHeapPendingRecordingLeaseUnwindPublishesWithoutArenaTraffic)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        smoke,
-        "TEST_F(DescriptorBufferRoundTripTest, DeviceDescriptorHeapPendingRecordingLeaseTracksRecordedUse)"
-    ));
-    EXPECT_TRUE(ContainsText(
-        rayTracingSmoke,
-        "heap.bindCompute(*commandList, *pipeline, handle);\n"
-        "        ASSERT_FALSE(commandList->commandRecordingFailed())"
-    ));
-    EXPECT_TRUE(ContainsText(
-        rayTracingSmoke,
-        "native TLAS binding rejected the exact pending-recording generation"
+        heap,
+        "allocator.slotStates[handle.slot()] = SlotState::PendingRecording;"
     ));
 }
 
@@ -364,7 +364,7 @@ TEST(EcsGraphics, DescriptorStorageTeardownRequiresCompletedDeviceJoinOrActualLo
     AString managerSource;
     AString heapSource;
     AString deviceSource;
-    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend.h", managerHeaderSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / "core" / "graphics" / "vulkan" / "backend_pipeline_state.h", managerHeaderSource));
     ASSERT_TRUE(ReadTextFile(
         repoRoot / "core" / "graphics" / "vulkan" / "resource_bindings_descriptor_buffer.cpp",
         managerSource

@@ -87,7 +87,20 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     AString materialContextSource;
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_swbvh.cpp",
+            "raytrace/rt_swbvh_helpers.h",
+            "raytrace/rt_swbvh_mesh_blas.cpp",
+            "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
+            "raytrace/rt_swbvh_mesh_build.cpp",
+            "raytrace/rt_swbvh_scene_tlas.cpp",
+            "raytrace/rt_swbvh_scene_swbvh.cpp",
+            "raytrace/rt_swbvh_bvh_infra.cpp",
+        },
+        swBvhSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_shadow_material_context.cpp", materialContextSource));
 
     const AStringView materialContext(materialContextSource.data(), materialContextSource.size());
@@ -190,7 +203,7 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     ));
     EXPECT_EQ(CountText(materialConfirm, "clearPreparedShadowMaterialContext();"), 1u);
 
-    const usize materialHashOffset = swBvh.find("[[nodiscard]] u64 ComputeShadowMaterialContextHash(");
+    const usize materialHashOffset = swBvh.find("u64 ComputeShadowMaterialContextHash(");
     const usize materialHashEndOffset = swBvh.find("// Cross-frame cache pins raw keys", materialHashOffset);
     ASSERT_NE(materialHashOffset, AStringView::npos);
     ASSERT_NE(materialHashEndOffset, AStringView::npos);
@@ -324,13 +337,13 @@ TEST(EcsGraphics, RayTracingMaterialAndSoftwareInputsExposeRawViews){
     EXPECT_TRUE(ContainsText(meshResources, "indexFlags.canHaveRawViews = true;"));
     EXPECT_TRUE(ContainsText(
         skinningRuntimeCache,
-        "NWB_TEXT(\"skinned position\"),\n"
+        "MakeNotNull(NWB_TEXT(\"skinned position\")),\n"
         "        true,\n"
         "        rtSupported"
     ));
     EXPECT_TRUE(ContainsText(
         skinningRuntimeCache,
-        "NWB_TEXT(\"rt triangle index\"),\n"
+        "MakeNotNull(NWB_TEXT(\"rt triangle index\")),\n"
         "            true,\n"
         "            rtSupported"
     ));
@@ -363,13 +376,27 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
             "renderer_frame_pipeline_graph_shadow_visibility.cpp",
             "renderer_frame_pipeline_graph_surfel_gi.cpp",
             "renderer_frame_pipeline_graph.cpp",
+            "graph/frame_graph_reflection_resolve.cpp",
         },
         taskGraphSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl/ecs_render/raytrace/task_graph_scene_resources.cpp", sceneGraphSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSource));
-    ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_swbvh.cpp", swBvhSource));
+    ASSERT_TRUE(ReadRendererSources(
+        repoRoot,
+        {
+            "raytrace/rt_swbvh.cpp",
+            "raytrace/rt_swbvh_helpers.h",
+            "raytrace/rt_swbvh_mesh_blas.cpp",
+            "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
+            "raytrace/rt_swbvh_mesh_build.cpp",
+            "raytrace/rt_swbvh_scene_tlas.cpp",
+            "raytrace/rt_swbvh_scene_swbvh.cpp",
+            "raytrace/rt_swbvh_bvh_infra.cpp",
+        },
+        swBvhSource
+    ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "mesh_raytracing_handoff.cpp", meshResourcesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "mesh" / "renderer_mesh_types.h", meshTypesSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "renderer_raytracing_state.h", rendererStateHeaderSource));
@@ -565,8 +592,8 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     EXPECT_TRUE(ContainsText(
         system,
         "context->stateReady = false;\n"
-        "            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
-        "            return false;"
+        "        renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();\n"
+        "        return false;"
     ));
     EXPECT_TRUE(ContainsText(
         system,
@@ -575,7 +602,7 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     EXPECT_TRUE(ContainsText(
         system,
         "if(!context->stateReady){\n"
-        "            renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();"
+        "        renderer.m_raytracingSystem.discardPreflightShadowVisibilityResources();"
     ));
     EXPECT_TRUE(ContainsText(system, "const bool acceptedStateLost ="));
     EXPECT_TRUE(ContainsText(

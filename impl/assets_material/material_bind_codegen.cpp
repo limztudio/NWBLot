@@ -46,6 +46,7 @@ namespace MaterialCookDetail{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 static constexpr u32 s_MaterialBindGeneratedSeparatorChunkRepeatCount = 8u;
 static constexpr u32 s_MaterialBindByteBitCount = 8u;
 static constexpr u64 s_MaterialBindU64LowWordMask = static_cast<u64>(Limit<u32>::s_Max);

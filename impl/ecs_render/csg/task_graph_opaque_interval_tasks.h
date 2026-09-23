@@ -50,7 +50,9 @@ struct DeferredFrameTargets;
 
 namespace ECSRenderDetail{
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Shared opaque-interval record inputs core. All opaque interval tasks carry the same material/CSG/target/ticket,
 // setup-flag, binding-snapshot, and upload-flag prefix and differ only in their trailing image-state ownership flags.

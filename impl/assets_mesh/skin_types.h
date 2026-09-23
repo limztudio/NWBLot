@@ -19,6 +19,7 @@ NWB_IMPL_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 // Number of joint/weight pairs carried by one skin influence record. This keeps the serialized CPU and GPU
 // representations in lockstep without scattering the fixed influence count.
 inline constexpr u32 s_SkinInfluenceJointCount = NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT;

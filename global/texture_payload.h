@@ -11,6 +11,8 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Shared texture-asset payload contract. Both the texture asset implementation domain (cooker, runtime codec, and loader under `impl/assets_texture/`) and the standalone `utilities/tex_conv` converter consume these payload layouts, so the single source of truth lives in the neutral `global/` domain instead of `impl/`.
 
 
@@ -81,6 +83,8 @@ namespace TextureAlphaMode{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // This is the single source of truth for texture-asset payload contracts. The converter emits these layouts while the cooker, runtime codec, and loader validate or consume them, so format constants and mip arithmetic cannot drift.
 
 

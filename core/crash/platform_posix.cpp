@@ -40,6 +40,7 @@ namespace __hidden_crash_posix{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
 // CrashRequest is fixed-size and large; keep the alternate stack comfortably above the request snapshot size.
 inline constexpr usize s_SignalStackSize = 256u * 1024u;
 inline constexpr int s_AndroidEmergencyFileMode = 0644;

@@ -306,7 +306,6 @@ inline void AabbCorners(const SIMDVector center, const SIMDVector extents, SIMDV
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 inline void ObbCorners(const SIMDVector center, const SIMDVector extents, const SIMDVector orientation, SIMDVector* outCorners)noexcept{
     SIMDVector axis0{};
     SIMDVector axis1{};
@@ -326,7 +325,6 @@ inline void ObbCorners(const SIMDVector center, const SIMDVector extents, const 
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
 
 
 inline void FrustumCorners(

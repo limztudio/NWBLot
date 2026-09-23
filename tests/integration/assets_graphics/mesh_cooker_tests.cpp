@@ -4,7 +4,6 @@
 
 #include "assets_graphics_fixture.h"
 
-
 #include <gtest/gtest.h>
 
 

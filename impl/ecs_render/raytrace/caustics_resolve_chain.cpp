@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/raytrace/caustics_resolve_chain.h>
 
-
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>

@@ -4,7 +4,6 @@
 
 #include "mesh_refresh_parse.h"
 
-
 #include <core/common/log.h>
 
 

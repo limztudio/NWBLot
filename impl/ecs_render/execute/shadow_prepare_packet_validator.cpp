@@ -3,8 +3,6 @@
 
 
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
-
-
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 

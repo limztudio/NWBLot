@@ -3,8 +3,6 @@
 
 
 #include <impl/ecs_render/execute/surfel_caustics_merge_validator.h>
-
-
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 

@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
 
-
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/ecs_render/deferred/deferred_system.h>

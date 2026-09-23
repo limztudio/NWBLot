@@ -3,8 +3,6 @@
 
 
 #include <impl/ecs_render/execute/opaque_emulation_merge_validator.h>
-
-
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 

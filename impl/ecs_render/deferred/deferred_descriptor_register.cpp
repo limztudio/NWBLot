@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/deferred/deferred_descriptor_register.h>
 
-
 #include <core/graphics/vulkan/backend.h>
 
 

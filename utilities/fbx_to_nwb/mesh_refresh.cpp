@@ -7,7 +7,6 @@
 #include "mesh_refresh_text.h"
 #include <global/text_write.h>
 
-
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
 

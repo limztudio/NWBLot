@@ -3,8 +3,6 @@
 
 
 #include <impl/ecs_render/execute/graphics_prefix_timing_resolver.h>
-
-
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 
 

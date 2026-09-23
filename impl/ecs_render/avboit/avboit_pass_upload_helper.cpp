@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 
-
 #include <core/graphics/vulkan/backend.h>
 
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>

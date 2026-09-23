@@ -4,7 +4,6 @@
 
 #include <impl/ecs_render/avboit/compute_emulation_capture.h>
 
-
 #include <core/graphics/vulkan/backend.h>
 
 

@@ -3,7 +3,6 @@
 
 
 #include "../command_line.h"
-
 #include "gather.h"
 
 #include <core/assets/gather_merge_registry.h>

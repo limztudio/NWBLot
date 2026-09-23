@@ -3,7 +3,6 @@
 
 
 #include "mesh_system.h"
-
 #include "runtime_mesh_pruning.h"
 
 #include <impl/ecs_render/kernel/arena_names.h>

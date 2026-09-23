@@ -3,9 +3,7 @@
 
 
 #include "packet_runtime_internal.h"
-
 #include "packet_recording_helpers.h"
-
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>

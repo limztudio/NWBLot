@@ -8,7 +8,6 @@
 #include <impl/ecs_render/material/material_shader_variants_private.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 #include <impl/ecs_render/shader/shader_system.h>
-
 #include <impl/assets/graphics/csg/names.h>
 #include <impl/assets_material/shader_stage_names.h>
 

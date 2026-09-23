@@ -6,9 +6,7 @@
 
 
 #include <core/graphics/api.h>
-
 #include <core/task/cpu/scheduler.h>
-
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/render_pass.h>
 

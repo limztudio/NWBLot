@@ -5,9 +5,7 @@
 #include "report.h"
 
 #include "report_dot.h"
-
 #include "report_json.h"
-
 #include "memory_report.h"
 
 #include <global/hash_utils.h>

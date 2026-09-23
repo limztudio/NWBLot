@@ -27,7 +27,6 @@
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xdg-shell-client-protocol.h>
-
 #include <cerrno>
 
 

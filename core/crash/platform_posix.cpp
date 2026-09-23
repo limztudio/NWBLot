@@ -8,7 +8,6 @@
 #include <global/process_execution.h>
 
 #include <exception>
-
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>

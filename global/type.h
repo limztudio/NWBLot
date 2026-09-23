@@ -16,7 +16,6 @@
 
 #include "type_borrow.h"
 #include "type_properties.h"
-
 #include "compile.h"
 #include "platform.h"
 

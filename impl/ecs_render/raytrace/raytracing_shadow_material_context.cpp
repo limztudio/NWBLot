@@ -5,7 +5,6 @@
 #include "raytracing_system.h"
 
 #include <impl/ecs_render/material/sampled_texture_collection.h>
-
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 

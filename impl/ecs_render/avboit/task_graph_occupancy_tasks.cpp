@@ -5,7 +5,6 @@
 #include "task_graph_occupancy_tasks.h"
 
 #include <impl/ecs_render/avboit/compute_emulation_record.h>
-
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>

@@ -5,9 +5,7 @@
 #include "material_instance.h"
 
 #include <impl/ecs_render/material/material_system.h>
-
 #include <impl/ecs_render/material/renderer_material_state.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 
 #include <core/common/log.h>

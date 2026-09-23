@@ -7,7 +7,6 @@
 
 #include "module.h"
 #include "source_mesh_streams.h"
-
 #include "skin.h"
 
 #include <core/common/log.h>

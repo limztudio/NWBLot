@@ -6,9 +6,7 @@
 
 
 #include "global.h"
-
 #include "core.h"
-
 #include "general.h"
 #include "scratch.h"
 #include "persistent.h"

@@ -30,7 +30,6 @@
 #include <tbb/queuing_rw_mutex.h>
 #include <mutex>
 #include <condition_variable>
-
 #include <semaphore>
 #include <climits>
 

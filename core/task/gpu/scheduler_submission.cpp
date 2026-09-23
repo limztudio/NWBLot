@@ -4,7 +4,6 @@
 
 #include "scheduler.h"
 #include "packet_runtime_internal.h"
-
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>

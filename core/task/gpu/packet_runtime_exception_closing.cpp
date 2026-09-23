@@ -4,7 +4,6 @@
 
 #include "packet_runtime.h"
 #include "scheduler.h"
-
 #include "task_graph.h"
 
 #include <core/common/log.h>

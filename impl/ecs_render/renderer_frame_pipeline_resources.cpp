@@ -3,10 +3,8 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/timing_names.h>
-
 #include <impl/ecs_scene/components.h>
 
 #include <core/graphics/backend_selection.h>

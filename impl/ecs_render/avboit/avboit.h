@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/shared/renderer_frame_types.h>
-
 #include <impl/assets/graphics/avboit/constants.h>
 
 

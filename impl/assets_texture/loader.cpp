@@ -5,7 +5,6 @@
 #include "loader.h"
 
 #include "texture_mip_decoder.h"
-
 #include "arena_names.h"
 
 #include <core/alloc/scratch.h>

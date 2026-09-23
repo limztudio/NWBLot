@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/csg/csg_interval_private.h>
-
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/renderer_render_state_private.h>
 #include <impl/ecs_render/mesh/mesh_system.h>

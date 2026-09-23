@@ -4,14 +4,11 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
-
 #include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>

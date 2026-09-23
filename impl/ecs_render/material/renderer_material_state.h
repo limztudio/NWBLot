@@ -6,7 +6,6 @@
 
 
 #include <impl/global.h>
-
 #include <impl/ecs_render/material/renderer_draw_types.h>
 
 #include <core/ecs/entity_id.h>

@@ -12,7 +12,6 @@
 
 #include <functional>
 #include <optional>
-
 #include <tuple>
 #include <array>
 #include <forward_list>
@@ -22,7 +21,6 @@
 #include <map>
 #include <deque>
 #include <queue>
-
 #include <memory>
 
 #include <tbb/concurrent_unordered_set.h>

@@ -7,7 +7,6 @@
 
 #include <impl/ecs_render/material/renderer_pipeline_types.h>
 #include <impl/ecs_render/mesh/object_geometry_cache.h>
-
 #include <impl/assets/graphics/mesh/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 #include <impl/ecs_mesh/runtime/mesh.h>

@@ -6,7 +6,6 @@
 
 
 #include "global.h"
-
 #include "memory.h"
 #include "report.h"
 #include "session.h"

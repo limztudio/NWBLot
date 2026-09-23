@@ -12,10 +12,8 @@
 
 
 #include <core/assets/global.h>
-
 #include <core/assets/cook_metadata.h>
 #include <core/assets/cook_paths.h>
-
 #include <core/alloc/scratch.h>
 #include <core/filesystem/volume_staging.h>
 

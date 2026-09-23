@@ -5,7 +5,6 @@
 #include "packet_recording_helpers.h"
 
 #include "packet_runtime.h"
-
 #include "task_graph.h"
 
 #include <core/graphics/backend_selection.h>

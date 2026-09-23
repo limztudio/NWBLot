@@ -3,17 +3,13 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-
 #include <impl/ecs_render/raytrace/task_graph_software_scene_refit.h>
-
 #include <impl/ecs_render/raytrace/prepared_software_bvh_graph_resources.h>
 #include <impl/ecs_render/raytrace/shadow_prepare_geometry_resources.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>

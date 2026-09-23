@@ -3,7 +3,6 @@
 
 
 #include "backend.h"
-
 #include "timer_query_detail.h"
 
 #include <core/common/log.h>

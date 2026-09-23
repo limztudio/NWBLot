@@ -3,7 +3,6 @@
 
 
 #include "runtime_cache.h"
-
 #include "arena_names.h"
 
 #include <core/assets/manager.h>

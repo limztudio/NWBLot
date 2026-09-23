@@ -3,7 +3,6 @@
 
 
 #include "compiled_graph.h"
-
 #include "task_graph.h"
 
 #include <global/termination.h>

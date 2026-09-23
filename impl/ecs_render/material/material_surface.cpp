@@ -6,7 +6,6 @@
 #include "sampled_texture_collection.h"
 
 #include <impl/assets_material/asset.h>
-
 #include <impl/ecs_render/material/renderer_material_state.h>
 
 #include <core/assets/manager.h>

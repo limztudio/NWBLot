@@ -8,7 +8,6 @@
 
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/material/material_instance.h>
-
 #include <impl/ecs_scene/components.h>
 
 

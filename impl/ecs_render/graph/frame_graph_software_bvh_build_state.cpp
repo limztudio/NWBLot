@@ -5,7 +5,6 @@
 #include <impl/ecs_render/graph/frame_graph_software_bvh_build_state.h>
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 

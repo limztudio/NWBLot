@@ -5,7 +5,6 @@
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 
 #include <impl/ecs_render/mesh/mesh_system.h>
-
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/backend_selection.h>

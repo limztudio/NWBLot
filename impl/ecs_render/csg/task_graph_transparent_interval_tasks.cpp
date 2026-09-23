@@ -8,7 +8,6 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
-
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/backend_selection.h>

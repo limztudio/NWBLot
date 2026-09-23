@@ -8,7 +8,6 @@
 #include "global.h"
 
 #include <core/task/cpu/scheduler.h>
-
 #include <core/graphics/api.h>
 
 

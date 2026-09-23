@@ -6,7 +6,6 @@
 
 
 #include "../bit.h"
-
 #include "type.h"
 #include "constant.h"
 

@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <impl/ecs_render/reflection/reflection_system.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>

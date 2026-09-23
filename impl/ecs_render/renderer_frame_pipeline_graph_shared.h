@@ -6,7 +6,6 @@
 
 
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
-
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 
 #include <core/task/gpu/task_graph.h>

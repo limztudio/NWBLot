@@ -6,7 +6,6 @@
 
 
 #include "packet_runtime.h"
-
 #include "task_graph.h"
 
 #include <core/task/gpu/capture/command_ir.h>

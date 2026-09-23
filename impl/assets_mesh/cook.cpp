@@ -15,7 +15,6 @@
 #include "cook_stream_reorder.h"
 #include "cook_ref_encoding.h"
 #include "cook_meshlets.h"
-
 #include "arena_names.h"
 #include "binary_payload_io.h"
 #include "binary_payload.h"

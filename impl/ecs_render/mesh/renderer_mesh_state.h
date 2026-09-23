@@ -6,10 +6,8 @@
 
 
 #include <impl/global.h>
-
 #include <impl/ecs_render/mesh/renderer_mesh_types.h>
 #include <impl/ecs_render/shared/renderer_frame_bindings.h>
-
 #include <impl/assets/graphics/mesh/runtime_constants.h>
 
 

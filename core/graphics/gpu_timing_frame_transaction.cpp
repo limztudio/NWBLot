@@ -3,7 +3,6 @@
 
 
 #include "gpu_timing.h"
-
 #include "backend_selection.h"
 
 #include <global/exception.h>

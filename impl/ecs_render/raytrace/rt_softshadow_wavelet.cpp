@@ -3,7 +3,6 @@
 
 
 #include <impl/ecs_render/raytrace/soft_shadow_wavelet.h>
-
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 

@@ -8,7 +8,6 @@
 #include <impl/ecs_render/csg/csg_graph_resource_snapshot.h>
 #include <impl/ecs_render/csg/renderer_csg_types.h>
 #include <impl/ecs_render/shared/renderer_frame_types.h>
-
 #include <impl/ecs_csg/frame_state.h>
 
 

@@ -3,15 +3,11 @@
 
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
-
 #include <impl/ecs_render/material/generated_geometry_state.h>
 #include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
-
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>
@@ -34,7 +30,6 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>

@@ -12,7 +12,6 @@
 
 
 #include <core/assets/global.h>
-
 #include <core/alloc/scratch.h>
 #include <core/metascript/value.h>
 

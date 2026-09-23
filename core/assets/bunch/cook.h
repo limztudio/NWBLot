@@ -12,7 +12,6 @@
 
 
 #include <core/assets/expanded_metadata.h>
-
 #include <core/metascript/parser.h>
 
 

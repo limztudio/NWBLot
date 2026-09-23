@@ -3,7 +3,6 @@
 
 
 #include <global/cpu_topology.h>
-
 #include <global/platform.h>
 #include <global/simplemath.h>
 #include <global/thread.h>

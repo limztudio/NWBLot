@@ -6,7 +6,6 @@
 
 #include <core/telemetry/frame_graph_registry.h>
 #include <core/telemetry/session.h>
-
 #include <core/task/gpu/compiler_internal.h>
 
 #include <tests/common/test_context.h>

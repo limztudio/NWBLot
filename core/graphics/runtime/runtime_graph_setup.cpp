@@ -7,7 +7,6 @@
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
-
 #include <core/graphics/rhi/queue_sharing.h>
 
 

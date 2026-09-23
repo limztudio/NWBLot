@@ -6,9 +6,7 @@
 
 
 #include "report.h"
-
 #include "report_dot.h"
-
 #include "memory_report.h"
 
 

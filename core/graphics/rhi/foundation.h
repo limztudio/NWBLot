@@ -6,7 +6,6 @@
 
 
 #include <core/global.h>
-
 #include <core/common/module.h>
 #include <core/alloc/module.h>
 

@@ -6,7 +6,6 @@
 
 
 #include "global.h"
-
 #include "report.h"
 
 

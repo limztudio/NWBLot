@@ -14,9 +14,7 @@
 #include "module.h"
 
 #include <core/task/cpu/scheduler.h>
-
 #include <core/alloc/scratch.h>
-
 #include <core/common/log.h>
 #include <core/metascript/parser.h>
 

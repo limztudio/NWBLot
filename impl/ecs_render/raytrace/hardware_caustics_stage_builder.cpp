@@ -12,7 +12,6 @@
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_resolve_chain.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
-
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 
 

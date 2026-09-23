@@ -6,10 +6,8 @@
 
 
 #include <core/global.h>
-
 #include <core/task/cpu/scheduler.h>
 #include <core/task/gpu/scheduler.h>
-
 #include <core/common/module.h>
 #include <core/input/module.h>
 #include <core/graphics/runtime/runtime.h>

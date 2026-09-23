@@ -18,10 +18,8 @@
 #include <impl/ecs_render/reflection/task_graph_reflection.h>
 #include <impl/ecs_render/avboit/task_graph_refraction_capture.h>
 #include <impl/ecs_render/avboit/generated_geometry_reuse.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
-
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
 
 #include <core/task/gpu/capture/command_ir.h>
@@ -45,7 +43,6 @@
 #include <impl/ecs_render/material/task_graph_opaque_compute_emulation_plan.h>
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_emulation_plan.h>
-
 #include <impl/ecs_render/mesh/task_graph_prefix_tasks.h>
 #include <impl/ecs_render/material/task_graph_opaque_compute_tasks.h>
 #include <impl/ecs_render/csg/task_graph_opaque_compute_tasks.h>
@@ -56,7 +53,6 @@
 #include <impl/ecs_render/deferred/lighting_stage_builder.h>
 #include <impl/ecs_render/deferred/frame_tail_builder.h>
 #include <impl/ecs_render/raytrace/hardware_caustics_stage_builder.h>
-
 #include <impl/ecs_render/avboit/task_graph_compute_emulation_plan.h>
 #include <impl/ecs_render/avboit/task_graph_occupancy_tasks.h>
 #include <impl/ecs_render/avboit/task_graph_extinction_integration_tasks.h>

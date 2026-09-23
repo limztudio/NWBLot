@@ -18,10 +18,8 @@
 #include <core/assets/volume/cooked_object_cache.h>
 #include <core/assets/volume/pack_manifest.h>
 #include <core/assets/volume/volume_prepare_registry.h>
-
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
-
 #include <core/common/log.h>
 
 

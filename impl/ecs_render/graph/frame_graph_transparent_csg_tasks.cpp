@@ -7,7 +7,6 @@
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>

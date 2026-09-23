@@ -17,7 +17,6 @@
 #include <impl/assets_shader/asset.h>
 #include <impl/assets_shader/cook.h>
 #include <core/assets/volume/volume_prepare_registry.h>
-
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>

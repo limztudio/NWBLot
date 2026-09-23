@@ -6,7 +6,6 @@
 
 #include <impl/ecs_render/material/material_system.h>
 #include <impl/ecs_render/csg/csg_system.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/avboit/avboit_pass_upload_helper.h>
 #include <impl/ecs_render/avboit/material_upload_builder.h>

@@ -15,7 +15,6 @@
 
 #include <core/assets/paths.h>
 #include <core/metascript/parser.h>
-
 #include <core/common/log.h>
 #include <global/hash_utils.h>
 #include <global/process_execution.h>

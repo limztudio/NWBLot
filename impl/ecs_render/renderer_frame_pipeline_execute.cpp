@@ -9,11 +9,9 @@
 #include <impl/ecs_render/execute/shadow_prepare_packet_validator.h>
 #include <impl/ecs_render/execute/shadow_visibility_merge_validator.h>
 #include <impl/ecs_render/execute/surfel_caustics_merge_validator.h>
-
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/shared/renderer_scene_private.h>
-
 #include <impl/ecs_scene/components.h>
 
 #include <core/graphics/backend_selection.h>

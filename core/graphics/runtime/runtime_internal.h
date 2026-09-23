@@ -8,7 +8,6 @@
 #include "runtime.h"
 
 #include <core/task/cpu/scheduler.h>
-
 #include <core/task/gpu/task_desc.h>
 
 

@@ -3,7 +3,6 @@
 
 
 #include "build.h"
-
 #include "../command_line.h"
 
 #include <core/assets/paths.h>

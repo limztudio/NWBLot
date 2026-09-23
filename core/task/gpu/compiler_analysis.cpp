@@ -3,7 +3,6 @@
 
 
 #include "compiler_analysis_internal.h"
-
 #include "compiler_internal.h"
 
 #include <global/hash_utils.h>

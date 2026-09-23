@@ -11,7 +11,6 @@
 #include "material_validation.h"
 
 #include <core/graphics/shader_stage_names.h>
-
 #include <core/common/log.h>
 
 

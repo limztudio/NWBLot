@@ -3,7 +3,6 @@
 
 
 #include "system.h"
-
 #include "runtime_cache.h"
 #include "resource_names.h"
 #include "skin_payload.h"

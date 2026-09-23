@@ -7,7 +7,6 @@
 #include <core/assets/input_list.h>
 #include <core/assets/volume/asset_volume_writer.h>
 #include <core/assets/volume/built_asset.h>
-
 #include <core/common/log.h>
 
 

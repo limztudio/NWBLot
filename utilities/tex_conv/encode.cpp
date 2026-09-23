@@ -3,7 +3,6 @@
 
 
 #include "module.h"
-
 #include "encode_backend.h"
 
 #include <core/common/log.h>

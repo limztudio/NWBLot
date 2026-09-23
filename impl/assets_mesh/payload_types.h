@@ -6,7 +6,6 @@
 
 
 #include "skin_types.h"
-
 #include "meshlet_constants.h"
 
 

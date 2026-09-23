@@ -598,7 +598,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
 
     if(!m_rayTracingState.m_hwCausticDispatchLogged){
         m_rayTracingState.m_hwCausticDispatchLogged = true;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
             , static_cast<u64>(photonCount)
             , static_cast<u64>(temporalPhaseCount)
             , static_cast<u64>(s_CausticHwPhotonCount)

@@ -90,7 +90,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             failed = true;
             return false;
         }
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({})"),
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created refraction resolve pipeline ({})"),
             hardware ? NWB_TEXT("hardware ray query") : NWB_TEXT("screen space"));
         return true;
     };

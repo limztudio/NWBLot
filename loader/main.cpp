@@ -200,12 +200,7 @@ bool LoadShaderArchiveRecords(
 }
 
 void AddDebugCommandLineOptions(CLI::App& app, LoaderOptions& options){
-#if !defined(NWB_FINAL)
     app.add_flag("--gpudbg", options.enableGpuDebug, "Enable graphics backend validation layer");
-#else
-    static_cast<void>(app);
-    static_cast<void>(options);
-#endif
 }
 
 bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOptions& options){
@@ -225,18 +220,18 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: forcing SDR presentation"));
     }
 
-#if !defined(NWB_FINAL)
     if(options.enableGpuDebug){
+#if !defined(NWB_FINAL)
         if(!graphics.setDebugRuntimeEnabled(true)){
             NWB_LOGGER_FATAL(NWB_TEXT("Loader: GPU debug runtime must be enabled before graphics initialization"));
             return false;
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation enabled"));
-    }
 #else
-    static_cast<void>(graphics);
-    static_cast<void>(options);
+        // Final builds omit GPU validation; accept the flag so shared smoke invocations run unchanged without it.
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Loader: GPU debug validation unavailable in final builds; continuing without validation"));
 #endif
+    }
 
     return true;
 }

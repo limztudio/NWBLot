@@ -218,7 +218,7 @@ struct DispatchTask{
         payload.feedbackReservation.accept(token, sceneReady);
         if(payload.stage == DispatchStage::Hardware && hardware){
             if(payload.hardwareDispatchLogged && !*payload.hardwareDispatchLogged){
-                NWB_LOGGER_INFO(NWB_TEXT("Reflection resolve: hardware"));
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: hardware"));
                 *payload.hardwareDispatchLogged = true;
             }
         }
@@ -229,7 +229,7 @@ struct DispatchTask{
                 const tchar* route = screen ? NWB_TEXT("screen-space") : NWB_TEXT("environment");
                 if(mode == NWB_REFLECTION_MODE_DISABLED)
                     route = NWB_TEXT("disabled");
-                NWB_LOGGER_INFO(NWB_TEXT("Reflection resolve: {}"), route);
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Reflection resolve: {}"), route);
                 *payload.fallbackDispatchLogged = true;
             }
         }

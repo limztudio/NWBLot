@@ -111,7 +111,7 @@ bool GraphicsRuntime::backBufferResized(){
         invalidateRenderPassResources();
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GraphicsRuntime: Back buffer resized to {}x{}"), m_swapChainState.backBufferWidth, m_swapChainState.backBufferHeight);
     return true;
 }
 

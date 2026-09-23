@@ -229,7 +229,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         m_rayTracingState.m_surfelTracePipelineFailed = true;
         return false;
     }
-    NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
     return true;
 }
 

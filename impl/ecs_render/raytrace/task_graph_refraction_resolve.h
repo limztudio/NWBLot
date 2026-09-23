@@ -56,7 +56,7 @@ struct RefractionResolveGraphTask{
         const bool usedHardware = payload.resources.usesHardwareTrace && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         bool* const dispatchLogged = payload.resources.usesHardwareTrace && !usedHardware ? payload.screenFallbackDispatchLogged : payload.dispatchLogged;
         if(dispatchLogged && !*dispatchLogged){
-            NWB_LOGGER_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AVBOIT refraction resolve: {}"), usedHardware ? NWB_TEXT("hardware") : NWB_TEXT("screen-space"));
             *dispatchLogged = true;
         }
     }

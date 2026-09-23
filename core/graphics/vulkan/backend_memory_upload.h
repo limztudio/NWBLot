@@ -348,7 +348,7 @@ public:
     }
     // Resolves the state a typed task-graph import may inherit from live retained/native provenance.
     [[nodiscard]] ResourceStates::Mask resolveTaskGraphImportInitialState()const noexcept;
-    virtual Object getNativeHandle(ObjectType objectType) override;
+    virtual Object getNativeHandle(ObjectType objectType)override;
 
 
 private:

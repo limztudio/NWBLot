@@ -92,7 +92,7 @@ namespace RayTracingSurfelGiTaskDetail{
     struct SurfelGiTraceGraphTask;
     struct SurfelGiResolveGraphTask;
     struct SurfelGiGraphTask;
-}
+};
 
 namespace RayTracingShadowVisibilityTaskDetail{
     struct ShadowVisibilityOpaqueGraphTask;

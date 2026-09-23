@@ -29,8 +29,8 @@ namespace __hidden_assets_graphics_caustic_refract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU mirror of caustic/refract.slangi's nwbCausticRefract -- the SAME explicit Snell form the shader emits (k = 1 - eta*eta*(1 - cosI*cosI); k < 0 -> float3(0); else eta*i - (eta*cosI + sqrt(k))*n). 
-// It deliberately reimplements the formula without calling Vector3Refract so that a divergence between this formula and the shader's, or a bug in the formula itself, fails the test. 
+// CPU mirror of caustic/refract.slangi's nwbCausticRefract -- the SAME explicit Snell form the shader emits (k = 1 - eta*eta*(1 - cosI*cosI); k < 0 -> float3(0); else eta*i - (eta*cosI + sqrt(k))*n).
+// It deliberately reimplements the formula without calling Vector3Refract so that a divergence between this formula and the shader's, or a bug in the formula itself, fails the test.
 // The oracle it is checked against is Vector3Refract (global/math/vector.h), the runtime path RefractV backs, so the mirror, the shader, and the engine math all agree on the same definition including the TIR-returns-zero branch.
 static SIMDVector CausticRefractCpuMirrorVector(const SIMDVector incident, const SIMDVector normal, const SIMDVector eta){
     const SIMDVector cosI = Vector3Dot(incident, normal);

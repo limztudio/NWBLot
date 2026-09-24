@@ -36,6 +36,7 @@ struct NwbMeshViewBuffer{
 #define g_NwbMeshCameraPosition g_NwbMeshViewBuffer.g_NwbMeshCameraPosition
 #define g_NwbMeshFrustumPlanes g_NwbMeshViewBuffer.g_NwbMeshFrustumPlanes
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

@@ -13,6 +13,8 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // GI ray-sampling math: a spherical-Fibonacci direction sequence + a per-frame R2 rotation. Shared by any GI producer that casts a deterministic low-discrepancy ray set with one rotation per frame (the surfel trace folds a ray set to the upper hemisphere via the surfel-normal TBN). Grid-free -- no probe volume, no atlas, no constant buffer.
 
 

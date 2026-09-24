@@ -7,6 +7,8 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its heap-selected trace-context uniform selects the scene BVH / instance and shadow material buffers from the global StorageBuffer heap.
 // gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade + NwbGiTraceHit, so a red wall bounces red identically.
 // The producer's own shader supplies the OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
@@ -67,6 +69,8 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // Heap-selected SW scene records
 
 // The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers. This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.

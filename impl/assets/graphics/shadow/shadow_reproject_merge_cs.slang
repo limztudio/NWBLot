@@ -142,8 +142,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // Clamp history to the current neighbourhood. Visibility luma stays in (0, 1), so half math is sufficient here.
         const half lumaCur = half(nwbLuminance(cur));
         const half lumaHistRaw = half(nwbLuminance(hist));
-        const float temporalDelta = lumaCur - lumaHistRaw;
-        const float temporalDeltaAbs = abs(temporalDelta);
+        const half temporalDelta = lumaCur - lumaHistRaw;
+        const half temporalDeltaAbs = abs(temporalDelta);
         float3 mu = float3(0.0, 0.0, 0.0);
         float3 mu2 = float3(0.0, 0.0, 0.0);
         float lumaM1 = 0.0;
@@ -167,7 +167,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 const half sl = half(nwbLuminance(float3(s)));
                 lumaM1 += float(sl);
                 lumaM2 += float(sl * sl);
-                const float tapDelta = sl - lumaHistRaw;
+                const half tapDelta = sl - lumaHistRaw;
                 if(
                     supportTapInBounds
                     && temporalDeltaAbs > 0.0

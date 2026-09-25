@@ -201,8 +201,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                         rgbWeightSum += rgbWeight;
                     }
                 }
-                const float opaque = opaqueWeightSum > half(0.0h) ? opaqueSum / opaqueWeightSum : 1.0;
-                const float3 rgb = rgbWeightSum > half(0.0h) ? rgbSum / rgbWeightSum : float3(1.0);
+                const half opaque = opaqueWeightSum > half(0.0h) ? half(opaqueSum / float(opaqueWeightSum)) : half(1.0);
+                const half3 rgb = rgbWeightSum > half(0.0h) ? half3(rgbSum / float(rgbWeightSum)) : half3(1.0h);
                 nwbCombinedShadowWaveletStore(pixel, slot, opaque, rgb);
             }
         }

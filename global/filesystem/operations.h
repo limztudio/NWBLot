@@ -106,7 +106,8 @@ inline void SetValueTooLargeError(ErrorCode& outError)noexcept{
 
 template<typename ArenaT>
 [[nodiscard]] inline bool IsRootComponent(const Path<ArenaT>& path)noexcept{
-    return path.size() != 0u && path.size() == GlobalFilesystemPathDetail::RootDirectoryLength(path.native());
+    const usize pathSize = path.size();
+    return pathSize != 0u && pathSize == GlobalFilesystemPathDetail::RootDirectoryLength(path.native());
 }
 
 

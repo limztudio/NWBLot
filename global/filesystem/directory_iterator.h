@@ -116,7 +116,7 @@ private:
             }
 
             const AStringView fileName(entry->d_name);
-            if(fileName == "." || fileName == "..")
+            if(GlobalFilesystemPathDetail::IsDot(fileName) || GlobalFilesystemPathDetail::IsDotDot(fileName))
                 continue;
             this->m_entries.emplace_back(path / fileName);
         }

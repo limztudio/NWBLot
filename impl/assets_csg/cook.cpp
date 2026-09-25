@@ -152,7 +152,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     for(const auto& component : includePathValue){
         ScratchString componentText = PathToString(scratchArena, component);
         CanonicalizeTextInPlace(componentText);
-        if(componentText.empty() || componentText == "." || componentText == ".."){
+        if(componentText.empty() || GlobalFilesystemPathDetail::IsDot(AStringView(componentText.data(), componentText.size())) || GlobalFilesystemPathDetail::IsDotDot(AStringView(componentText.data(), componentText.size()))){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' has invalid include path '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(fieldName)

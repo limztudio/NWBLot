@@ -99,7 +99,7 @@ template<typename ArenaT>
         }
 
         const AStringView name(entry->d_name);
-        if(name == "." || name == "..")
+        if(GlobalFilesystemPathDetail::IsDot(name) || GlobalFilesystemPathDetail::IsDotDot(name))
             continue;
 
         const Path<ArenaT> child = path / name;

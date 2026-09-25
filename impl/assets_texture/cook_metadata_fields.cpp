@@ -100,9 +100,7 @@ using TextureFormat::s_TextureDataExtension;
         dataFileName.empty()
         || dataFileName == "."
         || dataFileName == ".."
-        || dataFileName.find('/') != AStringView::npos
-        || dataFileName.find('\\') != AStringView::npos
-        || dataFileName.find(':') != AStringView::npos
+        || dataFileName.find_first_of("/\\:") != AStringView::npos
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a sidecar filename without path components")
             , StringConvert(s_DiagnosticPrefix)

@@ -61,6 +61,9 @@ inline constexpr f32 s_MaxF32 = Limit<f32>::s_Max;
 inline constexpr f64 s_MinF64 = Limit<f64>::s_Min;
 inline constexpr f64 s_MaxF64 = Limit<f64>::s_Max;
 
+inline constexpr usize s_BitsPerByte = 8u;
+inline constexpr usize s_BitsPerU64 = 64u;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,16 +82,16 @@ template<typename T>
 
     constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);
     if constexpr(signedType){
-        constexpr usize bitCount = sizeof(T) * 8u;
-        constexpr u64 maxValue = bitCount >= 64u
+        constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
+        constexpr u64 maxValue = bitCount >= s_BitsPerU64
             ? (Limit<u64>::s_Max >> 1u)
             : ((u64(1) << (bitCount - 1u)) - 1u)
         ;
         return value <= maxValue;
     }
     else{
-        constexpr usize bitCount = sizeof(T) * 8u;
-        constexpr u64 maxValue = bitCount >= 64u
+        constexpr usize bitCount = sizeof(T) * s_BitsPerByte;
+        constexpr u64 maxValue = bitCount >= s_BitsPerU64
             ? Limit<u64>::s_Max
             : ((u64(1) << bitCount) - 1u)
         ;

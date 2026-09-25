@@ -128,7 +128,12 @@ private:
 
 
 private:
-    static constexpr usize s_QueueCount = 12u;
+    static constexpr usize s_PrioritySlotCount = 3u;
+    static constexpr usize s_CostSlotCount = 4u;
+    static constexpr usize s_CostValueCount = 3u;
+    static constexpr usize s_AffinitySlotCount = 3u;
+    static constexpr usize s_MainThreadTargetSlot = 3u;
+    static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
     static constexpr usize s_ChunksPerWorker = 4u;
     inline static thread_local Execution* s_execution = nullptr;
 
@@ -273,8 +278,8 @@ private:
     Vector<CpuTaskProfileEvent, Alloc::GlobalArena> m_profileEvents;
     Vector<ReadyProfile, Alloc::GlobalArena> m_readyProfiles;
     ReadyQueue m_ready[s_QueueCount];
-    u32 m_readyWorkerCosts[3u]{};
-    u32 m_sleepingWorkers[3u]{};
+    u32 m_readyWorkerCosts[s_CostValueCount]{};
+    u32 m_sleepingWorkers[s_AffinitySlotCount]{};
     u32 m_freeNode = TaskHandle::s_InvalidIndex;
     u32 m_workerCount = 0u;
     u32 m_busyPerformance = 0u;
@@ -286,7 +291,7 @@ private:
     u64 m_dispatchCount = 0u;
     mutable Futex m_mutex;
     ConditionVariableAny m_changed;
-    ConditionVariableAny m_workerChanged[3u];
+    ConditionVariableAny m_workerChanged[s_AffinitySlotCount];
     usize m_outstanding = 0u;
     bool m_aborting = false;
     CpuTaskSchedulerStatistics m_statistics;

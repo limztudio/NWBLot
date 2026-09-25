@@ -19,7 +19,7 @@ u32 CpuTaskScheduler::workerWakeMaskLocked()const noexcept{
     const bool heavy = m_readyWorkerCosts[CpuTaskCost::Heavy] != 0u;
     const bool light = m_readyWorkerCosts[CpuTaskCost::Light] != 0u;
     u32 wakeMask = 0u;
-    for(u32 affinity = 0u; affinity < 3u; ++affinity){
+    for(u32 affinity = 0u; affinity < s_AffinitySlotCount; ++affinity){
         if(m_sleepingWorkers[affinity] == 0u)
             continue;
         const bool heavyEligible = affinity != CpuAffinity::Efficiency || m_busyPerformance >= m_statistics.performanceWorkers;
@@ -32,7 +32,7 @@ u32 CpuTaskScheduler::workerWakeMaskLocked()const noexcept{
 
 void CpuTaskScheduler::notifyWorkers(const u32 wakeMask)noexcept{
     // Masks compute under the queue mutex; claimed tasks wake the next parked worker first.
-    for(u32 affinity = 0u; affinity < 3u; ++affinity){
+    for(u32 affinity = 0u; affinity < s_AffinitySlotCount; ++affinity){
         if((wakeMask & (1u << affinity)) != 0u)
             m_workerChanged[affinity].notify_one();
     }

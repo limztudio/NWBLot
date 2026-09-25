@@ -85,8 +85,8 @@ CpuTaskSchedulerConfig CpuTaskScheduler::workerConfig(const u32 workerCount){
 }
 
 usize CpuTaskScheduler::queueIndex(const CpuTaskOptions& options)noexcept{
-    const usize target = options.target == CpuTaskTarget::MainThread ? 3u : static_cast<usize>(options.cost);
-    return static_cast<usize>(options.priority) * 4u + target;
+    const usize target = options.target == CpuTaskTarget::MainThread ? s_MainThreadTargetSlot : static_cast<usize>(options.cost);
+    return static_cast<usize>(options.priority) * s_CostSlotCount + target;
 }
 
 
@@ -388,11 +388,11 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::claimLocked(
     const u64 dispatch = m_dispatchCount;
     const usize firstPriority = dispatch % __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_BackgroundAdmissionTick ? 2u : (dispatch % __hidden_cpu_scheduler_fairness::s_NormalAdmissionPeriod == __hidden_cpu_scheduler_fairness::s_NormalAdmissionTick ? 1u : 0u);
     const usize preferredCost = affinity == CpuAffinity::Efficiency ? CpuTaskCost::Light : CpuTaskCost::Heavy;
-    const usize costs[4] = { 3u, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? 2u : 1u };
-    for(usize pass = 0u; pass < 3u; ++pass){
+    const usize costs[s_CostSlotCount] = { s_MainThreadTargetSlot, preferredCost, 0u, preferredCost == CpuTaskCost::Heavy ? static_cast<usize>(CpuTaskCost::Light) : static_cast<usize>(CpuTaskCost::Heavy) };
+    for(usize pass = 0u; pass < s_PrioritySlotCount; ++pass){
         const usize priority = pass == 0u ? firstPriority : (pass <= firstPriority ? pass - 1u : pass);
         for(const usize cost : costs){
-            const usize index = priority * 4u + cost;
+            const usize index = priority * s_CostSlotCount + cost;
             ReadyQueue& queue = m_ready[index];
             if(queue.head == TaskHandle::s_InvalidIndex || !queueEligible(index, affinity, mainThread, cooperative))
                 continue;
@@ -496,8 +496,8 @@ bool CpuTaskScheduler::queueEligible(
     const bool mainThread,
     const bool cooperative
 )const noexcept{
-    const usize cost = queue % 4u;
-    if(cost == 3u)
+    const usize cost = queue % s_CostSlotCount;
+    if(cost == s_MainThreadTargetSlot)
         return mainThread;
     if(mainThread && m_workerCount != 0u && !cooperative)
         return false;

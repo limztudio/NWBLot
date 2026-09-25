@@ -195,18 +195,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // Reduce history at temporal edges after removing local noise. Visibility luma stays in (0, 1), so half math is sufficient here.
         const half lumaHist = half(nwbLuminance(histClamped));
         const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
-        const float edgeSignal = temporalChangeCoherent
-            ? max(0.0, abs(lumaCur - lumaHist) - NWB_SHADOW_TEMPORAL_NOISE_SLACK * sigmaLuma)
-            : 0.0
+        // Edge signal, gradient, and effective history count feed only the (0, 1) saturate below; variance
+        // accumulators above and the float4 moments-store count below stay on float. Widen only at those uses.
+        const half edgeSignal = temporalChangeCoherent
+            ? max(half(0.0h), abs(lumaCur - lumaHist) - half(NWB_SHADOW_TEMPORAL_NOISE_SLACK) * half(sigmaLuma))
+            : half(0.0h)
         ;
-        const float tempGrad = edgeSignal / max(max(lumaCur, lumaHist), 1e-3);
-        const float nEff = n * saturate(1.0 - NWB_SHADOW_TEMPORAL_ANTILAG * tempGrad);
+        const half tempGrad = edgeSignal / max(max(lumaCur, lumaHist), half(0.001h));
+        const half nEff = half(n) * saturate(half(1.0h) - half(NWB_SHADOW_TEMPORAL_ANTILAG) * tempGrad);
 
         // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded
         // factors, so half arithmetic is sufficient here.
-        const half alpha = half(max(1.0 / (nEff + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN));
+        const half alpha = half(max(1.0 / (float(nEff) + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN));
         const half3 outVis = half3(lerp(histClamped, cur, float(alpha)));
-        const float nNext = min(nEff + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
+        const float nNext = min(float(nEff) + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);
 
         // Integrate current-sample luminance moments with the same alpha.
         const half m1 = half(lerp(m1Prev, lumaCur, float(alpha)));

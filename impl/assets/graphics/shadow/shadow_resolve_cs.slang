@@ -120,9 +120,10 @@ half4 nwbShadowResolveGeomAtHalf(const int2 halfTexel){
 #define NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT (NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)
 
 // Quadratic B-spline weights preserve affine signals and vanish as taps leave the rounded three-sample support.
-float3 nwbShadowResolveSpatialWeights(const float offset){
-    const float2 side = float2(0.5 - offset, 0.5 + offset);
-    return float3(0.5 * side.x * side.x, 0.75 - offset * offset, 0.5 * side.y * side.y);
+// The offset is src-round(src) in [-0.5, 0.5], so every weight lands in [0, 0.75]; half math is sufficient here.
+half3 nwbShadowResolveSpatialWeights(const half offset){
+    const half2 side = half2(half(0.5h) - offset, half(0.5h) + offset);
+    return half3(half(0.5h) * side.x * side.x, half(0.75h) - offset * offset, half(0.5h) * side.y * side.y);
 }
 
 half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapOct){
@@ -260,8 +261,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float2 src = float2(pixel) / float(NWB_SW_SHADOW_SOFT_FACTOR);
         const int2 baseTexel = int2(round(src));
         const float2 offset = src - float2(baseTexel);
-        const float3 weightsX = nwbShadowResolveSpatialWeights(offset.x);
-        const float3 weightsY = nwbShadowResolveSpatialWeights(offset.y);
+        const half3 weightsX = nwbShadowResolveSpatialWeights(half(offset.x));
+        const half3 weightsY = nwbShadowResolveSpatialWeights(half(offset.y));
 
         const half3 centerWorldSample = half3(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
         const half3 centerNormalSample = half3(NwbHeapSampledImage2D(g_NwbShadowResolvePushConstants.normalSlot).Load(int3(fullTexel, 0)).xyz);
@@ -285,8 +286,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const uint tapBit = 1u << tapIndex;
-                const float spatialWeight = weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
-                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS];
+                // Widen the (0, 1) bounded half product at the float regression-accumulator boundary.
+                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
+                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
                 spatialWeights[tapIndex] = spatialWeight;
                 if(spatialWeight <= 0.0)
                     continue;

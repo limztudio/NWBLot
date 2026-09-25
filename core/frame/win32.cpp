@@ -378,8 +378,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         switch(uMsg){
         case WM_PAINT: {
             bool ret = false;
-            if(auto hdc = BeginPaint(hwnd, &ps)){
-                static_cast<void>(hdc);
+            if(BeginPaint(hwnd, &ps)){
                 ret = frame->render();
                 EndPaint(hwnd, &ps);
             }

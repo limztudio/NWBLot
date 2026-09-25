@@ -145,7 +145,7 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
     const int result = Common::InvokeTerminalEntry<Failure>([&]()->int{
         scheduler.parallelFor(0u, 1u, 1u, [&](usize){
             EXPECT_TRUE(scheduler.submit([&, capture = Retirement(retirements)](){
-                static_cast<void>(capture);
+                EXPECT_TRUE(capture.count != nullptr);
                 ++callbacks;
             }).valid());
             throw Failure{ 73 };

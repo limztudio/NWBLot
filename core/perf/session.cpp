@@ -46,7 +46,11 @@ void Session::ensureMemoryScopes(){
             ? MemorySource::HeapBacking
             : MemorySource::Arena
         ;
-        static_cast<void>(m_memory.registerScope(snapshot.ownerName, source));
+        const MemoryScopeId scope = m_memory.registerScope(snapshot.ownerName, source);
+        if(!scope.valid()){
+            NWB_ASSERT(false);
+            continue;
+        }
     }
 }
 

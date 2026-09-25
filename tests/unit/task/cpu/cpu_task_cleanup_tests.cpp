@@ -81,14 +81,14 @@ TEST(CpuTaskCleanupTests, NormalDestructorsCompleteTasksBeforeRetiringTheirCaptu
     {
         CpuTaskScheduler scheduler(0u);
         const auto task = scheduler.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
         });
         EXPECT_TRUE(task.valid());
         {
             CpuTaskScope scope(scheduler);
             const auto scopedTask = scope.submit([&, probe = RetirementProbe(retirements)](){
-                static_cast<void>(probe);
+                EXPECT_TRUE(probe.retirements != nullptr);
                 ++callbacks;
             });
             EXPECT_TRUE(scopedTask.valid());
@@ -108,12 +108,12 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScheduler scheduler(0u);
         EXPECT_TRUE(scheduler.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 17 };
         }, { .target = CpuTaskTarget::MainThread }).valid());
         EXPECT_TRUE(scheduler.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 29 };
         }).valid());
@@ -137,12 +137,12 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
         EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 37 };
         }, { .target = CpuTaskTarget::MainThread }).valid());
         EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 41 };
         }).valid());
@@ -165,12 +165,12 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope scope(scheduler);
         EXPECT_TRUE(scheduler.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 53 };
         }, { .target = CpuTaskTarget::MainThread }).valid());
         EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             ++callbacks;
             throw TerminalTaskError{ 59 };
         }).valid());
@@ -199,7 +199,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     Atomic<bool> expired{ false };
     u32 canceledCallbacks = 0u;
     EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-        static_cast<void>(probe);
+        EXPECT_TRUE(probe.retirements != nullptr);
         started.store(true, MemoryOrder::release);
         if(!WaitUntil(released))
             expired.store(true, MemoryOrder::release);
@@ -207,7 +207,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     }).valid());
     EXPECT_TRUE(WaitUntil(started));
     EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-        static_cast<void>(probe);
+        EXPECT_TRUE(probe.retirements != nullptr);
         ++canceledCallbacks;
         throw TerminalTaskError{ 61 };
     }, { .target = CpuTaskTarget::MainThread }).valid());
@@ -297,7 +297,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
     const int result = InvokeTerminalEntry<TerminalTaskError>([&]()->int{
         CpuTaskScope scope(scheduler);
         EXPECT_TRUE(scope.submit([&, probe = RetirementProbe(retirements)](){
-            static_cast<void>(probe);
+            EXPECT_TRUE(probe.retirements != nullptr);
             scope.parallelFor(0u, 16u, 1u, [&](usize){
                 ++callbacks;
                 throw TerminalTaskError{ 67 };

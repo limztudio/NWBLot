@@ -1067,7 +1067,7 @@ def make_parser(repo_launchers: Optional[Dict[str, RepoLauncher]] = None) -> arg
 
     for launcher in repo_launchers.values():
         route = " -> ".join(str(script) for script in (*launcher.route, launcher.script))
-        launcher_parser = subparsers.add_parser(launcher.command, help=f"Forward through {route}.")
+        subparsers.add_parser(launcher.command, help=f"Forward through {route}.")
 
     profiles_parser = subparsers.add_parser("profiles", help="List generic and discovered launch commands.")
     profiles_parser.set_defaults(handler=list_profiles_command, repo_launchers=repo_launchers)

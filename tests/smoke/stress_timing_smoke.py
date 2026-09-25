@@ -4,7 +4,6 @@
 import argparse
 import json
 import math
-import os
 from pathlib import Path
 import platform
 import re

@@ -360,7 +360,8 @@ def compare_work(baseline, feedback, spec):
     original, optimized = baseline["stable_feedback"], feedback["stable_feedback"]
     if not original or not optimized:
         raise SmokeFailure("paired feedback evidence lacks completed steady observations")
-    by_id = lambda evidence: {(sample["sequence"], sample["generation"]): sample for sample in evidence["statistics"]}
+    def by_id(evidence):
+        return {(sample["sequence"], sample["generation"]): sample for sample in evidence["statistics"]}
     before_stats, after_stats = by_id(baseline), by_id(feedback)
     def total(samples, stats, key):
         return sum(stats[(sample["sequence"], sample["generation"])][key] for sample in samples) / len(samples)
@@ -395,7 +396,8 @@ def compare_work(baseline, feedback, spec):
 
 def analyze_suite(directory, evidence, specs=CAPTURES):
     available = {spec.name: spec for spec in specs}
-    frame = lambda name: read_bmp_24_rows(directory / (name + ".bmp"))
+    def frame(name):
+        return read_bmp_24_rows(directory / (name + ".bmp"))
     metrics = {}
     for case in ("offscreen", "floor", "opaque_glass"):
         first, second = "diagnostics_off_" + case + "_baseline", "diagnostics_off_" + case + "_feedback"

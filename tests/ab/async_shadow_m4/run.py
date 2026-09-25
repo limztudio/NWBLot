@@ -22,7 +22,6 @@ import inspect
 import json
 import math
 import re
-import statistics
 import struct
 import sys
 import tempfile
@@ -30,7 +29,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from unittest import mock
 
 

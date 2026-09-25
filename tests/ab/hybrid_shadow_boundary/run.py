@@ -19,8 +19,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
-import statistics
 import sys
 import tempfile
 import time
@@ -28,7 +26,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 from unittest import mock
 
 

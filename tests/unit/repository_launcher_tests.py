@@ -11,8 +11,8 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-import launcher
-from launcher import repository_windows_process
+import launcher  # noqa: E402
+from launcher import repository_windows_process  # noqa: E402
 
 
 class FakeWindowsProcessApi:

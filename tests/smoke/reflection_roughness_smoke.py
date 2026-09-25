@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 
-from reflection_smoke import (DEFAULT_RAY_BUDGET, capture_environment, parse_statistics,
+from reflection_smoke import (capture_environment, parse_statistics,
     validate_frame, validate_statistics)
 from reflection_roughness_reference import analyze_furnace, analyze_roughness, frame_grid
 from refraction_gallery_smoke import png_rgb_bytes

@@ -501,8 +501,15 @@ GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findHistory
     const GpuTaskTimingKey& key,
     const GpuPhysicalQueueId& physicalQueue
 )noexcept{
-    const GpuTaskTimingHistoryStore& store = *this;
-    return const_cast<HistoryRecord*>(store.findHistoryRecord(key, physicalQueue));
+    if(m_historyIndex){
+        const auto found = m_historyIndex->find(GpuTaskTimingHistoryDetail::RouteLookup{ key, physicalQueue });
+        return found == m_historyIndex->end() ? nullptr : &m_histories[found->second];
+    }
+    for(HistoryRecord& record : m_histories){
+        if(record.entry.key == key && record.entry.physicalQueue == physicalQueue)
+            return &record;
+    }
+    return nullptr;
 }
 
 
@@ -525,8 +532,15 @@ const GpuTaskTimingHistoryStore::HistoryRecord* GpuTaskTimingHistoryStore::findH
 GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentState(
     const GpuTaskTimingAssignmentKey& key
 )noexcept{
-    const GpuTaskTimingHistoryStore& store = *this;
-    return const_cast<GpuTaskTimingAssignmentState*>(store.findAssignmentState(key));
+    if(m_assignmentIndex){
+        const auto found = m_assignmentIndex->find(key);
+        return found == m_assignmentIndex->end() ? nullptr : &m_assignments[found->second];
+    }
+    for(GpuTaskTimingAssignmentState& assignment : m_assignments){
+        if(assignment.key == key)
+            return &assignment;
+    }
+    return nullptr;
 }
 
 

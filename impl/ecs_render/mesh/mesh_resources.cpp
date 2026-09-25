@@ -292,7 +292,6 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
         meshPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("RendererMeshSystem::createMeshResources")),
         MakeNotNull(NWB_TEXT("RendererSystem")),
         MakeNotNull("mesh")
     );

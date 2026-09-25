@@ -169,7 +169,7 @@ void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
     }
     for(GpuTaskGraphInitialOwnerHandoffSourceView& source : m_initialOwnerHandoffSources){
         if(source.stateSource)
-            DestroyArenaObjectNoexcept(m_arena, const_cast<CommandListResourceStateHandoff*>(source.stateSource));
+            DestroyArenaObjectNoexcept(m_arena, source.stateSource);
         source.stateSource = nullptr;
     }
     m_initialOwnerHandoffSources.clear();

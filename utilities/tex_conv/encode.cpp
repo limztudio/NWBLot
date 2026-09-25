@@ -300,7 +300,7 @@ private:
     ImagePlanes& outPlanes
 ){
     EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::PrepareVolumeMipTargets<basisu::image>(
+    if(!EncodeBackendDetail::PrepareVolumeMipTargets(
         sourcePlanes,
         sourcePlanes.front().get_width(),
         sourcePlanes.front().get_height(),

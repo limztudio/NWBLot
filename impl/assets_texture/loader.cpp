@@ -442,7 +442,6 @@ bool TextureAssetLoader::Load(
     const Texture* loadedTexture = assetManager.loadTypedSync<Texture>(
         textureVirtualPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("TextureAssetLoader::Load")),
         owner,
         MakeNotNull("texture")
     );

@@ -205,7 +205,8 @@ private:
     );
     void parallelRange(usize begin, usize end, usize grainSize, CpuTaskOptions options, const void* context, RangeFunction invoke);
     void releaseReservation(TaskHandle handle)noexcept;
-    [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)const noexcept;
+    [[nodiscard]] TaskNode* resolveLocked(TaskHandle handle)noexcept;
+    [[nodiscard]] const TaskNode* resolveLocked(TaskHandle handle)const noexcept;
     [[nodiscard]] bool wasCanceledLocked(TaskHandle handle)const noexcept;
     void enqueueLocked(u32 index)noexcept;
     [[nodiscard]] TaskHandle claimLocked(

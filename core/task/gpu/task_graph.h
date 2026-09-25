@@ -60,14 +60,14 @@ struct GpuTaskGraphTaskView{
     bool hasAcceptedPayload = false;
 };
 
-// Graph-owned immutable view of one texture range released by external work. State sources are copied while the resource is declared, so an accepted source graph or native producer may retire its original handoff before this graph records its first consumer packet.
+// Graph-owned immutable view of one texture range released by external work. State sources are copied while the resource is declared, so an accepted source graph or native producer may retire its original handoff before this graph records its first consumer packet. The graph retains each copied snapshot through this view, so readers observe immutable state while teardown destroys graph-owned storage.
 struct GpuTaskGraphInitialOwnerHandoffSourceView{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     GpuExternalCompletionId completion;
     QueueSubmissionToken minimumCompletionToken;
-    const CommandListResourceStateHandoff* stateSource = nullptr;
+    CommandListResourceStateHandoff* stateSource = nullptr;
 };
 
 struct GpuTaskGraphResourceView{

@@ -501,7 +501,6 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     const Material* loadedMaterial = m_assetManager.loadTypedSync<Material>(
         materialPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("RendererMaterialSystem::createMaterialSurfaceInfo")),
         MakeNotNull(NWB_TEXT("RendererSystem")),
         MakeNotNull("material")
     );

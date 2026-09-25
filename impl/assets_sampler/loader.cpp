@@ -86,7 +86,6 @@ bool SamplerAssetLoader::Load(
     const Sampler* loadedSampler = assetManager.loadTypedSync<Sampler>(
         samplerVirtualPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("SamplerAssetLoader::Load")),
         owner,
         MakeNotNull("sampler")
     );

@@ -109,11 +109,9 @@ public:
     [[nodiscard]] const AssetT* loadTypedSync(
         const Name& virtualPath,
         UniquePtr<IAsset>& outLoadedAsset,
-        const NotNull<const tchar*>& failureContext,
         const NotNull<const tchar*> ownerName,
         const NotNull<const char*> assetKindText
     )const{
-        static_cast<void>(failureContext);
         if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName.get()

@@ -338,10 +338,17 @@ void CpuTaskScheduler::releaseReservation(const TaskHandle handle)noexcept{
     m_freeNode = handle.index;
 }
 
-CpuTaskScheduler::TaskNode* CpuTaskScheduler::resolveLocked(const TaskHandle handle)const noexcept{
+CpuTaskScheduler::TaskNode* CpuTaskScheduler::resolveLocked(const TaskHandle handle)noexcept{
     if(!handle.valid() || handle.domainIdentity != m_domainIdentity || handle.index >= m_nodes.size())
         return nullptr;
-    TaskNode& node = const_cast<TaskNode&>(m_nodes[handle.index]);
+    TaskNode& node = m_nodes[handle.index];
+    return node.generation == handle.generation && node.state != TaskState::Free ? &node : nullptr;
+}
+
+const CpuTaskScheduler::TaskNode* CpuTaskScheduler::resolveLocked(const TaskHandle handle)const noexcept{
+    if(!handle.valid() || handle.domainIdentity != m_domainIdentity || handle.index >= m_nodes.size())
+        return nullptr;
+    const TaskNode& node = m_nodes[handle.index];
     return node.generation == handle.generation && node.state != TaskState::Free ? &node : nullptr;
 }
 

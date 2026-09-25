@@ -367,7 +367,6 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
         meshAsset.name(),
         loadedMeshAsset,
-        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
         MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
         MakeNotNull("mesh")
     );
@@ -378,7 +377,6 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Skin* preloadedSkin = m_assetManager.loadTypedSync<Skin>(
         skinAsset.name(),
         loadedSkinAsset,
-        MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache::ensureSourceLoaded")),
         MakeNotNull(NWB_TEXT("MeshSkinningRuntimeCache")),
         MakeNotNull("skin")
     );

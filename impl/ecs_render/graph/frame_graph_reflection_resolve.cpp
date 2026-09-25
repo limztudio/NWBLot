@@ -126,9 +126,9 @@ bool FrameGraphReflectionResolve::declare(
         .surfaceReads = reflectionSurfaceReads, .surfaceReadCount = LengthOf(reflectionSurfaceReads),
         .hardwareReads = reflectionHardwareReads.data(), .hardwareReadCount = reflectionHardwareReads.size(),
         .hardwareSetReads = reflectionSets, .hardwareSetReadCount = reflectionSetCount,
-        .hardwarePreparationReady = const_cast<const bool*>(inputs.hardwarePreparationReady),
-        .hardwareDispatchLogged = const_cast<bool*>(inputs.hardwareDispatchLogged),
-        .fallbackDispatchLogged = const_cast<bool*>(inputs.fallbackDispatchLogged),
+        .hardwarePreparationReady = inputs.hardwarePreparationReady,
+        .hardwareDispatchLogged = inputs.hardwareDispatchLogged,
+        .fallbackDispatchLogged = inputs.fallbackDispatchLogged,
     };
     const ReflectionGraphResult reflectionGraph = DeclareReflectionTasks(
         m_graph, m_graphics, traceGeometryScratchArena,
@@ -188,10 +188,10 @@ bool FrameGraphReflectionResolve::declare(
         refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(refractionDesc,
             RefractionResolveGraphTask::Payload{
                 .system = &m_raytracingSystem, .targets = &deferredTargets, .resources = refractionResources,
-                .hardwarePreparationReady = const_cast<const bool*>(inputs.hardwarePreparationReady),
+                .hardwarePreparationReady = inputs.hardwarePreparationReady,
                 .dispatchLogged = refractionResources.usesHardwareTrace
-                    ? const_cast<bool*>(inputs.refractionHardwareLogged) : const_cast<bool*>(inputs.refractionScreenLogged),
-                .screenFallbackDispatchLogged = const_cast<bool*>(inputs.refractionScreenLogged),
+                    ? inputs.refractionHardwareLogged : inputs.refractionScreenLogged,
+                .screenFallbackDispatchLogged = inputs.refractionScreenLogged,
             });
     }
     else{

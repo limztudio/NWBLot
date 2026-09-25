@@ -92,7 +92,6 @@ template<typename ShaderPathResolver>
     const Shader* loadedShader = assetManager.loadTypedSync<Shader>(
         shaderVirtualPath,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("ShaderAssetLoader::Load")),
         ownerName,
         MakeNotNull("shader")
     );

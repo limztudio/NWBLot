@@ -128,7 +128,6 @@ bool LoadSkeleton(
     const Skeleton* loadedSkeleton = assetManager.loadTypedSync<Skeleton>(
         skeletonName,
         outAsset,
-        MakeNotNull(NWB_TEXT("LoadSkeleton")),
         MakeNotNull(NWB_TEXT("ModelSystem")),
         MakeNotNull("skeleton")
     );
@@ -281,7 +280,6 @@ void ModelSystem::ensureModelRuntime(
     const Model* loadedModel = m_assetManager.loadTypedSync<Model>(
         modelName,
         loadedAsset,
-        MakeNotNull(NWB_TEXT("ModelSystem::ensureModelRuntime")),
         MakeNotNull(NWB_TEXT("ModelSystem")),
         MakeNotNull("model")
     );

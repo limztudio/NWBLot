@@ -79,6 +79,35 @@ namespace TriangleAreaDetail{
         _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)),
         _mm_cvtsd_f64(z),
     };
+#elif defined(NWB_HAS_NEON)
+#if defined(__aarch64__) || defined(_M_ARM64)
+    float64x2_t abZY = vdupq_n_f64(abY);
+    abZY = vsetq_lane_f64(abZ, abZY, 1);
+    float64x2_t acZX = vdupq_n_f64(acZ);
+    acZX = vsetq_lane_f64(acX, acZX, 1);
+    float64x2_t abZB = vdupq_n_f64(abZ);
+    abZB = vsetq_lane_f64(abX, abZB, 1);
+    float64x2_t acZY = vdupq_n_f64(acY);
+    acZY = vsetq_lane_f64(acZ, acZY, 1);
+    const float64x2_t xy = vsubq_f64(vmulq_f64(abZY, acZX), vmulq_f64(abZB, acZY));
+    float64x2_t zProducts = vdupq_n_f64(abX);
+    zProducts = vsetq_lane_f64(abY, zProducts, 1);
+    float64x2_t acYX = vdupq_n_f64(acY);
+    acYX = vsetq_lane_f64(acX, acYX, 1);
+    zProducts = vmulq_f64(zProducts, acYX);
+    const f64 z = vgetq_lane_f64(zProducts, 0) - vgetq_lane_f64(zProducts, 1);
+    return TriangleAreaNormal64{
+        vgetq_lane_f64(xy, 0),
+        vgetq_lane_f64(xy, 1),
+        z,
+    };
+#else
+    return TriangleAreaNormal64{
+        abY * acZ - abZ * acY,
+        abZ * acX - abX * acZ,
+        abX * acY - abY * acX,
+    };
+#endif
 #else
     return TriangleAreaNormal64{
         abY * acZ - abZ * acY,
@@ -147,6 +176,17 @@ namespace TriangleAreaDetail{
     const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
     const __m128d zSquared = _mm_mul_sd(_mm_set_sd(areaNormal.z), _mm_set_sd(areaNormal.z));
     return _mm_cvtsd_f64(_mm_add_sd(xySum, zSquared));
+#elif defined(NWB_HAS_NEON)
+#if defined(__aarch64__) || defined(_M_ARM64)
+    float64x2_t xy = vdupq_n_f64(areaNormal.x);
+    xy = vsetq_lane_f64(areaNormal.y, xy, 1);
+    xy = vmulq_f64(xy, xy);
+    const f64 xySum = vgetq_lane_f64(xy, 0) + vgetq_lane_f64(xy, 1);
+    const f64 z = areaNormal.z;
+    return xySum + z * z;
+#else
+    return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
+#endif
 #else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
 #endif

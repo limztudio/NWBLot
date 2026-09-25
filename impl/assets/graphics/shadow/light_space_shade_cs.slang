@@ -65,9 +65,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         hit.worldPosition = world;
         hit.rayDirection = towardLight;
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-        const float cosI = nwbShadowCosineToRay(geometric, objectDirection);
-        const float smoothCosI = nwbShadowCosineToRay(normal, objectDirection);
-        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, half(lerp(cosI, smoothCosI, smoothstep(1e-5, 2e-3, spread))));
+        const half cosI = nwbShadowCosineToRay(geometric, objectDirection);
+        const half smoothCosI = nwbShadowCosineToRay(normal, objectDirection);
+        const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
         const bool valid = view.depthRange.w != 0.0 && isfinite(asfloat(raw.x))
             && all(isfinite(float3(absorption))) && isfinite(float(fresnel));

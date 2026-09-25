@@ -111,7 +111,7 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
                 const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase);
                 const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
                 const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-                const float smoothNormalWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
+                const half smoothNormalWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
 
                 const float3 objectNormal = float3(a0.normal) * triangleHit.w + float3(a1.normal) * triangleHit.u + float3(a2.normal) * triangleHit.v;
 
@@ -126,10 +126,10 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
-                const float cosI = nwbShadowCosineToRay(geometricNormal, direction);
-                const float shadingCosI = nwbShadowCosineToRay(objectNormal, direction);
-                const half fresnelCosI = half(lerp(cosI, shadingCosI, saturate(smoothNormalWeight)));
-                nwbShadowInstanceIntegrateCrossing(optics, hasAbsorption, surface.refractionIor, surface.shadowAbsorptionTint, float(fresnelCosI), triangleHit.t);
+                const half cosI = nwbShadowCosineToRay(geometricNormal, direction);
+                const half shadingCosI = nwbShadowCosineToRay(objectNormal, direction);
+                const half fresnelCosI = lerp(cosI, shadingCosI, smoothNormalWeight);
+                nwbShadowInstanceIntegrateCrossing(optics, hasAbsorption, surface.refractionIor, surface.shadowAbsorptionTint, fresnelCosI, triangleHit.t);
             }
             if(stackPointer == 0u){
                 if(optics.crossingCount == 0u && optics.crossingOverflow == 0u)

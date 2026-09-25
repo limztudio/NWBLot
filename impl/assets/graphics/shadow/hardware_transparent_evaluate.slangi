@@ -120,12 +120,12 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
     hit.worldPosition = ray.Origin + ray.Direction * crossing.distance;
     hit.rayDirection = ray.Direction;
     const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-    const float smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
-    const half cosine = half(lerp(
+    const half smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
+    const half cosine = lerp(
         nwbShadowCosineToRay(geometricNormal, objectDirection),
         nwbShadowCosineToRay(objectNormal, objectDirection),
         smoothWeight
-    ));
+    );
     NwbHardwareTransparentCrossingOptics optics;
     // Bounded (0, 1) optics factors stay half; geometry chord/distances below remain float for precision.
     optics.absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);

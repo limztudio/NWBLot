@@ -100,10 +100,10 @@ bool nwbReflectionValidateScreenHit(
     const float intervalFirst,
     const float intervalLast,
     out half3 radiance,
-    out float confidence,
+    out half confidence,
     out bool crossedSurface){
     radiance = half3(0.0h);
-    confidence = 0.0;
+    confidence = half(0.0h);
     crossedSurface = false;
     if(all(abs(int2(candidatePixel) - int2(sourcePixel)) < 2))
         return false;
@@ -176,13 +176,14 @@ bool nwbReflectionValidateScreenHit(
     if(residual >= g_NwbReflectionParameters.screenThickness)
         return false;
     // Confidence gates are (0, 1) bounded factors, so half arithmetic is sufficient here.
-    const half geometryConfidence = half(1.0 - smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual));
+    // Widen only at the float smoothstep/alignment geometry inputs and the half confidence store.
+    const half geometryConfidence = half(half(1.0h) - half(smoothstep(0.0, g_NwbReflectionParameters.screenThickness, residual)));
     const float2 edgeDistance = min(uv, 1.0 - uv);
     const half2 edgeWeight = g_NwbReflectionParameters.screenEdgeFade > 0.0
         ? half2(smoothstep(float2(0.0), float2(g_NwbReflectionParameters.screenEdgeFade), edgeDistance))
         : half2(half(1.0h));
-    confidence = float(geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y);
-    confidence *= smoothstep(0.02, 0.2, abs(incidence));
+    confidence = geometryConfidence * geometryConfidence * edgeWeight.x * edgeWeight.y;
+    confidence *= half(smoothstep(0.02, 0.2, abs(incidence)));
 
     // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the
     // reflected observer differs; roughness relaxes the directional match but does not prove a custom BXDF invariant.
@@ -192,16 +193,16 @@ bool nwbReflectionValidateScreenHit(
     const half strength = half(saturate(max(specular.x, max(specular.y, specular.z)) * 8.0));
     const float alignment = dot(cameraObserver, -surface.direction);
     const half requiredAlignment = half(lerp(0.995, 0.5, saturate(specular.w) * saturate(specular.w)));
-    confidence *= lerp(1.0, smoothstep(float(requiredAlignment) - 0.1, float(requiredAlignment), alignment), float(strength));
+    confidence *= lerp(half(1.0h), half(smoothstep(float(requiredAlignment) - 0.1, float(requiredAlignment), alignment)), strength);
     // The G-buffer does not identify a thin, two-sided surface versus a solid volume's visible front boundary.
     // Keep a back-facing crossing provisional; Hybrid's default threshold sends this ambiguity to the real scene.
     if(incidence > 0.0)
-        confidence = min(confidence, 0.5);
-    confidence *= 1.0 - smoothstep(
+        confidence = min(confidence, half(0.5h));
+    confidence *= half(1.0h) - half(smoothstep(
         g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, distance
-    );
+    ));
     radiance = half3(NwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb);
-    if(!all(isfinite(float3(radiance))) || !isfinite(confidence) || confidence <= 0.0)
+    if(!all(isfinite(float3(radiance))) || !isfinite(float(confidence)) || confidence <= half(0.0h))
         return false;
     radiance = max(radiance, half3(0.0h));
     return true;
@@ -217,11 +218,11 @@ bool nwbReflectionTraceScreen(
     const uint2 pixel,
     const NwbReflectionSurface surface,
     out half3 radiance,
-    out float confidence,
+    out half confidence,
     out uint iterations,
     out bool limited){
     radiance = half3(0.0h);
-    confidence = 0.0;
+    confidence = half(0.0h);
     iterations = 0u;
     limited = false;
     if(g_NwbReflectionParameters.depthMipCount == 0u || g_NwbReflectionParameters.screenMaxSteps == 0u)

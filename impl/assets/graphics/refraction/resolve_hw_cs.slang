@@ -81,16 +81,17 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance
     );
     if(!entryHit.hit || float(entryHit.surface.refractionIor) <= 1.001
-        || abs(float(entryHit.surface.refractionIor) - entry.ior) > 0.02)
+        || abs(float(entryHit.surface.refractionIor) - float(entry.ior)) > 0.02)
         return nwbRefractionResolveScreen(pixel, entry);
 
-    float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / entry.ior);
+    float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     if(dot(internalDirection, internalDirection) < 0.5)
         return float4(0.0, 0.0, 0.0, 1.0);
     NwbRayTraceSurfaceHit exitHit = (NwbRayTraceSurfaceHit)0;
     float3 internalOrigin = entryHit.position;
     float3 outgoingDirection = float3(0.0);
-    float exitCosine = 0.0;
+    // Exit cosine is a saturate-bounded (0, 1) factor feeding the bounded Fresnel attenuation below.
+    half exitCosine = half(0.0h);
     float pathLength = 0.0;
     // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel
     // reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
@@ -107,8 +108,8 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         float3 exitNormal = nwbSafeNormalize(exitHit.surface.normal, exitHit.geometricNormal);
         if(dot(exitNormal, internalDirection) < 0.0)
             exitNormal = -exitNormal;
-        exitCosine = saturate(dot(internalDirection, exitNormal));
-        outgoingDirection = refract(internalDirection, -exitNormal, entry.ior);
+        exitCosine = half(saturate(dot(internalDirection, exitNormal)));
+        outgoingDirection = refract(internalDirection, -exitNormal, float(entry.ior));
         if(dot(outgoingDirection, outgoingDirection) >= 0.5)
             break;
         internalDirection = reflect(internalDirection, exitNormal);

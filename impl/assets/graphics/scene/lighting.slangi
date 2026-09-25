@@ -85,7 +85,8 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
     const half3 baseRadiance = clamp(half3(light.colorIntensity.xyz), half3(0.0h), half3(NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX))
         * clamp(half(light.colorIntensity.w), half(0.0h), half(NWB_SCENE_LIGHT_RADIANCE_INTENSITY_MAX));
-    const float lightType = light.params.y;
+    // Light-type tag selects the branch only; the discriminant constants (0.5/1.5) are exactly representable in half.
+    const half lightType = half(light.params.y);
 
     if(lightType < NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
         lightVector = nwbSafeNormalize(light.direction.xyz, float3(0.0, 0.0, -1.0));
@@ -96,15 +97,17 @@ void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 
     const float3 toLight = light.position.xyz - worldPosition;
     lightVector = nwbSafeNormalize(toLight, float3(0.0, 0.0, -1.0));
 
-    const float range = max(light.params.x, NWB_SCENE_LIGHT_RANGE_MIN);
-    half attenuation = half(saturate(1.0 - length(toLight) / range));
+    // Range feeds only the (0, 1) distance-attenuation ratio below; widen at the float length division.
+    const half range = half(max(light.params.x, NWB_SCENE_LIGHT_RANGE_MIN));
+    half attenuation = half(saturate(half(1.0h) - half(length(toLight) / float(range))));
     attenuation *= attenuation;
 
-    if(lightType > NWB_SCENE_LIGHT_TYPE_POINT_MAX){
-        const float innerConeCos = light.position.w;
-        const float outerConeCos = light.direction.w;
+    if(lightType > half(NWB_SCENE_LIGHT_TYPE_POINT_MAX)){
+        // Cone cosines are [-1, 1] bounded factors; half math is sufficient here (widened at the float dot).
+        const half innerConeCos = half(light.position.w);
+        const half outerConeCos = half(light.direction.w);
         const float3 emission = nwbSafeNormalize(light.direction.xyz, float3(0.0, 0.0, -1.0));
-        attenuation *= half(smoothstep(outerConeCos, innerConeCos, dot(-lightVector, emission)));
+        attenuation *= half(smoothstep(float(outerConeCos), float(innerConeCos), dot(-lightVector, emission)));
     }
 
     radiance = baseRadiance * attenuation;

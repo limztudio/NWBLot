@@ -93,14 +93,14 @@ half3 nwbRefractionBackground(const uint2 pixel){
     return behind / max(frontTransmittance, half(1e-4h)) + opaque * backTransmittance;
 }
 
-half nwbRefractionFresnelTransmission(const float ior, const float cosine){
+half nwbRefractionFresnelTransmission(const half ior, const half cosine){
     // Schlick reflectance is a (0, 1) bounded factor, so half arithmetic is sufficient here.
-    const half ratio = half((ior - 1.0) / (ior + 1.0));
+    const half ratio = (ior - half(1.0h)) / (ior + half(1.0h));
     const half r0 = ratio * ratio;
-    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(1.0 - saturate(cosine), 5.0)));
+    return half(1.0) - (r0 + (half(1.0) - r0) * half(pow(half(1.0h) - saturate(cosine), half(5.0h))));
 }
 
-half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const float ior, const float entryCosine, const float exitCosine){
+half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const half ior, const half entryCosine, const half exitCosine){
     // Tint/Beer attenuation plus two bounded Fresnel transmissions stay in (0, 1]; half color math is sufficient.
     return half3(exp(log(clamp(float3(tint), float3(1e-4), float3(1.0))) * max(thickness, 0.0))
         * float3(nwbRefractionFresnelTransmission(ior, entryCosine))
@@ -115,8 +115,9 @@ struct NwbRefractionEntry{
     float3 incident;
     float3 normal;
     half3 tint;
-    float ior;
-    float cosine;
+    // IOR (clamped 1..4) and entry cosine (saturate-bounded (0,1)) feed only the bounded Fresnel/attenuation factors.
+    half ior;
+    half cosine;
     float bias;
 };
 
@@ -135,9 +136,9 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.normal = nwbSafeNormalize(normalIor.xyz, -entry.incident);
     if(dot(entry.incident, entry.normal) > 0.0)
         entry.normal = -entry.normal;
-    entry.ior = clamp(normalIor.w, 1.0, 4.0);
+    entry.ior = half(clamp(normalIor.w, 1.0, 4.0));
     entry.tint = half3(saturate(tintCoverage.xyz));
-    entry.cosine = saturate(-dot(entry.incident, entry.normal));
+    entry.cosine = half(saturate(-dot(entry.incident, entry.normal)));
     entry.bias = max(NWB_REFRACTION_MIN_DISTANCE, length(cameraRay) * 1e-5);
     // Coverage is intentionally not an optical mask: perfectly clear glass may author zero AVBOIT opacity.
     return true;
@@ -200,7 +201,7 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
 
 float4 nwbRefractionResolveScreen(const uint2 pixel, const NwbRefractionEntry entry){
     half3 background;
-    const float3 direction = refract(entry.incident, entry.normal, 1.0 / entry.ior);
+    const float3 direction = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
     if(dot(direction, direction) > 0.5 && nwbRefractionScreenBackground(entry, direction, background)){
         return float4(half3(background) * nwbRefractionAttenuation(
             entry.tint, NWB_REFRACTION_FALLBACK_THICKNESS, entry.ior, entry.cosine, entry.cosine

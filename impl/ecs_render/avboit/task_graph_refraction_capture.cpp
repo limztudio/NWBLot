@@ -320,7 +320,8 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     commonUses.push_back(ReadUse(slots, Core::ResourceStates::ConstantBuffer));
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> csgUses{scratch};
-    csgUses.reserve(8u);
+    constexpr usize s_CsgUseCapacity = 8u;
+    csgUses.reserve(s_CsgUseCapacity);
     if(hasCsg){
         CsgClipContextSlots clipContext;
         if(!csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings, clipContext))

@@ -138,7 +138,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         if(inputs.traceMaterialSampledTextureSet.valid()){
             hardwarePhotonResourceSetUses[hardwarePhotonResourceSetUseCount++] = traceMaterialSampledTextureSetUse;
         }
-        hardwarePhotonResourceUses.reserve(15u + (
+        constexpr usize s_HardwarePhotonResourceUseCapacity = 15u;
+        hardwarePhotonResourceUses.reserve(s_HardwarePhotonResourceUseCapacity + (
             hardwareTraceAttributeStatesGraphOwned ? 0u : inputs.hardwareTraceAttributeResourceCount
         ));
         hardwareGeometryResourceUses.reserve(3u);

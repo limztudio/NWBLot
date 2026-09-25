@@ -74,8 +74,9 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
         if(resolvedMesh.runtime){
             // Conservative deformation inflation keeps skinned refractors in the emission domain.
-            const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(0.5f));
-            const SIMDVector half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(0.5f * s_CausticRuntimeBoundsInflation));
+            constexpr f32 s_BoundsMidpointWeight = 0.5f;
+            const SIMDVector center = VectorMultiply(VectorAdd(localMin, localMax), VectorReplicate(s_BoundsMidpointWeight));
+            const SIMDVector half = VectorMultiply(VectorSubtract(localMax, localMin), VectorReplicate(s_BoundsMidpointWeight * s_CausticRuntimeBoundsInflation));
             localMin = VectorSubtract(center, half);
             localMax = VectorAdd(center, half);
         }

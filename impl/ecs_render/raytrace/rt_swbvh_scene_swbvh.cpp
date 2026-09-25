@@ -253,7 +253,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         SceneBvhPrimitiveCalculation bvhPrimitive;
         bvhPrimitive.aabbMin = worldMin;
         bvhPrimitive.aabbMax = worldMax;
-        bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), 0.5f);
+        constexpr f32 s_BoundsMidpointWeight = 0.5f;
+        bvhPrimitive.centroid = VectorScale(VectorAdd(worldMin, worldMax), s_BoundsMidpointWeight);
         bvhPrimitive.transparentOccluder = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
 
         Float3U opticalLocalMin{};

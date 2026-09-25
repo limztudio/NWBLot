@@ -110,7 +110,8 @@ struct LightSpaceShadowState{
     SoftwareShadowSettings m_settings;
     LightSpaceShadowSnapshot m_snapshot;
     Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> m_casters;
-    Core::ShaderHandle m_shaders[8];
+    static constexpr usize s_LightSpaceShaderCount = 8u;
+    Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
     bool m_sceneEligible = false;
     bool m_resourcesPrepared = false;
     bool m_pipelineFailed = false;

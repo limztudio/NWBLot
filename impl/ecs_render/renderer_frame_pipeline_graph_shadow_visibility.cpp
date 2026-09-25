@@ -189,7 +189,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
     const bool traceGeometryStatesGraphOwned = traceGeometrySet.valid();
-    resourceUses.reserve(40u + (
+    constexpr usize s_ShadowVisibilityResourceUseCapacity = 40u;
+    resourceUses.reserve(s_ShadowVisibilityResourceUseCapacity + (
         traceGeometryStatesGraphOwned
             ? 0u
             : traceGeometryResourceCount
@@ -614,7 +615,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
 
         // The opaque callback has no temporal or coarse scratch access. Keep its direct serial writes separate from
         // the monolithic compatibility vector so a fresh retained target never becomes a synthetic first read.
-        opaqueResourceUses.reserve(18u + (
+        constexpr usize s_OpaqueResourceUseCapacity = 18u;
+        opaqueResourceUses.reserve(s_OpaqueResourceUseCapacity + (
             traceGeometryStatesGraphOwned
                 ? 0u
                 : traceGeometryResourceCount
@@ -647,7 +649,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             }
         }
 
-        opaqueFirstWaveletResourceUses.reserve(12u);
+        constexpr usize s_OpaqueFirstWaveletResourceUseCapacity = 12u;
+        opaqueFirstWaveletResourceUses.reserve(s_OpaqueFirstWaveletResourceUseCapacity);
         // The compiler lowers the opaque trace from UAV to the exact sampled state required by temporal merge or
         // the first wavelet. The first wavelet then publishes half-B for the resolve tail.
         opaqueFirstWaveletResourceUses.push_back(ReadUse(shadowSoftHalfA, Core::ResourceStates::ShaderResource));
@@ -671,7 +674,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         }
 
         if(!combinedSoftUpsample){
-            opaqueResolveResourceUses.reserve(8u);
+            constexpr usize s_OpaqueResolveResourceUseCapacity = 8u;
+            opaqueResolveResourceUses.reserve(s_OpaqueResolveResourceUseCapacity);
             // With the current one-wavelet opaque resolve, the tail only samples the first-wavelet half-B result for
             // upsample. Keep a conservative native ping-pong declaration if that compile-time pass count grows.
             if(NWB_SHADOW_RESOLVE_PASS_COUNT == 1u)
@@ -688,7 +692,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             opaqueResolveResourceUses.push_back(ReadUse(sceneShading, Core::ResourceStates::ConstantBuffer));
         }
 
-        transparentTraceResourceUses.reserve(16u + (
+        constexpr usize s_TransparentTraceResourceUseCapacity = 16u;
+        transparentTraceResourceUses.reserve(s_TransparentTraceResourceUseCapacity + (
             traceGeometryStatesGraphOwned
                 ? 0u
                 : traceGeometryResourceCount
@@ -749,7 +754,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(graphOwnsTransparentTemporalMergeEntryStates){
             // Selection is frozen with the compiled frame. The merge samples the current front pair and publishes
             // the opposite pair, which the following wavelet receives as graph-owned sampled inputs.
-            transparentTemporalMergeResourceUses.reserve(8u);
+            constexpr usize s_TransparentTemporalMergeResourceUseCapacity = 8u;
+            transparentTemporalMergeResourceUses.reserve(s_TransparentTemporalMergeResourceUseCapacity);
             transparentTemporalMergeResourceUses.push_back(ReadUse(transparentSoftHalf, Core::ResourceStates::ShaderResource));
             transparentTemporalMergeResourceUses.push_back(ReadUse(shadowSoftGeometry, Core::ResourceStates::ShaderResource));
             transparentTemporalMergeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));
@@ -784,7 +790,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             ));
             transparentFirstWaveletResourceUses.push_back(WriteUse(shadowSoftHalfB, Core::ResourceStates::UnorderedAccess));
         }
-        transparentFoldResourceUses.reserve(9u);
+        constexpr usize s_TransparentFoldResourceUseCapacity = 9u;
+        transparentFoldResourceUses.reserve(s_TransparentFoldResourceUseCapacity);
         if(combinedSoftUpsample)
             transparentFoldResourceUses.push_back(ReadUse(shadowSoftHalfB, Core::ResourceStates::ShaderResource));
         // With one RGB wavelet the terminal task only samples half-A before multiplying visibility. Preserve a
@@ -809,7 +816,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Core::GpuTaskId shadowTraceDependency = prefixTask;
     if(splitSoftTransparentFold && rayTracingPlan.lightSpace.ready){
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
-        lightSpaceReads.reserve(9u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+        constexpr usize s_LightSpaceReadCapacity = 9u;
+        lightSpaceReads.reserve(s_LightSpaceReadCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
         if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources, importBuffer,
             [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){

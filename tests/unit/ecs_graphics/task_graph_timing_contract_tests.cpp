@@ -856,7 +856,7 @@ TEST(EcsGraphics, DeferredGraphWiresAcceptedTaskTimingFeedback){
     EXPECT_TRUE(ContainsText(taskGraph, "AvboitComputeStageTimingMetadata"));
     EXPECT_TRUE(ContainsText(
         taskGraph,
-        ".resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << 16u)"
+        ".resolutionClass = bucketDimension(targets.lowWidth) | (bucketDimension(targets.lowHeight) << s_ResolutionHeightShiftBits)"
     ));
     EXPECT_TRUE(ContainsText(depthWarpDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));
     EXPECT_TRUE(ContainsText(integrationDeclaration, ".setTimingMetadata(avboitComputeStageTiming)"));

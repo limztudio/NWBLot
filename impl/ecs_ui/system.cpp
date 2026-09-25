@@ -32,6 +32,7 @@ namespace __hidden_ui{
 
 
 static constexpr usize s_UploadAlignmentBytes = sizeof(u32);
+static constexpr f32 s_ClipScaleFactor = 2.0f;
 
 static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
 
@@ -40,8 +41,8 @@ static void DrawCallbackResetRenderState(const ImDrawList*, const ImDrawCmd*){}
     const SIMDVector displayExtent = VectorSubtract(displayMax, displayMin);
     const SIMDVector displaySum = VectorAdd(displayMax, displayMin);
     const SIMDVector numerators = VectorMergeX(
-        VectorReplicate(2.0f),
-        VectorReplicate(2.0f),
+        VectorReplicate(s_ClipScaleFactor),
+        VectorReplicate(s_ClipScaleFactor),
         displaySum,
         VectorSplatY(displaySum)
     );

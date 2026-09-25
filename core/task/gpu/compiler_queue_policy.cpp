@@ -24,6 +24,12 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr u64 s_TinyQueueCostWeight = 1u;
+inline constexpr u64 s_SmallQueueCostWeight = 2u;
+inline constexpr u64 s_MediumQueueCostWeight = 4u;
+inline constexpr u64 s_LargeQueueCostWeight = 8u;
+
+
 inline constexpr u8 s_ValidQueueCapabilityMask =
     static_cast<u8>(GpuQueueCapability::Transfer)
     | static_cast<u8>(GpuQueueCapability::Compute)
@@ -243,10 +249,10 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] u64 QueueCostWeight(const GpuTaskCostHint::Enum cost)noexcept{
     switch(cost){
-    case GpuTaskCostHint::Tiny: return 1u;
-    case GpuTaskCostHint::Small: return 2u;
-    case GpuTaskCostHint::Medium: return 4u;
-    case GpuTaskCostHint::Large: return 8u;
+    case GpuTaskCostHint::Tiny: return s_TinyQueueCostWeight;
+    case GpuTaskCostHint::Small: return s_SmallQueueCostWeight;
+    case GpuTaskCostHint::Medium: return s_MediumQueueCostWeight;
+    case GpuTaskCostHint::Large: return s_LargeQueueCostWeight;
     default: return 0u;
     }
 }

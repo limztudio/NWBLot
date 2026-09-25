@@ -102,7 +102,8 @@ bool FrameGraphTransparentCsgTasks::declare(
 
     Core::Alloc::ScratchArena avboitIntervalResourceScratch(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> avboitIntervalResourceUses{ avboitIntervalResourceScratch };
-    avboitIntervalResourceUses.reserve(16u);
+    constexpr usize s_IntervalResourceUseCapacity = 16u;
+    avboitIntervalResourceUses.reserve(s_IntervalResourceUseCapacity);
     if(avboitPrePayload.transparentCsgStreamsUploaded){
         avboitIntervalResourceUses.push_back(ReadUse(depth));
         avboitIntervalResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
@@ -236,7 +237,8 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitCsgReceiverSpanPayload.receiverSpanOutputImageStatesGraphOwned = true;
     }
     if(avboitCsgIntervalCombineGraphOwned){
-        avboitIntervalCombineResourceUses.reserve(11u);
+        constexpr usize s_IntervalCombineResourceUseCapacity = 11u;
+    avboitIntervalCombineResourceUses.reserve(s_IntervalCombineResourceUseCapacity);
         avboitIntervalCombineResourceUses.push_back(ReadTextureUse(
             csgCapBackNormal,
             csgPeelSubresources,

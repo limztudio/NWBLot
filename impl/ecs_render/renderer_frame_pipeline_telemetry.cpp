@@ -31,6 +31,7 @@ namespace __hidden_frame_graph_export{
 
 
 static constexpr f64 s_MillisecondsPerSecondTelemetry = 1000.0;
+static constexpr f64 s_PercentScaleTelemetry = 100.0;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -315,7 +316,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             recordingStatistics.readyFrontierElapsedSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
             recordingStatistics.readyFrontierWorkerBusySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
             recordingStatistics.readyFrontierWorkerCapacitySeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
-            recordingStatistics.readyFrontierWorkerUtilization() * 100.0
+            recordingStatistics.readyFrontierWorkerUtilization() * __hidden_frame_graph_export::s_PercentScaleTelemetry
         );
 
         // This borrows immutable compiled-plan topology and entries plus recorded packet slots under the same renderer-

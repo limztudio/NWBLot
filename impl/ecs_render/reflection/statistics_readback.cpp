@@ -159,8 +159,9 @@ void ReflectionStatisticsState::complete(
         m_latest.screenReturns = counters[NWB_REFLECTION_COUNTER_SCREEN_RETURNS / sizeof(u32)];
         m_latest.feedbackBypassedPixels = counters[NWB_REFLECTION_COUNTER_FEEDBACK_BYPASSED_PIXELS / sizeof(u32)];
         m_latest.feedbackProbeTiles = counters[NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES / sizeof(u32)];
+        constexpr u32 s_CounterHighWordShiftBits = 32u;
         m_latest.screenIterations = static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_LOW / sizeof(u32)])
-            | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << 32u)
+            | (static_cast<u64>(counters[NWB_REFLECTION_COUNTER_SCREEN_ITERATIONS_HIGH / sizeof(u32)]) << s_CounterHighWordShiftBits)
         ;
         m_latest.screenLimitMisses = counters[NWB_REFLECTION_COUNTER_SCREEN_LIMIT_MISSES / sizeof(u32)];
     }

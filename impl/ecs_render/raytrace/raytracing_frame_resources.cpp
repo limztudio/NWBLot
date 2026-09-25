@@ -258,7 +258,8 @@ void RendererRayTracingSystem::retireCompletedAdaptiveShadowStatisticsReadback()
         const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
         const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
         m_graphics.getDevice().unmapBuffer(*state.m_swShadowEdgeStatsReadback);
-        const f64 fraction = (total > 0u) ? (100.0 * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
+        constexpr f64 s_PercentScale = 100.0;
+        const f64 fraction = (total > 0u) ? (s_PercentScale * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
             , fraction
             , static_cast<u64>(traced)

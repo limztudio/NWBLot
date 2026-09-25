@@ -11,6 +11,7 @@
 
 namespace __hidden_refit_shader{
 static constexpr char s_DefaultShaderVariant[] = "default";
+static constexpr u64 s_SoftwareNodeByteSize = 32u;
 };
 
 
@@ -65,7 +66,7 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
     const auto& sceneDesc = sceneNodes->getCreationDescription();
     if(
         sceneNodes->getDeviceGeneration() != device.getDeviceGeneration() || !sceneDesc.canHaveUAVs
-        || sceneDesc.byteSize < static_cast<u64>(nodeCount) * 32u
+        || sceneDesc.byteSize < static_cast<u64>(nodeCount) * __hidden_refit_shader::s_SoftwareNodeByteSize
     )
         return {};
     const usize byteSize = instanceCount * sizeof(SoftwareSceneRefitInstanceGpu);
@@ -112,7 +113,7 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
         if(
             !meshNodes[index] || inputs[index].meshNodeSlot == Limit<u32>::s_Max
             || meshNodes[index]->getDeviceGeneration() != device.getDeviceGeneration()
-            || meshNodes[index]->getCreationDescription().byteSize < 32u
+            || meshNodes[index]->getCreationDescription().byteSize < __hidden_refit_shader::s_SoftwareNodeByteSize
         )
             return {};
         snapshot->inputs.push_back(inputs[index]);

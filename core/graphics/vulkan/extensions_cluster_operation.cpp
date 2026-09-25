@@ -56,6 +56,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation mode is invalid"));
         return;
     }
+    constexpr u32 s_MaxPositionTruncateBitCount = 32u;
     constexpr u32 s_SupportedOperationFlags =
         static_cast<u32>(RayTracingClusterOperationFlags::FastTrace)
         | static_cast<u32>(RayTracingClusterOperationFlags::FastBuild)
@@ -155,7 +156,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             opDesc.params.clas.maxTriangleCount > properties.maxTrianglesPerCluster
             || opDesc.params.clas.maxVertexCount > properties.maxVerticesPerCluster
             || opDesc.params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
-            || opDesc.params.clas.minPositionTruncateBitCount > 32u
+            || opDesc.params.clas.minPositionTruncateBitCount > s_MaxPositionTruncateBitCount
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster parameters exceed device limits"));
             return;

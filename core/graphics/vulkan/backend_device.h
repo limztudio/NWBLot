@@ -78,6 +78,7 @@ private:
 private:
     static constexpr u64 s_SubmissionDrainBit = static_cast<u64>(1u) << 63u;
     static constexpr u64 s_SubmissionOperationCountMask = s_SubmissionDrainBit - 1u;
+    static constexpr u32 s_CompleteTimestampValidBits = 64u;
 
 
 private:
@@ -381,7 +382,7 @@ public:
     // Partial-width timestamps remain valid for modular ordinary durations only.
     [[nodiscard]] bool supportsComparableGpuTimestamps(const GpuPhysicalQueueId& queue)const noexcept{
         const GpuPhysicalQueueInfo* const queueInfo = getPhysicalQueueInfo(queue);
-        return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == 64u;
+        return supportsComparableGpuTimestamps() && queueInfo && queueInfo->timestampValidBits == s_CompleteTimestampValidBits;
     }
     [[nodiscard]] GpuCommandArenaStatistics getCommandArenaStatistics(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] GpuCommandArenaWorkerStatistics getCommandArenaWorkerStatistics(

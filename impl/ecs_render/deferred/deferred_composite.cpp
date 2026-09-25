@@ -44,12 +44,15 @@ struct CompositePushConstants{
 };
 static_assert(sizeof(CompositePushConstants) == sizeof(u32) * 5u);
 
+inline constexpr f32 s_CompositeDefaultShoulder = 0.65f;
+
+
 struct PresentPushConstants{
     u32 resourceSlots = 0u;
     u32 presentationMode = NWB_DEFERRED_PRESENTATION_SDR;
     u32 toneMap = NWB_DEFERRED_TONE_MAP_REINHARD;
     f32 exposure = 1.f;
-    f32 shoulder = 0.65f;
+    f32 shoulder = s_CompositeDefaultShoulder;
 };
 static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 5u);
 

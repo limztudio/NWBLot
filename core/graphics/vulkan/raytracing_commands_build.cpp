@@ -853,7 +853,8 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         m_device.unmapBuffer(*transformBuffer);
 
         transformBaseAddress = VulkanDetail::GetBufferDeviceAddress(transformBuffer.get());
-        if(transformBaseAddress == 0u || transformBaseAddress % 16u != 0u){
+        constexpr u32 s_TransformDeviceAddressAlignment = 16u;
+        if(transformBaseAddress == 0u || transformBaseAddress % s_TransformDeviceAddressAlignment != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: transform buffer device address must be 16-byte aligned"));
             return;
         }

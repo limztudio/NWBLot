@@ -557,8 +557,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     PreparedMeshSwBvhGraphResourceVector pureSoftwareMeshSwBvhGraphResources{ scratchArena };
     ECSRenderDetail::MeshBlasGraphStateVector liveMeshBlasGraphStates{ scratchArena };
     m_meshSystem.collectBlasGraphStates(liveMeshBlasGraphStates);
+    constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
     resourceUses.reserve(
-        19u
+        s_ShadowPrepareResourceUseCapacity
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
         + liveMeshBlasGraphStates.size()

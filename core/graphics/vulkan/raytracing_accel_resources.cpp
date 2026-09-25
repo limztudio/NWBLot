@@ -533,6 +533,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
         || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
     )
         return info;
+    constexpr u32 s_MaxPositionTruncateBitCount = 32u;
     constexpr u32 s_SupportedOperationFlags =
         static_cast<u32>(RayTracingClusterOperationFlags::FastTrace)
         | static_cast<u32>(RayTracingClusterOperationFlags::FastBuild)
@@ -578,7 +579,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
             params.clas.maxTriangleCount > properties.maxTrianglesPerCluster
             || params.clas.maxVertexCount > properties.maxVerticesPerCluster
             || params.clas.maxGeometryIndex > properties.maxClusterGeometryIndex
-            || params.clas.minPositionTruncateBitCount > 32u
+            || params.clas.minPositionTruncateBitCount > s_MaxPositionTruncateBitCount
         )
             return info;
 

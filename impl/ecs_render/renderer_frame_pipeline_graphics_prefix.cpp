@@ -643,8 +643,10 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     gbufferPayload.csgReceiverComputeEmulationOutputStatesGraphOwned =
         opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned;
 
+    constexpr usize s_OpaqueDrawResourceUseCount = 8u;
+    constexpr usize s_NoOpaqueDrawResourceUseCount = 6u;
     gbufferResourceUses.reserve(
-        (hasOpaqueDrawItems ? 8u : 6u)
+        (hasOpaqueDrawItems ? s_OpaqueDrawResourceUseCount : s_NoOpaqueDrawResourceUseCount)
         + (hasCsgFrameGpuWork ? 5u : 0u)
         + (hasOpaqueCsgFrameWork ? 5u : 0u)
     );
@@ -663,7 +665,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     }
     if(hasOpaqueCsgFrameWork){
         csgReceiverSpanResourceUses.reserve(4u + (hasCsgFrameGpuWork ? 2u : 0u));
-        csgIntervalCombineResourceUses.reserve(9u + (hasCsgFrameGpuWork ? 2u : 0u));
+        constexpr usize s_CsgIntervalCombineResourceUseCapacity = 9u;
+        csgIntervalCombineResourceUses.reserve(s_CsgIntervalCombineResourceUseCapacity + (hasCsgFrameGpuWork ? 2u : 0u));
         // Peel payloads and receiver-event entries never load their prior values. Their paired interval ID and
         // event count preserve the sparse-write validity contract after the preceding explicit clears, so only those
         // two resources require ReadWrite access. Keeping the payloads write-only also permits their first graph
@@ -907,7 +910,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         opaqueCsgReceiverComputeEmulationPayload.materialGeometryStatesGraphOwned =
             gbufferPayload.materialGeometryStatesGraphOwned;
 
-        opaqueCsgReceiverComputeEmulationResourceUses.reserve(8u);
+        constexpr usize s_OpaqueCsgReceiverComputeEmulationCapacity = 8u;
+        opaqueCsgReceiverComputeEmulationResourceUses.reserve(s_OpaqueCsgReceiverComputeEmulationCapacity);
         opaqueCsgReceiverComputeEmulationResourceUses.push_back(
             ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
         );
@@ -1043,7 +1047,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             WriteUse(opaqueSharedComputeEmulationOutput, Core::ResourceStates::UnorderedAccess)
         );
 
-        opaqueSharedComputeEmulationRasterResourceUses.reserve(9u);
+        constexpr usize s_OpaqueSharedComputeEmulationRasterCapacity = 9u;
+        opaqueSharedComputeEmulationRasterResourceUses.reserve(s_OpaqueSharedComputeEmulationRasterCapacity);
         opaqueSharedComputeEmulationRasterResourceUses.insert(
             opaqueSharedComputeEmulationRasterResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end()
         );
@@ -1454,7 +1459,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             opaqueCsgIntervalSampleComputeEmulationPayload.materialGeometryStatesGraphOwned =
                 csgIntervalSamplePayload.materialGeometryStatesGraphOwned;
 
-            opaqueCsgIntervalSampleComputeEmulationResourceUses.reserve(12u);
+            constexpr usize s_OpaqueCsgIntervalSampleCapacity = 12u;
+            opaqueCsgIntervalSampleComputeEmulationResourceUses.reserve(s_OpaqueCsgIntervalSampleCapacity);
             opaqueCsgIntervalSampleComputeEmulationResourceUses.push_back(
                 ReadUse(meshView, Core::ResourceStates::ConstantBuffer)
             );
@@ -1591,7 +1597,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
 
     Core::Alloc::ScratchArena normalizeScratchArena(RendererArenaScope::s_TaskGraphArena);
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> normalizeResourceUses{ normalizeScratchArena };
-    normalizeResourceUses.reserve(9u + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
+    constexpr usize s_NormalizeResourceUseCapacity = 9u;
+    normalizeResourceUses.reserve(s_NormalizeResourceUseCapacity + (shadowTraceGeometryStatesGraphOwned ? 0u : shadowTraceGeometryResourceCount));
     normalizeResourceUses.push_back(ReadUse(meshView, Core::ResourceStates::ConstantBuffer));
     normalizeResourceUses.push_back(ReadUse(normal, Core::ResourceStates::ShaderResource));
     normalizeResourceUses.push_back(ReadUse(worldPosition, Core::ResourceStates::ShaderResource));

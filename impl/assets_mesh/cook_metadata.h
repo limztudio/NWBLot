@@ -67,6 +67,9 @@ namespace MetadataU32ValueFailure{
 static constexpr NotNull<const tchar*> s_MeshMetaKind = MakeNotNull(NWB_TEXT("Mesh"));
 
 
+static constexpr usize s_MetadataTupleAlignment = 16u;
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -228,7 +231,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
     const auto& list = field->asList();
     outValues.reserve(list.size());
     for(usize i = 0; i < list.size(); ++i){
-        alignas(16) f32 tuple[ComponentCount] = {};
+        alignas(s_MetadataTupleAlignment) f32 tuple[ComponentCount] = {};
         if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple, scratchArena)){
             outValues.clear();
             return false;

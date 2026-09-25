@@ -130,7 +130,8 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
         return {};
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses(scratchArena);
-    uses.reserve(finalize.boundsBuffers.size() + 8u);
+    constexpr usize s_BoundsUseCapacity = 8u;
+    uses.reserve(finalize.boundsBuffers.size() + s_BoundsUseCapacity);
     uses.push_back(RendererTaskGraphDetail::ReadUse(source, Core::ResourceStates::ShaderResource));
     uses.push_back(RendererTaskGraphDetail::ReadUse(source, Core::ResourceStates::Common));
     uses.push_back(RendererTaskGraphDetail::WriteUse(inputs, Core::ResourceStates::CopyDest));

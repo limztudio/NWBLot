@@ -49,7 +49,8 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 
     SIMDVector sinHalfFovVector;
     SIMDVector cosHalfFovVector;
-    VectorSinCos(sinHalfFovVector, cosHalfFovVector, VectorScale(verticalFovRadians, 0.5f));
+    constexpr f32 s_HalfFovWeight = 0.5f;
+    VectorSinCos(sinHalfFovVector, cosHalfFovVector, VectorScale(verticalFovRadians, s_HalfFovWeight));
     if(
         !VectorIsFinite(sinHalfFovVector, VectorComponentMask::s_XYZW)
         || !VectorIsFinite(cosHalfFovVector, VectorComponentMask::s_XYZW)

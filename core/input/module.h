@@ -28,13 +28,19 @@ namespace InputAction{
 };
 
 namespace InputModifier{
+    static constexpr i32 kModifierShiftBits = 0x0001;
+    static constexpr i32 kModifierControlBits = 0x0002;
+    static constexpr i32 kModifierAltBits = 0x0004;
+    static constexpr i32 kModifierSuperBits = 0x0008;
+    static constexpr i32 kModifierCapsLockBits = 0x0010;
+    static constexpr i32 kModifierNumLockBits = 0x0020;
     enum Enum : i32{
-        Shift = 0x0001,
-        Control = 0x0002,
-        Alt = 0x0004,
-        Super = 0x0008,
-        CapsLock = 0x0010,
-        NumLock = 0x0020,
+        Shift = kModifierShiftBits,
+        Control = kModifierControlBits,
+        Alt = kModifierAltBits,
+        Super = kModifierSuperBits,
+        CapsLock = kModifierCapsLockBits,
+        NumLock = kModifierNumLockBits,
     };
 };
 

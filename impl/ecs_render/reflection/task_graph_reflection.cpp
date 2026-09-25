@@ -410,7 +410,8 @@ ReflectionGraphResult DeclareReflectionTasks(
     }
 
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-    uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + 12u);
+    constexpr usize s_ReflectionUseCapacity = 12u;
+    uses.reserve(inputs.surfaceReadCount + inputs.hardwareReadCount + s_ReflectionUseCapacity);
     const auto appendSurfaceReads = [&](){
         uses.assign(inputs.surfaceReads, inputs.surfaceReads + inputs.surfaceReadCount);
         uses.push_back(ReadUse(result.frameParameters, Core::ResourceStates::ConstantBuffer));

@@ -397,8 +397,9 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         if(baseAddress == 0u || baseAddress > Limit<u64>::s_Max - offset)
             return false;
 
+        constexpr VkDeviceAddress s_MatrixRangeAlignment = 64u;
         const VkDeviceAddress address = baseAddress + offset;
-        if(address == 0u || address % 64u != 0u)
+        if(address == 0u || address % s_MatrixRangeAlignment != 0u)
             return false;
         if(static_cast<u64>(requiredByteSize) > Limit<u64>::s_Max - address)
             return false;

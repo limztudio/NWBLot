@@ -27,6 +27,7 @@ static_assert(sizeof(AffineTransform) == sizeof(VkTransformMatrixKHR), "AffineTr
 inline constexpr u32 s_LssVerticesPerPrimitive = 2u;
 inline constexpr u32 s_LssListIndicesPerPrimitive = 2u;
 inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
+inline constexpr u32 s_AabbStrideAlignment = 8u;
 
 
 VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
@@ -278,7 +279,7 @@ bool FillBlasGeometryForSizeQuery(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is zero"), operation);
             return false;
         }
-        if(aabbs.count > 0u && (aabbs.stride % 8u) != 0u){
+        if(aabbs.count > 0u && (aabbs.stride % s_AabbStrideAlignment) != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB stride is not a multiple of 8 bytes"), operation);
             return false;
         }
@@ -288,7 +289,7 @@ bool FillBlasGeometryForSizeQuery(
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: AABB buffer range overflows"), operation);
                 return false;
             }
-            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, 8u, operation, NWB_TEXT("AABB")))
+            if(!ValidateAccelStructBuildInputRange(aabbs.buffer, aabbs.offset, aabbByteSize, s_AabbStrideAlignment, operation, NWB_TEXT("AABB")))
                 return false;
         }
 

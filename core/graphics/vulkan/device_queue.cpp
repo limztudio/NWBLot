@@ -85,6 +85,8 @@ bool Device::registerPhysicalQueue(
         static_cast<u8>(GpuQueueCapability::Graphics)
         | static_cast<u8>(GpuQueueCapability::Compute)
     );
+    constexpr u32 s_MinTimestampValidBits = 36u;
+    constexpr u32 s_MaxTimestampValidBits = 64u;
     const bool missingRequiredTransferCapability =
         (providedCapabilities & graphicsOrComputeCapabilities) != 0u
         && (providedCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
@@ -98,7 +100,7 @@ bool Device::registerPhysicalQueue(
         || (providedCapabilities & requiredCapabilities) != requiredCapabilities
         || (providedCapabilities & static_cast<u8>(~knownCapabilities)) != 0u
         || missingRequiredTransferCapability
-        || (desc.timestampValidBits != 0u && (desc.timestampValidBits < 36u || desc.timestampValidBits > 64u))
+        || (desc.timestampValidBits != 0u && (desc.timestampValidBits < s_MinTimestampValidBits || desc.timestampValidBits > s_MaxTimestampValidBits))
         || m_physicalQueueInfos.size() >= static_cast<usize>(Limit<u16>::s_Max)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));

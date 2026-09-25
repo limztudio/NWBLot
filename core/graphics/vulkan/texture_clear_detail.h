@@ -61,6 +61,8 @@ inline constexpr u32 s_ClearShift11 = 11u;
 inline constexpr u32 s_ClearShift12 = 12u;
 inline constexpr u32 s_ClearShift20 = 20u;
 inline constexpr u32 s_ClearShift22 = 22u;
+inline constexpr u32 s_UFloat111110GreenMantissaBits = 6u;
+inline constexpr u32 s_UFloat111110BlueMantissaBits = 5u;
 inline constexpr u32 s_ClearShift30 = 30u;
 inline constexpr f32 s_SRGBClearLinearThreshold = 0.0031308f;
 inline constexpr f32 s_SRGBClearLinearScale = 12.92f;
@@ -527,9 +529,9 @@ inline bool BuildTextureFloatClearPattern(const Format::Enum format, const VkCle
     };
     auto writeUFloat111110RGBComponents = [&](){
         const u32 packed =
-            ConvertFloatToUnsignedFloat<6u>(values[0])
-            | (ConvertFloatToUnsignedFloat<6u>(values[1]) << 11u)
-            | (ConvertFloatToUnsignedFloat<5u>(values[2]) << 22u);
+            ConvertFloatToUnsignedFloat<s_UFloat111110GreenMantissaBits>(values[0])
+            | (ConvertFloatToUnsignedFloat<s_UFloat111110GreenMantissaBits>(values[1]) << s_ClearShift11)
+            | (ConvertFloatToUnsignedFloat<s_UFloat111110BlueMantissaBits>(values[2]) << s_ClearShift22);
         WriteClearPatternValue(outPattern, sizeof(packed), &packed, sizeof(packed));
         outPatternSize = sizeof(packed);
         return true;

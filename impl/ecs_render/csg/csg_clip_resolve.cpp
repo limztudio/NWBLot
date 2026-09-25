@@ -35,6 +35,7 @@ namespace __hidden_csg_clip_resolve{
 
 static constexpr f32 s_MinClipWForWorkRegion = static_cast<f32>(NWB_CSG_HOMOGENEOUS_W_EPSILON);
 static constexpr i32 s_WorkRegionPixelPadding = 2;
+static constexpr u32 s_BoxCornerCount = 8u;
 
 namespace CsgClipCutterResolveResult{
     enum Enum : u8{
@@ -216,7 +217,7 @@ static void ExpandCsgFrameWorkRegionForWorldBounds(
     );
     SIMDVector minPixel = frameExtent;
     SIMDVector maxPixel = VectorZero();
-    for(u32 corner = 0u; corner < 8u; ++corner){
+    for(u32 corner = 0u; corner < s_BoxCornerCount; ++corner){
         const SIMDVector cornerSelect = VectorSelectControl(corner & 1u, (corner >> 1u) & 1u, (corner >> 2u) & 1u, 0u);
         const SIMDVector worldPosition = VectorSetW(VectorSelect(minBounds, maxBounds, cornerSelect), 1.0f);
         const SIMDVector clipPosition = Vector4Transform(worldPosition, worldToClip);

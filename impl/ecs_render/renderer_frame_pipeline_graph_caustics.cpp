@@ -137,7 +137,8 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveFifthWaveletResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveUpsampleResourceUses{ scratchArena };
     const bool softwareTraceGeometryStatesGraphOwned = softwareTraceGeometrySet.valid();
-    photonResourceUses.reserve(20u + (
+    constexpr usize s_PhotonResourceUseCapacity = 20u;
+    photonResourceUses.reserve(s_PhotonResourceUseCapacity + (
         softwareTraceGeometryStatesGraphOwned
             ? 0u
             : softwareTraceGeometryResourceCount

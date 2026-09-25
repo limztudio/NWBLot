@@ -35,6 +35,8 @@ namespace FrameDetail{
 
 
 inline constexpr usize s_WinFrameActiveFlagByteIndex = 4u;
+inline constexpr SHORT s_ControlKeyDownMask = 0x8000;
+inline constexpr WPARAM s_CopyControlKey = static_cast<WPARAM>('C');
 inline constexpr COLORREF s_DefaultLogRowTextColor = RGB(0, 0, 0);
 inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
 
@@ -158,7 +160,7 @@ static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool a
 }
 
 static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
-    if(uMsg == WM_KEYDOWN && wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
+    if(uMsg == WM_KEYDOWN && wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask)){
         SendMessage(GetParent(hwnd), uMsg, wParam, lParam);
         return 0;
     }
@@ -283,7 +285,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_KEYDOWN:
         {
-            if(wParam == 'C' && (GetKeyState(VK_CONTROL) & 0x8000)){
+            if(wParam == s_CopyControlKey && (GetKeyState(VK_CONTROL) & s_ControlKeyDownMask)){
                 ScopedLock lock(s_ListMutex);
                 if(s_Store && !s_Store->messages.empty()){
                     usize combinedSize = 0u;

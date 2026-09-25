@@ -178,9 +178,11 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
 
 static constexpr u32 s_FixtureCheckerWidth = 2u;
 static constexpr u32 s_FixtureCheckerHeight = 2u;
+static constexpr u8 s_CheckerWhiteChannel = 255u;
+static constexpr u8 s_CheckerGrayChannel = 32u;
 static constexpr u8 s_CheckerRgba8Pixels[] = {
-    255u, 255u, 255u, 255u,  32u,  32u,  32u, 255u,
-     32u,  32u,  32u, 255u, 255u, 255u, 255u, 255u,
+    s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerGrayChannel, s_CheckerGrayChannel, s_CheckerGrayChannel, s_CheckerWhiteChannel,
+    s_CheckerGrayChannel, s_CheckerGrayChannel, s_CheckerGrayChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel, s_CheckerWhiteChannel,
 };
 static_assert(sizeof(s_CheckerRgba8Pixels) == s_FixtureCheckerWidth * s_FixtureCheckerHeight * sizeof(u32));
 static void ReleaseFixtureHeapHandles(Core::GraphicsRuntime& graphics, RendererMaterialResourceFixtureState& fixtures){

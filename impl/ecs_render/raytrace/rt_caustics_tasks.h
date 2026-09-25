@@ -572,9 +572,12 @@ inline void DispatchCausticResolvePass(
     NWB_ASSERT(input.texture);
     NWB_ASSERT(output.texture);
     NWB_ASSERT(input.texture != output.texture);
+    constexpr u32 s_ActivityStepWidth4 = 4u;
+    constexpr u32 s_ActivityStepWidth8 = 8u;
+    constexpr u32 s_ActivityStepWidth16 = 16u;
     const bool usesActivity = stage == CausticResolveStage::Wavelet && activity.valid();
-    const i32 activityInput = usesActivity ? (stepWidth == 8u ? 0 : (stepWidth == 16u ? 1 : -1)) : -1;
-    const i32 activityOutput = usesActivity ? (stepWidth == 4u ? 0 : (stepWidth == 8u ? 1 : -1)) : -1;
+    const i32 activityInput = usesActivity ? (stepWidth == s_ActivityStepWidth8 ? 0 : (stepWidth == s_ActivityStepWidth16 ? 1 : -1)) : -1;
+    const i32 activityOutput = usesActivity ? (stepWidth == s_ActivityStepWidth4 ? 0 : (stepWidth == s_ActivityStepWidth8 ? 1 : -1)) : -1;
     if(!graphOwnsPassEntryStates){
         // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup, while later ping-pong passes explicitly establish their own dynamic input/output states.
         if(!graphEntryStatesOwned){

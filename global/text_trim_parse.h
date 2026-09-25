@@ -433,13 +433,16 @@ template<usize N>
 }
 
 
+inline constexpr int s_DecimalParseBase = 10;
+
+
 [[nodiscard]] inline bool ParseI64FromChars(const char* begin, const char* end, i64& outValue){
-    const auto parseResult = std::from_chars(begin, end, outValue, 10);
+    const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
 [[nodiscard]] inline bool ParseU64FromChars(const char* begin, const char* end, u64& outValue){
-    const auto parseResult = std::from_chars(begin, end, outValue, 10);
+    const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 

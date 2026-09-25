@@ -154,12 +154,14 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceBuildArgsResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> traceResourceUses{ scratchArena };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
-    resourceUses.reserve(28u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    constexpr usize s_SurfelResourceUseCapacity = 28u;
+    constexpr usize s_SurfelTraceResourceUseCapacity = 16u;
+    resourceUses.reserve(s_SurfelResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
     spawnResourceUses.reserve(7u);
     traceBuildArgsResourceUses.reserve(3u);
-    traceResourceUses.reserve(16u + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
     resolveResourceUses.reserve(6u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));

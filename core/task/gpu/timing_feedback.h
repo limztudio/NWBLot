@@ -203,13 +203,19 @@ struct GpuTaskTimingAssignmentState{
 };
 
 
+namespace GpuTaskTimingFeedbackPolicyDetail{
+inline constexpr u64 s_MinFramesBetweenSwitches = 30u;
+inline constexpr u32 s_MinSwitchSamples = 8u;
+};
+
+
 // Disabled by default.  A caller supplies this policy and one immutable history snapshot to the compiler; neither
 // missing timing nor an invalid/empty snapshot may change the ordinary deterministic queue assignment.
 struct GpuTaskTimingFeedbackPolicy{
     f64 minimumAbsoluteBenefitSeconds = 0.0;
     f64 minimumRelativeBenefit = 0.0;
-    u64 minimumFramesBetweenSwitches = 30u;
-    u32 minimumSampleCount = 8u;
+    u64 minimumFramesBetweenSwitches = GpuTaskTimingFeedbackPolicyDetail::s_MinFramesBetweenSwitches;
+    u32 minimumSampleCount = GpuTaskTimingFeedbackPolicyDetail::s_MinSwitchSamples;
     // While a legal candidate lacks enough samples, one opted-in route is selected every N frames. Every
     // cross-family probe requires the family-routing opt-in, and cross-class probes also require the cross-class
     // timing opt-in. Zero disables calibration. Probes stop after every legal route reaches minimumSampleCount.

@@ -17,9 +17,11 @@ NWB_IMPL_BEGIN
 ReflectionSampleBase ComputeReflectionSampleBase(const u32 sampleIndex)noexcept{
     ReflectionSampleBase base;
     u32 remaining = sampleIndex;
-    u32 direction = 0x80000000u;
+    constexpr u32 s_SampleBitCount = 32u;
+    constexpr u32 s_SampleDirectionHighBit = 0x80000000u;
+    u32 direction = s_SampleDirectionHighBit;
     // x reverses index bits; y uses the Sobol generator (see pbr-book).
-    for(u32 bit = 0u; bit < 32u; ++bit){
+    for(u32 bit = 0u; bit < s_SampleBitCount; ++bit){
         const u32 selected = remaining & 1u;
         base.x = (base.x << 1u) | selected;
         if(selected != 0u)

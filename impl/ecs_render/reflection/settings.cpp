@@ -15,7 +15,9 @@ NWB_IMPL_BEGIN
 
 
 bool ValidateReflectionSettings(const ReflectionSettings& settings){
-    if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > 256u || settings.spatialRadius > 3u)
+    constexpr u32 s_MaxTemporalSamples = 256u;
+    constexpr u32 s_MaxSpatialRadius = 3u;
+    if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > s_MaxTemporalSamples || settings.spatialRadius > s_MaxSpatialRadius)
         return false;
     if(settings.maxOpticalQueries == 0u || settings.maxOpticalQueries > NWB_OPTICAL_MAX_QUERIES)
         return false;
@@ -28,12 +30,15 @@ bool ValidateReflectionSettings(const ReflectionSettings& settings){
         || !IsFinite(settings.roughnessCutoff) || settings.roughnessCutoff < 0.f || settings.roughnessCutoff > 1.f
     )
         return false;
+    constexpr u32 s_MinScreenSteps = 8u;
+    constexpr u32 s_MaxScreenSteps = 256u;
+    constexpr f32 s_MaxScreenEdgeFade = 0.25f;
     if(
-        settings.screenMaxSteps < 8u || settings.screenMaxSteps > 256u
+        settings.screenMaxSteps < s_MinScreenSteps || settings.screenMaxSteps > s_MaxScreenSteps
         || !IsFinite(settings.screenThickness) || settings.screenThickness <= 0.f
         || !IsFinite(settings.screenConfidenceThreshold)
         || settings.screenConfidenceThreshold <= 0.f || settings.screenConfidenceThreshold > 1.f
-        || !IsFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.f || settings.screenEdgeFade > 0.25f
+        || !IsFinite(settings.screenEdgeFade) || settings.screenEdgeFade < 0.f || settings.screenEdgeFade > s_MaxScreenEdgeFade
     )
         return false;
     const SIMDVector top = LoadFloat(settings.environmentTop);

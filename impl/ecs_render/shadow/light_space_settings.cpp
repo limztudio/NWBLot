@@ -19,8 +19,8 @@ NWB_IMPL_BEGIN
 bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
     return
         settings.backend <= SoftwareShadowBackend::LightSpace
-        && settings.directionalResolution >= 32u && settings.directionalResolution <= 2048u
-        && settings.pointResolution >= 32u && settings.pointResolution <= 2048u
+        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
+        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
         && settings.memoryBudgetBytes > 0u && settings.memoryBudgetBytes <= Limit<u32>::s_Max
     ;
 }

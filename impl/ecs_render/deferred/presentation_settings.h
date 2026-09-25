@@ -26,10 +26,13 @@ namespace PresentationToneMap{
 };
 
 // Stages exchange linear radiance; exposure applies at presentation.
+inline constexpr f32 s_PresentationDefaultShoulder = 0.65f;
+
+
 struct PresentationSettings{
     PresentationToneMap::Enum toneMap = PresentationToneMap::Reinhard;
     f32 exposure = 1.f;
-    f32 shoulder = 0.65f;
+    f32 shoulder = s_PresentationDefaultShoulder;
 };
 
 [[nodiscard]] bool ValidatePresentationSettings(const PresentationSettings& settings);

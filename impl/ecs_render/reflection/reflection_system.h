@@ -156,7 +156,8 @@ private:
     Core::ComputePipelineHandle m_plainHardwarePipeline;
     Core::ComputePipelineHandle m_unspecifiedHardwarePipeline;
     Core::ShaderHandle m_depthShader;
-    Core::GpuDescriptorHandle m_descriptors[8];
+    static constexpr usize s_ReflectionDescriptorCount = 8u;
+    Core::GpuDescriptorHandle m_descriptors[s_ReflectionDescriptorCount];
     Core::GpuDescriptorHandle m_depthSampledDescriptor;
     Core::GpuDescriptorHandle m_depthMipSampledDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];
     Core::GpuDescriptorHandle m_depthMipStorageDescriptors[ReflectionDepthPyramidSnapshot::s_MaxMipCount];

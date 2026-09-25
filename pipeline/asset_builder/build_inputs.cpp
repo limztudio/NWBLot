@@ -59,10 +59,6 @@ struct PathSelectionIndex{
     }
 };
 
-[[nodiscard]] static bool ContainsPath(const AStringView root, const AStringView file){
-    return IsPathPrefixText(root, file);
-}
-
 [[nodiscard]] static bool SelectPathRange(
     const PathSelectionIndex& index,
     const AStringView path,
@@ -137,7 +133,7 @@ bool SelectBuildInputs(
 #if defined(NWB_PLATFORM_WINDOWS)
                 CanonicalizeTextInPlace(rootText);
 #endif
-                if(__hidden_build_inputs::ContainsPath(rootText, normalized)){
+                if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size()))){
                     matched = true;
                     break;
                 }

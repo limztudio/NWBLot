@@ -48,31 +48,15 @@ using TextWrite::s_OutputFloatPrecision;
     return true;
 }
 
-[[nodiscard]] bool IsWhitespace(const char c){
-    return IsAsciiSpace(c);
-}
-
 [[nodiscard]] usize SkipWhitespace(const AString& text, usize offset){
-    while(offset < text.size() && IsWhitespace(text[offset]))
+    while(offset < text.size() && IsAsciiSpace(text[offset]))
         ++offset;
     return offset;
 }
 
-inline constexpr char s_DigitFirst = '0';
-inline constexpr char s_DigitLast = '9';
-
-
-[[nodiscard]] bool IsIdentifierChar(const char c){
-    return (c >= 'a' && c <= 'z')
-        || (c >= 'A' && c <= 'Z')
-        || (c >= s_DigitFirst && c <= s_DigitLast)
-        || c == '_'
-    ;
-}
-
 [[nodiscard]] bool HasIdentifierBoundary(const AString& text, const usize begin, const usize end){
-    const bool leftOk = begin == 0u || !IsIdentifierChar(text[begin - 1u]);
-    const bool rightOk = end >= text.size() || !IsIdentifierChar(text[end]);
+    const bool leftOk = begin == 0u || !IsAsciiIdentifierChar(text[begin - 1u]);
+    const bool rightOk = end >= text.size() || !IsAsciiIdentifierChar(text[end]);
     return leftOk && rightOk;
 }
 

@@ -50,16 +50,6 @@ static const char* BackendName(Common::LinuxFrameBackend::Enum backend){
     }
 }
 
-#if defined(NWB_WITH_WAYLAND)
-static bool HasEnvValue(Alloc::GlobalArena& arena, const char* name){
-    AString<Alloc::GlobalArena> value(arena);
-    return ReadEnvironmentVariable(name, value) && !value.empty();
-}
-
-static bool EnvEquals(Alloc::GlobalArena& arena, const char* name, const char* expectedValue){
-    return EnvironmentVariableEquals(arena, name, AStringView(expectedValue));
-}
-#endif
 
 inline constexpr usize s_LinuxBackendOrderCapacity = 2u;
 
@@ -95,7 +85,7 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_Lin
     }
 
 #if defined(NWB_WITH_WAYLAND)
-    const bool preferWayland = EnvEquals(arena, s_XdgSessionTypeEnvName, s_WaylandBackendRequest) || HasEnvValue(arena, s_WaylandDisplayEnvName);
+    const bool preferWayland = EnvironmentVariableEquals(arena, s_XdgSessionTypeEnvName, AStringView(s_WaylandBackendRequest)) || HasEnvironmentValue(arena, s_WaylandDisplayEnvName);
     if(preferWayland){
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
         AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);

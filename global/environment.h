@@ -24,6 +24,12 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
+[[nodiscard]] inline bool HasEnvironmentValue(ArenaT& arena, const char* name){
+    AString<ArenaT> current(arena);
+    return ReadEnvironmentVariable(name, current) && !current.empty();
+}
+
+template<typename ArenaT>
 [[nodiscard]] inline bool ReadEnvironmentVariable(const char* name, AString<ArenaT>& outValue){
     outValue.clear();
     if(!name || name[0] == 0)

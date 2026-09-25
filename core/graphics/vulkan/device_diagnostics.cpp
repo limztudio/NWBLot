@@ -18,34 +18,6 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_vulkan_device_diagnostics{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static AStringView TrimGpuCrashText(const AStringView text){
-    return TruncateView(text, s_MaxGpuCrashMarkerChars);
-}
-
-static AStringView TrimGpuCrashText(const char* const text){
-    return TruncateView<char>(text, s_MaxGpuCrashMarkerChars);
-}
-
-static const char* GpuCrashAvailabilityText(const bool available){
-    return BoolToAvailabilityText(available);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 void Device::captureDeviceLoss(const AStringView context){
     // Device-loss state must not depend on optional crash diagnostics.
     markDeviceLost();
@@ -105,7 +77,7 @@ void Device::captureDeviceLoss(const AStringView context){
                     if(!resolved.first())
                         continue;
 
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), __hidden_vulkan_device_diagnostics::TrimGpuCrashText(resolved.second())));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "last executed marker (stage 0x{:x}): {}\n", static_cast<u32>(checkpoint.stage), TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)));
                 }
 
                 remainingEntries -= checkpointCount;
@@ -167,7 +139,7 @@ void Device::captureDeviceLoss(const AStringView context){
                                 queue.deviceGeneration,
                                 newestRecord.serial,
                                 newestRecord.marker,
-                                __hidden_vulkan_device_diagnostics::TrimGpuCrashText(resolved.second())
+                                TruncateView(resolved.second(), s_MaxGpuCrashMarkerChars)
                             ));
                         }
                         else{
@@ -222,7 +194,7 @@ void Device::captureDeviceLoss(const AStringView context){
                 const VkResult faultResult = m_context.deviceDispatch.vkGetDeviceFaultInfoEXT(m_context.device, &faultCounts, &faultInfo);
                 if(faultResult == VK_SUCCESS || faultResult == VK_INCOMPLETE){
                     const char* faultDescription = faultInfo.description;
-                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", __hidden_vulkan_device_diagnostics::TrimGpuCrashText(faultDescription)));
+                    report.details.append(StringFormat(m_gpuCrashReportArena, "device fault: {}\n", TruncateView(faultDescription, s_MaxGpuCrashMarkerChars)));
                     if(vendorBinaryByteSize != 0u){
                         if(!vendorBinary.empty()){
                             report.details.append(StringFormat(m_gpuCrashReportArena, "device fault vendor binary (RGD): {} bytes\n", vendorBinary.size()));
@@ -251,7 +223,7 @@ void Device::captureDeviceLoss(const AStringView context){
                         const VkDeviceFaultVendorInfoEXT& vendorInfo = vendorInfos[i];
                         const char* vendorDescription = vendorInfo.description;
                         report.details.append(StringFormat(m_gpuCrashReportArena, "vendor fault '{}' (code 0x{:x}, data 0x{:x})\n"
-                            , __hidden_vulkan_device_diagnostics::TrimGpuCrashText(vendorDescription)
+                            , TruncateView(vendorDescription, s_MaxGpuCrashMarkerChars)
                             , static_cast<u64>(vendorInfo.vendorFaultCode)
                             , static_cast<u64>(vendorInfo.vendorFaultData)
                         ));
@@ -266,15 +238,15 @@ void Device::captureDeviceLoss(const AStringView context){
                 "capture context: {}\n"
                 "device: {} (vendor 0x{:x}, device 0x{:x}, driver 0x{:x})\n"
                 "diagnostic paths: NV_device_diagnostic_checkpoints={}, AMD_buffer_marker={}, VK_EXT_device_fault={}, NVIDIA Aftermath={}\n"
-                , __hidden_vulkan_device_diagnostics::TrimGpuCrashText(context)
-                , __hidden_vulkan_device_diagnostics::TrimGpuCrashText(m_context.physicalDeviceProperties.deviceName)
+                , TruncateView(context, s_MaxGpuCrashMarkerChars)
+                , TruncateView(AStringView(m_context.physicalDeviceProperties.deviceName), s_MaxGpuCrashMarkerChars)
                 , static_cast<u32>(m_context.physicalDeviceProperties.vendorID)
                 , static_cast<u32>(m_context.physicalDeviceProperties.deviceID)
                 , static_cast<u32>(m_context.physicalDeviceProperties.driverVersion)
-                , __hidden_vulkan_device_diagnostics::GpuCrashAvailabilityText(hasCheckpoints)
-                , __hidden_vulkan_device_diagnostics::GpuCrashAvailabilityText(hasBufferMarker)
-                , __hidden_vulkan_device_diagnostics::GpuCrashAvailabilityText(hasDeviceFault)
-                , __hidden_vulkan_device_diagnostics::GpuCrashAvailabilityText(Aftermath::IsActive())
+                , BoolToAvailabilityText(hasCheckpoints)
+                , BoolToAvailabilityText(hasBufferMarker)
+                , BoolToAvailabilityText(hasDeviceFault)
+                , BoolToAvailabilityText(Aftermath::IsActive())
             ));
     }
 

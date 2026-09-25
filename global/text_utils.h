@@ -252,6 +252,16 @@ template<typename CharT>
 }
 
 template<typename CharT>
+[[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch){
+    return
+        (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'))
+        || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
+        || (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
+        || ch == static_cast<CharT>('_')
+    ;
+}
+
+template<typename CharT>
 inline constexpr CharT Canonicalize(CharT c){
     if(c == static_cast<CharT>('\\'))
         return static_cast<CharT>('/');

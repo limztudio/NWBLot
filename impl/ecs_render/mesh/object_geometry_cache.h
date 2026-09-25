@@ -45,8 +45,8 @@ struct ObjectGeometryCacheLayout{
 struct ObjectGeometryCacheState{
     Core::BufferHandle buffer;
     Core::ComputePipelineHandle decoderPipeline;
-    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u64 acceptedContentRevision = 0u;
+    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u32 indexByteOffset = 0u;
     u32 indexCount = 0u;
     bool acceptedContent = false;
@@ -57,8 +57,8 @@ struct ObjectGeometryCacheState{
 struct ObjectGeometryCacheSnapshot{
     Core::BufferHandle buffer;
     Core::ComputePipelineHandle decoderPipeline;
-    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u64 sourceRevision = 0u;
+    Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
     u32 indexByteOffset = 0u;
     u32 indexCount = 0u;
     bool initialized = false;

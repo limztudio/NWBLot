@@ -120,8 +120,8 @@ public:
 private:
     struct WorkerCommandArena{
         u64 recordingWorkerDomain = 0u;
-        u32 recordingWorkerIndex = 0u;
         VkCommandPool commandPool = VK_NULL_HANDLE;
+        u32 recordingWorkerIndex = 0u;
         Futex mutex;
         Atomic<WorkerCommandArena*> next = nullptr;
         Atomic<u64> currentCommandBufferCount = 0u;

@@ -172,8 +172,8 @@ ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::objectGeometryC
     return {
         .buffer = cache.buffer,
         .decoderPipeline = cache.decoderPipeline,
-        .heapHandle = cache.heapHandle,
         .sourceRevision = mesh.runtimeGeometryContentRevision,
+        .heapHandle = cache.heapHandle,
         .indexByteOffset = cache.indexByteOffset,
         .indexCount = cache.indexCount,
         .initialized = cache.initialized,

@@ -706,8 +706,8 @@ public:
         const Core::GpuPhysicalQueueId& queue
     )
         : m_device(device)
-        , m_queue(queue)
         , m_context(VulkanTestDeviceProbe::capture(device))
+        , m_queue(queue)
     {
         Core::GraphicsBackend::Queue* const nativeQueue = device.getQueue(queue);
         if(!nativeQueue || !m_context.valid() || !m_context.deviceDispatch->vkCreateSemaphore)
@@ -782,9 +782,9 @@ private:
     static inline constexpr u64 s_ReleaseValue = 1u;
 
     Core::GraphicsBackend::Device& m_device;
-    Core::GpuPhysicalQueueId m_queue;
     VulkanTestDeviceContext m_context;
     VkSemaphore m_semaphore = VK_NULL_HANDLE;
+    Core::GpuPhysicalQueueId m_queue;
     bool m_armed = false;
     bool m_released = false;
     bool m_drained = false;

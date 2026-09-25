@@ -420,12 +420,12 @@ struct GraphicsState{
     Framebuffer* framebuffer = nullptr;
     ViewportState viewport;
     VariableRateShadingState shadingRateState;
+    u8 dynamicStencilRefValue = 0;
     Color blendConstantColor{};
     FixedVector<VertexBufferBinding, s_MaxVertexAttributes> vertexBuffers;
     IndexBufferBinding indexBuffer;
 
     Buffer* indirectParams = nullptr;
-    u8 dynamicStencilRefValue = 0;
 
     constexpr GraphicsState& setPipeline(GraphicsPipeline* value){ pipeline = value; return *this; }
     constexpr GraphicsState& setFramebuffer(Framebuffer* value){ framebuffer = value; return *this; }

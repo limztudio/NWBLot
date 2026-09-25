@@ -60,15 +60,15 @@ struct FrameGraphAvboitOccupancyUploadResult{
     Core::GpuTaskId uploadTask;
     Core::GpuGraphResourceSetId materialGeometrySet;
     Core::GpuGraphResourceSetId materialSampledTextureSet;
-    bool csgStreamsUploaded = false;
-    bool regularComputeEmulationPlanCaptured = false;
-    bool producesReusableGeometry = false;
     Core::GpuTaskId reusedGeometryProducer;
-    bool csgComputeEmulationPlanCaptured = false;
-    bool sharedComputeEmulationPlanCaptured = false;
     ECSRenderDetail::RegularSharedComputeEmulationGraphPlan sharedComputeEmulationPlan;
     usize sharedComputeEmulationInstanceCount = 0u;
     usize sharedComputeEmulationMaterialTypedByteCount = 0u;
+    bool csgStreamsUploaded = false;
+    bool regularComputeEmulationPlanCaptured = false;
+    bool producesReusableGeometry = false;
+    bool csgComputeEmulationPlanCaptured = false;
+    bool sharedComputeEmulationPlanCaptured = false;
     bool declared = false;
 };
 

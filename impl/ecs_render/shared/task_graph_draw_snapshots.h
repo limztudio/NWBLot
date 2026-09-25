@@ -133,9 +133,9 @@ struct TransparentCsgIntervalGraphSnapshot{
     DrawItemVector receiverSurfaceComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
-    CsgFrameWorkRegion csgWorkRegion;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
+    CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
     explicit TransparentCsgIntervalGraphSnapshot(Core::Alloc::GlobalArena& arena)
@@ -210,9 +210,9 @@ struct TransparentMaterialPassGraphSnapshot{
     DrawItemVector csgComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
-    CsgFrameWorkRegion csgWorkRegion;
     usize instanceCount = 0u;
     usize materialTypedByteCount = 0u;
+    CsgFrameWorkRegion csgWorkRegion;
     bool captured = false;
 
     explicit TransparentMaterialPassGraphSnapshot(Core::Alloc::GlobalArena& arena)

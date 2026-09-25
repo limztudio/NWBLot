@@ -43,9 +43,10 @@ half4 nwbSurfelShBasis(const float3 dir){
 }
 
 // Per-ray projection weight: the upper hemisphere is sampled with pdf 1/(2*pi), so the summed radiance*basis products
-// over N rays are scaled by 2*pi/N to estimate the SH projection integral.
-float nwbSurfelShProjectionScale(const uint rayCount){
-    return NWB_GI_FULL_TURN_RADIANS / float(max(rayCount, 1u));   // 2 * pi / N
+// over N rays are scaled by 2*pi/N to estimate the SH projection integral. N >= 1 keeps this in (0, 2*pi];
+// half math is sufficient here (widened at the float SH-coefficient scale in the trace).
+half nwbSurfelShProjectionScale(const uint rayCount){
+    return half(NWB_GI_FULL_TURN_RADIANS) / half(float(max(rayCount, 1u)));   // 2 * pi / N
 }
 
 // Reconstruct one colour channel's cosine-weighted mean radiance for a query normal from its 4 SH coefficients:

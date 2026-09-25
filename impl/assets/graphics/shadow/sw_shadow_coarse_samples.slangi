@@ -68,7 +68,7 @@ half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const
 bool nwbSwShadowLoadCoarseLight(
     const NwbSwShadowCoarseLocation location,
     const uint lightIndex,
-    const float edgeThreshold,
+    const half edgeThreshold,
     out NwbSwShadowCoarseLight outLight
 ){
     const float slotF = g_NwbSceneLights[lightIndex].params.z;
@@ -85,7 +85,8 @@ bool nwbSwShadowLoadCoarseLight(
 
     outLight.slot = uint(slotF);
     outLight.samples = nwbSwShadowLoadCoarseSamples(location.c0, location.c1, outLight.slot);
-    outLight.isEdge = float(nwbSwShadowCoarseRange(outLight.samples)) > edgeThreshold;
+    // The coarse range is a (0, 1) half visibility delta; half compare is sufficient here.
+    outLight.isEdge = nwbSwShadowCoarseRange(outLight.samples) > edgeThreshold;
     return true;
 }
 

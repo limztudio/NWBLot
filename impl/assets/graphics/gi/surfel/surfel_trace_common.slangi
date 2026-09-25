@@ -149,7 +149,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const float4 sumB = s_surfelShB[0];
 
     if(rayIndex == 0u){
-        const half projectionScale = half(nwbSurfelShProjectionScale(rayCount));
+        const half projectionScale = nwbSurfelShProjectionScale(rayCount);
         const float4 frameShR = sumR * float(projectionScale);
         const float4 frameShG = sumG * float(projectionScale);
         const float4 frameShB = sumB * float(projectionScale);

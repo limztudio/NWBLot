@@ -48,7 +48,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         pixel,
         uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight)
     );
-    const float edgeThreshold = g_NwbSwShadowPush.edgeThreshold;
+    const half edgeThreshold = half(g_NwbSwShadowPush.edgeThreshold);
     const uint edgeCapacity = g_NwbSwShadowPush.edgeCapacity;
 
     uint tracedRays = 0u;

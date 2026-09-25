@@ -711,17 +711,17 @@ struct ShadowTransparentSoftFoldGraphTask{
 // Shadow visibility owns its graph task; pipeline composes the caustics successor.
 struct ShadowVisibilityGraphTask{
     struct Payload{
+        bool hardwareShadowSupported = false;
+        bool graphEntryStatesOwned = false;
+        bool graphOwnsAllLitVisibilityClear = false;
+        mutable bool adaptiveRouteRecorded = false;
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
         DeferredLightingGraphResources deferredLightingResources;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const bool* prepared = nullptr;
-        bool hardwareShadowSupported = false;
-        bool graphEntryStatesOwned = false;
-        bool graphOwnsAllLitVisibilityClear = false;
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
-        mutable bool adaptiveRouteRecorded = false;
     };
 
     [[nodiscard]] static bool record(

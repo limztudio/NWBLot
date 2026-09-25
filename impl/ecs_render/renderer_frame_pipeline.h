@@ -564,22 +564,22 @@ private:
     // The counter can continue into a late Transfer readback, so retain the accepted tail state and its typed backing separately. The next Surfel-GI packet imports this cache through its first-use declaration.
     Core::GpuPersistentResourceStateCache m_surfelGiCounterPersistentState;
     Core::GpuPersistentResourceStateCache m_surfelIrradianceReturnState;
+    bool m_laggedLightingCurrentFrameAcceptancePending = false;
+    bool m_preparedRefractionActive = false;
+    bool m_refractionHardwareLogged = false;
+    bool m_refractionScreenLogged = false;
+    bool m_preparedReflectionSceneAvailable = false;
+    bool m_reflectionHardwareLogged = false;
+    bool m_reflectionFallbackLogged = false;
+    bool m_refractionEnabled = true;
+    LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
     bool m_preparedCsgFrameStateValid = false;
     bool m_preparedHasTransparentRenderers = false;
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
     ReflectionSettings m_reflectionSettings;
     u32 m_reflectionFrameIndex = 0u;
-    bool m_preparedReflectionSceneAvailable = false;
-    bool m_reflectionHardwareLogged = false;
-    bool m_reflectionFallbackLogged = false;
-    bool m_refractionEnabled = true;
-    bool m_preparedRefractionActive = false;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
-    bool m_refractionHardwareLogged = false;
-    bool m_refractionScreenLogged = false;
-    LaggedLightingReport m_laggedLightingReport = LaggedLightingReport::Unreported;
-    bool m_laggedLightingCurrentFrameAcceptancePending = false;
     u64 m_laggedLightingReportGeneration = 0u;
     Core::QueueSubmissionToken m_laggedLightingHistorySubmissionToken;
     // The newest incomplete accepted same-generation Transfer tail protects live producer writes while graph declaration resets the normal history-read token. A later tail is its proven successor; completed tails do not keep adding redundant waits. Target recreation clears it with the normal history tracking state.

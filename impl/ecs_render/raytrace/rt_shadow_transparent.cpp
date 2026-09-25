@@ -357,15 +357,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{
+            .hardwareShadowSupported = hardwareShadowSupported,
+            .graphEntryStatesOwned = graphEntryStatesOwned,
+            .graphOwnsAllLitVisibilityClear = graphOwnsAllLitVisibilityClear,
             .raytracingSystem = this,
             .graphics = &m_graphics,
             .targets = &targets,
             .deferredLightingResources = deferredLightingResources,
             .timingTicket = &timingTicket,
             .prepared = prepared,
-            .hardwareShadowSupported = hardwareShadowSupported,
-            .graphEntryStatesOwned = graphEntryStatesOwned,
-            .graphOwnsAllLitVisibilityClear = graphOwnsAllLitVisibilityClear,
             .graphOwnedAdaptivePlan = graphOwnedAdaptivePlan,
         }
     );

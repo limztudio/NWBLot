@@ -162,13 +162,7 @@ struct AvboitOccupancySharedComputeEmulationGraphTask{
 // Occupancy follows the interval producer with its own immutable stream.
 struct AvboitOccupancyGraphTask{
     struct Payload{
-        RendererAvboitSystem* avboitSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         bool hasTransparentRenderers = false;
-        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
-        ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
-        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         bool occupancyPhasePrepared = false;
         bool occupancyStreamsUploaded = false;
         bool occupancyCsgIntervalSampleImageStatesGraphOwned = false;
@@ -178,6 +172,12 @@ struct AvboitOccupancyGraphTask{
         bool occupancyComputeEmulationOutputStatesGraphOwned = false;
         bool occupancyCsgComputeEmulationOutputStatesGraphOwned = false;
         bool generatedGeometryReused = false;
+        RendererAvboitSystem* avboitSystem = nullptr;
+        DeferredFrameTargets* targets = nullptr;
+        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
+        ECSRenderDetail::TransparentMaterialPassGraphSnapshot occupancySnapshot;
+        ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
         Optional<Core::GpuTimingMeasure>* occupancyComputeEmulationTiming = nullptr;
 
         explicit Payload(Core::Alloc::GlobalArena& arena)

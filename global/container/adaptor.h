@@ -137,7 +137,6 @@ public:
             throw std::bad_alloc{};
 
         pointer const output = static_cast<pointer>(m_arena->allocate(static_cast<size_type>(alignof(value_type)), bytes));
-        NWB_ASSERT(output != nullptr);
         if(output == nullptr)
             throw std::bad_alloc{};
 
@@ -294,7 +293,6 @@ public:
             throw std::bad_alloc{};
 
         pointer const output = static_cast<pointer>(m_arena->allocate(alignment(), bytes));
-        NWB_ASSERT(output != nullptr);
         if(output == nullptr)
             throw std::bad_alloc{};
 

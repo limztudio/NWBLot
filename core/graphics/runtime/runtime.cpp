@@ -99,7 +99,6 @@ public:
                 return;
             }
         }
-        NWB_ASSERT(m_phaseCount < s_MaxPhaseCount);
         if(m_phaseCount >= s_MaxPhaseCount)
             return;
 

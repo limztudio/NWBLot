@@ -89,7 +89,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     DeferredFrameTargets& deferredTargets = m_frameTargets;
 
     NWB_ASSERT(m_preparedCsgFrameStateValid);
-    NWB_ASSERT(m_shadowPreparationOutcome.resourcesValid);
     if(!m_shadowPreparationOutcome.resourcesValid){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow-visibility resource preflight was unavailable"));
         return;

@@ -483,7 +483,6 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     outInfo = nullptr;
 
     const Name materialPath = materialAsset.name();
-    NWB_ASSERT(materialPath);
     if(!materialPath){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer material is empty"));
         return false;

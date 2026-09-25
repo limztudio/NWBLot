@@ -534,7 +534,6 @@ bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& m
 
 bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& outMesh){
     outMesh = nullptr;
-    NWB_ASSERT(meshKey);
     if(!meshKey)
         return false;
 

@@ -82,7 +82,6 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         deferredTargets = &m_frameTargets;
         targetsReady = m_deferredSystem.createDeferredLightingPipeline() && m_deferredSystem.createDeferredCompositePipeline();
         if(!targetsReady){
-            NWB_ASSERT(deferredTargets);
             resetFrameTargets();
         }
     }

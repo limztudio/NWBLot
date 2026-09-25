@@ -360,7 +360,6 @@ void GpuTimingRecorder::dispatchCompletedSample(
             ScopedLock listenerLock(m_sampleListenerMutex);
             if(nextRecord->removing || !nextRecord->listener.valid())
                 continue;
-            NWB_ASSERT(nextRecord->activeCallbackCount != Limit<u32>::s_Max);
             if(nextRecord->activeCallbackCount == Limit<u32>::s_Max)
                 continue;
             ++nextRecord->activeCallbackCount;

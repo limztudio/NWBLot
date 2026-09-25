@@ -121,7 +121,6 @@ bool LoadSkeleton(
     outSkeleton = nullptr;
 
     const Name skeletonName = skeletonRef.name();
-    NWB_ASSERT(skeletonName);
     if(!skeletonName)
         return false;
 

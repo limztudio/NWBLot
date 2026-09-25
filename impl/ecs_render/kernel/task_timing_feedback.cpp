@@ -51,7 +51,6 @@ void ResolveRendererTaskTimingFeedbackPolicyTransition(
     if(transition.action == RendererTaskTimingFeedbackCollectionAction::None)
         return;
 
-    NWB_ASSERT(transition.action < RendererTaskTimingFeedbackCollectionAction::kCount);
     if(transition.action >= RendererTaskTimingFeedbackCollectionAction::kCount)
         return;
     currentPolicy = collectionUpdated ? transition.requestedPolicy : transition.previousPolicy;

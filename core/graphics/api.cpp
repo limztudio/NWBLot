@@ -463,7 +463,7 @@ bool BlendState::RenderTarget::usesConstantColor()const{
 
 bool BlendState::usesConstantColor(u32 numTargets)const{
     NWB_ASSERT(numTargets <= s_MaxRenderTargets);
-    for(u32 rt = 0; rt < numTargets && rt < s_MaxRenderTargets; ++rt){
+    for(u32 rt = 0; rt < numTargets; ++rt){
         if(targets[rt].usesConstantColor())
             return true;
     }

@@ -423,7 +423,6 @@ Queue::WorkerCommandArena* Queue::findWorkerCommandArena(
     const u64 recordingWorkerDomain,
     const u32 recordingWorkerIndex
 )const noexcept{
-    NWB_ASSERT(recordingWorkerIndex != 0u);
     if(recordingWorkerIndex == 0u)
         return nullptr;
 
@@ -447,7 +446,6 @@ Queue::WorkerCommandArena* Queue::getOrCreateWorkerCommandArena(
     const u64 recordingWorkerDomain,
     const u32 recordingWorkerIndex
 ){
-    NWB_ASSERT(recordingWorkerIndex != 0u);
     if(recordingWorkerIndex == 0u)
         return nullptr;
 

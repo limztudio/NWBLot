@@ -482,7 +482,6 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
         const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
         if(commit.accelStruct == &accelStruct){
-            NWB_ASSERT(commit.preparedRole);
             if(!commit.preparedRole)
                 return false;
 

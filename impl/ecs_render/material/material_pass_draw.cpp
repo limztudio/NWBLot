@@ -42,7 +42,6 @@ static void SetCsgHeapResourceStates(
     if(!csgBindingUse.clip)
         return;
 
-    NWB_ASSERT(csgResources);
     if(!csgResources)
         return;
 
@@ -219,7 +218,6 @@ bool RendererMaterialSystem::setMaterialPassDrawPushConstants(
         context,
         frameHeapSlots
     );
-    NWB_ASSERT(frameHeapSlotsReady);
     if(!frameHeapSlotsReady)
         return false;
     if(MaterialPipelinePassUsesRendererAvboit(context.pass)){
@@ -293,7 +291,6 @@ void RendererMaterialSystem::dispatchComputeMaterialPassDrawItem(
         context,
         frameHeapSlots
     );
-    NWB_ASSERT(frameHeapSlotsReady);
     if(!frameHeapSlotsReady)
         return;
     frameHeapSlots.generatedVertex = mesh.emulationVertexHeapHandle.slot();

@@ -113,7 +113,6 @@ void CommandList::setViewportState(const ViewportState& viewportState){
             viewportState.viewports[0u],
             scissor
         );
-        NWB_ASSERT(implicitScissorBuilt);
         if(!implicitScissorBuilt)
             return;
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);

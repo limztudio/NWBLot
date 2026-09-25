@@ -33,11 +33,31 @@ void Session::beginFrame(const u64 frameIndex){
     m_frameIndex = frameIndex;
 }
 
+void Session::ensureMemoryScopes(){
+    if(!captureOptions().memoryActive())
+        return;
+
+    // Scope creation for arena owners lives in this setup step, never in the record calls below.
+    const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
+    while(owner){
+        ArenaMemoryOwnerSnapshot snapshot;
+        owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
+        const MemorySource::Enum source = snapshot.source == ArenaMemorySource::HeapBacking
+            ? MemorySource::HeapBacking
+            : MemorySource::Arena
+        ;
+        static_cast<void>(m_memory.registerScope(snapshot.ownerName, source));
+    }
+}
+
 void Session::publishFrame(){
     m_cpuTiming.publishFrame(m_frameIndex);
     if(!captureOptions().memoryActive())
         return;
 
+    ensureMemoryScopes();
+
+    // The record loop below only consumes scopes registered above; it never creates them.
     const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
     while(owner){
         ArenaMemoryOwnerSnapshot snapshot;

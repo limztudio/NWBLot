@@ -247,6 +247,10 @@ private:
     [[nodiscard]] bool ensureBoundsPipeline();
     [[nodiscard]] bool ensureLocalBoundsPipeline();
     [[nodiscard]] bool ensureRepackPipeline();
+    // Consume-only pipeline checks for the per-frame prepare path; creation belongs to validateResources via the ensure* setup above.
+    [[nodiscard]] bool skinningPipelineReady()const noexcept;
+    [[nodiscard]] bool boundsPipelinesReady()const noexcept;
+    [[nodiscard]] bool repackPipelineReady()const noexcept;
     // Declares frame-local skinning as one Graphics packet; accepted task commits dirty state.
     [[nodiscard]] bool submitFrameSkinningGraph();
     [[nodiscard]] bool prepareRuntimeMeshResources(

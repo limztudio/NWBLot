@@ -172,9 +172,8 @@ bool Frame::updateFrame(f32 delta){
 
     if(m_projectUpdateCallback){
         Timer projectUpdateBegin;
-        if(cpuTiming.enabled()){
-            if(!m_projectUpdateTimingScope.valid())
-                m_projectUpdateTimingScope = cpuTiming.registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
+        // The update scope is registered once during construction/capture setup; the per-frame update path only consumes it and never creates scopes.
+        if(cpuTiming.enabled() && m_projectUpdateTimingScope.valid()){
             projectUpdateBegin = TimerNow();
             recordProjectUpdateTiming = true;
         }

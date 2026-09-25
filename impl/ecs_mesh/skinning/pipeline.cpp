@@ -244,6 +244,19 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
 }
 
 
+bool MeshSkinningSystem::skinningPipelineReady()const noexcept{
+    return m_skinningBindingLayout && m_skinningComputePipeline;
+}
+
+bool MeshSkinningSystem::boundsPipelinesReady()const noexcept{
+    return m_boundsBindingLayout && m_boundsComputePipeline && m_localBoundsComputePipeline;
+}
+
+bool MeshSkinningSystem::repackPipelineReady()const noexcept{
+    return m_repackBindingLayout && m_repackComputePipeline;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

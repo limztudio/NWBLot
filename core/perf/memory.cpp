@@ -88,7 +88,12 @@ void MemoryRecorder::recordSnapshot(
     if(!m_enabled || !scopeName)
         return;
 
-    recordSnapshot(registerScope(scopeName, source), stats, frameIndex);
+    // Record paths only consume scopes registered during setup; scope creation belongs to registerScope callers, never to per-frame record calls.
+    const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
+    if(found == m_scopeMap.end())
+        return;
+
+    recordSnapshot(found.value(), stats, frameIndex);
 }
 
 const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName, const MemorySource::Enum source)const{

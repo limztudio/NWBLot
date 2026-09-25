@@ -285,6 +285,12 @@ bool MeshSkinningSystem::validateResources(const u32 width, const u32 height, co
     ;
     if(!timingReady)
         NWB_LOGGER_WARNING(NWB_TEXT("MeshSkinningSystem: GPU timing scope preparation failed; timing samples may be skipped"));
+
+    // Pipeline creation lives in resource validation, never in the per-frame prepare path below; prepare only consumes the handles created here.
+    if(!ensureSkinningPipeline() || !ensureBoundsPipeline() || !ensureLocalBoundsPipeline() || !ensureRepackPipeline()){
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to create skinning pipelines during resource validation"));
+        return false;
+    }
     return true;
 }
 

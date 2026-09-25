@@ -45,12 +45,13 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     if(instance.meshlets.empty())
         return true;
 
-    if(hasActiveSkin && !ensureSkinningPipeline())
+    // Pipelines are created during validateResources; the per-frame prepare path only consumes them and fails if setup is missing.
+    if(hasActiveSkin && !skinningPipelineReady())
         return false;
-    if(!ensureBoundsPipeline() || !ensureLocalBoundsPipeline())
+    if(!boundsPipelinesReady())
         return false;
-    // RT attribute buffer exists only with ray tracing; build repack pipeline only then.
-    if(instance.attributeBuffer && !ensureRepackPipeline())
+    // RT attribute buffer exists only with ray tracing; consume the repack pipeline only then.
+    if(instance.attributeBuffer && !repackPipelineReady())
         return false;
 
     RuntimeResources* resources = nullptr;

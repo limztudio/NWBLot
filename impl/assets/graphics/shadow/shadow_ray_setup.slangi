@@ -43,10 +43,11 @@ bool nwbShadowBuildLightRay(
         tMax = length(delta);
         const float3 centerDir = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON) ? (delta / tMax) : float3(0.0, 1.0, 0.0);
         // A punctual source sphere subtends asin(radius / distance); the center distance remains the trace extent.
-        const float sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON)
-            ? min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX)
-            : 0.0;
-        outDirection = nwbShadowJitterCone(centerDir, asin(sinHalf), jitter);
+        // Punctual-source sine half-angle is a (0, 1) bounded factor; half math is sufficient here; widen only at asin.
+        const half sinHalf = (tMax > NWB_SHADOW_LIGHT_DIRECTION_EPSILON)
+            ? half(min(light.params2.y / tMax, NWB_SHADOW_POINT_LIGHT_SINE_HALF_ANGLE_MAX))
+            : half(0.0h);
+        outDirection = nwbShadowJitterCone(centerDir, asin(float(sinHalf)), jitter);
     }
 
     // Deferred lighting already clamps NdotL, so a back-facing receiver is unshadowed without a trace.

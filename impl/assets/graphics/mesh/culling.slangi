@@ -48,16 +48,17 @@ bool nwbMeshletBackfaceCull(
         return false;
 
     const float3 view = toCamera / dist;
-    const float sinTheta = sqrt(max(0.0, 1.0 - coneCos * coneCos));
-    const float sinAlpha = saturate(radius / dist);
-    const float cosAlpha = sqrt(max(0.0, 1.0 - sinAlpha * sinAlpha));
+    // Cone sine/cosine factors are (0, 1) bounded; half math is sufficient here; widen only at the comparisons.
+    const half sinTheta = half(sqrt(max(0.0, 1.0 - coneCos * coneCos)));
+    const half sinAlpha = saturate(half(radius / dist));
+    const half cosAlpha = half(sqrt(max(0.0, 1.0 - float(sinAlpha) * float(sinAlpha))));
 
-    const float cosThetaPlusAlpha = coneCos * cosAlpha - sinTheta * sinAlpha;
-    if(cosThetaPlusAlpha <= 0.0)
+    const half cosThetaPlusAlpha = half(coneCos) * cosAlpha - sinTheta * sinAlpha;
+    if(float(cosThetaPlusAlpha) <= 0.0)
         return false;
 
-    const float sinThetaPlusAlpha = sinTheta * cosAlpha + coneCos * sinAlpha;
-    return dot(coneAxis, view) <= -sinThetaPlusAlpha;
+    const half sinThetaPlusAlpha = sinTheta * cosAlpha + half(coneCos) * sinAlpha;
+    return dot(coneAxis, view) <= -float(sinThetaPlusAlpha);
 }
 
 struct NwbMeshletCullContext{

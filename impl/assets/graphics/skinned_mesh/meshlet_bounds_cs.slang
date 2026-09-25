@@ -399,7 +399,8 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         g_NwbSkinnedMeshBoundsConeAxis = nwbSafeNormalize(g_NwbSkinnedMeshBoundsAreaNormal[0u], float3(0.0));
     GroupMemoryBarrierWithGroupSync();
 
-    float localConeCutoff = 1.0;
+    // Cone-cutoff cosine accumulation stays in (-1, 1]; half math is sufficient here; widen only at the float groupshared store.
+    half localConeCutoff = half(1.0h);
     for(uint localPrimitiveIndex = groupThreadIndex; localPrimitiveIndex < primitiveCount; localPrimitiveIndex += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         float3 areaFaceNormal = float3(0.0);
         if(!nwbSkinnedMeshBoundsFaceNormal(meshlet, decodeInfo, localPrimitiveIndex, areaFaceNormal))
@@ -407,9 +408,9 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
         const float3 faceNormal = nwbSafeNormalize(areaFaceNormal, float3(0.0));
         if(nwbValidFrameDirection(faceNormal))
-            localConeCutoff = min(localConeCutoff, dot(g_NwbSkinnedMeshBoundsConeAxis, faceNormal));
+            localConeCutoff = min(localConeCutoff, half(dot(g_NwbSkinnedMeshBoundsConeAxis, faceNormal)));
     }
-    g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = localConeCutoff;
+    g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = float(localConeCutoff);
     nwbSkinnedMeshBoundsReduceConeCutoff(groupThreadIndex);
 
     if(groupThreadIndex != 0u)

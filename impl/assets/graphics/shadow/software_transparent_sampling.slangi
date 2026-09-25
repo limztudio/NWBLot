@@ -58,13 +58,15 @@ bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 pr
 }
 
 uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 previousMoments, const uint maximumSamples){
-    const float3 moments = float3(previousMoments);
-    const float variance = moments.y - moments.x * moments.x;
+    // Moments are (0, 1) visibility statistics and the history count caps at 32; the variance gate only compares
+    // against small bounded thresholds, so half math is sufficient here.
+    const half variance = previousMoments.y - previousMoments.x * previousMoments.x;
     // Half moments may round a small nonnegative variance slightly below zero.
-    const bool settled = geometryAccepted && all(isfinite(moments))
-        && moments.x >= 0.0 && moments.x <= 1.0 && moments.y >= 0.0 && moments.y <= 1.0
-        && moments.z >= NWB_SW_TRANSPARENT_STABLE_HISTORY && moments.z <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
-        && variance >= -0.002 && variance <= NWB_SW_TRANSPARENT_STABLE_VARIANCE;
+    const bool settled = geometryAccepted && all(isfinite(previousMoments))
+        && previousMoments.x >= half(0.0h) && previousMoments.x <= half(1.0h)
+        && previousMoments.y >= half(0.0h) && previousMoments.y <= half(1.0h)
+        && float(previousMoments.z) >= NWB_SW_TRANSPARENT_STABLE_HISTORY && float(previousMoments.z) <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
+        && variance >= half(-0.002h) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE);
     return settled ? 1u : maximumSamples;
 }
 

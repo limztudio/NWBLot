@@ -590,11 +590,11 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     };
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
-    const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline* pipeline, const u32 groupCount){
+    const auto dispatchBuildKernel = [&commandList, &pushConstants, &heap](Core::ComputePipeline& pipeline, const u32 groupCount){
         Core::ComputeState computeState;
-        computeState.setPipeline(pipeline);
+        computeState.setPipeline(&pipeline);
         commandList.setComputeState(computeState);
-        heap.bindCompute(commandList, *pipeline);
+        heap.bindCompute(commandList, pipeline);
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(groupCount, 1u, 1u);
     };
@@ -603,7 +603,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();
 
-    dispatchBuildKernel(m_rayTracingState.m_bvhMortonPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(*m_rayTracingState.m_bvhMortonPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
     // Separates rebuild-sort timing from the one-shot self-test.
@@ -615,11 +615,11 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     bvhBuildBarrier();
 
     if(primitiveCount > 1u){
-        dispatchBuildKernel(m_rayTracingState.m_bvhTopologyPipeline.get(), DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+        dispatchBuildKernel(*m_rayTracingState.m_bvhTopologyPipeline, DivideUp(primitiveCount - 1u, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
         bvhBuildBarrier();
     }
 
-    dispatchBuildKernel(m_rayTracingState.m_bvhFitPipeline.get(), DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
+    dispatchBuildKernel(*m_rayTracingState.m_bvhFitPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     // Shadow Preparation's declared successor uses lower the final node UAV -> SRV and retained scratch UAV handoffs for graph callers. Keep the direct close fence for compatibility recorders.
     if(!graphBoundaryStatesOwned)
         bvhBuildBarrier();

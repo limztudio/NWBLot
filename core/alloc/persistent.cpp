@@ -102,8 +102,9 @@ private:
     return block;
 }
 
-inline void StoreBlockForAllocation(void* const p, Block* const block)noexcept{
-    NWB_MEMCPY(static_cast<u8*>(p) - sizeof(block), sizeof(block), &block, sizeof(block));
+inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
+    Block* const blockPtr = &block;
+    NWB_MEMCPY(static_cast<u8*>(p) - sizeof(blockPtr), sizeof(blockPtr), &blockPtr, sizeof(blockPtr));
 }
 
 [[nodiscard]] inline bool IsLiveBlock(const void* const bucket, const usize bucketSize, const Block* const block)noexcept{
@@ -524,7 +525,7 @@ void* PersistentArena::allocateLocked(const usize align, const usize size, void*
     __hidden_persistent::SplitUsedBlock(m_freeHead, *selected, selectedLayout.spanBytes);
     selected->requestedBytes = size;
     void* const p = __hidden_persistent::BlockData(*selected) + selectedLayout.userOffset;
-    __hidden_persistent::StoreBlockForAllocation(p, selected);
+    __hidden_persistent::StoreBlockForAllocation(p, *selected);
     outBlock = selected;
     return p;
 }

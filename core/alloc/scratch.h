@@ -54,9 +54,9 @@ private:
             // excludes the header so cache sizing and arena telemetry keep their contract.
             return new(backing) Chunk(payloadSize, static_cast<u8*>(backing) + payloadOffset);
         }
-        static inline void destroy(Chunk* chunk){
-            chunk->~Chunk();
-            CoreFreeAligned(chunk);
+        static inline void destroy(Chunk& chunk){
+            chunk.~Chunk();
+            CoreFreeAligned(&chunk);
         }
 
 
@@ -166,7 +166,7 @@ public:
             for(auto* chunk : { bucket.active, bucket.cached }){
                 while(chunk){
                     auto* previous = chunk->m_next;
-                    Chunk::destroy(chunk);
+                    Chunk::destroy(*chunk);
                     chunk = previous;
                 }
             }
@@ -285,7 +285,7 @@ private:
             Chunk* discarded = bucket.cached;
             bucket.cached = discarded->m_next;
             m_memoryStats.removeReservedBytes(static_cast<u64>(discarded->m_size));
-            Chunk::destroy(discarded);
+            Chunk::destroy(*discarded);
         }
         if(created){
             bucket.size = Max(bucket.size, chunk->m_size);

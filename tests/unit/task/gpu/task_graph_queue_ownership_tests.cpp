@@ -541,20 +541,9 @@ TEST(GpuTaskGraph, UsesDeclaredTripleQueueSharingForDedicatedTransfer){
     ASSERT_TRUE(pair.producer.valid());
     ASSERT_TRUE(pair.consumer.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-        DedicatedTransferQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    ThreeQueueCompile threeQueueCompile(testArena);
+    ASSERT_TRUE(threeQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(threeQueueCompile.compiledGraph);
 
 
     const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;

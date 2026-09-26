@@ -1096,20 +1096,10 @@ TEST(GpuTaskGraph, CompilesEligibleTransferPreferenceToDedicatedTransferQueue){
     );
     ASSERT_TRUE(copyTask.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-        DedicatedTransferQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    ThreeQueueCompile threeQueueCompile(testArena);
+    ASSERT_TRUE(threeQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(threeQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphQueueAssignments& assignments = threeQueueCompile.assignments;
 
 
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(copyTask);

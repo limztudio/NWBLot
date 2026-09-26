@@ -211,6 +211,26 @@ struct TwoQueueCompile{
     );
 };
 
+struct ThreeQueueCompile{
+    Graphics::GpuPhysicalQueueInfo graphicsQueue;
+    Graphics::GpuPhysicalQueueInfo computeQueue;
+    Graphics::GpuPhysicalQueueInfo transferQueue;
+    Graphics::GpuPhysicalQueueInfo queueStorage[3u];
+    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuTaskGraphAnalysis analysis;
+    Graphics::GpuTaskGraphQueueAssignments assignments;
+    Graphics::GpuCompiledGraph compiledGraph;
+
+
+    explicit ThreeQueueCompile(TestArena& testArena);
+
+
+    [[nodiscard]] bool compile(
+        const Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskGraphCompileOptions& options = {}
+    );
+};
+
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
     const Graphics::GpuQueueCapability::Mask first,
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,

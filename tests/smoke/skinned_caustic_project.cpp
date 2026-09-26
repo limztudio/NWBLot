@@ -24,6 +24,7 @@
 
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
@@ -116,10 +117,10 @@ static constexpr f32 s_MaxAnimationDelta = 1.0f / 15.0f;
 class SkinnedCausticSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, "SkinnedCausticSmokeProject");
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("SkinnedCausticSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){

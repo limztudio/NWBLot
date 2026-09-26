@@ -32,15 +32,25 @@ bool RecordLightSpaceViews(Core::CommandList& commandList, Core::GpuDescriptorHe
 }
 
 bool RecordLightSpaceCapture(
-    Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, const LightSpaceShadowSnapshot& snapshot,
-    const u32 viewIndex, const bool transparent){
-    static_assert(sizeof(Core::DrawIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
+    Core::CommandList& commandList,
+    Core::GpuDescriptorHeap& heap,
+    const LightSpaceShadowSnapshot& snapshot,
+    const u32 viewIndex,
+    const bool transparent){
+    static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
     if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount || (snapshot.casterCount != 0u && !snapshot.casters))
         return false;
     const auto& framebuffer = transparent ? snapshot.transparentFramebuffers[viewIndex] : snapshot.opaqueFramebuffers[viewIndex];
     const auto& pipeline = transparent ? snapshot.transparentCapture : snapshot.opaqueCapture;
     if(!framebuffer || !pipeline)
         return false;
+    for(usize index = 0u; index < snapshot.casterCount; ++index){
+        const auto& caster = snapshot.casters[index];
+        if(caster.transparent != transparent || caster.indexCount == 0u)
+            continue;
+        if(!caster.triangleIndexBuffer || !caster.triangleIndexBuffer->getCreationDescription().isIndexBuffer)
+            return false;
+    }
     Core::RenderPassParameters parameters;
     parameters.depthClearValue = 1.f;
     parameters.depthAttachmentActions.loadAction = transparent ? Core::RenderPassLoadAction::Load : Core::RenderPassLoadAction::Clear;
@@ -51,18 +61,20 @@ bool RecordLightSpaceCapture(
     viewport.addScissorRect(Core::Rect(0, static_cast<i32>(resolution), 0, static_cast<i32>(resolution)));
     Core::GraphicsState graphics;
     graphics.setPipeline(pipeline.get()).setFramebuffer(framebuffer.get()).setViewport(viewport).setIndirectParams(snapshot.drawArguments.get());
-    commandList.setGraphicsState(graphics);
-    heap.bindGraphics(commandList, *pipeline);
+
     LightSpaceShadowPush push = snapshot.push;
     push.viewIndex = viewIndex;
     for(usize index = 0u; index < snapshot.casterCount; ++index){
         const LightSpaceShadowCaster& caster = snapshot.casters[index];
-        if(caster.transparent != transparent || caster.vertexCount == 0u)
+        if(caster.transparent != transparent || caster.indexCount == 0u)
             continue;
+        graphics.setIndexBuffer(Core::IndexBufferBinding{}.setBuffer(caster.triangleIndexBuffer.get()).setFormat(Core::Format::R32_UINT));
+        commandList.setGraphicsState(graphics);
+        heap.bindGraphics(commandList, *pipeline);
         push.instanceIndex = caster.instanceIndex;
         commandList.setPushConstants(&push, sizeof(push));
         const u32 argumentOffset = (viewIndex * snapshot.push.instanceCount + caster.instanceIndex) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-        commandList.drawIndirect(argumentOffset);
+        commandList.drawIndexedIndirect(argumentOffset);
     }
     commandList.endRenderPass();
     return true;

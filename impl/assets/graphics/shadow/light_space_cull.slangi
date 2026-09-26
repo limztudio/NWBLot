@@ -69,9 +69,10 @@ bool nwbLightSpaceCasterOutside(const NwbLightSpaceView view, const uint instanc
 void nwbLightSpaceWriteDrawArguments(const NwbLightSpaceView view, const uint viewIndex){
     for(uint instanceIndex = 0u; instanceIndex < g_NwbLightSpacePush.instanceCount; ++instanceIndex){
         const NwbSwBvhInstance instance = nwbLightSpaceInstance(instanceIndex);
-        const uint vertexCount = nwbLightSpaceCasterOutside(view, instanceIndex) ? 0u : instance.primitiveCount * 3u;
+        const uint indexCount = nwbLightSpaceCasterOutside(view, instanceIndex) ? 0u : instance.primitiveCount * 3u;
         const uint address = (viewIndex * g_NwbLightSpacePush.instanceCount + instanceIndex) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store4(address, uint4(vertexCount, 1u, 0u, 0u));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store4(address, uint4(indexCount, 1u, 0u, 0u));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.outputSlot].Store(address + 16u, 0u);
     }
 }
 

@@ -27,6 +27,60 @@ namespace __hidden_task_graph_light_space_shadow{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Capture needs one simultaneous SRV/index state for each canonical buffer. Separate set uses would describe successive states.
+[[nodiscard]] bool GatherCaptureReads(
+    const Core::GpuTaskGraph& graph,
+    const LightSpaceShadowGraphInputs& inputs,
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
+    const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
+    if(!declarations.valid())
+        return false;
+    usize capacity = inputs.sceneReadCount + inputs.snapshot.casterCount + 5u;
+    for(usize index = 0u; index < inputs.sceneReadSetCount; ++index){
+        const Core::GpuTaskResourceSetUse& use = inputs.sceneReadSets[index];
+        if(!declarations.validResourceSet(use.resourceSet))
+            return false;
+        capacity += declarations.resourceSetAt(use.resourceSet.index).memberCount;
+    }
+    outUses.clear();
+    outUses.reserve(capacity);
+    const auto appendRead = [&](const Core::GpuTaskResourceUse& use){
+        // The light-space scene inputs are whole-resource reads, including material texture sets.
+        NWB_ASSERT(use.access == Core::GpuTaskResourceAccess::Read);
+        NWB_ASSERT(use.range.bufferRange == Core::s_EntireBuffer && use.range.textureSubresources == Core::s_AllSubresources);
+        for(auto& previous : outUses){
+            if(previous.resource == use.resource){
+                previous.requiredState |= use.requiredState;
+                previous.hasIndependentStateSource = previous.hasIndependentStateSource && use.hasIndependentStateSource;
+                return;
+            }
+        }
+        outUses.push_back(use);
+    };
+    for(usize index = 0u; index < inputs.sceneReadCount; ++index)
+        appendRead(inputs.sceneReads[index]);
+    for(usize index = 0u; index < inputs.sceneReadSetCount; ++index){
+        const Core::GpuTaskResourceSetUse& use = inputs.sceneReadSets[index];
+        const Core::GpuTaskGraphResourceSetView members = declarations.resourceSetAt(use.resourceSet.index);
+        for(usize member = 0u; member < members.memberCount; ++member){
+            appendRead(Core::GpuTaskResourceUse{
+                .resource = members.members[member], .range = use.range, .requiredState = use.requiredState,
+                .access = use.access, .hasIndependentStateSource = use.hasIndependentStateSource,
+            });
+        }
+    }
+    for(usize index = 0u; index < inputs.snapshot.casterCount; ++index){
+        const auto& caster = inputs.snapshot.casters[index];
+        // The scene geometry importer already retains this exact frozen canonical index buffer.
+        const Core::GpuGraphResourceId resource = declarations.findImportedBuffer(caster.triangleIndexBuffer);
+        if(!resource.valid())
+            return false;
+        appendRead(RendererTaskGraphDetail::ReadUse(resource, Core::ResourceStates::ShaderResource | Core::ResourceStates::IndexBuffer));
+    }
+    return true;
+}
+
+
 struct ViewTask{
     struct Payload{
         Core::GraphicsRuntime& graphics;
@@ -204,7 +258,8 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         return {};
 
     const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, snapshot.plan.viewCount };
-    uses.resize(inputs.sceneReadCount);
+    if(!__hidden_task_graph_light_space_shadow::GatherCaptureReads(graph, inputs, uses))
+        return {};
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.drawArguments, Core::ResourceStates::IndirectArgument));
     uses.push_back(WriteTextureUse(result.depth, layers, Core::ResourceStates::DepthWrite));
@@ -218,7 +273,6 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setDependencies(&result.viewFit, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses.data(), uses.size())
-        .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
     ;
     result.opaqueCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(opaqueDesc,
         __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, false));
@@ -238,14 +292,15 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setDependencies(&result.opaqueCapture, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
         .setResourceUses(uses.data(), uses.size())
-        .setResourceSetUses(inputs.sceneReadSets, inputs.sceneReadSetCount)
     ;
     result.transparentCapture = graph.addTask<__hidden_task_graph_light_space_shadow::CaptureTask>(transparentDesc,
         __hidden_task_graph_light_space_shadow::CaptureTask::Payload(inputs, true));
     if(!result.transparentCapture.valid())
         return {};
 
-    uses.resize(inputs.sceneReadCount);
+    uses.clear();
+    for(usize index = 0u; index < inputs.sceneReadCount; ++index)
+        uses.push_back(inputs.sceneReads[index]);
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.counts, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(result.events, Core::ResourceStates::UnorderedAccess));

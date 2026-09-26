@@ -157,10 +157,10 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, "CsgSkinnedVisibleSmokeProject");
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("CsgSkinnedVisibleSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){

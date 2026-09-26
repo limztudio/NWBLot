@@ -32,6 +32,7 @@ struct BufferFlags{
     bool canHaveRawViews = false;
     bool accelStructBuildInput = false;
     Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::Exclusive;
+    bool isIndexBuffer = false;
 };
 
 namespace BufferSetupFailure{
@@ -65,6 +66,7 @@ template<typename PayloadT>
         .setCanHaveUAVs(flags.canHaveUAVs)
         .setCanHaveRawViews(flags.canHaveRawViews)
         .setIsAccelStructBuildInput(flags.accelStructBuildInput)
+        .setIsIndexBuffer(flags.isIndexBuffer)
         .setQueueSharing(flags.queueSharing)
         .setDebugName(debugName)
     ;

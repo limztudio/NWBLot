@@ -157,15 +157,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgSkinnedVisibleSmokeProject initialization failed: ECS world allocation failed"));
-            throw RuntimeException("CsgSkinnedVisibleSmokeProject initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("CsgSkinnedVisibleSmokeProject initialization failed: shader path resolver callback is null"));
-            throw RuntimeException("CsgSkinnedVisibleSmokeProject initialization failed");
-        }
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, "CsgSkinnedVisibleSmokeProject");
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return MakeNotNullUnique(Move(world));

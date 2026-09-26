@@ -298,15 +298,7 @@ private:
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
-        if(!world){
-            NWB_LOGGER_FATAL(NWB_TEXT("SkinningCullingBenchmark: ECS world allocation failed"));
-            throw RuntimeException("SkinningCullingBenchmark initialization failed");
-        }
-        if(!context.shaderPathResolver){
-            NWB_LOGGER_FATAL(NWB_TEXT("SkinningCullingBenchmark: shader path resolver callback is null"));
-            throw RuntimeException("SkinningCullingBenchmark initialization failed");
-        }
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, "SkinningCullingBenchmark");
 
         AddSmokeSkinnedRenderSystems(*world, context);
         return MakeNotNullUnique(Move(world));

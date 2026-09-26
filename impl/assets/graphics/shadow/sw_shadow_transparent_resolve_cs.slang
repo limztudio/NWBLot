@@ -25,10 +25,6 @@
 
 #include "sw_shadow_coarse_samples.slangi"
 
-// Edge-fraction instrumentation counter ([0] full-res traced rays, [1] total candidate rays). Tallied only when
-// collectStats is set; read back to the log to decide the Stage-3 payoff.
-#define g_NwbSwShadowEdgeStats NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeStatsStorageSlot)
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -53,22 +49,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     );
     const half edgeThreshold = half(g_NwbSwShadowPush.edgeThreshold);
 
-    uint tracedRays = 0u;
-    uint totalRays = 0u;
-
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         NwbSwShadowCoarseLight coarseLight;
         if(!nwbSwShadowLoadCoarseLight(coarseLocation, i, edgeThreshold, coarseLight))
             continue;
         const uint slot = coarseLight.slot;
-        ++totalRays;
 
         half3 transmittance;
         if(coarseLight.isEdge){
             // Edge block: re-trace this exact full-res pixel.
             transmittance = nwbSwShadowLightVisible(worldPosition, normal, g_NwbSceneLights[i], float2(0.0, 0.0));
-            ++tracedRays;
         }
         else{
             // Flat interior: bilinearly interpolate the coarse transmittance.
@@ -77,13 +68,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
         const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
         g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * transmittance, 1.0);
-    }
-
-    // Edge-fraction instrumentation: one atomic pair per lit pixel (only when measuring). traced/total over the frame is
-    // the fraction of candidate rays that still needed a full-res trace -- the number that decides the Stage-3 payoff.
-    if(g_NwbSwShadowPush.collectStats != 0u && totalRays > 0u){
-        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TRACED], tracedRays);
-        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TOTAL], totalRays);
     }
 }
 

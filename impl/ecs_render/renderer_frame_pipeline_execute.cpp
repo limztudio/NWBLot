@@ -215,7 +215,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .hardwareCaustics = hardwareShadowSupported,
     };
     m_raytracingSystem.discardSoftShadowTemporalHistory();
-    m_raytracingSystem.retireCompletedAdaptiveShadowStatisticsReadback();
 
     // Preserve mirrors so rejected recordings retry exactly.
     const RayTracingFrameCpuStateSnapshot rayTracingCpuState = m_rayTracingState.captureFrameCpuState();
@@ -1026,8 +1025,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         lightSpaceShadowResources.events,
         lightSpaceShadowResources.views,
         lightSpaceShadowResources.drawArguments,
-        rayTracingShadowResources.swShadowEdgeStatsBuffer,
-        rayTracingShadowResources.swShadowEdgeStatsReadback,
         rayTracingShadowResources.swShadowEdgeCounterBuffer,
         rayTracingShadowResources.swShadowEdgeListBuffer,
         rayTracingShadowResources.swShadowIndirectArgsBuffer,

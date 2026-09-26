@@ -73,8 +73,8 @@ struct MeshSkinningRuntimeInstance{
     Core::BufferHandle meshletLocalVertexRefBuffer;
     Core::BufferHandle meshletPrimitiveIndexBuffer;
     Core::BufferHandle attributeSkinBuffer;
-    Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
-    Core::BufferHandle attributeBuffer;       // RT-only per-corner trace attributes (bind-pose); null without RT
+    Core::BufferHandle triangleIndexBuffer;   // Canonical triangle indices shared by hardware and software tracing
+    Core::BufferHandle attributeBuffer;       // Bind-pose per-corner attributes shared by hardware and software tracing
     Core::BufferHandle meshletLocalBoundsBuffer;
     Core::BufferHandle localBoundsBuffer;
     u32 skeletonJointCount = 0;

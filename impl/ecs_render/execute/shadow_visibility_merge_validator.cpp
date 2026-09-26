@@ -77,23 +77,13 @@ void ShadowVisibilityMergeValidator::validate(
                 pipeline.m_deferredShadowVisibilityAllLitClearTask
             )
     ;
-    // Keep the original acceptance endpoint; a split would leak state early.
+    // The append-counter clear must precede visibility in the same packet.
     outResult.adaptivePrimitivesMerged =
-        (!pipeline.m_deferredShadowVisibilityAdaptiveStatsClearTask.valid()
-            || compiledPlan.tasksSharePacket(
-                pipeline.m_deferredShadowVisibilityTask,
-                pipeline.m_deferredShadowVisibilityAdaptiveStatsClearTask
-            ))
-        && (!pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
-            || compiledPlan.tasksSharePacket(
-                pipeline.m_deferredShadowVisibilityTask,
-                pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask
-            ))
-        && (!pipeline.m_deferredShadowVisibilityAdaptiveStatsReadbackTask.valid()
-            || compiledPlan.tasksSharePacket(
-                pipeline.m_deferredShadowVisibilityTask,
-                pipeline.m_deferredShadowVisibilityAdaptiveStatsReadbackTask
-            ))
+        !pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask.valid()
+        || compiledPlan.tasksSharePacket(
+            pipeline.m_deferredShadowVisibilityTask,
+            pipeline.m_deferredShadowVisibilityAdaptiveCounterClearTask
+        )
     ;
 }
 

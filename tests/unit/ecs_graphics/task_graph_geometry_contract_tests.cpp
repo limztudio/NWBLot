@@ -90,7 +90,6 @@ TEST(EcsGraphics, SoftwareStaticSceneCacheFreezesTraversalWithoutRecordingTimeRe
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_swbvh.cpp",
             "raytrace/rt_swbvh_helpers.h",
             "raytrace/rt_swbvh_mesh_blas.cpp",
             "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
@@ -386,7 +385,6 @@ TEST(EcsGraphics, PreparedAccelStructInitialStatesTrackBackingGenerationHandoffs
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_swbvh.cpp",
             "raytrace/rt_swbvh_helpers.h",
             "raytrace/rt_swbvh_mesh_blas.cpp",
             "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",

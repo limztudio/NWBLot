@@ -25,14 +25,6 @@ float nwbCsgPixelWorldDistanceTolerance(const float3 worldPosition){
     return min(footprint, NWB_CSG_RECEIVER_DISCARD_MAX_WORLD_TOLERANCE);
 }
 
-bool nwbCsgReceiverPixelDiscard(const uint receiverIndex, const float3 worldPosition){
-    return nwbCsgReceiverPixelDiscardWithWorldTolerance(
-        receiverIndex,
-        worldPosition,
-        nwbCsgPixelWorldDistanceTolerance(worldPosition)
-    );
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

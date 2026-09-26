@@ -45,10 +45,6 @@ uint nwbAvboitExtinctionWordCount(){
     return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_EXTINCTION_WORD_COUNT];
 }
 
-uint nwbAvboitCoverageWordCount(){
-    return NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitVolume[NWB_AVBOIT_PUSH_VOLUME_COVERAGE_WORD_COUNT];
-}
-
 float nwbAvboitExtinctionFixedScale(){
     return max(NWB_AVBOIT_PUSH_CONSTANTS.nwbAvboitParams[NWB_AVBOIT_PUSH_PARAMS_EXTINCTION_FIXED_SCALE], 1.0);
 }

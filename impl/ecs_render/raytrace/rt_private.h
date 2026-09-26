@@ -104,10 +104,6 @@ inline constexpr usize s_TlasInitialInstanceCapacity = 128u;
 
 inline constexpr usize s_BvhSortInitialCapacity = 1024u;
 
-// Async-safe transparent-shadow edge-stat readback cadence.
-inline constexpr u32 s_SwShadowEdgeStatsPeriod = 120u;
-inline constexpr u32 s_SwShadowEdgeStatsLogDelay = 8u;
-
 // CPU mirror of NwbBvhBitonicSortPushConstants.
 struct BvhSortPushConstants{
     u32 elementCount = 0u;
@@ -248,7 +244,6 @@ struct SwShadowHeapPushConstants{
     u32 coarseWidth = 0u;
     u32 coarseHeight = 0u;
     f32 edgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
-    u32 collectStats = 0u;
     u32 edgeCapacity = 0u;
     u32 traceGroupSize = 0u;
     u32 deferredResourcesHeapSlot = 0u;
@@ -257,14 +252,13 @@ struct SwShadowHeapPushConstants{
     u32 coarseStorageSlot = 0u;
     u32 softHalfStorageSlot = 0u;
     u32 transparentSoftHalfStorageSlot = 0u;
-    u32 edgeStatsStorageSlot = 0u;
     u32 edgeCounterStorageSlot = 0u;
     u32 edgeListStorageSlot = 0u;
     u32 indirectArgsStorageSlot = 0u;
     u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
 };
 static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
-static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 21u, "SwShadowHeapPushConstants must match the shader push-constant layout");
+static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 19u, "SwShadowHeapPushConstants must match the shader push-constant layout");
 
 // CPU mirror of hardware RayQuery shadow push constants.
 struct ShadowRqPushConstants{

@@ -108,8 +108,6 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
         .bvhSortKeysBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortKeysBuffer,
         .bvhSortPayloadBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhSortPayloadBuffer,
         .bvhVisitCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_bvhVisitCounterBuffer,
-        .swShadowEdgeStatsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeStatsBuffer,
-        .swShadowEdgeStatsReadback = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeStatsReadback,
         .swShadowEdgeCounterBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeCounterBuffer,
         .swShadowEdgeListBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowEdgeListBuffer,
         .swShadowIndirectArgsBuffer = m_shadowVisibilityHardwareSupported ? nullptr : m_rayTracingState.m_swShadowIndirectArgsBuffer,
@@ -184,18 +182,10 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
         && !softTransparentShadowReady()
         && !hardwareShadowSupported
         && shadowVisibilitySoftwareResourcesPreflighted()
-        && state.m_swShadowEdgeStatsBuffer
-        && state.m_swShadowEdgeStatsReadback
         && state.m_swShadowEdgeCounterBuffer
     ){
         adaptivePlan.enabled = true;
         adaptivePlan.compact = state.m_swShadowCompactEnabled;
-        adaptivePlan.statsTick = state.m_swShadowEdgeStatsTick;
-        adaptivePlan.captureStatsSnapshot =
-            state.m_swShadowEdgeStatsEnabled
-            && !state.m_swShadowEdgeStatsPending
-            && (adaptivePlan.statsTick % s_SwShadowEdgeStatsPeriod == 0u)
-        ;
     }
 
     return RayTracingShadowVisibilityGraphPlanSnapshot{
@@ -236,69 +226,6 @@ void RendererRayTracingSystem::confirmSurfelCountReadbackSubmission(
 )noexcept{
     NWB_ASSERT(submissionToken.valid());
     m_rayTracingState.m_surfelCountReadbackSubmissionToken = submissionToken;
-}
-
-void RendererRayTracingSystem::retireCompletedAdaptiveShadowStatisticsReadback(){
-    auto& state = m_rayTracingState;
-    if(
-        !state.m_swShadowEdgeStatsPending
-        || (state.m_swShadowEdgeStatsTick - state.m_swShadowEdgeStatsPendingTick) < s_SwShadowEdgeStatsLogDelay
-        || state.m_swShadowEdgeStatsPendingSubmissionID == 0u
-        || !state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue.valid()
-        || m_graphics.getDevice().queueGetCompletedInstance(
-            state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue
-        ) < state.m_swShadowEdgeStatsPendingSubmissionID
-    )
-        return;
-
-    const u32* const stats = static_cast<const u32*>(
-        m_graphics.getDevice().mapBuffer(*state.m_swShadowEdgeStatsReadback, Core::CpuAccessMode::Read)
-    );
-    if(stats){
-        const u32 traced = stats[NWB_SW_SHADOW_EDGE_STATS_TRACED];
-        const u32 total = stats[NWB_SW_SHADOW_EDGE_STATS_TOTAL];
-        m_graphics.getDevice().unmapBuffer(*state.m_swShadowEdgeStatsReadback);
-        constexpr f64 s_PercentScale = 100.0;
-        const f64 fraction = (total > 0u) ? (s_PercentScale * static_cast<f64>(traced) / static_cast<f64>(total)) : 0.0;
-        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW shadow adaptive edge fraction = {}% ({} traced / {} total rays, threshold {})")
-            , fraction
-            , static_cast<u64>(traced)
-            , static_cast<u64>(total)
-            , static_cast<f64>(state.m_swShadowEdgeThreshold)
-        );
-    }
-    state.m_swShadowEdgeStatsPending = false;
-    state.m_swShadowEdgeStatsPendingSubmissionID = 0u;
-    state.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
-}
-
-void RendererRayTracingSystem::confirmGraphOwnedAdaptiveShadowSubmission(
-    const GraphOwnedAdaptiveShadowPlan& plan,
-    const bool adaptiveRouteRecorded,
-    const Core::QueueSubmissionToken& submissionToken
-){
-    if(
-        !plan.enabled
-        || !adaptiveRouteRecorded
-        || !submissionToken.valid()
-        || !submissionToken.hasPhysicalQueueIdentity()
-    )
-        return;
-
-    // The graph-owned plan can schedule clear/copy primitives before a later renderer callback discovers that its
-    // producer is unavailable. Advance the diagnostic timeline only when that callback actually took the adaptive
-    // route and its shared packet accepted.
-    m_rayTracingState.m_swShadowEdgeStatsTick = plan.statsTick + 1u;
-    if(!plan.captureStatsSnapshot)
-        return;
-
-    m_rayTracingState.m_swShadowEdgeStatsPending = true;
-    m_rayTracingState.m_swShadowEdgeStatsPendingTick = plan.statsTick;
-    m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionID = submissionToken.value;
-    m_rayTracingState.m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = Core::GpuPhysicalQueueId{
-        .index = submissionToken.physicalQueueIndex,
-        .deviceGeneration = submissionToken.deviceGeneration,
-    };
 }
 
 

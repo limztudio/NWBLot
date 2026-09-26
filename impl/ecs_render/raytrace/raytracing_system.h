@@ -222,15 +222,6 @@ public:
     [[nodiscard]] bool surfelCountReadbackSubmissionMatches(const Core::QueueSubmissionToken& submissionToken)const noexcept;
     void confirmSurfelCountReadbackSubmission(const Core::QueueSubmissionToken& submissionToken)noexcept;
 
-    // Retire an accepted readback before graph declaration so native packet recording stays CPU-side-effect-free.
-    void retireCompletedAdaptiveShadowStatisticsReadback();
-    // A graph-owned adaptive plan cannot publish its CPU mirror while recording. The Shadow Visibility task commits the frozen tick and optional readback token only after its shared packet accepts.
-    void confirmGraphOwnedAdaptiveShadowSubmission(
-        const GraphOwnedAdaptiveShadowPlan& plan,
-        bool adaptiveRouteRecorded,
-        const Core::QueueSubmissionToken& submissionToken
-    );
-
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);

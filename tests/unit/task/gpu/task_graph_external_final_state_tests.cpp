@@ -1081,7 +1081,6 @@ TEST(GpuTaskGraph, TerminalFinalizationReachabilityCrossesPackedWordBoundaries){
         TwoQueueCompile twoQueueCompile(testArena);
         ASSERT_TRUE(twoQueueCompile.compile(graph));
         const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
-        Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
         EXPECT_EQ(compiledPlan.packetCount(), prefixPacketCount + 3u);
 

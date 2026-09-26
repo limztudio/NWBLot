@@ -714,7 +714,6 @@ struct ShadowVisibilityGraphTask{
         bool hardwareShadowSupported = false;
         bool graphEntryStatesOwned = false;
         bool graphOwnsAllLitVisibilityClear = false;
-        mutable bool adaptiveRouteRecorded = false;
         RendererRayTracingSystem* raytracingSystem = nullptr;
         Core::GraphicsRuntime* graphics = nullptr;
         DeferredFrameTargets* targets = nullptr;
@@ -729,7 +728,6 @@ struct ShadowVisibilityGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        payload.adaptiveRouteRecorded = false;
         if(
             !payload.raytracingSystem
             || !payload.graphics
@@ -739,8 +737,7 @@ struct ShadowVisibilityGraphTask{
         )
             return false;
 
-        GraphOwnedAdaptiveShadowPlan adaptivePlan = payload.graphOwnedAdaptivePlan;
-        adaptivePlan.adaptiveRouteRecorded = &payload.adaptiveRouteRecorded;
+        const GraphOwnedAdaptiveShadowPlan& adaptivePlan = payload.graphOwnedAdaptivePlan;
         const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan =
             adaptivePlan.enabled ? &adaptivePlan : nullptr
         ;
@@ -797,20 +794,7 @@ struct ShadowVisibilityGraphTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-        if(!payload.raytracingSystem)
-            return;
-        if(payload.graphOwnedAdaptivePlan.enabled){
-            payload.raytracingSystem->confirmGraphOwnedAdaptiveShadowSubmission(
-                payload.graphOwnedAdaptivePlan,
-                payload.adaptiveRouteRecorded,
-                token
-            );
-        }
-    }
-
     static void discarded(Payload& payload){
-        payload.adaptiveRouteRecorded = false;
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
     }

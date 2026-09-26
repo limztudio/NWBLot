@@ -27,9 +27,8 @@
 #define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
 // Selects scene/mesh records from the heap.
 #define NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS 8
-// Slots 5, 7, and 9-14 are intentional ABI gaps; do not renumber.
+// Slots 5, 7, 9-14, and 16 are intentional ABI gaps; do not renumber.
 #define NWB_SW_SHADOW_BINDING_COARSE 15
-#define NWB_SW_SHADOW_BINDING_EDGE_STATS 16
 // Compacted edge records feed the indirect transparent retrace.
 #define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
 #define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
@@ -56,10 +55,6 @@
 #define NWB_SW_SHADOW_SOFT_FACTOR (1u << NWB_SW_SHADOW_SOFT_SHIFT)
 
 #define NWB_SW_SHADOW_TRACE_GROUP 64
-
-#define NWB_SW_SHADOW_EDGE_STATS_TRACED 0
-#define NWB_SW_SHADOW_EDGE_STATS_TOTAL 1
-#define NWB_SW_SHADOW_EDGE_STATS_COUNT 2
 
 #define NWB_SW_SHADOW_EDGE_COUNTER_APPEND 0
 #define NWB_SW_SHADOW_EDGE_COUNTER_TRACE 1

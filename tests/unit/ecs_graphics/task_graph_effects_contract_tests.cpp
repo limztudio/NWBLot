@@ -87,7 +87,6 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_surfel_gi.cpp",
             "raytrace/rt_surfel_tasks.h",
             "raytrace/rt_surfel_tasks.cpp",
             "raytrace/rt_surfel_pipelines.cpp",

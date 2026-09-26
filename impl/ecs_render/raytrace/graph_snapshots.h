@@ -20,15 +20,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Adaptive software-shadow diagnostics are private scratch work.  The shared deferred graph freezes this small
-// plan before compilation so its counter/stat clears and optional readback can be declared as first-class primitive
-// tasks. Enabled may own only the acceptance-time tick when the current frame needs no primitive task.
+// Freeze adaptive software-shadow compaction before graph compilation so its append-counter clear is a graph primitive.
 struct GraphOwnedAdaptiveShadowPlan{
     bool enabled = false;
     bool compact = false;
-    bool captureStatsSnapshot = false;
-    u32 statsTick = 0u;
-    bool* adaptiveRouteRecorded = nullptr;
 };
 
 
@@ -92,8 +87,6 @@ struct RayTracingShadowPreparationResourceSnapshot{
     Core::BufferHandle bvhSortKeysBuffer;
     Core::BufferHandle bvhSortPayloadBuffer;
     Core::BufferHandle bvhVisitCounterBuffer;
-    Core::BufferHandle swShadowEdgeStatsBuffer;
-    Core::BufferHandle swShadowEdgeStatsReadback;
     Core::BufferHandle swShadowEdgeCounterBuffer;
     Core::BufferHandle swShadowEdgeListBuffer;
     Core::BufferHandle swShadowIndirectArgsBuffer;

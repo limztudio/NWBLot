@@ -164,36 +164,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         }
 
 
-        Core::BufferDesc edgeStatsDesc;
-        edgeStatsDesc
-            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT))
-            .setStructStride(sizeof(u32))
-            .setCanHaveUAVs(true)
-            .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-            .setDebugName(Name("sw_shadow_edge_stats"))
-            .enableAutomaticStateTracking(Core::ResourceStates::Common)
-        ;
-        m_rayTracingState.m_swShadowEdgeStatsBuffer = m_graphics.createBuffer(edgeStatsDesc);
-        if(!m_rayTracingState.m_swShadowEdgeStatsBuffer){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats buffer"));
-            m_rayTracingState.m_swShadowPipelineFailed = true;
-            return false;
-        }
-
-        Core::BufferDesc edgeStatsReadbackDesc;
-        edgeStatsReadbackDesc
-            .setByteSize(static_cast<u64>(sizeof(u32) * NWB_SW_SHADOW_EDGE_STATS_COUNT))
-            .setCpuAccess(Core::CpuAccessMode::Read)
-            .setDebugName(Name("sw_shadow_edge_stats_readback"))
-            .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
-        ;
-        m_rayTracingState.m_swShadowEdgeStatsReadback = m_graphics.createBuffer(edgeStatsReadbackDesc);
-        if(!m_rayTracingState.m_swShadowEdgeStatsReadback){
-            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create SW shadow edge-stats readback buffer"));
-            m_rayTracingState.m_swShadowPipelineFailed = true;
-            return false;
-        }
-
         // Compaction uses a persistent counter and UAV-writable indirect-args buffer.
         Core::BufferDesc edgeCounterDesc;
         edgeCounterDesc
@@ -230,8 +200,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
     }
 
     const bool heapResourcesReady =
-        RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeStatsHeapHandle)
-        && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeCounterHeapHandle)
+        RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowEdgeCounterBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowEdgeCounterHeapHandle)
         && RayTracingDetail::EnsureHeapBuffer(heap, *m_rayTracingState.m_swShadowIndirectArgsBuffer.get(), Core::GpuDescriptorClass::StorageBuffer, true, m_rayTracingState.m_swShadowIndirectArgsHeapHandle)
     ;
     if(!heapResourcesReady){

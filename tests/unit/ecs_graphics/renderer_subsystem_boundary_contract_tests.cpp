@@ -131,7 +131,6 @@ static TestPath RepoRoot(TestArena& testArena){
 }
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -289,7 +288,6 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_caustics.cpp",
             "raytrace/rt_caustics_tasks.h",
             "raytrace/rt_caustics_tasks.cpp",
             "raytrace/rt_caustics_gpu_render.cpp",
@@ -303,7 +301,6 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_swbvh.cpp",
             "raytrace/rt_swbvh_mesh_blas.cpp",
             "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
             "raytrace/rt_swbvh_mesh_build.cpp",
@@ -399,7 +396,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_swbvh.cpp",
             "raytrace/rt_swbvh_mesh_blas.cpp",
             "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
             "raytrace/rt_swbvh_mesh_build.cpp",
@@ -412,7 +408,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -427,7 +422,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_caustics.cpp",
             "raytrace/rt_caustics_tasks.h",
             "raytrace/rt_caustics_tasks.cpp",
             "raytrace/rt_caustics_gpu_render.cpp",
@@ -442,7 +436,6 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_surfel_gi.cpp",
             "raytrace/rt_surfel_tasks.h",
             "raytrace/rt_surfel_tasks.cpp",
             "raytrace/rt_surfel_pipelines.cpp",
@@ -487,7 +480,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 105u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 103u);
     EXPECT_EQ(CountText(compactStateSystem, "m_softwareTransparentSampling=SoftwareTransparentSamplingState{};"), 1u);
     // Accepted transparent history belongs to the shadow feature and clears both generations on resource invalidation.
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/shadow/transparent_sampling_history.h>"));
@@ -510,7 +503,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_FALSE(ContainsText(compactStateSystem, "m_refractionHardwareTracingEnabled="));
     EXPECT_EQ(CountText(compactStateSystem, ".clear();"), 16u);
     // Shadow and caustic aliases now share one descriptor owned by the ray scene; invalidation retires it once.
-    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 24u);
+    EXPECT_EQ(CountText(compactStateSystem, "Core::GpuDescriptorHandle::invalid();"), 23u);
     EXPECT_EQ(CountText(compactStateHeader, "Core::GpuDescriptorHandlem_rayTraceMaterialContextSlotsHeapHandle="), 1u);
     EXPECT_EQ(CountText(compactStateSystem, "m_rayTraceMaterialContextSlotsHeapHandle=Core::GpuDescriptorHandle::invalid();"), 1u);
     EXPECT_FALSE(ContainsText(compactStateHeader, "m_shadowMaterialContextSlotsHeapHandle"));
@@ -1872,7 +1865,6 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -1887,7 +1879,6 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_caustics.cpp",
             "raytrace/rt_caustics_tasks.h",
             "raytrace/rt_caustics_tasks.cpp",
             "raytrace/rt_caustics_gpu_render.cpp",
@@ -1902,7 +1893,6 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_surfel_gi.cpp",
             "raytrace/rt_surfel_tasks.h",
             "raytrace/rt_surfel_tasks.cpp",
             "raytrace/rt_surfel_pipelines.cpp",

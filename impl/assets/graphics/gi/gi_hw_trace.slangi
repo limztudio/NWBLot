@@ -117,7 +117,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbGiHwMaterialContextSlots.sceneSlots.z)[instanceIndex];
     const uint triangle = query.CommittedPrimitiveIndex();
 
-    // This mesh's index / position / attribute geometry is fetched from the global descriptor heap by the per-buffer slots the material record carries (populated lockstep with the mesh in rt_swbvh.cpp).
+    // This mesh's index / position / attribute geometry is fetched from the global descriptor heap by the per-buffer slots the material record carries (populated with each mesh by the ray-tracing material context).
     // Each slot is NON-UNIFORM across the wave
     const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint3 tri = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);

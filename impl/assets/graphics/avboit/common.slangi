@@ -71,10 +71,6 @@ ConstantBuffer<NwbAvboitDrawPushConstants> g_NwbAvboitDraw;
     g_NwbAvboitDraw.nwbAvboitHeapSlots[NWB_AVBOIT_PUSH_HEAP_SLOT_DEFERRED_BINDLESS_RESOURCES]
 #include "heap_resources.slangi"
 
-half nwbAvboitResolveFragmentAlpha(half4 color){
-    return clamp(color.a, half(0.0), half(1.0));
-}
-
 #if NWB_CSG_ENABLED
 bool nwbAvboitCsgPixelDiscard(const float4 rasterPosition, const float4 worldPosition){
     const uint rasterFlags = uint(worldPosition.w + 0.5);
@@ -139,12 +135,6 @@ uint nwbAvboitLowPixelIndex(uint2 lowPixel){
     return lowPixel.y * nwbAvboitLowWidth() + lowPixel.x;
 }
 
-uint nwbAvboitPhysicalSliceFromVirtualSlice(uint virtualSlice){
-    const uint physicalSliceCount = max(nwbAvboitPhysicalSliceCount(), 1u);
-    const uint virtualSliceCount = max(nwbAvboitVirtualSliceCount(), 1u);
-    return min((virtualSlice * physicalSliceCount) / virtualSliceCount, physicalSliceCount - 1u);
-}
-
 float2 nwbAvboitFullUvFromFragCoord(float2 fragCoord){
     const float2 fullSize = max(float2(float(nwbAvboitFullWidth()), float(nwbAvboitFullHeight())), float2(1.0));
     return clamp(fragCoord / fullSize, float2(0.0), float2(1.0));
@@ -189,10 +179,6 @@ uint2 nwbAvboitLowPixelFromLowFragCoord(float2 fragCoord){
     return uint2(clamp(fragCoord, float2(0.0), lowMax));
 }
 
-float nwbAvboitOpaqueDepth(Texture2D<float4> opaqueDepth, SamplerState pointSampler, float2 fragCoord){
-    return opaqueDepth.Sample(pointSampler, nwbAvboitFullUvFromFragCoord(fragCoord)).r;
-}
-
 float nwbAvboitOpaqueDepthFromLowFragCoord(Texture2D<float4> opaqueDepth, SamplerState pointSampler, float2 fragCoord){
     return opaqueDepth.Sample(pointSampler, nwbAvboitFullUvFromLowFragCoord(fragCoord)).r;
 }
@@ -222,10 +208,6 @@ bool nwbAvboitAcceptLowDepthFragment(
 
     outVirtualSlice = nwbAvboitVirtualSliceFromDepth(fragCoord.z);
     return true;
-}
-
-float nwbAvboitUnpackTransmittance(uint packedValue){
-    return clamp(float(packedValue) / 65535.0, 0.0, 1.0);
 }
 
 

@@ -344,9 +344,7 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
-    m_deferredShadowVisibilityAdaptiveStatsClearTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
-    m_deferredShadowVisibilityAdaptiveStatsReadbackTask = {};
     m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
     m_deferredSoftwareCausticsTask = {};

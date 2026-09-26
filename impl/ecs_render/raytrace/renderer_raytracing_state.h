@@ -140,7 +140,6 @@ struct RtShadowState{
     usize m_shadowInstanceMaterialCapacity = 0u;
     usize m_shadowInstanceCapacity = 0u;
     usize m_shadowMaterialTypedCapacity = 0u;
-    u64 m_swShadowEdgeStatsPendingSubmissionID = 0u;
 
     Core::BindingLayoutHandle m_shadowBindingLayout;
     Core::ShaderHandle m_shadowShader;
@@ -169,9 +168,6 @@ struct RtShadowState{
     Core::ShaderHandle m_swShadowTransparentUniformShader;
     Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
     SoftwareTransparentSamplingState m_softwareTransparentSampling;
-    // Periodic async-safe edge-stat readback.
-    Core::BufferHandle m_swShadowEdgeStatsBuffer;
-    Core::BufferHandle m_swShadowEdgeStatsReadback;
     // Scalar and RGB wavelet/upsample pipelines share one push-constant layout.
     SoftShadowResolveState m_softShadowResolve;
     // Compaction buffers get fresh heap views after target recreation.
@@ -208,20 +204,14 @@ struct RtShadowState{
     u32 m_swShadowMeshCount = 0u;
     u32 m_swShadowMeshHeapHighWater = 0u;
     f32 m_swShadowEdgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
-    Core::GpuDescriptorHandle m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    u32 m_swShadowEdgeStatsTick = 0u;
     u32 m_swShadowEdgeListCapacity = 0u;
-    u32 m_swShadowEdgeStatsPendingTick = 0u;
     Core::GpuDescriptorHandle m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
 
     bool m_swShadowAdaptiveEnabled = true;
-    bool m_swShadowEdgeStatsEnabled = false;
     // Compaction dispatches edge rays indirectly when enabled.
     bool m_swShadowCompactEnabled = true;
-    bool m_swShadowEdgeStatsPending = false;
-    Core::GpuPhysicalQueueId m_swShadowEdgeStatsPendingSubmissionPhysicalQueue;
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;
     bool m_swShadowDispatchLogged = false;

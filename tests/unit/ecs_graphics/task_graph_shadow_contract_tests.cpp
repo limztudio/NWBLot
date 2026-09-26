@@ -40,7 +40,6 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -165,7 +164,6 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(primitiveScheduling)"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(allLitClearScheduling)"));
     EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(scheduling)"));
-    EXPECT_TRUE(ContainsText(shadowVisibility, "EnableCrossFamilyComputeEffectRouting(statsReadbackScheduling)"));
 }
 
 
@@ -179,7 +177,6 @@ TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -301,7 +298,6 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -401,7 +397,6 @@ TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoute
     ASSERT_TRUE(ReadRendererSources(
         repoRoot,
         {
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",

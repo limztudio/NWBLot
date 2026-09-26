@@ -18,7 +18,6 @@
 // The classify pass reads/writes all worksets through their storage heap slots.
 #define g_NwbSwShadowCoarse NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 #define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
-#define g_NwbSwShadowEdgeStats NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeStatsStorageSlot)
 #define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
 #define g_NwbSwShadowEdgeList NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeListStorageSlot)
 
@@ -46,22 +45,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half edgeThreshold = half(g_NwbSwShadowPush.edgeThreshold);
     const uint edgeCapacity = g_NwbSwShadowPush.edgeCapacity;
 
-    uint tracedRays = 0u;
-    uint totalRays = 0u;
-
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         NwbSwShadowCoarseLight coarseLight;
         if(!nwbSwShadowLoadCoarseLight(coarseLocation, i, edgeThreshold, coarseLight))
             continue;
         const uint slot = coarseLight.slot;
-        ++totalRays;
 
         if(coarseLight.isEdge){
             // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave
             // the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the
             // true edge total is measured) but guard the indexed write to the allocated capacity.
-            ++tracedRays;
             uint appendIndex;
             InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
             if(appendIndex < edgeCapacity){
@@ -83,11 +77,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
             g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);
         }
-    }
-
-    if(g_NwbSwShadowPush.collectStats != 0u && totalRays > 0u){
-        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TRACED], tracedRays);
-        InterlockedAdd(g_NwbSwShadowEdgeStats[NWB_SW_SHADOW_EDGE_STATS_TOTAL], totalRays);
     }
 }
 

@@ -175,13 +175,6 @@ void RendererRayTracingState::invalidateResources(){
     m_hwMeshHeapHandleCache.clear();
     m_swMeshHeapHandleCache.clear();
     m_softwareTransparentSampling = SoftwareTransparentSamplingState{};
-    m_swShadowEdgeStatsBuffer.reset();
-    m_swShadowEdgeStatsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_swShadowEdgeStatsReadback.reset();
-    m_swShadowEdgeStatsTick = 0u;
-    m_swShadowEdgeStatsPending = false;
-    m_swShadowEdgeStatsPendingSubmissionID = 0u;
-    m_swShadowEdgeStatsPendingSubmissionPhysicalQueue = {};
     m_softShadowFrameIndex = 0u;
     m_softShadowSlotMask = 0u;
     m_softShadowResolve = SoftShadowResolveState{};
@@ -203,7 +196,6 @@ void RendererRayTracingState::invalidateResources(){
     m_softTransparentReady = false;
     m_softTransparentTemporalReady = false;
     m_transparentShadowSamplingHistory.reset();
-    m_swShadowEdgeStatsPendingTick = 0u;
     m_swShadowEdgeCounterBuffer.reset();
     m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
     m_swShadowEdgeListBuffer.reset();

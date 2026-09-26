@@ -487,11 +487,8 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
-    // Adaptive software-shadow scratch work is graph-declared around the retained monolithic visibility callback.
-    // Every valid ID must share that callback's semantic packet so timing, recovery, and CPU readback acceptance retain the original single Shadow Visibility endpoint.
-    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsClearTask;
+    // The adaptive append-counter clear shares the monolithic visibility packet so its CopyDest -> UAV handoff stays graph-owned.
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
-    Core::GpuTaskId m_deferredShadowVisibilityAdaptiveStatsReadbackTask;
     // The retained monolithic route always clears visibility to all-lit immediately before its callback.
     // The clear must share that semantic packet so its CopyDest -> UAV handoff and the existing acceptance endpoint stay graph-owned.
     Core::GpuTaskId m_deferredShadowVisibilityAllLitClearTask;

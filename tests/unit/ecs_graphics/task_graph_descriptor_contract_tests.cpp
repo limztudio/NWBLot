@@ -106,7 +106,6 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
             "csg/csg_resources.cpp",
             "csg/csg_interval_resources.cpp",
             "mesh/mesh_bindings.cpp",
-            "raytrace/rt_shadow.cpp",
             "raytrace/rt_shadow_tasks.h",
             "raytrace/rt_shadow_material_context.cpp",
             "raytrace/rt_shadow_visibility_target.cpp",
@@ -114,7 +113,6 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
             "raytrace/rt_shadow_transparent.cpp",
             "raytrace/rt_shadow_gpu_visibility.cpp",
             "raytrace/rt_shadow_pipelines.cpp",
-            "raytrace/rt_caustics.cpp",
             "raytrace/rt_caustics_tasks.h",
             "raytrace/rt_caustics_tasks.cpp",
             "raytrace/rt_caustics_gpu_render.cpp",
@@ -123,13 +121,11 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
             "raytrace/rt_caustics_emission_targets.cpp",
             "raytrace/rt_caustics_accumulator.cpp",
             "raytrace/rt_caustics_graph_dispatch.cpp",
-            "raytrace/rt_surfel_gi.cpp",
             "raytrace/rt_surfel_tasks.h",
             "raytrace/rt_surfel_tasks.cpp",
             "raytrace/rt_surfel_pipelines.cpp",
             "raytrace/rt_surfel_resources.cpp",
             "raytrace/rt_surfel_render.cpp",
-            "raytrace/rt_swbvh.cpp",
             "raytrace/rt_swbvh_mesh_blas.cpp",
             "raytrace/rt_swbvh_mesh_swbvh_prep.cpp",
             "raytrace/rt_swbvh_mesh_build.cpp",
@@ -172,7 +168,6 @@ TEST(EcsGraphics, GlobalHeapRetainedResourcesAdmitAsyncCompute){
     expectSharedBlock(renderer, "Core::TextureDesc softHalfADesc;", "targets.shadowSoftHalfA =");
     expectSharedBlock(renderer, "Core::TextureDesc softGeometryDesc;", "targets.shadowSoftGeometry =");
     expectSharedBlock(renderer, "Core::BufferDesc edgeListDesc;", "Core::BufferHandle edgeListBuffer =");
-    expectSharedBlock(renderer, "Core::BufferDesc edgeStatsDesc;", "m_rayTracingState.m_swShadowEdgeStatsBuffer =");
     expectSharedBlock(renderer, "Core::BufferDesc edgeCounterDesc;", "m_rayTracingState.m_swShadowEdgeCounterBuffer =");
     expectSharedBlock(renderer, "Core::BufferDesc indirectArgsDesc;", "m_rayTracingState.m_swShadowIndirectArgsBuffer =");
     expectSharedBlock(renderer, "Core::TextureDesc surfelIrradianceHalfDesc;", "targets.surfelIrradianceHalf =");

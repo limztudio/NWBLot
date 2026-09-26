@@ -50,7 +50,7 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
         return false;
     if(!boundsPipelinesReady())
         return false;
-    // RT attribute buffer exists only with ray tracing; consume the repack pipeline only then.
+    // Repack canonical trace attributes when the runtime instance owns the attribute buffer.
     if(instance.attributeBuffer && !repackPipelineReady())
         return false;
 

@@ -60,7 +60,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowCoarseTransmittanceStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.transparentSoftHalfStorage, Core::GpuDescriptorClass::StorageImage)
-        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeStatsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeCounterHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -109,7 +108,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         push.coarseStorageSlot = targets.bindless.shadowCoarseTransmittanceStorage.slot();
         push.softHalfStorageSlot = targets.bindless.shadowSoftHalfAStorage.slot();
         push.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
-        push.edgeStatsStorageSlot = m_rayTracingState.m_swShadowEdgeStatsHeapHandle.slot();
         push.edgeCounterStorageSlot = m_rayTracingState.m_swShadowEdgeCounterHeapHandle.slot();
         push.edgeListStorageSlot = m_rayTracingState.m_swShadowEdgeListHeapHandle.slot();
         push.indirectArgsStorageSlot = m_rayTracingState.m_swShadowIndirectArgsHeapHandle.slot();
@@ -245,14 +243,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     // Fallback transparent fold; it is mutually exclusive with the soft path.
     if(!softTransparentRan && m_rayTracingState.m_swShadowAdaptiveEnabled){
-        // Compacted mode traces only classified edge records; stats are sampled asynchronously.
+        // Compacted mode traces only classified edge records.
         const bool graphOwnsAdaptivePlan =
             graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled
         ;
         const bool compact = graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->compact;
-        const bool snapshot = graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->captureStatsSnapshot;
-        if(graphOwnsAdaptivePlan && graphOwnedAdaptivePlan->adaptiveRouteRecorded)
-            *graphOwnedAdaptivePlan->adaptiveRouteRecorded = true;
 
         // Coarse transmittance feeds both adaptive resolve modes.
         commandList.setEnableUavBarriersForTexture(targets.shadowCoarseTransmittance.get(), true);
@@ -283,7 +278,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             commandList.commitBarriers();
 
             // Classify interpolated interiors and append traceable edges.
-            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
@@ -293,7 +287,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             classifyPush.coarseWidth = coarseWidth;
             classifyPush.coarseHeight = coarseHeight;
             classifyPush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
-            classifyPush.collectStats = snapshot ? 1u : 0u;
             classifyPush.edgeCapacity = m_rayTracingState.m_swShadowEdgeListCapacity;
             commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentClassifyPipeline));
             bindPassHeap(m_rayTracingState.m_swShadowTransparentClassifyPipeline);
@@ -340,7 +333,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             // Full-resolution adaptive fallback.
             commandList.setTextureState(targets.shadowCoarseTransmittance.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
             commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-            commandList.setBufferState(m_rayTracingState.m_swShadowEdgeStatsBuffer.get(), Core::ResourceStates::UnorderedAccess);
             commandList.commitBarriers();
             SwShadowHeapPushConstants resolvePush = makePush();
             resolvePush.width = targets.width;
@@ -348,7 +340,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             resolvePush.coarseWidth = coarseWidth;
             resolvePush.coarseHeight = coarseHeight;
             resolvePush.edgeThreshold = m_rayTracingState.m_swShadowEdgeThreshold;
-            resolvePush.collectStats = snapshot ? 1u : 0u;
             commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentResolvePipeline));
             bindPassHeap(m_rayTracingState.m_swShadowTransparentResolvePipeline);
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));

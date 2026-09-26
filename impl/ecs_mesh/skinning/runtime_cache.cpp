@@ -19,46 +19,6 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_runtime_cache{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static constexpr RuntimeMeshDirtyFlags s_KnownDirtyFlags = RuntimeMeshDirtyFlag::All;
-
-[[nodiscard]] RuntimeMeshDirtyFlags SanitizeDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
-    return static_cast<RuntimeMeshDirtyFlags>(dirtyFlags & s_KnownDirtyFlags);
-}
-
-[[nodiscard]] RuntimeMeshDirtyFlags ExpandDirtyFlags(const RuntimeMeshDirtyFlags dirtyFlags){
-    RuntimeMeshDirtyFlags expanded = SanitizeDirtyFlags(dirtyFlags);
-    if((expanded & (RuntimeMeshDirtyFlag::TopologyDirty | RuntimeMeshDirtyFlag::AttributesDirty)) != 0u){
-        expanded = static_cast<RuntimeMeshDirtyFlags>(
-            expanded
-            | RuntimeMeshDirtyFlag::GpuUploadDirty
-            | RuntimeMeshDirtyFlag::SkinningInputDirty
-            | RuntimeMeshDirtyFlag::MeshletBoundsDirty
-        );
-    }
-    else if((expanded & RuntimeMeshDirtyFlag::GpuUploadDirty) != 0u){
-        expanded = static_cast<RuntimeMeshDirtyFlags>(
-            expanded | RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty
-        );
-    }
-    return expanded;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const Mesh* MeshSkinningRuntimeCache::MeshSkinningSource::mesh()const{
     return Core::Assets::CastAsset<Mesh>(meshAsset.get());
 }
@@ -121,50 +81,12 @@ void MeshSkinningRuntimeCache::clear(){
     m_sources.clear();
 }
 
-RuntimeMeshHandle MeshSkinningRuntimeCache::handleForEntity(const Core::ECS::EntityID entity)const{
-    const auto found = m_instances.find(entity);
-    if(found == m_instances.end())
-        return RuntimeMeshHandle{};
-    return found.value().handle;
-}
-
 MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle){
     return findInstanceByEntity(entityForHandle(handle));
 }
 
 const MeshSkinningRuntimeInstance* MeshSkinningRuntimeCache::findInstance(const RuntimeMeshHandle handle)const{
     return findInstanceByEntity(entityForHandle(handle));
-}
-
-u32 MeshSkinningRuntimeCache::editRevision(const RuntimeMeshHandle handle)const{
-    const MeshSkinningRuntimeInstance* instance = findInstance(handle);
-    return instance ? instance->editRevision : 0u;
-}
-
-bool MeshSkinningRuntimeCache::bumpEditRevision(const RuntimeMeshHandle handle, const RuntimeMeshDirtyFlags dirtyFlags){
-    if(!handle.valid())
-        return false;
-
-    MeshSkinningRuntimeInstance* instance = findInstance(handle);
-    if(!instance)
-        return false;
-    const RuntimeMeshDirtyFlags expandedDirtyFlags = __hidden_runtime_cache::ExpandDirtyFlags(dirtyFlags);
-    if(expandedDirtyFlags == RuntimeMeshDirtyFlag::None){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' revision bump requires dirty flags")
-            , instance->handle.value
-        );
-        return false;
-    }
-    if(instance->editRevision == Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime mesh '{}' edit revision overflowed")
-            , instance->handle.value
-        );
-        return false;
-    }
-
-    ++instance->editRevision;
-    instance->dirtyFlags = static_cast<RuntimeMeshDirtyFlags>(instance->dirtyFlags | expandedDirtyFlags);
-    return true;
 }
 
 RuntimeMeshHandle MeshSkinningRuntimeCache::allocateHandle(){

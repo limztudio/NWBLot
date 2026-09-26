@@ -21,6 +21,8 @@
 #include <core/task/gpu/scheduler.h>
 #include <impl/ecs_skeleton/runtime_helpers.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -85,7 +87,9 @@ bool MeshSkinningSystem::replaceAcceptedSkinningState(
     const Core::CommandListResourceStateHandoff& state,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> liveBuffers(m_arena);
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& liveBuffers = m_frameLiveBuffers;
+    ScopeExit releaseLiveBuffers([&]()noexcept{ liveBuffers.clear(); });
+
     collectLiveSkinningStateBuffers(liveBuffers, scratchArena);
     return m_acceptedSkinningState.replaceBufferSubset(state, liveBuffers.data(), liveBuffers.size(), scratchArena);
 }

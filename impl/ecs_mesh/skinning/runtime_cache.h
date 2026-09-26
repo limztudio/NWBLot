@@ -93,11 +93,8 @@ public:
     void prepareResources(Core::ECS::World& world);
     void clear();
 
-    [[nodiscard]] RuntimeMeshHandle handleForEntity(Core::ECS::EntityID entity)const;
     [[nodiscard]] MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle);
     [[nodiscard]] const MeshSkinningRuntimeInstance* findInstance(RuntimeMeshHandle handle)const;
-    [[nodiscard]] u32 editRevision(RuntimeMeshHandle handle)const;
-    [[nodiscard]] bool bumpEditRevision(RuntimeMeshHandle handle, RuntimeMeshDirtyFlags dirtyFlags);
 
 
 private:

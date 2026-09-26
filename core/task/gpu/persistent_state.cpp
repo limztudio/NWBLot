@@ -89,6 +89,38 @@ bool GpuPersistentResourceStateCache::replaceResourceSubset(
     const usize bufferCount,
     Alloc::ScratchArena& scratchArena
 ){
+    if(&source == &m_states){
+        if(
+            !source.valid()
+            || source.deviceGeneration() == 0u
+            || (textureCount != 0u && !textures)
+            || (bufferCount != 0u && !buffers)
+        ){
+            reset();
+            return false;
+        }
+
+        CommandListResourceSelection selection(scratchArena);
+        using namespace __hidden_gpu_persistent_resource_state_cache;
+        if(!BuildSelection(selection, textures, textureCount, buffers, bufferCount)){
+            reset();
+            return false;
+        }
+        GraphicsVector<TextureHandle> retainedTextures(m_arena);
+        GraphicsVector<BufferHandle> retainedBuffers(m_arena);
+        RetainSelectedHandles(selection, textures, buffers, retainedTextures, retainedBuffers);
+
+        // Finish every allocation and retain new live handles before filtering the accepted snapshot. Self-filtering
+        // only shrinks its existing state arrays; after its input checks, compaction and these same-arena swaps cannot fail.
+        if(!m_states.buildResourceSubset(m_states, selection)){
+            reset();
+            return false;
+        }
+        m_textures.swap(retainedTextures);
+        m_buffers.swap(retainedBuffers);
+        return true;
+    }
+
     Candidate candidate(*this);
     if(!buildFilteredResourceSubset(candidate, source, textures, textureCount, buffers, bufferCount, scratchArena)){
         reset();

@@ -424,32 +424,7 @@ private:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     [[nodiscard]] bool configureFramebufferCapture(){
-        NWB::Tests::Smoke::SmokeEnvironmentString outputPath(m_context.objectArena);
-        if(!NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
-            return true;
-
-        u32 captureFrameCount = 360u;
-        NWB::Tests::Smoke::SmokeEnvironmentString frameCountText(m_context.objectArena);
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
-            u64 parsedFrameCount = 0u;
-            if(
-                !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
-                || parsedFrameCount == 0u
-                || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
-            ){
-                NWB_LOGGER_ERROR(NWB_TEXT("CausticSphereSmokeProject: capture frame count must be a positive u32"));
-                return false;
-            }
-            captureFrameCount = static_cast<u32>(parsedFrameCount);
-        }
-
-        auto capture = MakeUnique<NWB::Tests::Smoke::FramebufferCapture>(
-            m_context, AStringView(outputPath.data(), outputPath.size()), captureFrameCount
-        );
-        if(!capture || !capture->start())
-            return false;
-        m_framebufferCapture = Move(capture);
-        return true;
+        return NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CausticSphereSmokeProject"), 360u, m_framebufferCapture);
     }
 #endif
 

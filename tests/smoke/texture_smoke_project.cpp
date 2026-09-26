@@ -33,6 +33,7 @@ using NWB::Tests::Smoke::CreateSmokeWorldOrDie;
 using NWB::Tests::Smoke::CreateTintedStaticMeshEntity;
 using NWB::Tests::Smoke::DestroySmokeRenderWorld;
 using NWB::Tests::Smoke::FramebufferCapture;
+using NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture;
 using NWB::Tests::Smoke::ReadSmokeEnvironmentText;
 using NWB::Tests::Smoke::SmokeEnvironmentString;
 
@@ -74,37 +75,7 @@ private:
     }
 
     bool configureFramebufferCapture(){
-        SmokeEnvironmentString outputPath(m_context.objectArena);
-        if(!ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
-            return true;
-
-        u32 captureFrameCount = s_FramebufferCaptureDefaultFrameCount;
-        SmokeEnvironmentString frameCountText(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
-            u64 parsedFrameCount = 0u;
-            if(
-                !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
-                || parsedFrameCount == 0u
-                || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
-            ){
-                NWB_LOGGER_ERROR(
-                    NWB_TEXT("TextureSmokeProject: NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT must be a positive u32")
-                );
-                return false;
-            }
-            captureFrameCount = static_cast<u32>(parsedFrameCount);
-        }
-
-        auto capture = MakeUnique<FramebufferCapture>(
-            m_context,
-            AStringView(outputPath.data(), outputPath.size()),
-            captureFrameCount
-        );
-        if(!capture || !capture->start())
-            return false;
-
-        m_framebufferCapture = Move(capture);
-        return true;
+        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount, m_framebufferCapture);
     }
 
     void destroyWorld(){

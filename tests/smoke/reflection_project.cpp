@@ -502,19 +502,6 @@ private:
     }
 
     bool configureFramebufferCapture(){
-        SmokeEnvironmentString outputPath(m_context.objectArena);
-        if(!ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
-            return true;
-        u32 frameCount = 16u;
-        SmokeEnvironmentString frameText(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameText)){
-            u64 parsed = 0u;
-            if(!ParseU64(AStringView(frameText.data(), frameText.size()), parsed) || parsed == 0u || parsed > Limit<u32>::s_Max){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: capture frame count must be a positive u32"));
-                return false;
-            }
-            frameCount = static_cast<u32>(parsed);
-        }
         FramebufferCaptureOptions options;
         if(m_extendedCase || m_feedbackCapture){
             if(!m_reflectionSettings.diagnosticsEnabled){
@@ -527,11 +514,7 @@ private:
                 return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
             };
         }
-        auto capture = MakeUnique<FramebufferCapture>(m_context, AStringView(outputPath.data(), outputPath.size()), frameCount, options);
-        if(!capture || !capture->start())
-            return false;
-        m_framebufferCapture = Move(capture);
-        return true;
+        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("ReflectionSmokeProject"), 16u, m_framebufferCapture, options);
     }
 
     void destroyWorld(){

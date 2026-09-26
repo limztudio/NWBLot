@@ -7,7 +7,10 @@
 
 #include <loader/project_entry.h>
 
+#include "smoke_environment.h"
+
 #include <core/alloc/scratch.h>
+#include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/presentation_contributor.h>
 #include <global/filesystem/path.h>
@@ -119,6 +122,49 @@ private:
     bool m_quitRequested = false;
     bool m_stopped = false;
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Shared smoke framebuffer-capture prologue: reads the capture path + frame count, validates the count, and
+// constructs a started capture. Returns true when capture is disabled (outCapture stays null) or when a started
+// capture is published; false on config/startup failure. Projects with extra capture options pass them through.
+[[nodiscard]] inline bool ConfigureSmokeFramebufferCapture(
+    ProjectRuntimeContext& context,
+    const tchar* const projectName,
+    const u32 defaultFrameCount,
+    UniquePtr<FramebufferCapture>& outCapture,
+    const FramebufferCaptureOptions& options = {}
+){
+    outCapture.reset();
+    SmokeEnvironmentString outputPath(context.objectArena);
+    if(!ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
+        return true;
+
+    u32 captureFrameCount = defaultFrameCount;
+    SmokeEnvironmentString frameCountText(context.objectArena);
+    if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
+        u64 parsedFrameCount = 0u;
+        if(
+            !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
+            || parsedFrameCount == 0u
+            || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
+            return false;
+        }
+        captureFrameCount = static_cast<u32>(parsedFrameCount);
+    }
+
+    auto capture = MakeUnique<FramebufferCapture>(
+        context, AStringView(outputPath.data(), outputPath.size()), captureFrameCount, options
+    );
+    if(!capture || !capture->start())
+        return false;
+    outCapture = Move(capture);
+    return true;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

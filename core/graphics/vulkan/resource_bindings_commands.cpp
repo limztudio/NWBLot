@@ -330,7 +330,8 @@ void CommandList::bindDescriptorBufferHeapNative(
         rejectCommandRecording(operationName, NWB_TEXT("heap retains a resource unavailable to this exact command queue"));
         return;
     }
-    for(const SamplerHandle& retainedSampler : heap.m_samplerDescriptorResources){
+    for(u32 slot = 0u; slot < heap.m_samplerSlots.nextFresh; ++slot){
+        const SamplerHandle& retainedSampler = heap.m_samplerDescriptorResources[slot];
         Sampler* const sampler = retainedSampler.get();
         if(sampler && (&sampler->m_context != &m_context || sampler->m_sampler == VK_NULL_HANDLE)){
             rejectCommandRecording(operationName, NWB_TEXT("heap retains a foreign or unready sampler"));
@@ -448,11 +449,13 @@ void CommandList::bindDescriptorBufferHeapNative(
         rejectCommandRecording(operationName, NWB_TEXT("descriptor-heap command-buffer use identity is exhausted"));
         return;
     }
-    for(const BufferHandle& retainedBuffer : heap.m_resourceDescriptorBuffers){
+    for(u32 slot = 0u; slot < heap.m_resourceSlots.nextFresh; ++slot){
+        const BufferHandle& retainedBuffer = heap.m_resourceDescriptorBuffers[slot];
         if(retainedBuffer)
             trackedCommandBuffer.m_resourceReferences.trackRetainedBuffer(*retainedBuffer);
     }
-    for(const TextureHandle& retainedTexture : heap.m_resourceDescriptorTextures){
+    for(u32 slot = 0u; slot < heap.m_resourceSlots.nextFresh; ++slot){
+        const TextureHandle& retainedTexture = heap.m_resourceDescriptorTextures[slot];
         if(retainedTexture)
             trackedCommandBuffer.m_resourceReferences.trackRetainedTexture(*retainedTexture);
     }

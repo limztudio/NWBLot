@@ -32,7 +32,8 @@ bool GpuDescriptorHeap::isResourceAdmittedToActiveUsesLocked(const ResourceQueue
 }
 
 bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQueueInfo& queue)const noexcept{
-    for(const BufferHandle& retainedBuffer : m_resourceDescriptorBuffers){
+    for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
+        const BufferHandle& retainedBuffer = m_resourceDescriptorBuffers[slot];
         if(
             retainedBuffer
             && (
@@ -42,7 +43,8 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQu
         )
             return false;
     }
-    for(const TextureHandle& retainedTexture : m_resourceDescriptorTextures){
+    for(u32 slot = 0u; slot < m_resourceSlots.nextFresh; ++slot){
+        const TextureHandle& retainedTexture = m_resourceDescriptorTextures[slot];
         if(
             retainedTexture
             && (
@@ -52,7 +54,8 @@ bool GpuDescriptorHeap::retainedResourcesReadyForQueueLocked(const GpuPhysicalQu
         )
             return false;
     }
-    for(const RayTracingAccelStructHandle& retainedAccelStruct : m_accelStructResources){
+    for(u32 slot = 0u; slot < m_accelStructSlots.nextFresh; ++slot){
+        const RayTracingAccelStructHandle& retainedAccelStruct = m_accelStructResources[slot];
         if(!retainedAccelStruct)
             continue;
 

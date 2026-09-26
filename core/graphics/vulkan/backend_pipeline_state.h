@@ -324,6 +324,7 @@ private:
     // Fresh indices plus a recycled free list per namespace.
     struct SlotAllocator{
         u32 capacity = 0;
+        // Every allocated or quarantined slot lies below nextFresh; only clear() resets this high-water mark.
         u32 nextFresh = 0;
         FixedTable<u32> freeList;
         usize freeCount = 0u;

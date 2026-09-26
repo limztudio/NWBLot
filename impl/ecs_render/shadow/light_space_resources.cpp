@@ -180,6 +180,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     RayTracingDetail::RetireHeapHandle(heap, snapshot.viewsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.drawArgumentsDescriptor);
     RayTracingDetail::RetireHeapHandle(heap, snapshot.depthDescriptor);
+    m_lightSpaceShadow.m_captureHistory.invalidate();
     snapshot.counts = Move(buffers[0]);
     snapshot.events = Move(buffers[1]);
     snapshot.views = Move(buffers[2]);
@@ -207,6 +208,13 @@ void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.drawArgumentsDescriptor);
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.depthDescriptor);
     }
+    state.m_captureHistory.invalidate();
+    state.m_captureSceneTrusted = false;
+    state.m_captureReuseLogged = false;
+    state.m_sceneBuffers.clear();
+    state.m_captureBuffers.clear();
+    state.m_sceneTextures.clear();
+    state.m_captureTextures.clear();
     state.m_snapshot = {};
     state.m_casters.clear();
     for(auto& shader : state.m_shaders)

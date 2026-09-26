@@ -1041,6 +1041,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1085,6 +1087,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1183,6 +1187,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1203,6 +1209,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"

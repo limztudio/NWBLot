@@ -113,7 +113,11 @@ struct ShadeTask{
             payload.graphics.gpuTiming(), RendererGpuTimingScope::s_LightSpaceShadowShade, payload.graphics.getDevice(), commandList
         );
 
-        return RecordLightSpaceShade(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot);
+        if(!RecordLightSpaceShade(commandList, payload.graphics.getDevice().getDescriptorHeap(), payload.snapshot))
+            return false;
+        if(payload.snapshot.captureHistory)
+            payload.snapshot.captureHistory->recordCapture(payload.snapshot.captureTicket);
+        return true;
     }
 };
 
@@ -184,12 +188,20 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     result.counts = importBuffer(snapshot.counts, Name("render.light_space_shadow.counts"), "Light-Space Crossing Counts");
     result.events = importBuffer(snapshot.events, Name("render.light_space_shadow.events"), "Light-Space Crossings");
     result.views = importBuffer(snapshot.views, Name("render.light_space_shadow.views"), "Light-Space Views");
-    result.drawArguments = importBuffer(snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments");
     // Opaque capture clears every layer. Unknown preserves fresh Undefined; accepted state sources retain native states.
     result.depth = graph.importTexture(snapshot.depth,
         TextureResourceDesc(Name("render.light_space_shadow.depth"), "Light-Space Opaque Depth")
             .setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
-    if(!result.counts.valid() || !result.events.valid() || !result.views.valid() || !result.drawArguments.valid() || !result.depth.valid())
+    if(!result.counts.valid() || !result.events.valid() || !result.views.valid() || !result.depth.valid())
+        return {};
+    if(snapshot.captureTicket.reuse){
+        // Receiver tasks retain all current scene/BVH reads and the accepted native map state sources.
+        result.ready = inputs.dependency;
+        return result;
+    }
+    // A retained draw buffer is untouched during reuse; importing its final state would promise an unowned graph export.
+    result.drawArguments = importBuffer(snapshot.drawArguments, Name("render.light_space_shadow.draw_arguments"), "Light-Space Draw Arguments");
+    if(!result.drawArguments.valid())
         return {};
     const Core::GpuUploadBlobId upload = graph.copyUploadData(
         snapshot.plan.views.data(), snapshot.plan.viewCount * sizeof(LightSpaceViewGpu), alignof(u32)
@@ -319,6 +331,7 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         __hidden_task_graph_light_space_shadow::ShadeTask::Payload{
             inputs.graphics, inputs.shadowPrepared, snapshot,
         });
+    result.ready = result.shade;
     return result.valid() ? result : LightSpaceShadowGraph{};
 }
 

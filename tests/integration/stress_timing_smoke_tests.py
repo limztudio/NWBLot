@@ -17,13 +17,13 @@ import stress_timing_smoke as smoke
 def shadow_defaults():
     return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
         software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
-        software_shadow_budget_mib=256,
+        software_shadow_capture_cadence="every_frame", software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
 
 
-def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0):
+def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0, capture_cadence=0):
     return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
-        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search}")
+        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search} capture_cadence={capture_cadence}")
 
 
 def workload_record(characters_per_class=10):
@@ -83,6 +83,28 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         executable = self.output / "renderer.exe"
         executable.write_bytes(b"fixture")
         self.argv = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
+
+    def test_capture_cadence_requires_observed_accepted_reuse(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-capture-cadence", "reuse_one_frame"])
+        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": "every_frame"}, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_one_frame")
+        record = shadow_record(capture_cadence=1)
+        marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE
+        observed = smoke.verify_software_shadow_settings(record + "\n" + marker, args)
+        self.assertTrue(observed["accepted_reuse_verified"])
+        for text in (record, record + "\n" + marker + "\n" + marker, shadow_record() + "\n" + marker):
+            with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(text, args)
+
+    def test_reference_capture_cadence_rejects_unrequested_reuse(self):
+        args = smoke.parse_args(self.argv)
+        observed = smoke.verify_software_shadow_settings(shadow_record(), args)
+        self.assertFalse(observed["accepted_reuse_verified"])
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.verify_software_shadow_settings(shadow_record() + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE, args)
+        for name in ("2", "REUSE_ONE_FRAME", "invalid"):
+            with self.assertRaises(SystemExit):
+                smoke.parse_args(self.argv + ["--software-shadow-capture-cadence", name])
 
     def test_cli_defaults_and_explicit_modes_match_application_contract(self):
         args = smoke.parse_args(self.argv)
@@ -620,6 +642,122 @@ class StressMeasurementTests(unittest.TestCase):
                     smoke.acquire(args, output)
             self.assertEqual((output / "runtime.log").read_text(encoding="utf-8"), "raw timeout runtime log")
             self.assertEqual((output / "process_tail.txt").read_text(encoding="utf-8"), "failed process output")
+
+
+class StressPerformanceTargetTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.runtime = self.root / "runtime"
+        self.runtime.mkdir()
+        executable = self.runtime / "renderer.exe"
+        executable.write_bytes(b"synthetic")
+        self.argv = ["--executable", str(executable), "--working-directory", str(self.runtime), "--no-logserver"]
+
+    def rate_log(self, fps):
+        count = int(fps / 2)
+        lines = []
+        interval = 0
+        for line in valid_log().splitlines():
+            if line.startswith(smoke.INTERVAL):
+                first = 80 + count * interval
+                line = smoke.INTERVAL + f"avg={fps} presentations={count} seconds=0.5 first={first} last={first+count}"
+                interval += 1
+            elif line.startswith(smoke.DONE):
+                line = smoke.DONE + f"fps={fps} presentations={count*60} seconds=30 first=80 last={80+count*60}"
+            lines.append(line)
+        return shadow_record() + "\n" + "\n".join(lines) + "\n"
+
+    def acquire_or_main(self, extra, text, use_main=False, identities=None):
+        output = self.root / "capture"
+        argv = self.argv + ["--output-directory", str(output)] + extra
+        args = smoke.parse_args(argv)
+        if not use_main:
+            output.mkdir(exist_ok=True)
+        with patch.object(smoke, "identities", side_effect=identities, return_value={"verified": True}), \
+            patch.object(smoke, "build_launch_environment", return_value={}), \
+            patch.object(smoke, "launch_logserver", return_value=(None, None, output, {}, "*.log")), \
+            patch.object(smoke, "launch_testbed", return_value=Mock()), \
+            patch.object(smoke, "terminate_process", return_value=(0, "process preserved")), \
+            patch.object(smoke, "shutdown_logserver_and_collect", return_value=text), \
+            patch.object(smoke.ab, "device_material_signature", return_value={}), patch.object(smoke, "write_status"):
+            return smoke.main(argv) if use_main else smoke.acquire(args, output)
+
+    def test_default_capture_only_and_positive_finite_thresholds(self):
+        self.assertIsNone(smoke.parse_args(self.argv).minimum_fps)
+        for threshold in ("60", "0.001", "5e-324", "1e308"):
+            self.assertEqual(smoke.parse_args(self.argv + ["--minimum-fps", threshold]).minimum_fps, float(threshold))
+        result = self.acquire_or_main([], self.rate_log(16))
+        self.assertTrue(result["passed"])
+        self.assertTrue(result["capture_validated"])
+        self.assertFalse(result["performance_target"]["requested"])
+        self.assertIsNone(result["performance_target"]["passed"])
+
+    def test_invalid_or_diagnostic_threshold_requests_are_rejected(self):
+        for value in ("0", "-1", "nan", "inf", "-inf", "1e309", "1e-999", "invalid"):
+            with self.subTest(value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
+                smoke.parse_args(self.argv + ["--minimum-fps=" + value])
+        for flags in (["--cpu-diagnostics"], ["--reflection-diagnostics"], ["--cpu-diagnostics", "--reflection-diagnostics"]):
+            with self.subTest(flags=flags), patch("sys.stderr"), self.assertRaises(SystemExit):
+                smoke.parse_args(self.argv + ["--minimum-fps", "60"] + flags)
+            self.assertIsNone(smoke.parse_args(self.argv + flags).minimum_fps)
+
+    def test_acquisition_strict_boundary_and_validated_provenance(self):
+        for fps, expected in ((58, False), (60, False), (62, True)):
+            with self.subTest(fps=fps):
+                result = self.acquire_or_main(["--minimum-fps", "60"], self.rate_log(fps))
+                self.assertEqual(result["passed"], expected)
+                self.assertTrue(result["capture_validated"])
+                self.assertEqual(result["performance_target"], dict(requested=True, minimum_fps=60, comparison=">",
+                    observed_fps=fps, source="accepted_native_presentations / steady_clock_seconds", passed=expected))
+                self.assertEqual(result["identity_before"], result["identity_after"])
+                self.assertIn("runtime.log", result["raw_files"])
+                launch = json.loads((self.root / "capture/launch.json").read_text())
+                self.assertEqual(launch["minimum_fps"], 60)
+
+    def test_rounded_logged_rate_cannot_turn_equal_count_rate_into_pass(self):
+        text = self.rate_log(60).replace("complete fps=60 ", "complete fps=60.00000003 ")
+        result = self.acquire_or_main(["--minimum-fps", "60"], text)
+        self.assertGreater(result["measurement"]["fps"], 60)
+        self.assertEqual(result["performance_target"]["observed_fps"], 60)
+        self.assertFalse(result["passed"])
+
+    def test_main_retains_fully_validated_result_and_separate_target_failure(self):
+        text = self.rate_log(60)
+        self.assertEqual(self.acquire_or_main(["--minimum-fps", "60"], text, use_main=True), 1)
+        output = self.root / "capture"
+        result = json.loads((output / "result.json").read_text())
+        failure = json.loads((output / "failure.json").read_text())
+        self.assertTrue(result["capture_validated"])
+        self.assertFalse(result["passed"])
+        self.assertFalse(result["performance_target"]["passed"])
+        self.assertIn("must exceed 60", failure["error"])
+        self.assertEqual((output / "runtime.log").read_text(), text)
+        self.assertEqual((output / "process_tail.txt").read_text(), "process preserved")
+        self.assertEqual(result["identity_before"], {"verified": True})
+        self.assertEqual(result["identity_before"], result["identity_after"])
+
+    def test_main_above_target_passes_without_failure_artifact(self):
+        self.assertEqual(self.acquire_or_main(["--minimum-fps", "60"], self.rate_log(62), use_main=True), 0)
+        result = json.loads((self.root / "capture/result.json").read_text())
+        self.assertTrue(result["performance_target"]["passed"])
+        self.assertFalse((self.root / "capture/failure.json").exists())
+
+    def test_target_does_not_bypass_validation_or_identity_checks(self):
+        for text in (self.rate_log(62) + "VUID-123", self.rate_log(62).replace("blocker_search=0", "blocker_search=1")):
+            with self.subTest(text=text[-50:]), self.assertRaises(smoke.SmokeFailure):
+                self.acquire_or_main(["--minimum-fps", "60"], text)
+        with self.assertRaisesRegex(smoke.SmokeFailure, "identity changed"):
+            self.acquire_or_main(["--minimum-fps", "60"], self.rate_log(62), identities=[{"generation": 1}, {"generation": 2}])
+
+    def test_direct_acquisition_rejects_diagnostic_or_invalid_threshold_before_launch(self):
+        for field, value in (("cpu_diagnostics", True), ("reflection_diagnostics", True), ("minimum_fps", float("nan"))):
+            args = smoke.parse_args(self.argv + ["--minimum-fps", "60"])
+            setattr(args, field, value)
+            with patch.object(smoke, "launch_testbed") as launch, self.assertRaises(smoke.SmokeFailure):
+                smoke.acquire(args, self.root / "unused")
+            launch.assert_not_called()
 
 
 if __name__ == "__main__":

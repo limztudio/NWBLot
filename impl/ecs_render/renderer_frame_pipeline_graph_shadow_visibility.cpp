@@ -859,7 +859,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, rayTracingPlan.lightSpace.plan.viewCount };
         opaqueResourceUses.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
         transparentTraceResourceUses.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));
-        shadowTraceDependency = maps.shade;
+        shadowTraceDependency = maps.ready;
     }
 
     if(splitSoftTransparentFold){

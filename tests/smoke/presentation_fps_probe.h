@@ -54,6 +54,7 @@ public:
     [[nodiscard]] PresentationFpsStatus::Enum observe(u64 successfulPresentations, Timer now);
     [[nodiscard]] const PresentationFpsSample& interval()const noexcept{ return m_interval; }
     [[nodiscard]] const PresentationFpsSample& total()const noexcept{ return m_total; }
+    [[nodiscard]] bool measurementStarted()const noexcept{ return m_measuring; }
 
 
 private:

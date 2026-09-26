@@ -5,6 +5,7 @@
 #include "arrow_yaw_input_handler.h"
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
+#include "stress_cpu_timing_probe.h"
 #include "presentation_fps_probe.h"
 #include "presentation_pacing_ring.h"
 #include "reflection_quality_settings.h"
@@ -347,6 +348,13 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: presentation measurement invalid counter or clock"));
             return false;
         }
+        if(!m_cpuTimingProbe.observe(
+            m_context.perfSession,
+            m_fpsProbe,
+            successfulPresentations,
+            status == NWB::Tests::Smoke::PresentationFpsStatus::Complete
+        ))
+            return false;
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
             return true;
 
@@ -412,7 +420,11 @@ public:
         if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled))
+            return false;
+        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
+        capture.cpuTiming = m_cpuDiagnosticsEnabled;
+        m_context.setPerfCapture(capture);
         if(m_timingEnabled){
             if(m4PixelCaptureFreezeFrame() != 0u || rendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit){
                 NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
@@ -627,6 +639,7 @@ private:
     NWB::Core::ECS::EntityID m_ceiling = NWB::Core::ECS::ENTITY_ID_INVALID;
     u32 m_charactersPerClass = s_DefaultCharactersPerClass;
     const bool m_timingEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_SMOKE_TIMING");
+    const bool m_cpuDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_CPU_DIAGNOSTICS");
     const bool m_reflectionDiagnosticsEnabled = ReadSmokeEnvironmentFlag("NWB_STRESS_REFLECTION_DIAGNOSTICS");
     u64 m_reflectionStatisticsSequence = 0u;
     u64 m_reflectionStatisticsGeneration = 0u;
@@ -634,6 +647,7 @@ private:
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
     bool m_timingComplete = false;
+    NWB::Tests::Smoke::StressCpuTimingProbe m_cpuTimingProbe{ m_context.objectArena };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;

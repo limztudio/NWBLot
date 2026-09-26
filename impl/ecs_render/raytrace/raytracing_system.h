@@ -235,6 +235,8 @@ public:
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
     [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
+    void acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, bool prepared);
+    void invalidateLightSpaceShadowCapture()noexcept;
 
     void logCapabilityOnce();
 

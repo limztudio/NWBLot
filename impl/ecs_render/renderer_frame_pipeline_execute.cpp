@@ -1046,6 +1046,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .returnTextures = shadowVisibilityReturnTextures,
         .scratchTextures = shadowComputeScratchTextures,
         .scratchBuffers = shadowComputeScratchBuffers,
+        .lightSpacePrepared = &m_shadowPreparationOutcome.ready,
+        .lightSpaceCaptureTicket = lightSpaceShadowResources.captureTicket,
         .returnTextureCount = LengthOf(shadowVisibilityReturnTextures),
         .scratchTextureCount = LengthOf(shadowComputeScratchTextures),
         .scratchBufferCount = LengthOf(shadowComputeScratchBuffers),

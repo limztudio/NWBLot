@@ -6,6 +6,7 @@
 
 
 #include "light_space_plan.h"
+#include "light_space_capture_history.h"
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -104,13 +105,23 @@ struct LightSpaceShadowSnapshot{
     LightSpaceShadowPush push;
     const LightSpaceShadowCaster* casters = nullptr;
     usize casterCount = 0u;
+    LightSpaceCaptureTicket captureTicket;
+    LightSpaceCaptureHistory* captureHistory = nullptr;
     bool ready = false;
 };
 
 struct LightSpaceShadowState{
     SoftwareShadowSettings m_settings;
     LightSpaceShadowSnapshot m_snapshot;
+    LightSpaceCaptureHistory m_captureHistory;
+    u64 m_captureSceneIdentity = 0u;
+    bool m_captureSceneTrusted = false;
+    bool m_captureReuseLogged = false;
     Vector<LightSpaceShadowCaster, Core::Alloc::GlobalArena> m_casters;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_sceneBuffers;
+    Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_captureBuffers;
+    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
+    Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
     static constexpr usize s_LightSpaceShaderCount = 8u;
     Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
     bool m_sceneEligible = false;
@@ -118,7 +129,13 @@ struct LightSpaceShadowState{
     bool m_pipelineFailed = false;
     bool m_dispatchLogged = false;
 
-    explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena) : m_casters(arena){}
+    explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena)
+        : m_casters(arena)
+        , m_sceneBuffers(arena)
+        , m_captureBuffers(arena)
+        , m_sceneTextures(arena)
+        , m_captureTextures(arena)
+    {}
 };
 
 // Graph tasks own uploads, clears, and entry/exit states. Resolve owns its internal map-to-fallback UAV dependency.

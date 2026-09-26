@@ -39,6 +39,13 @@ namespace SoftwareShadowBlockerSearch{
     };
 };
 
+namespace SoftwareShadowCaptureCadence{
+    enum Enum : u8{
+        EveryFrame,
+        ReuseOneFrame,
+    };
+};
+
 inline constexpr u32 s_ShadowDefaultDirectionalResolution = 512u;
 inline constexpr u32 s_ShadowDefaultPointResolution = 256u;
 inline constexpr u64 s_ShadowDefaultMemoryBudgetBytes = 256ull * 1024ull * 1024ull;
@@ -50,6 +57,7 @@ struct SoftwareShadowSettings{
     SoftwareShadowBackend::Enum backend = SoftwareShadowBackend::Automatic;
     SoftwareShadowCoverage::Enum coverage = SoftwareShadowCoverage::Reference;
     SoftwareShadowBlockerSearch::Enum blockerSearch = SoftwareShadowBlockerSearch::ReferenceGrid9;
+    SoftwareShadowCaptureCadence::Enum captureCadence = SoftwareShadowCaptureCadence::EveryFrame;
     u32 directionalResolution = s_ShadowDefaultDirectionalResolution;
     u32 pointResolution = s_ShadowDefaultPointResolution;
     u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;

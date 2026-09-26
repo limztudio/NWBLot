@@ -2,6 +2,8 @@ nwb_declare_gtest_executable(nwb_ecs_graphics_tests)
 target_sources(nwb_ecs_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/light_space_capture_graph_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/light_space_capture_history_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/light_space_plan_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/light_space_shadow_storage_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_settings_tests.cpp"

@@ -26,6 +26,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     using namespace __hidden_rt_swbvh;
 
     m_preparedSceneContentStamp = {};
+    m_lightSpaceShadow.m_captureSceneTrusted = false;
 
     // Software scene BVH and material context share hardware instance ordering.
     auto* meshSystemPtr = m_world.getSystem<NWB::Impl::MeshSystem>();
@@ -34,6 +35,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
+    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * 3u);
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
@@ -88,6 +90,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     bool staticScene = true;
     bool samplingSceneTrusted = true;
     bool contentComplete = true;
+    bool captureSceneTrusted = true;
+    u64 captureSceneIdentity = FNV64_OFFSET_BASIS;
     RayTracingOpticalSceneGather opticalScene(scratchArena, candidateCount);
 
     ShadowMaterialSampledTextureCollector sampledTextureCollector(m_preparedShadowTraceMaterialSampledTextures, scratchArena);
@@ -275,6 +279,24 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             && ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax, opticalMin, opticalMax)
         ;
         opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
+
+        // Preserve the exact emitted instance/boundary ordering, while allowing only world transforms to lag one frame.
+        Fnv64AppendValue(captureSceneIdentity, entity.id);
+        Fnv64AppendValue(captureSceneIdentity, mesh.positionBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.triangleIndexBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.attributeBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, mesh.meshletPrimitiveIndexCount);
+        Fnv64AppendValue(captureSceneIdentity, mesh.runtimeMeshVersion);
+        Fnv64AppendValue(captureSceneIdentity, mesh.runtimeGeometryContentRevision);
+        Fnv64AppendValue(captureSceneIdentity, instanceMaterial);
+        Fnv64AppendValue(captureSceneIdentity, shadowInstance.translation.w);
+        Fnv64AppendValue(captureSceneIdentity, shadowInstance.geometryHeapSlots);
+        Fnv64AppendValue(captureSceneIdentity, opticalScene.instances.back());
+        if((resolvedMesh.runtime || mesh.runtimeMesh) && mesh.runtimeGeometryContentRevision == 0u)
+            captureSceneTrusted = false;
+        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
+        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
+        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
 
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
@@ -500,6 +522,14 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
     samplingStamp.trusted = samplingStamp.trusted && samplingSceneTrusted;
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(samplingStamp);
+    Fnv64AppendValue(captureSceneIdentity, instanceCount);
+    Fnv64AppendBuffer(captureSceneIdentity, shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size());
+    for(const auto& texture : m_preparedShadowTraceMaterialSampledTextures)
+        Fnv64AppendValue(captureSceneIdentity, texture.get());
+    m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
+    // Sampled material assets are immutable under this collector; resource/shader invalidation also clears capture history.
+    m_lightSpaceShadow.m_captureSceneIdentity = captureSceneIdentity;
+    m_lightSpaceShadow.m_captureSceneTrusted = captureSceneTrusted && samplingSceneTrusted && contentComplete;
     return true;
 }
 

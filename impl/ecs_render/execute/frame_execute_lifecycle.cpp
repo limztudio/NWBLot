@@ -164,6 +164,8 @@ NWB_IMPL_BEGIN
     ;
     context->stateReady = returnStateReady && scratchStateReady;
     context->renderer->m_raytracingSystem.finalizeSoftShadowTemporalHistory(*context->targets);
+    if(context->stateReady && context->lightSpacePrepared)
+        context->renderer->m_raytracingSystem.acceptLightSpaceShadowCapture(context->lightSpaceCaptureTicket, *context->lightSpacePrepared);
     return context->stateReady;
 }
 

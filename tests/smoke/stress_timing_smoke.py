@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import renderer_ab_benchmark as ab
 from smoke_volume_identity import file_identity
 import caustic_quality_smoke
+import stress_cpu_timing
 from window_capture_smoke import (
     STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
     launch_logserver, launch_testbed, require_normal_process_exit,
@@ -40,6 +41,8 @@ SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
 SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
 SOFTWARE_SHADOW_COVERAGE = {"reference": 0, "fitted_volume": 1}
 SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1}
+SOFTWARE_SHADOW_CAPTURE_CADENCE = {"every_frame": 0, "reuse_one_frame": 1}
+SOFTWARE_SHADOW_CAPTURE_REUSE = "RendererSystem: accepted light-space capture reuse (cadence=2)"
 
 
 WORKLOAD = "StressTestSmokeProject: workload "
@@ -304,7 +307,7 @@ def verify_software_shadow_settings(text, args):
     records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_SETTINGS)]
     if len(records) != 1:
         raise SmokeFailure("exactly one SoftwareShadowSmoke requested-settings record is required")
-    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes", "coverage", "blocker_search")
+    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes", "coverage", "blocker_search", "capture_cadence")
     pattern = re.escape(SOFTWARE_SHADOW_SETTINGS) + " ".join(re.escape(field) + r"=([0-9]+)" for field in fields)
     match = re.fullmatch(pattern, records[0])
     if not match:
@@ -314,10 +317,17 @@ def verify_software_shadow_settings(text, args):
         directional_resolution=args.software_shadow_directional_resolution,
         point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024,
         coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage],
-        blocker_search=SOFTWARE_SHADOW_BLOCKER_SEARCH[args.software_shadow_blocker_search])
+        blocker_search=SOFTWARE_SHADOW_BLOCKER_SEARCH[args.software_shadow_blocker_search],
+        capture_cadence=SOFTWARE_SHADOW_CAPTURE_CADENCE[args.software_shadow_capture_cadence])
     if observed != requested:
         raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
-    return {"backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
+    reuse_records = [line.strip() for line in text.splitlines() if line.strip() == SOFTWARE_SHADOW_CAPTURE_REUSE]
+    if args.software_shadow_capture_cadence == "reuse_one_frame" and len(reuse_records) != 1:
+        raise SmokeFailure("reuse-one-frame acquisition requires exactly one accepted light-space capture reuse marker")
+    if args.software_shadow_capture_cadence == "every_frame" and reuse_records:
+        raise SmokeFailure("every-frame acquisition unexpectedly reused a light-space capture")
+    return {"capture_cadence_name": args.software_shadow_capture_cadence, "accepted_reuse_verified": bool(reuse_records),
+        "backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
         "blocker_search_name": args.software_shadow_blocker_search, "requested": requested, "observed": observed, "verified": True}
 
 
@@ -371,12 +381,15 @@ def launch_environment(base, args, output):
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
         NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
         NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
+        NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE=args.software_shadow_capture_cadence,
         NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling,
         NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
         NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
         NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
         NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
+    if getattr(args, "cpu_diagnostics", False):
+        result.update(NWB_STRESS_CPU_DIAGNOSTICS="1", NWB_STRESS_CPU_TIMING_FILE=str(output / "cpu_gpu_timing.txt"))
     if not args.animate:
         result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
             NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS=str(args.fixed_delta_seconds))
@@ -410,7 +423,25 @@ def identities(args, helpers):
         "helpers": {str(path): file_identity(path) for path in helpers}}
 
 
+def validate_performance_target_request(args):
+    minimum = getattr(args, "minimum_fps", None)
+    if minimum is None:
+        return
+    if not math.isfinite(minimum) or minimum <= 0:
+        raise SmokeFailure("minimum FPS must be finite and positive")
+    if getattr(args, "cpu_diagnostics", False) or getattr(args, "reflection_diagnostics", False):
+        raise SmokeFailure("minimum FPS cannot qualify CPU or reflection diagnostic runs")
+
+
+def performance_target(measurement, minimum):
+    # Derive qualification from the validated accepted count and wall clock, not rounded log FPS or GPU samples.
+    observed = measurement["presentations"] / measurement["seconds"]
+    return dict(requested=minimum is not None, minimum_fps=minimum, comparison=">", observed_fps=observed,
+        source="accepted_native_presentations / steady_clock_seconds", passed=None if minimum is None else observed > minimum)
+
+
 def acquire(args, output):
+    validate_performance_target_request(args)
     helpers = sorted({Path(module.__file__).resolve() for module in list(sys.modules.values())
         if getattr(module, "__file__", None) and Path(module.__file__).suffix == ".py"
         and ("tests" in Path(module.__file__).parts or Path(module.__file__).resolve() == Path(__file__).resolve())})
@@ -420,7 +451,7 @@ def acquire(args, output):
     write_json(output / "launch.json", {"executable": str(args.executable), "working_directory": str(args.working_directory),
         "application_args": args.application_arg, "timeout_seconds": args.timeout,
         "environment": {key: value for key, value in env.items() if key.startswith(("NWB_", "VK_"))},
-        "identity_before": before})
+        "identity_before": before, "minimum_fps": getattr(args, "minimum_fps", None)})
     process = logserver = log_directory = None
     baseline, pattern = {}, ""
     collected = False
@@ -441,6 +472,12 @@ def acquire(args, output):
         collected = True
         (output / "runtime.log").write_text(text, encoding="utf-8")
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
+        result["cpu_diagnostics"] = stress_cpu_timing.verify_capture(
+            text, output / "cpu_gpu_timing.txt", result["measurement"], getattr(args, "cpu_diagnostics", False))
+        result["diagnostic_only"] = getattr(args, "cpu_diagnostics", False) or args.reflection_diagnostics
+        result["performance_qualification"] = not result["diagnostic_only"]
+        if getattr(args, "cpu_diagnostics", False):
+            write_json(output / "cpu_gpu_summary.json", result["cpu_diagnostics"])
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
         result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
@@ -453,8 +490,10 @@ def acquire(args, output):
         after = identities(args, helpers)
         if before != after:
             raise SmokeFailure("renderer, resources, logger, interpreter or helper identity changed during acquisition")
-        result.update(schema=1, passed=True, exit_code=code, identity_before=before, identity_after=after,
-            raw_files={name: file_identity(output / name) for name in ("runtime.log", "process_tail.txt", "gpu_timing.txt")
+        result["performance_target"] = performance_target(result["measurement"], getattr(args, "minimum_fps", None))
+        result.update(schema=1, passed=result["performance_target"]["passed"] is not False, capture_validated=True,
+            exit_code=code, identity_before=before, identity_after=after,
+            raw_files={name: file_identity(output / name) for name in ("runtime.log", "process_tail.txt", "gpu_timing.txt", "cpu_gpu_timing.txt", "cpu_gpu_summary.json")
                 if (output / name).is_file()})
         return result
     finally:
@@ -491,6 +530,8 @@ def parse_args(argv=None):
     parser.add_argument("--no-logserver", action="store_true")
     parser.add_argument("--output-directory", type=Path)
     parser.add_argument("--timeout", type=float, default=90.0)
+    parser.add_argument("--minimum-fps", type=float,
+        help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify.")
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
@@ -500,6 +541,8 @@ def parse_args(argv=None):
         help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
     parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default="reference_grid9",
         help="Compact cross uses five blocker taps with cheap off-center opaque plane estimates; the center stays fully checked.")
+    parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default="every_frame",
+        help="Reuse accepted software light-space captures for one frame; receiver shading and fallback remain current.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
         help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)
@@ -513,9 +556,15 @@ def parse_args(argv=None):
     caustic_quality_smoke.add_arguments(parser)
     parser.add_argument("--reflection-screen-steps", type=int, default=96,
         help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
+    parser.add_argument("--cpu-diagnostics", action="store_true",
+        help="Capture existing CPU+GPU timing with memory off; buffered publication evidence is diagnostic only, not a performance result.")
     parser.add_argument("--reflection-diagnostics", action="store_true",
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
+    try:
+        validate_performance_target_request(args)
+    except SmokeFailure as error:
+        parser.error(str(error))
     if not 8 <= args.reflection_screen_steps <= 256:
         parser.error("reflection screen steps must be 8 through 256")
     for key in ("executable", "working_directory", "logserver_executable"):
@@ -555,8 +604,13 @@ def main(argv=None):
         write_status(f"Stress presentation timing artifacts: {output}")
         result = acquire(args, output)
         write_json(output / "result.json", result)
+        if result["performance_target"]["passed"] is False:
+            target = result["performance_target"]
+            raise SmokeFailure(f"accepted presentation FPS {target['observed_fps']:.9g} must exceed {target['minimum_fps']:.9g}")
         write_status(result["workload"]["signature"])
         write_status(f"PASS: {result['measurement']['fps']:.4f} accepted presentations/s over {result['measurement']['seconds']:.6f}s")
+        if result["diagnostic_only"]:
+            write_status("DIAGNOSTIC ONLY: profiling overhead is present; use a separate identical GPU-only control for final FPS.")
         optical = result["optical_reflection"]
         write_status(f"Optical reflection: {optical['status']} (query activity alone does not certify optical correctness)")
         if optical["requested"]:

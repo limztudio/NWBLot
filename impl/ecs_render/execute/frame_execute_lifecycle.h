@@ -51,6 +51,8 @@ public:
         const Core::TextureHandle* returnTextures = nullptr;
         const Core::TextureHandle* scratchTextures = nullptr;
         const Core::BufferHandle* scratchBuffers = nullptr;
+        const bool* lightSpacePrepared = nullptr;
+        LightSpaceCaptureTicket lightSpaceCaptureTicket;
         usize returnTextureCount = 0u;
         usize scratchTextureCount = 0u;
         usize scratchBufferCount = 0u;

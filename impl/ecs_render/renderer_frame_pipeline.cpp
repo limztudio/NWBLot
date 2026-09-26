@@ -228,6 +228,7 @@ void RendererFramePipeline::resetLaggedLightingHistoryTracking()noexcept{
 
 void RendererFramePipeline::resetTargetGenerationStateHandoffs()noexcept{
     // Replaced targets invalidate retained compute-local state.
+    m_raytracingSystem.invalidateLightSpaceShadowCapture();
     m_shadowComputePersistentState.reset();
     m_shadowVisibilityReturnState.reset();
     m_causticsComputePersistentState.reset();

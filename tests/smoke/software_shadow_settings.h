@@ -52,6 +52,15 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
+    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE", value)){
+        const AStringView cadence(value.data(), value.size());
+        if(cadence == "every_frame")
+            settings.captureCadence = Impl::SoftwareShadowCaptureCadence::EveryFrame;
+        else if(cadence == "reuse_one_frame")
+            settings.captureCadence = Impl::SoftwareShadowCaptureCadence::ReuseOneFrame;
+        else
+            return false;
+    }
     struct ResolutionOverride{ const char* name; u32* destination; };
     const ResolutionOverride overrides[] = {
         { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", &settings.directionalResolution },
@@ -73,13 +82,14 @@ namespace NWB::Tests::Smoke{
     }
     if(!renderer.setSoftwareShadowSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={} capture_cadence={}")
         , static_cast<u32>(settings.backend)
         , settings.directionalResolution
         , settings.pointResolution
         , settings.memoryBudgetBytes
         , static_cast<u32>(settings.coverage)
         , static_cast<u32>(settings.blockerSearch)
+        , static_cast<u32>(settings.captureCadence)
     );
     return true;
 }

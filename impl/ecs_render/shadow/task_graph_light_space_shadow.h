@@ -65,13 +65,14 @@ struct LightSpaceShadowGraph{
     Core::GpuTaskId opaqueCapture;
     Core::GpuTaskId transparentCapture;
     Core::GpuTaskId shade;
+    Core::GpuTaskId ready;
 
     [[nodiscard]] bool valid()const noexcept{
-        return counts.valid() && events.valid() && views.valid() && drawArguments.valid() && depth.valid() && shade.valid();
+        return counts.valid() && events.valid() && views.valid() && depth.valid() && ready.valid();
     }
 };
 
-// Maps are rebuilt from the frozen scene; stateSources supplies accepted native states and frame ordering supplies availability.
+// Capture and reuse import the same map generation; accepted state sources and frame ordering preserve availability.
 [[nodiscard]] LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs);
 
 

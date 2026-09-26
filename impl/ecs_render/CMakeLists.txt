@@ -19,6 +19,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_capture_history.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_capture_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.cpp"

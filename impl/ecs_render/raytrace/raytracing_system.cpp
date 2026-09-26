@@ -706,6 +706,7 @@ void RendererRayTracingSystem::invalidatePreparedShadowTraceGeometryBuffers()noe
 }
 
 void RendererRayTracingSystem::discardPreflightShadowVisibilityResources()noexcept{
+    invalidateLightSpaceShadowCapture();
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     m_preparedShadowTraceGeometryBuffers.clear();
     clearPreparedShadowTraceMaterialSampledTextures();
@@ -743,6 +744,11 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
     Core::Alloc::ScratchArena& scratchArena
 ){
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene({});
+    m_lightSpaceShadow.m_captureHistory.beginFrame();
+    m_lightSpaceShadow.m_captureSceneTrusted = false;
+    m_lightSpaceShadow.m_sceneBuffers.clear();
+    m_lightSpaceShadow.m_sceneTextures.clear();
+    m_lightSpaceShadow.m_snapshot.captureTicket = {};
     m_lightSpaceShadow.m_snapshot.ready = false;
     m_lightSpaceShadow.m_resourcesPrepared = false;
     m_lightSpaceShadow.m_sceneEligible = false;

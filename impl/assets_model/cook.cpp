@@ -162,33 +162,6 @@ static constexpr AStringView s_TransformField = "transform";
     );
 }
 
-[[nodiscard]] bool ReadFloatValue(
-    const Path& nwbFilePath,
-    const Value& value,
-    const AStringView objectKind,
-    const AStringView fieldName,
-    f32& outValue
-){
-    if(Core::Assets::TryDecodeMetadataFiniteF32(value, outValue))
-        return true;
-
-    if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must contain only numeric matrix values")
-            , StringConvert(objectKind)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return false;
-    }
-
-    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' contains a non-finite or out-of-range matrix value")
-        , StringConvert(objectKind)
-        , PathToString<tchar>(nwbFilePath)
-        , StringConvert(fieldName)
-    );
-    return false;
-}
-
 [[nodiscard]] bool ReadTransformField(
     const Path& nwbFilePath,
     const Value& object,
@@ -232,7 +205,7 @@ static constexpr AStringView s_TransformField = "transform";
 
         Float4 homogeneousValues;
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            if(!ReadFloatValue(nwbFilePath, homogeneousRow.asList()[columnIndex], objectKind, s_TransformField, homogeneousValues.raw[columnIndex]))
+            if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, homogeneousRow.asList()[columnIndex], objectKind, s_TransformField, homogeneousValues.raw[columnIndex]))
                 return false;
         }
         if(
@@ -264,7 +237,7 @@ static constexpr AStringView s_TransformField = "transform";
 
         Float4 rowValues;
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
-            if(!ReadFloatValue(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues.raw[columnIndex]))
+            if(!Core::Assets::ReadMetadataFiniteF32Value(nwbFilePath, row.asList()[columnIndex], objectKind, s_TransformField, rowValues.raw[columnIndex]))
                 return false;
         }
         outTransform.rows[rowIndex] = rowValues;

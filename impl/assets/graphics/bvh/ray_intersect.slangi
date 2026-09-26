@@ -113,6 +113,8 @@ bool nwbBvhPickNearChild(
         farChildIndex = rightChildIndex;
         return true;
     }
+    descendNode = (NwbBvhNode)0;
+    farChildIndex = 0u;
     return false;
 }
 

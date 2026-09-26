@@ -216,47 +216,17 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
                 const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[node.leftChild];
                 const uint right = nwbBvhNodeRightChildIndex(node);
                 const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
-                float tLeft;
-                const bool hitLeft = nwbBvhRayAabbT(
-                    origin,
-                    invDir,
-                    tMin,
-                    closest.t,
-                    leftNode.aabbMin,
-                    leftNode.aabbMax,
-                    0.0,
-                    tLeft
-                );
-                float tRight;
-                const bool hitRight = nwbBvhRayAabbT(
-                    origin,
-                    invDir,
-                    tMin,
-                    closest.t,
-                    rightNode.aabbMin,
-                    rightNode.aabbMax,
-                    0.0,
-                    tRight
-                );
-                if(hitLeft && hitRight){
-                    if(tLeft <= tRight){
-                        if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE){
-                            stack[stackPointer] = right;
-                            ++stackPointer;
-                        }
-                        node = leftNode;
+                NwbBvhNode descendNode;
+                uint farChild;
+                bool bothHit;
+                if(nwbBvhPickNearChild(origin, invDir, tMin, closest.t, node, leftNode, right, rightNode, descendNode, farChild, bothHit)){
+                    if(bothHit && stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE){
+                        stack[stackPointer] = farChild;
+                        ++stackPointer;
                     }
-                    else{
-                        if(stackPointer < NWB_CAUSTIC_SW_MESH_STACK_SIZE){
-                            stack[stackPointer] = node.leftChild;
-                            ++stackPointer;
-                        }
-                        node = rightNode;
-                    }
+                    node = descendNode;
                     continue;
                 }
-                if(hitLeft){ node = leftNode; continue; }
-                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }
@@ -298,47 +268,17 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
                 const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[node.leftChild];
                 const uint right = nwbBvhNodeRightChildIndex(node);
                 const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[right];
-                float tLeft;
-                const bool hitLeft = nwbBvhRayAabbT(
-                    origin,
-                    invDir,
-                    tMin,
-                    closest.t,
-                    leftNode.aabbMin,
-                    leftNode.aabbMax,
-                    0.0,
-                    tLeft
-                );
-                float tRight;
-                const bool hitRight = nwbBvhRayAabbT(
-                    origin,
-                    invDir,
-                    tMin,
-                    closest.t,
-                    rightNode.aabbMin,
-                    rightNode.aabbMax,
-                    0.0,
-                    tRight
-                );
-                if(hitLeft && hitRight){
-                    if(tLeft <= tRight){
-                        if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
-                            stack[stackPointer] = right;
-                            ++stackPointer;
-                        }
-                        node = leftNode;
+                NwbBvhNode descendNode;
+                uint farChild;
+                bool bothHit;
+                if(nwbBvhPickNearChild(origin, invDir, tMin, closest.t, node, leftNode, right, rightNode, descendNode, farChild, bothHit)){
+                    if(bothHit && stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
+                        stack[stackPointer] = farChild;
+                        ++stackPointer;
                     }
-                    else{
-                        if(stackPointer < NWB_CAUSTIC_SW_SCENE_STACK_SIZE){
-                            stack[stackPointer] = node.leftChild;
-                            ++stackPointer;
-                        }
-                        node = rightNode;
-                    }
+                    node = descendNode;
                     continue;
                 }
-                if(hitLeft){ node = leftNode; continue; }
-                if(hitRight){ node = rightNode; continue; }
                 break;
             }
         }

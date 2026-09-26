@@ -6,6 +6,9 @@
 #define NWB_GRAPHICS_BVH_RAY_INTERSECT_SLANGI
 
 
+#include "bvh_common.slangi"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -65,6 +68,52 @@ bool nwbBvhRayAabbT(
     out float tEntry
 ){
     return nwbBvhRayAabbInterval(origin, invDir, tMin, tMax, boxMin, boxMax, padding, tEntry);
+}
+
+// Shared inner-node step for the software mesh/scene traversals. Intersects both children against the current
+// closest range and selects the near child to descend inline plus the far child to defer. Returns false when both
+// children miss so the caller pops the next stack entry. The stack push stays caller-side because mesh and scene
+// traversals use different stack capacities.
+bool nwbBvhPickNearChild(
+    const float3 origin,
+    const float3 invDir,
+    const float tMin,
+    const float tMax,
+    const NwbBvhNode node,
+    const NwbBvhNode leftNode,
+    const uint rightChildIndex,
+    const NwbBvhNode rightNode,
+    out NwbBvhNode descendNode,
+    out uint farChildIndex,
+    out bool bothHit
+){
+    float tLeft;
+    const bool hitLeft = nwbBvhRayAabbT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax, 0.0, tLeft);
+    float tRight;
+    const bool hitRight = nwbBvhRayAabbT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax, 0.0, tRight);
+    bothHit = hitLeft && hitRight;
+    if(bothHit){
+        if(tLeft <= tRight){
+            descendNode = leftNode;
+            farChildIndex = rightChildIndex;
+        }
+        else{
+            descendNode = rightNode;
+            farChildIndex = node.leftChild;
+        }
+        return true;
+    }
+    if(hitLeft){
+        descendNode = leftNode;
+        farChildIndex = node.leftChild;
+        return true;
+    }
+    if(hitRight){
+        descendNode = rightNode;
+        farChildIndex = rightChildIndex;
+        return true;
+    }
+    return false;
 }
 
 

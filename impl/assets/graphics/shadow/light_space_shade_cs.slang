@@ -102,7 +102,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(destinationAddress, value);
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + 16u, optical);
     }
-
 }
 
 

@@ -15,7 +15,7 @@ import stress_timing_smoke as smoke
 
 
 def shadow_defaults():
-    return dict(caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
+    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
         software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
         software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
@@ -50,6 +50,7 @@ def valid_log(characters_per_class=10):
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, "
         "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
     lines.append(smoke.SHADOW_QUALITY_SETTINGS + "0")
+    lines.append(smoke.REFLECTION_QUALITY_SETTINGS + "96")
     for index in range(60):
         lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
     lines.append(smoke.DONE + "fps=16 presentations=480 seconds=30 first=80 last=560")
@@ -340,6 +341,68 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
         for record in variants:
             with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
                 smoke.parse_runtime_log(reflection_log(record), 0, reflection_diagnostics=True)
+
+
+class StressReflectionQualityTests(unittest.TestCase):
+    def test_explicit_steps_validate_and_replace_inherited_environment(self):
+        with TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            executable = output / "renderer.exe"
+            executable.write_bytes(b"fixture")
+            required = ["--executable", str(executable), "--working-directory", str(output), "--no-logserver"]
+            self.assertEqual(smoke.parse_args(required).reflection_screen_steps, 96)
+            for steps in (8, 32, 48, 96, 256):
+                args = smoke.parse_args(required + ["--reflection-screen-steps", str(steps)])
+                env = smoke.launch_environment({"NWB_REFLECTION_SCREEN_STEPS": "1"}, args, output)
+                self.assertEqual(env["NWB_REFLECTION_SCREEN_STEPS"], str(steps))
+                result = smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + str(steps), args, {})
+                self.assertEqual(result, {"screen_max_steps": steps, "verified": True, "screen_work_measured": False})
+            for invalid in ("0", "7", "257", "-1", "48.5", "bad"):
+                with patch("sys.stderr"), self.assertRaises(SystemExit):
+                    smoke.parse_args(required + ["--reflection-screen-steps", invalid])
+
+    def test_applied_budget_missing_duplicate_malformed_and_mismatch_fail(self):
+        args = SimpleNamespace(reflection_screen_steps=48, reflection_diagnostics=False)
+        good = smoke.REFLECTION_QUALITY_SETTINGS + "48"
+        for bad in ("", good + "\n" + good, good + " extra=0", smoke.REFLECTION_QUALITY_SETTINGS + "96"):
+            with self.subTest(bad=bad), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_reflection_quality_settings(bad, args, {})
+
+    def test_actual_software_screen_work_is_independent_of_hardware_counters(self):
+        row = reflection_record(hardware_ready=0, transport_enabled=0, candidates=0, hardware_rays=0, unsupported_paths=0)
+        row += " screen_attempts=20 screen_hits=2 screen_returns=4 screen_iterations=640 screen_limit_misses=10"
+        text = reflection_log(row)
+        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)["optical_reflection"]
+        self.assertEqual(optical["hardware_ready_samples"], 0)
+        self.assertEqual(optical["screen"]["iterations_per_attempt"], 32)
+        self.assertEqual(optical["screen"]["limit_miss_ratio"], .5)
+        self.assertEqual(optical["screen"]["return_ratio"], .2)
+        args = SimpleNamespace(reflection_screen_steps=48, reflection_diagnostics=True)
+        self.assertTrue(smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + "48", args, optical)["screen_work_measured"])
+        args.reflection_screen_steps = 8
+        with self.assertRaisesRegex(smoke.SmokeFailure, "exceeds"):
+            smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + "8", args, optical)
+
+    def test_legacy_replay_remains_valid_but_new_diagnostic_acquisition_needs_screen_evidence(self):
+        optical = smoke.parse_runtime_log(reflection_log(reflection_record()), 0, reflection_diagnostics=True)["optical_reflection"]
+        self.assertEqual(optical["screen"]["sample_count"], 0)
+        args = SimpleNamespace(reflection_screen_steps=96, reflection_diagnostics=True)
+        with self.assertRaisesRegex(smoke.SmokeFailure, "screen-work"):
+            smoke.verify_reflection_quality_settings(smoke.REFLECTION_QUALITY_SETTINGS + "96", args, optical)
+
+    def test_malformed_partial_overflow_or_impossible_screen_counters_fail(self):
+        prefix = reflection_record()
+        tails = (" screen_attempts=1", " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=0",
+            " screen_attempts=1 screen_hits=2 screen_returns=1 screen_iterations=48 screen_limit_misses=0",
+            " screen_attempts=1 screen_hits=0 screen_returns=2 screen_iterations=48 screen_limit_misses=0",
+            " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=48 screen_limit_misses=2",
+            " screen_attempts=0 screen_hits=0 screen_returns=0 screen_iterations=1 screen_limit_misses=0",
+            " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=257 screen_limit_misses=0",
+            " screen_attempts=4294967296 screen_hits=0 screen_returns=0 screen_iterations=0 screen_limit_misses=0",
+            " screen_attempts=1 screen_hits=0 screen_returns=0 screen_iterations=18446744073709551616 screen_limit_misses=0")
+        for tail in tails:
+            with self.subTest(tail=tail), self.assertRaises(smoke.SmokeFailure):
+                smoke.parse_runtime_log(reflection_log(prefix + tail), 0, reflection_diagnostics=True)
 
 
 class StressWorkloadTests(unittest.TestCase):

@@ -48,19 +48,22 @@
 bool nwbLightSpaceFindView(const uint lightIndex, const float3 world, out NwbLightSpaceView view){
     view = (NwbLightSpaceView)0;
     for(uint index = 0u; index < g_NwbLightSpacePush.viewCount; ++index){
-        const NwbLightSpaceView candidate = nwbLightSpaceLoadView(index);
-        if(candidate.light.x != lightIndex)
+        // Reject unrelated lights/faces before loading projection, depth and map data.
+        const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
+        const uint4 candidateLight = NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
+        if(candidateLight.x != lightIndex)
             continue;
-        if((candidate.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
-            const float3 direction = world - candidate.originOrDirection.xyz;
+        if((candidateLight.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
+            const float3 candidateOrigin = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u)).xyz;
+            const float3 direction = world - candidateOrigin;
             const float3 magnitude = abs(direction);
             const uint face = magnitude.x >= max(magnitude.y, magnitude.z)
                 ? (direction.x >= 0.0 ? 0u : 1u)
                 : (magnitude.y >= magnitude.z ? (direction.y >= 0.0 ? 2u : 3u) : (direction.z >= 0.0 ? 4u : 5u));
-            if(candidate.light.z != face)
+            if(candidateLight.z != face)
                 continue;
         }
-        view = candidate;
+        view = nwbLightSpaceLoadView(index);
         return view.depthRange.w != 0.0 && (view.light.w & NWB_LIGHT_SPACE_FLAG_ELIGIBLE) != 0u;
     }
     return false;

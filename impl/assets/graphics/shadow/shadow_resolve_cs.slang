@@ -276,8 +276,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         // classification once, then retain the original tap order while each layer loads only its own visibility values.
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
-        float guidedTapG[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
-        float spatialWeights[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
+        float tapCoefficients[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
         float sumG = 0.0;
         float sumG2 = 0.0;
         float guidedWeightSum = 0.0;
@@ -289,7 +288,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 // Widen the (0, 1) bounded half product at the float regression-accumulator boundary.
                 const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
                     * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
-                spatialWeights[tapIndex] = spatialWeight;
                 if(spatialWeight <= 0.0)
                     continue;
                 const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
@@ -302,54 +300,55 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     continue;
                 const float g = float(tapGeom.z) - centerDist;
                 guidedTapMask |= tapBit;
-                guidedTapG[tapIndex] = g;
+                tapCoefficients[tapIndex] = g;
                 sumG += spatialWeight * g;
                 sumG2 += spatialWeight * g * g;
                 guidedWeightSum += spatialWeight;
             }
         }
         const bool hasGuidedTaps = guidedWeightSum > 0.0;
-        const float guidedInvWeightSum = hasGuidedTaps ? (1.0 / guidedWeightSum) : 0.0;
-        const float guidedMeanG = sumG * guidedInvWeightSum;
-        const float guidedVarG = max(sumG2 * guidedInvWeightSum - guidedMeanG * guidedMeanG, 0.0);
+        const uint tapMask = hasGuidedTaps ? guidedTapMask : validTapMask;
+        const float weightSum = hasGuidedTaps ? guidedWeightSum : validWeightSum;
+        const float invWeightSum = weightSum > 0.0 ? (1.0 / weightSum) : 0.0;
+        const float guidedMeanG = sumG * invWeightSum;
+        const float guidedVarG = max(sumG2 * invWeightSum - guidedMeanG * guidedMeanG, 0.0);
+        const float regressionScale = hasGuidedTaps ? guidedMeanG / (guidedVarG + guidedEpsSq) : 0.0;
+        // mean(P) - mean(G) * cov(G,P) / (var(G) + epsilon) is linear in each visibility tap.
+        // Fold its scalar coefficients once, preserving the geometry gates and support for every light layer.
+        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                if((tapMask & (1u << tapIndex)) == 0u)
+                    continue;
+                const float spatialWeight = float(weightsX[dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]
+                    * weightsY[dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS]);
+                const float regressionWeight = hasGuidedTaps ? 1.0 - regressionScale * (tapCoefficients[tapIndex] - guidedMeanG) : 1.0;
+                tapCoefficients[tapIndex] = spatialWeight * invWeightSum * regressionWeight;
+            }
+        }
 
         for(uint slot = slotStart; slot < slotEnd; ++slot){
-            NwbShadowResolveVisFVec result;
-            if(hasGuidedTaps){
-                // The unguided fallback is unreachable here. Avoid loading and accumulating its taps; only
-                // guided samples contribute to the regression result.
-                NwbShadowResolveVisFVec sumP = (NwbShadowResolveVisFVec)0.0;
-                NwbShadowResolveVisFVec sumGP = (NwbShadowResolveVisFVec)0.0;
+            NwbShadowResolveVisFVec result = (NwbShadowResolveVisFVec)1.0;
+            if(tapMask != 0u){
+                const uint anchorTap = firstbitlow(tapMask);
+                const int2 anchorOffset = int2(int(anchorTap % NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE),
+                    int(anchorTap / NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE)) - int2(NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
+                const int2 anchorTexel = clamp(baseTexel + anchorOffset, int2(0), int2(hw - 1, hh - 1));
+                const NwbShadowResolveVisFVec anchor = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(anchorTexel, slot);
+                // The coefficient sum is one analytically. Anchor the affine sum so constant visibility stays exact.
+                result = anchor;
                 [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
                     [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                         const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
-                        if((guidedTapMask & (1u << tapIndex)) == 0u)
+                        if(tapIndex == anchorTap || (tapMask & (1u << tapIndex)) == 0u)
                             continue;
                         const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
-                        const NwbShadowResolveVisFVec tapVis = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
-                        const float g = guidedTapG[tapIndex];
-                        const float spatialWeight = spatialWeights[tapIndex];
-                        sumP += spatialWeight * tapVis;
-                        sumGP += spatialWeight * g * tapVis;
+                        const NwbShadowResolveVisFVec value = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
+                        result += tapCoefficients[tapIndex] * (value - anchor);
                     }
                 }
-                const NwbShadowResolveVisFVec meanP = sumP * guidedInvWeightSum;
-                const NwbShadowResolveVisFVec covGP = sumGP * guidedInvWeightSum - guidedMeanG * meanP;
-                const NwbShadowResolveVisFVec a = covGP / (guidedVarG + guidedEpsSq);
-                result = clamp(meanP - a * guidedMeanG, (NwbShadowResolveVisFVec)0.0, (NwbShadowResolveVisFVec)1.0);
-            }
-            else{
-                NwbShadowResolveVisFVec anySum = (NwbShadowResolveVisFVec)0.0;
-                [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-                    [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
-                        const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
-                        if((validTapMask & (1u << tapIndex)) == 0u)
-                            continue;
-                        const int2 tap = int2(clamp(baseTexel.x + dx, 0, hw - 1), clamp(baseTexel.y + dy, 0, hh - 1));
-                        anySum += spatialWeights[tapIndex] * (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(tap, slot);
-                    }
-                }
-                result = (validWeightSum > 0.0) ? (anySum / validWeightSum) : (NwbShadowResolveVisFVec)1.0;
+                if(hasGuidedTaps)
+                    result = clamp(result, (NwbShadowResolveVisFVec)0.0, (NwbShadowResolveVisFVec)1.0);
             }
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
             if(fold == 0u){

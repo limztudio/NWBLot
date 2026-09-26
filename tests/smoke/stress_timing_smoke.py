@@ -103,6 +103,8 @@ REFLECTION_FIELDS = ("sequence", "generation", "frame", "graphics_frame", "hardw
     "candidates", "hardware_rays", "exterior_eligible_rays", "hardware_queries", "bootstrap_events",
     "transparent_paths", "unsupported_paths")
 REFLECTION_COUNTERS = REFLECTION_FIELDS[6:]
+REFLECTION_SCREEN_FIELDS = ("screen_attempts", "screen_hits", "screen_returns", "screen_iterations", "screen_limit_misses")
+REFLECTION_QUALITY_SETTINGS = "ReflectionQualitySmoke: requested screen_max_steps="
 
 
 def parse_reflection_diagnostics(lines, requested):
@@ -116,7 +118,11 @@ def parse_reflection_diagnostics(lines, requested):
     enabled_index = lines.index(REFLECTION_ENABLED)
     shutdown_index = lines.index(SHUTDOWN)
     pattern = re.escape(REFLECTION_SAMPLE) + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_FIELDS)
+    pattern += r"(?: " + " ".join(re.escape(field) + r"=([0-9]{1,20})" for field in REFLECTION_SCREEN_FIELDS) + r")?"
     sums = dict.fromkeys(REFLECTION_COUNTERS, 0)
+    screen_sums = dict.fromkeys(REFLECTION_SCREEN_FIELDS, 0)
+    screen_samples = 0
+    maximum_frame_average_iterations = 0.0
     seen = set()
     ranges = {}
     previous = None
@@ -127,7 +133,21 @@ def parse_reflection_diagnostics(lines, requested):
         match = re.fullmatch(pattern, line)
         if not match:
             raise SmokeFailure("malformed accepted reflection diagnostic sample")
-        row = dict(zip(REFLECTION_FIELDS, map(int, match.groups())))
+        row = dict(zip(REFLECTION_FIELDS, map(int, match.groups()[:len(REFLECTION_FIELDS)])))
+        if match.groups()[len(REFLECTION_FIELDS)] is not None:
+            screen = dict(zip(REFLECTION_SCREEN_FIELDS, map(int, match.groups()[len(REFLECTION_FIELDS):])))
+            for field, value in screen.items():
+                if value >= 2 ** (64 if field == "screen_iterations" else 32):
+                    raise SmokeFailure("screen reflection counter exceeds its unsigned field bounds")
+            attempts = screen["screen_attempts"]
+            if (screen["screen_hits"] > screen["screen_returns"] or screen["screen_returns"] > attempts
+                    or screen["screen_limit_misses"] > attempts or screen["screen_iterations"] > attempts * 256):
+                raise SmokeFailure("screen reflection counters exceed their attempted ray population or maximum budget")
+            screen_samples += 1
+            for field in REFLECTION_SCREEN_FIELDS:
+                screen_sums[field] += screen[field]
+            maximum_frame_average_iterations = max(maximum_frame_average_iterations,
+                screen["screen_iterations"] / attempts if attempts else 0.0)
         for field, value in row.items():
             bits = 64 if field in ("sequence", "generation", "graphics_frame") else 32
             if value >= 2 ** bits or (field in ("sequence", "generation") and value == 0):
@@ -184,7 +204,12 @@ def parse_reflection_diagnostics(lines, requested):
         "transport_enabled_samples": transport_enabled_samples, "sums": sums,
         "unsupported_ratio": sums["unsupported_paths"] / rays if rays else None,
         "exterior_eligible_ratio": sums["exterior_eligible_rays"] / rays if rays else None,
-        "queries_per_hardware_ray": sums["hardware_queries"] / rays if rays else None}
+        "queries_per_hardware_ray": sums["hardware_queries"] / rays if rays else None,
+        "screen": {"sample_count": screen_samples, "sums": screen_sums,
+            "maximum_frame_average_iterations": maximum_frame_average_iterations,
+            "iterations_per_attempt": screen_sums["screen_iterations"] / screen_sums["screen_attempts"] if screen_sums["screen_attempts"] else None,
+            "limit_miss_ratio": screen_sums["screen_limit_misses"] / screen_sums["screen_attempts"] if screen_sums["screen_attempts"] else None,
+            "return_ratio": screen_sums["screen_returns"] / screen_sums["screen_attempts"] if screen_sums["screen_attempts"] else None}}
 
 
 def parse_sample(line, prefix, rate_key, positive_count):
@@ -319,6 +344,20 @@ def verify_shadow_quality_settings(text, args):
         "effective_dispatch_verified": bool(dispatched), "hardware": hardware, "verified": True}
 
 
+def verify_reflection_quality_settings(text, args, optical):
+    records = [line.strip() for line in text.splitlines() if line.strip().startswith(REFLECTION_QUALITY_SETTINGS)]
+    if records != [REFLECTION_QUALITY_SETTINGS + str(args.reflection_screen_steps)]:
+        raise SmokeFailure("reflection screen step budget mismatch between request and application")
+    if args.reflection_diagnostics:
+        screen = optical["screen"]
+        if screen["sample_count"] != optical["sample_count"]:
+            raise SmokeFailure("new reflection diagnostic acquisition requires accepted screen-work counters for every sample")
+        if screen["maximum_frame_average_iterations"] > args.reflection_screen_steps:
+            raise SmokeFailure("accepted screen iteration count exceeds the requested step budget")
+    return {"screen_max_steps": args.reflection_screen_steps, "verified": True,
+        "screen_work_measured": args.reflection_diagnostics}
+
+
 def launch_environment(base, args, output):
     for key in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE"):
         if base.get(key, "").strip():
@@ -328,6 +367,7 @@ def launch_environment(base, args, output):
         result["NWB_LINUX_BACKEND"] = "x11"
     result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
+        NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
         NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
         NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
@@ -404,6 +444,7 @@ def acquire(args, output):
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
         result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
+        result["reflection_quality_settings"] = verify_reflection_quality_settings(text, args, result["optical_reflection"])
         result["runtime_signature"] = ab.device_material_signature(text)
         result["motion"] = {"mode": "rotating" if args.animate else "fixed",
             "simulation_clock": "wall" if args.animate else "fixed_step",
@@ -470,9 +511,13 @@ def parse_args(argv=None):
     parser.add_argument("--fixed-delta-seconds", type=float)
     parser.add_argument("--application-arg", action="append", default=[])
     caustic_quality_smoke.add_arguments(parser)
+    parser.add_argument("--reflection-screen-steps", type=int, default=96,
+        help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
     parser.add_argument("--reflection-diagnostics", action="store_true",
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
+    if not 8 <= args.reflection_screen_steps <= 256:
+        parser.error("reflection screen steps must be 8 through 256")
     for key in ("executable", "working_directory", "logserver_executable"):
         if getattr(args, key) is not None:
             setattr(args, key, getattr(args, key).resolve())

@@ -28,7 +28,7 @@ apply.
 
 | Effect | No-RT implementation |
 | --- | --- |
-| Opaque and transparent shadows | GPU triangle BVHs and compute traversal |
+| Opaque and transparent shadows | Indexed light-space capture and compute resolve, with GPU triangle-BVH traversal for unresolved receivers |
 | Caustics | Software BVH photon producer and shared temporal/filtering passes |
 | Surfel GI | Software BVH trace and the shared surfel cache/resolve |
 | Camera reflection | Screen-space tracing and existing miss handling |
@@ -72,9 +72,10 @@ ray-miss radiometric oracle: projected screen-space hits do not establish the
 same off-screen transport. Its report records that distinction.
 
 The scene captures establish startup, traversal-route and rendered-output
-coverage. Native kernel and descriptor/graph tests provide more focused
-numeric and resource-state coverage; a visually nonempty capture alone is not
-an exact optical equivalence test.
+coverage. The ECS graphics unit tests cover prepared BVH resources, scene-refit
+graph dependencies and shadow quality/history contracts using metadata-only
+resources. They do not execute the traversal shaders. A visually nonempty
+capture alone is not an exact optical equivalence test.
 
 ## Animated scene bounds
 
@@ -82,13 +83,11 @@ Runtime software scenes refit the scene BVH from the current GPU mesh roots
 after the per-mesh build/refit work. The CPU topology and instance order remain
 frozen for that frame. Static-only scenes retain their existing reuse path.
 
-`SceneRefitKernelTest.PosedRootsRefitSceneBoundsBeforeSoftwareTraversal` runs
-the production refit shader on an RT-disabled device. It checks an independent
-FP64 bounds oracle, exact topology preservation, and a moved triangle that
-misses the old scene bounds but is hit after refitting. Cases include more
-leaves than workgroup threads, mirrored/nonuniform transforms, invalid bounds,
-overflow, and subnormal input coordinates under large finite transforms.
+`software_scene_refit_graph_tests.cpp` checks graph declaration, resource
+handoffs and failure cases with metadata-only resources. The skinned scene
+smoke exercises the production shader on a disabled-RT device. The retired
+native kernel test suite is not part of the current qualification commands.
 
-This verifies traversal bounds. Caustic photon emission-target domains remain a
-separate approximation based on CPU geometry bounds; these smoke scenes do not
-establish coverage for every possible skeletal deformation.
+Caustic photon emission-target domains remain a separate approximation based
+on CPU geometry bounds; these smoke scenes do not establish coverage for every
+possible skeletal deformation.

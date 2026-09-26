@@ -7,6 +7,7 @@
 #include "gpu_pass_timing_probe.h"
 #include "presentation_fps_probe.h"
 #include "presentation_pacing_ring.h"
+#include "reflection_quality_settings.h"
 #include "smoke_project_helpers.h"
 #include "smoke_scene_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
@@ -315,6 +316,7 @@ private:
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
             NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
             NWB_TEXT(" hardware_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
+            NWB_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
             , statistics.sequence
             , statistics.generation
             , statistics.frameIndex
@@ -328,6 +330,11 @@ private:
             , statistics.bootstrapEvents
             , statistics.transparentPaths
             , statistics.unsupportedPaths
+            , statistics.screenAttempts
+            , statistics.screenHits
+            , statistics.screenReturns
+            , statistics.screenIterations
+            , statistics.screenLimitMisses
         );
     }
 
@@ -398,13 +405,12 @@ public:
     virtual bool onStartup()override{
         if(!readCharactersPerClass(m_charactersPerClass))
             return false;
-        if(m_reflectionDiagnosticsEnabled){
-            NWB::Impl::ReflectionSettings settings;
-            settings.diagnosticsEnabled = true;
-            if(!m_renderer.setReflectionSettings(settings))
-                return false;
+        NWB::Impl::ReflectionSettings reflectionSettings;
+        reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
+        if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(m_renderer, reflectionSettings, m_context.objectArena))
+            return false;
+        if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
-        }
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
         if(m_timingEnabled){

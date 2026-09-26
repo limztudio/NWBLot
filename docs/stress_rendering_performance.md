@@ -1,12 +1,12 @@
 # Stress rendering performance
 
-On the recorded Snapdragon X2 Elite Extreme / Qualcomm Adreno X2-90 system, both rendering routes exceeded **60 average accepted presentations per second** with the 20-body stress workload. The final default-profile build passed explicit `>60` checks at **70.8933 FPS with hardware RT** and **62.3919 FPS with RT disabled**. Earlier software runs measured 62.5994 and 62.3973 FPS; the earlier hardware control measured 70.5082 FPS. These results qualify the recorded profiles and machine, not every frame, every scene, or another GPU. Software headroom remains modest.
+On the recorded Snapdragon X2 Elite Extreme / Qualcomm Adreno X2-90 system, both rendering routes exceeded **60 average accepted presentations per second** with the 20-body stress workload. The latest September 27 audit build passed explicit `>60` checks at **70.2965 FPS with hardware RT** and **62.4263 FPS with RT disabled**. Earlier profile qualification and each retained audit stage are recorded below. These results qualify the recorded profiles and machine, not every frame, every scene, or another GPU. Software headroom remains modest.
 
 ## Workload and measurement
 
-The workload is 1280Ã—900, ten transparent and ten opaque high-detail bodies at full scale, rotating in a fixed bind pose. It includes the ground, colored GI enclosure, directional and point lights, opaque/transparent shadows, AVBOIT, reflection, refraction, caustics, and surfel GI. The bodies are not twenty independently changing skeletal poses. `--characters-per-class 10 --animate` selects this workload; five per class is a different comparison scene.
+The workload is 1280x900, ten transparent and ten opaque high-detail bodies at full scale, rotating in a fixed bind pose. It includes the ground, colored GI enclosure, directional and point lights, opaque/transparent shadows, AVBOIT, reflection, refraction, caustics, and surfel GI. The bodies are not twenty independently changing skeletal poses. `--characters-per-class 10 --animate` selects this workload; five per class is a different comparison scene.
 
-The `two_rows_v1` signature checks the two rows of ten, 0.72 spacing, 0.18 stagger, depths âˆ’0.55/+0.55, camera `(0, 2.7, -7.2)`, pitch 0.25 and vertical FOV approximately 1.0471976 radians. No resolution, body-count, material-effect, or light-count reduction is part of the performance profile.
+The `two_rows_v1` signature checks the two rows of ten, 0.72 spacing, 0.18 stagger, depths -0.55/+0.55, camera `(0, 2.7, -7.2)`, pitch 0.25 and vertical FOV approximately 1.0471976 radians. No resolution, body-count, material-effect, or light-count reduction is part of the performance profile.
 
 The harness excludes a five-second warmup and measures approximately thirty seconds with a steady clock. FPS is accepted native presentations divided by elapsed seconds. Each acquisition retains executable/runtime/helper hashes, requested and applied settings, route markers, raw logs, and results. Serialize runs, use fresh output directories, and do not change the executable or assets during acquisition. The recorded adapter inventory reports Vulkan 1.4.295 and Qualcomm driver 0.863.0.
 
@@ -63,11 +63,41 @@ The first software cadence run published 1,785 GPU frame samples and 892 samples
 
 Historical `pulled_20260926_*_baseline` runs used the subsequently repaired FP16 shadow sampler and are excluded from speedup attribution. The `shader_math_20260926_sw_profile` experiment included shared resolve coefficients plus the later-rejected surfel zero-weight guard; it did **not** include header-first view search. It is not a clean measure of the final retained implementation and is omitted from the comparison table.
 
-Completed validation includes all 437 ECS graphics tests, GPU task tests, stress/CPU timing analysis CTests (`cadence_20260926_cpu_final.log`), and all eight registered no-RT scene tests (`cadence_20260926_software.log`). The scene matrix covers overlapping glass, two CSG poses, caustics, optical contributions, animated skinned glass, 20-body resize to 1001Ã—701, and GI. The separate divisor-4 optical comparison passed (`cadence_20260926_sw_optical_div4/caustic_optical_manifest.json`), using actual framebuffer readbacks with reflection, refraction and caustics individually disabled. It checks visible software contributions, not the hardware-only off-screen radiometric oracle.
+Completed validation includes all 437 ECS graphics tests, GPU task tests, stress/CPU timing analysis CTests (`cadence_20260926_cpu_final.log`), and all eight registered no-RT scene tests (`cadence_20260926_software.log`). The scene matrix covers overlapping glass, two CSG poses, caustics, optical contributions, animated skinned glass, 20-body resize to 1001x701, and GI. The separate divisor-4 optical comparison passed (`cadence_20260926_sw_optical_div4/caustic_optical_manifest.json`), using actual framebuffer readbacks with reflection, refraction and caustics individually disabled. It checks visible software contributions, not the hardware-only off-screen radiometric oracle.
 
 Direct HW and disabled-RT Stress launches with no quality overrides passed Vulkan-validation capture checks (`stress_defaults_20260926_hw_verified.bmp` and `stress_defaults_20260926_sw.bmp`). A non-Stress caustic scene retained reference settings, and explicit reference environment values overrode the new Stress defaults. The final smoke analysis tests passed after merging both changes: 56 stress tests and 12 CPU-diagnostic tests.
 
 `cadence_20260926_cpu_diagnostic` completed as a qualified diagnostic acquisition with `performance_qualification=false`; its FPS is not an additional target result. CPU/GPU scope durations overlap and may span workers or use different publication counts. Do not sum parent/child scopes or subtract GPU means from wall time to estimate CPU cost. Pacing-ring summaries currently include warmup observations; they do not establish timed-window p95 or that every frame is below 16.67 ms.
+
+## September 27 graphics audit
+
+The audit retained five separately committed and pushed stages:
+
+- `cb2b9beaf`: reject non-refractive caustic targets before resolving/copying mesh resources, and remove a write-only counter plus redundant transformed-bound checks.
+- `002bf6ca8`: bound Vulkan retained-resource scans by the descriptor allocator's allocated prefix. Pending/retired slots, locking and lifetime checks remain; only the never-allocated tail is skipped.
+- `66029c602`: remove disabled software-shadow statistics, their graph tasks/readback/resources and matching CPU/shader push fields, four empty translation units, seven unused shader helpers and stale assertions/comments. Active edge compaction and overflow fallback remain.
+- `fa0063864`: remove the unreachable uniform software-shadow branch, shader asset, pipeline and two fixed private switches. Adaptive fallback and direct full-resolution resolve remain.
+- `91e869244`: filter accepted resource-state arrays in place when the source is that same snapshot, reuse skinning's live-buffer storage, and remove three unused cache methods and their private helpers. Selection and handle retention complete before mutation; foreign-source replacement and submission acceptance remain unchanged. Five tests cover ranges, queues, ownership and storage reuse.
+
+All changes remain in their owning graphics, GPU-task, mesh or rendering domains. No quality-profile, resolution, body-count or effect reduction was added in this audit. The final reference pass covered 409 renderer/mesh C++ files; subsequent review found no further confirmed stale method candidate. Shader and backend review found no additional evidence-supported change to retain. This is a bounded audit, not proof that all possible optimizations have been exhausted.
+
+| Stage / artifact prefix | Hardware FPS | Hardware ms/presentation | Disabled RT FPS | Disabled RT ms/presentation |
+| --- | ---: | ---: | ---: | ---: |
+| `baseline` | 71.5039 | 13.9853 | 62.7253 | 15.9425 |
+| `step_a` | 70.4628 | 14.1919 | 62.2154 | 16.0732 |
+| `step_heap` | 69.7918 | 14.3283 | 62.1584 | 16.0879 |
+| `step_cleanup` | 69.9777 | 14.2903 | 62.5056 | 15.9986 |
+| `step_uniform` | 70.2664 | 14.2316 | 62.0972 | 16.1038 |
+| `step_state` | 69.5718 | 14.3736 | 62.1950 | 16.0785 |
+| `final` | 70.2965 | 14.2255 | 62.4263 | 16.0189 |
+
+Directories are under `__artifacts/graphics_optimization_20260927`, with `_hw` / `_sw` suffixes. Every row passed the strict `>60` check for the same rotating 20-body 1280x900 workload and existing per-route profiles, over approximately 30 seconds after five seconds of warmup. The final hardware result is 2,109 accepted presentations / 30.0014887 seconds; software is 1,873 / 30.0033836 seconds. Exact executable, runtime, helper and settings identities remain in each acquisition. These sequential measurements do **not** demonstrate an FPS improvement from the CPU cleanup or establish a causal per-stage regression; no whole-frame speedup is claimed.
+
+A separate caustic shared-geometry experiment was rejected and reverted before the final runs. Software caustic resolve changed from 1.094978 to 1.094596 ms, effectively unchanged. Hardware changed from 1.141893 to 1.134217 ms (-0.67%), while unchanged shadow and surfel controls improved by 1.42% and 0.89%. This does not establish a useful isolated benefit. The comparison is in `final_audit/tile_comparison.json`; final renderer/runtime/helper identities exactly match `step_state` on each route, confirming restoration. GPU means use summed scope durations / published sample counts, include a different publication window from the presentation measurement, and must not be summed across overlapping scopes.
+
+Final retained CPU changes passed 437 ECS graphics, 282 GPU-task and 78 graphics-resource cases, including the five new state-filter tests. The unused-shadow-mode stage passed all eight disabled-RT scenes. The state stage additionally passed early/mid/late hardware skinned captures, software skinned/resize captures and explicit hardware GPU-validation skinned/1001x701 resize captures. The initial cleanup ECS source assertion and five new-fixture initializer warnings were corrected; the relevant rebuilds and reruns passed. Logs/XML retain the initial outcomes as well as the corrections.
+
+Fresh final optical-toggle captures passed with GPU validation, actual frame-360 framebuffer readbacks, hardware photon divisor 2 and software divisor 4 (`final_hw_optical` / `final_sw_optical`). The software fixture includes an in-screen striped backdrop and checks separate visible contributions; it does not claim hardware image equivalence or off-screen transport. Its existing stepped screen-space edge remains a quality limitation. Performance runs keep diagnostics and GPU validation disabled. Average FPS is not a per-frame 16.67 ms guarantee or qualification of twenty independently deforming characters.
 
 ## Build and reproduce
 

@@ -22,6 +22,7 @@
 
 #include <global/environment.h>
 
+#include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
 
 
@@ -298,10 +299,10 @@ private:
 class SkinningCullingBenchmarkProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, "SkinningCullingBenchmark");
+        auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, NWB_TEXT("SkinningCullingBenchmark"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
-        return MakeNotNullUnique(Move(world));
+        return world;
     }
 
     void destroyWorld(){

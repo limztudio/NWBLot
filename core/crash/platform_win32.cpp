@@ -192,8 +192,8 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
         // Wake on the ack event OR the handler process dying, so a dead/wedged handler never costs the full
         // timeout. Falls back to a single-object wait if the handler process handle is unavailable.
-        HANDLE waitHandles[s_CrashWaitHandleCount] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
-        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? s_CrashWaitHandleCount : 1u;
+        HANDLE waitHandles[__hidden_crash_win32::s_CrashWaitHandleCount] = { g_State.crashHandledEvent, g_State.handlerProcessInfo.hProcess };
+        const DWORD waitCount = g_State.handlerProcessInfo.hProcess ? __hidden_crash_win32::s_CrashWaitHandleCount : 1u;
         const DWORD waitResult = WaitForMultipleObjects(waitCount, waitHandles, FALSE, waitMilliseconds);
         if(waitResult == WAIT_OBJECT_0){
             CrashAck ack;

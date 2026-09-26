@@ -64,7 +64,7 @@ struct RelativeAssetPathLayout{
             continue;
         if(
             GlobalFilesystemPathDetail::IsDotDot(component)
-            || component.find_first_of(Path::native_string_view{ "/\\", 2u }) != Path::native_string_view::npos
+            || component.find_first_of(Path::native_string_view{ NWB_TEXT("/\\"), 2u }) != Path::native_string_view::npos
         ){
             layout.acceptedEnd = componentIt;
             layout.byteCount = counter.byteCount;

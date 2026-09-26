@@ -89,6 +89,50 @@ TEST(LightSpacePlan, FittedCoverageIsExplicitAndPreservesTheWholeCasterPlan){
     EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
 }
 
+TEST(LightSpacePlan, CompactBlockerSearchPreservesAdmissionStorageAndEveryFace){
+    const LightSpaceLightRequest requests[] = {
+        { 7u, 3u, Scene::LightType::Directional },
+        { 63u, 0u, Scene::LightType::Point },
+    };
+    SoftwareShadowSettings settings;
+    EXPECT_EQ(settings.blockerSearch, SoftwareShadowBlockerSearch::ReferenceGrid9);
+    settings.coverage = SoftwareShadowCoverage::FittedVolume;
+    LightSpacePlan reference;
+    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, reference));
+    settings.blockerSearch = SoftwareShadowBlockerSearch::CompactCross5;
+    LightSpacePlan compact;
+    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, compact));
+    ASSERT_EQ(compact.viewCount, reference.viewCount);
+    ASSERT_EQ(compact.lightCount, reference.lightCount);
+    EXPECT_EQ(compact.totalPixels, reference.totalPixels);
+    EXPECT_EQ(compact.totalByteSize, reference.totalByteSize);
+    for(u32 index = 0u; index < compact.viewCount; ++index){
+        const auto& before = reference.views[index];
+        const auto& after = compact.views[index];
+        for(usize field = 0u; field < LengthOf(before.map); ++field)
+            EXPECT_EQ(after.map[field], before.map[field]);
+        for(usize field = 0u; field < 3u; ++field)
+            EXPECT_EQ(after.light[field], before.light[field]);
+        EXPECT_EQ(before.light[3] & NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS, 0u);
+        EXPECT_EQ(after.light[3], before.light[3] | NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS);
+    }
+    settings.backend = SoftwareShadowBackend::SoftwareTrace;
+    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, compact));
+    EXPECT_EQ(compact.viewCount, 0u);
+    EXPECT_EQ(compact.totalByteSize, 0u);
+}
+
+TEST(LightSpacePlan, RejectsUnknownBlockerPolicyWithoutReplacingTheCurrentPlan){
+    SoftwareShadowSettings settings;
+    settings.blockerSearch = static_cast<SoftwareShadowBlockerSearch::Enum>(2u);
+    EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
+    const LightSpaceLightRequest light{};
+    LightSpacePlan plan;
+    plan.totalByteSize = 123u;
+    EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_EQ(plan.totalByteSize, 123u);
+}
+
 TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
     const LightSpaceLightRequest point{ 0u, 0u, Scene::LightType::Point };
     const LightSpaceLightRequest directional{ 1u, 1u, Scene::LightType::Directional };

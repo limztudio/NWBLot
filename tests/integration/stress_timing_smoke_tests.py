@@ -16,13 +16,14 @@ import stress_timing_smoke as smoke
 
 def shadow_defaults():
     return dict(caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
-        software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_budget_mib=256,
+        software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
+        software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
 
 
-def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0):
+def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0):
     return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
-        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage}")
+        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search}")
 
 
 def workload_record(characters_per_class=10):
@@ -101,7 +102,8 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             ("--software-shadow-directional-resolution", ("31", "2049", "-1", "32.5", "invalid")),
             ("--software-shadow-point-resolution", ("31", "2049", "-1", "32.5", "invalid")),
             ("--software-shadow-backend", ("hardware", "LIGHT_SPACE", "invalid")),
-            ("--software-shadow-coverage", ("exact", "FITTED_VOLUME", "invalid")))
+            ("--software-shadow-coverage", ("exact", "FITTED_VOLUME", "invalid")),
+            ("--software-shadow-blocker-search", ("5", "COMPACT_CROSS5", "invalid")))
         for option, values in cases:
             for value in values:
                 with self.subTest(option=option, value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
@@ -143,7 +145,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         for text in ("", shadow_record() + "\n" + shadow_record(), shadow_record().replace("budget_bytes=", "budget="),
             shadow_record() + " unknown=1", shadow_record(budget_bytes=128 * 1024 * 1024),
             shadow_record(backend=1), shadow_record(directional_resolution=1024), shadow_record(point_resolution=512),
-            shadow_record(coverage=1)):
+            shadow_record(coverage=1), shadow_record(blocker_search=1)):
             with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_software_shadow_settings(text, args)
         # Historical measurement logs remain replayable without the new acquisition evidence.
@@ -159,6 +161,31 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             smoke.verify_software_shadow_settings(shadow_record(), args)
         defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
         self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_COVERAGE"], "reference")
+
+    def test_blocker_search_is_explicit_forwarded_and_verified(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
+        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9"}, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
+        report = smoke.verify_software_shadow_settings(shadow_record(blocker_search=1), args)
+        self.assertEqual(report["blocker_search_name"], "compact_cross5")
+        self.assertEqual(report["observed"]["blocker_search"], 1)
+        for record in (shadow_record(), shadow_record(blocker_search=2), shadow_record().replace(" blocker_search=0", "")):
+            with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(record, args)
+        defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "reference_grid9")
+
+    def test_blocker_acquisition_records_policy_and_rejects_silent_reference_fallback(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
+        text = shadow_record(blocker_search=1) + "\n" + valid_log()
+        result = self.acquire_log(args, text)
+        self.assertEqual(result["software_shadow_settings"]["observed"]["blocker_search"], 1)
+        launch = json.loads((self.output / "launch.json").read_text(encoding="utf-8"))
+        self.assertEqual(launch["environment"]["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
+        wrong = shadow_record() + "\n" + valid_log()
+        with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
+            self.acquire_log(args, wrong)
+        self.assertEqual((self.output / "runtime.log").read_text(encoding="utf-8"), wrong)
 
     def test_shadow_sampling_is_explicit_forwarded_and_verified(self):
         for name, code in smoke.SHADOW_TRANSPARENT_SAMPLING.items():

@@ -106,6 +106,53 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
 }
 
 
+// Compact penumbra estimates need only an approximate receiver distance, never a visibility threshold.
+// Omit invalid or grazing neighbors without the center/visibility path's quantization and footprint proof.
+bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint2 pixel,
+    const float3 origin, const float3 receiverNormal, out float linearDepth){
+    linearDepth = 0.0;
+    if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
+        return false;
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
+        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
+    float3 direction;
+    float3 relativeAnchor;
+    if(point){
+        direction = normalize(view.worldToClipRows[3].xyz
+            + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
+        relativeAnchor = view.originOrDirection.xyz - origin;
+    }
+    else{
+        const float3 xRow = view.worldToClipRows[0].xyz;
+        const float3 yRow = view.worldToClipRows[1].xyz;
+        const float xScale = dot(xRow, xRow);
+        const float yScale = dot(yRow, yRow);
+        if(xScale <= 0.0 || yScale <= 0.0 || !isfinite(xScale) || !isfinite(yScale))
+            return false;
+        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale)
+            + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
+        direction = -view.originOrDirection.xyz;
+    }
+    const float rawNormalError = sqrt(3.0) / 1024.0;
+    const float denominatorError = 2.0 * rawNormalError / (1.0 - rawNormalError) + 8.0 * 1.1920928955078125e-7;
+    const float denominator = dot(receiverNormal, direction);
+    if(!all(isfinite(direction)) || !all(isfinite(relativeAnchor)) || abs(denominator) <= denominatorError)
+        return false;
+    const float distance = -dot(receiverNormal, relativeAnchor) / denominator;
+    if(!isfinite(distance) || (point && distance <= 0.0))
+        return false;
+    linearDepth = point ? distance : nwbLightSpaceLinearDepth(view, origin)
+        + dot(relativeAnchor + direction * distance, direction);
+    if(!isfinite(linearDepth) || linearDepth < 0.0)
+        return false;
+    const float viewDepth = point ? distance * dot(direction, view.worldToClipRows[3].xyz) : linearDepth;
+    if(!isfinite(viewDepth) || viewDepth <= view.depthRange.x)
+        return false;
+    return (view.light.w & NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE) != 0u || viewDepth <= view.depthRange.y;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

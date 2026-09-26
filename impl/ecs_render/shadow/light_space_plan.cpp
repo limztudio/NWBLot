@@ -79,7 +79,8 @@ bool BuildLightSpacePlan(
             view.light[1] = request.shadowSlot;
             view.light[2] = face;
             view.light[3] = NWB_LIGHT_SPACE_FLAG_ELIGIBLE | (point ? NWB_LIGHT_SPACE_FLAG_POINT : 0u)
-                | (settings.coverage == SoftwareShadowCoverage::FittedVolume ? NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE : 0u);
+                | (settings.coverage == SoftwareShadowCoverage::FittedVolume ? NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE : 0u)
+                | (settings.blockerSearch == SoftwareShadowBlockerSearch::CompactCross5 ? NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS : 0u);
         }
         plan.viewCount = newViewCount;
         plan.textureResolution = textureResolution;

@@ -39,6 +39,7 @@ SHADOW_TRANSPARENT_SAMPLING = {"reference_three": 0, "temporal_one": 1}
 SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
 SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
 SOFTWARE_SHADOW_COVERAGE = {"reference": 0, "fitted_volume": 1}
+SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1}
 
 
 WORKLOAD = "StressTestSmokeProject: workload "
@@ -278,7 +279,7 @@ def verify_software_shadow_settings(text, args):
     records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_SETTINGS)]
     if len(records) != 1:
         raise SmokeFailure("exactly one SoftwareShadowSmoke requested-settings record is required")
-    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes", "coverage")
+    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes", "coverage", "blocker_search")
     pattern = re.escape(SOFTWARE_SHADOW_SETTINGS) + " ".join(re.escape(field) + r"=([0-9]+)" for field in fields)
     match = re.fullmatch(pattern, records[0])
     if not match:
@@ -287,11 +288,12 @@ def verify_software_shadow_settings(text, args):
     requested = dict(backend=SOFTWARE_SHADOW_BACKENDS[args.software_shadow_backend],
         directional_resolution=args.software_shadow_directional_resolution,
         point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024,
-        coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage])
+        coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage],
+        blocker_search=SOFTWARE_SHADOW_BLOCKER_SEARCH[args.software_shadow_blocker_search])
     if observed != requested:
         raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
     return {"backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
-        "requested": requested, "observed": observed, "verified": True}
+        "blocker_search_name": args.software_shadow_blocker_search, "requested": requested, "observed": observed, "verified": True}
 
 
 def verify_shadow_quality_settings(text, args):
@@ -328,6 +330,7 @@ def launch_environment(base, args, output):
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
         NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
+        NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
         NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling,
         NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
         NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
@@ -454,6 +457,8 @@ def parse_args(argv=None):
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
     parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default="reference",
         help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
+    parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default="reference_grid9",
+        help="Compact cross uses five blocker taps with cheap off-center opaque plane estimates; the center stays fully checked.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
         help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)

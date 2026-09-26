@@ -239,27 +239,45 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
     nwbShadowBuildBasis(axis, tangent, bitangent);
     float sum = 0.0;
     uint found = 0u;
+    const bool compact = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS) != 0u;
     for(int y = -1; y <= 1; ++y){
         for(int x = -1; x <= 1; ++x){
+            if(compact && x != 0 && y != 0)
+                continue;
+            // Only the penumbra estimator may omit an unavailable neighbor. Its center remains mandatory.
+            const bool optionalEstimate = compact && (x != 0 || y != 0);
             const float3 query = origin + radius * (float(x) * tangent + float(y) * bitangent);
             NwbLightSpaceView view;
             uint2 pixel;
             float depth;
-            if(!nwbLightSpaceFindView(lightIndex, query, view))
+            if(!nwbLightSpaceFindView(lightIndex, query, view)){
+                if(optionalEstimate)
+                    continue;
                 return false;
+            }
             const uint address = nwbLightSpaceAddress(view, query, pixel, depth);
             if(address == NWB_LIGHT_SPACE_ADDRESS_EMPTY)
                 continue;
-            if(address != NWB_LIGHT_SPACE_ADDRESS_SAMPLE)
+            if(address != NWB_LIGHT_SPACE_ADDRESS_SAMPLE){
+                if(optionalEstimate)
+                    continue;
                 return false;
+            }
             float comparisonDepth = receiverDepth;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-            if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
+            if(optionalEstimate){
+                if(!nwbLightSpaceReceiverEstimateDepth(view, pixel, origin, receiverNormal, comparisonDepth))
+                    continue;
+            }
+            else if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
                 return false;
 #endif
             float blocker;
-            if(!nwbLightSpaceNearestBlocker(view, pixel, comparisonDepth, blocker))
+            if(!nwbLightSpaceNearestBlocker(view, pixel, comparisonDepth, blocker)){
+                if(optionalEstimate)
+                    continue;
                 return false;
+            }
             if(blocker < comparisonDepth){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
                 // Parallel receiver/blocker planes have the same depth ratio on every point-light ray; use the central ray's distance.

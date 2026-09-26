@@ -8,6 +8,8 @@
 #include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
 
+#include "task_graph_test_utils.h"
+
 #include <gtest/gtest.h>
 
 #include <core/task/gpu/compiler_internal.h>
@@ -41,34 +43,10 @@ namespace Graphics = Core;
 inline constexpr Name s_ResourceVersionScratchArena("tests/task/gpu/resource_version_scratch");
 
 
-[[nodiscard]] inline Graphics::GpuPhysicalQueueInfo GraphicsQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .familyIndex = 0u,
-        .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-        .queueClass = Graphics::CommandQueue::Graphics,
-        .capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(
-            static_cast<u8>(Graphics::GpuQueueCapability::Graphics)
-            | static_cast<u8>(Graphics::GpuQueueCapability::Compute)
-            | static_cast<u8>(Graphics::GpuQueueCapability::Transfer)
-        ),
-        .dedicated = false,
-    };
-}
-
-[[nodiscard]] inline Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .familyIndex = 1u,
-        .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ .index = 1u, .deviceGeneration = 1u },
-        .queueClass = Graphics::CommandQueue::Compute,
-        .capabilities = static_cast<Graphics::GpuQueueCapability::Mask>(
-            static_cast<u8>(Graphics::GpuQueueCapability::Compute)
-            | static_cast<u8>(Graphics::GpuQueueCapability::Transfer)
-        ),
-        .dedicated = true,
-    };
-}
+using TaskGraphTestUtils::ComputeRequest;
+using TaskGraphTestUtils::DedicatedComputeQueue;
+using TaskGraphTestUtils::GraphicsQueue;
+using TaskGraphTestUtils::GraphicsRequest;
 
 [[nodiscard]] inline Graphics::GpuTaskResourceRange BufferRange(const u64 byteOffset, const u64 byteSize){
     Graphics::GpuTaskResourceRange range;

@@ -5,6 +5,7 @@
 #include <tests/common/test_context.h>
 #include <tests/common/gpu_task_graph_read_views.h>
 #include "task_graph_resource_version_test_utils.h"
+#include "task_graph_test_utils.h"
 
 #include <gtest/gtest.h>
 
@@ -42,8 +43,6 @@ namespace __hidden_task_graph_timing_tests{
 using TestArena = ::NWB::Tests::TestArena<struct TaskGraphTimingTestsTag>;
 namespace Graphics = Core;
 
-inline constexpr Name s_TaskGraphTimingScratchArena("tests/task/gpu/timing_scratch");
-
 using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 
 
@@ -75,12 +74,7 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
 ){
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
     const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphTimingScratchArena);
-    const Graphics::GpuTaskGraphCompiler compiler;
-    Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
-    metadataOptions.allowMetadataOnlyTasks = true;
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
+    return TaskGraphTestUtils::Compile(graph, analysis, topology, assignments, compiledGraph, options);
 }
 
 

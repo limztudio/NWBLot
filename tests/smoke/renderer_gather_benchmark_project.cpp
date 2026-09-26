@@ -176,7 +176,7 @@ public:
         m_timingRegistered = true;
         SmokeEnvironmentString compilerOutput(m_context.objectArena);
         if(ReadSmokeEnvironmentText("NWB_GATHER_COMPILER_STATISTICS_FILE", compilerOutput)){
-            if(!m_compilerProbe.start(*renderer, MakeNotNull(compilerOutput.c_str())))
+            if(!m_compilerProbe.start(renderer, MakeNotNull(compilerOutput.c_str())))
                 return false;
         }
         NWB::Core::Perf::CaptureOptions capture;

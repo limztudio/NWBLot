@@ -26,7 +26,7 @@ inline constexpr int s_TexConvEntryFailure = -1;
 int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
-        NWB_CERR << s_LoggerInitFailureText << "\n";
+        NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
         return s_TexConvEntryFailure;
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);

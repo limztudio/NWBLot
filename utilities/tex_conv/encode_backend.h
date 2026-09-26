@@ -7,6 +7,8 @@
 
 #include "module.h"
 
+#include <core/common/log.h>
+
 #include <basisu_comp.h>
 #include <basisu_enc.h>
 
@@ -67,18 +69,18 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 // Shared plane-loader policies: LDR decodes 8-bit images, HDR decodes float images.
 struct LdrPlaneLoader{
     using Plane = basisu::image;
-    static constexpr AStringView s_DecodeFailureLabel = "tex_conv: failed to decode input image '{}'.";
-    static constexpr AStringView s_ResolutionFailureLabel = "tex_conv: input image '{}' has an invalid resolution.";
-    static constexpr AStringView s_MismatchFailureLabel = "tex_conv: all LDR texture inputs must have the same resolution.";
+    static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode input image '{}'.");
+    static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: input image '{}' has an invalid resolution.");
+    static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
     [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image(inputPathText.c_str(), outPlane);
     }
 };
 struct HdrPlaneLoader{
     using Plane = basisu::imagef;
-    static constexpr AStringView s_DecodeFailureLabel = "tex_conv: failed to decode HDR image '{}'.";
-    static constexpr AStringView s_ResolutionFailureLabel = "tex_conv: HDR image '{}' has an invalid resolution.";
-    static constexpr AStringView s_MismatchFailureLabel = "tex_conv: all HDR texture inputs must have the same resolution.";
+    static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode HDR image '{}'.");
+    static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
+    static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");
     [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image_hdr(inputPathText.c_str(), outPlane, false);
     }
@@ -96,11 +98,11 @@ template<typename PlaneLoader, typename PlaneVector>
         const AString inputPathText = PathToGenericString<AString>(inputPath);
         Plane plane;
         if(!PlaneLoader::decode(inputPathText, plane)){
-            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_DecodeFailureLabel), PathToString<tchar>(inputPath));
+            NWB_LOGGER_ERROR(PlaneLoader::s_DecodeFailureLabel, PathToString<tchar>(inputPath));
             return false;
         }
         if(plane.get_width() == 0u || plane.get_height() == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_ResolutionFailureLabel), PathToString<tchar>(inputPath));
+            NWB_LOGGER_ERROR(PlaneLoader::s_ResolutionFailureLabel, PathToString<tchar>(inputPath));
             return false;
         }
         if(outPlanes.empty()){
@@ -108,7 +110,7 @@ template<typename PlaneLoader, typename PlaneVector>
             height = plane.get_height();
         }
         else if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_MismatchFailureLabel));
+            NWB_LOGGER_ERROR(PlaneLoader::s_MismatchFailureLabel);
             return false;
         }
         outPlanes.push_back(Move(plane));

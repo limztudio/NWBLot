@@ -33,7 +33,7 @@ inline constexpr int s_PromptSuccessThreshold = 0;
 int Run(const int argc, char** argv){
     NWB::Log::ClientStandalone logger;
     if(!logger.init(s_LoggerAppName)){
-        NWB_CERR << s_LoggerInitFailureText << "\n";
+        NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
         return s_FbxToNwbEntryFailure;
     }
     NWB::Log::ClientLoggerRegistrationGuard loggerRegistrationGuard(logger);

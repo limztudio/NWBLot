@@ -9,6 +9,8 @@
 
 #include "smoke_environment.h"
 #include "software_shadow_settings.h"
+#include "caustic_quality_settings.h"
+#include "shadow_quality_settings.h"
 
 #include <core/assets/ref.h>
 #include <core/ecs/entity.h>
@@ -134,7 +136,9 @@ struct SmokeRenderSystems{
         context.assetManager,
         context.shaderPathResolver
     );
+    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid caustic quality smoke settings"));
     NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid software shadow smoke settings"));
+    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid shadow quality smoke settings"));
     return { meshSystem, rendererSystem };
 }
 

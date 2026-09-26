@@ -15,13 +15,15 @@ import stress_timing_smoke as smoke
 
 
 def shadow_defaults():
-    return dict(software_shadow_backend="automatic", software_shadow_budget_mib=256,
+    return dict(caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
+        software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
+        software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
 
 
-def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456):
+def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0):
     return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
-        f"point_resolution={point_resolution} budget_bytes={budget_bytes}")
+        f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search}")
 
 
 def workload_record(characters_per_class=10):
@@ -44,6 +46,10 @@ def valid_log(characters_per_class=10):
     lines.append("RendererSystem: deferred rendering targets ready (1280x900, format test)")
     # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
     lines.append("Fixture: fixed simulation delta 0.016666667")
+    lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
+    lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, "
+        "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
+    lines.append(smoke.SHADOW_QUALITY_SETTINGS + "0")
     for index in range(60):
         lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
     lines.append(smoke.DONE + "fps=16 presentations=480 seconds=30 first=80 last=560")
@@ -95,7 +101,9 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         cases = (("--software-shadow-budget-mib", ("0", "4096", "-1", "1.5", "invalid")),
             ("--software-shadow-directional-resolution", ("31", "2049", "-1", "32.5", "invalid")),
             ("--software-shadow-point-resolution", ("31", "2049", "-1", "32.5", "invalid")),
-            ("--software-shadow-backend", ("hardware", "LIGHT_SPACE", "invalid")))
+            ("--software-shadow-backend", ("hardware", "LIGHT_SPACE", "invalid")),
+            ("--software-shadow-coverage", ("exact", "FITTED_VOLUME", "invalid")),
+            ("--software-shadow-blocker-search", ("5", "COMPACT_CROSS5", "invalid")))
         for option, values in cases:
             for value in values:
                 with self.subTest(option=option, value=value), patch("sys.stderr"), self.assertRaises(SystemExit):
@@ -136,11 +144,79 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         self.assertEqual(report["observed"]["budget_bytes"], 256 * 1024 * 1024)
         for text in ("", shadow_record() + "\n" + shadow_record(), shadow_record().replace("budget_bytes=", "budget="),
             shadow_record() + " unknown=1", shadow_record(budget_bytes=128 * 1024 * 1024),
-            shadow_record(backend=1), shadow_record(directional_resolution=1024), shadow_record(point_resolution=512)):
+            shadow_record(backend=1), shadow_record(directional_resolution=1024), shadow_record(point_resolution=512),
+            shadow_record(coverage=1), shadow_record(blocker_search=1)):
             with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_software_shadow_settings(text, args)
         # Historical measurement logs remain replayable without the new acquisition evidence.
         self.assertEqual(smoke.parse_measurement(valid_log())["fps"], 16.)
+
+    def test_fitted_coverage_is_explicit_forwarded_and_verified(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-coverage", "fitted_volume"])
+        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_COVERAGE": "reference"}, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_COVERAGE"], "fitted_volume")
+        report = smoke.verify_software_shadow_settings(shadow_record(coverage=1), args)
+        self.assertEqual(report["observed"]["coverage"], 1)
+        with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
+            smoke.verify_software_shadow_settings(shadow_record(), args)
+        defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_COVERAGE"], "reference")
+
+    def test_blocker_search_is_explicit_forwarded_and_verified(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
+        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9"}, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
+        report = smoke.verify_software_shadow_settings(shadow_record(blocker_search=1), args)
+        self.assertEqual(report["blocker_search_name"], "compact_cross5")
+        self.assertEqual(report["observed"]["blocker_search"], 1)
+        for record in (shadow_record(), shadow_record(blocker_search=2), shadow_record().replace(" blocker_search=0", "")):
+            with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(record, args)
+        defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
+        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "reference_grid9")
+
+    def test_blocker_acquisition_records_policy_and_rejects_silent_reference_fallback(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
+        text = shadow_record(blocker_search=1) + "\n" + valid_log()
+        result = self.acquire_log(args, text)
+        self.assertEqual(result["software_shadow_settings"]["observed"]["blocker_search"], 1)
+        launch = json.loads((self.output / "launch.json").read_text(encoding="utf-8"))
+        self.assertEqual(launch["environment"]["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
+        wrong = shadow_record() + "\n" + valid_log()
+        with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
+            self.acquire_log(args, wrong)
+        self.assertEqual((self.output / "runtime.log").read_text(encoding="utf-8"), wrong)
+
+    def test_shadow_sampling_is_explicit_forwarded_and_verified(self):
+        for name, code in smoke.SHADOW_TRANSPARENT_SAMPLING.items():
+            with self.subTest(name=name):
+                args = smoke.parse_args(self.argv + ["--shadow-transparent-sampling", name])
+                env = smoke.launch_environment({"NWB_SHADOW_TRANSPARENT_SAMPLING": "invalid"}, args, self.output)
+                self.assertEqual(env["NWB_SHADOW_TRANSPARENT_SAMPLING"], name)
+                request = smoke.SHADOW_QUALITY_SETTINGS + str(code)
+                dispatch = smoke.SHADOW_TEMPORAL_ONE_RECORDED + "samples=1 hardware=1"
+                record = request + ("\n" + dispatch if code == 1 else "")
+                report = smoke.verify_shadow_quality_settings(record, args)
+                self.assertTrue(report["verified"])
+                self.assertEqual(report["bootstrap_samples"], 3)
+                self.assertEqual(report["accepted_history_samples"], 1 if code == 1 else 3)
+                self.assertEqual(report["effective_dispatch_verified"], code == 1)
+                if code == 1:
+                    software = smoke.verify_shadow_quality_settings(request + "\n" + dispatch.replace("hardware=1", "hardware=0"), args)
+                    self.assertFalse(software["hardware"])
+                    for invalid in (request, record + "\n" + dispatch, record.replace("samples=1", "samples=3")):
+                        with self.assertRaises(smoke.SmokeFailure):
+                            smoke.verify_shadow_quality_settings(invalid, args)
+                else:
+                    with self.assertRaises(smoke.SmokeFailure):
+                        smoke.verify_shadow_quality_settings(record + "\n" + dispatch, args)
+                for invalid in ("", record + "\n" + record, record + " trailing", smoke.SHADOW_QUALITY_SETTINGS + str(1-code)):
+                    with self.assertRaises(smoke.SmokeFailure):
+                        smoke.verify_shadow_quality_settings(invalid, args)
+        defaults = smoke.parse_args(self.argv)
+        self.assertEqual(defaults.shadow_transparent_sampling, "reference_three")
+        with patch("sys.stderr"), self.assertRaises(SystemExit):
+            smoke.parse_args(self.argv + ["--shadow-transparent-sampling", "0"])
 
     def acquire_log(self, args, text):
         with patch.object(smoke, "identities", return_value={}), \

@@ -143,6 +143,7 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
         return false;
     }
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
+    m_rayTracingState.m_transparentShadowSamplingHistory.reset();
     m_rayTracingState.m_softShadowTemporalSeeded = false;
     m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
     m_rayTracingState.m_prevWorldToClipValid = false;

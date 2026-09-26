@@ -39,7 +39,9 @@ bool RendererRayTracingSystem::setSoftwareShadowSettings(const SoftwareShadowSet
         return false;
     auto& state = m_lightSpaceShadow;
     if(
-        state.m_settings.backend == settings.backend && state.m_settings.directionalResolution == settings.directionalResolution
+        state.m_settings.backend == settings.backend && state.m_settings.coverage == settings.coverage
+        && state.m_settings.blockerSearch == settings.blockerSearch
+        && state.m_settings.directionalResolution == settings.directionalResolution
         && state.m_settings.pointResolution == settings.pointResolution && state.m_settings.memoryBudgetBytes == settings.memoryBudgetBytes
     )
         return true;

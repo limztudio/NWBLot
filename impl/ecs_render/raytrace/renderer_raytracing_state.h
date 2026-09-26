@@ -11,6 +11,7 @@
 #include <impl/ecs_render/raytrace/hardware_transparent_shadow_state.h>
 #include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>
 #include <impl/ecs_render/raytrace/software_transparent_sampling.h>
+#include <impl/ecs_render/shadow/transparent_sampling_history.h>
 #include <impl/ecs_render/kernel/renderer_constants_private.h>
 
 #include <core/graphics/rhi/device.h>
@@ -282,6 +283,7 @@ struct RtSoftShadowState{
     bool m_softShadowTemporalHistoryAdvancePending = false;
     bool m_shadowReprojectMergePipelineFailed = false;
     // Transparent temporal gates; coarse/adaptive fallback remains available.
+    TransparentShadowSamplingHistory m_transparentShadowSamplingHistory;
     bool m_softTransparentTemporalReady = false;
     bool m_softTransparentReady = false;
 };

@@ -2,9 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_settings.h"
+#include "quality_settings.h"
 
-#include <global/limit.h>
+#include <impl/assets/graphics/shadow/sw_binding_slots.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,15 +16,13 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
-    return
-        settings.backend <= SoftwareShadowBackend::LightSpace
-        && settings.coverage <= SoftwareShadowCoverage::FittedVolume
-        && settings.blockerSearch <= SoftwareShadowBlockerSearch::CompactCross5
-        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
-        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0u && settings.memoryBudgetBytes <= Limit<u32>::s_Max
-    ;
+bool ValidateShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
+    return settings.transparentSampling <= TransparentShadowSampling::TemporalOne;
+}
+
+u32 ResolveTransparentShadowSampleCount(const ShadowQualitySettings& settings, const bool temporalHistoryUsable)noexcept{
+    return settings.transparentSampling == TransparentShadowSampling::TemporalOne && temporalHistoryUsable
+        ? 1u : NWB_SW_SHADOW_TRANSPARENT_SPP;
 }
 
 

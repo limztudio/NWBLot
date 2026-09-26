@@ -361,7 +361,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 tracePush.height = targets.height;
                 tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
                 tracePush.frameIndex = frameIndex;
-                tracePush.softSampleCount = NWB_SW_SHADOW_TRANSPARENT_SPP;
+                tracePush.softSampleCount = transparentShadowSampleCount();
                 tracePush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
                 tracePush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
                 tracePush.transparentSoftHalfStorageSlot = targets.bindless.transparentSoftHalfStorage.slot();
@@ -375,6 +375,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 bindHeap(pipeline);
                 commandList.setPushConstants(&tracePush, sizeof(tracePush));
                 commandList.dispatch(softGroupsX, softGroupsY, 1u);
+                reportTransparentShadowSampling(tracePush.softSampleCount);
             }
         }
     }
@@ -414,6 +415,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 graphOwnsTransparentTemporalMergeEntryStates,
                 graphOwnsTransparentTemporalMergeEntryStates
             );
+            m_rayTracingState.m_transparentShadowSamplingHistory.record(m_rayTracingState.m_softShadowSlotMask);
         }
 
         if(dispatchTransparentWavelet){

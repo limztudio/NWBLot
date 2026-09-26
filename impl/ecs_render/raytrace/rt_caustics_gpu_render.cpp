@@ -69,7 +69,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     )
         return false;
     const u32 temporalPhaseCount = causticTemporalPhaseCount();
-    const u32 photonCount = s_CausticSwPhotonCount / temporalPhaseCount;
+    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticSwPhotonGridSide, temporalPhaseCount);
+    const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
         if(temporalDecay > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
@@ -103,7 +104,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         // Temporal sampling phases retain the full-domain flux.
         pushConstants.photonCount = photonCount;
         pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
-        pushConstants.gridSide = s_CausticSwPhotonGridSide;
+        pushConstants.gridSide = photonBudget.gridSide;
         // The photon temporal phase rides the graphics frame index, not the dispatch count: early-frame
         // producer skips (pipeline warmup) would otherwise shift every later phase and make captures
         // run-varying. The graphics frame is capture-anchored, so identical frames emit identical photons.
@@ -152,7 +153,7 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched software caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
             , static_cast<u64>(photonCount)
             , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(s_CausticSwPhotonCount)
+            , static_cast<u64>(photonBudget.fullGridCount)
             , static_cast<u64>(m_rayTracingState.m_causticLightCount)
             , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
         );

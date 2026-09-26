@@ -460,15 +460,13 @@ struct CausticAccumulatorDecayPushConstants{
 };
 static_assert(sizeof(CausticAccumulatorDecayPushConstants) == sizeof(u32) * 4u, "CausticAccumulatorDecayPushConstants must match the shader push-constant layout");
 
-// Hardware uses full density; photon count must equal gridSide squared.
+// Base grids retain full quality; the explicit quality divisor scales both dimensions before temporal phase selection.
 inline constexpr u32 s_CausticHwPhotonGridSide = 512u;
-inline constexpr u32 s_CausticHwPhotonCount = s_CausticHwPhotonGridSide * s_CausticHwPhotonGridSide;
 #if defined(NWB_FINAL) || defined(NWB_OPTIMIZE)
 inline constexpr u32 s_CausticSwPhotonGridSide = 512u;
 #else
 inline constexpr u32 s_CausticSwPhotonGridSide = NWB_CAUSTIC_SW_GRID_SIDE;
 #endif
-inline constexpr u32 s_CausticSwPhotonCount = s_CausticSwPhotonGridSide * s_CausticSwPhotonGridSide;
 
 // Two bootstrap phases, then four converged phases with normalized flux.
 inline constexpr u32 s_CausticTemporalBootstrapPhaseCount = NWB_CAUSTIC_TEMPORAL_BOOTSTRAP_PHASE_COUNT;

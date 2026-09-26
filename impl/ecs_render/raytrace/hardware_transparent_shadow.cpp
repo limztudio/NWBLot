@@ -213,8 +213,9 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
     const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_HW_TRANSPARENT_GROUP_SIZE));
     const u32 groupsY = DivideUp(halfHeight, static_cast<u32>(NWB_HW_TRANSPARENT_GROUP_SIZE));
+    const u32 sampleCount = transparentShadowSampleCount();
     __hidden_hardware_transparent_shadow::PushConstants push{
-        targets.width, targets.height, frameIndex, 0u, 0u, NWB_SW_SHADOW_TRANSPARENT_SPP,
+        targets.width, targets.height, frameIndex, 0u, 0u, sampleCount,
         targets.bindless.slotsBufferDescriptor.slot(), m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
         state.m_crossingsHeapHandle.slot(), state.m_overflowListHeapHandle.slot(), state.m_overflowArgsHeapHandle.slot(),
         targets.bindless.transparentSoftHalfStorage.slot(),
@@ -223,7 +224,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
         if((m_rayTracingState.m_softShadowSlotMask & (1u << slot)) == 0u)
             continue;
         push.lightSlot = slot;
-        for(u32 sample = 0u; sample < NWB_SW_SHADOW_TRANSPARENT_SPP; ++sample){
+        for(u32 sample = 0u; sample < sampleCount; ++sample){
             push.sampleIndex = sample;
             const u32 emptyArgs[NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS] = { 0u, 1u, 1u, 0u };
             if(!commandList.tryWriteBuffer(*state.m_overflowArgsBuffer, emptyArgs, sizeof(emptyArgs))){
@@ -271,6 +272,8 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
             }
         }
     }
+    if(m_rayTracingState.m_softShadowSlotMask != 0u)
+        reportTransparentShadowSampling(sampleCount);
     // The trace task exports scratch in its declared UAV state, including the indirect-argument allocation.
     commandList.setBufferState(state.m_crossingsBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.setBufferState(state.m_overflowListBuffer.get(), Core::ResourceStates::UnorderedAccess);

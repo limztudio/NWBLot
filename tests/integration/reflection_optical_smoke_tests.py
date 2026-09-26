@@ -287,7 +287,7 @@ class CombinedCausticTests(unittest.TestCase):
         for require_hardware in (False, True):
             args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
                 working_directory=Path("runtime"), logserver_executable=None, timeout=60,
-                require_hardware=require_hardware, software_ray_tracing=False, application_arg=[])
+                require_hardware=require_hardware, software_ray_tracing=False, caustic_photon_grid_divisor=1, application_arg=[])
             with self.subTest(require_hardware=require_hardware), patch.object(caustic.subprocess, "run",
                 return_value=SimpleNamespace(returncode=77)) as run:
                 self.assertIsNone(caustic.capture(args, "combined"))
@@ -303,7 +303,7 @@ class CombinedCausticTests(unittest.TestCase):
     def test_disabled_refraction_retains_glass_reflection_composition_pass(self):
         args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
             working_directory=Path("runtime"), logserver_executable=None, timeout=60,
-            require_hardware=True, software_ray_tracing=False, application_arg=[])
+            require_hardware=True, software_ray_tracing=False, caustic_photon_grid_divisor=1, application_arg=[])
         with patch.object(caustic.subprocess, "run", return_value=SimpleNamespace(returncode=77)) as run:
             self.assertIsNone(caustic.capture(args, "refraction_disabled"))
         command = run.call_args.args[0]
@@ -336,7 +336,7 @@ class CombinedCausticTests(unittest.TestCase):
     def test_capture_software_route_requires_real_disabled_device_for_every_toggle(self):
         args = SimpleNamespace(output_directory=Path("output"), executable=Path("app.exe"),
             working_directory=Path("runtime"), logserver_executable=None, timeout=150,
-            require_hardware=False, software_ray_tracing=True, application_arg=[])
+            require_hardware=False, software_ray_tracing=True, caustic_photon_grid_divisor=1, application_arg=[])
         for variant in caustic.VARIANTS:
             with self.subTest(variant=variant), patch.object(caustic.subprocess, "run",
                 return_value=SimpleNamespace(returncode=77)) as run:

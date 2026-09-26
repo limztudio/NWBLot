@@ -66,19 +66,32 @@ bool nwbLightSpaceFindView(const uint lightIndex, const float3 world, out NwbLig
     return false;
 }
 
-bool nwbLightSpaceTexel(const NwbLightSpaceView view, const float3 world, out uint2 pixel, out float projectedDepth){
+// Fitted directional maps contain the complete caster projection. Empty margins remain empty under this map approximation.
+// Missing/invalid views and point-face seams never inherit this classification.
+#define NWB_LIGHT_SPACE_ADDRESS_INVALID 0u
+#define NWB_LIGHT_SPACE_ADDRESS_SAMPLE 1u
+#define NWB_LIGHT_SPACE_ADDRESS_EMPTY 2u
+
+uint nwbLightSpaceAddress(const NwbLightSpaceView view, const float3 world, out uint2 pixel, out float projectedDepth){
     pixel = uint2(0u);
     projectedDepth = 0.0;
     const float4 clip = nwbLightSpaceProject(view, world);
-    if(!all(isfinite(clip)) || clip.w <= 0.0)
-        return false;
+    if(!all(isfinite(clip)) || clip.w <= 0.0 || any(view.map.xy == 0u))
+        return NWB_LIGHT_SPACE_ADDRESS_INVALID;
     const float3 ndc = clip.xyz / clip.w;
+    if(!all(isfinite(ndc)))
+        return NWB_LIGHT_SPACE_ADDRESS_INVALID;
     const float2 uv = float2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if(any(uv < 0.0) || any(uv >= 1.0) || ndc.z < 0.0 || ndc.z > 1.0)
-        return false;
+    const bool outsideXY = any(uv < 0.0) || any(uv >= 1.0);
+    const bool fitted = (view.light.w & NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE) != 0u;
+    const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
+    if(fitted && !point && (outsideXY || ndc.z < 0.0))
+        return NWB_LIGHT_SPACE_ADDRESS_EMPTY;
+    if(outsideXY || ndc.z < 0.0 || (!fitted && ndc.z > 1.0))
+        return NWB_LIGHT_SPACE_ADDRESS_INVALID;
     pixel = min(uint2(uv * float2(view.map.xy)), view.map.xy - 1u);
     projectedDepth = ndc.z;
-    return true;
+    return NWB_LIGHT_SPACE_ADDRESS_SAMPLE;
 }
 
 float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
@@ -211,7 +224,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 }
 
 // A finite blocker search estimates the footprint of the real light source. It is a spatial approximation,
-// overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
+// Overflow, missing faces and invalid fits retain software traversal. Fitted-volume coverage skips empty directional margins.
 bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
     const NwbLightSpaceView centerView, out float distance){
     distance = 0.0;
@@ -226,22 +239,45 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
     nwbShadowBuildBasis(axis, tangent, bitangent);
     float sum = 0.0;
     uint found = 0u;
+    const bool compact = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_COMPACT_BLOCKERS) != 0u;
     for(int y = -1; y <= 1; ++y){
         for(int x = -1; x <= 1; ++x){
+            if(compact && x != 0 && y != 0)
+                continue;
+            // Only the penumbra estimator may omit an unavailable neighbor. Its center remains mandatory.
+            const bool optionalEstimate = compact && (x != 0 || y != 0);
             const float3 query = origin + radius * (float(x) * tangent + float(y) * bitangent);
             NwbLightSpaceView view;
             uint2 pixel;
             float depth;
-            if(!nwbLightSpaceFindView(lightIndex, query, view) || !nwbLightSpaceTexel(view, query, pixel, depth))
+            if(!nwbLightSpaceFindView(lightIndex, query, view)){
+                if(optionalEstimate)
+                    continue;
                 return false;
+            }
+            const uint address = nwbLightSpaceAddress(view, query, pixel, depth);
+            if(address == NWB_LIGHT_SPACE_ADDRESS_EMPTY)
+                continue;
+            if(address != NWB_LIGHT_SPACE_ADDRESS_SAMPLE){
+                if(optionalEstimate)
+                    continue;
+                return false;
+            }
             float comparisonDepth = receiverDepth;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-            if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
+            if(optionalEstimate){
+                if(!nwbLightSpaceReceiverEstimateDepth(view, pixel, origin, receiverNormal, comparisonDepth))
+                    continue;
+            }
+            else if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
                 return false;
 #endif
             float blocker;
-            if(!nwbLightSpaceNearestBlocker(view, pixel, comparisonDepth, blocker))
+            if(!nwbLightSpaceNearestBlocker(view, pixel, comparisonDepth, blocker)){
+                if(optionalEstimate)
+                    continue;
                 return false;
+            }
             if(blocker < comparisonDepth){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
                 // Parallel receiver/blocker planes have the same depth ratio on every point-light ray; use the central ray's distance.
@@ -270,7 +306,12 @@ bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const flo
     NwbLightSpaceView view;
     uint2 pixel;
     float projectedDepth;
-    if(!nwbLightSpaceFindView(lightIndex, samplePosition, view) || !nwbLightSpaceTexel(view, samplePosition, pixel, projectedDepth))
+    if(!nwbLightSpaceFindView(lightIndex, samplePosition, view))
+        return false;
+    const uint address = nwbLightSpaceAddress(view, samplePosition, pixel, projectedDepth);
+    if(address == NWB_LIGHT_SPACE_ADDRESS_EMPTY)
+        return true;
+    if(address != NWB_LIGHT_SPACE_ADDRESS_SAMPLE)
         return false;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float receiverDepth;

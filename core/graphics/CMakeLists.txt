@@ -129,6 +129,7 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_resource_management.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_command_list.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_device.h"
+    "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_forward.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_capabilities.h"
     "${CMAKE_CURRENT_LIST_DIR}/vulkan/backend_context_detail.h"

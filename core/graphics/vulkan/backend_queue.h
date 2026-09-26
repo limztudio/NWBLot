@@ -6,6 +6,7 @@
 
 
 #include "module.h"
+#include "backend_forward.h"
 
 #include <core/task/cpu/scheduler.h>
 #include "command_buffer_resource_references.h"
@@ -21,25 +22,6 @@
 
 
 NWB_VULKAN_BEGIN
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-class Device;
-class VulkanTestDispatchAccess;
-class Queue;
-class TrackedCommandBuffer;
-class StateTracker;
-class GpuDescriptorHeap;
-class DescriptorBufferManager;
-
-class Buffer;
-class Texture;
-class AccelStruct;
-class OpacityMicromap;
-
-struct VulkanContext;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

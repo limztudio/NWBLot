@@ -61,6 +61,34 @@ TEST(LightSpacePlan, PacksDirectionalAndEveryPointFaceWithoutPixelOrLayerOverlap
     EXPECT_EQ(end, plan.totalPixels);
 }
 
+TEST(LightSpacePlan, FittedCoverageIsExplicitAndPreservesTheWholeCasterPlan){
+    const LightSpaceLightRequest requests[] = {
+        { 7u, 3u, Scene::LightType::Directional },
+        { 63u, 0u, Scene::LightType::Point },
+    };
+    SoftwareShadowSettings settings;
+    EXPECT_EQ(settings.coverage, SoftwareShadowCoverage::Reference);
+    LightSpacePlan reference;
+    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, reference));
+    settings.coverage = SoftwareShadowCoverage::FittedVolume;
+    LightSpacePlan fitted;
+    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
+    EXPECT_EQ(fitted.viewCount, reference.viewCount);
+    EXPECT_EQ(fitted.totalPixels, reference.totalPixels);
+    EXPECT_EQ(fitted.totalByteSize, reference.totalByteSize);
+    EXPECT_EQ(fitted.eventByteSize, reference.eventByteSize);
+    for(u32 index = 0u; index < fitted.viewCount; ++index){
+        EXPECT_EQ(fitted.views[index].light[3], reference.views[index].light[3] | NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE);
+        EXPECT_EQ(fitted.views[index].map[2], reference.views[index].map[2]);
+        EXPECT_EQ(fitted.views[index].light[0], reference.views[index].light[0]);
+        EXPECT_EQ(fitted.views[index].light[2], reference.views[index].light[2]);
+        EXPECT_EQ(fitted.views[index].depthRange.w, 0.0f);
+    }
+    settings.coverage = static_cast<SoftwareShadowCoverage::Enum>(2u);
+    EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
+}
+
 TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
     const LightSpaceLightRequest point{ 0u, 0u, Scene::LightType::Point };
     const LightSpaceLightRequest directional{ 1u, 1u, Scene::LightType::Directional };

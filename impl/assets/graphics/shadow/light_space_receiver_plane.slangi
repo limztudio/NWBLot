@@ -76,8 +76,17 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
     if(!all(isfinite(clip)) || clip.w <= 0.0)
         return false;
     const float depth = clip.z / clip.w;
-    if(!isfinite(depth) || depth <= 0.0 || depth > 1.0)
+    if(!isfinite(depth) || depth <= 0.0)
         return false;
+    if(depth > 1.0){
+        if((view.light.w & NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE) == 0u)
+            return false;
+        // All captured casters lie before the fitted far plane. Threshold 1 includes them while clear D32 stays lit.
+        // Retain the actual corrected plane distance for PCSS rather than inverting a clamped depth.
+        projectedDepth = 1.0;
+        linearDepth = point ? distance - depthError : nwbLightSpaceLinearDepth(view, corrected);
+        return isfinite(linearDepth) && linearDepth >= 0.0;
+    }
     // One full D32 spacing covers stored-depth quantization; keep its world-space effect inside the same bound.
     projectedDepth = asfloat(asuint(depth) - 1u);
     if(point){

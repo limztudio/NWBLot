@@ -63,6 +63,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     function(nwb_configure_runtime_smoke_target TARGET_NAME RUNTIME_ROOT)
         target_sources("${TARGET_NAME}" PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/graphics_abi.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.h"
+            "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.h"
         )
         set_target_properties("${TARGET_NAME}" PROPERTIES
             DEBUGGER_WORKING_DIRECTORY "${RUNTIME_ROOT}"

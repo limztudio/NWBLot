@@ -39,10 +39,14 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
             m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
         );
 
-        return RecordLightSpaceResolve(
+        const u32 sampleCount = transparentShadowSampleCount();
+        if(!RecordLightSpaceResolve(
             commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(), *lightSpace, *targets.transparentSoftHalf,
-            frameIndex, NWB_SW_SHADOW_TRANSPARENT_SPP, targets.bindless.transparentSoftHalfStorage.slot(), true
-        );
+            frameIndex, sampleCount, targets.bindless.transparentSoftHalfStorage.slot(), true
+        ))
+            return false;
+        reportTransparentShadowSampling(sampleCount);
+        return true;
     }
     const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
     const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;

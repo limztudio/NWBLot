@@ -25,6 +25,13 @@ namespace SoftwareShadowBackend{
     };
 };
 
+namespace SoftwareShadowCoverage{
+    enum Enum : u8{
+        Reference,
+        FittedVolume,
+    };
+};
+
 inline constexpr u32 s_ShadowDefaultDirectionalResolution = 512u;
 inline constexpr u32 s_ShadowDefaultPointResolution = 256u;
 inline constexpr u64 s_ShadowDefaultMemoryBudgetBytes = 256ull * 1024ull * 1024ull;
@@ -34,6 +41,7 @@ inline constexpr u32 s_ShadowMaxResolution = 2048u;
 
 struct SoftwareShadowSettings{
     SoftwareShadowBackend::Enum backend = SoftwareShadowBackend::Automatic;
+    SoftwareShadowCoverage::Enum coverage = SoftwareShadowCoverage::Reference;
     u32 directionalResolution = s_ShadowDefaultDirectionalResolution;
     u32 pointResolution = s_ShadowDefaultPointResolution;
     u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;

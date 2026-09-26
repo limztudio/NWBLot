@@ -11,6 +11,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+import caustic_quality_smoke
 from reflection_smoke import validate_frame
 from caustic_optical_reference import exterior_samples, expected_environment_color, predictor_metadata
 from refraction_gallery_smoke import png_rgb_bytes
@@ -20,7 +21,7 @@ from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 VARIANTS = ("combined", "reflection_disabled", "caustics_disabled", "refraction_disabled")
 
 
-def capture_environment(variant, software_ray_tracing=False):
+def capture_environment(variant, software_ray_tracing=False, caustic_photon_grid_divisor=1):
     environment = dict(os.environ)
     for key in tuple(environment):
         if key.startswith(("NWB_REFLECTION_SMOKE_", "NWB_REFRACTION_SMOKE_", "NWB_CAUSTIC_SMOKE_")) or key == "NWB_GPU_TIMING_FILE":
@@ -30,7 +31,8 @@ def capture_environment(variant, software_ray_tracing=False):
         "NWB_REFRACTION_SMOKE_HARDWARE": "1", "NWB_CAUSTIC_SMOKE_ENABLED": "0" if variant == "caustics_disabled" else "1",
         "NWB_CAUSTIC_SMOKE_REFLECTION_COMPARISON": "1", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667",
         "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "0", "NWB_TRANSPARENT_MULTI_SPIN_ANGLE": "0",
-        "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0"})
+        "NWB_TRANSPARENT_MULTI_SPIN_SPEED": "0",
+        "NWB_CAUSTIC_PHOTON_GRID_DIVISOR": str(caustic_photon_grid_divisor)})
     if software_ray_tracing:
         environment["NWB_CAUSTIC_SMOKE_SCREEN_REFRACTION_BACKDROP"] = "1"
     return environment
@@ -91,11 +93,13 @@ def capture(args, variant):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print("Capturing combined caustic scene / " + variant + " at presentation360...", flush=True)
-    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing), check=False, timeout=args.timeout + 90)
+    result = subprocess.run(command, env=capture_environment(variant, args.software_ray_tracing, args.caustic_photon_grid_divisor), check=False, timeout=args.timeout + 90)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
         raise SmokeFailure(variant + " combined capture failed: " + str(result.returncode))
+    caustic_quality_smoke.verify_settings(output.with_suffix(".log").read_text(encoding="utf-8"),
+        args.caustic_photon_grid_divisor, producer_enabled=variant != "caustics_disabled")
     frame = read_bmp_24_rows(output)
     validate_frame(frame)
     if frame[:2] != (1280, 900):
@@ -211,6 +215,7 @@ def write_report(args, frames, metrics=None):
     else:
         note += "Mesh-derived exterior rays that miss both sphere and ground require their predicted smooth Fresnel/environment contribution, including local patches. Secondary ray-hit shading does not claim to sample the primary-camera caustic cache."
     metadata = {"frame_source": "actual application framebuffer readback", "presentation_frame": 360,
+        "caustic_photon_grid_divisor": args.caustic_photon_grid_divisor,
         "logical_device_policy": "disabled" if args.software_ray_tracing else "automatic",
         "background_fixture": "screen_refraction_stripes" if args.software_ray_tracing else "original",
         "optical_validation": "software_contributions" if args.software_ray_tracing else "hardware_contributions_and_exterior_radiometry",
@@ -235,6 +240,7 @@ def parse_args(argv):
     route.add_argument("--software-ray-tracing", action="store_true",
         help="Disable logical-device hardware ray tracing and validate software/screen-space optical contributions.")
     parser.add_argument("--application-arg", action="append", default=[])
+    caustic_quality_smoke.add_arguments(parser)
     args = parser.parse_args(argv)
     if args.timeout <= 0:
         parser.error("timeout must be positive")

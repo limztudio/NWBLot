@@ -21,6 +21,10 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/window_capture_smoke_tests.py"
     )
     add_test(
+        NAME nwb_caustic_quality_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_smoke_tests.py"
+    )
+    add_test(
         NAME nwb_stress_presentation_timing_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_timing_smoke_tests.py"
     )

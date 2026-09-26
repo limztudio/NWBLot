@@ -8,6 +8,7 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/raytrace/graph_snapshots.h>
 #include <impl/ecs_render/raytrace/soft_shadow_wavelet.h>
+#include <impl/ecs_render/caustic/settings.h>
 #include <impl/ecs_render/raytrace/caustic_resolve_activity.h>
 #include <impl/ecs_render/raytrace/scene_resources.h>
 #include <impl/ecs_render/raytrace/optical_scene_resources.h>
@@ -15,6 +16,7 @@
 #include <impl/ecs_render/raytrace/prepared_builds.h>
 #include <impl/ecs_render/raytrace/software_scene_refit.h>
 #include <impl/ecs_render/shadow/light_space_shadow.h>
+#include <impl/ecs_render/shadow/quality_settings.h>
 
 #include <core/alloc/scratch.h>
 #include <core/graphics/gpu_timing.h>
@@ -229,7 +231,9 @@ public:
         const Core::QueueSubmissionToken& submissionToken
     );
 
+    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
+    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
     [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
 
     void logCapabilityOnce();
@@ -1126,6 +1130,8 @@ private:
     // Temporal merge precedes soft resolve and swaps history at frame end.
     [[nodiscard]] bool ensureShadowReprojectMergePipeline();
     [[nodiscard]] bool softShadowTemporalHistoryUsable()const noexcept;
+    [[nodiscard]] u32 transparentShadowSampleCount()const noexcept;
+    void reportTransparentShadowSampling(u32 sampleCount);
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticResolvePipeline();
@@ -1217,7 +1223,10 @@ private:
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;
+    CausticQualitySettings m_causticQualitySettings;
     LightSpaceShadowState m_lightSpaceShadow;
+    ShadowQualitySettings m_shadowQualitySettings;
+    bool m_temporalOneShadowSamplingLogged = false;
     SoftwareSceneRefitHandle m_preparedSceneSwBvhRefit;
     PreparedShadowTraceGeometryBufferVector m_preparedShadowTraceGeometryBuffers;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_acceptedShadowTraceGeometryBuffers;

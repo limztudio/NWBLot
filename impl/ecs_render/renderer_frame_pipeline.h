@@ -158,8 +158,15 @@ public:
     void setRefractionHardwareTracingEnabled(const bool enabled)noexcept{
         m_raytracingSystem.setRefractionHardwareTracingEnabled(enabled);
     }
+    [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings){
+        return m_raytracingSystem.setCausticQualitySettings(settings);
+    }
+
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
         return m_raytracingSystem.setSoftwareShadowSettings(settings);
+    }
+    [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings){
+        return m_raytracingSystem.setShadowQualitySettings(settings);
     }
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
     [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;

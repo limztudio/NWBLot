@@ -83,8 +83,16 @@ void RendererSystem::setRefractionHardwareTracingEnabled(const bool enabled)noex
     m_pipeline->setRefractionHardwareTracingEnabled(enabled);
 }
 
+bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& settings){
+    return m_pipeline->setCausticQualitySettings(settings);
+}
+
 bool RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
     return m_pipeline->setSoftwareShadowSettings(settings);
+}
+
+bool RendererSystem::setShadowQualitySettings(const ShadowQualitySettings& settings){
+    return m_pipeline->setShadowQualitySettings(settings);
 }
 
 bool RendererSystem::setReflectionSettings(const ReflectionSettings& settings){

@@ -202,6 +202,7 @@ void RendererRayTracingState::invalidateResources(){
     m_shadowReprojectMergePipelineFailed = false;
     m_softTransparentReady = false;
     m_softTransparentTemporalReady = false;
+    m_transparentShadowSamplingHistory.reset();
     m_swShadowEdgeStatsPendingTick = 0u;
     m_swShadowEdgeCounterBuffer.reset();
     m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();

@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_settings.h"
+#pragma once
 
-#include <global/limit.h>
+
+#include <impl/global.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,15 +17,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
-    return
-        settings.backend <= SoftwareShadowBackend::LightSpace
-        && settings.coverage <= SoftwareShadowCoverage::FittedVolume
-        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
-        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0u && settings.memoryBudgetBytes <= Limit<u32>::s_Max
-    ;
-}
+namespace TransparentShadowSampling{
+    enum Enum : u8{
+        ReferenceThree,
+        TemporalOne,
+    };
+};
+
+struct ShadowQualitySettings{
+    TransparentShadowSampling::Enum transparentSampling = TransparentShadowSampling::ReferenceThree;
+};
+
+[[nodiscard]] bool ValidateShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;
+// Reduced sampling requires an accepted history and an available transparent temporal filter.
+[[nodiscard]] u32 ResolveTransparentShadowSampleCount(const ShadowQualitySettings& settings, bool temporalHistoryUsable)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

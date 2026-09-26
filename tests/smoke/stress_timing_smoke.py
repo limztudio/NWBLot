@@ -14,6 +14,7 @@ from types import SimpleNamespace
 
 import renderer_ab_benchmark as ab
 from smoke_volume_identity import file_identity
+import caustic_quality_smoke
 from window_capture_smoke import (
     STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
     launch_logserver, launch_testbed, require_normal_process_exit,
@@ -30,8 +31,14 @@ REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
     "AvboitTimingProbe: render unfocused 1", "AvboitTimingProbe: caustic in-flight ranges 32")
 
 
+SHADOW_QUALITY_SETTINGS = "ShadowQualitySmoke: requested transparent_sampling="
+SHADOW_TEMPORAL_ONE_RECORDED = "RendererSystem: recorded temporal-one transparent shadow sampling "
+SHADOW_TRANSPARENT_SAMPLING = {"reference_three": 0, "temporal_one": 1}
+
+
 SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
 SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
+SOFTWARE_SHADOW_COVERAGE = {"reference": 0, "fitted_volume": 1}
 
 
 WORKLOAD = "StressTestSmokeProject: workload "
@@ -271,7 +278,7 @@ def verify_software_shadow_settings(text, args):
     records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_SETTINGS)]
     if len(records) != 1:
         raise SmokeFailure("exactly one SoftwareShadowSmoke requested-settings record is required")
-    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes")
+    fields = ("backend", "directional_resolution", "point_resolution", "budget_bytes", "coverage")
     pattern = re.escape(SOFTWARE_SHADOW_SETTINGS) + " ".join(re.escape(field) + r"=([0-9]+)" for field in fields)
     match = re.fullmatch(pattern, records[0])
     if not match:
@@ -279,11 +286,35 @@ def verify_software_shadow_settings(text, args):
     observed = dict(zip(fields, map(int, match.groups())))
     requested = dict(backend=SOFTWARE_SHADOW_BACKENDS[args.software_shadow_backend],
         directional_resolution=args.software_shadow_directional_resolution,
-        point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024)
+        point_resolution=args.software_shadow_point_resolution, budget_bytes=args.software_shadow_budget_mib * 1024 * 1024,
+        coverage=SOFTWARE_SHADOW_COVERAGE[args.software_shadow_coverage])
     if observed != requested:
         raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
     return {"backend_name": args.software_shadow_backend, "budget_mib": args.software_shadow_budget_mib,
         "requested": requested, "observed": observed, "verified": True}
+
+
+def verify_shadow_quality_settings(text, args):
+    records = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_QUALITY_SETTINGS)]
+    if len(records) != 1:
+        raise SmokeFailure("exactly one ShadowQualitySmoke requested-settings record is required")
+    expected = SHADOW_QUALITY_SETTINGS + str(SHADOW_TRANSPARENT_SAMPLING[args.shadow_transparent_sampling])
+    if records[0] != expected:
+        raise SmokeFailure("shadow sampling quality mismatch between request and application")
+    dispatched = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_TEMPORAL_ONE_RECORDED)]
+    hardware = None
+    if args.shadow_transparent_sampling == "temporal_one":
+        if len(dispatched) != 1:
+            raise SmokeFailure("temporal-one acquisition requires exactly one effective dispatch marker")
+        match = re.fullmatch(re.escape(SHADOW_TEMPORAL_ONE_RECORDED) + r"samples=1 hardware=([01])", dispatched[0])
+        if not match:
+            raise SmokeFailure("invalid effective temporal-one dispatch marker")
+        hardware = bool(int(match[1]))
+    elif dispatched:
+        raise SmokeFailure("unrequested temporal-one dispatch was recorded")
+    return {"transparent_sampling": args.shadow_transparent_sampling,
+        "bootstrap_samples": 3, "accepted_history_samples": 1 if args.shadow_transparent_sampling == "temporal_one" else 3,
+        "effective_dispatch_verified": bool(dispatched), "hardware": hardware, "verified": True}
 
 
 def launch_environment(base, args, output):
@@ -296,9 +327,12 @@ def launch_environment(base, args, output):
     result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
+        NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
+        NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling,
         NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
         NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
         NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
+        NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor),
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
     if not args.animate:
         result.update(NWB_STRESS_TEST_SPIN_ANGLE=str(args.spin_angle),
@@ -365,6 +399,8 @@ def acquire(args, output):
         (output / "runtime.log").write_text(text, encoding="utf-8")
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
+        result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
+        result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
         result["runtime_signature"] = ab.device_material_signature(text)
         result["motion"] = {"mode": "rotating" if args.animate else "fixed",
             "simulation_clock": "wall" if args.animate else "fixed_step",
@@ -413,7 +449,11 @@ def parse_args(argv=None):
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
+    parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
+        help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
+    parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default="reference",
+        help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
         help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)
@@ -424,6 +464,7 @@ def parse_args(argv=None):
         help="Continuously rotate the bodies using wall-time simulation; excludes fixed yaw and fixed simulation delta.")
     parser.add_argument("--fixed-delta-seconds", type=float)
     parser.add_argument("--application-arg", action="append", default=[])
+    caustic_quality_smoke.add_arguments(parser)
     parser.add_argument("--reflection-diagnostics", action="store_true",
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)

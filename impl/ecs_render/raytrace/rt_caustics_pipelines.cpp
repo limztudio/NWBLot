@@ -515,7 +515,8 @@ bool RendererRayTracingSystem::renderHwCaustics(
     )
         return false;
     const u32 temporalPhaseCount = causticTemporalPhaseCount();
-    const u32 photonCount = s_CausticHwPhotonCount / temporalPhaseCount;
+    const CausticPhotonBudget photonBudget = MakeCausticPhotonBudget(m_causticQualitySettings, s_CausticHwPhotonGridSide, temporalPhaseCount);
+    const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
         if(temporalDecay > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
@@ -551,7 +552,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         pushConstants.instanceCount = m_rayTracingState.m_tlasInstanceCount;
         pushConstants.photonCount = photonCount;
         pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
-        pushConstants.gridSide = s_CausticHwPhotonGridSide;
+        pushConstants.gridSide = photonBudget.gridSide;
         // Same deterministic phase clock as the software producer above: the graphics frame index is
         // capture-anchored, while the dispatch count shifts with pipeline-warmup skips.
         pushConstants.frameIndex = static_cast<u32>(m_graphics.getFrameIndex());
@@ -573,7 +574,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 
         Core::RayTracingDispatchRaysArguments dispatchArgs;
-        dispatchArgs.setDimensions(s_CausticHwPhotonGridSide, s_CausticHwPhotonGridSide / temporalPhaseCount, 1u);
+        dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
         commandList.dispatchRays(dispatchArgs);
         // Advance temporal phase only after recording a producer dispatch.
         m_rayTracingState.m_hwCausticFrameIndex = m_rayTracingState.m_hwCausticFrameIndex + 1u;
@@ -602,7 +603,7 @@ bool RendererRayTracingSystem::renderHwCaustics(
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware caustic producer ({} photons/frame, {} temporal phases, {} full-grid budget, {} caustic lights, {} refractive instances)")
             , static_cast<u64>(photonCount)
             , static_cast<u64>(temporalPhaseCount)
-            , static_cast<u64>(s_CausticHwPhotonCount)
+            , static_cast<u64>(photonBudget.fullGridCount)
             , static_cast<u64>(m_rayTracingState.m_causticLightCount)
             , static_cast<u64>(m_rayTracingState.m_causticRefractiveInstanceCount)
         );

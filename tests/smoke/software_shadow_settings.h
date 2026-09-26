@@ -34,6 +34,15 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
+    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_COVERAGE", value)){
+        const AStringView coverage(value.data(), value.size());
+        if(coverage == "reference")
+            settings.coverage = Impl::SoftwareShadowCoverage::Reference;
+        else if(coverage == "fitted_volume")
+            settings.coverage = Impl::SoftwareShadowCoverage::FittedVolume;
+        else
+            return false;
+    }
     struct ResolutionOverride{ const char* name; u32* destination; };
     const ResolutionOverride overrides[] = {
         { "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION", &settings.directionalResolution },
@@ -55,11 +64,12 @@ namespace NWB::Tests::Smoke{
     }
     if(!renderer.setSoftwareShadowSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={}")
         , static_cast<u32>(settings.backend)
         , settings.directionalResolution
         , settings.pointResolution
         , settings.memoryBudgetBytes
+        , static_cast<u32>(settings.coverage)
     );
     return true;
 }

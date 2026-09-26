@@ -357,6 +357,7 @@ void RendererRayTracingSystem::swapSoftShadowTemporalHistory(DeferredFrameTarget
         m_rayTracingState.m_softwareTransparentSampling.m_history.accept();
     else
         m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
+    m_rayTracingState.m_transparentShadowSamplingHistory.accept();
     m_rayTracingState.m_softShadowTemporalSeeded = true;
     Swap(targets.shadowSoftGeometry, targets.shadowSoftGeometryPrev);
     Swap(targets.bindless.shadowSoftGeometry, targets.bindless.shadowSoftGeometryPrev);
@@ -374,6 +375,7 @@ void RendererRayTracingSystem::finalizeSoftShadowTemporalHistory(DeferredFrameTa
 
 void RendererRayTracingSystem::discardSoftShadowTemporalHistory(){
     m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
+    m_rayTracingState.m_transparentShadowSamplingHistory.discardPending();
 }
 
 

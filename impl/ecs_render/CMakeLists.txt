@@ -11,6 +11,14 @@ target_link_libraries(nwb_ecs_render_components INTERFACE
 
 nwb_declare_static_library(nwb_ecs_render)
 target_sources(nwb_ecs_render PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/caustic/settings.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_caustics_quality.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_settings.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_settings.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/quality_runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/shadow/transparent_sampling_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_settings.h"
     "${CMAKE_CURRENT_LIST_DIR}/shadow/light_space_plan.cpp"

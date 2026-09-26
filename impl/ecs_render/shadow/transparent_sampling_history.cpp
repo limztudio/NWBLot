@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_settings.h"
-
-#include <global/limit.h>
+#include "transparent_sampling_history.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,14 +14,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
-    return
-        settings.backend <= SoftwareShadowBackend::LightSpace
-        && settings.coverage <= SoftwareShadowCoverage::FittedVolume
-        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
-        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0u && settings.memoryBudgetBytes <= Limit<u32>::s_Max
-    ;
+void TransparentShadowSamplingHistory::reset()noexcept{
+    m_acceptedSlots = 0u;
+    m_pendingSlots = 0u;
+}
+
+void TransparentShadowSamplingHistory::accept()noexcept{
+    m_acceptedSlots = m_pendingSlots;
+    m_pendingSlots = 0u;
 }
 
 

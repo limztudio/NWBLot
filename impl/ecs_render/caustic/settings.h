@@ -2,9 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "light_space_settings.h"
+#pragma once
 
-#include <global/limit.h>
+
+#include <impl/global.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -16,15 +17,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
-    return
-        settings.backend <= SoftwareShadowBackend::LightSpace
-        && settings.coverage <= SoftwareShadowCoverage::FittedVolume
-        && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
-        && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution
-        && settings.memoryBudgetBytes > 0u && settings.memoryBudgetBytes <= Limit<u32>::s_Max
-    ;
-}
+struct CausticQualitySettings{
+    // Divide each photon-grid dimension by 1, 2, or 4; temporal phases and filtering stay unchanged.
+    u32 photonGridDivisor = 1u;
+};
+
+struct CausticPhotonBudget{
+    u32 gridSide = 0u;
+    u32 fullGridCount = 0u;
+    u32 photonsPerFrame = 0u;
+};
+
+[[nodiscard]] bool ValidateCausticQualitySettings(const CausticQualitySettings& settings);
+// Callers supply validated settings, a supported base grid, and the existing 1/2/4 temporal phase count.
+[[nodiscard]] CausticPhotonBudget MakeCausticPhotonBudget(
+    const CausticQualitySettings& settings,
+    u32 baseGridSide,
+    u32 temporalPhaseCount
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

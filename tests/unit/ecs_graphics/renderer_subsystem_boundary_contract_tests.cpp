@@ -487,8 +487,12 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 104u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 105u);
     EXPECT_EQ(CountText(compactStateSystem, "m_softwareTransparentSampling=SoftwareTransparentSamplingState{};"), 1u);
+    // Accepted transparent history belongs to the shadow feature and clears both generations on resource invalidation.
+    EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/shadow/transparent_sampling_history.h>"));
+    EXPECT_EQ(CountText(compactStateHeader, "TransparentShadowSamplingHistorym_transparentShadowSamplingHistory;"), 1u);
+    EXPECT_EQ(CountText(compactStateSystem, "m_transparentShadowSamplingHistory.reset();"), 1u);
     // Both channel families release their stage handles and clear failures through their feature owner.
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/raytrace/soft_shadow_resolve_state.h>"));
     EXPECT_EQ(CountText(compactStateHeader, "SoftShadowResolveStatem_softShadowResolve;"), 1u);

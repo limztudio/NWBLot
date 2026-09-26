@@ -969,28 +969,6 @@ bool BuildMaterialBindIncludeSourceImpl(
 }
 
 
-static bool PrepareMaterialBindIncludeRoot(const Path& includeRoot){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to clear generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
 
 bool EmitMaterialBindIncludes(
     CookArena& arena,
@@ -1002,7 +980,7 @@ bool EmitMaterialBindIncludes(
 ){
     outIncludeRoot.clear();
     outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareMaterialBindIncludeRoot(outIncludeRoot))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Material bind include generation"))
         return false;
     if(materialBindEntries.empty())
         return true;

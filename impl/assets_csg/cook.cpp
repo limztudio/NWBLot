@@ -12,6 +12,7 @@
 
 #include <impl/assets/csg/shape_id.h>
 
+#include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
 #include <global/text_utils.h>
@@ -197,27 +198,6 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 ){
     ScratchString configurationName(configurationSafeName, scratchArena);
     return cacheDirectory / configurationName.c_str() / "csg_modules";
-}
-
-[[nodiscard]] static bool PrepareIncludeRoot(const Path& includeRoot){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to clear generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include directory '{}': {}")
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-    return true;
 }
 
 [[nodiscard]] static bool SameModule(const CsgShapeCookEntry& entry, const Name shaderModule){
@@ -472,7 +452,7 @@ bool EmitCsgShapeModuleIncludes(
     outIncludeRoot.clear();
     outIncludeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
     if(csgShapeEntries.empty()){
-        if(!PrepareIncludeRoot(outIncludeRoot))
+        if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
             return false;
         return WriteEmptyDefaultModuleInclude(outIncludeRoot);
     }
@@ -539,7 +519,7 @@ bool EmitCsgShapeModuleIncludes(
         }
     }
 
-    if(!PrepareIncludeRoot(outIncludeRoot))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
         return false;
 
     HashSet<NameHash, Hasher<NameHash>, EqualTo<NameHash>, ScratchArena> emittedModules(

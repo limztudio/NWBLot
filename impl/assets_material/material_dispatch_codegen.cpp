@@ -125,30 +125,6 @@ static Path BuildDeferredBxdfIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}")
-            , StringConvert(generatorName)
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}")
-            , StringConvert(generatorName)
-            , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-
-    return true;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -162,7 +138,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 ){
     outIncludeRoot.clear();
     outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
         return false;
 
     // Build a dense id -> bxdf-source table from the (already assigned) materials. Each unique bxdf appears at
@@ -520,7 +496,7 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
 ){
     outIncludeRoot.clear();
     outIncludeRoot = BuildShadowTransmittanceIncludeRoot(cacheDirectory, configurationSafeName, scratchArena);
-    if(!PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow transmittance dispatch"))
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow transmittance dispatch"))
         return false;
 
     // Build a dense shadowTransmittanceModelId -> (surface source, .bind interface) table from the (already

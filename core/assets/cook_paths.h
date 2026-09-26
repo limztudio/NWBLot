@@ -41,6 +41,33 @@ struct ResolvedCookPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+[[nodiscard]] inline bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
+    ErrorCode errorCode;
+    if(!RemoveAllIfExists(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}")
+            , StringConvert(generatorName)
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+
+    errorCode.clear();
+    if(!EnsureDirectories(includeRoot, errorCode)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}")
+            , StringConvert(generatorName)
+            , PathToString<tchar>(includeRoot)
+            , StringConvert(errorCode.message())
+        );
+        return false;
+    }
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 NWB_ASSETS_END
 
 

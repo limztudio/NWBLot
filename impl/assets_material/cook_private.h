@@ -16,6 +16,7 @@
 #include "binary_payload.h"
 
 #include <core/alloc/scratch.h>
+#include <core/assets/cook_paths.h>
 #include <core/assets/paths.h>
 #include <core/graphics/shader_archive.h>
 #include <core/graphics/shader_stage_names.h>

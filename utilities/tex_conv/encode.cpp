@@ -78,35 +78,7 @@ private:
 
 
 [[nodiscard]] static bool LoadLdrPlanes(const Vector<Path>& inputPaths, ImagePlanes& outPlanes){
-    outPlanes.clear();
-    if(inputPaths.empty())
-        return false;
-
-    u32 width = 0u;
-    u32 height = 0u;
-    outPlanes.reserve(inputPaths.size());
-    for(const Path& inputPath : inputPaths){
-        const AString inputPathText = PathToGenericString<AString>(inputPath);
-        basisu::image plane;
-        if(!basisu::load_image(inputPathText.c_str(), plane)){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode input image '{}'."), PathToString<tchar>(inputPath));
-            return false;
-        }
-        if(plane.get_width() == 0u || plane.get_height() == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image '{}' has an invalid resolution."), PathToString<tchar>(inputPath));
-            return false;
-        }
-        if(outPlanes.empty()){
-            width = plane.get_width();
-            height = plane.get_height();
-        }
-        else if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: all LDR texture inputs must have the same resolution."));
-            return false;
-        }
-        outPlanes.push_back(Move(plane));
-    }
-    return true;
+    return EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths, outPlanes);
 }
 
 [[nodiscard]] static bool ApplyAlphaSource(const AlphaSource& alphaSource, ImagePlanes& inOutPlanes){

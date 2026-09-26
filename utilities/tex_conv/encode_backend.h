@@ -64,6 +64,57 @@ void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimen
 [[nodiscard]] bool EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource, TexturePayload& outPayload);
 [[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims);
 [[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd);
+// Shared plane-loader policies: LDR decodes 8-bit images, HDR decodes float images.
+struct LdrPlaneLoader{
+    using Plane = basisu::image;
+    static constexpr AStringView s_DecodeFailureLabel = "tex_conv: failed to decode input image '{}'.";
+    static constexpr AStringView s_ResolutionFailureLabel = "tex_conv: input image '{}' has an invalid resolution.";
+    static constexpr AStringView s_MismatchFailureLabel = "tex_conv: all LDR texture inputs must have the same resolution.";
+    [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
+        return basisu::load_image(inputPathText.c_str(), outPlane);
+    }
+};
+struct HdrPlaneLoader{
+    using Plane = basisu::imagef;
+    static constexpr AStringView s_DecodeFailureLabel = "tex_conv: failed to decode HDR image '{}'.";
+    static constexpr AStringView s_ResolutionFailureLabel = "tex_conv: HDR image '{}' has an invalid resolution.";
+    static constexpr AStringView s_MismatchFailureLabel = "tex_conv: all HDR texture inputs must have the same resolution.";
+    [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
+        return basisu::load_image_hdr(inputPathText.c_str(), outPlane, false);
+    }
+};
+template<typename PlaneLoader, typename PlaneVector>
+[[nodiscard]] bool LoadPlanesFromFiles(const Vector<Path>& inputPaths, PlaneVector& outPlanes){
+    using Plane = typename PlaneLoader::Plane;
+    outPlanes.clear();
+    if(inputPaths.empty())
+        return false;
+    u32 width = 0u;
+    u32 height = 0u;
+    outPlanes.reserve(inputPaths.size());
+    for(const Path& inputPath : inputPaths){
+        const AString inputPathText = PathToGenericString<AString>(inputPath);
+        Plane plane;
+        if(!PlaneLoader::decode(inputPathText, plane)){
+            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_DecodeFailureLabel), PathToString<tchar>(inputPath));
+            return false;
+        }
+        if(plane.get_width() == 0u || plane.get_height() == 0u){
+            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_ResolutionFailureLabel), PathToString<tchar>(inputPath));
+            return false;
+        }
+        if(outPlanes.empty()){
+            width = plane.get_width();
+            height = plane.get_height();
+        }
+        else if(plane.get_width() != width || plane.get_height() != height){
+            NWB_LOGGER_ERROR(NWB_TEXT(PlaneLoader::s_MismatchFailureLabel));
+            return false;
+        }
+        outPlanes.push_back(Move(plane));
+    }
+    return true;
+}
 // Shared volume-mip prologue: derive the next-level dims from the source planes and size the output planes.
 template<typename PlaneVector>
 [[nodiscard]] bool PrepareVolumeMipTargets(

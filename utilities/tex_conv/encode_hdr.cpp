@@ -80,35 +80,7 @@ namespace EncodeBackendDetail{
 }
 
 [[nodiscard]] bool LoadHdrPlanes(const Vector<Path>& inputPaths, HdrImagePlanes& outPlanes){
-    outPlanes.clear();
-    if(inputPaths.empty())
-        return false;
-
-    u32 width = 0u;
-    u32 height = 0u;
-    outPlanes.reserve(inputPaths.size());
-    for(const Path& inputPath : inputPaths){
-        const AString inputPathText = PathToGenericString<AString>(inputPath);
-        basisu::imagef plane;
-        if(!basisu::load_image_hdr(inputPathText.c_str(), plane, false)){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode HDR image '{}'."), PathToString<tchar>(inputPath));
-            return false;
-        }
-        if(plane.get_width() == 0u || plane.get_height() == 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR image '{}' has an invalid resolution."), PathToString<tchar>(inputPath));
-            return false;
-        }
-        if(outPlanes.empty()){
-            width = plane.get_width();
-            height = plane.get_height();
-        }
-        else if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: all HDR texture inputs must have the same resolution."));
-            return false;
-        }
-        outPlanes.push_back(Move(plane));
-    }
-    return true;
+    return LoadPlanesFromFiles<HdrPlaneLoader>(inputPaths, outPlanes);
 }
 
 [[nodiscard]] bool ApplyHdrAlphaSource(const AlphaSource& alphaSource, HdrImagePlanes& inOutPlanes){

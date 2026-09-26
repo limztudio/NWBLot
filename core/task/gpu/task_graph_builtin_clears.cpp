@@ -252,10 +252,7 @@ GpuTaskId GpuTaskGraph::addClearBufferTask(const GpuTaskDesc& desc, const GpuCle
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validResource(clearDesc.destination)
         || (static_cast<u8>(desc.queue.requiredCapabilities) & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
     )
@@ -305,10 +302,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validResource(clearDesc.destination)
         || clearDesc.valueType >= GpuClearTextureTaskValueType::kCount
         || (
@@ -395,10 +389,7 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validResource(clearDesc.destination)
         || clearDesc.rect.maxX <= clearDesc.rect.minX
         || clearDesc.rect.maxY <= clearDesc.rect.minY

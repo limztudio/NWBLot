@@ -352,10 +352,7 @@ GpuTaskId GpuTaskGraph::addResolveTextureTask(
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !resolveDesc.regions
         || resolveDesc.regionCount == 0u
         || resolveDesc.regionCount > Limit<u32>::s_Max

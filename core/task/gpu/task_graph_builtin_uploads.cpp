@@ -282,10 +282,7 @@ GpuTaskId GpuTaskGraph::addUploadBufferTask(
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown
@@ -365,10 +362,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
         return {};
 
     if(
-        desc.resourceUses
-        || desc.resourceUseCount != 0u
-        || desc.resourceSetUses
-        || desc.resourceSetUseCount != 0u
+        !GpuTaskGraphBuiltinDetail::BuiltinDeclarationHasNoCallerResourceUses(desc)
         || !validUploadBlob(uploadDesc.source)
         || !validResource(uploadDesc.destination)
         || uploadDesc.finalState == ResourceStates::Unknown

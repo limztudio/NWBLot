@@ -88,16 +88,9 @@ TEST(GpuTaskGraph, PlansTextureStatesPerDeclaredSubresourceRange){
     ASSERT_TRUE(first.valid());
     ASSERT_TRUE(second.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuCompiledBarrier* const secondBarrier = compiledPlan.findTask(second).prologueBarriers;

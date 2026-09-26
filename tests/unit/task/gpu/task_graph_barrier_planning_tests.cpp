@@ -137,16 +137,9 @@ TEST(GpuTaskGraph, ForcesMergedSameStateWriteDependenciesAcrossResourceKinds){
     const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
     ASSERT_TRUE(consumer.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
@@ -271,16 +264,9 @@ TEST(GpuTaskGraph, PlansPacketBoundaryTransitionsAndUavDependencies){
     ASSERT_TRUE(uavReader.valid());
     ASSERT_TRUE(shaderReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuCompiledTask* const compiledWriter = compiledPlan.findTask(writer).plan;
@@ -392,16 +378,9 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
     ASSERT_TRUE(producer.valid());
     ASSERT_TRUE(consumer.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;

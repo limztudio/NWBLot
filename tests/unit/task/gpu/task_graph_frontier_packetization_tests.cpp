@@ -198,18 +198,11 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesCheapImmediateSuccessor){
     const Graphics::GpuTaskId successor = graph.addTask(successorDesc);
     ASSERT_TRUE(successor.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 1u);
 
@@ -262,18 +255,11 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationMergesLongSerialPacket){
         ASSERT_TRUE(tasks[taskIndex].valid());
     }
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 1u);
 
@@ -336,18 +322,11 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRejectsPrecedingBoundaryTask){
     const Graphics::GpuTaskId successor = graph.addTask(successorDesc);
     ASSERT_TRUE(successor.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
     EXPECT_NE(compiledPlan.packetForTask(first), compiledPlan.packetForTask(successor));
@@ -406,18 +385,11 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresNonemptyMergeDomain){
     const Graphics::GpuTaskId emptyDomainSuccessor = graph.addTask(emptyDomainDesc);
     ASSERT_TRUE(emptyDomainSuccessor.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), 3u);
 
@@ -489,18 +461,11 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
     const Graphics::GpuTaskId successor = graph.addTask(successorDesc);
     ASSERT_TRUE(successor.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
     Graphics::GpuTaskGraphCompileOptions options;
     options.packetizationPolicy = Graphics::GpuTaskGraphPacketizationPolicy::FrontierScored;
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph, options));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     ASSERT_EQ(compiledPlan.packetCount(), s_ExpectedDualCount);
 

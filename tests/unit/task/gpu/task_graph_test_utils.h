@@ -175,6 +175,23 @@ struct ImportedTexturePair{
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 );
 
+struct SingleQueueCompile{
+    Graphics::GpuPhysicalQueueInfo singleQueue;
+    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuTaskGraphAnalysis analysis;
+    Graphics::GpuTaskGraphQueueAssignments assignments;
+    Graphics::GpuCompiledGraph compiledGraph;
+
+
+    explicit SingleQueueCompile(TestArena& testArena);
+
+
+    [[nodiscard]] bool compile(
+        const Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskGraphCompileOptions& options = {}
+    );
+};
+
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
     const Graphics::GpuQueueCapability::Mask first,
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,

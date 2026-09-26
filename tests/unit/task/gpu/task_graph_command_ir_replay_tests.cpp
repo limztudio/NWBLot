@@ -625,17 +625,10 @@ TEST(GpuCommandIrReplay, PreflightsTheWholeStreamAgainstTheCompiledPacketBeforeL
     const Graphics::GpuTaskId secondTask = graph.addTask(secondDesc);
     ASSERT_TRUE(secondTask.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
     const Graphics::GpuSubmissionPacketId packet = compiledPlan.packetForTask(task);
     const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(secondTask);

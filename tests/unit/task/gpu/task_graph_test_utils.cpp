@@ -296,6 +296,21 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, metadataOptions);
 }
 
+SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
+    : singleQueue(GraphicsQueue())
+    , topology{.queues = &singleQueue, .queueCount = 1u}
+    , analysis(testArena.arena)
+    , assignments(testArena.arena)
+    , compiledGraph(testArena.arena){
+}
+
+[[nodiscard]] bool SingleQueueCompile::compile(
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuTaskGraphCompileOptions& options
+){
+    return Compile(graph, analysis, topology, assignments, compiledGraph, options);
+}
+
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index,
     const Graphics::GpuQueueCapability::Mask capabilities){

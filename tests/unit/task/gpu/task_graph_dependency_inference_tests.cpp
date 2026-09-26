@@ -500,18 +500,8 @@ TEST(GpuTaskGraph, ReducesSchedulingDagWithoutLosingRawDependencyDiagnostics){
     );
     ASSERT_TRUE(handoff.valid());
 
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     const Name mergeDomain("tests/task_graph/transitive_reduction_merge_domain");
 
     Graphics::GpuTaskSchedulingHint firstScheduling;

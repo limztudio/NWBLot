@@ -466,16 +466,9 @@ TEST(GpuTaskGraph, KeepsExplicitPacketDependenciesOutOfRecordingReadyFrontiers){
     ASSERT_TRUE(third.valid());
     ASSERT_TRUE(fourth.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
@@ -635,16 +628,9 @@ TEST(GpuTaskGraph, DerivesRecordingReadyFrontiersFromStateSeedProducers){
     const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc);
     ASSERT_TRUE(consumer.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    SingleQueueCompile singleQueueCompile(testArena);
+    ASSERT_TRUE(singleQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(singleQueueCompile.compiledGraph);
 
 
     const Graphics::GpuSubmissionPacketId orderingProducerPacket = compiledPlan.packetForTask(orderingProducer);

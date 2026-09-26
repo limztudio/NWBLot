@@ -698,18 +698,8 @@ TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossin
     Graphics::GpuTaskResourceUse finalUses[] = { consumerUses[0u], consumerUses[1u] };
     for(Graphics::GpuTaskResourceUse& use : finalUses)
         use.access = Graphics::GpuTaskResourceAccess::Read;
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     Graphics::GpuTaskDesc producerDesc;
     producerDesc
         .setIdentity(Name("tests/task_graph/ownership_score_producer"))

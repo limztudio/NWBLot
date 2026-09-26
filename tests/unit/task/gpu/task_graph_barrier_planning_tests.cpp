@@ -700,18 +700,8 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     const auto addReadTask = [&](
         const Name& identity,
         const AStringView label,

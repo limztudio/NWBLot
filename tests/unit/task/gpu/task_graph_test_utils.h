@@ -236,6 +236,24 @@ struct TwoQueueCompile{
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(const u16 index = 2u);
 
+[[nodiscard]] inline Graphics::GpuQueueRequest GraphicsRequest(){
+    return Graphics::GpuQueueRequest{
+        Graphics::GpuQueueCapability::Graphics,
+        Graphics::GpuQueuePreference::Graphics,
+        false,
+        false,
+    };
+}
+
+[[nodiscard]] inline Graphics::GpuQueueRequest ComputeRequest(){
+    return Graphics::GpuQueueRequest{
+        Graphics::GpuQueueCapability::Compute,
+        Graphics::GpuQueuePreference::Compute,
+        false,
+        false,
+    };
+}
+
 [[nodiscard]] Telemetry::FrameGraphQueueAssignmentModifier::Mask ExpectedTelemetryModifiers(
     const Graphics::GpuTaskQueueAssignmentModifier::Mask modifiers
 );

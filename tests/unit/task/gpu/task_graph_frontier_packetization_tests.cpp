@@ -39,18 +39,8 @@ using TaskGraphTestUtils::TestArena;
 TEST(GpuTaskGraph, FrontierSafePacketizationSplitsBeforeCrossQueueConsumer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
@@ -488,18 +478,8 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationRequiresOneDomainAcrossPrecedingPa
 TEST(GpuTaskGraph, FrontierScoredPacketizationPreservesCrossQueueConsumerFrontier){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
 
     Graphics::GpuTaskSchedulingHint producerScheduling;
     producerScheduling.cost = Graphics::GpuTaskCostHint::Medium;
@@ -700,18 +680,8 @@ TEST(GpuTaskGraph, FrontierScoredPacketizationCarriesTailPhysicalQueueFrontierFo
 TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;
@@ -803,18 +773,8 @@ TEST(GpuTaskGraph, FrontierSafePacketizationKeepsFrontierAfterExplicitOverride){
 TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediateDependency){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     const Graphics::GpuGraphResourceId orderedHandoff = AddHazardDomain(
         graph,
         Name("tests/task_graph/frontier_override_ordered_handoff"),
@@ -941,18 +901,8 @@ TEST(GpuTaskGraph, FrontierSafeConsumerFrontierOverrideRequiresExplicitImmediate
 TEST(GpuTaskGraph, FrontierSafePacketizationKeepsMergeWhenLaterTaskOwnsCrossQueueConsumer){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
 
     Graphics::GpuTaskSchedulingHint firstScheduling;
     firstScheduling.allowPacketMerge = true;

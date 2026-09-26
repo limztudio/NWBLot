@@ -400,18 +400,8 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
         .requiredState = Graphics::ResourceStates::UnorderedAccess,
         .access = Graphics::GpuTaskResourceAccess::Write,
     };
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     Graphics::GpuTaskDesc graphicsDesc;
     graphicsDesc
         .setIdentity(Name("tests/task_graph/external_final_multiple_graphics"))
@@ -1187,18 +1177,8 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         .requiredState = Graphics::ResourceStates::UnorderedAccess,
         .access = Graphics::GpuTaskResourceAccess::Write,
     };
-    const Graphics::GpuQueueRequest graphicsRequest{
-        Graphics::GpuQueueCapability::Graphics,
-        Graphics::GpuQueuePreference::Graphics,
-        false,
-        false,
-    };
-    const Graphics::GpuQueueRequest computeRequest{
-        Graphics::GpuQueueCapability::Compute,
-        Graphics::GpuQueuePreference::Compute,
-        false,
-        false,
-    };
+    const Graphics::GpuQueueRequest graphicsRequest = GraphicsRequest();
+    const Graphics::GpuQueueRequest computeRequest = ComputeRequest();
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = true;
     scheduling.allowPacketMerge = false;

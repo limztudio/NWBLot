@@ -9,13 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HARDWARE OPAQUE shadow occlusion via inline RayQuery. In the hybrid shadow split, the hardware path handles ONLY the
-// opaque occluders: a binary "any opaque hit -> fully shadowed" test. That is order-independent and needs no chord, so
-// the hardware ray-triangle intersector does it exactly as well as software (at most a sub-pixel hard-edge difference,
-// never a colored-chord error). The TRANSPARENT occluders -- whose colored Beer-Lambert shadow DOES depend on the exact
-// per-occluder crossing set -- are traced by the software traversal (sw_shadow_traverse.slangi), and that colored result is
-// multiplied onto this opaque mask. So this trace gathers nothing and runs no integrator; it returns the first opaque
-// hit as fully-blocked. Centralising the opaque ray here keeps shadow_rayquery_cs thin.
+// HW opaque-only occlusion (binary any-hit test; order-independent, no chord). Transparent Beer-Lambert shadows come
+// from the software traversal and multiply onto this mask (HW/SW intersectors disagree at grazing chords).
 
 
 #include "binding_slots.h"
@@ -44,15 +39,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: inline-trace one occlusion ray from worldPosition toward the light. Returns 0 (fully shadowed) on the first
-// OPAQUE hit, else 1 (lit). Transparent occluders are skipped here -- the software traversal tints those and multiplies
-// its colored transmittance onto this mask. Mirrors the software path's ray setup (directional aims to "infinity";
-// point/spot aim at the light with tMax = distance; geometric-normal bias + tMin avoids self-intersection).
-// `jitter` is the per-pixel low-discrepancy 2D sample for the soft cone-jitter (pass float2(0,0) for the hard path); it
-// offsets the toward-light direction inside the cone the physical source subtends so the HW opaque path softens the SAME
-// way the software traversal does: a DIRECTIONAL light uses its constant angular radius (params2.x); a POINT/SPOT light
-// the distance-dependent half-angle asin(params2.y/dist) its source sphere (radius params2.y) subtends (a zero source
-// radius / angular radius -> a zero cone half-angle -> nwbShadowJitterCone returns the axis exactly -> the hard path).
+// Per light: one HW inline-RayQuery occlusion ray; 0 on first opaque hit else 1 (software tints transparents onto this mask).
+// `jitter` cone-jitters inside the source cone (float2(0,0) = hard); zero radius collapses to the axis.
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMin;
@@ -66,12 +54,8 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    // The opaque fast path. buildSceneTlas marks every non-transparent occluder FORCE_OPAQUE, so the fixed-function
-    // intersector commits the first opaque occluder and ACCEPT_FIRST_HIT_AND_END_SEARCH ends traversal immediately --
-    // no per-candidate shader callback and no per-instance material load on the common opaque path. Only TRANSPARENT
-    // occluders stay non-opaque; they surface here as non-opaque candidates the hardware path ignores (the software
-    // traversal casts their colored shadow). We never commit them, so traversal continues past a transparent occluder
-    // to any opaque occluder behind it. A committed triangle hit therefore means an opaque occluder blocks the light.
+    // Opaque fast path: non-transparent occluders are FORCE_OPAQUE, so first-hit commit ends traversal with no
+    // callbacks/material loads. Transparent candidates are skipped (software tints them); a commit means opaque block.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach

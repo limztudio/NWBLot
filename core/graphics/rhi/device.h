@@ -187,12 +187,8 @@ typedef Pair<bool, AStringView> ResolvedMarker;
 
 class GpuCrashTracker;
 
-// On a device-lost the GPU driver reports the payload of the last marker the GPU executed
-// (NVIDIA device-diagnostic checkpoints / AMD buffer markers).
-// In cases of nested regimes, we want the marker payloads to represent the whole "stack" of regimes.
-// GpuCrashMarkerTracker pushes/pops regimes to this stack and interns completed paths in its device tracker.
-// The payload itself is a 64bit value resolved through immutable device-lifetime history.
-// There should be one GpuCrashMarkerTracker per graphics API-level command list.
+// Device-lost reports the last executed marker payload (NV checkpoints / AMD markers); nested regimes stack them.
+// One GpuCrashMarkerTracker per API-level command list; 64-bit payload via device-lifetime history.
 class GpuCrashMarkerTracker : NoCopy{
 public:
     GpuCrashMarkerTracker(GpuCrashTracker& tracker, GraphicsArena& arena);

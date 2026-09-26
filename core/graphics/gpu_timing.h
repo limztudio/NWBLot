@@ -302,12 +302,8 @@ public:
     // Materializes every declared scope during Graphics' frame preamble. Capture can be toggled on at runtime, but
     // recording never creates a query pool: scopes and their capacity must be declared through requestScopeQueries().
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
-    // Record a device-timeline reset of every available timer-query pool onto a reset-capable command buffer. Graphics
-    // normally emits this in its frame preamble, allowing render-pass and transfer-only timestamp positions to consume
-    // an ordered external reset -- the validation-correct alternative to a host-side reset the layer cannot order
-    // against recorded writes.
-    // Call confirmFrameReset() only after that command list submits successfully. discardFrameReset() invalidates
-    // prior-frame readiness when a new preamble cannot be submitted.
+    // Device-timeline reset of available timer pools onto a reset-capable list (frame preamble). Ordered external
+    // reset replaces the unorderable host-side reset. confirmFrameReset() only after successful submit.
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset();
@@ -419,13 +415,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Couples timestamp-query ownership to one complete queue submission. Keep a RecordingScope active while recording
-// every primary command buffer that can contain a timing endpoint, then submit that whole ordered batch through this
-// ticket. If recording aborts or the submission is rejected, the ticket releases the reserved query slots; a
-// successful submission retains them until collect() observes their results. This supports a timing scope whose
-// start and end timestamps live in separate primary command buffers.
-// A ticket must outlive every scope or measure recorded under it because each keeps a non-owning publication link,
-// including while exception unwinding relinquishes an incomplete recording.
+// One ticket owns timestamp queries for one complete queue submission (scope endpoints may span primaries).
+// Abort/reject releases slots; success retains until collect(). Ticket must outlive all scopes under it.
 class GpuTimingSubmissionTicket final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
     friend class GpuRecordedGraph;
@@ -565,10 +556,8 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns a whole-frame timestamp whose endpoints live in different accepted submissions. Unlike a normal submission
-// ticket, it does not mark its query pending until the packet containing the ending timestamp has actually been
-// accepted. If a later packet is rejected after the producer was accepted, record a recovery end and confirm it with
-// publishSample=false so the query retires without reporting a misleading partial frame duration.
+// Whole-frame timestamp across accepted submissions; pending only once the ending packet is accepted. Rejected tail:
+// recovery end with publishSample=false so no partial duration reports.
 class GpuTimingFrameTransaction final : NoCopy{
 private:
     enum class State : u8{

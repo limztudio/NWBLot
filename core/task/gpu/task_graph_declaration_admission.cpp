@@ -81,10 +81,8 @@ GpuTaskGraphDeclarationReadView::GpuTaskGraphDeclarationReadView(
 }
 
 void GpuTaskGraphDeclarationReadView::acquire(const GpuTaskGraph& graph)noexcept{
-    // Try admission needs only the lifecycle state. If a mutation owns the declaration turnstile but has not
-    // published its lifecycle claim yet, this reader may win safely: the mutation then observes the nonzero read count
-    // and rejects before changing declarations. An active mutation has accessCount != readCount and rejects here.
-    // Reset takes lifecycle state only and rejects this access claim, so neither path waits back on the turnstile.
+    // Try-admission reads lifecycle state only; an unpublished mutation observes the read count and rejects first,
+    // so neither path waits back on the turnstile.
     NothrowScopedLock lock(graph.m_lifecycleMutex);
     if(
         graph.m_teardownInProgress

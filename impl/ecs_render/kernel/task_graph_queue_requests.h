@@ -82,7 +82,8 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// These callbacks dispatch Compute work but form one ordered packet with the graphics prefix and subsequent deferred passes. Keep the physical primary-Graphics route while declaring the command capability they use.
+// These callbacks dispatch Compute work but form one ordered packet with the graphics prefix and subsequent deferred passes.
+// Keep the physical primary-Graphics route while declaring the command capability they use.
 [[nodiscard]] inline Core::GpuQueueRequest GraphicsPreferredComputeQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Compute,
@@ -116,7 +117,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
 }
 
 // Native image clears require Transfer capability, while Surfel GI keeps its output initialization and compute work in one packet on the selected Compute transport.
-//Lock the Compute preference so a tiny clear does not fall back to Graphics merely because it is too small to amortize a queue crossing; Graphics remains the explicit fallback when no Compute transport exists.
+// Lock the Compute preference so a tiny clear does not fall back to Graphics merely because it is too small to amortize a queue crossing
 [[nodiscard]] inline Core::GpuQueueRequest ComputeTransferQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -139,7 +140,7 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// The lagged-history selector must share Deferred Lighting's selected packet. Its built-in upload needs Transfer capability and prefers Compute without cost-based rerouting; Graphics remains the fallback when no Compute transport exists, preserving the renderer on single-queue Vulkan devices.
+// The lagged-history selector must share Deferred Lighting's selected packet. Its built-in upload needs Transfer capability and prefers Compute without cost-based rerouting
 [[nodiscard]] inline Core::GpuQueueRequest ComputeUploadQueueRequest(){
     return Core::GpuQueueRequest{
         Core::GpuQueueCapability::Transfer,
@@ -158,9 +159,11 @@ inline void EnableCrossFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& s
     };
 }
 
-// The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the following graph packets. All of those states are declared below, so this callback retains only timing ownership.
+// The terminal graphics-prefix task publishes its ordinary and route-selected trace-geometry states before the following graph packets.
+// All of those states are declared below, so this callback retains only timing ownership.
 
-// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff. Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
+// Shared alternating generate/raster compute-emulation chain scheduling: keep the full chain in one packet so a single list owns timing and handoff.
+// Occupancy, extinction, and accumulation share this policy and differ only in their downstream consumers.
 [[nodiscard]] inline Core::GpuTaskSchedulingHint SharedComputeEmulationChainScheduling()noexcept{
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Medium;

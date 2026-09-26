@@ -26,8 +26,7 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Low-overhead pacing trace for the stress timing mode. Each advancing observation stores the entire interval since the previous advancement, averaged across the new presentations. Batch samples do not recover individual frame timings.
-// Idle observations preserve that interval and count each pending gap of at least 50 ms once. Timing claims report the stored observation count alongside the percentiles; the caller owns warmup exclusion.
+// Pacing trace: advancing observations average the whole interval (no per-frame recovery); idle preserves it, counts 50ms+ gaps once. Caller owns warmup exclusion.
 struct PresentationPacingSample{
     f64 wallMsPerPresentation = 0.0;
     u64 newPresentations = 0u;

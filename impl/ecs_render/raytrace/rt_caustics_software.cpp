@@ -179,7 +179,7 @@ bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     )
         return false;
 
-    // The normal deferred graph arrives with the accumulator already lowered to UAV by this task's declared use. Compatibility callers retain the native transition; the following graph-owned photon task receives the compiler-planned UAV barrier, whereas direct callers keep their existing packet-local fence.
+    // The normal deferred graph arrives with the accumulator already lowered to UAV by this task's declared use. Compatibility callers retain the native transition
     commandList.setEnableUavBarriersForTexture(targets.causticAccumulator.get(), true);
     if(!graphEntryStatesOwned){
         commandList.setTextureState(

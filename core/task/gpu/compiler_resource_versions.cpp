@@ -536,10 +536,8 @@ bool BuildResourceVersionDependencyEdges(
     ))
         return fail(GpuTaskGraphAnalysisStatus::InvalidTask, {}, {}, {}, {});
 
-    // A produced version permits an overlapping writer before its producer only when the declared semantic graph or
-    // an imported-root lifetime already proves that order. Otherwise all version consumers precede the writer. Do
-    // not feed these selected produced-version constraints back into later classification: doing so would guess an
-    // order between independent produced values from version declaration order rather than requiring task intent.
+    // Overlapping pre-producer writers need a proven semantic/imported order; else consumers precede the writer.
+    // Never feed these constraints back: declaration order must not imply intent.
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(version.origin != GpuGraphResourceVersionOrigin::TaskProduced)

@@ -71,10 +71,8 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The closest-hit payload carries the NwbCausticHit fields (caustic_trace.slangi) the shared bounce loop consumes; the
-// transmission tint stays float3 here for stable ray-payload packing and is narrowed when the raygen builds NwbCausticHit.
-// The two bool fields ride as uint for stable HLSL payload packing. The closest-hit fills every field, the miss clears
-// `hit`, and the raygen hook converts it back to NwbCausticHit. 52 bytes -> declare MaxPayloadSize 64.
+// Closest-hit payload mirrors NwbCausticHit (tint float3 + bools-as-uint for stable packing; 52 bytes -> MaxPayload 64).
+// Hit fills all fields, miss clears `hit`; raygen converts back.
 struct NwbCausticHwPayload{
     float3 worldPos;
     float3 shadingNormal;
@@ -134,13 +132,8 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticHwView(){
 // shadow trace's nwbSwShadowLoadVertexAttrib (Half4U normal @ +0, Float2U uv0 @ +8, 16B stride), so the closest-hit
 // interpolates the SAME inputs into the per-hit surface dispatch.
 NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is this mesh's per-corner attribute buffer's GLOBAL HEAP slot (carried on the instance material
-    // record, populated lockstep with the mesh by the HW shadow builder in rt_swbvh.cpp). It is
-    // non-uniform across the ray wave -- each hit is on a different instance/mesh -- so the heap subscript MUST be
-    // NonUniformResourceIndex-tagged; NwbHeapRawBuffer() applies that internally and is re-invoked at each Load so the
-    // decoration is applied fresh at every descriptor access.
-    // One Load4 for the whole 16-byte attribute record (packed normal in .xy, uv0 in .zw) -- one request instead of two
-    // dependent Load2s (bit-identical; mirrors the SW producer).
+    // attributeSlot is non-uniform across the ray wave: NwbHeapRawBuffer() tags NonUniformResourceIndex per Load.
+    // One Load4 covers the 16-byte record (packed normal .xy, uv0 .zw); mirrors the SW producer.
     return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 

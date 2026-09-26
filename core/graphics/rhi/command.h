@@ -78,7 +78,7 @@ struct QueueSubmissionToken{
     }
 };
 
-// Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal; task timing history remains responsible for estimating route-specific execution duration.
+// Immutable queue pressure sampled at one scheduling decision. Timeline distance is a coarse availability signal
 struct GpuQueueTimelineSnapshot{
     GpuPhysicalQueueId queue;
     u64 submittedValue = 0u;
@@ -140,7 +140,9 @@ struct GpuCommandArenaStatistics{
     [[nodiscard]] bool valid()const noexcept{ return queue.valid(); }
 };
 
-// Snapshot for one recording worker on one physical queue. Direct recording is domain/index {0,0}; shards use the GpuRecordedPacket domain/index. Counters sample independently and may advance during the query; the storage estimate covers handle objects only, not opaque driver memory.
+// Snapshot for one recording worker on one physical queue. Direct recording is domain/index {0,0};
+// shards use the GpuRecordedPacket domain/index. Counters sample independently and may advance during the query;
+// the storage estimate covers handle objects only, not opaque driver memory.
 struct GpuCommandArenaWorkerStatistics{
     u64 recordingWorkerDomain = 0u;
     u64 commandPoolEpochCount = 0u;
@@ -189,7 +191,7 @@ struct CommandMarkerRecordingToken{
     }
 };
 
-// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic; absolute endpoints need probed calibrated timestamps plus a full 64-bit queue.
+// Raw device timestamps for one timer query. Only the low timestampValidBits are exposed, so durations use modular tick arithmetic
 struct TimerQueryResult{
     static constexpr u32 s_FullWidthBits = 64u;
 
@@ -230,7 +232,7 @@ struct TimerQueryResult{
 };
 
 
-// Captures the final tracked state of one primary command list so a later primary command list can begin from it. The scheduler must guarantee that the producer executes before the consumer, either by preserving their order in one queue submission or by using explicit queue synchronization. Resource lifetime remains owned by the caller: every referenced texture and buffer must stay alive until the consumer has opened.
+// Final tracked state of one primary list for the next to begin from (scheduler orders producer < consumer). Caller-owned lifetimes: refs stay alive until the consumer opens.
 
 // It carries both transient and permanent state. UAV-barrier policy remains local to each command list, while keepInitialState resources are captured after their close-time restore barriers. Before the producer is accepted, this handoff is the only valid cross-list source for that restored native state.
 class CommandListResourceStateHandoff final : NoCopy{
@@ -293,7 +295,8 @@ public:
         return m_valid && deviceGeneration != 0u && m_deviceGeneration == deviceGeneration;
     }
 
-    // Builds a post-branch state snapshot from a normalized base snapshot and the final states exported by independently recorded branches. Every branch must have been opened from base, and the caller must submit the base producer before every branch and every branch before the eventual consumer. Only final resource states are merged here: callers must still keep cross-branch read/write hazards disjoint or synchronize them explicitly. Returns false if a branch is invalid or two branches leave the same resource in incompatible final states. `this` must be distinct from base and every branch. Temporary state indices reuse caller-owned operation scratch; persistent merged state remains in this handoff's owning graphics arena.
+    // Fan-in merge of branch-final states over a normalized base (branches opened from base; base < branches < consumer).
+    // Final states only: callers keep cross-branch hazards disjoint. False on invalid/incompatible; `this` != inputs.
     [[nodiscard]] bool buildFanIn(
         const CommandListResourceStateHandoff& base,
         const CommandListResourceStateHandoff* const* branches,
@@ -301,7 +304,8 @@ public:
         Alloc::ScratchArena& scratchArena
     );
 
-    // Builds a valid handoff containing only the selected resources from `source`. This lets a cross-queue packet import exactly the resources its queue may access instead of accidentally acquiring unrelated exclusive resources from a broad producer snapshot. Null resource entries are ignored and `source` may alias `this`. Construction is failure-atomic: invalid input returns false and allocation exceptions unwind without changing the destination snapshot.
+    // Subset handoff of selected resources (cross-queue imports take only what their queue may access). Nulls ignored,
+    // `source` may alias `this`; failure-atomic.
     [[nodiscard]] bool buildResourceSubset(
         const CommandListResourceStateHandoff& source,
         Texture* const* textures,
@@ -318,7 +322,7 @@ public:
         Texture* texture,
         TextureSubresourceSet subresources
     );
-    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges; release smaller intervals independently before selecting them.
+    // Clips ordinary buffer states. Pending ownership releases must be selected in full because the acquire must use their original byte ranges
     [[nodiscard]] bool buildBufferRangeSubset(const CommandListResourceStateHandoff& source, Buffer* buffer, BufferRange range);
     // Imported exclusive-owner texture handoffs must provide one concrete state for every selected subresource. Verify that exact coverage before a graph lowers its paired acquire, including the source owner and (when distinct) the release destination captured by the producer's native state tracker.
     [[nodiscard]] bool coversTextureRangeWithOwnership(
@@ -334,9 +338,11 @@ public:
         GpuPhysicalQueueId expectedReleaseDestinationQueue,
         BufferRange range = s_EntireBuffer
     )const;
-    // Copies a valid state snapshot without exposing backend tracker storage.  Packet recording uses this to retain graph-owned producer seeds while legacy consumers still request their own final handoff.
+    // Copies a valid state snapshot without exposing backend tracker storage.
+    // Packet recording uses this to retain graph-owned producer seeds while legacy consumers still request their own final handoff.
     [[nodiscard]] bool copyFrom(const CommandListResourceStateHandoff& source);
-    // Compares immutable snapshot contents rather than the address of a producer-owned snapshot. This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
+    // Compares immutable snapshot contents rather than the address of a producer-owned snapshot.
+    // This is suitable for declaration deduplication across producer-storage retirement and same-address allocator reuse.
     [[nodiscard]] bool equivalentTo(const CommandListResourceStateHandoff& snapshot)const noexcept;
     // Exchanges complete snapshot storage without allocating. Both snapshots must be backed by the same arena so each vector remains paired with the allocator that owns its storage after the exchange.
     [[nodiscard]] bool exchangeSnapshot(CommandListResourceStateHandoff& snapshot)noexcept;

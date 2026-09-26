@@ -147,10 +147,8 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         transmittance *= half(1.0h) - coverage;
         origin = background.position + outgoingDirection * entry.bias;
     }
-    // Keep the completed primary volume's exit direction, measured thickness, and Fresnel transmission. The bounded
-    // screen lookup retains its depth and primary-instance checks; secondary glass contributes only its cached AVBOIT
-    // appearance, without additional bending or optical absorption. Replace the entire background estimate here so
-    // partially traced transparent layers are not also counted through the cached AVBOIT accumulation.
+    // Keep the primary volume's exit (direction/thickness/Fresnel); secondary glass adds cached AVBOIT appearance only.
+    // Full background replace: no double-count of partially traced layers.
     NwbRefractionEntry exitEntry = entry;
     exitEntry.position = exitHit.position;
     half3 backgroundRadiance;

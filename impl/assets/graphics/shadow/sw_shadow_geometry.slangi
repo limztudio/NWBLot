@@ -27,12 +27,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The software-shadow scene geometry: the scene/instance BVH node buffer, the per-instance record, world->object
-// helpers, and vertex-attribute unpack. Per-mesh nodes, positions, indices, and attributes are read through descriptor
-// heap slots carried by the material record; shared backing buffers remain transitioned for those reads. This concern
-// declares typed heap aliases for the scene-node, instance, and instance-material buffers used by every BVH-walking
-// pass. Their uniform slots come from g_NwbSwShadowMaterialContextSlots (declared by sw_shadow_gbuffer.slangi before
-// this concern is included), so no local SRV remains in the SW shadow layout.
+// SW shadow scene geometry: BVH nodes, instance records, world->object helpers, attribute unpack via material-record
+// heap slots. Uniform slots come from g_NwbSwShadowMaterialContextSlots; no local SRV remains.
 
 // The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class
 // with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
@@ -50,14 +46,8 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapSwShadowSceneInstanc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Transforms an object-space normal to world space for the surface hook (NwbMeshSurface.normal is world space).
-// The normal transform is the inverse-transpose of object->world -- the transpose of the world->object 3x3 carried
-// in the instance rows; that transpose's i-th component is the dot of the object normal with the i-th COLUMN of the
-// world->object 3x3 (the i-th components of the three rows). This is the geometrically-correct transform; it equals
-// the rasterizer's world-space normal under uniform instance scale (the
-// common case) and diverges in direction only under NON-uniform scale (where the rasterizer applies the forward
-// map instead) -- latent for transmittance hooks that don't read the normal. nwbSafeNormalize guards the
-// degenerate (near-zero / non-finite, e.g. a singular instance transform) result, matching the engine pattern.
+// Inverse-transpose normal to world space (dot with world->object columns); matches the rasterizer under uniform scale.
+// nwbSafeNormalize guards singular transforms.
 float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     const float3 worldNormal = nwbSwBvhTransformNormal(instance, objectNormal);
     return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));

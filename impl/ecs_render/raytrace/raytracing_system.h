@@ -280,20 +280,21 @@ public:
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
-    // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities. The shared graph retains this POD as an immutable upload blob before recording begins.
+    // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
+    // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] bool snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots);
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] bool retainPreparedCausticEmissionTargetUpload(
         Core::GpuTaskGraph& graph,
         Core::GpuUploadBlobId& outBlob
     )const;
-    // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame; an active frame always supplies a blob for the graph-owned upload.
+    // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame
     [[nodiscard]] bool retainPreparedSurfelFrameConstantsUpload(
         Core::GpuTaskGraph& graph,
         const DeferredFrameTargets& targets,
         Core::GpuUploadBlobId& outBlob
     )const;
-    // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch; accepted software-cache reuse retains the same storage/hash identity without bytes.
+    // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
     [[nodiscard]] bool retainPreparedShadowMaterialContextUploads(
         Core::GpuTaskGraph& graph,
         Core::GpuUploadBlobId& outInstanceMaterialBlob,
@@ -301,7 +302,8 @@ public:
         Core::GpuUploadBlobId& outMaterialTypedBlob
     )const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
-    // The software scene hierarchy and its leaf instances share topology and leaf indices, so retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
+    // The software scene hierarchy and its leaf instances share topology and leaf indices,
+    // retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
     [[nodiscard]] bool retainPreparedSceneBvhUploads(
         Core::GpuTaskGraph& graph,
         Core::GpuUploadBlobId& outNodeBlob,
@@ -310,7 +312,7 @@ public:
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
     [[nodiscard]] bool preparedSceneTlasBuildReady()const noexcept;
-    // Only a newly allocated backing generation has a descriptor-native source. Every graph import uses this current-generation query so direct and frozen paths agree; retained generations deliberately remain Unknown until the accepted Shadow Preparation state handoff supplies their native state.
+    // Only a newly allocated backing generation has a descriptor-native source. Every graph import uses this current-generation query so direct and frozen paths agree
     [[nodiscard]] Core::ResourceStates::Mask sceneTlasBackingInitialState()const noexcept;
     void confirmPreparedSceneTlasBuild()noexcept;
     // Direct fallback recording cannot publish native state until its Shadow Preparation packet accepts.
@@ -324,7 +326,7 @@ public:
     [[nodiscard]] bool preparedMeshSwBvhBuildPlanFrozen()const noexcept{ return m_preparedMeshSwBvhBuildPlanFrozen; }
     [[nodiscard]] bool preparedMeshSwBvhBuildsReady()const noexcept;
     [[nodiscard]] const PreparedMeshSwBvhBuildVector& preparedMeshSwBvhBuilds()const noexcept;
-    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence; any miss rejects the shared packet so the existing acceptance callback cannot publish partial topology.
+    // The pure-software Shadow Preparation packet records each frozen build after graph-owned typed sentinel clears. Revalidate this immutable snapshot immediately before its native compute sequence
     [[nodiscard]] bool recordPreparedMeshSwBvhBuildAfterGraphClears(
         Core::CommandList& commandList,
         const PreparedMeshSwBvhBuild& build
@@ -356,7 +358,7 @@ public:
         bool graphOwnsAllLitVisibilityClear = false,
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan = {}
     );
-    // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one semantic Shadow Visibility packet. The opaque task starts the legacy timing scopes; the terminal fold task closes them and remains the accepted output owner.
+    // A prepared soft-transparent frame splits opaque soft visibility from its transparent fold while retaining one semantic Shadow Visibility packet. The opaque task starts the legacy timing scopes
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -373,7 +375,8 @@ public:
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
-    // The prepared opaque producer records the trace and geometry downsample first. This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet; its native tail retains dynamic ping-pong and upsample work while the terminal fold remains the accepted output owner.
+    // The prepared opaque producer records the trace and geometry downsample first.
+    // This adjacent callback owns the compiler-lowered trace/geometry sampled handoff before temporal merge and the first wavelet
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityOpaqueFirstWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -405,7 +408,8 @@ public:
         bool hardwareShadowSupported,
         bool graphEntryStatesOwned = false
     );
-    // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval. Its output reaches the first wavelet through the compiler-owned task handoff.
+    // The prepared transparent temporal merge receives frozen history/moment entry states and starts the resolve timing interval.
+    // Its output reaches the first wavelet through the compiler-owned task handoff.
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftTemporalMergeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -419,7 +423,8 @@ public:
         bool graphEntryStatesOwned = false,
         bool graphOwnsTransparentTemporalMergeEntryStates = false
     );
-    // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states. The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
+    // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states.
+    // The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
     [[nodiscard]] Core::GpuTaskId declareShadowTransparentSoftFirstWaveletTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -463,7 +468,8 @@ public:
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    // Direct compatibility helper for the per-frame non-temporal accumulator reset. The normal deferred graph owns its typed clear and commits the matching CPU reset only after the containing producer packet accepts.
+    // Direct compatibility helper for the per-frame non-temporal accumulator reset.
+    // The normal deferred graph owns its typed clear and commits the matching CPU reset only after the containing producer packet accepts.
     void clearNonTemporalCausticAccumulator(Core::CommandList& commandList, DeferredFrameTargets& targets);
     void confirmCausticAccumulatorNonTemporalClear();
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
@@ -481,7 +487,7 @@ public:
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming,
         bool graphEntryStatesOwned = false
     );
-    // Record the decay dispatch itself.  Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler; direct compatibility callers retain the existing native setup.
+    // Record the decay dispatch itself.  Graph callers leave entry state lowering and the following producer's UAV dependency to the compiler
     [[nodiscard]] bool dispatchCausticAccumulatorDecay(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -581,7 +587,7 @@ public:
         bool graphOwnsResolve = false,
         Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr
     );
-    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs; a final empty callback preserves the established resolve timing endpoint.
+    // The normal deferred graph records geometry downsample, resolve prepare, all five wavelet passes, and upsample after the selected photon producer. Their exact resource uses own the immutable and ping-pong UAV-to-SRV handoffs
     // Direct compatibility callers keep the full resolve attached to it.
     [[nodiscard]] Core::GpuTaskId declareCausticGeometryDownsampleTask(
         Core::GpuTaskGraph& graph,
@@ -1134,7 +1140,8 @@ private:
     void advanceCausticTemporalReuse();
     // Bootstrap or decay temporal splat accumulation before photon atomic adds.
     void prepareCausticAccumulatorForSplat(Core::CommandList& commandList, DeferredFrameTargets& targets, f32 decayFactor);
-    // Shared software/hardware caustic resolve. Normal graph callers split geometry, prepare, and all five wavelet stages so they declare immutable inputs and ping-pong handoffs; direct compatibility callers retain setup.
+    // Shared software/hardware caustic resolve. Normal graph callers split geometry, prepare, and all five wavelet stages
+    // they declare immutable inputs and ping-pong handoffs; direct compatibility callers retain setup.
     void dispatchCausticResolve(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
@@ -1219,7 +1226,8 @@ private:
     Vector<u8, Core::Alloc::GlobalArena> m_preparedCausticEmissionTargetBytes;
     // P7 valid-work diagnostic: cumulative degenerate caustic emission targets skipped before dispatch.
     u64 m_causticDegenerateTargetSkips = 0u;
-    // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts. Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
+    // A fresh shadow material context retains all three ABI-coupled byte streams until Shadow Preparation accepts.
+    // Accepted software-cache reuse retains only the same immutable storage identity, counts, and hash.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceMaterialBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowInstanceBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedShadowMaterialTypedBytes;
@@ -1240,8 +1248,7 @@ private:
     bool m_preparedShadowMaterialContextStatic = false;
     bool m_preparedShadowMaterialContextReady = false;
     bool m_preparedShadowMaterialContextUploadRequired = false;
-    // The transient HW fallback is separate from the final SW graph upload. It retains only the material-context payload because the preceding Shadow Preparation work has already recorded the frozen HW TLAS/BLAS plan.
-    // A fresh CPU-built software scene BVH retains node and leaf-instance bytes together because each node's leaf range indexes that exact instance stream. An accepted static-cache reuse retains only the same immutable storage identity and hash; it remains traversal-ready without manufacturing another graph upload.
+    // Transient HW fallback keeps material context only (Shadow Prep already froze the TLAS/BLAS plan). Fresh SW BVH keeps node+instance bytes together (leaf ranges index that stream); cache reuse keeps identity + hash.
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhNodeBytes;
     Vector<u8, Core::Alloc::GlobalArena> m_preparedSceneBvhInstanceBytes;
     Core::BufferHandle m_preparedSceneBvhNodeBuffer;
@@ -1275,7 +1282,8 @@ private:
     bool m_preparedSceneTlasReady = false;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     bool m_preparedMeshBlasBuildsReady = false;
-    // P6.1 geometry/AS ownership ledger: cumulative per-frame BLAS actions keyed by dirty reason. Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change. Logged on confirm; timing runs keep the log at INFO so throughput measurement stays uncontaminated.
+    // P6.1 geometry/AS ownership ledger: cumulative per-frame BLAS actions keyed by dirty reason.
+    // Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change. Logged on confirm
     u64 m_blasLedgerStaticSkipped = 0u;
     u64 m_blasLedgerFirstBuilds = 0u;
     u64 m_blasLedgerRefits = 0u;
@@ -1288,7 +1296,8 @@ private:
     RayTracingSceneContentStamp m_preparedSceneContentStamp;
     bool m_shadowVisibilityResourcesPreflighted = false;
     bool m_shadowVisibilityHardwareSupported = false;
-    // Recording may only touch allocations selected before the shared graph is compiled. These flags distinguish a usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
+    // Recording may only touch allocations selected before the shared graph is compiled.
+    // These flags distinguish a usable frozen trace plan from a non-fatal preflight fallback that leaves the effect black for this frame.
     bool m_shadowVisibilityTraceResourcesPreflighted = false;
     bool m_shadowVisibilityBackendPipelinePreflighted = false;
 };

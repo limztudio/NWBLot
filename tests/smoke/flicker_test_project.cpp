@@ -54,11 +54,8 @@ using FlickerMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// FLICKER-REPRO scene: opaque and glass `body` characters on an opaque ground plane, lit by directional and point lights.
-// The characters spin about their vertical axes (root-transform rotation only, bind pose) so their shadows + self-shadows
-// sweep. Arrow keys (Left/Right) scrub the yaw by hand; the live angle shows in the title bar so the exact orientation a
-// flicker appears at can be read off and reproduced via NWB_FLICKER_TEST_SPIN_ANGLE. Reuses the benchmark's cooked body
-// model + ground material (no new assets).
+// FLICKER-REPRO: spinning opaque + glass bodies on a ground plane; sweeping shadows expose flicker. Arrows scrub yaw
+// (title shows the angle; NWB_FLICKER_TEST_SPIN_ANGLE pins it). Reuses body + ground assets.
 static constexpr FlickerModelRef s_Model{"project/characters/body/model"};
 static constexpr FlickerMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr FlickerMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};

@@ -288,7 +288,8 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     for(usize taskIndex = 0u; taskIndex < taskCosts.size(); ++taskIndex)
         taskCosts[taskIndex] = QueueCostWeight(graph.taskAt(taskIndex).scheduling.cost);
 
-    // Hazard kinds and ranges remain available in analysis for diagnostics. Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
+    // Hazard kinds and ranges remain available in analysis for diagnostics.
+    // Queue ownership scoring counts each producer/consumer/resource only once, so build that immutable index once for all candidate evaluations.
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> uniqueEdges(scratchArena);
     uniqueEdges.reserve(analysis.inferredEdges().size());
     for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){

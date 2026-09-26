@@ -19,10 +19,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Flat per-triangle-corner shadow/caustic trace attribute record, parallel to the reconstructed triangle index buffer
-// (see BuildMeshletTriangleIndices). Element[primitive * 3 + corner] holds the exact normal/uv0 corner attribute that
-// rasterization would use for that primitive corner. That preserves smooth edges (shared normal refs) and hard edges
-// (same position with distinct normal refs) instead of collapsing them into one position-indexed normal.
+// Per-corner trace attributes parallel to the triangle index buffer; preserves smooth vs hard edges (no
+// position-indexed normal collapse).
 struct AttribGpu{
     Half4U normal;
     Float2U uv0;
@@ -37,11 +35,8 @@ static_assert(sizeof(AttribGpu) == s_AttribGpuByteSize, "AttribGpu must stay 16 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reconstructs a flat per-triangle-corner attribute buffer (AttribGpu, one per triangle index) from the meshlet-packed
-// streams. Decode chain mirrors BuildMeshletTriangleIndices: primitive u8 -> meshletLocalVertexRef.localAttribute ->
-// DecodeMeshletAttributeRef -> global normal/uv0 stream indices. Output count/order equals the meshlet primitive
-// index count, so shaders can fetch attributes with PrimitiveIndex * 3 + corner. Takes the raw streams so it works for
-// both the cooked asset payload and the runtime/skinned mesh instance.
+// Flat per-corner attribute buffer from meshlet streams (mirrors BuildMeshletTriangleIndices decode chain).
+// PrimitiveIndex * 3 + corner fetch; raw streams cover cooked + skinned instances.
 template<
     typename MeshletContainer,
     typename LocalVertexRefContainer,

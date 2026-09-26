@@ -9,13 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Splat-space temporal EMA decay pre-pass. Runs BEFORE the producer's photon splat, once per accumulator texel: it
-// multiplies the resident R32_UINT fixed-point flux by decayFactor (accum_N = decayFactor*accum_{N-1}), and the producer
-// then atomic-adds this frame's photons on top. So the accumulator holds an exponential moving average of the photon
-// density across frames -- static steady state = photons/(1-decayFactor) -- which the resolve normalizes by (1-decay)
-// so the STATIC caustic brightness is byte-unchanged, while a MOVING caustic is temporally smoothed (the sparkle-flicker
-// of a spinning refractor averages out). This is a decay in SPLAT space, NOT an image-space reprojection: there is no
-// per-pixel motion warp, so it cannot ghost. Each of the 3 layers (RGB flux) is decayed independently.
+// Splat-space temporal EMA decay (pre-splat, per texel): accum_N = decay*accum_{N-1} + photons; resolve normalizes by
+// (1-decay) so static brightness is unchanged while motion smooths. No reprojection warp: cannot ghost. Per RGB layer.
 
 struct NwbCausticAccumulatorDecayPushConstants{
     uint width;        // accumulator width

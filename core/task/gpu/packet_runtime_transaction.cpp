@@ -145,7 +145,8 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         if(operation->m_transaction == &transaction)
             return;
     }
-    // Cross-transaction reentry is a prompt rejection regardless of target availability. An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
+    // Cross-transaction reentry is a prompt rejection regardless of target availability.
+    // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
     if(s_activeOperation)
         return;
     if(
@@ -325,7 +326,7 @@ public:
 private:
     void publish()noexcept{
         // Graph lifecycle completion deliberately precedes the transaction-token commit: the last transaction packet resolves its graph binding only after every graph task is terminal.
-        // Graph lifecycle is private; public transaction queries serialize on m_mutex and therefore observe either Submitting or the complete accepted token/statistics publication, never a partially written transaction record.
+        // Graph lifecycle is private
         m_graph.completePacketSubmissionAcceptance(m_compiledGraph, m_planAccess, m_packet, m_lease);
         m_transaction.commitAcceptedPacket(m_graph, m_compiledGraph, m_packet, m_token, m_nativeSubmissionInfo);
         m_active = false;
@@ -505,7 +506,8 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(
     )
         return;
 
-    // The exact bound plan and terminal transaction packets prove every graph task was accepted or discarded. Keep terminal resolution declaration-storage free because the last packet lease may have released its read claim.
+    // The exact bound plan and terminal transaction packets prove every graph task was accepted or discarded.
+    // Keep terminal resolution declaration-storage free because the last packet lease may have released its read claim.
     m_submissionBindingResolved = graph.resolveSubmissionTransaction(
         compiledGraph,
         m_recordingAttemptGeneration,
@@ -665,7 +667,8 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     if(!timingResolved)
         NWB_LOGGER_ERROR(NWB_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
 
-    // Native acceptance remains hidden while synchronous typed and compatibility observers publish. If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
+    // Native acceptance remains hidden while synchronous typed and compatibility observers publish.
+    // If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
     graph.notifyPacketSubmissionAccepted(compiledGraph, planAccess, packetID, token, lease);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
         for(usize callbackIndex = 0u; callbackIndex < taskAcceptedCallbackCount; ++callbackIndex){
@@ -699,7 +702,8 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
         NWB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
         TerminateInvariant();
     }
-    // reset() and cancellation cannot cross a graph-owned submission lease. Once the graph publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second failure point.
+    // reset() and cancellation cannot cross a graph-owned submission lease.
+    // Once the graph publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second failure point.
     PacketRuntime& runtime = m_packets[packetID.index];
     if(runtime.state != PacketRuntimeState::Submitting){
         NWB_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");

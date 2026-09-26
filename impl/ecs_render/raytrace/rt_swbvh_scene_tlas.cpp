@@ -196,7 +196,7 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
             if(materialInfo->transparent)
                 m_rayTracingState.m_sceneHasTransparentOccluder = true;
-            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight; recording must never discover a texture after the shared graph fixed its immutable resource set.
+            // The trace surface dispatcher reads this material's Texture2D fields through non-uniform bindless slots. Retain the exact resolved handles during preflight
             if(
                 !commandList
                 && materialInfo->shadowTransmittanceModelId != Limit<u32>::s_Max
@@ -495,7 +495,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         m_rayTracingState.m_tlasStaticSceneHash = tlasStaticSceneHash;
         m_rayTracingState.m_tlasStaticSceneHashValid = true;
     }
-    // Publish semantic identity from the complete current gather, including cache-hit frames. Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
+    // Publish semantic identity from the complete current gather, including cache-hit frames.
+    // Missing geometry or an unresolved surface hook must disable temporal consumers without changing acceleration-cache policy.
     if(!commandList){
         if(!m_hardwareOpticalScene.prepare(opticalScene) || !m_hardwareOpticalScene.prepareRuntimeBounds(opticalScene, m_shaderSystem))
             return false;

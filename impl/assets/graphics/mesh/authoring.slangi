@@ -31,11 +31,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Raster mesh and compute-emulation stages share the global descriptor heap for their frame data. Trace and
-// standalone CSG shaders include narrower headers directly but remain heap-selected as well.
-// The mesh shader is engine-owned + generic (shared_ms.slang): it does not read typed material data, so it
-// requires no .bind interface. A material's constants are read per-pixel in its surface hook (see
-// material_ps_authoring.slangi); the typed-binding contract gates the pixel shader, not the mesh shader.
+// Mesh/compute-emulation stages share the global heap for frame data. The generic mesh shader reads no typed
+// material data (no .bind); the typed-binding contract gates the pixel shader's surface hook.
 
 #include "runtime.slangi"
 #include "encoding.slangi"

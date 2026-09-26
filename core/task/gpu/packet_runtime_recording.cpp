@@ -200,7 +200,7 @@ bool GpuNativePacketRecorder::recordPacket(
         )
     )
         return false;
-    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command; otherwise old records could be mistaken for this packet's trace after the same graph is recompiled with a different packet/queue plan.
+    // A capture is one immutable compiled-plan artifact. Reject a stale non-empty capture before opening a packet that happens not to contain a primitive command
     if(
         commandIrCapture
         && commandIrCapture->recordCount() != 0u

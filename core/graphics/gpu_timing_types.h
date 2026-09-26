@@ -112,11 +112,8 @@ struct GpuTimingSample{
     // physicalQueue but leave this range invalid even when raw query data existed.
 };
 
-// Listener context belongs to its caller. Callbacks run unlocked; a recursive gate serializes context access.
-// External unsubscription waits for active callbacks, so the caller may then release its context. A callback-stack
-// unsubscription cannot wait for itself; its context must outlive that stack. Callback exceptions restore state,
-// bump the recorder failure count, and propagate to the application boundary. An unpublished notification only
-// retires attribution, never timing data.
+// Listener context is caller-owned; callbacks run unlocked under a recursive gate. External unsubscription waits;
+// callback-stack unsubscription must outlive its stack. Exceptions propagate; unpublished notices retire attribution only.
 struct GpuTimingSampleListener{
     void* context = nullptr;
     void (*invoke)(void* context, const GpuTimingSample& sample) = nullptr;

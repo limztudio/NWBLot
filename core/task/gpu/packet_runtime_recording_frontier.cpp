@@ -378,7 +378,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 workerBusySeconds += recordedPacket->recordingSeconds;
         }
 
-        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots. Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
+        // CpuTaskScheduler workers and its calling thread are all callable logical recording slots.
+        // Keeping the entire successful ready-frontier operation in the denominator exposes serial fallbacks and underfilled frontiers.
         const f64 logicalWorkerSlotCount = static_cast<f64>(cpuScheduler.workerThreadCount()) + 1.0;
         outRecordedGraph.addRecordingElapsedSeconds(elapsedSeconds, artifactOperation);
         outRecordedGraph.addReadyFrontierStatistics(
@@ -439,7 +440,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
         }
         return true;
     };
-    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again; sort that sparse case once instead of rescanning every packet per depth.
+    // Compiler order is already free for monotonic frontiers, including a deep state-seed chain. A later independent packet may lower the frontier again
     if(!recordingFrontiersAreMonotonic){
         Sort(
             recordingEntries.begin(),

@@ -310,7 +310,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         artifactAccess
     );
     const GpuPhysicalQueueInfo* const queue = planAccess.queueInfo(packet.queue);
-    // All validation before the transaction reservation is retryable.  A caller that abandons this artifact uses discardUnaccepted() explicitly; a corrected dependency/completion must not discard graph-owned task state.
+    // All validation before the transaction reservation is retryable.  A caller that abandons this artifact uses discardUnaccepted() explicitly
     if(
         !recordedPacket
         || recordedPacket->commandListCount == 0u
@@ -405,7 +405,8 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         return false;
     }
 
-    // Device repeats this validation at its final boundary because another queue may still be resolving a concurrent native submit. Roll ticket preparation back here so a corrected external dependency can retry this packet.
+    // Device repeats this validation at its final boundary because another queue may still be resolving a concurrent native submit.
+    // Roll ticket preparation back here so a corrected external dependency can retry this packet.
     for(const QueueSubmissionToken& waitToken : waitTokens){
         if(device().validateSubmissionWaitToken(waitToken))
             continue;
@@ -439,7 +440,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
             ++nativeSubmissionInfo.timelineWaitCount;
     }
 
-    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens; the graph-owned reservation starts only once submission is unavoidable and keeps cancellation from racing Device::executeCommandLists().
+    // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
     GpuTaskGraph::PacketSubmissionLease submissionLease;
     if(!transaction.beginPacketSubmission(
         graph,
@@ -474,7 +475,8 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex)
             graphSubmissionOwnerships[commandListIndex].reset();
     }
-    // Device has released its native Queue locks. Serialize only the irreversible CPU publication tail so another ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
+    // Device has released its native Queue locks. Serialize only the irreversible CPU publication tail
+    // another ordinary packet may already enter Vulkan without exposing timing, payload, or transaction state out of order.
     SubmittingPacketUnwindScope resolutionSubmittingPacketUnwind(graph, compiledGraph, planAccess, transaction);
     PreparedTimingTicketsUnwindScope resolutionPreparedTimingTicketsUnwind(
         submissionTimingTickets.data(),

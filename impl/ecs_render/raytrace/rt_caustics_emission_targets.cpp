@@ -20,7 +20,8 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc::ScratchArena& scratchArena){
-    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here, while preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
+    // Photon emission targets are world bounds of refractive instances. Freeze the gathered bytes here,
+    // preflight still owns capacity/descriptor selection; graph declaration retains only this immutable snapshot.
     m_preparedCausticEmissionTargetBytes.clear();
     m_rayTracingState.m_causticRefractiveInstanceCount = 0u;
 
@@ -85,7 +86,8 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
             continue;
 
-        // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never emit a photon, so it leaves the work list before dispatch. Proven no-contribution work only; refractive classification and visibility gates above are unchanged.
+        // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never emit a photon,
+        // it leaves the work list before dispatch. Proven no-contribution work only
         if(!Vector3IsFinite(worldMin) || !Vector3IsFinite(worldMax) || !Vector3LessOrEqual(worldMin, worldMax)){
             ++m_causticDegenerateTargetSkips;
             continue;

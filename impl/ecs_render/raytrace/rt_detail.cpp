@@ -122,16 +122,8 @@ void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& 
     handle = Core::GpuDescriptorHandle::invalid();
 }
 
-// Recursively builds a binary BVH over the [lo, hi) slice of the instance-index permutation, appending nodes
-// to `nodes` (the first node appended for the whole range is the root, index 0). Each internal node splits on
-// the axis + bin boundary of lowest binned-SAH cost: it sweeps a fixed-grid binning of all three centroid axes,
-// accumulating per-bin AABBs, instance counts, and leaf-cost sums, then evaluates the standard binned-SAH
-// cost = ct + (SA_L*cost_L + SA_R*cost_R)/SA_parent at every boundary and takes the minimum. When no axis has a
-// separating bin boundary (coincident centroids everywhere) it falls back to the count median, so the build never
-// produces an empty/degenerate split. Leaves store NWB_BVH_LEAF_FLAG | instanceIndex + the instance world AABB;
-// internal nodes store child node indices + the unioned box — the exact NwbBvhNode layout the per-mesh build
-// produces, so the GPU traversal is uniform across the scene BVH and every per-mesh BVH. The CPU-only node carries
-// Packer encodes transparent-occluder flag in rightChild high bit; null cost counts uniformly.
+// Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback
+// on coincident centroids (never an empty split). Node layout matches the per-mesh build so GPU traversal is uniform.
 u32 BuildSceneBvhNode(
     u32* indices,
     const u32 lo,
@@ -307,11 +299,8 @@ u32 BuildSceneBvhNode(
     return nodeIndex;
 }
 
-// Builds the per-instance shadow-occluder material record from the cooked material surface info: the
-// transmittance-model id (dispatches the per-hit transmittance hook) + the transparent flag. Both shadow builders
-// append exactly one of these per instance, in instance push order, so the table indexes by shadow instance id.
-// The material-constants context (constant byte offset + g_NwbMeshInstances index) is supplied by the caller.
-// The shadow builders fill the record's geometry heap slots after this helper returns.
+// Per-instance shadow-occluder record (transmittance id + transparent flag), appended in push order for by-id index.
+// Caller supplies the constants context; builders fill geometry slots after.
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
     const MaterialSurfaceInfo& materialInfo,
     const u32 materialConstantByteOffset,

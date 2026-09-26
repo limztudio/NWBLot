@@ -182,10 +182,8 @@ bool nwbOpticalBootstrap(
         }
     }
 
-    // Accumulate signed winding per instance before allocating the four origin-active media. The probe may pass
-    // through many volumes that are already exited at the origin; those must not consume the active-medium cap.
-    // Exterior-to-origin crossings use entries minus exits. Each final positive interval's start orders nested
-    // enclosing media; overlapping shells of one instance retain their union until the winding becomes zero.
+    // Signed per-instance winding first: origin-exited volumes must not consume the medium cap. Entries-minus-exits
+    // for exterior crossings; same-instance shells union until winding hits zero.
     uint activeEventIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeEntryIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeWindings[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };

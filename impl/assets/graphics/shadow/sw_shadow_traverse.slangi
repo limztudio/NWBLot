@@ -56,7 +56,8 @@ uint nwbSwShadowInstanceCount(){
 }
 
 
-// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once. The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
+// Per-instance traversal walks ONE mesh BVH into temporary instance optics and finalizes them exactly once.
+// The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
 // Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
 NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];

@@ -204,7 +204,8 @@ template<typename PayloadT, typename DispatchFn>
     return true;
 }
 
-// Shared shared-phase record core for AVBOIT effect tasks. Occupancy, extinction, and accumulation share the inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
+// Shared shared-phase record core for AVBOIT effect tasks.
+// Occupancy, extinction, and accumulation share the inputs fill plus phase mapping and differ only in their payload timing member plus record trait.
 template<typename PayloadT>
 [[nodiscard]] inline bool RecordAvboitSharedComputeEmulationFromPayload(
     const PayloadT& payload,

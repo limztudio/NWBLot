@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 ADAPTIVE transparent resolve (full resolution). One thread per full-res pixel: read the coarse neighbourhood;
-// where the colored transmittance AGREES (flat shadow) bilinearly interpolate it (cheap), where it DISAGREES (an edge)
-// re-trace THIS pixel at full res (sharp). Either way fold the result onto this pixel's own full-res opaque mask, so the
-// opaque (hard) shadow stays full-res while the soft transparent shadow costs one trace per block in the interior and
-// per-pixel only along its edges. This is the fallback path when runtime edge compaction is disabled.
+// Stage-2 adaptive transparent resolve: interpolate where the coarse neighbourhood agrees, re-trace where it
+// disagrees, fold onto the full-res opaque mask. Fallback when edge compaction is off.
 
 
 #include "sw_binding_slots.h"

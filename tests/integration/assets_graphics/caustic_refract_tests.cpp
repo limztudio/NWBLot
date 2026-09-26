@@ -28,9 +28,8 @@ namespace __hidden_assets_graphics_caustic_refract{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// CPU mirror of caustic/refract.slangi's nwbCausticRefract -- the SAME explicit Snell form the shader emits (k = 1 - eta*eta*(1 - cosI*cosI); k < 0 -> float3(0); else eta*i - (eta*cosI + sqrt(k))*n).
-// It deliberately reimplements the formula without calling Vector3Refract so that a divergence between this formula and the shader's, or a bug in the formula itself, fails the test.
-// The oracle it is checked against is Vector3Refract (global/math/vector.h), the runtime path RefractV backs, so the mirror, the shader, and the engine math all agree on the same definition including the TIR-returns-zero branch.
+// CPU mirror of nwbCausticRefract's explicit Snell form (deliberately not via Vector3Refract, so formula drift fails).
+// Oracle is Vector3Refract: mirror, shader, and engine math agree incl. the TIR-zero branch.
 static SIMDVector CausticRefractCpuMirrorVector(const SIMDVector incident, const SIMDVector normal, const SIMDVector eta){
     const SIMDVector cosI = Vector3Dot(incident, normal);
     const SIMDVector k = VectorSubtract(
@@ -58,8 +57,7 @@ struct CausticRefractCase{
 };
 
 TEST(AssetsGraphics, CausticRefractMatchesVector3Refract){
-    // Incident vectors point INTO the surface (travel direction); the normal is oriented against the incident ray (so cosI < 0), matching the RefractV / Vector3Refract convention.
-    // eta = n_from / n_to: eta < 1 enters a denser medium (air->glass, 1/1.5), eta > 1 exits to a thinner one (glass->air, 1.5). The grazing exit case drives the discriminant negative -> total internal reflection -> a zero result on BOTH the mirror and the reference.
+    // Incident travels into the surface, normal against it (cosI < 0; RefractV convention). eta = n_from/n_to; grazing exit -> TIR -> zero on both mirror and reference.
     static const f32 s_InvSqrt2 = 0.70710678f;
     const CausticRefractCase cases[] = {
         { "straight_on_entering", Float3U(0.0f, 0.0f, -1.0f), Float3U(0.0f, 0.0f, 1.0f), 1.0f / 1.5f, false },

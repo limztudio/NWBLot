@@ -161,20 +161,14 @@ struct GeneratedMaterialPixelShader{
 );
 [[nodiscard]] bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial);
 
-// Assigns each material a deferred shading-model id from the unique set of `bxdf` sources AND a separate
-// shadow-transmittance id from the unique set of `surface` sources (both sorted for deterministic ids;
-// materials sharing a bxdf / a surface share the respective id). Must run before the material assets are built
-// (so the ids are baked into each cooked material) and before EmitDeferredBxdfDispatchModule /
-// EmitShadowTransmittanceDispatchModule.
+// Deterministic shading-model id (unique `bxdf`) + transmittance id (unique `surface`); shared sources share ids.
+// Before material build + dispatch emission.
 [[nodiscard]] bool AssignMaterialShadingModelIds(
     MaterialCookVector<MaterialCookEntry>& materialEntries,
     Core::Alloc::ScratchArena& scratchArena
 );
-// Generates the deferred lighting BXDF dispatch module (deferred/generated/bxdf_dispatch.slangi) under the
-// returned include root. The module includes each unique bxdf (macro-renamed per id) + a switch dispatch
-// keyed by shading-model id; an unknown id resolves to a visible magenta (the engine ships no default BXDF).
-// The engine's deferred lighting harness includes this module. Always writes the module (empty dispatch if
-// no materials declare a bxdf). Run after AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
+// BXDF dispatch module (per-bxdf include, macro-renamed per id; unknown id = magenta, no engine default).
+// Always written; after AssignMaterialShadingModelIds, before PrepareShaderEntriesForCook.
 [[nodiscard]] bool EmitDeferredBxdfDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
@@ -183,14 +177,8 @@ struct GeneratedMaterialPixelShader{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-// Generates the shadow-transmittance dispatch module (shadow/generated/transmittance_dispatch.slangi) under the
-// returned include root. The module includes each unique `.surface` (with its `.bind`, macro-isolated per id) +
-// a switch dispatch keyed by shadowTransmittanceModelId that routes a hit to that material's surface hook. An unknown
-// id returns a no-surface NwbMeshSurface: shadow consumes its neutral optical fields, while GI consumers use the fixed
-// mid-grey base color. That fallback applies only to opaque, non-refractive explicit-stage materials; transparent or
-// refractive explicit-stage materials are rejected during metadata parsing. The shadow trace includes this module.
-// Always writes the module (empty dispatch if no materials declare a surface). Run after
-// AssignMaterialShadingModelIds + before PrepareShaderEntriesForCook.
+// Shadow-transmittance dispatch module (per-`.surface` include, macro-isolated per id, switch on shadowTransmittanceModelId).
+// Unknown id: neutral optical fields for shadow, fixed mid-grey for GI. Always written; run after AssignMaterialShadingModelIds.
 [[nodiscard]] bool EmitShadowTransmittanceDispatchModule(
     const Path& cacheDirectory,
     AStringView configurationSafeName,
@@ -200,14 +188,8 @@ struct GeneratedMaterialPixelShader{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-// For each material that omits explicit `shaders`, generate its G-buffer pixel shader (engine pixel-shader
-// authoring + the material's typed `.bind` + its resolved `surface` hook) under a `generated/` directory in the
-// cook cache, set the material's stage shaders (pixel = the generated PS, mesh = `sharedMeshShaderName`), and
-// append a (name, source) record so the caller can synthesize the shader entry. Errors if a material declares
-// both `surface` and `shaders`, or neither, or omits the interface needed to generate. Explicit `shaders` are
-// accepted only for opaque, non-refractive materials; transparent/refractive materials must use their project
-// `surface` hook so AVBOIT and shadow optical passes use the same contract. `bxdfSource`/`surfaceSource` must
-// already be resolved to absolute paths.
+// G-buffer PS per `surface` material (engine authoring + typed `.bind` + resolved hook); pixel = generated PS, mesh = shared.
+// Explicit `shaders` only for opaque non-refractive; transparent/refractive must use `surface`. Sources must be absolute paths.
 [[nodiscard]] bool EmitMaterialPixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,
@@ -218,15 +200,9 @@ struct GeneratedMaterialPixelShader{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-// The transparent-pass twin of EmitMaterialPixelShaders: for each TRANSPARENT material authored with a
-// `surface`, generate its AVBOIT accumulate pixel shader (engine AVBOIT-accumulate authoring + the material's
-// typed `.bind` + its resolved `surface` hook) under a `generated/` directory in the cook cache, and append a
-// (name, source) record so the caller can synthesize the shader entry. Unlike the G-buffer PS this is NOT
-// assigned as a material stage shader (the material's single pixel stage is the G-buffer PS); its generated name
-// is stored on the cooked material for the transparent draw. Opaque materials are skipped; transparent/refractive
-// explicit-stage materials are rejected
-// during material metadata parsing because the current schema has no separate AVBOIT/shadow optical hook.
-// `surfaceSource` must already be resolved to an absolute path.
+// Transparent-pass twin of EmitMaterialPixelShaders: generates each TRANSPARENT `surface` material's AVBOIT accumulate PS
+// (not a material stage shader; name stored on the cooked material). Opaque skipped; explicit-stage transparent rejected
+// (no separate AVBOIT hook in the schema). `surfaceSource` must be an absolute path.
 [[nodiscard]] bool EmitMaterialAvboitAccumulatePixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,
@@ -236,12 +212,8 @@ struct GeneratedMaterialPixelShader{
     Core::Alloc::ScratchArena& scratchArena
 );
 
-// The occupancy/extinction twins of EmitMaterialAvboitAccumulatePixelShaders: for each TRANSPARENT material
-// authored with a `surface`, generate its AVBOIT occupancy / extinction pixel shader (engine AVBOIT
-// occupancy/extinction authoring + the material's typed `.bind` + its resolved `surface` hook), so all three
-// AVBOIT passes read this material's SAME shader-decided surface.renderCoverage. Like the accumulate PS these are NOT
-// material stage shaders; their generated names are stored on the cooked material for the transparent draw's
-// occupancy/extinction pass. `surfaceSource` must already be resolved.
+// Occupancy/extinction twins of the accumulate PS: same surface.renderCoverage contract, names stored on the cooked
+// material (not stage shaders). `surfaceSource` must already be resolved.
 [[nodiscard]] bool EmitMaterialAvboitOccupancyPixelShaders(
     MaterialCookArena& arena,
     const Path& cacheDirectory,

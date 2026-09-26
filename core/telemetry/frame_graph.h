@@ -178,7 +178,7 @@ struct FrameGraphCompiledTask{
     bool present = false;
 };
 
-// Aggregate, graph-generation-scoped CPU runtime telemetry. Counts use fixed-width values so decoded telemetry does not inherit the host width of usize. The separately frozen runtime-statistics wire records below are packed and fixed-size, but use the telemetry codec's native byte order rather than defining a cross-endian interchange format.
+// Generation-scoped CPU telemetry; fixed-width counts (no host-width leak). Wire records: packed fixed-size, codec-native byte order (no cross-endian format).
 // Durations are seconds.
 struct FrameGraphCompileRuntimeStatistics{
     u64 taskCount = 0u;
@@ -671,7 +671,8 @@ struct EncodedFrameGraphRuntimeStatisticsV6{
     EncodedFrameGraphSubmissionRuntimeStatisticsV6 submission;
 };
 
-// V8 appends resource-version counters after the frozen V4-V7 compile-statistics prefix. Keeping the prefix intact lets older payload records retain their exact layout while the decoder defaults counters absent before V8 to zero.
+// V8 appends resource-version counters after the frozen V4-V7 compile-statistics prefix.
+// Keeping the prefix intact lets older payload records retain their exact layout while the decoder defaults counters absent before V8 to zero.
 struct EncodedFrameGraphCompileRuntimeStatisticsV8{
     u64 taskCount = 0u;
     u64 resourceCount = 0u;

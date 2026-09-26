@@ -112,19 +112,22 @@ struct GpuTaskQueueAssignment{
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
-// Migration starts with explicitly requested compatible merges. Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue; that producer needs its own signal point so the consumer does not wait for unrelated later same-queue work.
+// Migration starts with explicitly requested compatible merges.
+// Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue
 namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
         FrontierSafe,
-        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has no cross-queue consumer frontier. Existing renderer paths retain ExplicitMerge until each packet boundary has its own acceptance/timing proof.
+        // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has no cross-queue consumer frontier.
+        // Existing renderer paths retain ExplicitMerge until each packet boundary has its own acceptance/timing proof.
         FrontierScored,
 
         kCount,
     };
 };
 
-// The timing system owns these immutable observations. Queue assignment only consumes a snapshot, so graph validation and packet/barrier correctness remain independent from late query completion and history mutation.
+// The timing system owns these immutable observations. Queue assignment only consumes a snapshot,
+// graph validation and packet/barrier correctness remain independent from late query completion and history mutation.
 struct GpuTaskQueueLoad{
     GpuPhysicalQueueId queue;
     u64 estimatedCost = 0u;
@@ -132,17 +135,19 @@ struct GpuTaskQueueLoad{
 
 struct GpuTaskGraphQueueAssignmentOptions{
     const GpuTaskTimingHistorySnapshot* timingHistory = nullptr;
-    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes; required capabilities and strict preferences remain authoritative.
+    // Scheduler-owned pressure sampled immediately before compilation. Costs use the same relative units as task cost hints and affect only movable routes
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
-    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment. The history remains an explicitly immutable snapshot owned by its producer.
+    // Scalar policy is copied into one compile request so concurrent runtime policy changes cannot mutate an in-progress queue assignment.
+    // The history remains an explicitly immutable snapshot owned by its producer.
     GpuTaskTimingFeedbackPolicy timingFeedbackPolicy;
     const GpuTaskTimingQueueOverride* timingQueueOverrides = nullptr;
     usize timingQueueOverrideCount = 0u;
     u64 timingFrameIndex = 0u;
 };
 
-// Optional semantic anchors for one compiler-owned normal-execution packet timing envelope. Both omitted disables the envelope; a partial pair is invalid. Configured endpoints must belong to this graph, occur in compiler order, and resolve before every accepted-queue-frontier recovery packet. The resolved range includes each endpoint's complete containing packet, so explicitly merged neighbors share the same packet timing scope.
+// Optional timing-envelope anchors for one normal-execution packet (both omitted = off; partial = invalid).
+// Endpoints in compiler order, resolved before frontier recovery; merged neighbours share scope.
 struct GpuTaskGraphPacketTimingEnvelopeOptions{
     GpuTaskId firstTask;
     GpuTaskId lastTask;
@@ -154,7 +159,7 @@ struct GpuTaskGraphCompileOptions{
     GpuTaskGraphQueueAssignmentOptions queueAssignmentOptions;
     GpuTaskGraphPacketTimingEnvelopeOptions packetTimingEnvelope;
     f64 declarationSeconds = 0.0;
-    // Caller-owned wall time spent declaring/building the graph before scheduler admission begins. Accepted plans retain finite nonnegative values separately from the compiler-only total duration; other values normalize to zero. Native packet recording requires every task to retain a payload and record thunk. Internal tooling that compiles metadata graphs may opt out explicitly; executable graph paths must retain the default.
+    // Caller-owned declare/build wall time (accepted: finite nonneg kept, else zero). Native recording needs per-task payload + thunk; only metadata tooling may opt out.
     GpuTaskGraphPacketizationPolicy::Enum packetizationPolicy = GpuTaskGraphPacketizationPolicy::ExplicitMerge;
     bool allowMetadataOnlyTasks = false;
 };

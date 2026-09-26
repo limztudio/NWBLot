@@ -240,13 +240,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // Resolve each CSG shape's `eval` virtual path (engine/...; .slangi) to its absolute hand-written source
-    // against the asset roots -- only known here, in the cross-asset phase. The resolved path becomes the verbatim
-    // #include the generated CSG module emits for each shape's evaluator, mirroring how a material's `.surface`
-    // virtual path resolves to its absolute source before the per-material pixel shader #includes it. Runs before
-    // EmitCsgShapeModuleIncludes (which writes the generated module that #includes these resolved sources) and is
-    // covered by the dependency checksum's repo alias. ResolveVirtualAssetPath preserves the asset-root case +
-    // canonicalizes the appended components (matching the on-disk lowercase eval file names).
+    // Resolve each CSG `eval` virtual path to its absolute source (cross-asset phase; verbatim #include in the
+    // generated module, checksum-covered). Runs before EmitCsgShapeModuleIncludes.
     for(auto& csgShapeEntry : graphicsMetadata.csgShapeEntries){
         if(csgShapeEntry.evalInclude.empty())
             continue;
@@ -283,12 +278,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // Resolve each material's `bxdf` + `surface` virtual paths (project/...; .bxdf / .surface) to absolute
-    // sources against the asset roots -- only known here, in the cross-asset phase. Each resolved path becomes a
-    // verbatim #include in a generated shader (the BXDF dispatch module / the per-material pixel shader) covered
-    // by the dependency checksum's repo alias; this mirrors how a material's `interface` resolves to a discovered
-    // .bind. ResolveVirtualAssetPath preserves the asset-root case + canonicalizes the appended components
-    // (matching the on-disk lowercase shader file names).
+    // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered,
+    // mirroring `interface` -> .bind resolution).
     const auto resolveMaterialVirtualSource = [&context](auto& virtualSource, const AStringView label, const AStringView materialName) -> bool {
         if(virtualSource.empty())
             return true;
@@ -341,11 +332,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // Generate the shadow-transmittance dispatch module the shadow trace includes (routes each material's
-    // shadowTransmittanceModelId to its surface hook). Runs alongside the BXDF dispatch -- before shader
-    // preparation (so its include root is registered + each `.surface` it #includes is covered by the
-    // dependency checksum) and after the surface ids are assigned. The trace shaders #include it in a later
-    // unit; emitting it here keeps the cook + the rasterizer unchanged.
+    // Shadow-transmittance dispatch alongside the BXDF dispatch: before shader prep (checksum-covered includes),
+    // after surface-id assignment. Later trace units #include it; cook + rasterizer unchanged.
     Path shadowTransmittanceIncludeRoot(context.arena);
     if(!EmitShadowTransmittanceDispatchModule(
         context.resolvedPaths.cacheDirectory,
@@ -357,10 +345,8 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // Generate each material's G-buffer pixel shader from its `surface` hook (when it omits explicit `shaders`),
-    // assigning its stage shaders (pixel = generated PS, mesh = the shared engine mesh shader). Then synthesize a
-    // shader entry per generated PS so it is prepared + cooked like any authored shader. Runs before shader prep
-    // (so the entries are cooked) and before ValidateMaterials (so each material's stage shaders are populated).
+    // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored
+    // ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
     MaterialCookVector<GeneratedMaterialPixelShader> generatedPixelShaders(materialCookArena);
     if(!EmitMaterialPixelShaders(

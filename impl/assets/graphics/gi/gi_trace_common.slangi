@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Backend-agnostic GI trace body shared by the SW-BVH walk (gi_sw_trace.slangi) and the HW inline-RayQuery (gi_hw_trace.slangi): the NwbGiTraceHit closest-hit result + the Lambert shade nwbGiShadeHit. The TRAVERSAL is the SEAM -- each backend defines nwbGiTraceClosest,
-// and the shade re-enters it for the dominant-light occlusion ray, so the same shade runs on both paths. The including backend MUST provide global scene-shading/light-list heap-slot expressions plus NWB_GI_HIT_SHADOW_RAYS before this include.
+// Shared GI trace body (hit + Lambert shade); traversal is the seam (each backend defines nwbGiTraceClosest, shade re-enters it). Backend provides heap-slot expressions + NWB_GI_HIT_SHADOW_RAYS.
 
 
 #include "constants.h"
@@ -41,10 +40,12 @@ struct NwbGiTraceHit{
     half3 albedo;
 };
 
-// The traversal SEAM: each backend (SW BVH walk / HW inline RayQuery) defines this to return the nearest hit. Declared here so the shared shade can re-enter it for the occlusion ray before the backend supplies the definition.
+// The traversal SEAM: each backend (SW BVH walk / HW inline RayQuery) defines this to return the nearest hit.
+// Declared here so the shared shade can re-enter it for the occlusion ray before the backend supplies the definition.
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
 
-// P8.2 boolean occlusion seam: same geometric-blocking acceptance as the legacy GI contract (ANY surface blocks, including transparent-classified geometry), but returns only whether a valid blocker exists. No normal/UV/material reconstruction: the SW walk returns on the first valid blocker, and the HW route uses first-accepted-hit behavior.
+// P8.2 boolean occlusion seam: same geometric-blocking acceptance as the legacy GI contract, but returns only whether a valid blocker exists.
+// No normal/UV/material reconstruction: the SW walk returns on the first valid blocker, and the HW route uses first-accepted-hit behavior.
 // Named for geometric blocking under the legacy GI contract, not opaque-material-only blocking.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);
 
@@ -52,7 +53,8 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Lambert hit shade: direct light (<=8 lights, unshadowed base + optional dominant-light shadow ray) * the authored material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term. The occlusion ray re-enters the traversal seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
+// Lambert hit shade: direct light * the authored material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term.
+// The occlusion ray re-enters the traversal seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
 half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     half3 irradiance = half3(0.0h, 0.0h, 0.0h);
 

@@ -15,12 +15,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One node of a binary LBVH. For N primitives the flat node array holds (2N-1) nodes: internal nodes occupy
-// indices [0, N-1) and leaves [N-1, 2N-1); node 0 is the root. Internal nodes store child node indices in
-// leftChild/rightChild; a leaf sets NWB_BVH_LEAF_FLAG on leftChild and packs the primitive index in its low
-// bits, with rightChild holding the primitive count. CPU-built scene nodes may set the high bit of rightChild as a
-// transparent-subtree tag, so traversal must decode rightChild through nwbBvhNodeRightChildIndex(). 32 bytes /
-// 2 float4 lanes (std430).
+// Binary LBVH node (2N-1 nodes for N prims; 0 = root). Leaf: NWB_BVH_LEAF_FLAG + prim index/count in children.
+// Decode rightChild via nwbBvhNodeRightChildIndex() (transparent-subtree tag). 32 bytes / 2 float4 lanes.
 struct NwbBvhNode{
     float3 aabbMin;
     uint leftChild;

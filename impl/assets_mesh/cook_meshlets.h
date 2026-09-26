@@ -39,7 +39,8 @@ struct MeshletTriangleData{
 };
 
 
-// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary, so the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
+// CPU cook-scratch only. These values never cross an asset or GPU-memory boundary,
+// the meshlet scoring helpers can stay entirely on calculation types after PrecomputeMeshletTriangleData performs the source-storage loads.
 struct MeshletTriangleCalculation{
     MeshletTriangleVectors vectors;
 };

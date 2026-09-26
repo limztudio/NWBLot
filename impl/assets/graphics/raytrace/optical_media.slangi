@@ -83,10 +83,8 @@ NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
 }
 
 #if NWB_OPTICAL_CLOSED_MEDIA
-// A nested boundary is an authored stack discipline. Priority boundaries form an authored set: highest priority
-// wins, with the lowest full EntityID resolving equal priorities. Overlapping outward-oriented shells of one
-// instance form a union through bounded positive winding; only zero/positive changes affect medium membership.
-// Mixed active policies and unmatched exits are ambiguous; traversal never guesses from hardware tie order.
+// Nested boundaries are an authored stack: highest priority wins (lowest EntityID breaks ties); same-instance
+// shells union via positive winding. Mixed policies/unmatched exits are ambiguous: never guess from tie order.
 bool nwbOpticalApplyBoundary(
     inout NwbOpticalMedia media,
     const NwbOpticalMedium medium,

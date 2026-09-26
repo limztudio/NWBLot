@@ -141,7 +141,8 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         )
     )
         return false;
-    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState, so an explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source requirement above.
+    // A texture upload is a first write. Its recorder materializes CopyDest and then publishes finalState,
+    // an explicit Unknown graph import is safe for a fresh image while all other built-ins retain the stricter source requirement above.
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

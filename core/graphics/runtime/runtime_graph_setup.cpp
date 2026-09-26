@@ -25,7 +25,7 @@ namespace __hidden_graphics_graph_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first; callers that know a small upload benefits can still request CommandQueue::Transfer explicitly.
+// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first
 constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
 
 inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
@@ -43,7 +43,8 @@ inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_tas
 }
 
 
-// A returned setup resource has no external-completion object for later direct consumers. Record one explicit graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
+// A returned setup resource has no external-completion object for later direct consumers.
+// Record one explicit graph packet per declared consumer queue; its producer dependency lowers the exact timeline wait.
 struct SetupUploadReadinessBridgeGraphTask{
     struct Payload{};
 
@@ -421,7 +422,7 @@ GpuTaskSchedulingHint SetupUploadGraphScheduling(
 }
 
 ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask declaredInitialState)noexcept{
-    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state; CopyDest is exactly what the native write leaves behind when the old setup path has no declared final transition.
+    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state
     return declaredInitialState == ResourceStates::Unknown
         ? ResourceStates::CopyDest
         : declaredInitialState
@@ -506,7 +507,7 @@ bool SubmitGraphOwnedStandaloneTask(
     )
         return false;
 
-    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool; the normal executor derives its recovery suffix and each task decides whether it can safely opt into ready-frontier worker recording.
+    // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool
     GpuTaskGraphNormalExecutionDesc normalExecution;
     normalExecution.readyFrontierScheduler = readyFrontierScheduler;
     const bool graphAccepted = scheduler.executeGraph(

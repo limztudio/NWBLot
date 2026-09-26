@@ -505,7 +505,8 @@ struct SurfelGiGraphTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task so the renderer's CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared packet accepts.
+// The typed clear primitives own the four persistent-buffer writes. Keep this tiny final task
+// the renderer's CPU mirror still becomes pending only after every clear recorded, and becomes initialized only after their shared packet accepts.
 struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;

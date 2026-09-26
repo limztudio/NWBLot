@@ -9,9 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The SOFTWARE backend of the GI trace seam: walks the SW scene/instance/per-mesh BVH the SW shadow/caustic path already builds and defines nwbGiTraceClosest (+ nwbGiSwInstanceClosest) accordingly. Its heap-selected trace-context uniform selects the scene BVH / instance and shadow material buffers from the global StorageBuffer heap.
-// gi_trace_common also brings NwbGiTraceHit + the shared nwbGiShadeHit Lambert shade + the scene light list. The HW twin is gi_hw_trace.slangi (inline RayQuery over the TLAS); both share the common shade + NwbGiTraceHit, so a red wall bounces red identically.
-// The producer's own shader supplies the OUTPUT bindings + main() (the surfel path reduces rays in groupshared and running-means them into a surfel record).
+// SW backend of the GI trace seam: walks the shared SW BVH; HW twin is gi_hw_trace.slangi (same hit + Lambert via
+// gi_trace_common, so both bounce identically). Heap-selected context picks scene/material buffers; producer owns outputs.
 
 
 #include "constants.h"
@@ -48,7 +47,8 @@ uint nwbMeshFrameViewHeapSlot(){
 // Provides the typed material-word and mesh-instance views that material_typed_bindings.slangi aliases above.
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures. Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
+// GI shades direct scene lights with an occlusion ray; it never samples the screen-space shadow/caustic textures.
+// Omitting those declarations prevents their default set-0 bindings from aliasing GI's typed material buffers.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED 1
 
 // The generated shadow dispatch is also the material-surface evaluator for GI. It reads the typed material constants and mutable instance storage through the heap-selected context above, so GI evaluates the authored NwbMeshSurface instead of guessing one project-interface field.
@@ -63,7 +63,8 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the heap-selected trace context carries the scene-node slot. This include provides NwbHeapBvhNodes() and
+// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots;
+// the heap-selected trace context carries the scene-node slot. This include provides NwbHeapBvhNodes() and
 // NwbHeapRawBuffer().
 #include "../bindless/bindless_heap_bvh.slangi"
 
@@ -73,7 +74,8 @@ uint nwbMeshFrameViewHeapSlot(){
 
 // Heap-selected SW scene records
 
-// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers. This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
+// The scene-instance table shares the StorageBuffer descriptor class with the per-mesh BVH, material, and typed buffers.
+// This pass-local typed alias supplies its 64-byte record stride without introducing a second heap class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -84,7 +86,8 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapGiSwInstances(const 
     return g_NwbHeapGiSwInstanceBuffers[slot];
 }
 
-// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material record. The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
+// Per-mesh nodes, positions, indices, and attributes are read through descriptor-heap slots carried by the material record.
+// The shared C++ backing buffers, including the scene tables selected above, remain transitioned for heap reads.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

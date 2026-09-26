@@ -506,7 +506,8 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
 
     const FrameGraphPhysicalQueueSubmissionRuntimeStatistics& submission = statistics.submission;
     const FrameGraphSubmissionRuntimeStatistics& ownerSubmission = ownerStatistics.submission;
-    // Submission acceptance and per-queue snapshots visit packets in different orders, so their positive floating duration sums can differ by one rounding bit. Counts remain the exact owner-conservation contract.
+    // Submission acceptance and per-queue snapshots visit packets in different orders,
+    // their positive floating duration sums can differ by one rounding bit. Counts remain the exact owner-conservation contract.
     return submission.acceptedPacketCount <= ownerSubmission.acceptedPacketCount
         && submission.acceptedTaskCount <= ownerSubmission.acceptedTaskCount
         && submission.rejectedPacketCount <= ownerSubmission.rejectedPacketCount

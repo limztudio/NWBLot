@@ -367,7 +367,8 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
 }
 
 
-// The frame timing query must record its published endpoint after the optional presentation contributor. A rejected endpoint remains recoverable through the separate non-publishing recovery task instead of silently publishing a partial frame duration.
+// The frame timing query must record its published endpoint after the optional presentation contributor.
+// A rejected endpoint remains recoverable through the separate non-publishing recovery task instead of silently publishing a partial frame duration.
 TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -459,7 +460,8 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
 }
 
 
-// Split measures retain non-owning links to their recording tickets. Declare each ticket first so reverse local destruction keeps it alive while an incomplete measure relinquishes its scope during exception unwinding.
+// Split measures retain non-owning links to their recording tickets. Declare each ticket first
+// reverse local destruction keeps it alive while an incomplete measure relinquishes its scope during exception unwinding.
 TEST(EcsGraphics, RendererSplitGpuTimingTicketsOutliveTheirMeasures){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

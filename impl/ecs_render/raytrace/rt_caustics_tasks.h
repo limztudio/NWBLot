@@ -102,7 +102,8 @@ struct CausticAccumulatorDecayGraphTask{
     }
 };
 
-// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain. The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
+// Caustic producers own typed graph-task payloads; RendererFramePipeline composes their packet chain.
+// The renderer still supplies declaration-filtered external state until the graph has every producer in the same frame transaction.
 struct SoftwareCausticsGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -252,7 +253,8 @@ struct HardwareCausticsGraphTask{
     }
 };
 
-// Geometry downsample follows the selected photon producer in the same graph packet. Its timing begin is retained until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
+// Geometry downsample follows the selected photon producer in the same graph packet.
+// Its timing begin is retained until wavelet resolve records the endpoint, preserving the established full-resolve interval across callbacks.
 struct CausticGeometryDownsampleGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -327,7 +329,7 @@ struct CausticResolvePrepareGraphTask{
 };
 
 
-// The first wavelet pass consumes the prepare output and writes its counterpart. The next four alternating passes stay in separate graph callbacks, while only the upsample body stays native; this first read/write pair receives graph-owned entry states.
+// The first wavelet pass consumes the prepare output and writes its counterpart. The next four alternating passes stay in separate graph callbacks, while only the upsample body stays native
 struct CausticResolveWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -356,7 +358,8 @@ struct CausticResolveWaveletGraphTask{
 };
 
 
-// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface. The next three alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
+// The second wavelet pass consumes the first graph-owned output and returns to the parity-selected surface.
+// The next three alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveSecondWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -385,7 +388,8 @@ struct CausticResolveSecondWaveletGraphTask{
 };
 
 
-// The third wavelet pass consumes the second graph-owned output and writes its counterpart. The next two alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
+// The third wavelet pass consumes the second graph-owned output and writes its counterpart.
+// The next two alternating passes stay in separate graph callbacks, but this exact handoff receives graph-owned entry states.
 struct CausticResolveThirdWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -417,7 +421,8 @@ struct CausticResolveThirdWaveletGraphTask{
 };
 
 
-// The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface. The final alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
+// The fourth wavelet pass consumes the third graph-owned output and returns to the parity-selected surface.
+// The final alternating pass stays in a separate graph callback, but this exact handoff receives graph-owned entry states.
 struct CausticResolveFourthWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -449,7 +454,8 @@ struct CausticResolveFourthWaveletGraphTask{
 };
 
 
-// The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input. This final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
+// The fifth wavelet pass consumes the fourth graph-owned output and produces the fixed half-B upsample input.
+// This final ping-pong handoff receives graph-owned entry states before the graph-owned upsample callback.
 struct CausticResolveFifthWaveletGraphTask{
     struct Payload{
         RendererRayTracingSystem* raytracingSystem = nullptr;
@@ -579,7 +585,8 @@ inline void DispatchCausticResolvePass(
     const i32 activityInput = usesActivity ? (stepWidth == s_ActivityStepWidth8 ? 0 : (stepWidth == s_ActivityStepWidth16 ? 1 : -1)) : -1;
     const i32 activityOutput = usesActivity ? (stepWidth == s_ActivityStepWidth4 ? 0 : (stepWidth == s_ActivityStepWidth8 ? 1 : -1)) : -1;
     if(!graphOwnsPassEntryStates){
-        // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup, while later ping-pong passes explicitly establish their own dynamic input/output states.
+        // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup,
+        // later ping-pong passes explicitly establish their own dynamic input/output states.
         if(!graphEntryStatesOwned){
             commandList.setTextureState(targets.worldPosition.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
             commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);

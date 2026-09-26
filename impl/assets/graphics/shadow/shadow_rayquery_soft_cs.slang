@@ -2,14 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HARDWARE (RayQuery) SOFT OPAQUE half-res trace. The HW analog of sw_shadow_soft_opaque_cs: one thread per HALF-res
-// pixel casts NWB_SW_SHADOW_SOFT_SPP OPAQUE inline-RayQuery occlusion rays CONE-JITTERED inside the cone the light's
-// physical source subtends (via shadow_rayquery.slangi's nwbShadowRqLightVisible, already type-aware) and writes the
-// averaged single-frame visibility into the SAME half-res soft buffer (shadowSoftHalfA, bound at the trace's visibility-
-// output slot) the SW path writes. The SEPARATE shadow_resolve pipeline then denoises + upsamples it into the full-res
-// visibility exactly as on the SW path, so the HW opaque shadow becomes a half-res jittered -> temporal -> a-trous ->
-// upsampled soft shadow. The half-res grid geometry (SHIFT/FACTOR), SPP count, background=white-per-slot policy, and
-// block top-left texel sample are all shared with the SW trace so the downsample/resolve tap alignment is byte-identical.
+// HW analog of sw_shadow_soft_opaque_cs: per half texel, NWB_SW_SHADOW_SOFT_SPP cone-jittered RayQuery rays into the
+// shared half-res buffer for the resolve to denoise + upsample. Grid/SPP/sample conventions match the SW trace exactly.
 
 
 #include "binding_slots.h"
@@ -88,12 +82,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)
             continue;
-        // OPAQUE-only jittered occlusion. The runtime budget is full during bootstrap and drops after accepted temporal
-        // history; each sample is binary, and averaging the current budget --
-        // each walking the source via its OWN low-discrepancy 2D point (per pixel, per frame, per sample index) --
-        // yields the smooth 0..1 coverage the value-aware resolve needs (a single binary sample would leave a dithered
-        // penumbra the a-trous could not smooth without washing the umbra out). Temporal accumulation carries the sampling
-        // across frames.
+        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the
+        // 0..1 coverage the value-aware resolve needs. Temporal accumulation carries sampling across frames.
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);

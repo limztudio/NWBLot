@@ -38,7 +38,8 @@ public:
         const GpuTaskGraphQueueAssignmentOptions& options = {}
     )const;
 
-    // The packet compiler reuses the independently exposed analysis and queue-assignment results so scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions. Tasks retain one packet by default; explicitly requested compatible successors may merge into the preceding packet.
+    // The packet compiler reuses the independently exposed analysis and queue-assignment results
+    // scheduler admission, telemetry, and packet creation consume exactly the same immutable decisions. Tasks retain one packet by default
     [[nodiscard]] bool compile(
         const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,

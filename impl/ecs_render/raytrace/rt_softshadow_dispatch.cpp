@@ -237,7 +237,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 m_graphics.getDevice(),
                 commandList
             );
-            // The graph owns the selected history/moments plus stable previous-geometry/world reads. The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
+            // The graph owns the selected history/moments plus stable previous-geometry/world reads.
+            // The geometry downsample above still needs this callback's local UAV-to-SRV transition before the opaque merge samples it.
             dispatchMerge(
                 opaqueMerge,
                 graphOwnsOpaqueTraceToFirstWaveletBoundary,
@@ -499,7 +500,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         }
     }
 
-    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate targets.bindless. RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
+    // Do not mutate the target-generation handles while the sibling caustics and surfel-GI workers can still validate targets.bindless.
+    // RendererFramePipeline finalizes this pending CPU-side swap only after its complete ordered Graphics submission succeeds.
     if(
         ((dispatchTransparentResolve && !splitTransparentResolve) || dispatchTransparentResolveTail)
         && m_rayTracingState.m_softShadowTemporalReady

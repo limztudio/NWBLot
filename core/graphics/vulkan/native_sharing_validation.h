@@ -27,7 +27,8 @@ namespace VulkanNativeSharingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared exclusive/concurrent queue-family validation for imported native handles. Callers pass the resource-specific log prefix (for example "buffer handle for native buffer") so buffer and texture diagnostics keep their exact wording while the ladder itself lives in one place.
+// Shared exclusive/concurrent queue-family validation for imported native handles. Callers pass the resource-specific log prefix
+// buffer and texture diagnostics keep their exact wording while the ladder itself lives in one place.
 template<typename UsageFlags, typename CreateFlags>
 [[nodiscard]] inline bool ValidateNativeResourceSharing(
     const Device& device,

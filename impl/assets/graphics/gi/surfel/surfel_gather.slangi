@@ -9,10 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-pixel surfel gather for the deferred-lighting consumer. Biases the shaded point outward along the normal, hashes it,
-// walks the (2*extent+1)^3 neighbour cells' surfel lists (extent covers the falloff radius; capped), and weights each surfel by normal alignment * distance falloff *
-// confidence (samples integrated). Returns false when no surfel covers the point, so the caller falls back to hemiAmbient.
-// The pool + cell-head + params are bound via the NWB_SCENE_GI_SURFEL_* slot macros.
+// Per-pixel surfel gather: bias outward, walk the capped (2*extent+1)^3 neighbourhood, weight by normal * falloff *
+// confidence. False when uncovered (caller falls back to hemiAmbient). Bound via NWB_SCENE_GI_SURFEL_* slots.
 
 
 #include "surfel_heap_resources.slangi"

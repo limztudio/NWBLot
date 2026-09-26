@@ -52,11 +52,8 @@ struct NwbSceneLight{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Typed views of the shared heap StorageBuffer / UniformBuffer descriptor tables, exactly like the BVH-node and
-// mesh-stream aliases (bindless_heap_bvh.slangi / bindless_heap_mesh.slangi): the element type/stride is a per-view
-// SPIR-V decoration over the one Vulkan descriptor, so the scene-shading CB and light list are legible through the
-// heap without a second registration. The selecting slot is uniform across the draw (one per frame), so no
-// NonUniformResourceIndex() wrap is needed (mirrors the deferred image/sampler accessors).
+// Typed views over shared heap tables (type/stride is per-view SPIR-V decoration; no second registration).
+// Draw-uniform selecting slot: no NonUniformResourceIndex needed.
 #include "../bindless/bindless_heap.slangi"
 
 

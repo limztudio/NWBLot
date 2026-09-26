@@ -171,11 +171,8 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     return extension == s_SlangIncludeExtension;
 }
 
-// Both `eval` and `module_include` are `engine/`/`project/`-rooted virtual paths (matching `shape`/`module` and
-// the material asset's `interface`/`surface`/`bxdf`). The `eval` virtual path names a hand-written source resolved
-// to its absolute file in the cross-asset phase (mirroring a material's `.surface`); the `module_include` virtual
-// path is the generated module written under the CSG shape include root at this virtual-prefixed sub-path (the
-// dispatch shader #includes it -- mirroring a material's generated `.bind`).
+// `eval` = hand-written source (cross-asset resolved, like `.surface`); `module_include` = generated module include
+// (like generated `.bind`). Both are engine//project-rooted virtual paths.
 [[nodiscard]] static bool ValidateReservedVirtualRoot(
     const Path& nwbFilePath,
     const AStringView fieldName,

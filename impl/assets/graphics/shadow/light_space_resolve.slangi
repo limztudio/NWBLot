@@ -210,7 +210,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 #endif
 }
 
-// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation, while overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
+// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation,
+// overflow, missing faces, invalid fits and samples outside the fitted volume retain software traversal.
 bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
     const NwbLightSpaceView centerView, out float distance){
     distance = 0.0;

@@ -60,14 +60,8 @@ half3 nwbGBufferEncodeNormal(float3 normal){
     return half3(normalVector * 0.5 + 0.5);
 }
 
-// The owning material's shading-model id is data-driven: the renderer packs it into the high bits of the
-// per-draw dispatch word, which the pixel shader reads back here. A material never hard-codes its id in
-// shader source -- it declares a `bxdf`, and the cook assigns + delivers the id. The push constant is reached
-// differently depending on whether CSG injected its own per-draw block, or the mesh runtime is in scope.
-// When NWB_MESH_MATERIAL_CONTEXT_PROVIDED is defined the includer (the shadow trace's material-context header)
-// supplies nwbMeshShadingModelId()/nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset()/nwbMeshLoadInstance()
-// from per-invocation globals it set from the ray hit, so this file defines none of them (the rasterizer never
-// defines NWB_MESH_MATERIAL_CONTEXT_PROVIDED, so its branches below are byte-for-byte unchanged).
+// Shading-model id is data-driven (dispatch word high bits; material declares `bxdf`, cook assigns the id).
+// With NWB_MESH_MATERIAL_CONTEXT_PROVIDED the includer serves the accessors from the ray hit; else this file defines them.
 #if defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 // provided by includer
 #elif NWB_CSG_ENABLED
@@ -137,11 +131,8 @@ float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
     return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
 }
 
-// Full G-buffer write: the first three RGBA16F targets carry, in their otherwise-unused alpha channels, the
-// shading-model id (base-color.a, delivered as data by the renderer) + two user BXDF parameters (normal.a,
-// world.a). The deferred lighting framework unpacks these into the surface the material BXDF reads, so a
-// material chooses what those two scalars mean (e.g. roughness / metallic) while its shading model is fixed
-// by its `bxdf` declaration. The fourth target carries separately sanitized explicit F0 RGB and roughness.
+// G-buffer write: first three targets smuggle shading-model id + two material BXDF params in their alphas
+// (lighting unpacks them); fourth target carries sanitized F0 + roughness.
 void nwbWriteMeshGBufferParams(
     half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));

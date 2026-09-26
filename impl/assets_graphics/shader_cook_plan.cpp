@@ -532,12 +532,8 @@ bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        // The mesh shader is generic + interface-free; the per-material PIXEL shader is the stage that reads
-        // the typed .bind material constants (the material's surface hook), so the pixel stage also receives the
-        // typed binding when it depends on a material interface. The shadow trace evaluates the SAME surface hooks
-        // per hit through the cook-generated transmittance dispatch module (which #includes each material's .bind),
-        // so the compute stage that runs the software fallback (and any ray-tracing stage that runs the hardware
-        // path) likewise receives the typed binding when it depends on a material interface.
+        // Pixel/compute/rgen stages that read the typed .bind (surface hook, incl. the shadow dispatch) receive it
+        // when depending on a material interface; the generic mesh shader stays interface-free.
         const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage.view();
         const bool preparedEntryStageReadsTypedMaterial =
             preparedEntryArchiveStage == "mesh"

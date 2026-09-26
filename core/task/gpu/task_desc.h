@@ -23,11 +23,8 @@ class GpuCompiledGraph;
 class CommandListResourceStateHandoff;
 struct GpuTaskRecordContext;
 
-// A declaration-owned native state snapshot from work outside the graph's ordinary internal packet edges. The graph
-// captures it in graph-owned storage when it accepts the task declaration, then filters that immutable snapshot
-// through the task's declared resources before opening the packet command list. The producer may release its
-// original handoff after task creation. This is the migration path for accepted cross-frame state until every
-// producer becomes an in-graph packet, and avoids renderer-owned packet-specific record overrides.
+// Declaration-owned external state snapshot, captured at accept and filtered through declared resources pre-record.
+// Producer may release after creation; migration path until all producers are in-graph packets.
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
     // This predicate is evaluated after queue assignment and never constrains routing. kCount keeps the snapshot
@@ -64,11 +61,8 @@ struct GpuTaskSchedulingHint{
     // consumers. Those consumers then wait for the complete merged packet, including packet-local tail work and its
     // final state. This never changes queue routing and remains opt-in; shared-state tails keep serial recording.
     bool allowMergeAcrossConsumerFrontier = false;
-    // A late recovery/finalization packet must wait for the latest accepted work on every other physical queue.
-    // The compiler preserves it as a separate packet and the submitter derives those waits from the graph-owned
-    // submission transaction; callers do not assemble a queue-class token ladder. It may use no resource or only
-    // HazardDomains, and may have outgoing task edges, but it cannot have an incoming task/external dependency,
-    // an external state source, or a concrete Texture/Buffer/AccelStruct use.
+    // Late recovery/finalization packet: waits latest accepted work on every other queue (submitter derives waits).
+    // No incoming deps/state sources/concrete uses; HazardDomains or outgoing edges only.
     bool joinsAcceptedQueueFrontier = false;
     // Identifies a true partial-submission recovery packet within the broader recovery/finalization frontier class.
     // Recovery must also join the accepted queue frontier and is counted only after native submission acceptance.
@@ -132,10 +126,8 @@ struct GpuTaskTimingMetadata{
     return DeriveName(firstTaskIdentity, AStringView(".packet"));
 }
 
-// One immutable external ownership source for an imported texture or buffer range. Multiple sources let a later
-// graph consume disjoint terminal exports while retaining each range's physical owner. Every source supplies its
-// releasing queue, first-consumer queue, graph-local completion, and native snapshot that recorded the release.
-// Acceleration structures use the whole-allocation single-owner fields below.
+// Immutable external ownership source per imported range (later graphs consume disjoint terminal exports per owner).
+// Each gives releasing/first-consumer queues + completion + release snapshot. AS uses whole-allocation fields.
 struct GpuGraphInitialOwnerHandoffSourceDesc{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -153,10 +145,8 @@ struct GpuGraphResourceDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
-    // Compiler-generated packet-boundary transitions begin from this state. Unknown remains valid only while a
-    // transitional CommandListResourceStateHandoff supplies the authoritative imported state at recording time.
-    // Typed imports inherit their resource descriptor state only when this field was left unspecified; an explicit
-    // Unknown preserves Vulkan's fresh-resource UNDEFINED origin for the graph's first writer.
+    // Packet-boundary transitions start here; Unknown needs a transitional handoff at record time. Unspecified
+    // inherits the descriptor state; explicit Unknown keeps Vulkan UNDEFINED for the first writer.
     ResourceStates::Mask initialState = ResourceStates::Unknown;
     // Optional required state at completion; Unknown leaves final state under task ownership.
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
@@ -164,11 +154,8 @@ struct GpuGraphResourceDesc{
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     // Optional pre-first-use owner; exact first-packet matches need no extra sync.
     GpuPhysicalQueueId initialOwnerQueue;
-    // A different first packet is permitted only when an already-recorded external producer released ownership to
-    // this exact physical queue, exports the state snapshot below, and supplies the completion node imported into
-    // this graph before the resource. The graph captures the source snapshot at declaration, so the producer may
-    // release its original handoff before late packet recording. The compiler attaches that completion to the first
-    // consumer packet.
+    // Non-first-packet start needs an external producer's ownership release to this exact queue + exported snapshot
+    // and completion; captured at declaration, attached to the first consumer packet.
     GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     GpuExternalCompletionId initialOwnerCompletion;
     // NOTE: pointer kept with 8-byte group; the token below pairs with the completion above.

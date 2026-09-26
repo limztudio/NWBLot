@@ -78,10 +78,8 @@ struct GpuTaskGraphExternalResourceHandoff{
 };
 
 
-// Owns every producer, range, wait token, and native state snapshot returned by an external-resource handoff query.
-// Queries build into the inactive same-arena role and publish with one non-throwing owner swap, so a false return or
-// allocation exception preserves the previously published snapshot exactly. Refill, inspection, and destruction of
-// one snapshot are externally serialized; independent snapshot objects may be queried concurrently.
+// External handoff snapshot: builds into the inactive role, publishes via one non-throwing swap (failure keeps
+// the prior snapshot). Per-object serialization; distinct objects concurrent.
 class GpuTaskGraphExternalResourceHandoffSnapshot final : NoCopy{
     friend class GpuGraphSubmissionTransaction;
 

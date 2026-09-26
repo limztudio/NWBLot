@@ -13,11 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The HARDWARE backend closest-hit hook the shared bounce loop calls per segment. One TraceRay finds the nearest
-// surface (RAY_FLAG_FORCE_OPAQUE: skip any-hit, just commit the closest -- the refractive/opaque distinction is the
-// material flag the closest-hit reads, NOT a traversal decision, exactly as the SW trace tracks min-t over all
-// geometry then checks isRefractive). The payload the closest-hit/miss fill is converted back to the shared
-// NwbCausticHit. Recursion stays 1: the loop, not shader recursion, drives the bounces.
+// HW closest-hit hook per bounce segment: one TraceRay commits nearest (FORCE_OPAQUE); refractive/opaque is a
+// material flag, not a traversal decision (as in the SW min-t trace). Loop-driven bounces, recursion stays 1.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;

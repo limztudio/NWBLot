@@ -65,7 +65,7 @@ struct PositionKeyEqual{
     }
 };
 
-// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams; this map keeps the accumulated values SIMD-resident until AppendInstanceMesh writes a completed corner.
+// Import-only calculation scratch. SourceMesh keeps its serialized normals in Float#/Vec# streams
 struct alignas(Float4) PositionNormalCalculation{
     SIMDVector value = {};
 };

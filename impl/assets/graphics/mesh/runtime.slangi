@@ -32,10 +32,8 @@ struct NwbMeshSourceVertex{
 struct NwbMeshGeneratedVertex{
     float4 position;
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
-    // The compute path writes this type into a structured buffer. Keep native-half values packed in uint words:
-    // the current SPIR-V lowering declares these buffers in Uniform storage and would otherwise require the
-    // broader UniformAndStorageBuffer16BitAccess feature. The vertex fetch still interprets these exact words
-    // as RGBA16_FLOAT, so the buffer remains a 64-byte FP16 transport without narrowing device support.
+    // Halves packed in uint words: avoids UniformAndStorageBuffer16BitAccess (Uniform-storage lowering) while the
+    // fetch still reads RGBA16_FLOAT. 64-byte FP16 transport, full device support.
     uint2 normal;
     uint2 tangent;
 #else
@@ -347,11 +345,8 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Guarded like nwbMeshInstanceIndex()/nwbMeshMaterialConstantByteOffset() above: when a material-context provider
-// (the shadow trace's material-context header, or the AVBOIT accumulate authoring header) defines
-// NWB_MESH_MATERIAL_CONTEXT_PROVIDED it owns nwbMeshLoadInstance(), so this mesh runtime must NOT also define it
-// (otherwise the includer's definition collides with this one). The rasterizer never defines the macro, so its
-// definition below is byte-for-byte unchanged.
+// Skipped when a material-context provider owns nwbMeshLoadInstance() (NWB_MESH_MATERIAL_CONTEXT_PROVIDED);
+// rasterizer path unchanged.
 #if !defined(NWB_MESH_MATERIAL_CONTEXT_PROVIDED)
 
 

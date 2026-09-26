@@ -29,10 +29,8 @@ struct RayTracingSceneContentStamp{
     bool trusted = false;
 };
 
-// The ray-tracing domain owns the live scene and material tables. Camera effects retain this immutable snapshot
-// after scene preflight, then declare the referenced buffers plus the separately frozen trace-geometry and material
-// sampled-texture bundles. Availability means the resources can be scheduled; the scene preparation task must also
-// succeed before a hardware query dispatch. No effect pipeline, output target, or temporal policy belongs here.
+// Ray-tracing domain owns live scene/material tables; effects retain this snapshot post-preflight plus frozen
+// geometry/texture bundles. Schedulable != dispatchable: scene prep must also succeed.
 struct RayTracingSceneGraphResources{
     RayTracingSceneContentStamp contentStamp;
     Core::RayTracingAccelStructHandle sceneTlas;

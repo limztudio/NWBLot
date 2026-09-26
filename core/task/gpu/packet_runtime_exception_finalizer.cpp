@@ -145,8 +145,9 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
         TerminateInvariant();
     }
 
-    // This exact transaction writer prevents another admitted packet from resolving the binding. The graph remains ExceptionClosing, so graph reset and declaration mutation both reject until callback-free finalization below.
-    // Accepted-frontier rejection can bind and close the graph before publishing a recorded artifact; in that case there are no exact-attempt artifact timing tickets to abandon, but the transaction still needs terminalization.
+    // This exact transaction writer prevents another admitted packet from resolving the binding. The graph remains ExceptionClosing,
+    // graph reset and declaration mutation both reject until callback-free finalization below.
+    // Accepted-frontier rejection can bind and close the graph before publishing a recorded artifact
     const bool artifactMatchesAttempt = m_recordedGraph.validForWithinArtifactOperation(
         m_graph,
         declarationAccess,

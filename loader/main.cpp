@@ -236,11 +236,8 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
     return true;
 }
 
-// Arms crash/diagnostic capture as early as possible (before the CLI is parsed). Only options-independent,
-// capture-critical config is set here (application name + spool directory derived from the executable, dump
-// detail mode); the upload destination and metadata are applied later by ConfigureCrashReporting once the CLI
-// is parsed and the logger is up. Capture-to-disk is fully functional without the upload destination, so any
-// fault from this point on still leaves a dump in the spool. No logging happens here (the logger is not up yet).
+// Earliest crash capture (pre-CLI): app name + spool + detail mode only. Upload/metadata come later; disk capture
+// works without them. No logging here (logger not up yet).
 bool InstallCrashCapture(CrashArena& crashArena){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))

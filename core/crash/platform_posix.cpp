@@ -101,16 +101,10 @@ static void __hidden_capture_frame_pointer_callstack(
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-// glibc backtrace() unwinds through .eh_frame, so it captures a full callstack even when the frame pointer is
-// omitted (final builds compile with -fomit-frame-pointer). The first call lazily loads libgcc_s, so it is warmed
-// up at install time to keep the crash-time call allocation-free and async-signal-safe. (On glibc older than 2.35
-// the unwinder can still take the dynamic-loader lock through dl_iterate_phdr, so a fault while that lock is held
-// could deadlock; newer glibc uses the lock-free __dl_find_object fast path.) When the faulting/trigger instruction
-// pointer is known, capture starts at that frame so crash-handler-internal frames are dropped without depending on
-// inlining-sensitive skip counts; the address search makes it robust to inlining. If the trigger IP is not on the
-// unwound stack (e.g. a deferred or cross-thread diagnostic) only that instruction pointer is emitted, because the
-// rest of the unwound frames then belong to the crash machinery rather than the reported fault. Returns false only
-// when nothing could be unwound, so the caller can fall back to the frame-pointer walk.
+// backtrace() unwinds via .eh_frame without frame pointers; warmed up at install so the crash-time call stays allocation-free.
+// Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
+// When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
+// Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
 [[nodiscard]] static bool __hidden_capture_eh_frame_callstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
     void* unwoundAddresses[Detail::s_MaxCallstackFrames] = {};
     const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));

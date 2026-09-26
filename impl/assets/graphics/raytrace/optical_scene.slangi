@@ -62,10 +62,8 @@ bool nwbOpticalSetMediumProperties(
     return true;
 }
 
-// Closed volume authors promise homogeneous IOR and absorption independent of UV, normal, position and ray
-// direction. Only those optical fields are consumed here, so valid neutral hook inputs avoid retaining a 3x4
-// transform and all triangle attributes per bootstrap event. Appearance fields remain geometry-dependent and
-// are always evaluated at the real surface when shaded. Unspecified surfaces never use this contract.
+// Closed volumes promise UV/normal/position/direction-independent IOR + absorption; neutral hook inputs avoid
+// retaining transforms/attributes per event. Appearance still evaluates at the real surface.
 bool nwbOpticalLoadHomogeneousMedium(
     const NwbOpticalTraceConfig config,
     const float3 origin,

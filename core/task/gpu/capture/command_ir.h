@@ -404,10 +404,8 @@ struct GpuCommandIrReplayResult{
     }
 };
 
-// Performs graph-only validation for the commands selected by `packet` without touching a native command list.
-// The complete stream is syntax-validated first, then records for other packets are ignored so a normal
-// multi-packet capture can be replayed one packet at a time. Backend ownership, backing readiness, and permanent
-// state compatibility require a replay CommandList and are checked by the replay entry points before lowering.
+// Graph-only validation for `packet`'s commands (no native list): whole stream syntax-checked, other packets
+// ignored for one-at-a-time replay. Ownership/readiness need a replay list (checked at replay).
 [[nodiscard]] GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -415,11 +413,8 @@ struct GpuCommandIrReplayResult{
     GpuSubmissionPacketId packet
 )noexcept;
 
-// Re-runs complete preflight before lowering only `packet`'s commands. The command list must be open on the packet's
-// exact resolved physical queue, retain that queue's broad class, and have no active render pass. The bytes and graph
-// must remain unchanged for the duration of the call, and resources must belong to that command list's device. This
-// does not apply graph state seeds or barriers and does not submit work; callers retain the surrounding
-// packet-recording contract.
+// Preflight then lowers only `packet`'s commands: list open on the packet's exact queue/class, no render pass,
+// bytes+graph stable. No seeds/barriers/submit; caller keeps the packet contract.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacket(
     BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,
@@ -428,13 +423,8 @@ struct GpuCommandIrReplayResult{
     CommandList& commandList
 )noexcept;
 
-// Experimental Vulkan-only tooling lowerer for a CopyBuffer-only packet body. It repeats complete graph-aware
-// preflight and rejects any selected opcode it cannot lower before recording the first native command. The caller
-// must already have applied the compiler-owned initial-state seed and CopySource/CopyDest barriers to commandList.
-// The command list must be open on the packet's exact resolved physical queue, retain that queue's broad class, and
-// have no active render pass. Unlike ReplayGpuCommandIrPacket, this path deliberately bypasses CommandList's
-// automatic copy-state tracking. It is not part of native packet recording and does not own barriers, state
-// snapshots, or submission.
+// Experimental Vulkan-only CopyBuffer-only packet lowerer: graph-aware preflight, rejects unlowerable opcodes first.
+// Caller pre-applies seed + barriers on the packet's exact queue (no render pass); bypasses copy-state tracking.
 [[nodiscard]] GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectVulkan(
     BinaryByteView bytes,
     const GpuTaskGraphDeclarationReadView& graph,

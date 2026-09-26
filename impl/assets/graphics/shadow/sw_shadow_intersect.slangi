@@ -31,11 +31,8 @@ bool nwbSwShadowRayAabb(const float3 origin, const float3 invDir, const float tM
     return nwbBvhRayAabb(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING);
 }
 
-// Entry distance of the ray into the box (the slab tNear, clamped into [tMin,tMax]); NWB_SW_SHADOW_AABB_MISS on miss.
-// The ORDERING twin of nwbSwShadowRayAabb above: the accept/reject decision is ALWAYS made by that bool test, so a box
-// rejected here as the miss sentinel is exactly the box nwbSwShadowRayAabb would reject. Sharing the exact slab math
-// (same padding, same min/max) keeps the miss set identical; this only RANKS two sibling boxes so the nearer one is
-// visited first -- it can never cull a real hit.
+// Box entry distance (slab tNear in [tMin,tMax]); NWB_SW_SHADOW_AABB_MISS on miss. Ordering-only twin of the bool test:
+// identical slab math keeps the miss set identical; ranking nearer-first can never cull a hit.
 float nwbSwShadowRayAabbEntryT(const float3 origin, const float3 invDir, const float tMin, const float tMax, const float3 boxMin, const float3 boxMax){
     float tEntry;
     return nwbBvhRayAabbT(origin, invDir, tMin, tMax, boxMin, boxMax, NWB_SW_SHADOW_AABB_PADDING, tEntry)
@@ -62,12 +59,8 @@ struct NwbSwShadowTriangleHit{
     float w;
 };
 
-// Watertight ray/triangle test (Woop/Benthin/Wald 2013), two-sided: an occluder shadows regardless of facing.
-// The edge-function sign convention hits exactly one triangle across a shared edge (no float gap, no double count),
-// which is the robust replacement for Moeller-Trumbore's barycentric-epsilon fudge + 1/det amplification. NOTE: this is
-// a correctness/robustness improvement, NOT a hardware-parity fix -- the driver's opaque intersector still disagrees
-// with ANY software intersector by +/-1 crossing at grazing silhouettes (see shadow_rayquery_cs), an inherent hybrid
-// residual, invisible for this binary opaque test beyond a sub-pixel edge. Reports a hit strictly inside (tMin, tMax).
+// Watertight two-sided ray/triangle (Woop/Benthin/Wald 2013): exactly one hit per shared edge. Still differs from
+// the HW intersector by +/-1 crossing at grazing silhouettes (inherent hybrid residual, sub-pixel here).
 NwbSwShadowTriangleHit nwbSwShadowRayTriangle(const float3 origin, const float3 direction, const float tMin, const float tMax, const float3 v0, const float3 v1, const float3 v2){
     NwbSwShadowTriangleHit result;
     result.hit = false;

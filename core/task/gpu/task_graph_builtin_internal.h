@@ -68,7 +68,8 @@ template<typename Payload>
     return !payload.copies.empty();
 }
 
-// Shared accepted/discarded lifecycle for builtin singleton tasks whose payload carries a direct acceptedToken. ClearBuffer plus UploadBuffer plus UploadTexture plus ResolveTexture share these identical wrappers; each task hoists its Payload above the task struct so the base instantiates against a complete type.
+// Shared accepted/discarded lifecycle for builtin singleton tasks whose payload carries a direct acceptedToken.
+// ClearBuffer plus UploadBuffer plus UploadTexture plus ResolveTexture share these identical wrappers
 template<typename PayloadT>
 struct SingletonTokenTaskBase{
     using Payload = PayloadT;
@@ -138,7 +139,7 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
         )
     )
         return false;
-    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined; accepted retained subresources are restored to descriptor state at packet close and reused by StateTracker on later packets.
+    // An Unknown write-only destination never invents an input state. Fresh managed subresources lower from Undefined
     return graphInitialState == ResourceStates::Unknown || graphInitialState == resourceDesc.initialState;
 }
 

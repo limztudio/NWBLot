@@ -38,13 +38,8 @@ public:
         const void* data = nullptr;
         usize dataSize = 0;
         u64 destOffsetBytes = 0;
-        // kCount selects the automatic setup-upload route: sizeable uploads prefer a real dedicated Transfer
-        // transport, then dedicated Compute, then Graphics. Supplying a concrete queue preserves an explicit
-        // caller preference; Transfer and Compute still fall back to an available physical transport. Upload
-        // offsets and byte sizes must be 4-byte aligned; a non-retained Unknown initial state publishes CopyDest,
-        // while a retained upload requires a concrete initial state.
-        // Written only after the upload submission and every declared consumer-queue readiness bridge have been
-        // accepted. Async callers must keep this storage alive until their setup job completes.
+        // kCount = automatic route (Transfer > Compute > Graphics); concrete queue preserves caller preference.
+        // 4-byte aligned offsets/sizes. Written after submit + readiness bridges; async callers retain storage.
         QueueSubmissionToken* acceptedToken = nullptr;
         CommandQueue::Enum queue = CommandQueue::kCount;
     };
@@ -82,12 +77,8 @@ public:
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
     };
 
-    // Uploads every listed region into an existing texture through a compiler-owned task graph.  This is the
-    // multi-subresource companion to TextureSetupDesc for decoded/static assets.  `finalState` is explicit so a
-    // caller cannot publish an opaque post-write layout; for keepInitialState textures it must equal initialState.
-    // Leave hasPhysicalInitialState false to preserve the legacy descriptor-state import.  Set it true to declare
-    // the actual native state of the destination before the upload; an explicit Unknown means a fresh Vulkan image
-    // begins in UNDEFINED rather than TextureDesc::initialState.
+    // Multi-subresource texture upload via a compiler-owned graph. Explicit `finalState` (keepInitialState: == initialState).
+    // hasPhysicalInitialState declares the native pre-upload state; explicit Unknown starts fresh images UNDEFINED.
     struct TextureUploadBatchDesc{
         TextureHandle destination;
         const TextureUploadRegion* regions = nullptr;

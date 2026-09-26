@@ -2,13 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 CLASSIFY + FILL (compacted transparent resolve). Byte-identical edge test + interpolation to the Stage-2
-// adaptive resolve, but EDGE slots are NOT traced here: they are atomically APPENDED to the compacted edge list and the
-// edge texel is left holding the PRISTINE opaque mask, so the indirect trace pass can read that mask and fold
-// transmittance with a SINGLE overwrite -- never double-multiplying the opaque pass's read-modify-write fold. On list
-// overflow (index >= edgeCapacity) the edge texel degrades to the interpolated fallback instead of being left un-tinted.
-// This pass does NOT trace (no occlusion ray), so it needs neither the traversal engine nor an occluder class -- only
-// the coarse neighbourhood, the visibility mask, and the compaction buffers.
+// Stage-3 classify + fill: edge texels append to the compacted list and keep the pristine opaque mask for the
+// indirect pass to fold once (no double-multiply). Overflow degrades to the interpolated fallback. No tracing here.
 
 
 #include "sw_binding_slots.h"

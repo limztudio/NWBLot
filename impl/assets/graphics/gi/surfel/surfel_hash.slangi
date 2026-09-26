@@ -9,12 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// World-space spatial hash for surfel lookup. A surfel is bucketed by the integer cell of its centre; the hash-build
-// pass links each surfel into a per-cell singly-linked list (InterlockedExchange on the cell head -- one integer
-// atomic, no float atomics). The cell size is 2 * max surfel radius, so a surfel can only overlap the query point's
-// own cell or its 26 neighbours -- a 3x3x3 neighbour walk is exhaustive. Collisions (two cells hashing to the same
-// bucket) only add far/near-zero-weight candidates to a walk, never a wrong result, and every walk is capped so a
-// pathological bucket can never spin the shader. NWB_SURFEL_CELL_INVALID + NWB_SURFEL_MAX_WALK are shared with C++.
+// World-space surfel hash: 3x3x3 walk is exhaustive (cell = 2x max radius). Collisions only add zero-weight
+// candidates; walks are capped. Cell-invalid + max-walk constants shared with C++.
 
 
 #include "surfel_binding_slots.h"

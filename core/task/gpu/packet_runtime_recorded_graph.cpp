@@ -131,7 +131,8 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
         return;
     }
 
-    // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle. This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
+    // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle.
+    // This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
     if(s_activeOperation || GpuGraphSubmissionTransaction::SubmissionOperation::active())
         return;
     const bool acquireExclusive = exclusive;
@@ -578,7 +579,8 @@ bool GpuRecordedGraph::validForWithinArtifactOperation(
         && validForWithinArtifactOperation(compiledGraph, planAccess, artifactAccess)
         && storage->graphIdentity == &graph
         && storage->recordingAttemptGeneration != 0u
-        // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease. Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated; active-attempt matching is required only by claim/reset paths.
+        // A terminal accepted/discarded artifact remains a valid immutable result after the graph releases its active attempt lease.
+        // Declaration admission plus the exact compiled-plan identity proves that the source graph has not mutated
     ;
 }
 
@@ -740,7 +742,8 @@ bool GpuTaskGraphExternalCompletionToken::validFor(
     )
         return false;
 
-    // A metadata-only compatibility binding may originate on a current-device queue omitted from the assignment topology. Graph-owned tokens instead require complete-topology validation during compile; this fallback validates device lifetime here and leaves concrete queue validation to the submitting Device.
+    // A metadata-only compatibility binding may originate on a current-device queue omitted from the assignment topology.
+    // Graph-owned tokens instead require complete-topology validation during compile
     return token.deviceGeneration == planAccess.deviceGeneration();
 }
 

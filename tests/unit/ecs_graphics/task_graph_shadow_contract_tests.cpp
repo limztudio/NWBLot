@@ -112,7 +112,8 @@ TEST(EcsGraphics, SoftwareSoftShadowsShareCombinedResolvePreparationAndGraphOwne
 }
 
 
-// The retained monolithic soft-shadow route must clear all-lit visibility on the selected Compute packet. Its renderer-local callback retains typed command-IR capture while avoiding the generic clear helper's Graphics path.
+// The retained monolithic soft-shadow route must clear all-lit visibility on the selected Compute packet.
+// Its renderer-local callback retains typed command-IR capture while avoiding the generic clear helper's Graphics path.
 TEST(EcsGraphics, ShadowVisibilityAllLitClearUsesComputeGraphCallback){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -168,7 +169,8 @@ TEST(EcsGraphics, ShadowVisibilityPermitsOptInCrossFamilyComputeRouting){
 }
 
 
-// Split timing scopes nest Async Shadow around Shadow Visibility, with Transparent Resolve innermost when active. Marker leases and ending timestamps must close in reverse order so the Vulkan marker stack and measured intervals retain that nesting.
+// Split timing scopes nest Async Shadow around Shadow Visibility, with Transparent Resolve innermost when active.
+// Marker leases and ending timestamps must close in reverse order so the Vulkan marker stack and measured intervals retain that nesting.
 TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -285,7 +287,8 @@ TEST(EcsGraphics, SplitShadowVisibilityClosesNestedTimingMarkersInReverseOrder){
 }
 
 
-// Split shadow callbacks must declare only resources their native body touches. Fresh retained scratch stays Unknown until a graph writer publishes it, while an accepted temporal history remains a real sampled input.
+// Split shadow callbacks must declare only resources their native body touches.
+// Fresh retained scratch stays Unknown until a graph writer publishes it, while an accepted temporal history remains a real sampled input.
 TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -388,7 +391,8 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
 }
 
 
-// Both software-shadow recording routes publish the same production-owned one-shot diagnostic. The split transparent trace reports only after recording its dispatch, while the retained monolithic path shares it.
+// Both software-shadow recording routes publish the same production-owned one-shot diagnostic.
+// The split transparent trace reports only after recording its dispatch, while the retained monolithic path shares it.
 TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoutes){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -438,7 +442,8 @@ TEST(EcsGraphics, SoftwareShadowTraversalDiagnosticCoversSplitAndMonolithicRoute
 }
 
 
-// The retained monolithic callback owns later native scratch transitions, but its graph entry must still reflect each fresh target's first write. Only an accepted temporal history may enter as a sampled input.
+// The retained monolithic callback owns later native scratch transitions, but its graph entry must still reflect each fresh target's first write.
+// Only an accepted temporal history may enter as a sampled input.
 TEST(EcsGraphics, MonolithicShadowVisibilityKeepsFreshScratchAsFirstWrites){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -570,7 +575,8 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
 }
 
 
-// The split software-BVH task records only compute commands after graph-owned clears. The compatibility Shadow Preparation endpoint can still record both transfer clears and compute dispatches, while preferring Graphics.
+// The split software-BVH task records only compute commands after graph-owned clears.
+// The compatibility Shadow Preparation endpoint can still record both transfer clears and compute dispatches, while preferring Graphics.
 TEST(EcsGraphics, ShadowPreparationQueueCapabilitiesMatchNativeCommands){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

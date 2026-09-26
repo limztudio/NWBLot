@@ -10,14 +10,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Geometry downsample pre-pass for the half-res caustic resolve. The resolve runs at half resolution but its edge-stop +
-// area Jacobian need the receiver world position, and the wavelet re-reads it many times per pixel (5x5 taps x N passes).
-// Reading the FULL-res world-position + depth G-buffer at the half pixel's 2x location every tap is a scattered, cache-
-// unfriendly load that dominates the resolve's bandwidth (especially on a bandwidth-bound integrated GPU). This pass
-// resolves that ONCE: each half-res texel point-samples the full-res G-buffer at its top-left full texel and writes a
-// single compact half-res RGBA16F record -- xyz = world position, w = receiver validity (1 = receiver, 0 = background) --
-// that every resolve pass then taps as one half-res read. Same geometry the per-tap full-res reads would have used (a 2x
-// point sample), so there is no quality change; it only removes redundant full-res bandwidth.
+// Half-res geometry pack for the caustic resolve: one 2x point sample per half texel bakes xyz = world position,
+// w = receiver validity. Same taps as per-tap full-res reads, minus the redundant full-res bandwidth.
 
 struct NwbCausticGeometryDownsamplePushConstants{
     uint width;       // full-res G-buffer width

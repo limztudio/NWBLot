@@ -2,12 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel age-free recycling: one thread per pool slot. A live surfel whose cell has not been "seen" (covered by a
-// visible spawn tile) for more than maxAge frames is freed -- alive = 0 -- and its slot id is PUSHED onto the free-list
-// LIFO stack (InterlockedAdd on counter[FREE_TOP], one integer atomic, no float atomics). The spawn pass POPS these ids
-// before bump-allocating, so the pool stays bounded by the visible working set instead of growing monotonically. This
-// pass runs FIRST each frame (before the cell-head clear + hash-build), reading lastSeenFrame written by the PREVIOUS
-// frame's spawn keep-alive.
+// Age-free recycling: unseen-for-maxAge surfels freed + pushed to the LIFO free-list (one integer atomic).
+// Runs first each frame; spawn pops before bump-allocating, bounding the pool to the visible set.
 
 
 #include "surfel_runtime.slangi"
@@ -38,10 +34,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const uint maxAge = uint(g_NwbSurfelConstants.ageRaysTileScreen.x);
 
-    // lastSeenFrame <= frameIndex always (set with the current frame index at spawn/keep-alive, and this pass runs before
-    // this frame's spawn), so the unsigned age is exact. A surfel unseen for more than maxAge frames is recycled: mark it
-    // dead and push its slot id onto the free-list for the spawn to reuse. Age-free pushes each dead slot exactly once
-    // (the alive == 0 early-out above prevents a re-push), so the free-list holds no duplicates.
+    // Unsigned age is exact (lastSeen <= frame). Unseen past maxAge: mark dead, push once (alive early-out stops
+    // re-push); free-list stays duplicate-free.
     if(frameIndex - surfel.lastSeenFrame > maxAge){
         g_NwbSurfelPool[surfelIndex].alive = 0u;
         uint destination = 0u;

@@ -248,10 +248,8 @@ template<typename TValue>
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
 }
 
-// Reads back a material instance's mutable half4/float4 override (the inverse of SetMaterialMutableHalf4). Returns
-// false when the component has no override with that name, leaving outValue untouched so the caller keeps its default.
-// Used by the software probe/photon producers (GI, caustics) to shade a hit with the instance's authored tint colour,
-// which is stored as a per-instance mutable rather than a material-static constant.
+// Inverse of SetMaterialMutableHalf4: false when unoverridden (outValue untouched). Probe/photon producers read the
+// authored tint through it (per-instance mutable, not material-static).
 [[nodiscard]] inline bool GetMaterialMutableHalf4(
     const MaterialInstanceComponent& component,
     const AStringView parameterName,

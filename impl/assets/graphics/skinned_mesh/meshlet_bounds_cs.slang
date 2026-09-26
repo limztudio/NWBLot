@@ -134,12 +134,8 @@ void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, con
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
 #if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
-    // Two-stage fold. Intra-wave: each lane reads ONLY its own groupshared slot (the value the
-    // caller just wrote), so WaveActiveMin/Max combine register values across the wave with no
-    // barrier -- the same property the surfel SH reduce relies on. Lane 0 of each wave then holds
-    // the per-wave min/max. Cross-wave: lane 0 of each wave stores its result, one barrier, then a
-    // log2(waveCount)-stride tree folds the per-wave results into slot 0. 128-thread group ->
-    // waveCount 2 on AMD BC-250 (subgroup 64) / 4 on NVIDIA (subgroup 32); 8 baseline barriers -> 2.
+    // Two-stage fold: intra-wave via WaveActiveMin/Max with no barrier (per-lane slots), then a log2 tree over
+    // per-wave results (8 barriers -> 2 for a 128-thread group).
     const uint waveLaneCount = WaveGetLaneCount();
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;

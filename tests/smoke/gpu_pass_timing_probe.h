@@ -25,10 +25,8 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Published GPU timing is asynchronous: a window can contain samples from several source frames or only part of
-// one frame. Legacy avg/min/max fields describe totals per published window. The file sink also exports total_ms,
-// gpu_samples and sample_avg_ms so benchmarks can normalize by actual dispatches instead of publication cadence.
-// A multi-dispatch pass must account for its known dispatches per frame; window counts are not frame counts.
+// GPU timing is async: windows != frames. avg/min/max are per published window; total_ms/gpu_samples normalize
+// by dispatches, not cadence.
 class GpuPassTimingProbe final{
 private:
     static constexpr f64 s_WarmupSeconds = 0.25;
@@ -98,11 +96,8 @@ private:
             if(!stats.valid())
                 continue;
 
-            // Fold each published GPU window at most once. The watermark PERSISTS across interval resets, so a window
-            // that straddles a report boundary (onUpdate ran but no new GPU publish yet, e.g. an occluded/skipped
-            // frame still returns the prior window) is never double-counted into the next interval. Publish indices
-            // strictly increase and are > 0 once accumulation begins (post-warmup), so the 0 default reads as "none
-            // folded yet" without colliding with a real window.
+            // Fold each GPU window once: persistent watermark survives resets, so straddling windows never double-count.
+            // Publish indices > 0 post-warmup, so 0 means none folded yet.
             if(m_scopeLastFoldedPublish[i] == stats.publishFrameIndex)
                 continue;
             m_scopeLastFoldedPublish[i] = stats.publishFrameIndex;

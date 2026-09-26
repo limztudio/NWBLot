@@ -2,14 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel spawn: one thread per screen tile (spawnTile x spawnTile px). Reads the tile-centre G-buffer world position +
-// normal, hashes it to a cell, and -- if that cell's list is still EMPTY -- claims the cell and bump-allocates one
-// surfel on that surface. ONE SURFEL PER HASH BUCKET: the hash is rebuilt from the live pool BEFORE this pass, so a
-// non-empty cell head means a surfel already covers the cell (skip). Many screen tiles map to one near-camera cell on
-// the bootstrap frame, so the empty-cell claim is atomic -- CompareExchange(INVALID -> PENDING) -- and only the winning
-// tile allocates; losers skip (no wasted slots). Keeping every cell list length 1 makes the gather's fixed-order walk
-// deterministic. Background
-// pixels (no G-buffer normal) are skipped. Recycling / keep-alive are handled in the age-free pass and this spawn pass.
+// Surfel spawn: one thread per screen tile claims its EMPTY hash cell (atomic INVALID -> PENDING; losers skip) and
+// bump-allocates one surfel. One surfel per bucket keeps the gather walk deterministic. Background tiles skipped.
 
 
 #include "surfel_runtime.slangi"
@@ -58,11 +52,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const float defaultRadius = g_NwbSurfelConstants.coverageRadiusBiasHyst.y;
 
-    // One surfel per hash bucket. The hash was rebuilt from the live pool BEFORE this pass. COLLISION-AWARE KEEP-ALIVE:
-    // walk the bucket's (short) list and, if a node's cell matches THIS tile's cell, refresh its lastSeenFrame and return
-    // -- the cell is covered. Refreshing only the list HEAD would starve a deeper node when two distinct cells collide
-    // onto one bucket, ageing out a still-visible surfel = flicker; walking (bounded, like the gather) refreshes the
-    // right one. id < poolCapacity terminates the walk on INVALID / PENDING (both > poolCapacity).
+    // Collision-aware keep-alive: walk the bucket list for THIS tile's cell and refresh it (head-only refresh would
+    // starve collided cells into flicker). id < poolCapacity terminates on INVALID / PENDING.
     const int3 myCell = nwbSurfelCellCoord(worldPosition, cellSize);
     const uint bucket = nwbSurfelHashCell(myCell, cellCount);
     {
@@ -78,21 +69,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
 
-    // No surfel covers this cell yet. Claim the bucket atomically so only ONE tile allocates when many map to the same
-    // empty bucket (the bootstrap frame packs a near-camera cell with dozens of tiles). CompareExchange INVALID ->
-    // PENDING: the winner gets INVALID back; everyone else (bucket occupied by a foreign-cell surfel, or another tile
-    // mid-claim) gets a non-INVALID value and bails without touching the counters.
+    // Atomic INVALID -> PENDING claim so one tile wins a contended empty bucket; losers (occupied or mid-claim) bail
+    // without touching counters.
     uint previous = NWB_SURFEL_CELL_INVALID;
     InterlockedCompareExchange(g_NwbSurfelCellHead[bucket], NWB_SURFEL_CELL_INVALID, NWB_SURFEL_CELL_PENDING, previous);
     if(previous != NWB_SURFEL_CELL_INVALID)
         return;
 
-    // Won the claim: allocate a slot. POP a recycled id off the free-list first via a CAS loop -- pushes are
-    // quiescent this pass (age-free's push ran in a separate barrier-separated pass), so FREE_TOP only decreases and the
-    // pop never underflows / never goes transiently negative. If the free-list is empty, BUMP-allocate via a CAS capped
-    // at poolCapacity: BUMP_TOP is a monotonic high-water mark, so it must never overshoot -- decrementing it to "undo"
-    // an over-bump could re-hand a slot index already holding a live surfel (aliasing). On pool exhaustion, release the
-    // claim (restore INVALID) so a later frame retries once recycling frees slots.
+    // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never
+    // overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
     uint slot = 0u;
     bool allocated = false;
     {
@@ -126,16 +111,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Per-surfel spatial seeding prevents recycled surfels from flashing dark: a fresh surfel is sampleCount 0 -> the gather skips it,
-    // so a newly-revealed / recycled surface with NO seeded neighbour in the gather's reach shows hemiAmbient until the
-    // round-robin traces this surfel a few frames later = a pop-in. Seed the directional-irradiance SH from ESTABLISHED
-    // neighbours (sampleCount >= 2, i.e. traced at least twice -> never a this-frame spawn, so no torn read + no
-    // seed-from-seed) in the 3x3x3 cells, normal + distance weighted (the gather's weighting): a weighted average of the
-    // neighbours' SH coefficients is itself a valid SH field (linear). The surface then shows a plausible directional
-    // bounce immediately; the first real trace refines it (seeded sampleCount 1 -> the trace blends at weight 1/2). No
-    // established neighbour (bootstrap, or a genuinely new region) -> stays 0. The neighbours' SH was written by the
-    // PREVIOUS frame's trace (pass 4) and is stable during this spawn (pass 3, before this frame's trace) -> race-free.
-    // SH seed sums are bounded irradiance blends; half accumulators match the trace-side SH math.
+    // Spatial seed stops recycled surfels flashing dark: fresh surfels (sampleCount 0) are gather-skipped, so seed SH
+    // from ESTABLISHED neighbours (sampleCount >= 2, never a this-frame spawn: no torn read, no seed-from-seed),
+    // normal + distance weighted (SH average stays a valid field). First trace refines at weight 1/2.
+    // Neighbour SH is previous-frame stable (pass 4 before this pass-3 spawn): race-free.
     half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);

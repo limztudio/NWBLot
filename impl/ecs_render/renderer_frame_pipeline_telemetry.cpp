@@ -319,11 +319,8 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             recordingStatistics.readyFrontierWorkerUtilization() * __hidden_frame_graph_export::s_PercentScaleTelemetry
         );
 
-        // This borrows immutable compiled-plan topology and entries plus recorded packet slots under the same renderer-
-        // side serialization contract as deferredTaskGraphRuntimeStatistics(). Native recording, including joined
-        // ready-frontier workers, and compiled/recorded-graph reset/recompile must not overlap these value snapshots.
-        // In particular, do not replace this with the mutable live Device registry while a later recompile can change
-        // the packet plan that owns these transaction snapshots.
+        // Borrows immutable plan topology + packet slots under the renderer serialization contract; no overlap with
+        // recording/reset/recompile, and never the mutable live registry (recompile can move the owning plan).
         for(usize queueIndex = 0u; queueIndex < physicalQueueRuntimeStatistics.size(); ++queueIndex){
             const Core::GpuPhysicalQueueInfo& queueInfo = runtimeQueueTopology.queues[queueIndex];
             const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& queueRuntimeStatistics =

@@ -24,7 +24,8 @@ struct GpuTaskGraphCompileOptions;
 
 class GpuTaskScheduler final : NoCopy{
 private:
-    // Admission pins the lifecycle device while recording, callbacks, submission, or a GPU wait is in progress. The metadata lock is never held across those operations, preserving concurrent scheduler execution.
+    // Admission pins the lifecycle device while recording, callbacks, submission, or a GPU wait is in progress.
+    // The metadata lock is never held across those operations, preserving concurrent scheduler execution.
     class DeviceOperation final : NoCopy{
         friend class GpuTaskScheduler;
 
@@ -118,7 +119,7 @@ public:
 
 
 public:
-    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first; detach rejects active operations without changing the binding.
+    // The device owner attaches after creation and detaches before native destruction. It must stop and join producers and finish required GPU waits first
     [[nodiscard]] bool attachDevice(Device& device)noexcept;
     [[nodiscard]] bool detachDevice(Device& device)noexcept;
     [[nodiscard]] bool isAttachedTo(const Device& device)const noexcept;
@@ -149,7 +150,7 @@ public:
         Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphCompileOptions& compileOptions
     )const;
-    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned; callers provide only semantic task bindings and optional timing policy.
+    // Records and executes the compiler-frozen ordinary graph prefix. Native recorder construction and queue submission remain scheduler-owned
     [[nodiscard]] bool executeGraph(
         GpuTaskGraph& graph,
         GpuCompiledGraph& compiledGraph,
@@ -160,7 +161,8 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Executes one graph-owned terminal recovery/finalization task after ordinary graph work reaches an accepted frontier. The scheduler owns recorder construction and all native queue-submission details.
+    // Executes one graph-owned terminal recovery/finalization task after ordinary graph work reaches an accepted frontier.
+    // The scheduler owns recorder construction and all native queue-submission details.
     [[nodiscard]] bool executeAcceptedFrontierTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -171,7 +173,8 @@ public:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Executes one semantic late task after its graph dependencies have accepted. Recorded and accepted callbacks retain the task-level lifecycle contract while the scheduler owns native recording and submission.
+    // Executes one semantic late task after its graph dependencies have accepted.
+    // Recorded and accepted callbacks retain the task-level lifecycle contract while the scheduler owns native recording and submission.
     [[nodiscard]] bool executeTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -210,7 +213,7 @@ private:
     )const;
 
 private:
-    // Records and submits one semantic late-recovery/finalization task whose compiled packet joins the accepted physical-queue frontier. The transaction supplies the exact current queue waits during submission; callers never assemble a renderer-local frontier token list or compiler packet range. Record or submit failure rejects the still-unaccepted task before returning false.
+    // Records/submits one frontier recovery/finalization task (transaction supplies queue waits; no caller token ladder). Failure rejects the unaccepted task.
     [[nodiscard]] bool recordAndSubmitAcceptedFrontierTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -221,7 +224,7 @@ private:
         Alloc::ScratchArena& scratchArena,
         GpuSubmissionPacketId* outFailedPacket = nullptr
     )const;
-    // Records and submits one semantic late task after its graph dependencies have accepted. A recorded callback may validate the packet's immutable final-state seed before submission, and an accepted callback may publish semantic state synchronously from the native submission token. Any rejection leaves task lifecycle owned by the transaction rather than a renderer-local packet/retry path.
+    // Records/submits one late task post-accept: recorded validates the final-state seed, accepted publishes from the token. Rejection stays transaction-owned (no renderer retry path).
     [[nodiscard]] bool recordAndSubmitTask(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -275,7 +278,8 @@ private:
         const GpuTaskGraph::DeclarationReadView& declarationAccess,
         const GpuCompiledGraph::ReadView& planAccess
     )const;
-    // The caller owns one active composite submission operation for the full native-accept, task-callback, and transaction-publication sequence. It supplies semantic bindings while the packet primitive stays internal.
+    // The caller owns one active composite submission operation for the full native-accept, task-callback, and transaction-publication sequence.
+    // It supplies semantic bindings while the packet primitive stays internal.
     [[nodiscard]] bool submitPacketRangeWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -293,7 +297,8 @@ private:
         const GpuTaskGraphTaskSubmissionHook* taskSubmissionHooks,
         usize taskSubmissionHookCount
     )const;
-    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence. Range submission supplies its synchronous semantic obligations here; the native packet primitive is never exposed as a public entry point.
+    // The caller owns one valid SubmissionOperation for the full native-accept, task-callback, and transaction-publication sequence.
+    // Range submission supplies its synchronous semantic obligations here
     [[nodiscard]] bool submitPacketWithinSubmissionOperation(
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

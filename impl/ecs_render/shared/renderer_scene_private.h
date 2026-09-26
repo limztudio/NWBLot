@@ -202,11 +202,8 @@ inline bool CausticLightEnabled(const SceneLightGpuData& light){
     return light.params.w >= s_CausticSlotEnabledThreshold;
 }
 
-// Assigns the bounded pool of NWB_SCENE_CAUSTIC_SLOT_COUNT caustic slots to the most important caustic-enabled,
-// caustic-eligible lights, writing the chosen slot index into params.w (negative = no slot). Operates on the
-// already-resolved light array (call AFTER ResolveSceneLights). CRUCIAL GATE: caustics only exist when the scene
-// holds at least one refractive instance AND the light explicitly opted in; a normal transparent-shadow scene with
-// refractive materials therefore remains a shadow test, not a photon-caustic test.
+// Assigns caustic slots to top caustic-enabled lights (after ResolveSceneLights; negative = none). Gate: needs a
+// refractive instance AND light opt-in, so transparent-shadow scenes stay shadow tests.
 inline u32 ResolveCausticLights(
     SceneLightGpuData* outLights,
     const f32* causticImportance,

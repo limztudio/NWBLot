@@ -50,12 +50,7 @@ using CsgDeformVertexVector = Vector<CsgDeformVertex, ArenaT>;
 template<typename ArenaT>
 using CsgDeformTriangleVector = Vector<CsgDeformTriangle, ArenaT>;
 
-// Cutter shape mirrors the GPU SDF evals (plane/box/sphere/capsule).
-// parameter0 packs the same fields as the shader cutter:
-// - plane: xyz normal, w distance.
-// - box: xyz half extents.
-// - sphere: x radius.
-// - capsule: x radius, y half height.
+// Cutter mirrors the GPU SDF eval; parameter0 packs the shader fields (plane: n+d; box: half extents; sphere: r; capsule: r+h).
 struct CsgDeformShape{
     Name shapeType = NAME_NONE;
     Float34 worldToShape = Float34Identity();
@@ -118,7 +113,7 @@ static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Single source of truth for rebuild thresholds. Every domain class(validator, cutter field, wall, cap, pipeline) shares these so preview and commit observe identical epsilon, capacity, and seam rules.
+// Single source of truth for rebuild thresholds. Every domain class shares these so preview and commit observe identical epsilon, capacity, and seam rules.
 inline constexpr f32 s_MinEpsilon = 0.0000001f;
 inline constexpr f32 s_SplitDenominatorEpsilon = 0.0000001f;
 inline constexpr f32 s_NormalizeEpsilon = 0.000001f;

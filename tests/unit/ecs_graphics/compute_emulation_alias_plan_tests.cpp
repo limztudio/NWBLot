@@ -119,7 +119,7 @@ struct AliasPlanContext{
 };
 
 
-// The four production plans have different capture and matching inputs. Keep benchmark dispatch typed while timing the actual APIs; the operation arena is reserved for their caller-owned temporary validation storage.
+// The four production plans have different capture and matching inputs. Keep benchmark dispatch typed while timing the actual APIs
 template<typename Plan>
 [[nodiscard]] bool CapturePlan(Plan& plan, AliasPlanContext& context, Core::Alloc::ScratchArena& scratchArena){
     if constexpr(IsSame_V<Plan, RegularPlan> || IsSame_V<Plan, AvboitPlan>)

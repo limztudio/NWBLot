@@ -22,16 +22,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: cast one occlusion ray from the surface toward the light. Mirrors the hardware RayQuery path
-// (directional aims along the toward-light axis to "infinity"; point/spot aim at the light with tMax = the
-// distance; geometric-normal bias + tMin avoids self-intersection; a light inside the bias shell is lit).
-// Returns the per-channel transmittance: float3(1) when fully lit, tinted toward zero through occluders.
-// `jitter` is the per-pixel low-discrepancy 2D sample (in [0,1)^2) for the soft cone-jitter; pass float2(0,0) for the
-// HARD path (all non-soft modes). It offsets the toward-light direction inside the cone the physical source subtends,
-// so the occlusion ray samples the source and a penumbra emerges: a DIRECTIONAL light uses the constant angular radius
-// (params2.x); a POINT/SPOT light uses the distance-dependent half-angle asin(params2.y/dist) its source sphere (radius
-// params2.y) subtends, so closer lights soften more (physically correct, and the hard path emerges for free when the
-// source radius / angular radius is zero -> the cone half-angle is zero -> nwbShadowJitterCone returns the axis exactly).
+// Per light: one occlusion ray toward the light (mirrors the HW RayQuery setup). Returns per-channel transmittance.
+// `jitter` in [0,1)^2 cone-jitters inside the source cone (float2(0,0) = hard path); directional uses angular radius
+// params2.x, point/spot use asin(params2.y/dist). Zero radius collapses to the axis: the hard path is the soft path at zero width.
 half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMin;

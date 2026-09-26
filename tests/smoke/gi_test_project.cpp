@@ -50,17 +50,11 @@ using GiTestMaterialRef = NWB::Core::Assets::AssetRef<NWB::Impl::Material>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED GI scene: an OPEN-TOP BOX with a SATURATED-RED wall (+X) and a SATURATED-BLUE wall (-X) on
-// opposite sides, lit by a single DIRECTIONAL light aimed so the walls are lit but the FLOOR between them is in
-// DIRECT SHADOW. The indirect bleed onto the shadowed floor -- RED near the red wall, BLUE near the blue wall, a
-// red-to-blue gradient across the middle -- is the unfakeable pass signal: the hemiAmbient replacement makes this
-// true GI detection (a constant ambient term cannot produce a two-colour directional bounce). No refractive casters
-// (caustics gate off = the scene is GI-funded).
+// GI scene: open-top box, RED (+X) vs BLUE (-X) walls, floor in direct shadow. Red-to-blue bleed across the floor
+// is the pass signal (constant ambient cannot fake directional bounce). No refractive casters.
 //
-// The box is built from five opaque planes (four walls + one floor; open top so the directional light reaches the
-// interior). One wall is tinted saturated red, the opposite wall saturated blue; the two remaining walls + the floor
-// are near-white. The directional light grazes the walls at an angle that lights them while leaving the floor between
-// them in cast shadow, so the only light reaching the shadowed floor is the colored bounce off the lit walls.
+// Five-plane box (red/blue opposite walls, rest near-white); grazing light leaves the floor in cast shadow, so only
+// colored bounce reaches it.
 //
 // Reuses the benchmark's cooked ground material + the per-instance colour_tint mutable (no new assets).
 
@@ -73,11 +67,8 @@ static constexpr f32 s_BoxHalfExtent = 2.0f;       // half the box's X/Z extent
 static constexpr f32 s_BoxHeight = 2.0f;            // wall height
 static constexpr f32 s_BoxScale = 4.0f;             // plane scale (matches s_BoxHalfExtent * 2)
 
-// Camera: elevated ABOVE the box (higher than the wall top) looking DOWN into the open top at a moderate angle, so
-// it looks OVER the near wall (which would otherwise fill the frame because the walls are two-sided) and frames the
-// floor + its coloured bounce below with the red (+X) and blue (-X) side walls' inner faces rising at the left/right
-// and the far (+Z) wall across the back. A near-level camera sat below the wall tops and the near wall occluded
-// everything; a too-steep top-down angle foreshortened the walls to slivers -- this is the middle ground.
+// Camera over the open top at a moderate angle: frames floor bounce + red/blue side walls + far wall (level views
+// occlude; top-down foreshortens).
 static constexpr f32 s_CameraDistance = 7.5f;
 static constexpr f32 s_CameraHeight = 3.6f;
 static constexpr f32 s_CameraPitch = 0.42f;         // pulled back + elevated to frame the whole box interior

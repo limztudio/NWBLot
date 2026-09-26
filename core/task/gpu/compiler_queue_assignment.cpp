@@ -264,7 +264,8 @@ bool GpuTaskGraphCompiler::assignQueues(
     if(outAssignments.m_assignments.size() != outAssignments.m_assignmentIndicesByTask.size())
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
 
-    // Evaluate movable Compute and Any tasks against the same complete provisional plan, then publish their class decisions together. This keeps topology iteration order and partially-updated future routes out of scoring.
+    // Evaluate movable Compute and Any tasks against the same complete provisional plan, then publish their class decisions together.
+    // This keeps topology iteration order and partially-updated future routes out of scoring.
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> scoredQueues(outAssignments.m_assignments.size(), scratchArena);
     Vector<GpuTaskQueueAssignmentReason::Enum, Alloc::ScratchArena> scoredReasons(outAssignments.m_assignments.size(), scratchArena);
     for(usize assignmentIndex = 0u; assignmentIndex < outAssignments.m_assignments.size(); ++assignmentIndex){

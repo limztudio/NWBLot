@@ -60,7 +60,7 @@ struct GpuTaskGraphTaskView{
     bool hasAcceptedPayload = false;
 };
 
-// Graph-owned immutable view of one texture range released by external work. State sources are copied while the resource is declared, so an accepted source graph or native producer may retire its original handoff before this graph records its first consumer packet. The graph retains each copied snapshot through this view, so readers observe immutable state while teardown destroys graph-owned storage.
+// Immutable view of an externally released texture range; sources copied at declare time, so producers may retire early while readers stay immutable.
 struct GpuTaskGraphInitialOwnerHandoffSourceView{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -126,8 +126,7 @@ struct GpuTaskGraphExternalCompletionView{
     bool hasToken = false;
 };
 
-// One graph-declared presentation completion. The backbuffer is a retained typed texture captured in its native Unknown/Present acquisition state and exported only to the Present sink, without a second ownership release.
-// Every declared user must reach the Graphics producer and compile onto its exact physical queue. The producer may omit a direct use so a terminal timing/finalization task can publish after the earlier backbuffer writers.
+// Graph-declared presentation completion: retained backbuffer in Unknown/Present, exported to Present only. Users reach the Graphics producer on its exact queue; producer may skip direct use for terminal publish.
 struct GpuPresentEndpoint{
     GpuTaskId producer;
     GpuGraphResourceId backBuffer;
@@ -146,7 +145,7 @@ class GpuRecordedGraph;
 class GpuTaskScheduler;
 
 
-// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate; runtime paths use nonblocking acquisition after taking other gates.
+// Lexical proof that immutable declaration storage cannot be reset or mutated. Compiler/tooling callers acquire a waiting view before any other operation gate
 class GpuTaskGraphDeclarationReadView final : NoCopy{
     friend class GpuCompiledGraph::ReadView;
     friend class GpuTaskGraph;
@@ -464,7 +463,8 @@ private:
     };
 
 private:
-    // A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker. The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
+    // A failed parallel recorder transfers its exact packet claim into this capability before leaving its worker.
+    // The ready-frontier owner can then invoke typed discard callbacks serially after every worker has joined.
     class PacketRecordingAbort final : NoCopy{
         friend class GpuTaskGraph;
 
@@ -582,7 +582,8 @@ private:
         u64 m_claimGeneration = 0u;
     };
 
-    // Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard graph payload while Device::executeCommandLists() owns the packet, and only the owning transaction resolves it.
+    // Native submission has the same exclusive ownership rule as native recording: cancellation cannot discard graph payload
+    // Device::executeCommandLists() owns the packet, and only the owning transaction resolves it.
     class PacketSubmissionLease final : NoCopy{
         friend class GpuTaskGraph;
         friend class GpuGraphSubmissionTransaction;
@@ -650,7 +651,8 @@ private:
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         GpuTaskDiscardedThunk discardPayload = nullptr;
         GpuTaskPayloadDestroyThunk destroyPayload = nullptr;
-        // Lifecycle callbacks are scoped to one graph-owned recording attempt. A retry only re-arms every task after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
+        // Lifecycle callbacks are scoped to one graph-owned recording attempt.
+        // A retry only re-arms every task after the preceding attempt fully discarded, so a stale native packet cannot publish a later attempt.
         mutable u64 lifecycleAttemptGeneration = 0u;
         mutable u64 recordingClaimGeneration = 0u;
         mutable u64 submissionClaimGeneration = 0u;
@@ -825,11 +827,13 @@ public:
         usize alignment = alignof(u8)
     );
 
-    // Adds graph-owned buffer/texture uploads. Ordered uses expose the native CopyDest write and optional local final transition, so packet preflight and later graph packets observe the complete state contract.
+    // Adds graph-owned buffer/texture uploads. Ordered uses expose the native CopyDest write and optional local final transition,
+    // packet preflight and later graph packets observe the complete state contract.
     [[nodiscard]] GpuTaskId addUploadBufferTask(const GpuTaskDesc& desc, const GpuUploadBufferTaskDesc& uploadDesc);
     [[nodiscard]] GpuTaskId addUploadTextureTask(const GpuTaskDesc& desc, const GpuUploadTextureTaskDesc& uploadDesc);
 
-    // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives its CopyDest write declaration, so desc must declare Transfer capability and must not provide separate resource uses.
+    // Adds a graph-owned native uint-buffer clear. The helper retains the imported buffer and derives its CopyDest write declaration,
+    // desc must declare Transfer capability and must not provide separate resource uses.
     [[nodiscard]] GpuTaskId addClearBufferTask(const GpuTaskDesc& desc, const GpuClearBufferTaskDesc& clearDesc);
 
     // Adds a graph-owned native texture clear. The helper retains the imported texture and derives its CopyDest write declaration, so desc must declare Transfer capability and must not provide separate resource uses. It adds Compute for ordinary color unless Graphics is declared, and adds Graphics for depth/stencil.
@@ -927,12 +931,14 @@ public:
         return task;
     }
 
-    // This form is useful for abstract resources and conservative bindless hazard domains during the metadata-only phase. Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
+    // This form is useful for abstract resources and conservative bindless hazard domains during the metadata-only phase.
+    // Tasks that will be recorded later must use a typed import overload so the graph retains the resource.
     [[nodiscard]] GpuGraphResourceId importResource(const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importTexture(const TextureHandle& texture, const GpuGraphResourceDesc& desc);
     [[nodiscard]] GpuGraphResourceId importBuffer(const BufferHandle& buffer, const GpuGraphResourceDesc& desc);
-    // Reuses a typed texture import whose identity may have been chosen by an earlier producer. This lets later consumers add resource uses for the same physical texture without inventing incompatible graph metadata.
-    // Reuses a typed buffer import whose identity may have been chosen by an earlier producer. This lets later consumers add resource uses for the same physical buffer without inventing incompatible graph metadata.
+    // Reuses a typed texture import whose identity may have been chosen by an earlier producer.
+    // This lets later consumers add resource uses for the same physical texture without inventing incompatible graph metadata.
+    // Reuses a typed buffer import from an earlier producer (later consumers add uses without new metadata).
     [[nodiscard]] GpuGraphResourceId importAccelStruct(
         const RayTracingAccelStructHandle& accelStruct,
         const GpuGraphResourceDesc& desc
@@ -940,9 +946,10 @@ public:
     [[nodiscard]] GpuGraphResourceId importHazardDomain(const GpuGraphResourceDesc& desc);
     // Declares a distinct semantic value for one exact physical resource range. Repeating an identical descriptor intentionally produces a different version ID.
     [[nodiscard]] GpuGraphResourceVersionId declareResourceVersion(const GpuGraphResourceVersionDesc& desc);
-    // Stores an immutable dynamic resource collection. Task resource-set declarations expand to the set's concrete members at task creation, so compilation and recording keep their existing resource-level contracts.
+    // Stores an immutable dynamic resource collection. Task resource-set declarations expand to the set's concrete members at task creation,
+    // compilation and recording keep their existing resource-level contracts.
     [[nodiscard]] GpuGraphResourceSetId importResourceSet(const GpuGraphResourceSetDesc& desc);
-    // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup; typed imports retain a stable engine handle until native recording or later IR replay resolves it.
+    // Pipeline IDs are graph-local side-table entries.  Metadata-only entries support analysis/capture setup
     [[nodiscard]] GpuGraphPipelineId importPipeline(const GpuGraphPipelineDesc& desc);
     [[nodiscard]] GpuGraphPipelineId importGraphicsPipeline(
         const GraphicsPipelineHandle& pipeline,
@@ -964,14 +971,16 @@ public:
     // One graph may publish one presentation completion. The compiler validates the retained typed backbuffer, its single-sink acquisition/final-state contract, every user-to-producer dependency, at least one real writer, and exact physical Graphics routing before exposing it to native presentation policy.
     [[nodiscard]] bool declarePresentEndpoint(const GpuPresentEndpoint& endpoint);
 
-    // Reset is externally serialized against *starting* native recording/submission entrypoints. A bound partial attempt and every transient packet claim refuse teardown; callers must resolve the owner before retrying.
+    // Reset is externally serialized against *starting* native recording/submission entrypoints.
+    // A bound partial attempt and every transient packet claim refuse teardown; callers must resolve the owner before retrying.
     [[nodiscard]] bool tryReset();
     void reset();
 
 
 private:
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept;
-    // Starts or validates one native-recording attempt for the compiler-owned packet. A retry can begin only after every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
+    // Starts or validates one native-recording attempt for the compiler-owned packet.
+    // A retry can begin only after every task from the previous attempt was discarded; accepted-frontier recovery remains in that same attempt.
     [[nodiscard]] bool beginRecordingAttempt(
         const GpuCompiledGraph& compiledGraph,
         GpuSubmissionPacketId packet,
@@ -1192,7 +1201,8 @@ private:
         GpuSubmissionPacketId packet,
         PacketSubmissionLease& lease
     )const noexcept;
-    // Atomically discards one non-recording packet. A packet with an in-flight Recording claim is left intact so transaction cancellation cannot race native command recording or reopen the graph for a retry.
+    // Atomically discards one non-recording packet. A packet with an in-flight Recording claim is left intact
+    // transaction cancellation cannot race native command recording or reopen the graph for a retry.
     [[nodiscard]] bool discardUnacceptedPacket(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -1200,7 +1210,8 @@ private:
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
     )const;
-    // Unexpected observer failure must resolve the graph-owned attempt without invoking another extensible callback while the original exception is active. Payload destruction remains owned by normal graph teardown.
+    // Unexpected observer failure must resolve the graph-owned attempt without invoking another extensible callback
+    // the original exception is active. Payload destruction remains owned by normal graph teardown.
     [[nodiscard]] bool abandonUnacceptedPacketWithoutCallbacks(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
@@ -1314,7 +1325,7 @@ private:
     GraphicsVector<GpuTaskResourceUse> m_resourceUses;
     GraphicsVector<GpuTaskResourceVersionUse> m_resourceVersionUses;
     GraphicsVector<GpuGraphResourceNode> m_resources;
-    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix; promoted indexes retain capacity across reset without retaining extra resource handles or Names.
+    // Ordinals refer to immutable declarations in the current generation. Small graphs use their bounded existing node prefix
     Optional<ResourceIdentityIndex> m_resourceIdentityIndex;
     Optional<ResourcePointerIndex> m_resourcePointerIndex;
     GraphicsVector<GpuGraphResourceVersionNode> m_resourceVersions;

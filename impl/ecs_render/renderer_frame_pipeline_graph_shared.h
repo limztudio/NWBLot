@@ -26,7 +26,8 @@ namespace RendererFramePipelineDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares. The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
+// Five raytracing scene/shadow buffers shared by the caustics and shadow-visibility graph declares.
+// The importer callback matches each file's local importBuffer lambda, so call sites keep their exact graph.
 template<typename ImportBufferFn, typename AppendBufferFn>
 [[nodiscard]] inline bool AppendRayTracingSceneShadowBuffers(
     const RayTracingDeferredGraphResourceSnapshot& rayTracingResources,

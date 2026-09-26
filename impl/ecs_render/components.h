@@ -45,20 +45,15 @@ namespace OpticalBoundaryMode{
 struct RendererComponent{
     Core::Assets::AssetRef<Material> material;
     bool visible = true;
-    // Merging is opt-in: both modes assert that the material's geometry and surface hooks are independent of
-    // dense instance ID. Mesh, material asset and exact transform must match. IdenticalMaterial also compares
-    // every effective mutable byte; SharedGroup requires a nonempty common group and asserts that differing
-    // mutable inputs preserve the same boundary. Runtime meshes and CSG receivers always remain independent.
+    // Opt-in merging: hooks ID-independent; mesh/material/transform must match. IdenticalMaterial compares all
+    // mutable bytes; SharedGroup needs a common group + same boundary. Runtime/CSG receivers stay independent.
     OpticalVolumeCoincidence::Enum opticalVolumeCoincidence = OpticalVolumeCoincidence::Independent;
     Name opticalVolumeGroup = NAME_NONE;
     // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every
     // optical and shading property to raster, RT and caustics, including when screen refraction is disabled.
     i32 opticalVolumePriority = 0;
-    // Closed modes assert watertight outward-oriented geometry and homogeneous IOR/unit-distance absorption:
-    // these optical inputs are invariant across UV, normals, world position, and ray/observer direction.
-    // Outward closed shells in one instance form a union. Nested asserts disjoint or properly nested instance
-    // unions. Priority replaces the effective medium in overlaps;
-    // simultaneously active volumes must use the same mode. These contracts are independent of caustic eligibility.
+    // Closed modes: watertight outward geometry, homogeneous IOR/absorption (UV/normal/position/direction invariant).
+    // Same-instance shells union; priority wins overlaps; co-active volumes share the mode.
     OpticalBoundaryMode::Enum opticalBoundaryMode = OpticalBoundaryMode::Unspecified;
     // Higher priority selects the medium; equal priority uses the lowest full EntityID. This is separate from
     // opticalVolumePriority, which chooses a representative of explicitly coincident geometry before gathering.

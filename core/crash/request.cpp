@@ -195,12 +195,8 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     CopyFixedBuffer(request.triggerMessage, options.triggerMessage);
     CopyFixedBuffer(request.triggerFile, options.triggerFile);
 
-    // Ship the (untruncated) GPU report and the optional binary GPU crash dump as package files written
-    // straight from the caller's existing bytes: no copy into the fixed POD and no growable-heap allocation.
-    // The handler archives the package directory, so the files are included automatically. gpuReport/gpuDump
-    // are only set on the GPU device-lost path (a normal thread context), so this never adds file I/O to the
-    // hard-crash (signal/SEH) path. WriteTextFile opens the stream in binary mode and writes verbatim, so it
-    // serializes raw '.rgd' and '.nv-gpudmp' dump bytes unchanged.
+    // GPU report/dump ship as package files straight from caller bytes (no POD copy, no heap alloc).
+    // Device-lost path only (normal thread context), never the signal/SEH path; binary-verbatim writes.
     if(!options.gpuReport.empty() || !options.gpuDump.empty()){
         Alloc::PersistentArena& dumpArena = DumpArena();
         const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(dumpArena, request);

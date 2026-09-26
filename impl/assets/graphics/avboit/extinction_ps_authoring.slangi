@@ -9,17 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned authoring header for a material's AVBOIT-extinction pixel shader. A material's extinction pixel
-// shader includes this + its `.bind` interface + its surface
-// hook, and the engine owns the entry (the main below) + the extinction-splat math. The extinction alpha comes
-// from the SAME per-material surface hook (nwbMaterialSurface -> surface.renderCoverage) the accumulate + occupancy passes
-// use, so the extinction-built volume and the accumulate color-weight share the IDENTICAL shader-decided alpha.
-// Only the alpha source changes; the extinction-splat + depth/slice math stays shared by every generated material pass.
-//
-// This pass needs ONLY the alpha, so it pulls the MINIMAL context to bring nwbMaterialSurface() + the typed `.bind`
-// accessors into scope (common.slangi + gbuffer_io.slangi + the per-draw context accessors from g_NwbAvboitDraw +
-// material_typed_accessors.slangi + surface.slangi) -- NOT scene/lighting.slangi or the BXDF dispatch, which only
-// the accumulate pass (which shades a color) requires.
+// AVBOIT-extinction authoring: engine owns entry + splat math; alpha comes from the shared surface hook
+// (surface.renderCoverage), so all passes agree. Minimal alpha-only context (no scene/lighting/BXDF).
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

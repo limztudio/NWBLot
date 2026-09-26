@@ -502,10 +502,8 @@ public:
             return false;
 #endif
 
-        // Arrow keys (Left/Right) drive a manual yaw scrub; the live angle is shown in the title bar so the exact
-        // orientation an artifact appears at can be read off and reproduced (via NWB_TRANSPARENT_MULTI_SPIN_ANGLE).
-        // The dispatcher visits handlers back-to-front, so addHandlerToBack gives this diagnostic scrubber first crack
-        // at the arrow keys; it consumes only Left/Right and passes everything else through.
+        // Arrows scrub yaw (title shows the angle; NWB_TRANSPARENT_MULTI_SPIN_ANGLE pins it). addHandlerToBack takes
+        // first crack; consumes Left/Right only.
         m_context.input.addHandlerToBack(m_arrowYawInput);
 #if defined(NWB_TRANSPARENT_MULTI_FRAME_LAGGED_ASYNC_LIGHTING_SMOKE)
         m_context.graphics.addRenderPassToBack(m_frameLaggedAsyncLightingUnfocusedPass);
@@ -626,11 +624,8 @@ public:
         m_centerShape = centerShapeEntity;
         m_rightShape = rightShapeEntity;
 
-        // Two STATIC OPAQUE occluders (the octahedron + cone meshes with the OPAQUE ground material) to exercise the
-        // separate opaque and transparent hardware shadow passes. The spinning transparent shapes cast colored shadows
-        // whose volume thickness comes from their hardware intersection records. Placed between the
-        // transparent shapes so their fixed hard shadows OVERLAP the sweeping colored shadows -- verifying the
-        // multiplicative combine (opaque fully blocks: the receiver is black even under a colored tint).
+        // Two static opaque occluders between the transparent shapes: fixed hard shadows overlap sweeping colored ones,
+        // verifying the multiplicative combine (opaque blocks even under tint).
         const auto opaqueLeftEntity = CreateTintedStaticMeshEntity(
             *m_world,
             m_context.objectArena,
@@ -761,11 +756,7 @@ public:
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("FrameLaggedAsyncLightingSmoke: F1 requested current-frame path"));
         }
 #endif
-        // Yaw selection, in priority order:
-        //  1. NWB_TRANSPARENT_MULTI_SPIN_ANGLE env freeze -- pins one orientation for deterministic A/B captures.
-        //  2. Manual arrow-key scrub -- the moment Left/Right is touched, auto-spin latches off so the user can park
-        //     the scene on a precise angle (read off the title bar) to report exactly where an artifact appears.
-        //  3. Auto-spin -- the default continuous rotation.
+        // Yaw: env freeze > arrow-scrub (latches off auto-spin) > auto-spin default.
         const f32 frozenAngle = effectiveFrozenAngle();
         m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, effectiveRotationSpeed(), s_MaxAnimationDelta);
         updateTransparentSceneTransforms();

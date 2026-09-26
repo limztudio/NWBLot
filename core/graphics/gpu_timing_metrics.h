@@ -74,10 +74,8 @@ struct GpuPacketEnvelopeMetrics{
 
 using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics, Alloc::ScratchArena>;
 
-// Aggregates half-open packet envelopes without converting their raw ticks to floating point. Every range must
-// belong to the same logical-device generation and use the same exact tick period. Same-queue ranges are unioned
-// before gaps and cross-queue concurrency are measured. False always resets both outputs. outQueueMetrics keeps its
-// caller-selected allocator; scratchArena owns only temporary sorting and sweep storage.
+// Aggregates half-open packet envelopes in raw ticks (same device generation + tick period). Same-queue unioned
+// before gap/concurrency measure. False resets outputs; caller allocator kept, scratch is temporary.
 [[nodiscard]] bool TryAggregateGpuPacketEnvelopeMetrics(
     const GpuComparableTimestampRange* packetEnvelopes,
     usize packetEnvelopeCount,

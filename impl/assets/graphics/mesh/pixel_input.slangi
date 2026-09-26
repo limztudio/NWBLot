@@ -54,10 +54,8 @@ static float3 inWorldPosition;
 static float3 inIncidentDirection;
 static float inPixelDepth;
 
-// Rasterizer-independent surface inputs a material's surface hook reads (via the statics below). The rasterizer
-// fills it from the interpolated NwbMeshPixelInput; the shadow trace fills it from a ray hit's per-vertex
-// attributes (PrimitiveIndex + barycentrics). It carries exactly the attributes a hook may consult -- it is NOT
-// SV_-decorated, so a non-rasterizer stage (the trace) can construct + supply it without rasterizer plumbing.
+// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the
+// rasterizer does from interpolated pixels). Exactly the consultable attributes, no more.
 struct NwbMeshSurfaceInputs{
     half4 color;
     float3 normal;

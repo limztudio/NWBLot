@@ -2,10 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 BUILD INDIRECT ARGS (compacted transparent resolve). One thread: clamp the classify pass's append count to
-// the list capacity, write the DispatchIndirectArguments{groupsX,1,1} for the indirect trace (groupsX =
-// ceil(count / traceGroupSize); 0 when no edges -> a valid zero-workgroup indirect dispatch), and stash the clamped
-// count for the indirect trace's tail guard. No trace, no G-buffer -- just the compaction counter + args buffers.
+// Stage-3 indirect args: clamp append count, write {ceil(count/traceGroupSize),1,1} (0 = valid no-op), stash tail guard.
 
 
 #include "sw_binding_slots.h"

@@ -84,7 +84,8 @@ bool RendererFramePipeline::scheduleDeferredLightingTaskGraphForExecution(Core::
         return false;
 
     Core::GpuTaskGraphCompileOptions compileOptions;
-    // A graphics prefix can split immediately after work that enables a different physical queue. This exposes the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
+    // A graphics prefix can split immediately after work that enables a different physical queue.
+    // This exposes the true cross-queue frontier while preserving the compiler's declaration-derived dependency order.
     compileOptions.packetizationPolicy = Core::GpuTaskGraphPacketizationPolicy::FrontierSafe;
     // Time accepted normal-rendering packets through the graph-owned presentation endpoint. Late readback, history-copy, and recovery tails retain separate diagnostic/lifecycle policy.
     compileOptions.packetTimingEnvelope.firstTask = m_deferredShadowPrepareTask;

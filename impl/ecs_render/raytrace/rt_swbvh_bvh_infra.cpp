@@ -664,7 +664,8 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
 
-    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback; direct routes retain the native compatibility primitive.
+    // Refit retains topology and recomputes boxes. The pure-software graph route supplies this typed counter clear immediately before the callback;
+    // direct routes retain the native compatibility primitive.
     if(!sentinelClearsGraphOwned){
         commandList.setBufferState(visitCounterBuffer, Core::ResourceStates::CopyDest);
         commandList.commitBarriers();
@@ -676,7 +677,8 @@ bool RendererRayTracingSystem::refitMeshSwBvhPrepared(
     commandList.setEnableUavBarriersForBuffer(meshNodeBuffer, true);
     commandList.setEnableUavBarriersForBuffer(meshParentBuffer, true);
     commandList.setEnableUavBarriersForBuffer(visitCounterBuffer, true);
-    // Fit declares all scratch views, so direct callers retain its native entry UAV fence. The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
+    // Fit declares all scratch views, so direct callers retain its native entry UAV fence.
+    // The graph-split pure-software callback declares these exact states and lowers the CopyDest/UAV handoff in its prologue.
     if(!graphBoundaryStatesOwned){
         commandList.setBufferState(keysBuffer, Core::ResourceStates::UnorderedAccess);
         commandList.setBufferState(payloadBuffer, Core::ResourceStates::UnorderedAccess);

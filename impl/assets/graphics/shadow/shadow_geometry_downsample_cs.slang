@@ -12,15 +12,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Geometry downsample pre-pass for the half-res soft shadow resolve. The resolve's a-trous wavelet + its
-// upsample need the receiver's NORMAL + a distance edge-stop at every tap (5x5 taps x N passes), and re-reading the
-// full-res normal + world-position G-buffer at the half pixel's 2x location every tap is a scattered, cache-unfriendly
-// load. This pass resolves it ONCE: each half-res texel point-samples the full-res G-buffer at its top-left full texel
-// and writes a single compact half-res record -- .xy = octahedral-packed receiver normal, .z = world-space distance
-// from the camera (a linear, world-unit depth proxy for the edge-stop), .w = receiver validity (1 = receiver, 0 =
-// background). It stores the packed normal + camera-distance the shadow edge-stop uses (shadow needs a discontinuity
-// metric, not an area Jacobian). Same 2x point sample the resolve's half->full map would use, so no quality change vs
-// per-tap full-res reads; it only removes redundant full-res bandwidth.
+// Half-res geometry pack for the soft-shadow resolve: one 2x point sample per half texel bakes .xy = octahedral normal,
+// .z = camera distance (edge-stop proxy), .w = receiver validity. Same taps as per-tap full-res reads, minus the redundant bandwidth.
 
 struct NwbShadowGeometryDownsamplePushConstants{
     uint width;       // full-res G-buffer width

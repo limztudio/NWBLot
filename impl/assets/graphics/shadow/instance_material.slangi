@@ -15,16 +15,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-instance shadow-occluder material, indexed by the shadow instance id (hardware InstanceID() == software
-// scene-BVH leaf index). shadowTransmittanceModelId dispatches the per-hit transmittance hook; flags bit0 =
-// isTransparent (1 -> evaluate the hook, multiply the running transmittance and keep tracing; 0 -> opaque, zero
-// the transmittance and stop); shadingModelId selects the authored BXDF when a camera effect evaluates radiance.
-// Surface and BXDF dispatch IDs are separate domains; neither may substitute for the other.
-// materialConstantByteOffset locates the occluder's constant block in g_NwbMaterialTypedWords and
-// meshInstanceIndex indexes g_NwbMeshInstances (the mutable storage offset) -- together they reconstruct the
-// material-constants context the surface hook reads. GI evaluates the same hook for baseColor at the traced hit,
-// rather than carrying a guessed interface field in this record. The nine uints mirror the C++
-// NwbRtInstanceMaterialGpu.
+// Per-instance shadow-occluder material keyed by shadow instance id (HW InstanceID() == SW BVH leaf index).
+// flags bit0 = isTransparent (1: evaluate transmittance hook and continue; 0: opaque stop); surface and BXDF dispatch ids are separate domains.
+// materialConstantByteOffset + meshInstanceIndex reconstruct the surface hook's constants context. Mirrors NwbRtInstanceMaterialGpu.
 struct NwbRtInstanceMaterial{
     uint shadowTransmittanceModelId;
     uint flags;
@@ -40,10 +33,8 @@ struct NwbRtInstanceMaterial{
     uint nodeSlot;
 };
 
-// flags bit1 = isRefractive: the material asset's `refractive` classification, plumbed to the GPU instance record
-// for the caustic producer. The shadow trace does NOT read this -- a transparent occluder's surface hook supplies the
-// optical params (ior / transmission) and the engine integrates the shadow visibility over the true volume path
-// (per-crossing Fresnel + signed Beer-Lambert). This flag is the producer's classification.
+// flags bit1 = isRefractive for the caustic producer (shadow trace ignores it: the surface hook supplies optical
+// params; visibility integrates the true volume path).
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

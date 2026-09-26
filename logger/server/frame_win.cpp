@@ -465,13 +465,9 @@ void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
         listHwnd = FrameDetail::s_ListHwnd;
     }
 
-    // CRITICAL: the SendMessage calls run OUTSIDE s_ListMutex. print() runs on the Server's worker thread, while the
-    // listbox lives on the UI thread. LB_ADDSTRING on an LBS_OWNERDRAWVARIABLE listbox SYNCHRONOUSLY re-enters the UI
-    // thread's WM_MEASUREITEM / WM_DRAWITEM handlers, and those lock s_ListMutex to read the store. Holding the mutex
-    // across the cross-thread SendMessage would deadlock the worker (blocked in SendMessage) against the UI thread
-    // (blocked on the mutex) -- the first log line would freeze the whole logserver (blank, unresponsive to WM_CLOSE).
-    // The message was already appended under the lock above; the owner-draw handlers index the store by itemID (not the
-    // item pointer), so the LB_ADDSTRING item data is unused and the single worker never mutates the store concurrently.
+    // CRITICAL: SendMessage runs OUTSIDE s_ListMutex. LB_ADDSTRING synchronously re-enters the UI thread's draw handlers
+    // (which lock the mutex); holding it across would deadlock worker-against-UI on the first log line. Store indexed by
+    // itemID, so item data is unused and the single worker is race-free.
     if(!listHwnd)
         return;
 

@@ -248,12 +248,8 @@ namespace GpuTaskGraphCompilerDetail{
     )
         return false;
 
-    // Tasks retain one exact acceptance and synchronization point by default. An explicitly opted-in successor may
-    // share its immediately preceding compatible packet, preserving task order while retaining one submission for a
-    // temporary imported/native recording bridge. The separate FrontierScored policy is deliberately opt-in too:
-    // it only absorbs a cheap immediate successor after proving that the preceding packet has no cross-queue signal
-    // frontier. This keeps current renderer packet boundaries stable while the generic compiler can reduce safe
-    // one-task submission overhead for new callers.
+    // Default: one acceptance/sync point per task. Opt-in successors may share the preceding compatible packet
+    // (FrontierScored absorbs only cheap successors with no cross-queue frontier). Renderer boundaries stay stable.
     __hidden_gpu_task_graph_compiler_packetization::PacketMergeSummary precedingPacketSummary;
     const bool trackConsumerFrontiers = policy == GpuTaskGraphPacketizationPolicy::FrontierSafe
         || policy == GpuTaskGraphPacketizationPolicy::FrontierScored

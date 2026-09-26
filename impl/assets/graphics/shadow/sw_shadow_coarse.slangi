@@ -17,10 +17,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The shared coarse (downscaled) trace: one occlusion ray per coarse texel written into the coarse transmittance
-// buffer, the cheap base layer the adaptive resolve interpolates/refines. The OPAQUE opaque-coarse pass and the
-// TRANSPARENT transparent-coarse pass compose this SAME trace -- the only difference is the compile-time occluder class
-// each defines (so the opaque pass writes a BINARY blocker value and the transparent pass writes colored transmittance).
+// Shared coarse trace: one ray per coarse texel; opaque vs transparent passes differ only in the compile-time
+// occluder class (binary blocker vs colored transmittance).
 
 
 // The coarse transmittance workset is a heap-selected StorageImage. It is writable by the coarse trace and read via

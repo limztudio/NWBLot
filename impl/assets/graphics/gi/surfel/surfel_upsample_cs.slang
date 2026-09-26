@@ -2,18 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel upsample: reconstruct the full-res surfelIrradiance from the HALF-res surfel_resolve output. The costly
-// (2*EXTENT+1)^3 = 125-cell gather runs at half res; this pass restores full res with a JOINT-BILINEAR filter GATED by
-// surface similarity, so GI stays confined to the surface it belongs to (no bleed across a silhouette or a crease). A
-// plain bilinear upsample would smear irradiance -- and worse, smear the binary COVERAGE flag -- across a covered/
-// uncovered edge (the exact reason deferred lighting point-Loads, never bilinear-samples, the resolved texture). Model:
-// caustic_resolve_cs stage-2 upsample (2x2 bilinear footprint + world-distance edge-stop + 0 identity) PLUS a normal gate
-// (creases where the world position is near-equal but the normals differ -- e.g. the Cornell red<->blue corner -- which a
-// distance-only stop misses).
-//
-// Output contract (UNCHANGED for lighting): rgb = irradiance, a = coverage. a = 1 when >=1 covered same-surface tap fed
-// the filter; a = 0 (background, or every tap rejected/uncovered) so lighting falls back to hemiAmbient. Irradiance is HDR
-// -- NO [0,1] clamp (the shadow upsample's clamp would clip the bounce).
+// Half-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses
+// creases like the Cornell corner). Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
+// Output: rgb = HDR irradiance (no [0,1] clamp), a = coverage (0 falls back to hemiAmbient).
 
 
 #include "surfel_heap_resources.slangi"
@@ -82,10 +73,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     nwbSurfelUpsampleHalfIrradiance().GetDimensions(halfWidth, halfHeight);
     const uint factor = uint(NWB_SURFEL_RESOLVE_HALF_FACTOR);
 
-    // Map the full pixel to half-index space so that a block-aligned pixel lands EXACTLY on the half texel the resolve
-    // gathered for it: the resolve point-samples half texel h at the block TOP-LEFT full pixel (h*factor), so half texel h
-    // represents full pixel h*factor -> the half index of full pixel p is p/factor (NOT the texel-centre (p+0.5)/f-0.5,
-    // which assumes a block-centre sample and mis-registers by ~half a tap). p = factor*h -> src = h -> tap h at weight 1.
+    // Half index is p/factor (top-left point sample), not the texel-centre (p+0.5)/f-0.5 (block-centre mis-registers ~half tap).
     const float2 src = float2(pixel) / float(factor);
     const int2 baseTexel = int2(floor(src));
     const float2 lerpFrac = src - float2(baseTexel);

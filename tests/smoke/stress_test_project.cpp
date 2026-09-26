@@ -63,13 +63,8 @@ using StressMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// STRESS scene: twenty skinned body characters in two staggered rows, ten glass and ten opaque, inside the GI box.
-// The explicit five-per-class comparison profile preserves the historical ten-character zigzag and camera.
-// Each character SPINS about its vertical axis
-// (no skeleton-pose animation; the bodies render in bind pose and the whole entity rotates), so its instance transform
-// changes every frame -- exercising scene TLAS updates and separate opaque/transparent hardware shadows across TWO
-// shadowed lights as the occluders sweep. Reuses the body model + transparent_multi
-// glass/ground materials (no new assets).
+// STRESS: twenty spinning bind-pose bodies (ten glass + ten opaque) in two rows inside the GI box; sweeping occluders
+// exercise TLAS updates + opaque/transparent shadows across two lights. Reuses body + transparent_multi assets.
 static constexpr StressModelRef s_Model{"project/characters/body/model"};
 static constexpr StressMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"}; // glass
 static constexpr StressMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"}; // opaque lambert
@@ -85,11 +80,8 @@ static constexpr f32 s_TransparentRowZ = -0.55f;                      // even in
 static constexpr f32 s_OpaqueRowZ = 0.55f;                            // odd index  -> back of the zigzag
 static constexpr f32 s_CharacterLift = 0.0f;
 
-// GI CORNELL BOX (added to see the surfel GI bounce): three coloured walls (-X blue, +X red, +Z green BACK wall) + a
-// ceiling enclose the spinning crowd so each wall's coloured indirect bounce lands on the characters + floor. The camera
-// sits on -Z looking toward +Z, so the green BACK wall is at +Z (the far end, IN VIEW) and the box is OPEN on the -Z side
-// (behind the camera) -- all three wall colours + the ceiling are visible. Reuses the ground plane mesh + opaque material
-// + per-instance colour_tint (no new assets).
+// GI Cornell box around the crowd (blue/red/green walls + ceiling, open behind the camera) so colored bounce lands
+// on characters + floor. Reuses ground mesh + material + colour_tint.
 static constexpr Float2U s_BoxHalf = Float2U(4.0f, 4.5f);                    // x: side walls at +-4 (just outside the +-3.24 character spread); y: +Z back wall at +4.5; open -Z front at -4.5 (camera looks in through the open front)
 static constexpr f32 s_BoxHeight = 4.0f;                   // wall height / ceiling y (point light at 2.6 stays inside)
 static constexpr f32 s_GroundScale = 2.0f * s_BoxHalf.y;    // floor spans the box depth (+-4.5) so it meets the side + back walls
@@ -290,11 +282,8 @@ private:
         return entity;
     }
 
-    // Spin every character about its vertical (Y) axis around its fixed position; a per-character phase staggers the
-    // start angles so the crowd isn't in lockstep. Only the root transform's rotation changes -- the skinned bodies
-    // stay in bind pose -- so each frame the instance/scene BVH + the two lights' shadows re-resolve as they turn.
-    // Diagnostic freeze (read once): NWB_STRESS_TEST_SPIN_ANGLE pins yawBase to a fixed radians value so the skinned
-    // crowd holds one orientation -- two captures then differ only via non-determinism (a flicker/race), not motion.
+    // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
+    // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
     static f32 frozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
         return s_yaw;

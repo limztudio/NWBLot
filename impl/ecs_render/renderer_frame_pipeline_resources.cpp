@@ -512,7 +512,8 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     )
         return false;
 
-    // Resource selection and capacity growth happen before shared-graph compilation.  The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
+    // Resource selection and capacity growth happen before shared-graph compilation.
+    // The first deferred packet records the corresponding GPU work later, after every selected handle has been imported declaratively.
     m_raytracingSystem.discardSurfelResourceInitialization();
     if(!m_raytracingSystem.preflightShadowVisibilityResources(deferredTargets, scratchArena)){
         m_shadowPreparationOutcome.resourcesValid = false;

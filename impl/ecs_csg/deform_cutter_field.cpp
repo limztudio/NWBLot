@@ -95,7 +95,7 @@ bool CsgDeformCutterField::ShapeDistances(
     outDistances.clear();
     outDistances.resize(vertexCount, s_KeepDistanceZero);
 
-    // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on SIMD lanes; only the snapped distance crosses back to scalar, so preview/commit observe identical distances with no second pass.
+    // Cutter dispatch happens once per cut. World-to-shape and SDF eval stay on SIMD lanes
     const SIMDMatrix worldToShape = LoadFloat(shape.worldToShape);
     const SIMDVector parameter0 = LoadFloat(shape.parameter0);
     CsgDeformDistanceFunc distanceFunc = nullptr;

@@ -22,10 +22,8 @@ struct NwbDielectricInterface{
     bool totalInternalReflection;
 };
 
-// Exact unpolarized dielectric Fresnel and Snell transport. direction and opposingNormal are unit vectors, with
-// the normal facing the incident medium. The eta ratio is explicit: camera-radiance transmission contains
-// (etaIncident / etaTransmitted)^2, which cancels across a lossless air/glass/air pair. Photon flux uses a different
-// measure. Reference: https://pbr-book.org/4ed/Reflection_Models/Dielectric_BSDF .
+// Exact unpolarized dielectric Fresnel + Snell (unit direction, normal faces incident medium; explicit eta ratio;
+// radiance (etaI/etaT)^2 cancels over air/glass/air; photon flux differs). Ref: pbr-book Dielectric_BSDF.
 NwbDielectricInterface nwbDielectricTransmit(
     const float3 direction,
     const float3 opposingNormal,

@@ -224,14 +224,8 @@ public:
         const MaterialInstanceComponent* materialInstance,
         const MaterialTypedByteVector*& outMutableTypedBytes
     )const;
-    // Packs one shadow occluder's material-constants context into a shadow-OWNED combined typed buffer (the draw
-    // passes' g_NwbMaterialTypedWords / g_NwbMeshInstances hold only one pass's transparency class at trace time,
-    // so the trace cannot read them). Appends this occluder's constant block + its per-instance mutable block into
-    // inOutMaterialTypedBytes (mutable blocks deduped through inOutMutableRanges), builds the matching
-    // InstanceGpuData (the mutable byte offset packs into translation.w, exactly as the draw pass does), and
-    // returns the constant block's byte offset for the instance record's materialConstantByteOffset. Mirrors the
-    // draw pass's per-instance packing (gatherMaterialPassDrawItems) so the trace's surface hook reads the same
-    // bytes it would in the rasterizer.
+    // Shadow-owned copy of one occluder's constants context (draw-pass buffers hold one transparency class at trace time).
+    // Mirrors gatherMaterialPassDrawItems packing so the trace hook reads rasterizer-identical bytes.
     [[nodiscard]] bool appendShadowOccluderMaterialContext(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,

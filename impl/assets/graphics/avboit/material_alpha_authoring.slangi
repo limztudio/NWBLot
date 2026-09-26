@@ -9,7 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared alpha path for AVBOIT material occupancy/extinction authoring. Include after the material surface hook is in scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
+// Shared alpha path for AVBOIT material occupancy/extinction authoring.
+// Include after the material surface hook is in scope and after the pass declares its regular bindless or CSG-local opaque-depth contract.
 
 
 bool nwbAvboitLoadAcceptedMaterialAlpha(

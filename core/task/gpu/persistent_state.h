@@ -17,11 +17,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Owns an accepted, filtered native state snapshot between graph generations.  The graph still decides every
-// in-frame transition; this cache exists only for live imported resources whose next use occurs in a later graph.
-// It retains the typed resource handles alongside the raw native snapshot, so pruning/rebuilding a resource cannot
-// leave an external graph state source dangling.  Callers provide their current live handles deliberately: no
-// renderer-specific packet or state-tracker policy escapes into this utility.
+// Accepted native snapshot between graph generations, for live imports used in a later graph. Retains typed handles
+// so rebuilds cannot dangle; no renderer policy leaks into this utility.
 class GpuPersistentResourceStateCache final : NoCopy{
 public:
     // A pre-submission candidate built for one cache from a recorded packet's final state. On commit, the cache

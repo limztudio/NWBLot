@@ -15,11 +15,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Image-format conversion does not promise a rounding direction. Quantize the mean to an exact half value in
-// FP32 first, so a later storage conversion cannot accumulate directed rounding error.
-// https://docs.vulkan.org/spec/latest/chapters/fundamentals.html
-// Inputs are nonnegative finite half values blended with a count <=256. A positive mean is therefore >=2^-32
-// and <=65504; the subnormal case discards at most 31 bits. This narrow contract needs no native half conversion.
+// Quantize the mean to an exact half in FP32 first: image conversion promises no rounding direction.
+// Narrow contract (nonnegative halves, count <= 256): no native half conversion needed.
 float nwbReflectionRoundHistoryHalf(const float value, const uint random){
     const uint bits = asuint(value);
     if(bits == 0u)

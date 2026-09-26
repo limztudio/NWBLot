@@ -11,14 +11,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-frame skinned-normal repack. The RT attribute buffer (AttribGpu: Half4 normal @ +0, Float2 uv0 @ +8, 16-byte
-// stride, triangle-corner indexed) is built ONCE from bind-pose normals (BuildMeshletTriangleAttributes,
-// meshlet_vertex_attributes.h). The skinning compute writes the per-frame DEFORMED normals to the skinned-normal
-// buffer in ATTRIBUTE-stream space (skinning_cs.slang). This pass re-derives each triangle-corner normal slot from
-// the current deformed normals so the RT shadow + caustic photon traces bend on the live pose, not the bind pose.
-// It is a GPU mirror of BuildMeshletTriangleAttributes with one substitution: the normal source is the skinned
-// (deformed) stream instead of the bind-pose stream. uv0 is pose-invariant, so only the 8-byte normal half is written
-// (bytes 8..15 of each record are left verbatim).
+// Per-frame skinned-normal repack: GPU mirror of BuildMeshletTriangleAttributes reading the deformed stream, so RT
+// shadow + caustic traces bend on the live pose. uv0 is pose-invariant: only the 8-byte normal half is rewritten.
 struct NwbSkinnedMeshRepackPushConstants{
     uint4 payload0;
 };

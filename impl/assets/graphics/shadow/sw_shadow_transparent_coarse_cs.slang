@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 COARSE transparent trace (downscaled). One thread per coarse texel: trace ONE transparent occlusion ray per
-// shadowed light from the block's top-left full-res G-buffer texel and store the colored transmittance into the coarse
-// buffer (transmittance only, NOT yet multiplied onto the opaque mask). The cheap base layer the adaptive transparent
-// resolve interpolates over the flat interior and refines at edges. Composes the SAME coarse trace as the opaque-coarse
-// pass; the only difference is the TRANSPARENT occluder class (colored transmittance, not a binary blocker).
+// Stage-2 coarse transparent trace: one colored ray per shadowed light per coarse texel (same trace as opaque-coarse,
+// transparent class). Base layer for the adaptive resolve; not yet folded onto the opaque mask.
 
 
 #include "sw_binding_slots.h"

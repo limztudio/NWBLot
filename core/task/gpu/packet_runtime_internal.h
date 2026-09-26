@@ -37,7 +37,8 @@ private:
 
 
 private:
-    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must already be recorded, which keeps deliberate late tails separate from the ordinary graph prefix.
+    // Records one compiler-derived non-empty contiguous range. Earlier producer packets needed by the range must already be recorded,
+    // keeps deliberate late tails separate from the ordinary graph prefix.
     [[nodiscard]] bool recordPacketRangeInCompileOrder(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,
@@ -56,7 +57,7 @@ private:
         GpuSubmissionPacketId* outFailedPacket = nullptr,
         GpuCommandIrCapture* commandIrCapture = nullptr
     )const;
-    // Records compiler-ready frontiers with `cpuScheduler`. Only packets whose tasks all set GpuTaskSchedulingHint::allowParallelRecording may share a worker frontier; every other packet remains serial. Command-IR capture deliberately keeps the established serial order. The method is synchronous: callers may submit or destroy the recorded graph once it returns.
+    // Records ready frontiers via cpuScheduler; parallel only when every task opts in, else serial (command-IR keeps serial order). Synchronous: submittable on return.
     [[nodiscard]] bool recordPacketRangeInReadyFrontiers(
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

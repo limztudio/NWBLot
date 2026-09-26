@@ -32,10 +32,8 @@ namespace GpuTaskGraphCompilerDetail{
     ;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
 
-    // Imported texture/buffer/acceleration-structure metadata can require a graph-owned terminal state for code
-    // that resumes outside this compiled graph. Texture and buffer exports retain every terminal range fragment;
-    // acceleration structures remain whole-allocation. The runtime lowers each export through the native state
-    // tracker and retains the requested state even when no native transition was required.
+    // Imported metadata may require a graph-owned terminal state for post-graph resume. Texture/buffer keep every
+    // terminal fragment; AS stays whole-allocation; state retained even without a native transition.
     for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
         const GpuTaskGraphResourceView resource = graph.resourceAt(resourceIndex);
         if(resource.externalFinalState == ResourceStates::Unknown)

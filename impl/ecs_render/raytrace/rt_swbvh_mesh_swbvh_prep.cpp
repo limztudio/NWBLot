@@ -330,7 +330,8 @@ bool RendererRayTracingSystem::recordPreparedMeshSwBvhBuilds(
     if(!m_preparedMeshSwBvhBuildsReady || m_preparedMeshSwBvhBuilds.empty())
         return false;
 
-    // Preserve the aggregate recorder's all-plan validation before it emits any direct commands. The graph-split pure-software route instead rejects its one shared packet if a later individual snapshot no longer matches.
+    // Preserve the aggregate recorder's all-plan validation before it emits any direct commands.
+    // The graph-split pure-software route instead rejects its one shared packet if a later individual snapshot no longer matches.
     for(const PreparedMeshSwBvhBuild& build : m_preparedMeshSwBvhBuilds){
         if(!preparedMeshSwBvhBuildMatchesCurrent(build)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build no longer matches mesh '{}'"), StringConvert(build.meshName.c_str()));

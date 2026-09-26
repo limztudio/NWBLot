@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel hash build: one thread per pool slot. A live surfel links itself into its cell's singly-linked list --
-// InterlockedExchange the cell head to this surfel id (one integer atomic, no float atomics) and store the previous
-// head as this surfel's nextInCell. The gather + the next frame's spawn walk these lists. The cell-head table is
-// cleared to NWB_SURFEL_CELL_INVALID by the CPU each frame BEFORE this pass (a buffer clear), so the linking starts
-// from empty lists.
+// Hash build: live surfels InterlockedExchange into per-cell lists (one integer atomic). Heads CPU-cleared to
+// INVALID before this pass, so linking starts empty.
 
 
 #include "surfel_runtime.slangi"

@@ -2,13 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Build the trace's DispatchIndirectArguments: 1 thread reads the allocation high-water BUMP_TOP + the update
-// divisor (both from the surfel CB) and writes {ceil(BUMP_TOP / divisor), 1, 1} -- the exact workgroup count to visit
-// every LIVE surfel over `divisor` frames via the trace's round-robin, instead of the fixed ceil(poolCapacity/divisor).
-// Slots >= BUMP_TOP are never allocated, so groups*divisor >= BUMP_TOP covers every live slot and the trace's existing
-// `surfelIndex < poolCapacity && alive` guard drops the partial last group. Runs AFTER spawn (so BUMP_TOP includes this
-// frame's new surfels) and BEFORE the trace; the SAME args buffer feeds both the SW and HW trace (identical round-robin).
-// BUMP_TOP = 0 -> 0 groups -> a valid no-op indirect dispatch.
+// Indirect trace args: {ceil(BUMP_TOP / divisor), 1, 1} visits every live surfel over `divisor` frames (shared SW/HW).
+// After spawn, before trace; BUMP_TOP = 0 dispatches a no-op.
 
 
 #include "surfel_heap_resources.slangi"

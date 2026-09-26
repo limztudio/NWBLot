@@ -75,10 +75,8 @@ bool AssignMaterialShadingModelIdsImpl(
         entry.shadingModelId = static_cast<u32>(static_cast<usize>(sourceIt - uniqueSources.begin()));
     }
 
-    // Assign each material a separate shadow-transmittance id deduped over the unique `.surface` sources (the
-    // surface hook supplies the per-hit optical values and GI base color). An opaque material that declares explicit
-    // `shaders` instead gets the reserved no-surface sentinel id (NOT 0, which is the first real surface hook), so
-    // GI reaches the generated dispatch's documented neutral fallback rather than evaluating an unrelated hook.
+    // Transmittance id per unique `.surface`; explicit-`shaders` opaque takes the no-surface sentinel (not 0) so GI
+    // hits the neutral fallback, never an unrelated hook.
     Vector<AStringView, ScratchArena> uniqueSurfaces(scratchArena);
     uniqueSurfaces.reserve(materialEntries.size());
     for(const MaterialCookEntry& entry : materialEntries){
@@ -619,18 +617,11 @@ bool EmitShadowTransmittanceDispatchModuleImpl(
     source += "#ifndef NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n";
     source += "#define NWB_GRAPHICS_SHADOW_GENERATED_TRANSMITTANCE_DISPATCH_SLANGI\n\n";
 
-    // The trace material-constants context (NwbShadowHit + the per-invocation accessors the surface hooks read
-    // -- nwbMeshLoadInstance / nwbMeshMaterialConstantByteOffset / ... -- + the surface contract) is supplied by
-    // the includer BEFORE this module, exactly as the deferred BXDF dispatch relies on lighting_cs to bring in the
-    // framework first. The includer (each shadow trace shader) #includes shadow/shadow_surface.slangi -- where it
-    // also points the material-constants buffers at its heap-selected context -- then this module; emitting the framework
-    // include here instead would force a virtual engine/ path that the shader -I roots do not resolve.
+    // Context (NwbShadowHit + accessors + surface contract) comes from the includer's shadow_surface.slangi; emitting
+    // it here would force an unresolvable virtual engine/ include path.
 
-    // Per-id surface hook. The dispatch is the one shader TU that needs multiple `.bind` interfaces. Each unique
-    // interface is emitted once in a private namespace; before a project-owned global surface fragment is included,
-    // aliases map its fixed generated bind API to that namespace, then are immediately removed. A global `using`
-    // directive cannot be used here: later interfaces may provide the same accessor names, while wrapping a surface
-    // in a namespace would move its guarded project helper includes away from their normal global scope.
+    // Per-id hook: each unique `.bind` emitted once in a private namespace with scoped aliases (no global `using`:
+    // later interfaces may collide; namespacing the surface would relocate its guarded includes).
     ScratchHashSet<ScratchString> bindAliasSeenSymbols{
         0,
         Hasher<ScratchString>(),

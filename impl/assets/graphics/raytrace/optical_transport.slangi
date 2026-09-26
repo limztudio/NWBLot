@@ -81,10 +81,8 @@ bool nwbOpticalCheckBoundary(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Follow one dominant transmitted path, preserving accumulated radiance on every termination. Ordinary Fresnel
-// reflection at secondary interfaces is an explicitly omitted branch, not an environment approximation. TIR
-// reflects the same path without changing membership. No binary path tree or recursive query can escape the
-// shared query budget, and a miss/cap inside a medium never introduces exterior environment light.
+// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch
+// (not an env approximation); TIR keeps membership. No path tree escapes the query budget; in-medium miss adds no env.
 NwbOpticalTraceResult nwbOpticalTrace(
     const NwbOpticalTraceConfig config,
     const float3 initialOrigin,

@@ -52,11 +52,8 @@ using SkinnedCausticMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A SKINNED glass refractor over an opaque ground receiver under one directional light. The skeleton pose is animated
-// every frame, so the mesh (and its shading normals) deform continuously. This is the validation scene for the
-// per-frame skinned-normal repack (repack_normals_cs / dispatchRepackNormals): the RT shadow + caustic must bend on
-// the LIVE deformed normals -- if they read the bind pose instead, the refractive shadow + caustic would not track
-// the animation. Reuses the existing refractive glass + ground materials (no new assets).
+// SKINNED glass refractor over ground: per-frame pose validates the skinned-normal repack (shadow + caustic must
+// bend on live deformed normals, not bind pose). Reuses glass + ground materials.
 static constexpr SkinnedCausticModelRef s_Model{"project/characters/body/model"};
 static constexpr SkinnedCausticMaterialRef s_GlassMaterial{"project/smoke/transparent_multi/materials/shared"};
 static constexpr SkinnedCausticMaterialRef s_GroundMaterial{"project/smoke/transparent_multi/materials/ground"};

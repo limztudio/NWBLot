@@ -2,15 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SOFT OPAQUE half-res trace (soft-ray-traced-shadow feature, all light types). One thread per HALF-res pixel: for each
-// light holding a shadow slot, cast NWB_SW_SHADOW_SOFT_SPP OPAQUE occlusion rays CONE-JITTERED inside the cone the
-// light's physical source subtends and write the averaged single-frame visibility into the half-res soft buffer. A
-// DIRECTIONAL light jitters inside its constant angular radius (params2.x); a POINT/SPOT light inside the distance-
-// dependent half-angle asin(params2.y/dist) its source sphere (radius params2.y) subtends -- both handled inside
-// nwbSwShadowLightVisible, so this pass is light-type-agnostic and just processes every slot light. The separate
-// shadow_resolve pipeline then denoises + upsamples the result into the full-res visibility. The jitter is the per-
-// pixel/per-frame low-discrepancy sample, seeded by the half-res pixel + frameIndex so each pixel walks the source over
-// frames while neighbours stay decorrelated (the denoise then averages independent estimates).
+// Soft opaque half-res trace: one thread per half texel averages NWB_SW_SHADOW_SOFT_SPP cone-jittered occlusion rays
+// per shadow-slot light into the half-res buffer for the resolve to denoise + upsample. Seeded per pixel/frame so
+// neighbours stay decorrelated; light-type handling lives in nwbSwShadowLightVisible.
 
 
 #include "sw_binding_slots.h"

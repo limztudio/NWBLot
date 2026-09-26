@@ -2,13 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 INDIRECT TRACE + SCATTER (compacted transparent resolve). DispatchIndirect, one compacted edge record per
-// thread: unpack the pixel + light, re-trace that single light full-res via nwbSwShadowLightVisible (preserving the
-// per-mesh NonUniformResourceIndex wrapping), and fold onto the PRISTINE opaque mask the classify pass left in the
-// texel. Every lane in the wave is a real edge ray (no divergence); the tile-major append keeps the records -- and thus
-// the traced rays -- screen-local. The 1D dispatch reconstructs its flat record index as
-// groupID.x * traceGroupSize + SV_GroupIndex (the group uses NWB_SW_SHADOW_TRACE_GROUP threads, sized by the
-// build-args pass).
+// Stage-3 indirect trace + scatter: one compacted edge record per thread, re-traced full-res and folded onto the
+// pristine opaque mask. Tile-major order keeps rays screen-local; every lane is a real edge ray.
 
 
 #include "sw_binding_slots.h"

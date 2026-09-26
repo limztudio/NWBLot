@@ -2,15 +2,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Surfel resolve: one thread per HALF-res pixel. Reads the G-buffer world position + normal, gathers the surfel
-// irradiance (nwbSurfelGather -- the (2*EXTENT+1)^3 hash walk, reused verbatim), and writes it to a HALF-res texture
-// that surfel_upsample_cs then reconstructs into the full-res surfelIrradiance the deferred-lighting compute shader samples.
-// Running the 125-cell gather at 1/FACTOR^2 the pixels reduces its cost to roughly a full-res 3x3x3 gather.
-// The surfel pool is touched only by compute (spawn / hash-build / trace / resolve), never by the lighting shader,
-// avoiding frames-in-flight read/write overlap on the shared single-buffered pool.
-// Output alpha = 1 where a surfel covered the half texel (rgb = gathered irradiance); 0 elsewhere (background or no
-// coverage) so the upsample -> lighting falls back to hemiAmbient. Decode the query normal the same way lighting does
-// (encode = n*0.5+0.5), so the surfel normalWeight matches the deferred path.
+// Half-res surfel resolve: one thread per half texel runs the (2*EXTENT+1)^3 gather (125 cells at 1/FACTOR^2 cost) and
+// writes rgb = irradiance, a = coverage (0 falls back to hemiAmbient). Compute-only pool access: no lighting overlap.
+// Query normal decodes as lighting does (n*0.5+0.5) so normalWeight matches the deferred path.
 
 
 #include "surfel_gather.slangi"

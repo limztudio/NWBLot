@@ -2,10 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared GoogleTest entry point for the NWB test executables. Each test binary links this single object, which
-// performs the engine's common initialization once (Core::Common::InitializerGuard) and then runs every gtest
-// case registered in the linked test sources. GoogleTest's own gtest_main is intentionally not used — the
-// engine needs its own application entry point (NWB_DEFINE_APPLICATION_ENTRY_POINT) for startup.
+// Shared gtest entry: common init once, then all registered cases. Own entry point (not gtest_main) for startup.
 
 
 #include <cstdlib>

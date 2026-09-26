@@ -57,26 +57,12 @@ using SoftShadowMeshRef = NWB::Core::Assets::AssetRef<NWB::Impl::Mesh>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// DEDICATED SOFT-SHADOW scene (soft-ray-traced-shadow feature): an OPAQUE and a GLASS `body` character standing SIDE BY
-// SIDE on ONE opaque ground plane, lit by THREE differently-coloured lights AT ONCE -- a warm-white DIRECTIONAL sun, a RED
-// POINT light, and a BLUE SPOT -- each with a PHYSICAL source size. That source size is what makes each shadow soft: the
-// trace jitters the ray over the light's source (the sun's angularRadius disk, or a point/spot's sourceRadius sphere
-// subtending asin(R/dist)), so every penumbra emerges + WIDENS with occluder->receiver distance and HARDENS at contact. The
-// GLASS caster casts a COLORED transparent soft shadow beside the opaque grey one. Both spin (arrow keys).
-//
-// A/B levers:
-//   - THREE differently-coloured soft-shadowed lights are lit AT ONCE (a warm-white directional sun, a RED point, a BLUE
-//     spot), so all three soft penumbras are on screen together, distinguishable by tint (overlaps blend the colours).
-//   - NWB_SOFT_SHADOW_TEST_ANGLE (radians, default 0.03 ~ 1.7deg): the DIRECTIONAL sun's angular radius. Sweep it --
-//     ~0.001 is a near-HARD reference (tight penumbra), ~0.05 is very soft. Shown live in the title bar (deg).
-//   - NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS (world units, default 0.15): the POINT + SPOT emissive sphere radius. Larger =
-//     softer; the penumbra ALSO widens as the light nears the caster (asin(radius/dist)) -- physical distance softening.
-//   - A device without RayQuery-capable hardware naturally selects the SOFTWARE path, which runs the full soft pipeline
-//     (half-res jittered trace -> a-trous denoise -> bilateral upsample). The hardware path applies the same cone jitter
-//     at full resolution without the denoise (per-frame shimmer expected until the temporal stage).
-//   - Arrow keys (Left/Right) scrub the character yaw so the sweeping soft edge can be checked for crawl (it should NOT
-//     crawl -- a soft edge has nothing to alias); NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins a fixed yaw for a deterministic A/B.
-// Ordinary viewing retains the shared materials; timing opt-in uses the same surface hooks with fixed ambient response.
+// SOFT-SHADOW scene: OPAQUE + GLASS `body` casters on one ground plane, lit by warm DIRECTIONAL + RED point + BLUE spot,
+// each with a physical source size (penumbra widens with distance, hardens at contact). Glass tints its shadow. Both spin.
+// A/B levers: NWB_SOFT_SHADOW_TEST_ANGLE = sun angular radius (0.001 hard ref .. 0.05 very soft);
+// NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS = point/spot sphere radius (nearer light softens via asin(radius/dist)).
+// No-RayQuery devices take the SW path (half-res trace -> a-trous -> upsample); HW applies the same cone jitter at full
+// res without denoise. Arrow keys scrub yaw (NWB_SOFT_SHADOW_TEST_SPIN_ANGLE pins it); shared materials, fixed-ambient timing.
 static constexpr SoftShadowModelRef s_Model{"project/characters/body/model"};
 static constexpr SoftShadowMaterialRef s_OpaqueMaterial{"project/smoke/transparent_multi/materials/ground"};
 static constexpr SoftShadowMaterialRef s_TransparentMaterial{"project/smoke/transparent_multi/materials/shared"};
@@ -91,10 +77,7 @@ static constexpr f32 s_CameraDistance = 3.2f;
 static constexpr f32 s_CameraHeight = 1.5f;
 static constexpr f32 s_CameraPitch = 0.30f;
 
-// Directional light aimed to cast the shadow SIDEWAYS across the plane (large yaw), NOT behind the character where her
-// own body would hide it -- the shadow rakes out to one side, in full view, and its penumbra widens along its length
-// (crisp at the feet, soft at the far end). A moderate pitch keeps the plane well-lit (high shadow contrast) while still
-// giving a long shadow. Warm sun tint. Intensity is clamped to 2.0 by the shading, so 2.0 is the useful max.
+// Directional sun rakes sideways (large yaw, moderate pitch): long high-contrast shadow, crisp at feet, soft far.
 static constexpr f32 s_DirectionalLightPitch = 0.65f;
 static constexpr f32 s_DirectionalLightYaw = 1.4f;
 static constexpr f32 s_DirectionalLightIntensity = 2.0f;
@@ -211,12 +194,8 @@ public:
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(*m_world, s_CameraHeight, s_CameraDistance, s_CameraPitch);
 
-        // THREE differently-coloured soft-shadowed lights AT ONCE (not a chooser): a warm-white DIRECTIONAL sun (rakes its
-        // shadow to one side), a RED POINT light on the opposite side (rakes the other way), and a BLUE SPOT overhead (a
-        // short contact pool). Each casts its OWN soft shadow in its own tint, so the three penumbras are on screen together
-        // and distinguishable by colour (overlaps blend). Each light's physical source size drives its softness: the
-        // directional reads angularRadius (a constant sun-disk angle), point/spot read sourceRadius (the emissive sphere,
-        // whose subtended angle asin(R/dist) softens more as the light nears the caster). Both env-tunable + A/B-controllable.
+        // Three tinted soft lights at once (warm sun sideways, red point opposite, blue spot overhead); each casts its own
+        // tinted penumbra. Source size drives softness (sun: angularRadius; point/spot: asin(R/dist)); env-tunable.
         const NWB::Core::ECS::EntityID directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
             *m_world,
             s_DirectionalLightPitch,
@@ -304,14 +283,8 @@ public:
             s_Model,
             transparentMaterial,
             s_SmokeSurfaceMaterialInterface,
-            // Glass tint is (shadow colour . DENSITY): the RGB is the colour the shadow KEEPS, the A is the glass
-            // DENSITY (how solid). nwbMakeGlassSurface (smoke_transparent.surface) seeds BOTH consumers together --
-            // renderCoverage = density, shadowAbsorptionTint = lerp(white, rgb, density) -- so a denser glass is more
-            // opaque on screen AND casts a darker, matching shadow. Beer-Lambert uses the mesh's actual entry->exit chord,
-            // so this thin shell naturally casts a lighter shadow than a thick volume with the same material: choose mesh
-            // thickness and tint/density together. Here a DEEP GREEN glass (keeps green, absorbs red+blue) casts a green
-            // penumbra -- a bright rgb like (0.35,0.925,..) would still read faint because it barely absorbs. To decouple
-            // look from shadow deliberately, override renderCoverage in the hook after the constructor.
+            // Glass tint = (kept shadow colour . density): nwbMakeGlassSurface derives renderCoverage +
+            // shadowAbsorptionTint together; Beer-Lambert integrates the mesh chord, so pair tint with thickness.
             Float4(0.20f, 0.55f, 0.12f, 0.6f),
             Float4(-0.6f, 0.0f, -1.1f, 0.0f),
             Float4(1.0f, 1.0f, 1.0f, 0.0f),

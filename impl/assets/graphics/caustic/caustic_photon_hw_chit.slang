@@ -8,14 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The hardware caustic closest-hit. Fills the payload from the nearest triangle the raygen's TraceRay committed:
-// the world hit point + ray distance, the REFRACTIVE flag, and -- for a refractive crossing -- the interpolated
-// SHADING normal (the bounce loop's bend normal) + the occluder's optical params from the SAME surface dispatch the
-// SW trace + the shadow trace use. Bending on the interpolated shading normal (vs the per-facet geometric normal)
-// yields a SMOOTH caustic on a tessellated sphere; it needs only the per-vertex normals from the attribute buffer
-// (no positions). The normal is left UN-oriented; the shared bounce loop (nwbCausticOrientNormal) orients +
-// normalizes it. The SAME interpolation (a0*w + a1*u + a2*v) the SW trace uses, so the two agree up to the ~ULP
-// barycentric difference between the intersectors (accepted within the converged-image A/B tolerance).
+// HW caustic closest-hit: world hit + distance, REFRACTIVE flag, and for refractive crossings the interpolated shading
+// normal (smooth caustic; vertex normals only) + optical params from the shared surface dispatch. Un-oriented here;
+// nwbCausticOrientNormal orients it. Same a0*w+a1*u+a2*v interpolation as the SW trace (~ULP intersector difference).
 [shader("closesthit")]
 void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
     const NwbRtInstanceMaterial material = nwbCausticHwInstanceMaterials()[InstanceID()];

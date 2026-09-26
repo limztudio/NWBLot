@@ -47,7 +47,8 @@ struct RendererMaterialResourceState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Device-lifetime backing resources for the first material-authored-resource slice. The fixture payloads are shared by all materials, while each MaterialSurfaceInfo receives the matching global-heap slot word in its typed constants.
+// Device-lifetime backing resources for the first material-authored-resource slice. The fixture payloads are shared by all materials,
+// each MaterialSurfaceInfo receives the matching global-heap slot word in its typed constants.
 struct RendererMaterialResourceFixtureState{
     Core::TextureHandle checkerRgba8Texture;
     Core::SamplerHandle linearClampSampler;

@@ -126,14 +126,8 @@ void nwbCsgReceiverSpanBuildPairEvents(
     inout uint inOutSpanCount,
     inout uint inOutFlags
 ){
-    // Build receiver spans from the depth-sorted surface events with a winding/parity walk instead of
-    // pairing each front face to a back face. A receiver depth is inside the solid wherever more front
-    // faces than back faces have been crossed; a span runs from the front face that raises the winding
-    // count off zero to the back face that returns it to zero. This merges nested/overlapping layers of
-    // the same receiver into the correct enclosing span (so a cap can never be validated against a
-    // mismatched layer and protrude outside the body), while a simple convex receiver still yields the
-    // identical single [front, back] span. Events from other receivers interleaved inside an open span
-    // are skipped; an unmatched back face or a still-open winding at the end is flagged ambiguous.
+    // Winding/parity walk over depth-sorted events (not front-back pairing): inside wherever fronts exceed backs.
+    // Merges nested layers into the enclosing span; interleaved foreign events skipped, unmatched backs flagged ambiguous.
     uint winding = 0u;
     float spanEnterDepth = 0.0;
     uint spanReceiverIndex = 0u;

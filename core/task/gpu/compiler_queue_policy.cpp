@@ -36,7 +36,7 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
     | static_cast<u8>(GpuQueueCapability::Graphics)
 ;
 
-// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles; this distinct generation invalidates every packet-local artifact whenever a graph is compiled into a replacement immutable plan.
+// Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
@@ -85,7 +85,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return false;
 }
 
-// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by this compile topology. A single requested family remains exclusive and may use ordinary ownership handoffs.
+// A sharing mask becomes Vulkan concurrent sharing only when it names at least two distinct families supplied by this compile topology.
+// A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
     const ResourceQueueSharing::Mask sharing,
     const GpuTaskGraphQueueTopology& topology

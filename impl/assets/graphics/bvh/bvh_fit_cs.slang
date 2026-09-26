@@ -9,11 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One thread per leaf: write the leaf's triangle box, then walk to the root. An atomic visit counter (host
-// cleared to 0) lets only the SECOND child to reach an internal node proceed, so both child boxes are ready
-// when it unions them. globallycoherent + DeviceMemoryBarrier publish each box before the counter signals
-// it, so the sibling sees it. The host clears the parent buffer to NWB_BVH_INVALID, so a leaf with no parent
-// (single-primitive mesh, the root) simply stops.
+// One thread per leaf walks to root; the second child to reach a node unions (atomic visit counter, host-cleared).
+// globallycoherent + barrier publish boxes first; parentless root simply stops.
 [numthreads(NWB_BVH_BUILD_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint leaf = dispatchThreadID.x;

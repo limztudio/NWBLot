@@ -15,10 +15,8 @@
 // ByteAddressBuffer (bindless_heap.slangi). This alias is separate so only node-traversing passes include
 // NwbBvhNode / bvh_common, keeping hardware shadow, caustic, and GI include graphs BVH-free.
 //
-// It aliases the EXACT same set/binding as the raw StorageBuffer arrays (NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER on
-// NWB_BINDLESS_HEAP_RESOURCE_SET): all three views resolve to one Vulkan STORAGE_BUFFER descriptor, and the 32-byte
-// NwbBvhNode stride is a per-view SPIR-V decoration, not a distinct descriptor. A single heap slot minted for a node
-// buffer is therefore legible through this view without a second registration.
+// Same set/binding as the raw arrays (one Vulkan descriptor; 32-byte stride is per-view decoration): node buffers
+// need no second registration.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

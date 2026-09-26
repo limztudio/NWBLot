@@ -57,7 +57,7 @@ TEST(EcsGraphics, SurfelGbufferNormalsSharePackedDecodeContract){
 }
 
 
-// Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the graph-owned output-clear/compute chain; the compiler remains responsible for rejecting an undeclared resource sharing contract or lowering the required exclusive ownership transfer.
+// Surfel GI is an explicitly promoted Compute adopter. It can select an alternate Compute family only for the graph-owned output-clear/compute chain
 TEST(EcsGraphics, SurfelGiPermitsOptInCrossFamilyComputeRouting){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -204,7 +204,8 @@ TEST(EcsGraphics, HardwareCausticsPermitsOptInCrossFamilyGraphicsRouting){
 }
 
 
-// Caustic resolve targets start Unknown after recreation. Geometry downsample and prepare must therefore publish their first results as writes, while a warm hardware accumulator imports only accepted Graphics packet state.
+// Caustic resolve targets start Unknown after recreation. Geometry downsample and prepare must therefore publish their first results as writes,
+// a warm hardware accumulator imports only accepted Graphics packet state.
 TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAccumulatorState){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -331,7 +332,8 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
 }
 
 
-// FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own one timing/acceptance packet, so every accumulator alternative and semantic tail must opt in explicitly.
+// FrontierSafe normally closes a packet at a cross-queue consumer. These direct serial effect chains instead own one timing/acceptance packet,
+// every accumulator alternative and semantic tail must opt in explicitly.
 TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -394,7 +396,8 @@ TEST(EcsGraphics, FrontierSafeEffectChainsRetainTheirSemanticPackets){
 }
 
 
-// A fully prepared soft-transparent frame selects the split graph route from production state alone. The retained monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
+// A fully prepared soft-transparent frame selects the split graph route from production state alone.
+// The retained monolithic callback remains a natural compatibility fallback, not a behavior-selectable benchmark arm.
 TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -450,7 +453,8 @@ TEST(EcsGraphics, SoftTransparentFoldHasNoProductionTestControl){
 }
 
 
-// A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff. Keep the narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
+// A retained generated-vertex output needs an explicit graph phase for every producer/raster handoff.
+// Keep the narrow fifth regular draw visible rather than allowing it to fall through to a callback-local compatibility path.
 TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -516,7 +520,8 @@ TEST(EcsGraphics, SharedComputeEmulationRetainsFiveRegularDraws){
 }
 
 
-// Software-caustics scratch is private on both the dedicated Compute route and its legal Graphics fallback. Only the cross-queue irradiance return cache is route-conditional; all retained state publishes from the exact task.
+// Software-caustics scratch is private on both the dedicated Compute route and its legal Graphics fallback.
+// Only the cross-queue irradiance return cache is route-conditional; all retained state publishes from the exact task.
 TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);

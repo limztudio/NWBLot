@@ -26,6 +26,24 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+template<typename Plan>
+static void MaterializeCsgComputePlan(
+    const Plan& plan,
+    MaterialPassDrawItems& outDrawItems,
+    CsgFrameGpuData& outCsgFrameData
+){
+    outDrawItems.meshDrawItems.reserve(plan.meshDrawItems.size());
+    outDrawItems.meshDrawItems.assign(plan.meshDrawItems.begin(), plan.meshDrawItems.end());
+    outDrawItems.computeDrawItems.reserve(plan.drawItems.size());
+    outDrawItems.computeDrawItems.assign(plan.drawItems.begin(), plan.drawItems.end());
+    outCsgFrameData.receiverRanges.reserve(plan.receiverRanges.size());
+    outCsgFrameData.receiverRanges.assign(plan.receiverRanges.begin(), plan.receiverRanges.end());
+    outCsgFrameData.cutters.reserve(plan.cutters.size());
+    outCsgFrameData.cutters.assign(plan.cutters.begin(), plan.cutters.end());
+    outCsgFrameData.workRegion = plan.workRegion;
+}
+
+
 struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     using DrawItemVector = Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>;
     using BufferVector = Vector<Core::BufferHandle, Core::Alloc::GlobalArena>;
@@ -178,15 +196,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
-        outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
-        outDrawItems.computeDrawItems.reserve(drawItems.size());
-        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
-        outCsgFrameData.receiverRanges.reserve(receiverRanges.size());
-        outCsgFrameData.receiverRanges.assign(receiverRanges.begin(), receiverRanges.end());
-        outCsgFrameData.cutters.reserve(cutters.size());
-        outCsgFrameData.cutters.assign(cutters.begin(), cutters.end());
-        outCsgFrameData.workRegion = workRegion;
+        MaterializeCsgComputePlan(*this, outDrawItems, outCsgFrameData);
     }
 };
 
@@ -304,15 +314,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     }
 
     void materialize(MaterialPassDrawItems& outDrawItems, CsgFrameGpuData& outCsgFrameData)const{
-        outDrawItems.meshDrawItems.reserve(meshDrawItems.size());
-        outDrawItems.meshDrawItems.assign(meshDrawItems.begin(), meshDrawItems.end());
-        outDrawItems.computeDrawItems.reserve(drawItems.size());
-        outDrawItems.computeDrawItems.assign(drawItems.begin(), drawItems.end());
-        outCsgFrameData.receiverRanges.reserve(receiverRanges.size());
-        outCsgFrameData.receiverRanges.assign(receiverRanges.begin(), receiverRanges.end());
-        outCsgFrameData.cutters.reserve(cutters.size());
-        outCsgFrameData.cutters.assign(cutters.begin(), cutters.end());
-        outCsgFrameData.workRegion = workRegion;
+        MaterializeCsgComputePlan(*this, outDrawItems, outCsgFrameData);
     }
 };
 

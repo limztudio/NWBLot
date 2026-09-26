@@ -45,7 +45,7 @@ NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName){
     return snapshot;
 }
 
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(){
+NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount){
     NWB::Core::Perf::MemoryDelta delta;
     delta.previousFrameIndex = 87u;
     delta.currentFrameIndex = 88u;
@@ -54,7 +54,7 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(){
     delta.peakUsedBytes = 256;
     delta.allocationCount = 2;
     delta.reallocationCount = 1;
-    delta.deallocationCount = 0;
+    delta.deallocationCount = deallocationCount;
     delta.hasSamples = true;
     return delta;
 }

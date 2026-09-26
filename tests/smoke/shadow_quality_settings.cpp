@@ -16,8 +16,11 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ApplyShadowQualitySmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena){
-    Impl::ShadowQualitySettings settings;
+bool ApplyShadowQualitySmokeSettings(
+    Impl::RendererSystem& renderer,
+    Core::Alloc::GlobalArena& arena,
+    const Impl::ShadowQualitySettings& baseSettings){
+    Impl::ShadowQualitySettings settings = baseSettings;
     SmokeEnvironmentString value(arena);
     if(ReadSmokeEnvironmentText("NWB_SHADOW_TRANSPARENT_SAMPLING", value)){
         const AStringView sampling(value.data(), value.size());

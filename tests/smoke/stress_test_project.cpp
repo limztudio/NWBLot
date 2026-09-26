@@ -194,7 +194,13 @@ private:
     static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("StressTestSmokeProject"));
 
-        AddSmokeSkinnedRenderSystems(*world, context);
+        NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
+        settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
+        settings.softwareShadow.blockerSearch = NWB::Impl::SoftwareShadowBlockerSearch::CompactCross5;
+        settings.softwareShadow.coverage = NWB::Impl::SoftwareShadowCoverage::FittedVolume;
+        settings.softwareShadow.captureCadence = NWB::Impl::SoftwareShadowCaptureCadence::ReuseOneFrame;
+        settings.caustic.photonGridDivisor = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 2u : 4u;
+        AddSmokeSkinnedRenderSystems(*world, context, settings);
         return world;
     }
 

@@ -20,8 +20,11 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ApplySoftwareShadowSmokeSettings(Impl::RendererSystem& renderer, Core::Alloc::GlobalArena& arena){
-    Impl::SoftwareShadowSettings settings;
+[[nodiscard]] inline bool ApplySoftwareShadowSmokeSettings(
+    Impl::RendererSystem& renderer,
+    Core::Alloc::GlobalArena& arena,
+    const Impl::SoftwareShadowSettings& baseSettings = {}){
+    Impl::SoftwareShadowSettings settings = baseSettings;
     SmokeEnvironmentString value(arena);
     if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BACKEND", value)){
         const AStringView mode(value.data(), value.size());

@@ -11,6 +11,7 @@
 #include "software_shadow_settings.h"
 #include "caustic_quality_settings.h"
 #include "shadow_quality_settings.h"
+#include "render_quality_settings.h"
 
 #include <core/assets/ref.h>
 #include <core/ecs/entity.h>
@@ -127,8 +128,8 @@ struct SmokeRenderSystems{
 
 [[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(
     Core::ECS::World& world,
-    ProjectRuntimeContext& context
-){
+    ProjectRuntimeContext& context,
+    const SmokeRenderQualitySettings& baseSettings = {}){
     auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
     auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
         world,
@@ -136,9 +137,18 @@ struct SmokeRenderSystems{
         context.assetManager,
         context.shaderPathResolver
     );
-    NWB_FATAL_ASSERT_MSG(ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid caustic quality smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid software shadow smoke settings"));
-    NWB_FATAL_ASSERT_MSG(ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena), NWB_TEXT("Invalid shadow quality smoke settings"));
+    NWB_FATAL_ASSERT_MSG(
+        ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic),
+        NWB_TEXT("Invalid caustic quality smoke settings")
+    );
+    NWB_FATAL_ASSERT_MSG(
+        ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow),
+        NWB_TEXT("Invalid software shadow smoke settings")
+    );
+    NWB_FATAL_ASSERT_MSG(
+        ApplyShadowQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.shadow),
+        NWB_TEXT("Invalid shadow quality smoke settings")
+    );
     return { meshSystem, rendererSystem };
 }
 

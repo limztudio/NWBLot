@@ -106,7 +106,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 smoke.parse_args(self.argv + ["--software-shadow-capture-cadence", name])
 
-    def test_cli_defaults_and_explicit_modes_match_application_contract(self):
+    def test_cli_defaults_and_explicit_modes_preserve_reference_control(self):
         args = smoke.parse_args(self.argv)
         for key, expected in shadow_defaults().items():
             self.assertEqual(getattr(args, key), expected)
@@ -119,6 +119,29 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
                 self.assertEqual(args.software_shadow_budget_mib, 256)
                 self.assertEqual(args.software_shadow_directional_resolution, 1024)
                 self.assertEqual(args.software_shadow_point_resolution, 512)
+
+    def test_reference_launch_explicitly_overrides_direct_stress_performance_defaults(self):
+        args = smoke.parse_args(self.argv)
+        inherited = {
+            "NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "4",
+            "NWB_SHADOW_TRANSPARENT_SAMPLING": "temporal_one",
+            "NWB_SOFTWARE_SHADOW_COVERAGE": "fitted_volume",
+            "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "compact_cross5",
+            "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": "reuse_one_frame",
+        }
+        env = smoke.launch_environment(inherited, args, self.output)
+        expected = {
+            "NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "1",
+            "NWB_SHADOW_TRANSPARENT_SAMPLING": "reference_three",
+            "NWB_SOFTWARE_SHADOW_COVERAGE": "reference",
+            "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9",
+            "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": "every_frame",
+        }
+        for name, value in expected.items():
+            with self.subTest(setting=name):
+                self.assertEqual(env[name], value)
+        self.assertTrue(smoke.verify_shadow_quality_settings(smoke.SHADOW_QUALITY_SETTINGS + "0", args)["verified"])
+        self.assertTrue(smoke.verify_software_shadow_settings(shadow_record(), args)["verified"])
 
     def test_cli_rejects_invalid_ranges_types_and_backend(self):
         cases = (("--software-shadow-budget-mib", ("0", "4096", "-1", "1.5", "invalid")),

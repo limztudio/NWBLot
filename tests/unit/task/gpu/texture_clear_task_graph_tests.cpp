@@ -36,6 +36,8 @@ namespace __hidden_texture_clear_task_graph_tests{
 
 using TestArena = ::NWB::Tests::TestArena<struct TextureClearTaskGraphTestsTag>;
 namespace Graphics = Core;
+using TaskGraphTestUtils::GraphicsQueue;
+using TaskGraphTestUtils::QueueCapabilities;
 
 inline constexpr Name s_TextureClearScratchArena("tests/graphics/texture_clear_task_graph_scratch");
 
@@ -73,35 +75,6 @@ struct TextureClearTestContext{
         return texture;
     }
 };
-
-[[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
-    const Graphics::GpuQueueCapability::Mask first,
-    const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,
-    const Graphics::GpuQueueCapability::Mask third = Graphics::GpuQueueCapability::None
-){
-    return static_cast<Graphics::GpuQueueCapability::Mask>(
-        static_cast<u8>(first)
-        | static_cast<u8>(second)
-        | static_cast<u8>(third)
-    );
-}
-
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .familyIndex = 0u,
-        .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ .index = 0u, .deviceGeneration = 1u },
-        .queueClass = Graphics::CommandQueue::Graphics,
-        .capabilities = QueueCapabilities(
-            Graphics::GpuQueueCapability::Graphics,
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueueCapability::Transfer
-        ),
-        .dedicated = false,
-    };
-}
-
-
 
 [[nodiscard]] Graphics::GpuGraphResourceId ImportTexture(
     Graphics::GpuTaskGraph& graph,

@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/ecs_graphics/task_graph_contract_test_helpers.h>
 #include <gtest/gtest.h>
 
 #include <global/filesystem/directory_iterator.h>
@@ -129,25 +130,6 @@ static TestPath RepoRoot(TestArena& testArena){
     return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
 }
 
-// Source contracts name only their implementation owners. A file split must extend the read list, not sweep
-// unrelated sources: concatenate each owning split file so moved content keeps its contract.
-static bool ReadRendererSources(
-    const TestPath& repoRoot,
-    const InitializerList<StringView> sourcePaths,
-    AString& outSource
-){
-    const TestPath rendererDirectory = repoRoot / "impl" / "ecs_render";
-    outSource.clear();
-    for(const StringView sourcePath : sourcePaths){
-        AString source;
-        if(!ReadTextFile(rendererDirectory / sourcePath.data(), source))
-            return false;
-        if(!outSource.empty())
-            outSource += "\n\n";
-        outSource.append(source.data(), source.size());
-    }
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -304,7 +286,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_private.h", rayTracingPrivateSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_caustics.cpp",
@@ -318,7 +300,7 @@ TEST(EcsGraphics, RayTracingUsesMeshDomainContractsWithoutSharedStatePrivilege){
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_swbvh.cpp",
@@ -414,7 +396,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_detail.cpp", rayTracingDetailSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_swbvh.cpp",
@@ -427,7 +409,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
         },
         rayTracingSwBvhSource
     ));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_shadow.cpp",
@@ -442,7 +424,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
         rayTracingShadowSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_caustics.cpp",
@@ -457,7 +439,7 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
         },
         rayTracingCausticsSource
     ));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_surfel_gi.cpp",
@@ -1883,7 +1865,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "deferred" / "deferred_system.h", deferredHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.h", rayTracingHeaderSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "raytracing_system.cpp", rayTracingSystemSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_shadow.cpp",
@@ -1898,7 +1880,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
         rayTracingShadowSource
     ));
     ASSERT_TRUE(ReadTextFile(repoRoot / "impl" / "ecs_render" / "raytrace" / "rt_softshadow_dispatch.cpp", rayTracingSoftShadowSource));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_caustics.cpp",
@@ -1913,7 +1895,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
         },
         rayTracingCausticsSource
     ));
-    ASSERT_TRUE(ReadRendererSources(
+    ASSERT_TRUE(EcsGraphicsTaskGraphContractTestDetail::ReadRendererSources(
         repoRoot,
         {
             "raytrace/rt_surfel_gi.cpp",

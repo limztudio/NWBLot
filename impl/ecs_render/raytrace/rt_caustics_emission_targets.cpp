@@ -42,6 +42,12 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
+        MaterialSurfaceInfo* materialInfo = nullptr;
+        if(!m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo))
+            continue;
+        if(!materialInfo || !materialInfo->refractive)
+            continue;
+
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
         const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
@@ -52,12 +58,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
             mesh
         );
         if(meshResolution != RenderableMeshResolution::Ready || !mesh.csgLocalBounds.valid())
-            continue;
-
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo))
-            continue;
-        if(!materialInfo || !materialInfo->refractive)
             continue;
 
         const NWB::Impl::Scene::TransformComponent* transformPtr = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
@@ -85,13 +85,6 @@ bool RendererRayTracingSystem::prepareCausticEmissionTargetResources(Core::Alloc
         SIMDVector worldMax{};
         if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax))
             continue;
-
-        // P7 valid-work predicate: a degenerate emission target (non-finite or inverted world bounds) can never emit a photon,
-        // it leaves the work list before dispatch. Proven no-contribution work only
-        if(!Vector3IsFinite(worldMin) || !Vector3IsFinite(worldMax) || !Vector3LessOrEqual(worldMin, worldMax)){
-            ++m_causticDegenerateTargetSkips;
-            continue;
-        }
 
         combinedMin = VectorMin(combinedMin, worldMin);
         combinedMax = VectorMax(combinedMax, worldMax);

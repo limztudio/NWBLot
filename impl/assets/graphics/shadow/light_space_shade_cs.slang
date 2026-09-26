@@ -3,6 +3,7 @@
 
 
 #include "light_space_scene.slangi"
+#include "light_space_interpolation.slangi"
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 #include "shadow_integrate.slangi"
@@ -10,6 +11,11 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+void nwbLightSpaceInvalidateCrossing(const uint address, const uint instance, const uint primitive){
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(0x7fc00000u, instance, primitive, 0u));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
+}
 
 // Capture and shading use the same bounded records. The graph orders raw crossing writes before this in-place optical conversion.
 [numthreads(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE, 1, 1)]
@@ -29,22 +35,39 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             break;
         }
     }
+    const uint viewPixelIndex = pixelIndex - view.map.z;
+    const uint2 pixel = view.map.x > 0u ? uint2(viewPixelIndex % view.map.x, viewPixelIndex / view.map.x) : uint2(0u);
     for(uint record = 0u; record < count; ++record){
         const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + record) * NWB_LIGHT_SPACE_EVENT_BYTES;
         const uint4 raw = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(address);
-        const float2 bary = float2(asfloat(raw.w), asfloat(g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u)));
-        const uint instanceIndex = raw.y;
-        const uint primitive = raw.z;
+        const float depth = asfloat(raw.x);
+        const uint instanceIndex = raw.w;
+        const uint primitive = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u);
+        if(instanceIndex >= g_NwbLightSpacePush.instanceCount || !isfinite(depth) || view.depthRange.w == 0.0){
+            nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
+            continue;
+        }
         const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
         const NwbSwBvhInstance instance = nwbLightSpaceInstance(instanceIndex);
+        if(primitive >= instance.primitiveCount){
+            nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
+            continue;
+        }
         const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(primitive * 12u);
         const float3 p0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        float3 weights;
+        const float4 clip0 = nwbLightSpaceProject(view, nwbLightSpaceWorldPosition(p0, instanceIndex));
+        const float4 clip1 = nwbLightSpaceProject(view, nwbLightSpaceWorldPosition(p1, instanceIndex));
+        const float4 clip2 = nwbLightSpaceProject(view, nwbLightSpaceWorldPosition(p2, instanceIndex));
+        if(!nwbLightSpaceInterpolateBarycentrics(pixel, view.map.xy, clip0, clip1, clip2, weights)){
+            nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
+            continue;
+        }
         const NwbRayTraceVertexAttrib a0 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u);
         const NwbRayTraceVertexAttrib a1 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u + 1u);
         const NwbRayTraceVertexAttrib a2 = nwbSwShadowLoadVertexAttrib(material.attributeSlot, primitive * 3u + 2u);
-        const float3 weights = float3(1.0 - bary.x - bary.y, bary);
         const float3 local = p0 * weights.x + p1 * weights.y + p2 * weights.z;
         const float3 world = nwbLightSpaceWorldPosition(local, instanceIndex);
         const float3 n0 = float3(a0.normal);
@@ -69,11 +92,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const half smoothCosI = nwbShadowCosineToRay(normal, objectDirection);
         const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
-        const bool valid = view.depthRange.w != 0.0 && isfinite(asfloat(raw.x))
+        const bool valid = all(isfinite(world)) && isfinite(depth)
             && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
         // A nonfinite depth invalidates this texel at resolve, with the same software fallback as capture overflow.
         const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? raw.x : 0x7fc00000u,
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : 0x7fc00000u,
             instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u)));
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u,
             f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << 16u));

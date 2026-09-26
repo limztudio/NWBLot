@@ -213,8 +213,8 @@ template<typename PayloadT, typename PayloadVector>
     const NotNull<const tchar*> label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-){
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+    const bool isIndexBuffer = false){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
         instance.entity.id,
@@ -234,7 +234,7 @@ template<typename PayloadT, typename PayloadVector>
         graphics,
         bufferName,
         payload,
-        { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing },
+        { canHaveUavs, canHaveRawViews, accelStructBuildInput, queueSharing, isIndexBuffer },
         buffer
     );
     switch(failure){
@@ -267,8 +267,8 @@ template<typename PayloadT, typename PayloadVector>
     const NotNull<const tchar*> label,
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
-    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-){
+    const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+    const bool isIndexBuffer = false){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
         instance,
@@ -278,7 +278,8 @@ template<typename PayloadT, typename PayloadVector>
         label,
         canHaveRawViews,
         accelStructBuildInput,
-        queueSharing
+        queueSharing,
+        isIndexBuffer
     );
     return outBuffer != nullptr;
 }
@@ -544,7 +545,8 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             MakeNotNull(NWB_TEXT("rt triangle index")),
             true,
             rtSupported,
-            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
+            true
         ) && uploaded;
     }
 

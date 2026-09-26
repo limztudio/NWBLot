@@ -443,6 +443,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
 
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
         indexFlags.canHaveRawViews = true;
+        indexFlags.isIndexBuffer = true;
         indexFlags.accelStructBuildInput = rtSupported;
         // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;

@@ -1,0 +1,57 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_INTERPOLATION_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_INTERPOLATION_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Recover the original perspective-correct corner varyings at an already-covered sample.
+// Homogeneous equations avoid division by vertex w, including triangles clipped across the near plane.
+bool nwbLightSpaceInterpolateBarycentrics(
+    const uint2 pixel,
+    const uint2 extent,
+    const float4 clip0,
+    const float4 clip1,
+    const float4 clip2,
+    out float3 weights){
+    weights = float3(0.0);
+    if(any(extent == 0u) || any(pixel >= extent) || !all(isfinite(clip0)) || !all(isfinite(clip1)) || !all(isfinite(clip2)))
+        return false;
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(extent.x) - 1.0,
+        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(extent.y));
+    const float2 q0 = clip0.xy - ndc * clip0.w;
+    const float2 q1 = clip1.xy - ndc * clip1.w;
+    const float2 q2 = clip2.xy - ndc * clip2.w;
+    const float2 magnitude = max(abs(q0), max(abs(q1), abs(q2)));
+    const float scale = max(magnitude.x, magnitude.y);
+    if(!isfinite(scale) || scale < 1.1754943508222875e-38)
+        return false;
+    const float2 a = q0 / scale;
+    const float2 b = q1 / scale;
+    const float2 c = q2 / scale;
+    const float3 areas = float3(b.x * c.y - b.y * c.x, c.x * a.y - c.y * a.x, a.x * b.y - a.y * b.x);
+    const float denominator = areas.x + areas.y + areas.z;
+    if(!all(isfinite(areas)) || !isfinite(denominator) || denominator == 0.0)
+        return false;
+    const float2 bary = areas.yz / denominator;
+    // The old capture stores two unit-corner varyings; its shade reconstructs the first weight this same way.
+    weights = float3(1.0 - bary.x - bary.y, bary);
+    const float interpolatedW = dot(weights, float3(clip0.w, clip1.w, clip2.w));
+    // Coverage belongs to rasterization. Fixed-subpixel coverage can extrapolate the unsnapped vertex varyings slightly.
+    // Do not impose another inside-triangle test or clamp across an authored material/UV edge.
+    return all(isfinite(weights)) && isfinite(interpolatedW) && interpolatedW > 0.0;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -39,6 +39,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
     Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::ScratchArena> sceneRefitInputs{ scratchArena };
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sceneRefitRoots{ scratchArena };
+    Vector<Core::BufferHandle, Core::Alloc::ScratchArena> lightSpaceIndexBuffers{ scratchArena };
     Vector<SceneBvhPrimitiveCalculation, Core::Alloc::ScratchArena> instanceBvhPrimitives{ scratchArena };
     // Parallel material records index scene-BVH leaves.
     Vector<NwbRtInstanceMaterialGpu, Core::Alloc::ScratchArena> instanceMaterials{ scratchArena };
@@ -55,6 +56,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     instances.reserve(candidateCount);
     sceneRefitInputs.reserve(candidateCount);
     sceneRefitRoots.reserve(candidateCount);
+    lightSpaceIndexBuffers.reserve(candidateCount);
     instanceBvhPrimitives.reserve(candidateCount);
     instanceMaterials.reserve(candidateCount);
     shadowInstanceData.reserve(candidateCount);
@@ -276,6 +278,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
+        lightSpaceIndexBuffers.push_back(mesh.triangleIndexBuffer);
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
         instanceMaterials.push_back(instanceMaterial);
@@ -296,11 +299,16 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_lightSpaceShadow.m_casters.clear();
     m_lightSpaceShadow.m_casters.reserve(instanceCount);
     for(u32 index = 0u; index < instanceCount; ++index){
-        const u64 vertexCount = static_cast<u64>(instances[index].primitiveCount) * 3u;
-        if(vertexCount == 0u || vertexCount > Limit<u32>::s_Max)
+        const u64 indexCount = static_cast<u64>(instances[index].primitiveCount) * 3u;
+        const Core::BufferHandle& indexBuffer = lightSpaceIndexBuffers[index];
+        if(
+            indexCount == 0u || indexCount > Limit<u32>::s_Max || !indexBuffer
+            || !indexBuffer->getCreationDescription().isIndexBuffer
+            || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32)
+        )
             m_lightSpaceShadow.m_sceneEligible = false;
-        m_lightSpaceShadow.m_casters.push_back({ index, static_cast<u32>(vertexCount),
-            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u });
+        m_lightSpaceShadow.m_casters.push_back({ index, static_cast<u32>(indexCount),
+            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u, indexBuffer });
     }
     if(instanceCount == 0u){
         m_rayTracingState.m_sceneBvhInstanceCount = 0u;

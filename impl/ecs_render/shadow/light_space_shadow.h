@@ -72,8 +72,9 @@ struct LightSpaceShadowStorageCapacity{
 
 struct LightSpaceShadowCaster{
     u32 instanceIndex = 0u;
-    u32 vertexCount = 0u;
+    u32 indexCount = 0u;
     bool transparent = false;
+    Core::BufferHandle triangleIndexBuffer;
 };
 
 // Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.

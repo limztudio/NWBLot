@@ -33,6 +33,19 @@ static constexpr AStringView s_HwRaygenExportName = "CausticHwRayGen";
 static constexpr AStringView s_HwMissExportName = "CausticHwMiss";
 static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
+template<typename Payload>
+static void ConfirmCausticAccumulatorClears(Payload& payload){
+    if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
+        payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
+    if(
+        payload.raytracingSystem
+        && payload.graphOwnsAccumulatorBootstrapClear
+        && payload.causticProducerDispatched
+        && *payload.causticProducerDispatched
+    )
+        payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+}
+
 // A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
 struct CausticAccumulatorDecayGraphTask{
     struct Payload{
@@ -160,15 +173,7 @@ struct SoftwareCausticsGraphTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
-        if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
-            payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
-        if(
-            payload.raytracingSystem
-            && payload.graphOwnsAccumulatorBootstrapClear
-            && payload.causticProducerDispatched
-            && *payload.causticProducerDispatched
-        )
-            payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+        ConfirmCausticAccumulatorClears(payload);
     }
 
     static void discarded(Payload& payload){
@@ -235,15 +240,7 @@ struct HardwareCausticsGraphTask{
 
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
-        if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
-            payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
-        if(
-            payload.raytracingSystem
-            && payload.graphOwnsAccumulatorBootstrapClear
-            && payload.causticProducerDispatched
-            && *payload.causticProducerDispatched
-        )
-            payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+        ConfirmCausticAccumulatorClears(payload);
     }
 
     static void discarded(Payload& payload){

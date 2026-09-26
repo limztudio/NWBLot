@@ -100,29 +100,7 @@ namespace __hidden_gpu_packet_runtime_execution{
     const GpuTaskGraphTaskRecordedCallback* const callbacks,
     const usize callbackCount
 ){
-    if(callbackCount != 0u && !callbacks)
-        return false;
-
-    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
-    for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
-        const GpuTaskGraphTaskRecordedCallback& callback = callbacks[callbackIndex];
-        if(!callback.invoke || !declarations.validTask(callback.task) || !planAccess.findTask(callback.task).valid())
-            return false;
-
-        const GpuSubmissionPacketId packet = planAccess.packetForTask(callback.task);
-        if(
-            !packet.valid()
-            || packet.index < range.first.index
-            || static_cast<usize>(packet.index) >= rangeEnd
-        )
-            return false;
-
-        for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
-            if(callbacks[previousIndex].task == callback.task)
-                return false;
-        }
-    }
-    return true;
+    return ValidateTaskCallbackRange(declarations, planAccess, range, callbacks, callbackCount);
 }
 
 

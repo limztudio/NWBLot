@@ -474,6 +474,40 @@ struct GpuTaskGraphTaskRecordedCallback{
 };
 
 
+template<typename TaskCallback>
+[[nodiscard]] inline bool ValidateTaskCallbackRange(
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuSubmissionPacketRange& range,
+    const TaskCallback* const callbacks,
+    const usize callbackCount
+){
+    if(callbackCount != 0u && !callbacks)
+        return false;
+
+    const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
+    for(usize callbackIndex = 0u; callbackIndex < callbackCount; ++callbackIndex){
+        const TaskCallback& callback = callbacks[callbackIndex];
+        if(!callback.invoke || !declarationAccess.validTask(callback.task) || !planAccess.findTask(callback.task).valid())
+            return false;
+
+        const GpuSubmissionPacketId packet = planAccess.packetForTask(callback.task);
+        if(
+            !packet.valid()
+            || packet.index < range.first.index
+            || static_cast<usize>(packet.index) >= rangeEnd
+        )
+            return false;
+
+        for(usize previousIndex = 0u; previousIndex < callbackIndex; ++previousIndex){
+            if(callbacks[previousIndex].task == callback.task)
+                return false;
+        }
+    }
+    return true;
+}
+
+
 // One graph-owned ordinary-packet prefix in compiler order; optional terminal task includes its packet, rest stay declared for late-tail policy. Semantic bindings survive packet re-splitting.
 struct GpuTaskGraphNormalExecutionDesc{
     GpuTaskId terminalTask;

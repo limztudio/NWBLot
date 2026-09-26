@@ -30,7 +30,7 @@ NWB::Core::Perf::TimingStats MakeTestTimingStats();
 
 NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName);
 
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta();
+NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0);
 
 ::ArenaMemoryStats MakeTestArenaStats(
     const u64 reservedBytes,

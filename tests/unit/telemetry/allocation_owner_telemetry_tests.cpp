@@ -3,6 +3,7 @@
 
 
 #include <tests/common/test_context.h>
+#include <tests/unit/telemetry/telemetry_test_helpers.h>
 
 #include <core/common/name_symbols.h>
 #include <core/perf/session.h>
@@ -69,19 +70,6 @@ struct OwnedAllocation{
     return snapshot;
 }
 
-[[nodiscard]] static Perf::MemoryDelta MakeDelta(){
-    Perf::MemoryDelta delta;
-    delta.previousFrameIndex = 87u;
-    delta.currentFrameIndex = 88u;
-    delta.reservedBytes = 512;
-    delta.usedBytes = -128;
-    delta.peakUsedBytes = 256;
-    delta.allocationCount = 2;
-    delta.reallocationCount = 1;
-    delta.deallocationCount = -1;
-    delta.hasSamples = true;
-    return delta;
-}
 
 static void ExpectSnapshot(const Perf::MemorySnapshot& actual, const Perf::MemorySnapshot& expected){
     EXPECT_EQ(actual.scopeName, expected.scopeName);
@@ -184,7 +172,7 @@ TEST(AllocationOwnerTelemetry, VersionOneRoundTripsAllSourcesBinaryIdentityAndDe
     for(const Perf::MemorySource::Enum source : sources){
         const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, source);
         for(const bool hasDelta : { true, false }){
-            const Perf::MemoryDelta delta = hasDelta ? MakeDelta() : Perf::MemoryDelta{};
+            const Perf::MemoryDelta delta = hasDelta ? TelemetryTestDetail::MakeTestMemoryDelta(-1) : Perf::MemoryDelta{};
             Telemetry::TelemetryBytes bytes(testArena.arena);
             ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, s_DisplayName, snapshot, delta, bytes));
             ASSERT_EQ(bytes.size(), sizeof(Telemetry::EncodedPerfMemoryPayloadHeader) + s_DisplayName.size());
@@ -207,7 +195,7 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     TestArena testArena;
     const Name owner("tests/telemetry/payload_validation_owner");
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::Arena);
-    const Perf::MemoryDelta delta = MakeDelta();
+    const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
     Telemetry::TelemetryBytes bytes(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
@@ -529,7 +517,7 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
         // The explicit scope aliases the same arena; their values must remain separate in summaries.
         snapshot.usedBytes = sources[sourceIndex] == Perf::MemorySource::HeapBacking ? 300u : 100u;
         snapshot.peakUsedBytes = sources[sourceIndex] == Perf::MemorySource::HeapBacking ? 3000u : 1000u;
-        Perf::MemoryDelta delta = MakeDelta();
+        Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
         delta.usedBytes = sources[sourceIndex] == Perf::MemorySource::HeapBacking ? 30 : 10;
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
@@ -608,16 +596,16 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
     ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, firstOwner, firstHashText, MakeSnapshot(firstOwner, Perf::MemorySource::Arena), MakeDelta(), 91u
+        recorder, firstOwner, firstHashText, MakeSnapshot(firstOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 91u
     ));
     ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, secondOwner, secondHashText, MakeSnapshot(secondOwner, Perf::MemorySource::Arena), MakeDelta(), 92u
+        recorder, secondOwner, secondHashText, MakeSnapshot(secondOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 92u
     ));
     ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), MakeDelta(), 93u
+        recorder, firstOwner, "Producer Display Name", MakeSnapshot(firstOwner, Perf::MemorySource::ExplicitScope), TelemetryTestDetail::MakeTestMemoryDelta(-1), 93u
     ));
     ASSERT_TRUE(Telemetry::RecordPerfMemory(
-        recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), MakeDelta(), 94u
+        recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u
     ));
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
@@ -658,7 +646,7 @@ TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
     recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Name owner("core/alloc/heap_backing");
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::HeapBacking);
-    const Perf::MemoryDelta delta = MakeDelta();
+    const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
     ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Heap Backing", snapshot, delta, 9u));
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));

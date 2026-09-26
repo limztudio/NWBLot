@@ -118,6 +118,38 @@ using TaskGraphTestUtils::GraphicsRequest;
     };
 }
 
+struct VersionProducerUses{
+    Graphics::GpuTaskResourceUse resourceUse;
+    Graphics::GpuTaskResourceVersionUse versionUse;
+};
+
+struct VersionConsumerUses{
+    Graphics::GpuTaskResourceUse resourceUse;
+    Graphics::GpuTaskResourceVersionUse versionUse;
+};
+
+[[nodiscard]] inline VersionProducerUses ProducerUses(
+    const Graphics::GpuGraphResourceId resource,
+    const Graphics::GpuGraphResourceVersionId version,
+    const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u)
+){
+    return VersionProducerUses{
+        .resourceUse = ResourceUse(resource, range, Graphics::ResourceStates::UnorderedAccess, Graphics::GpuTaskResourceAccess::Write),
+        .versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Produce),
+    };
+}
+
+[[nodiscard]] inline VersionConsumerUses ConsumerUses(
+    const Graphics::GpuGraphResourceId resource,
+    const Graphics::GpuGraphResourceVersionId version,
+    const Graphics::GpuTaskResourceRange& range = BufferRange(0u, 64u)
+){
+    return VersionConsumerUses{
+        .resourceUse = ResourceUse(resource, range, Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read),
+        .versionUse = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume),
+    };
+}
+
 [[nodiscard]] inline Graphics::GpuTaskId AddTask(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,

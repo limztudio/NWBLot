@@ -49,16 +49,9 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuTaskResourceUse producerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::UnorderedAccess,
-        Graphics::GpuTaskResourceAccess::Write
-    );
-    const Graphics::GpuTaskResourceVersionUse producerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Produce
-    );
+    const VersionProducerUses producerUses = ProducerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
     const Graphics::GpuTaskId producer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/lifetime_producer"),
@@ -83,16 +76,9 @@ TEST(GpuTaskGraphResourceVersion, PreservesProducedVersionUntilAllConsumersFinis
         0u
     );
 
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Consume
-    );
+    const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
     const Graphics::GpuTaskId consumer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/lifetime_consumer"),
@@ -145,16 +131,9 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuTaskResourceUse producerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::UnorderedAccess,
-        Graphics::GpuTaskResourceAccess::Write
-    );
-    const Graphics::GpuTaskResourceVersionUse producerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Produce
-    );
+    const VersionProducerUses producerUses = ProducerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
     const Graphics::GpuTaskId producer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/lifetime_cycle_producer"),
@@ -181,16 +160,9 @@ TEST(GpuTaskGraphResourceVersion, ReportsExplicitClobberCycleWithVersionLifetime
         1u
     );
 
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Consume
-    );
+    const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
     const Graphics::GpuTaskId consumer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/lifetime_cycle_consumer"),
@@ -257,16 +229,9 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
         0u
     );
 
-    const Graphics::GpuTaskResourceUse producerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::UnorderedAccess,
-        Graphics::GpuTaskResourceAccess::Write
-    );
-    const Graphics::GpuTaskResourceVersionUse producerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Produce
-    );
+    const VersionProducerUses producerUses = ProducerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& producerResourceUse = producerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& producerVersionUse = producerUses.versionUse;
     const Graphics::GpuTaskId producer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/early_clobber_producer"),
@@ -278,16 +243,9 @@ TEST(GpuTaskGraphResourceVersion, HonorsExplicitClobberBeforeVersionProducer){
         1u
     );
 
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Consume
-    );
+    const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
     const Graphics::GpuTaskId consumer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/early_clobber_consumer"),
@@ -332,16 +290,9 @@ TEST(GpuTaskGraphResourceVersion, ProtectsImportedRootConsumerFromLaterClobber){
     ASSERT_TRUE(resource.valid());
     ASSERT_TRUE(version.valid());
 
-    const Graphics::GpuTaskResourceUse consumerResourceUse = ResourceUse(
-        resource,
-        BufferRange(0u, 64u),
-        Graphics::ResourceStates::ShaderResource,
-        Graphics::GpuTaskResourceAccess::Read
-    );
-    const Graphics::GpuTaskResourceVersionUse consumerVersionUse = VersionUse(
-        version,
-        Graphics::GpuTaskResourceVersionRole::Consume
-    );
+    const VersionConsumerUses consumerUses = ConsumerUses(resource, version);
+    const Graphics::GpuTaskResourceUse& consumerResourceUse = consumerUses.resourceUse;
+    const Graphics::GpuTaskResourceVersionUse& consumerVersionUse = consumerUses.versionUse;
     const Graphics::GpuTaskId consumer = AddTask(
         graph,
         Name("tests/task_graph_resource_version/imported_lifetime_consumer"),

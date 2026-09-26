@@ -529,19 +529,10 @@ TEST(GpuTaskGraph, OrdersExternalFinalTransitionAfterOverlappingConcurrentReader
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    TwoQueueCompile twoQueueCompile(testArena);
+    ASSERT_TRUE(twoQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
@@ -591,19 +582,10 @@ TEST(GpuTaskGraph, KeepsSameStateExternalExportConcurrentReadersIndependent){
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    TwoQueueCompile twoQueueCompile(testArena);
+    ASSERT_TRUE(twoQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
@@ -647,19 +629,10 @@ TEST(GpuTaskGraph, KeepsDisjointExternalFinalTextureFragmentsIndependent){
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    TwoQueueCompile twoQueueCompile(testArena);
+    ASSERT_TRUE(twoQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
@@ -701,19 +674,10 @@ TEST(GpuTaskGraph, ElidesSamePacketExternalFinalTransitionSelfDependency){
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    TwoQueueCompile twoQueueCompile(testArena);
+    ASSERT_TRUE(twoQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
     EXPECT_EQ(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
 
@@ -904,19 +868,10 @@ TEST(GpuTaskGraph, AvoidsTransitiveExternalFinalizationPacketDependencies){
     const Graphics::GpuTaskId terminalReader = graph.addTask(terminalDesc);
     ASSERT_TRUE(terminalReader.valid());
 
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuTaskGraphQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+    TwoQueueCompile twoQueueCompile(testArena);
+    ASSERT_TRUE(twoQueueCompile.compile(graph));
+    const Graphics::GpuCompiledGraph::ReadView compiledPlan(twoQueueCompile.compiledGraph);
+    Graphics::GpuTaskGraphAnalysis& analysis = twoQueueCompile.analysis;
 
     EXPECT_NE(FindEdge(analysis, pair.earlierReader, pair.finalizingReader), nullptr);
     EXPECT_NE(FindEdge(analysis, pair.finalizingReader, terminalReader), nullptr);

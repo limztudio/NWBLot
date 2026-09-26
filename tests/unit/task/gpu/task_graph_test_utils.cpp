@@ -311,6 +311,24 @@ SingleQueueCompile::SingleQueueCompile(TestArena& testArena)
     return Compile(graph, analysis, topology, assignments, compiledGraph, options);
 }
 
+TwoQueueCompile::TwoQueueCompile(TestArena& testArena)
+    : graphicsQueue(GraphicsQueue())
+    , computeQueue(DedicatedComputeQueue())
+    , topology{.queues = queueStorage, .queueCount = 2u}
+    , analysis(testArena.arena)
+    , assignments(testArena.arena)
+    , compiledGraph(testArena.arena){
+    queueStorage[0u] = graphicsQueue;
+    queueStorage[1u] = computeQueue;
+}
+
+[[nodiscard]] bool TwoQueueCompile::compile(
+    const Graphics::GpuTaskGraph& graph,
+    const Graphics::GpuTaskGraphCompileOptions& options
+){
+    return Compile(graph, analysis, topology, assignments, compiledGraph, options);
+}
+
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index,
     const Graphics::GpuQueueCapability::Mask capabilities){

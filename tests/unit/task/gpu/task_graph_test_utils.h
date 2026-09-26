@@ -192,6 +192,25 @@ struct SingleQueueCompile{
     );
 };
 
+struct TwoQueueCompile{
+    Graphics::GpuPhysicalQueueInfo graphicsQueue;
+    Graphics::GpuPhysicalQueueInfo computeQueue;
+    Graphics::GpuPhysicalQueueInfo queueStorage[2u];
+    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuTaskGraphAnalysis analysis;
+    Graphics::GpuTaskGraphQueueAssignments assignments;
+    Graphics::GpuCompiledGraph compiledGraph;
+
+
+    explicit TwoQueueCompile(TestArena& testArena);
+
+
+    [[nodiscard]] bool compile(
+        const Graphics::GpuTaskGraph& graph,
+        const Graphics::GpuTaskGraphCompileOptions& options = {}
+    );
+};
+
 [[nodiscard]] constexpr Graphics::GpuQueueCapability::Mask QueueCapabilities(
     const Graphics::GpuQueueCapability::Mask first,
     const Graphics::GpuQueueCapability::Mask second = Graphics::GpuQueueCapability::None,

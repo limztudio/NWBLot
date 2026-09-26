@@ -4,6 +4,7 @@
 
 #include <tests/common/test_context.h>
 #include <tests/common/gpu_task_graph_read_views.h>
+#include <tests/unit/task/gpu/task_graph_test_utils.h>
 
 #include <gtest/gtest.h>
 
@@ -100,30 +101,7 @@ struct TextureClearTestContext{
     };
 }
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedComputeQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .familyIndex = 1u,
-        .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ .index = 1u, .deviceGeneration = 1u },
-        .queueClass = Graphics::CommandQueue::Compute,
-        .capabilities = QueueCapabilities(
-            Graphics::GpuQueueCapability::Compute,
-            Graphics::GpuQueueCapability::Transfer
-        ),
-        .dedicated = true,
-    };
-}
 
-[[nodiscard]] Graphics::GpuPhysicalQueueInfo DedicatedTransferQueue(){
-    return Graphics::GpuPhysicalQueueInfo{
-        .familyIndex = 2u,
-        .queueIndex = 0u,
-        .id = Graphics::GpuPhysicalQueueId{ .index = 2u, .deviceGeneration = 1u },
-        .queueClass = Graphics::CommandQueue::Transfer,
-        .capabilities = Graphics::GpuQueueCapability::Transfer,
-        .dedicated = true,
-    };
-}
 
 [[nodiscard]] Graphics::GpuGraphResourceId ImportTexture(
     Graphics::GpuTaskGraph& graph,
@@ -216,7 +194,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
     }
 
     {
-        const Graphics::GpuPhysicalQueueInfo queue = DedicatedTransferQueue();
+        const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::DedicatedTransferQueue();
         const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
@@ -225,7 +203,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
         EXPECT_FALSE(Compile(partialGraph, analysis, topology, assignments, compiledGraph, scratchArena));
     }
     {
-        const Graphics::GpuPhysicalQueueInfo queue = DedicatedComputeQueue();
+        const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::DedicatedComputeQueue();
         const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
@@ -452,7 +430,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
         );
     }
 
-    const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
+    const Graphics::GpuPhysicalQueueInfo computeQueue = TaskGraphTestUtils::DedicatedComputeQueue();
     const Graphics::GpuTaskGraphQueueTopology computeTopology{
         .queues = &computeQueue,
         .queueCount = 1u,

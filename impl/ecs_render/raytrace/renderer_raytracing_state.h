@@ -165,8 +165,6 @@ struct RtShadowState{
     Core::ComputePipelineHandle m_swShadowTransparentBuildArgsPipeline;
     Core::ShaderHandle m_swShadowTransparentIndirectShader;
     Core::ComputePipelineHandle m_swShadowTransparentIndirectPipeline;
-    Core::ShaderHandle m_swShadowTransparentUniformShader;
-    Core::ComputePipelineHandle m_swShadowTransparentUniformPipeline;
     SoftwareTransparentSamplingState m_softwareTransparentSampling;
     // Scalar and RGB wavelet/upsample pipelines share one push-constant layout.
     SoftShadowResolveState m_softShadowResolve;
@@ -209,9 +207,6 @@ struct RtShadowState{
     Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
 
-    bool m_swShadowAdaptiveEnabled = true;
-    // Compaction dispatches edge rays indirectly when enabled.
-    bool m_swShadowCompactEnabled = true;
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;
     bool m_swShadowDispatchLogged = false;

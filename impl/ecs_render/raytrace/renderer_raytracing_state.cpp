@@ -160,8 +160,6 @@ void RendererRayTracingState::invalidateResources(){
     m_swShadowTransparentBuildArgsPipeline.reset();
     m_swShadowTransparentIndirectShader.reset();
     m_swShadowTransparentIndirectPipeline.reset();
-    m_swShadowTransparentUniformShader.reset();
-    m_swShadowTransparentUniformPipeline.reset();
     m_swShadowMeshCount = 0u;
     m_swShadowMeshNodeBuffers.clear();
     m_swShadowMeshPositionBuffers.clear();

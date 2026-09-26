@@ -217,7 +217,6 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentClassifyShader, m_rayTracingState.m_swShadowTransparentClassifyPipeline, AssetsGraphicsShadow::s_SwTransparentClassifyShaderName, MakeNotNull("ECSRender_SwShadowTransparentClassify"))
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentBuildArgsShader, m_rayTracingState.m_swShadowTransparentBuildArgsPipeline, AssetsGraphicsShadow::s_SwTransparentBuildArgsShaderName, MakeNotNull("ECSRender_SwShadowTransparentBuildArgs"))
         && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentIndirectShader, m_rayTracingState.m_swShadowTransparentIndirectPipeline, AssetsGraphicsShadow::s_SwTransparentIndirectShaderName, MakeNotNull("ECSRender_SwShadowTransparentIndirect"))
-        && ensureSwShadowPassPipeline(m_rayTracingState.m_swShadowTransparentUniformShader, m_rayTracingState.m_swShadowTransparentUniformPipeline, AssetsGraphicsShadow::s_SwTransparentUniformShaderName, MakeNotNull("ECSRender_SwShadowTransparentUniform"))
         && ensureSoftwareTransparentSamplingPipeline()
     ;
     if(!passesReady){

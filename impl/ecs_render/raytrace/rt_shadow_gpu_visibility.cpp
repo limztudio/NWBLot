@@ -242,7 +242,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     }
 
     // Fallback transparent fold; it is mutually exclusive with the soft path.
-    if(!softTransparentRan && m_rayTracingState.m_swShadowAdaptiveEnabled){
+    if(!softTransparentRan){
         // Compacted mode traces only classified edge records.
         const bool graphOwnsAdaptivePlan =
             graphOwnedAdaptivePlan && graphOwnedAdaptivePlan->enabled
@@ -345,18 +345,6 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             commandList.setPushConstants(&resolvePush, sizeof(resolvePush));
             commandList.dispatch(fullGroupsX, fullGroupsY, 1u);
         }
-    }
-    else if(!softTransparentRan){
-        // Non-adaptive half-resolution transparent fallback.
-        commandList.setTextureState(targets.shadowVisibility.get(), ECSRenderDetail::s_ShadowVisibilitySubresources, Core::ResourceStates::UnorderedAccess);
-        commandList.commitBarriers();
-        SwShadowHeapPushConstants pushConstants = makePush();
-        pushConstants.width = targets.width;
-        pushConstants.height = targets.height;
-        commandList.setComputeState(passState(m_rayTracingState.m_swShadowTransparentUniformPipeline));
-        bindPassHeap(m_rayTracingState.m_swShadowTransparentUniformPipeline);
-        commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
-        commandList.dispatch(coarseGroupsX, coarseGroupsY, 1u);
     }
 
     reportSoftwareShadowTraversal(targets);

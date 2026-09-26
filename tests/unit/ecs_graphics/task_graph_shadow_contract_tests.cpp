@@ -370,7 +370,7 @@ TEST(EcsGraphics, SplitShadowVisibilityKeepsFreshScratchAsFirstWrites){
     ASSERT_NE(softwareOpaqueOffset, AStringView::npos);
     ASSERT_LT(softwareVisibilityOffset, softwareOpaqueOffset);
     const AStringView softwareVisibility = shadowSourceView.substr(softwareVisibilityOffset, softwareOpaqueOffset - softwareVisibilityOffset);
-    const usize adaptiveOffset = softwareVisibility.find("if(!softTransparentRan && m_rayTracingState.m_swShadowAdaptiveEnabled)");
+    const usize adaptiveOffset = softwareVisibility.find("if(!softTransparentRan)");
     ASSERT_NE(adaptiveOffset, AStringView::npos);
     const AStringView preAdaptive = softwareVisibility.substr(0u, adaptiveOffset);
     const AStringView adaptive = softwareVisibility.substr(adaptiveOffset);

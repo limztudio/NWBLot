@@ -178,14 +178,13 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
     ;
     GraphOwnedAdaptiveShadowPlan adaptivePlan;
     if(
-        state.m_swShadowAdaptiveEnabled
-        && !softTransparentShadowReady()
+        !softTransparentShadowReady()
         && !hardwareShadowSupported
         && shadowVisibilitySoftwareResourcesPreflighted()
         && state.m_swShadowEdgeCounterBuffer
     ){
         adaptivePlan.enabled = true;
-        adaptivePlan.compact = state.m_swShadowCompactEnabled;
+        adaptivePlan.compact = true;
     }
 
     return RayTracingShadowVisibilityGraphPlanSnapshot{

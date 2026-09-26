@@ -475,12 +475,10 @@ TEST(EcsGraphics, RayTracingOwnsItsPrivateRendererState){
     EXPECT_TRUE(ContainsText(compactStateHeader, "f32m_causticTemporalDecay=ECSRenderDetail::s_DefaultCausticTemporalDecay;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelPoolCapacity=NWB_SURFEL_POOL_CAPACITY;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_surfelHashCellCount=NWB_SURFEL_HASH_CELL_COUNT;"));
-    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_swShadowAdaptiveEnabled=true;"));
-    EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_swShadowCompactEnabled=true;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "u32m_softShadowHistoryFrontIsA=1u;"));
     EXPECT_TRUE(ContainsText(compactStateHeader, "boolm_surfelResourcesNeedClear=false;"));
     EXPECT_TRUE(ContainsText(compactStateSystem, "voidRendererRayTracingState::invalidateResources(){"));
-    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 103u);
+    EXPECT_EQ(CountText(compactStateSystem, ".reset();"), 101u);
     EXPECT_EQ(CountText(compactStateSystem, "m_softwareTransparentSampling=SoftwareTransparentSamplingState{};"), 1u);
     // Accepted transparent history belongs to the shadow feature and clears both generations on resource invalidation.
     EXPECT_TRUE(ContainsText(stateHeaderSource, "#include <impl/ecs_render/shadow/transparent_sampling_history.h>"));

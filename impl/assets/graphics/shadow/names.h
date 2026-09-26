@@ -37,7 +37,6 @@ inline constexpr Name s_SwTransparentResolveShaderName("engine/graphics/shadow/s
 inline constexpr Name s_SwTransparentClassifyShaderName("engine/graphics/shadow/sw_shadow_transparent_classify_cs");
 inline constexpr Name s_SwTransparentBuildArgsShaderName("engine/graphics/shadow/sw_shadow_transparent_buildargs_cs");
 inline constexpr Name s_SwTransparentIndirectShaderName("engine/graphics/shadow/sw_shadow_transparent_indirect_cs");
-inline constexpr Name s_SwTransparentUniformShaderName("engine/graphics/shadow/sw_shadow_transparent_uniform_cs");
 // Colored analog of the soft trace, folded at the final upsample.
 inline constexpr Name s_SwTransparentSoftShaderName("engine/graphics/shadow/sw_shadow_transparent_soft_cs");
 inline constexpr Name s_HardwareTransparentGatherShaderName("engine/graphics/shadow/hardware_transparent_gather_cs");

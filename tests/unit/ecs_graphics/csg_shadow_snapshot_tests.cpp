@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/csg/shadow_cutter_snapshot.h>
 #include <impl/ecs_render/shadow/light_space_csg.h>
+#include <impl/ecs_render/shadow/light_space_capture_history.h>
+#include <impl/ecs_render/raytrace/instance_material.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 
 #include <core/ecs/entity.h>
@@ -391,6 +393,146 @@ TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMet
     EXPECT_FALSE(state.snapshot.hasCsg);
     EXPECT_EQ(state.snapshot.identity, 0u);
     EXPECT_TRUE(state.bytes.empty());
+}
+
+TEST(CsgShadowSnapshot, OneFrameCaptureReuseAllowsOnlyTransformLagAndAlwaysRefreshesTheNextFrame){
+    for(const auto cadence : { SoftwareShadowCaptureCadence::EveryFrame, SoftwareShadowCaptureCadence::ReuseOneFrame }){
+        SnapshotContext context;
+        ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+        const Core::ECS::EntityID receiver = context.addReceiver(s_ReceiverGroup, true);
+        const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+        auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
+        ASSERT_NE(cutter, nullptr);
+        LightSpaceCsgState state(context.testWorld.arena);
+        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+        mesh.runtimeMesh = true;
+        mesh.runtimeMeshVersion = 3u;
+        mesh.runtimeGeometryContentRevision = 7u;
+        mesh.meshletPrimitiveIndexCount = 3u;
+        NwbRtInstanceMaterialGpu material;
+        InstanceGpuData instance;
+        LightSpaceCaptureHistory history;
+        u64 previousExact = 0u;
+        u64 previousContent = 0u;
+        for(u32 frame = 0u; frame < 4u; ++frame){
+            const f32 x = static_cast<f32>(frame) * 0.25f;
+            StoreFloat(MatrixTranslation(x, 0.f, 0.f), cutter->shapeToWorld);
+            StoreFloat(MatrixTranslation(-x, 0.f, 0.f), cutter->worldToShape);
+            instance.translation.x = x;
+            StoreFloat(QuaternionRotationRollPitchYaw(0.f, x, 0.f), instance.rotation);
+            BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
+            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.f, 0.f), mesh);
+            ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+            ASSERT_TRUE(state.snapshot.hasCsg);
+            ASSERT_TRUE(state.captureGeometryTrusted);
+            const u64 content = BuildLightSpaceCsgCaptureIdentity(state, &material, &instance, 1u, nullptr, 0u, nullptr, 0u);
+            if(frame != 0u){
+                EXPECT_NE(state.snapshot.identity, previousExact);
+                EXPECT_EQ(content, previousContent);
+            }
+            previousExact = state.snapshot.identity;
+            previousContent = content;
+            history.beginFrame();
+            const LightSpaceCaptureIdentity identity{ content, 11u, 13u, state.captureGeometryTrusted };
+            const auto ticket = history.prepare(identity, cadence);
+            EXPECT_EQ(ticket.reuse, cadence == SoftwareShadowCaptureCadence::ReuseOneFrame && (frame % 2u) != 0u);
+            if(!ticket.reuse)
+                history.recordCapture(ticket);
+            ASSERT_TRUE(history.accept(ticket));
+        }
+    }
+}
+
+TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBindingChanges){
+    SnapshotContext context;
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    Core::ECS::EntityID receivers[] = { context.addReceiver(), context.addReceiver() };
+    const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgBoxShapeName);
+    auto* cutter = context.testWorld.world.tryGetComponent<CsgCutterComponent>(cutterEntity);
+    ASSERT_NE(cutter, nullptr);
+    LightSpaceCsgState state(context.testWorld.arena);
+    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+    mesh.runtimeMesh = true;
+    mesh.runtimeMeshVersion = 3u;
+    mesh.runtimeGeometryContentRevision = 7u;
+    mesh.meshletPrimitiveIndexCount = 3u;
+    NwbRtInstanceMaterialGpu materials[LengthOf(receivers)];
+    InstanceGpuData instances[LengthOf(receivers)];
+    u8 materialBytes[] = { 1u, 2u, 3u, 4u };
+    const auto build = [&](){
+        BeginLightSpaceCsgGather(state, context.testWorld.world, LengthOf(receivers), false);
+        for(const auto receiver : receivers)
+            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+        return FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch);
+    };
+    const auto identity = [&](){
+        return LightSpaceCaptureIdentity{
+            BuildLightSpaceCsgCaptureIdentity(state, materials, instances, LengthOf(receivers),
+                materialBytes, sizeof(materialBytes), nullptr, 0u),
+            11u, 13u, state.captureGeometryTrusted,
+        };
+    };
+    const auto expectRefresh = [&](const auto& change){
+        ASSERT_TRUE(build());
+        ASSERT_TRUE(state.snapshot.hasCsg);
+        LightSpaceCaptureHistory history;
+        history.beginFrame();
+        const auto captured = history.prepare(identity(), SoftwareShadowCaptureCadence::ReuseOneFrame);
+        history.recordCapture(captured);
+        ASSERT_TRUE(history.accept(captured));
+        change();
+        ASSERT_TRUE(build());
+        history.beginFrame();
+        EXPECT_FALSE(history.prepare(identity(), SoftwareShadowCaptureCadence::ReuseOneFrame).reuse);
+    };
+    expectRefresh([&](){ ++mesh.runtimeGeometryContentRevision; });
+    expectRefresh([&](){ ++mesh.runtimeMeshVersion; });
+    expectRefresh([&](){ mesh.meshletPrimitiveIndexCount += 3u; });
+    expectRefresh([&](){ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
+    expectRefresh([&](){
+        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 17u);
+    });
+    expectRefresh([&](){ materials[0].shadowTransmittanceModelId = 5u; });
+    expectRefresh([&](){ materials[0].positionSlot = 9u; });
+    expectRefresh([&](){ materials[0].flags = RtInstanceMaterialFlag::Transparent; });
+    expectRefresh([&](){ ++instances[0].translation.w; });
+    expectRefresh([&](){ ++instances[0].geometryHeapSlots[0]; });
+    expectRefresh([&](){ ++materialBytes[0]; });
+    expectRefresh([&](){ SetParameters(*cutter, Float4(0.5f, 1.f, 1.f, 0.f)); });
+    expectRefresh([&](){ Swap(receivers[0], receivers[1]); });
+    expectRefresh([&](){ ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry)); });
+    expectRefresh([&](){ cutter->active = false; });
+}
+
+TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture){
+    SnapshotContext context;
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    const Core::ECS::EntityID receiver = context.addReceiver(s_ReceiverGroup, true);
+    const Core::ECS::EntityID cutter = context.addCutter(s_CsgBoxShapeName);
+    ASSERT_TRUE(cutter.valid());
+    LightSpaceCsgState state(context.testWorld.arena);
+    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+    mesh.runtimeMesh = true;
+    mesh.meshletPrimitiveIndexCount = 3u;
+    NwbRtInstanceMaterialGpu material;
+    InstanceGpuData instance;
+    LightSpaceCaptureHistory history;
+    for(const u64 revision : { 7ull, 0ull, 0ull, 8ull }){
+        mesh.runtimeGeometryContentRevision = revision;
+        BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
+        AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+        ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+        EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
+        const LightSpaceCaptureIdentity identity{
+            BuildLightSpaceCsgCaptureIdentity(state, &material, &instance, 1u, nullptr, 0u, nullptr, 0u),
+            11u, 13u, state.captureGeometryTrusted,
+        };
+        history.beginFrame();
+        const auto ticket = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseOneFrame);
+        EXPECT_FALSE(ticket.reuse);
+        history.recordCapture(ticket);
+        ASSERT_TRUE(history.accept(ticket));
+    }
 }
 
 TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrder){

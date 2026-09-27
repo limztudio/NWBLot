@@ -103,6 +103,12 @@ class CsgShadowImageTests(unittest.TestCase):
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "every_frame")
         self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", environment)
 
+    def test_approximate_capture_preserves_explicit_quality_settings(self):
+        environment = capture_environment("cut", "point", cadence="reuse_one_frame", map_resolution_divisor=2)
+        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_one_frame")
+        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"], "256")
+        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_POINT_RESOLUTION"], "128")
+
     def test_capture_requires_post_motion_settle_interval(self):
         arguments = ["--executable", "test.exe", "--working-directory", ".", "--output-directory", ".", "--route", "software"]
         with self.assertRaises(SystemExit):

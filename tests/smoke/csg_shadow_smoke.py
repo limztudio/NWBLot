@@ -13,7 +13,7 @@ from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, c
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
 
-def capture_environment(arm, light, atlas="boxes"):
+def capture_environment(arm, light, atlas="boxes", cadence="every_frame", map_resolution_divisor=1):
     environment = dict(os.environ)
     for key in tuple(environment):
         if key.startswith(("NWB_CSG_SHADOW_", "NWB_SOFTWARE_SHADOW_", "NWB_SHADOW_")):
@@ -25,9 +25,9 @@ def capture_environment(arm, light, atlas="boxes"):
         "NWB_SOFTWARE_SHADOW_BACKEND": "automatic",
         "NWB_SOFTWARE_SHADOW_COVERAGE": "reference",
         "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9",
-        "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": "every_frame",
-        "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": "512",
-        "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION": "256",
+        "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": cadence,
+        "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": str(512 // map_resolution_divisor),
+        "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION": str(256 // map_resolution_divisor),
         "NWB_SOFTWARE_SHADOW_BUDGET_MIB": "256",
         "NWB_SHADOW_TRANSPARENT_SAMPLING": "reference_three",
         "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS": "0.016666667",
@@ -66,6 +66,8 @@ def capture_arm(args, arm):
     if arm not in ("reference", "uncut"):
         command += ["--expect-log-message", "RendererSystem: dispatched CSG light-space shadows (hardware_compose="
             + ("1" if args.route == "hardware" else "0")]
+    if args.capture_cadence == "reuse_one_frame" and (args.route == "software" or arm not in ("reference", "uncut")):
+        command += ["--expect-log-message", "RendererSystem: accepted light-space capture reuse (cadence=2)"]
     for message in ("[ERROR]", "VUID-", "Validation Error", "failed to resolve shader", "retaining all-lit visibility",
         "preserving opaque visibility", "ray-traced shadow visibility pass failed"):
         command += ["--reject-log-message", message]
@@ -75,7 +77,8 @@ def capture_arm(args, arm):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing CSG shadow {args.route}/{args.light}/{args.atlas}/{arm}...", flush=True)
-    result = subprocess.run(command, env=capture_environment(arm, args.light, args.atlas), check=False, timeout=args.timeout + 45.0)
+    environment = capture_environment(arm, args.light, args.atlas, args.capture_cadence, args.map_resolution_divisor)
+    result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return None
     if result.returncode:
@@ -95,6 +98,8 @@ def parse_args(argv):
     parser.add_argument("--route", choices=("hardware", "software"), required=True)
     parser.add_argument("--light", choices=("directional", "point"), default="directional")
     parser.add_argument("--atlas", choices=("boxes", "analytic"), default="boxes")
+    parser.add_argument("--capture-cadence", choices=("every_frame", "reuse_one_frame"), default="every_frame")
+    parser.add_argument("--map-resolution-divisor", type=int, choices=(1, 2, 4), default=1)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--timeout", type=float, default=90.0)
     parser.add_argument("--application-arg", action="append", default=[])
@@ -120,6 +125,8 @@ def main(argv):
         metrics = compare_analytic_frames(frames) if args.atlas == "analytic" else compare_frames(frames, args.light)
         metrics["atlas"] = args.atlas
         metrics["route"] = args.route
+        metrics["capture_cadence"] = args.capture_cadence
+        metrics["map_resolution_divisor"] = args.map_resolution_divisor
         (args.output_directory / "result.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
         if args.atlas == "analytic":
             print("PASS: CSG shadows match analytic plane, ellipsoid, capsule and cutter-union optical lengths")

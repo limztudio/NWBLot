@@ -52,9 +52,20 @@ class StressCsgProfileTests(unittest.TestCase):
         environment = smoke.launch_environment({"NWB_STRESS_CSG_PROFILE": "none"}, args, self.output)
         self.assertEqual(environment["NWB_STRESS_CSG_PROFILE"], "waist_bands")
         for extra in (["--characters-per-class", "5"], ["--software-shadow-backend", "trace"],
-            ["--software-shadow-capture-cadence", "reuse_one_frame"], ["--csg-profile", "unknown"]):
+            ["--csg-profile", "unknown"]):
             with self.subTest(extra=extra), patch("sys.stderr"), self.assertRaises(SystemExit):
                 smoke.parse_args(arguments + extra)
+
+    def test_csg_reuse_requires_accepted_runtime_evidence(self):
+        args = smoke.parse_args(self.argv + ["--csg-profile", "waist_bands", "--software-shadow-capture-cadence", "reuse_one_frame"])
+        environment = smoke.launch_environment({}, args, self.output)
+        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_one_frame")
+        text = csg_log().replace("capture_cadence=0", "capture_cadence=1")
+        with self.assertRaisesRegex(smoke.SmokeFailure, "accepted light-space capture reuse"):
+            smoke.verify_software_shadow_settings(text, args)
+        verified = smoke.verify_software_shadow_settings(text + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE, args)
+        self.assertTrue(verified["accepted_reuse_verified"])
+        self.assertTrue(smoke.verify_csg_profile(text, args)["verified"])
 
     def test_hardware_and_disabled_device_routes_are_verified(self):
         args = smoke.parse_args(self.argv + ["--csg-profile", "waist_bands"])

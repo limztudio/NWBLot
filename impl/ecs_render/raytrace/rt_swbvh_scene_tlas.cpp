@@ -240,6 +240,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
             m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
+            if(mesh.runtimeLocalBoundsBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.runtimeLocalBoundsBuffer);
+            if(mesh.swBvhNodeBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.swBvhNodeBuffer);
         }
         Float3U opticalLocalMin{};
         Float3U opticalLocalMax{};
@@ -543,8 +547,17 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             Fnv64AppendValue(captureIdentity, csg.identity);
             for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
                 Fnv64AppendValue(captureIdentity, buffer.get());
+            bool captureTrusted = staticScene && contentComplete;
+            if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame){
+                captureIdentity = BuildLightSpaceCsgCaptureIdentity(
+                    m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
+                    shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
+                    m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
+                );
+                captureTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted && contentComplete;
+            }
             m_lightSpaceShadow.m_captureSceneIdentity = captureIdentity;
-            m_lightSpaceShadow.m_captureSceneTrusted = staticScene && contentComplete;
+            m_lightSpaceShadow.m_captureSceneTrusted = captureTrusted;
             m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
         }
     }

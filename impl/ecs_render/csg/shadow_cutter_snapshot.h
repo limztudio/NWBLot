@@ -44,6 +44,7 @@ struct CsgShadowSnapshot{
     // Shadow records use NWB_CSG_SHADOW_SHAPE_* in shapeType, with the existing CSG cutter layout.
     Vector<CsgCutterGpuData, Core::Alloc::GlobalArena> cutters;
     u64 identity = 0u;
+    u64 contentIdentity = 0u;
     bool hasCsg = false;
 
 

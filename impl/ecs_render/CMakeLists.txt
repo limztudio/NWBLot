@@ -367,6 +367,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh/renderer_mesh_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/renderer_pipeline_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/renderer_raytracing_state.h"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/instance_material.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/shared/renderer_push_constants_private.h"
     "${CMAKE_CURRENT_LIST_DIR}/material/renderer_render_state_private.h"

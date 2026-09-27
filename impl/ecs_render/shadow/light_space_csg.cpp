@@ -5,6 +5,7 @@
 #include "light_space_csg.h"
 
 #include <impl/ecs_render/mesh/mesh_system.h>
+#include <impl/ecs_render/raytrace/instance_material.h>
 
 #include <core/common/log.h>
 #include <core/ecs/world.h>
@@ -21,11 +22,37 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+u64 BuildLightSpaceCsgCaptureIdentity(
+    const LightSpaceCsgState& state,
+    const NwbRtInstanceMaterialGpu* const materials, const InstanceGpuData* const instances, const usize instanceCount,
+    const u8* const materialBytes, const usize materialByteCount,
+    const Core::TextureHandle* const textures, const usize textureCount){
+    NWB_ASSERT(instanceCount == 0u || (materials && instances));
+    NWB_ASSERT(materialByteCount == 0u || materialBytes);
+    NWB_ASSERT(textureCount == 0u || textures);
+    u64 identity = state.captureGeometryIdentity;
+    Fnv64AppendValue(identity, state.snapshot.contentIdentity);
+    Fnv64AppendValue(identity, instanceCount);
+    for(usize index = 0u; index < instanceCount; ++index){
+        Fnv64AppendValue(identity, materials[index]);
+        Fnv64AppendValue(identity, instances[index].translation.w);
+        Fnv64AppendValue(identity, instances[index].geometryHeapSlots);
+    }
+    Fnv64AppendBuffer(identity, materialBytes, materialByteCount);
+    Fnv64AppendValue(identity, textureCount);
+    for(usize index = 0u; index < textureCount; ++index)
+        Fnv64AppendValue(identity, textures[index].get());
+    return identity;
+}
+
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, const usize capacity, const bool hardware){
     state.gathering = HasCsgFrameCandidates(world);
     state.hardware = hardware;
     state.snapshot.hasCsg = false;
     state.snapshot.identity = 0u;
+    state.snapshot.contentIdentity = 0u;
+    state.captureGeometryIdentity = FNV64_OFFSET_BASIS;
+    state.captureGeometryTrusted = true;
     state.snapshot.receiverRanges.clear();
     state.snapshot.cutters.clear();
     state.receivers.clear();
@@ -44,6 +71,23 @@ void AppendLightSpaceCsgReceiver(
     const SIMDMatrix& objectToWorld, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
     if(!state.gathering)
         return;
+    Fnv64AppendValue(state.captureGeometryIdentity, entity.id);
+    Fnv64AppendBool(state.captureGeometryIdentity, transparent);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshName.hash());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.positionBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.triangleIndexBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.attributeBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeLocalBoundsHeapHandle);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.swBvhNodeBuffer.get());
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.swBvhNodeHeapHandle);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.meshletPrimitiveIndexCount);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeMeshVersion);
+    Fnv64AppendValue(state.captureGeometryIdentity, mesh.runtimeGeometryContentRevision);
+    Fnv64AppendBool(state.captureGeometryIdentity, mesh.runtimeMesh);
+    if(mesh.runtimeMesh && mesh.runtimeGeometryContentRevision == 0u)
+        state.captureGeometryTrusted = false;
+
     CsgShadowReceiverInput receiver;
     receiver.entity = entity;
     receiver.receiverPass = transparent ? CsgReceiverPass::Transparent : CsgReceiverPass::Opaque;

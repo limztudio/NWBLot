@@ -601,7 +601,7 @@ def parse_args(argv=None):
     parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default="reference_grid9",
         help="Compact cross uses five blocker taps with cheap off-center opaque plane estimates; the center stays fully checked.")
     parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default="every_frame",
-        help="Reuse accepted software light-space captures for one frame; receiver shading and fallback remain current.")
+        help="Reuse accepted light-space captures for one frame, including CSG shadows; receiver shading remains current.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
         help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)
@@ -621,8 +621,8 @@ def parse_args(argv=None):
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
     if args.csg_profile != "none":
-        if args.characters_per_class != 10 or args.software_shadow_capture_cadence != "every_frame" or args.software_shadow_backend == "trace":
-            parser.error("waist_bands requires ten bodies per class, every-frame maps, and automatic or light-space shadows")
+        if args.characters_per_class != 10 or args.software_shadow_backend == "trace":
+            parser.error("waist_bands requires ten bodies per class and automatic or light-space shadows")
     try:
         validate_performance_target_request(args)
     except SmokeFailure as error:

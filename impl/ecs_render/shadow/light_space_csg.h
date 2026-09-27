@@ -20,6 +20,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct InstanceGpuData;
+struct NwbRtInstanceMaterialGpu;
+
 namespace ECSRenderDetail{
     struct MeshRayTracingResourceSnapshot;
 };
@@ -45,6 +48,8 @@ struct LightSpaceCsgState{
     Vector<LightSpaceCsgInstanceGpu, Core::Alloc::GlobalArena> instances;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> dynamicBounds;
     Vector<u8, Core::Alloc::GlobalArena> bytes;
+    u64 captureGeometryIdentity = 0u;
+    bool captureGeometryTrusted = false;
     bool gathering = false;
     bool hardware = false;
     bool limitationLogged = false;
@@ -59,6 +64,14 @@ public:
         , bytes(arena)
     {}
 };
+
+// Excludes only world transforms; geometry/material edits still invalidate the one-frame approximation.
+[[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(
+    const LightSpaceCsgState& state,
+    const NwbRtInstanceMaterialGpu* materials, const InstanceGpuData* instances, usize instanceCount,
+    const u8* materialBytes, usize materialByteCount,
+    const Core::TextureHandle* textures, usize textureCount
+);
 
 void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world, usize capacity, bool hardware);
 void AppendLightSpaceCsgReceiver(

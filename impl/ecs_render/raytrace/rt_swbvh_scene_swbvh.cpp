@@ -35,8 +35,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
-    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * 3u);
     BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, false);
+    m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * (m_lightSpaceShadow.m_csg.gathering ? 5u : 3u));
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
@@ -294,6 +294,12 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
+        if(m_lightSpaceShadow.m_csg.gathering){
+            if(mesh.runtimeLocalBoundsBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.runtimeLocalBoundsBuffer);
+            if(mesh.swBvhNodeBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.swBvhNodeBuffer);
+        }
 
         AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, mesh);
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
@@ -533,8 +539,17 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         Fnv64AppendValue(captureSceneIdentity, texture.get());
     m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
     // Sampled material assets are immutable under this collector; resource/shader invalidation also clears capture history.
-    if(csg.hasCsg)
+    if(csg.hasCsg){
         Fnv64AppendValue(captureSceneIdentity, csg.identity);
+        if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame){
+            captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(
+                m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
+                shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),
+                m_preparedShadowTraceMaterialSampledTextures.data(), m_preparedShadowTraceMaterialSampledTextures.size()
+            );
+            captureSceneTrusted = m_lightSpaceShadow.m_csg.captureGeometryTrusted;
+        }
+    }
     m_lightSpaceShadow.m_captureSceneIdentity = captureSceneIdentity;
     m_lightSpaceShadow.m_captureSceneTrusted = captureSceneTrusted && contentComplete;
     return true;

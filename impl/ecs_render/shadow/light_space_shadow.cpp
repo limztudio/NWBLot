@@ -191,7 +191,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     }
     snapshot.captureTicket = state.m_captureHistory.prepare(identity, state.m_settings.captureCadence);
     snapshot.captureHistory = &state.m_captureHistory;
-    // The map generation includes the GPU-fitted views. A reuse task must not upload the new zero-fit templates.
+    // Reuse retains the fitted views, CSG context and converted crossings together; current templates must not overwrite them.
     if(!snapshot.captureTicket.reuse){
         snapshot.plan = plan;
         // Keep hashed resource objects alive until their map generation is replaced; pointer identities cannot alias replacements.

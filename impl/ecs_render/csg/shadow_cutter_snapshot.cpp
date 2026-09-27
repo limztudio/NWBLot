@@ -79,6 +79,9 @@ void AppendReceiverCutters(
         if(boundsCanCull && finiteBounds && !AabbTests::Intersects(receiverMin, receiverMax, cutterMin, cutterMax))
             return;
 
+        Fnv64AppendValue(snapshot.contentIdentity, entity.id);
+        Fnv64AppendValue(snapshot.contentIdentity, cutter.shapeType.hash());
+        Fnv64AppendBuffer(snapshot.contentIdentity, parameterBytes, parameterByteCount);
         Fnv64AppendValue(snapshot.identity, entity.id);
         Fnv64AppendValue(snapshot.identity, cutter.shapeType.hash());
         Fnv64AppendValue(snapshot.identity, cutter.worldToShape);
@@ -130,6 +133,7 @@ bool BuildCsgShadowSnapshot(
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
     outSnapshot.identity = 0u;
+    outSnapshot.contentIdentity = 0u;
     outSnapshot.hasCsg = false;
     if(receiverCount > static_cast<usize>(Limit<u32>::s_Max) || (receiverCount != 0u && !receivers))
         return false;
@@ -156,11 +160,16 @@ bool BuildCsgShadowSnapshot(
 
     outSnapshot.receiverRanges.resize(receiverCount);
     outSnapshot.cutters.reserve(cutterCapacity);
+    outSnapshot.contentIdentity = FNV64_OFFSET_BASIS;
+    Fnv64AppendValue(outSnapshot.contentIdentity, shapeRegistry.revision());
+    Fnv64AppendValue(outSnapshot.contentIdentity, receiverCount);
     outSnapshot.identity = FNV64_OFFSET_BASIS;
     Fnv64AppendValue(outSnapshot.identity, shapeRegistry.revision());
     Fnv64AppendValue(outSnapshot.identity, receiverCount);
     for(usize index = 0u; index < receiverCount; ++index){
         const CsgShadowReceiverInput& receiver = receivers[index];
+        Fnv64AppendValue(outSnapshot.contentIdentity, receiver.entity.id);
+        Fnv64AppendValue(outSnapshot.contentIdentity, receiver.receiverPass);
         Fnv64AppendValue(outSnapshot.identity, receiver.entity.id);
         Fnv64AppendValue(outSnapshot.identity, receiver.receiverPass);
         CsgShadowReceiverRangeGpu& range = outSnapshot.receiverRanges[index];
@@ -177,10 +186,12 @@ bool BuildCsgShadowSnapshot(
             outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
         }
         Fnv64AppendValue(outSnapshot.identity, range);
+        Fnv64AppendValue(outSnapshot.contentIdentity, range);
     }
     if(!outSnapshot.hasCsg){
         outSnapshot.receiverRanges.clear();
         outSnapshot.identity = 0u;
+        outSnapshot.contentIdentity = 0u;
     }
     return true;
 }

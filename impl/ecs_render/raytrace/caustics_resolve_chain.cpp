@@ -6,6 +6,7 @@
 
 #include <core/graphics/vulkan/backend.h>
 
+#include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/raytrace/raytracing_system.h>
@@ -126,18 +127,15 @@ struct ResolveStageDesc{
             .setDependencies(&previousTask, 1u)
             .setResourceUses(stage.stageUses->uses, stage.stageUses->useCount)
         ;
-        if(activity.valid() && stageIndex >= 3u && stageIndex <= 5u){
+        if(activity.valid()){
             activityUses.clear();
             for(usize useIndex = 0u; useIndex < stage.stageUses->useCount; ++useIndex)
                 activityUses.push_back(stage.stageUses->uses[useIndex]);
-            if(stageIndex == 3u)
-                activityUses.push_back(WriteUse(activityResources[0], Core::ResourceStates::UnorderedAccess));
-            else if(stageIndex == 4u){
-                activityUses.push_back(ReadUse(activityResources[0], Core::ResourceStates::ShaderResource));
-                activityUses.push_back(WriteUse(activityResources[1], Core::ResourceStates::UnorderedAccess));
-            }
-            else
-                activityUses.push_back(ReadUse(activityResources[1], Core::ResourceStates::ShaderResource));
+            // Prepare publishes A; every wavelet alternates masks with its quantized color output.
+            if(stageIndex > 0u)
+                activityUses.push_back(ReadUse(activityResources[(stageIndex - 1u) % 2u], Core::ResourceStates::ShaderResource));
+            if(stageIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT)
+                activityUses.push_back(WriteUse(activityResources[stageIndex % 2u], Core::ResourceStates::UnorderedAccess));
             stageDesc.setResourceUses(activityUses.data(), activityUses.size());
         }
         if(!inputs.applyStateSourcesToPrepareOnly || stage.applyStateSources)

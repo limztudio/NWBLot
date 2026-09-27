@@ -12,6 +12,7 @@
 #include <core/task/gpu/compiled_graph.h>
 
 #include <global/algorithm.h>
+#include <global/bit.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -304,6 +305,7 @@ struct CausticResolvePrepareGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -313,6 +315,8 @@ struct CausticResolvePrepareGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -333,6 +337,7 @@ struct CausticResolveWaveletGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -342,6 +347,8 @@ struct CausticResolveWaveletGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -363,6 +370,7 @@ struct CausticResolveSecondWaveletGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -372,6 +380,8 @@ struct CausticResolveSecondWaveletGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -491,6 +501,7 @@ struct CausticResolveUpsampleGraphTask{
         DeferredFrameTargets* targets = nullptr;
         const bool* causticProducerDispatched = nullptr;
         bool graphEntryStatesOwned = false;
+        CausticResolveActivitySnapshot activity;
     };
 
     [[nodiscard]] static bool record(
@@ -500,6 +511,8 @@ struct CausticResolveUpsampleGraphTask{
     ){
         static_cast<void>(context);
         if(!payload.raytracingSystem || !payload.targets)
+            return false;
+        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
             return false;
         if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
             return true;
@@ -575,12 +588,14 @@ inline void DispatchCausticResolvePass(
     NWB_ASSERT(input.texture);
     NWB_ASSERT(output.texture);
     NWB_ASSERT(input.texture != output.texture);
-    constexpr u32 s_ActivityStepWidth4 = 4u;
-    constexpr u32 s_ActivityStepWidth8 = 8u;
-    constexpr u32 s_ActivityStepWidth16 = 16u;
-    const bool usesActivity = stage == CausticResolveStage::Wavelet && activity.valid();
-    const i32 activityInput = usesActivity ? (stepWidth == s_ActivityStepWidth8 ? 0 : (stepWidth == s_ActivityStepWidth16 ? 1 : -1)) : -1;
-    const i32 activityOutput = usesActivity ? (stepWidth == s_ActivityStepWidth4 ? 0 : (stepWidth == s_ActivityStepWidth8 ? 1 : -1)) : -1;
+    // Sequence indices match the graph: prepare, five wavelets, then upsample.
+    const u32 activityPassIndex = stage == CausticResolveStage::Wavelet
+        ? static_cast<u32>(CountTrailingZeros(stepWidth)) + 1u
+        : (stage == CausticResolveStage::PrepareDownsample ? 0u : NWB_CAUSTIC_RESOLVE_PASS_COUNT + 1u)
+    ;
+    const bool usesActivity = activity.valid();
+    const i32 activityInput = usesActivity && activityPassIndex > 0u ? static_cast<i32>((activityPassIndex - 1u) % 2u) : -1;
+    const i32 activityOutput = usesActivity && activityPassIndex <= NWB_CAUSTIC_RESOLVE_PASS_COUNT ? static_cast<i32>(activityPassIndex % 2u) : -1;
     if(!graphOwnsPassEntryStates){
         // Shared G-buffer reads are graph-declared for normal callers. Compatibility callers retain their original state setup,
         // later ping-pong passes explicitly establish their own dynamic input/output states.

@@ -177,6 +177,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolvePrepareTask(
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }
@@ -196,6 +197,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveWaveletTask(
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }
@@ -215,6 +217,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveSecondWaveletTask
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }
@@ -294,6 +297,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareCausticResolveUpsampleTask(
             .targets = &targets,
             .causticProducerDispatched = causticProducerDispatched,
             .graphEntryStatesOwned = graphEntryStatesOwned,
+            .activity = causticResolveActivitySnapshot(targets),
         }
     );
 }

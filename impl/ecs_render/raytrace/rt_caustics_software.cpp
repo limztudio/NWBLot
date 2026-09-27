@@ -125,7 +125,8 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
         1u,
         CausticResolveStage::Upsample,
         fullGroupsX,
-        fullGroupsY
+        fullGroupsY,
+        causticResolveActivitySnapshot(targets)
     );
 }
 

@@ -152,7 +152,8 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
         1u,
         CausticResolveStage::PrepareDownsample,
         halfGroupsX,
-        halfGroupsY
+        halfGroupsY,
+        causticResolveActivitySnapshot(targets)
     );
 }
 

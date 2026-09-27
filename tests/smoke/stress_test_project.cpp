@@ -197,9 +197,9 @@ private:
 
         NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
         settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
-        settings.softwareShadow.blockerSearch = NWB::Impl::SoftwareShadowBlockerSearch::CompactCross5;
+        settings.softwareShadow.blockerSearch = NWB::Impl::SoftwareShadowBlockerSearch::Center1;
         settings.softwareShadow.coverage = NWB::Impl::SoftwareShadowCoverage::FittedVolume;
-        settings.softwareShadow.captureCadence = NWB::Impl::SoftwareShadowCaptureCadence::ReuseOneFrame;
+        settings.softwareShadow.captureCadence = NWB::Impl::SoftwareShadowCaptureCadence::ReuseTwoFrames;
         settings.caustic.photonGridDivisor = context.graphics.queryFeatureSupport(NWB::Core::Feature::RayQuery) ? 2u : 4u;
         AddSmokeSkinnedRenderSystems(*world, context, settings);
         return world;

@@ -41,6 +41,7 @@ public:
     void invalidate()noexcept;
     [[nodiscard]] u64 acceptedCaptures()const noexcept{ return m_acceptedCaptures; }
     [[nodiscard]] u64 acceptedReuses()const noexcept{ return m_acceptedReuses; }
+    [[nodiscard]] u32 acceptedReuseAge()const noexcept{ return m_acceptedReuseCount; }
 
 private:
     LightSpaceCaptureIdentity m_acceptedIdentity;
@@ -49,8 +50,9 @@ private:
     u64 m_sequence = 0u;
     u64 m_acceptedCaptures = 0u;
     u64 m_acceptedReuses = 0u;
+    u8 m_acceptedReuseCount = 0u;
+    u8 m_pendingReuseLimit = 0u;
     bool m_accepted = false;
-    bool m_reuseConsumed = false;
     bool m_captureRecorded = false;
     bool m_frameAccepted = false;
 };

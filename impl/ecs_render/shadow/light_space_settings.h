@@ -43,6 +43,7 @@ namespace SoftwareShadowCaptureCadence{
     enum Enum : u8{
         EveryFrame,
         ReuseOneFrame,
+        ReuseTwoFrames,
     };
 };
 

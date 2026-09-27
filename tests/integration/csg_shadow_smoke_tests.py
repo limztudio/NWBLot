@@ -5,7 +5,7 @@ import math
 from pathlib import Path
 import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 from csg_shadow_reference import (  # noqa: E402
@@ -13,6 +13,7 @@ from csg_shadow_reference import (  # noqa: E402
     clipped_union_length, compare_analytic_frames, compare_frames, expected_rgb, expected_sample_rgb, ray_box,
     receiver_pixel_world, reference_optical_length, region_pixels,
 )
+import csg_shadow_smoke as smoke  # noqa: E402
 from csg_shadow_smoke import capture_environment, parse_args  # noqa: E402
 from window_capture_smoke import SmokeFailure  # noqa: E402
 
@@ -108,6 +109,20 @@ class CsgShadowImageTests(unittest.TestCase):
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_one_frame")
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION"], "256")
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_POINT_RESOLUTION"], "128")
+
+    def test_two_frame_capture_requires_the_matching_accepted_runtime_cadence(self):
+        arguments = ["--executable", "test.exe", "--working-directory", ".", "--output-directory", "."]
+        for route in ("hardware", "software"):
+            args = parse_args(arguments + ["--route", route, "--capture-cadence", "reuse_two_frames"])
+            with patch.object(smoke.subprocess, "run", return_value=Mock(returncode=0)) as run, \
+                patch.object(smoke, "read_bmp_24_rows", return_value=(960, 720, [])):
+                smoke.capture_arm(args, "cut")
+            command = run.call_args.args[0]
+            expected = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--expect-log-message"]
+            rejected = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--reject-log-message"]
+            self.assertIn("RendererSystem: accepted light-space capture reuse (cadence=3)", expected)
+            self.assertIn("RendererSystem: accepted light-space capture reuse (cadence=2)", rejected)
+            self.assertEqual(run.call_args.kwargs["env"]["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_two_frames")
 
     def test_capture_requires_post_motion_settle_interval(self):
         arguments = ["--executable", "test.exe", "--working-directory", ".", "--output-directory", ".", "--route", "software"]

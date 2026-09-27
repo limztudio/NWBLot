@@ -541,7 +541,10 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     // Sampled material assets are immutable under this collector; resource/shader invalidation also clears capture history.
     if(csg.hasCsg){
         Fnv64AppendValue(captureSceneIdentity, csg.identity);
-        if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame){
+        if(
+            m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame
+            || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames
+        ){
             captureSceneIdentity = BuildLightSpaceCsgCaptureIdentity(
                 m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
                 shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),

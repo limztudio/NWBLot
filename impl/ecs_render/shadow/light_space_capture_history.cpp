@@ -25,8 +25,10 @@ void LightSpaceCaptureHistory::beginFrame()noexcept{
 
 LightSpaceCaptureTicket LightSpaceCaptureHistory::prepare(
     const LightSpaceCaptureIdentity& identity, const SoftwareShadowCaptureCadence::Enum cadence)noexcept{
-    const bool reuse = cadence == SoftwareShadowCaptureCadence::ReuseOneFrame
-        && m_accepted && !m_reuseConsumed && identity.trusted && m_acceptedIdentity.trusted
+    m_pendingReuseLimit = cadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? 2u
+        : cadence == SoftwareShadowCaptureCadence::ReuseOneFrame ? 1u : 0u;
+    const bool reuse = m_acceptedReuseCount < m_pendingReuseLimit
+        && m_accepted && identity.trusted && m_acceptedIdentity.trusted
         && identity.scene == m_acceptedIdentity.scene && identity.lighting == m_acceptedIdentity.lighting
         && identity.layout == m_acceptedIdentity.layout;
     ++m_sequence;
@@ -50,9 +52,9 @@ bool LightSpaceCaptureHistory::accept(const LightSpaceCaptureTicket& ticket)noex
     if(!ticket.valid() || ticket.sequence != m_pendingTicket.sequence || ticket.reuse != m_pendingTicket.reuse)
         return false;
     if(ticket.reuse){
-        if(!m_accepted || m_reuseConsumed)
+        if(!m_accepted || m_acceptedReuseCount >= m_pendingReuseLimit)
             return false;
-        m_reuseConsumed = true;
+        ++m_acceptedReuseCount;
         ++m_acceptedReuses;
     }
     else{
@@ -60,7 +62,7 @@ bool LightSpaceCaptureHistory::accept(const LightSpaceCaptureTicket& ticket)noex
             return false;
         m_acceptedIdentity = m_pendingIdentity;
         m_accepted = m_pendingIdentity.trusted;
-        m_reuseConsumed = false;
+        m_acceptedReuseCount = 0u;
         ++m_acceptedCaptures;
     }
     m_pendingTicket = {};

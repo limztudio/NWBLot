@@ -65,7 +65,7 @@ public:
     {}
 };
 
-// Excludes only world transforms; geometry/material edits still invalidate the one-frame approximation.
+// Excludes only world transforms; geometry/material edits still invalidate the bounded capture approximation.
 [[nodiscard]] u64 BuildLightSpaceCsgCaptureIdentity(
     const LightSpaceCsgState& state,
     const NwbRtInstanceMaterialGpu* materials, const InstanceGpuData* instances, usize instanceCount,

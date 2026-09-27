@@ -61,6 +61,8 @@ namespace NWB::Tests::Smoke{
             settings.captureCadence = Impl::SoftwareShadowCaptureCadence::EveryFrame;
         else if(cadence == "reuse_one_frame")
             settings.captureCadence = Impl::SoftwareShadowCaptureCadence::ReuseOneFrame;
+        else if(cadence == "reuse_two_frames")
+            settings.captureCadence = Impl::SoftwareShadowCaptureCadence::ReuseTwoFrames;
         else
             return false;
     }

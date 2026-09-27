@@ -127,13 +127,113 @@ TEST(LightSpaceCaptureHistory, InvalidatedResourcesRejectPendingTicketsAndRequir
     EXPECT_FALSE(history.accept(current));
 }
 
+TEST(LightSpaceCaptureHistory, TwoAcceptedReusesRequireARefreshBeforeTheThird){
+    LightSpaceCaptureHistory history;
+    const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, true };
+    for(u32 frame = 0u; frame < 9u; ++frame){
+        history.beginFrame();
+        const auto ticket = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+        EXPECT_EQ(ticket.reuse, frame % 3u != 0u);
+        if(!ticket.reuse){
+            EXPECT_FALSE(history.accept(ticket));
+            history.recordCapture(ticket);
+        }
+        ASSERT_TRUE(history.accept(ticket));
+        EXPECT_FALSE(history.accept(ticket));
+    }
+    EXPECT_EQ(history.acceptedCaptures(), 3u);
+    EXPECT_EQ(history.acceptedReuses(), 6u);
+}
+
+TEST(LightSpaceCaptureHistory, TwoFrameReuseRetainsIdentityInvalidationAndRejectsUnsubmittedEdits){
+    const LightSpaceCaptureIdentity original{ 7u, 11u, 13u, true };
+    const LightSpaceCaptureIdentity changes[] = {
+        { 8u, 11u, 13u, true }, { 7u, 12u, 13u, true }, { 7u, 11u, 14u, true }, { 7u, 11u, 13u, false },
+    };
+    for(const auto& changed : changes){
+        for(const bool submitEdit : { false, true }){
+            LightSpaceCaptureHistory history;
+            history.beginFrame();
+            const auto captured = history.prepare(original, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+            history.recordCapture(captured);
+            ASSERT_TRUE(history.accept(captured));
+            history.beginFrame();
+            const auto reused = history.prepare(original, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+            ASSERT_TRUE(reused.reuse);
+            ASSERT_TRUE(history.accept(reused));
+            history.beginFrame();
+            const auto edited = history.prepare(changed, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+            EXPECT_FALSE(edited.reuse);
+            history.recordCapture(edited);
+            if(submitEdit)
+                ASSERT_TRUE(history.accept(edited));
+            history.beginFrame();
+            const auto next = history.prepare(original, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+            EXPECT_FALSE(next.reuse);
+            EXPECT_FALSE(history.accept(edited));
+            history.recordCapture(edited);
+            EXPECT_FALSE(history.accept(next));
+        }
+    }
+}
+
+TEST(LightSpaceCaptureHistory, TwoFrameReuseCannotExtendAgeThroughRejectedSkippedOrInvalidatedFrames){
+    for(u32 interruption = 0u; interruption < 3u; ++interruption){
+        LightSpaceCaptureHistory history;
+        const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, true };
+        history.beginFrame();
+        const auto captured = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+        history.recordCapture(captured);
+        ASSERT_TRUE(history.accept(captured));
+        history.beginFrame();
+        const auto firstReuse = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+        ASSERT_TRUE(firstReuse.reuse);
+        ASSERT_TRUE(history.accept(firstReuse));
+        history.beginFrame();
+        if(interruption != 0u){
+            const auto rejected = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+            ASSERT_TRUE(rejected.reuse);
+            if(interruption == 2u){
+                history.invalidate();
+                EXPECT_FALSE(history.accept(rejected));
+            }
+        }
+        history.beginFrame();
+        EXPECT_FALSE(history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames).reuse);
+    }
+}
+
+TEST(LightSpaceCaptureHistory, RetryingATwoFrameReuseDoesNotConsumeAnAdditionalAcceptedFrame){
+    LightSpaceCaptureHistory history;
+    const LightSpaceCaptureIdentity identity{ 7u, 11u, 13u, true };
+    history.beginFrame();
+    const auto captured = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+    history.recordCapture(captured);
+    ASSERT_TRUE(history.accept(captured));
+    for(u32 frame = 0u; frame < 2u; ++frame){
+        history.beginFrame();
+        const auto original = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+        const auto retried = history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames);
+        ASSERT_TRUE(original.reuse);
+        ASSERT_TRUE(retried.reuse);
+        EXPECT_FALSE(history.accept(original));
+        ASSERT_TRUE(history.accept(retried));
+    }
+    history.beginFrame();
+    EXPECT_FALSE(history.prepare(identity, SoftwareShadowCaptureCadence::ReuseTwoFrames).reuse);
+    EXPECT_EQ(history.acceptedCaptures(), 1u);
+    EXPECT_EQ(history.acceptedReuses(), 2u);
+}
+
 TEST(LightSpaceCaptureHistory, SettingsRequireExplicitKnownCadence){
     SoftwareShadowSettings settings;
     EXPECT_EQ(settings.captureCadence, SoftwareShadowCaptureCadence::EveryFrame);
     EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
     settings.captureCadence = SoftwareShadowCaptureCadence::ReuseOneFrame;
     EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
-    settings.captureCadence = static_cast<SoftwareShadowCaptureCadence::Enum>(2u);
+    settings.captureCadence = SoftwareShadowCaptureCadence::ReuseTwoFrames;
+    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
+    settings.captureCadence = static_cast<SoftwareShadowCaptureCadence::Enum>(3u);
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
 }
 

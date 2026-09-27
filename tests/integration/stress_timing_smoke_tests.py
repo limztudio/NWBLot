@@ -96,6 +96,24 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
             with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_software_shadow_settings(text, args)
 
+    def test_two_frame_cadence_requires_its_exact_runtime_reuse_evidence(self):
+        args = smoke.parse_args(self.argv + ["--software-shadow-capture-cadence", "reuse_two_frames"])
+        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": "reuse_one_frame"}, args, self.output)
+        self.assertEqual(env["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_two_frames")
+        record = shadow_record(capture_cadence=2)
+        marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=3)"
+        self.assertTrue(smoke.verify_software_shadow_settings(record + "\n" + marker, args)["accepted_reuse_verified"])
+        for text in (record, record + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE,
+            record + "\n" + marker + "\n" + marker, record + "\n" + marker + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE,
+            record + "\n" + marker + " malformed", shadow_record(capture_cadence=1) + "\n" + marker):
+            with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(text, args)
+        for cadence in ("every_frame", "reuse_one_frame"):
+            args.software_shadow_capture_cadence = cadence
+            with self.subTest(cadence=cadence), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_software_shadow_settings(shadow_record(capture_cadence=smoke.SOFTWARE_SHADOW_CAPTURE_CADENCE[cadence])
+                    + "\n" + marker, args)
+
     def test_reference_capture_cadence_rejects_unrequested_reuse(self):
         args = smoke.parse_args(self.argv)
         observed = smoke.verify_software_shadow_settings(shadow_record(), args)

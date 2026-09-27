@@ -66,8 +66,11 @@ def capture_arm(args, arm):
     if arm not in ("reference", "uncut"):
         command += ["--expect-log-message", "RendererSystem: dispatched CSG light-space shadows (hardware_compose="
             + ("1" if args.route == "hardware" else "0")]
-    if args.capture_cadence == "reuse_one_frame" and (args.route == "software" or arm not in ("reference", "uncut")):
-        command += ["--expect-log-message", "RendererSystem: accepted light-space capture reuse (cadence=2)"]
+    if args.capture_cadence != "every_frame" and (args.route == "software" or arm not in ("reference", "uncut")):
+        cadence = 2 if args.capture_cadence == "reuse_one_frame" else 3
+        other_cadence = 3 if cadence == 2 else 2
+        command += ["--expect-log-message", f"RendererSystem: accepted light-space capture reuse (cadence={cadence})",
+            "--reject-log-message", f"RendererSystem: accepted light-space capture reuse (cadence={other_cadence})"]
     for message in ("[ERROR]", "VUID-", "Validation Error", "failed to resolve shader", "retaining all-lit visibility",
         "preserving opaque visibility", "ray-traced shadow visibility pass failed"):
         command += ["--reject-log-message", message]
@@ -98,7 +101,7 @@ def parse_args(argv):
     parser.add_argument("--route", choices=("hardware", "software"), required=True)
     parser.add_argument("--light", choices=("directional", "point"), default="directional")
     parser.add_argument("--atlas", choices=("boxes", "analytic"), default="boxes")
-    parser.add_argument("--capture-cadence", choices=("every_frame", "reuse_one_frame"), default="every_frame")
+    parser.add_argument("--capture-cadence", choices=("every_frame", "reuse_one_frame", "reuse_two_frames"), default="every_frame")
     parser.add_argument("--map-resolution-divisor", type=int, choices=(1, 2, 4), default=1)
     parser.add_argument("--frames", type=int, default=120)
     parser.add_argument("--timeout", type=float, default=90.0)

@@ -57,15 +57,17 @@ class StressCsgProfileTests(unittest.TestCase):
                 smoke.parse_args(arguments + extra)
 
     def test_csg_reuse_requires_accepted_runtime_evidence(self):
-        args = smoke.parse_args(self.argv + ["--csg-profile", "waist_bands", "--software-shadow-capture-cadence", "reuse_one_frame"])
-        environment = smoke.launch_environment({}, args, self.output)
-        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_one_frame")
-        text = csg_log().replace("capture_cadence=0", "capture_cadence=1")
-        with self.assertRaisesRegex(smoke.SmokeFailure, "accepted light-space capture reuse"):
-            smoke.verify_software_shadow_settings(text, args)
-        verified = smoke.verify_software_shadow_settings(text + "\n" + smoke.SOFTWARE_SHADOW_CAPTURE_REUSE, args)
-        self.assertTrue(verified["accepted_reuse_verified"])
-        self.assertTrue(smoke.verify_csg_profile(text, args)["verified"])
+        for name, requested, effective in (("reuse_one_frame", 1, 2), ("reuse_two_frames", 2, 3)):
+            args = smoke.parse_args(self.argv + ["--csg-profile", "waist_bands", "--software-shadow-capture-cadence", name])
+            environment = smoke.launch_environment({}, args, self.output)
+            self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], name)
+            text = csg_log().replace("capture_cadence=0", f"capture_cadence={requested}")
+            with self.assertRaisesRegex(smoke.SmokeFailure, "accepted light-space capture reuse"):
+                smoke.verify_software_shadow_settings(text, args)
+            marker = smoke.SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + f"(cadence={effective})"
+            verified = smoke.verify_software_shadow_settings(text + "\n" + marker, args)
+            self.assertTrue(verified["accepted_reuse_verified"])
+            self.assertTrue(smoke.verify_csg_profile(text, args)["verified"])
 
     def test_hardware_and_disabled_device_routes_are_verified(self):
         args = smoke.parse_args(self.argv + ["--csg-profile", "waist_bands"])

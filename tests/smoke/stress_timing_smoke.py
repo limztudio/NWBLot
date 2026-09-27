@@ -41,8 +41,9 @@ SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
 SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
 SOFTWARE_SHADOW_COVERAGE = {"reference": 0, "fitted_volume": 1}
 SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1}
-SOFTWARE_SHADOW_CAPTURE_CADENCE = {"every_frame": 0, "reuse_one_frame": 1}
-SOFTWARE_SHADOW_CAPTURE_REUSE = "RendererSystem: accepted light-space capture reuse (cadence=2)"
+SOFTWARE_SHADOW_CAPTURE_CADENCE = {"every_frame": 0, "reuse_one_frame": 1, "reuse_two_frames": 2}
+SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX = "RendererSystem: accepted light-space capture reuse "
+SOFTWARE_SHADOW_CAPTURE_REUSE = SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=2)"
 
 CSG_PROFILE = "StressTestSmokeProject: CSG "
 CSG_DISPATCH = "RendererSystem: dispatched CSG light-space shadows "
@@ -325,9 +326,10 @@ def verify_software_shadow_settings(text, args):
         capture_cadence=SOFTWARE_SHADOW_CAPTURE_CADENCE[args.software_shadow_capture_cadence])
     if observed != requested:
         raise SmokeFailure(f"software shadow settings mismatch: requested {requested}, application reported {observed}")
-    reuse_records = [line.strip() for line in text.splitlines() if line.strip() == SOFTWARE_SHADOW_CAPTURE_REUSE]
-    if args.software_shadow_capture_cadence == "reuse_one_frame" and len(reuse_records) != 1:
-        raise SmokeFailure("reuse-one-frame acquisition requires exactly one accepted light-space capture reuse marker")
+    reuse_records = [line.strip() for line in text.splitlines() if line.strip().startswith(SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX)]
+    expected_reuse = SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + f"(cadence={requested['capture_cadence'] + 1})"
+    if args.software_shadow_capture_cadence != "every_frame" and reuse_records != [expected_reuse]:
+        raise SmokeFailure("capture cadence requires exactly one matching accepted light-space capture reuse marker")
     if args.software_shadow_capture_cadence == "every_frame" and reuse_records:
         raise SmokeFailure("every-frame acquisition unexpectedly reused a light-space capture")
     return {"capture_cadence_name": args.software_shadow_capture_cadence, "accepted_reuse_verified": bool(reuse_records),
@@ -592,7 +594,7 @@ def parse_args(argv=None):
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
     parser.add_argument("--csg-profile", choices=("none", "waist_bands"), default="none",
-        help="Waist bands add two moving box cutters to all twenty mesh children; requires every-frame maps.")
+        help="Waist bands add two moving box cutters to all twenty mesh children.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
         help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
@@ -601,7 +603,7 @@ def parse_args(argv=None):
     parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default="reference_grid9",
         help="Compact cross uses five blocker taps with cheap off-center opaque plane estimates; the center stays fully checked.")
     parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default="every_frame",
-        help="Reuse accepted light-space captures for one frame, including CSG shadows; receiver shading remains current.")
+        help="Reuse accepted light-space captures for up to one or two frames, including CSG; receiver shading remains current.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,
         help="Requested shadow-map storage budget in MiB (1 through 4095).")
     parser.add_argument("--software-shadow-directional-resolution", type=int, default=512)

@@ -72,9 +72,12 @@ void RendererRayTracingSystem::acceptLightSpaceShadowCapture(const LightSpaceCap
     auto& state = m_lightSpaceShadow;
     if(!prepared || !state.m_captureHistory.accept(ticket))
         return;
-    if(ticket.reuse && !state.m_captureReuseLogged){
+    const u32 requiredReuses = state.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames ? 2u : 1u;
+    if(ticket.reuse && !state.m_captureReuseLogged && state.m_captureHistory.acceptedReuseAge() == requiredReuses){
         state.m_captureReuseLogged = true;
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: accepted light-space capture reuse (cadence=2)"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: accepted light-space capture reuse (cadence={})")
+            , static_cast<u32>(state.m_settings.captureCadence) + 1u
+        );
     }
 }
 

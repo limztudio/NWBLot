@@ -548,7 +548,10 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
                 Fnv64AppendValue(captureIdentity, buffer.get());
             bool captureTrusted = staticScene && contentComplete;
-            if(m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame){
+            if(
+                m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseOneFrame
+                || m_lightSpaceShadow.m_settings.captureCadence == SoftwareShadowCaptureCadence::ReuseTwoFrames
+            ){
                 captureIdentity = BuildLightSpaceCsgCaptureIdentity(
                     m_lightSpaceShadow.m_csg, instanceMaterials.data(), shadowInstanceData.data(), instanceMaterials.size(),
                     shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size(),

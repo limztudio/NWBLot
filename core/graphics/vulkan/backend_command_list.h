@@ -39,7 +39,6 @@ class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Device;
     friend class GpuDescriptorHeap;
     friend class Queue;
-    friend class VulkanTestDispatchAccess;
 
 
 private:
@@ -68,7 +67,6 @@ private:
 private:
     class GraphPublicationReadOwnership final : NoCopy{
         friend class CommandList;
-        friend class VulkanTestDispatchAccess;
 
 
     private:
@@ -86,7 +84,6 @@ private:
         friend class ::NWB::Core::GpuNativePacketRecorder;
         friend class CommandList;
         friend class GraphPublicationReadOwnership;
-        friend class VulkanTestDispatchAccess;
 
 
     private:

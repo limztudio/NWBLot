@@ -96,7 +96,6 @@ class TrackedCommandBuffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class Queue;
     friend class StateTracker;
     friend class GpuDescriptorHeap;
-    friend class VulkanTestDispatchAccess;
 
 
 public:

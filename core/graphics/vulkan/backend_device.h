@@ -35,7 +35,6 @@ NWB_VULKAN_BEGIN
 class Device final : public RefCounter<GraphicsResource>, NoCopy{
     friend DeviceHandle CreateDevice(const DeviceDesc& desc);
     friend class ::NWB::Core::GpuTaskScheduler;
-    friend class VulkanTestDispatchAccess;
     friend class BackendContext;
     friend class Buffer;
     friend class CommandList;

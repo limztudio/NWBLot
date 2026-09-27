@@ -52,6 +52,7 @@ groupshared half4 s_NwbCombinedShadowWaveletVis[s_NwbCombinedShadowWaveletTileTe
 groupshared half2 s_NwbCombinedShadowWaveletNormal[s_NwbCombinedShadowWaveletTileTexels];
 groupshared half s_NwbCombinedShadowWaveletDist[s_NwbCombinedShadowWaveletTileTexels];
 groupshared uint s_NwbCombinedShadowWaveletValid[s_NwbCombinedShadowWaveletTileTexels];
+groupshared uint s_NwbCombinedShadowWaveletNonLit;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -148,6 +149,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
     const float invTwoSigmaDistanceSq = 1.0 / (2.0 * sigmaDistance * sigmaDistance);
     const float3 centerNormal = nwbOctDecodeNormal(float2(centerGeom.xy));
     for(uint slot = g_NwbCombinedShadowWaveletPush.lightSlotStart; slot < slotEnd; ++slot){
+        if(lane == 0u)
+            s_NwbCombinedShadowWaveletNonLit = 0u;
+        GroupMemoryBarrierWithGroupSync();
+        bool nonLit = false;
         for(uint index = lane; index < tileTexels; index += threadCount){
             const int2 tap = tileOrigin + int2((int)(index % (uint)tileWidth), (int)(index / (uint)tileWidth));
             half4 visibility = half4(1.0h);
@@ -158,6 +163,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const half4 geometry = nwbCombinedShadowWaveletGeometry(tap);
                 if(geometry.w > half(0.5h)){
                     visibility = nwbCombinedShadowWaveletVisibility(tap, slot);
+                    nonLit = nonLit || any(visibility != half4(1.0h));
                     normal = geometry.xy;
                     distance = geometry.z;
                     valid = 1u;
@@ -168,9 +174,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             s_NwbCombinedShadowWaveletDist[index] = distance;
             s_NwbCombinedShadowWaveletValid[index] = valid;
         }
+        if(nonLit)
+            InterlockedOr(s_NwbCombinedShadowWaveletNonLit, 1u);
         GroupMemoryBarrierWithGroupSync();
         if(inBounds){
-            if(centerGeom.w <= half(0.5h))
+            // A fully-lit halo has exact normalized visibility one; mixed tiles retain the original half-weight reduction.
+            if(centerGeom.w <= half(0.5h) || s_NwbCombinedShadowWaveletNonLit == 0u)
                 nwbCombinedShadowWaveletStore(pixel, slot, 1.0, float3(1.0));
             else{
                 const uint centerIndex = (uint)((int(groupThreadID.y) + 2 * step) * tileWidth + (int(groupThreadID.x) + 2 * step));

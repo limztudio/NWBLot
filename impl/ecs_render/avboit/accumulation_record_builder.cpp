@@ -249,27 +249,15 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             // Interval producer owns this state; accumulation only samples it.
             accumulationResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
             if(accumulationCsgIntervalSampleImageStatesGraphOwned){
-                // Interval producer wrote these aliases; graph lowers the same-UAV handoff.
-                accumulationResourceUses.push_back(ReadTextureUse(
+                AppendCsgRemovedIntervalUses(
+                    accumulationResourceUses,
                     inputs.csgRemovedIntervalDepth,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                accumulationResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalCapNormal,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                accumulationResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalData,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                accumulationResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalCount,
-                    inputs.csgRemovedIntervalCountSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
+                    inputs.csgRemovedIntervalSubresources,
+                    inputs.csgRemovedIntervalCountSubresources
+                );
             }
         }
     }
@@ -387,26 +375,15 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
             accumulationComputeEmulationResourceUses.push_back(
                 ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
             );
-            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
+            AppendCsgRemovedIntervalUses(
+                accumulationComputeEmulationResourceUses,
                 inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            accumulationComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalCountSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
+                inputs.csgRemovedIntervalSubresources,
+                inputs.csgRemovedIntervalCountSubresources
+            );
         }
         Core::GpuTaskResourceSetUse accumulationComputeEmulationResourceSetUses[3u] = {};
         usize accumulationComputeEmulationResourceSetUseCount = 0u;

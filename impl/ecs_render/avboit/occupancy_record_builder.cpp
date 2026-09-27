@@ -238,27 +238,15 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         }
     }
     if(occupancyCsgIntervalSampleImageStatesGraphOwned){
-        // Interval producer wrote these aliases; lower the required UAV handoff for occupancy shaders.
-        avboitPreResourceUses.push_back(ReadTextureUse(
+        AppendCsgRemovedIntervalUses(
+            avboitPreResourceUses,
             inputs.csgRemovedIntervalDepth,
-            inputs.csgRemovedIntervalSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
-        avboitPreResourceUses.push_back(ReadTextureUse(
             inputs.csgRemovedIntervalCapNormal,
-            inputs.csgRemovedIntervalSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
-        avboitPreResourceUses.push_back(ReadTextureUse(
             inputs.csgRemovedIntervalData,
-            inputs.csgRemovedIntervalSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
-        avboitPreResourceUses.push_back(ReadTextureUse(
             inputs.csgRemovedIntervalCount,
-            inputs.csgRemovedIntervalCountSubresources,
-            Core::ResourceStates::UnorderedAccess
-        ));
+            inputs.csgRemovedIntervalSubresources,
+            inputs.csgRemovedIntervalCountSubresources
+        );
     }
     const Core::GpuTaskResourceSetUse occupancyMaterialGeometrySetUse{
         .resourceSet = inputs.materialGeometrySet,
@@ -375,26 +363,15 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             occupancyComputeEmulationResourceUses.push_back(
                 ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
             );
-            occupancyComputeEmulationResourceUses.push_back(ReadTextureUse(
+            AppendCsgRemovedIntervalUses(
+                occupancyComputeEmulationResourceUses,
                 inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            occupancyComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            occupancyComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            occupancyComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalCountSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
+                inputs.csgRemovedIntervalSubresources,
+                inputs.csgRemovedIntervalCountSubresources
+            );
         }
         Core::GpuTaskResourceSetUse occupancyComputeEmulationResourceSetUses[3u] = {};
         usize occupancyComputeEmulationResourceSetUseCount = 0u;

@@ -234,27 +234,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             // Interval producer owns this sample state through all low-raster phases.
             extinctionResourceUses.push_back(ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer));
             if(extinctionCsgIntervalSampleImageStatesGraphOwned){
-                // Interval producer wrote these aliases; graph lowers the same-UAV handoff.
-                extinctionResourceUses.push_back(ReadTextureUse(
+                AppendCsgRemovedIntervalUses(
+                    extinctionResourceUses,
                     inputs.csgRemovedIntervalDepth,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                extinctionResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalCapNormal,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                extinctionResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalData,
-                    inputs.csgRemovedIntervalSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
-                extinctionResourceUses.push_back(ReadTextureUse(
                     inputs.csgRemovedIntervalCount,
-                    inputs.csgRemovedIntervalCountSubresources,
-                    Core::ResourceStates::UnorderedAccess
-                ));
+                    inputs.csgRemovedIntervalSubresources,
+                    inputs.csgRemovedIntervalCountSubresources
+                );
             }
         }
     }
@@ -371,26 +359,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             extinctionComputeEmulationResourceUses.push_back(
                 ReadUse(inputs.csgIntervalSampleState, Core::ResourceStates::ConstantBuffer)
             );
-            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
+            AppendCsgRemovedIntervalUses(
+                extinctionComputeEmulationResourceUses,
                 inputs.csgRemovedIntervalDepth,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCapNormal,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalData,
-                inputs.csgRemovedIntervalSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
-            extinctionComputeEmulationResourceUses.push_back(ReadTextureUse(
                 inputs.csgRemovedIntervalCount,
-                inputs.csgRemovedIntervalCountSubresources,
-                Core::ResourceStates::UnorderedAccess
-            ));
+                inputs.csgRemovedIntervalSubresources,
+                inputs.csgRemovedIntervalCountSubresources
+            );
         }
         Core::GpuTaskResourceSetUse extinctionComputeEmulationResourceSetUses[3u] = {};
         usize extinctionComputeEmulationResourceSetUseCount = 0u;

@@ -192,6 +192,39 @@ template<typename Plan>
     return result;
 }
 
+// Interval producer wrote these aliases; graph lowers the same-UAV handoff. Shared by the occupancy/extinction/accumulation record builders for both raster and compute-emulation use vectors.
+template<typename UseVector>
+inline void AppendCsgRemovedIntervalUses(
+    UseVector& resourceUses,
+    const Core::GpuGraphResourceId removedIntervalDepth,
+    const Core::GpuGraphResourceId removedIntervalCapNormal,
+    const Core::GpuGraphResourceId removedIntervalData,
+    const Core::GpuGraphResourceId removedIntervalCount,
+    const Core::TextureSubresourceSet& subresources,
+    const Core::TextureSubresourceSet& countSubresources
+){
+    resourceUses.push_back(ReadTextureUse(
+        removedIntervalDepth,
+        subresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resourceUses.push_back(ReadTextureUse(
+        removedIntervalCapNormal,
+        subresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resourceUses.push_back(ReadTextureUse(
+        removedIntervalData,
+        subresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+    resourceUses.push_back(ReadTextureUse(
+        removedIntervalCount,
+        countSubresources,
+        Core::ResourceStates::UnorderedAccess
+    ));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

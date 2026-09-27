@@ -316,7 +316,8 @@ bool ProjectTestbed::onStartup(){
     NWB_ASSERT(directionalLight.valid());
     NWB_ASSERT(pointLight.valid());
 
-    createDefaultScene();
+    if(!createDefaultScene())
+        return false;
     auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
     NWB_ASSERT(modelSystemPtr);
     NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
@@ -325,9 +326,11 @@ bool ProjectTestbed::onStartup(){
     return true;
 }
 
-void ProjectTestbed::createDefaultScene(){
-    const auto characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
-    NWB_ASSERT(characterEntity.valid());
+bool ProjectTestbed::createDefaultScene(){
+    if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity"));
+        return false;
+    }
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();
@@ -341,6 +344,7 @@ void ProjectTestbed::createDefaultScene(){
         NWB_TEXT("ProjectTestbed: startup scene created ({})"),
         __hidden_runtime::s_DefaultSceneDescription
     );
+    return true;
 }
 
 void ProjectTestbed::onShutdown(){

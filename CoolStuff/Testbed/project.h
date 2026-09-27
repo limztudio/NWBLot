@@ -22,7 +22,7 @@ private:
 
 private:
     void drawUiControls();
-    void createDefaultScene();
+    [[nodiscard]] bool createDefaultScene();
     void registerInputHandler();
     void unregisterInputHandler();
     void clearInputState();

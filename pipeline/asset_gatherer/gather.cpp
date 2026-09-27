@@ -80,6 +80,7 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, Assets::AssetVe
         }
     }
     Sort(files.begin(), files.end());
+    files.erase(Unique(files.begin(), files.end()), files.end());
     return true;
 }
 

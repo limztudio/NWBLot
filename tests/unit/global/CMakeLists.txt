@@ -8,6 +8,7 @@ target_sources(nwb_global_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/arena_object_construction_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/allocator_propagation_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/global_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/name_symbol_decode_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/cpu_topology_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scratch_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit_tests.cpp"

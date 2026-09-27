@@ -1282,7 +1282,7 @@ private:
     bool m_preparedSceneTlasReady = false;
     PreparedMeshBlasBuildVector m_preparedMeshBlasBuilds;
     bool m_preparedMeshBlasBuildsReady = false;
-    // P6.1 geometry/AS ownership ledger: cumulative per-frame BLAS actions keyed by dirty reason.
+    // Per-frame BLAS actions keyed by dirty reason.
     // Answers whether the stress scene rebuilds per-mesh geometry when only instance transforms change. Logged on confirm
     u64 m_blasLedgerStaticSkipped = 0u;
     u64 m_blasLedgerFirstBuilds = 0u;

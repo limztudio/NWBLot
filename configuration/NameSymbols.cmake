@@ -8,23 +8,11 @@ function(nwb_configure_name_symbols)
     add_compile_definitions(NWB_BUILDMODE=1)
 endfunction()
 
-# Creates the on-demand "nwb_namesym" target for a release (non-buildmode) configuration. Building it runs the full
-# capture in one step -- "compile NWB_BUILDMODE -> create namesym -> use it from the non-buildmode
-# build" -- without anyone configuring/building twice by hand:
-#
+# Build and run an isolated NWB_BUILDMODE variant, then copy its Name sidecars into the release output.
+# Run on demand because GUI capture needs a display:
 #   cmake --build <release-build-dir> --config <cfg> --target nwb_namesym
-#
-# It drives configuration/generate_name_symbols.py, which configures + builds the buildmode variant (preset
-# "<platform>-clang-namesym-<arch>", output domain "namesym", separate binaryDir so the release tree is untouched), runs
-# its workloads, and copies the produced "<exe>.namesym" sidecars into this configuration's output root for the log
-# server to load at startup (NameSymbols::LoadDefaultFile) and decode opt/fin client log hashes.
-#
-# It is an explicit on-demand target, NOT a dependency of the normal build: the GUI workloads (testbed + window-capture
-# smokes) launch real windows and need a display, so wiring them into every build would be both heavy and headless-
-# hostile. Run it when you want fresh sidecars.
 function(nwb_add_name_symbol_target)
-    # Guard against recursion: inside the buildmode variant there is nothing to generate from itself, and building this
-    # target there would re-invoke the driver -> re-build the buildmode variant -> ...
+    # The capture build must not recursively create another capture target.
     if(NWB_BUILDMODE)
         return()
     endif()
@@ -55,18 +43,12 @@ function(nwb_add_name_symbol_target)
     set(_namesym_buildmode_bin_dir "${PROJECT_SOURCE_DIR}/__exec/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym/$<CONFIG>")
     set(_namesym_release_dest "${NWB_OUTPUT_ROOT}/$<CONFIG>")
 
-    # Headless workload: a real cook (mirrors the smoke-asset cook in tests/smoke/CMakeLists.txt) so the cooker records
-    # its full pipeline + asset-id literals -- not just startup symbols. Output/cache live under the build-mode tree so
-    # the release asset cache is untouched. This run needs no display, so it is the graceful path on headless hosts.
+    # A headless cook captures pipeline and asset names using a separate output/cache tree.
     set(_namesym_cook_out "${_namesym_build_dir}/namesym_cook/res")
     set(_namesym_cook_cache "${PROJECT_SOURCE_DIR}/__build_obj/c/${_namesym_output_platform}/${NWB_OUTPUT_ARCH}/namesym")
     set(_namesym_cook_run "${PROJECT_SOURCE_DIR}/pipeline/launch.py|||--skip-build|||--tool-directory|||${_namesym_buildmode_bin_dir}|||--repo-root|||${PROJECT_SOURCE_DIR}|||--asset-root|||impl/assets|||--asset-root|||tests/smoke/assets|||--output-directory|||${_namesym_cook_out}|||--cache-directory|||${_namesym_cook_cache}|||--configuration|||$<CONFIG>")
 
-    # GUI workloads (need a display): the window-capture harness runs each, captures, then shuts it down GRACEFULLY
-    # (posts WM_CLOSE) so the app's NWB_BUILDMODE exit writes its sidecar -- a hard kill would skip it. The testbed
-    # covers the base render path; the skinned-caustic smoke adds the shadow / caustic / AVBOIT / skinning scopes the
-    # testbed scene never exercises. On a headless host these ctest runs skip (warned, not fatal) and only the cook
-    # sidecar is produced. --expect-sidecar surfaces a capture that silently produced nothing.
+    # GUI captures must exit gracefully to write sidecars; --expect-sidecar reports missing output.
     add_custom_target(nwb_namesym
         COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_COMMAND=${CMAKE_COMMAND}"
             "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/configuration/generate_name_symbols.py"

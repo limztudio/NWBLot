@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and run the Phase 11 command-IR overhead profile.
+"""Build and run the command-IR overhead profile.
 
 The profile measures the stable native recording path alongside command-IR copy-buffer
 capture, validation-reader decode, preflight, Core::CommandList replay, and experimental

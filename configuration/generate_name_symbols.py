@@ -1,21 +1,9 @@
 #!/usr/bin/env python3
 # limztudio@gmail.com
 #
-# Build-time Name-symbol generator.
-#
-# Drives the three-step capture workflow so opt/fin logs read as text without anyone building twice by hand:
-#   1. configure + build a NWB_BUILDMODE variant (separate output domain "namesym", does not touch the release tree),
-#   2. run that variant's workloads so each executable records every Name literal it touches and, on exit, writes its
-#      "<exe>.namesym" sidecar next to itself (core/common/application_entry.h -> NameSymbols::WriteDefaultFile),
-#   3. copy those sidecars into the release output for the log server to load at startup
-#      (NameSymbols::LoadDefaultFile) and resolve client hash tokens centrally.
-#
-# This is invoked by the on-demand "nwb_namesym" CMake target (configuration/NameSymbols.cmake), which passes the
-# resolved buildmode/release paths for the configuration being built. It can also be run directly for one-off captures.
-#
-# Note on coverage: capture is runtime-driven, so a name is only recorded if the run actually reaches it. GUI targets
-# (testbed / window-capture smokes) need a display; they are driven here through their existing CTest tests so the
-# capture harness launches and tears them down. Headless targets (the asset pipeline) are run directly.
+# Build and run the isolated NWB_BUILDMODE variant, then copy Name sidecars to the release output.
+# Invoked by nwb_namesym or directly. Coverage includes only names reached by the workloads;
+# GUI captures use CTest and need a display, while headless tools run directly.
 
 import argparse
 import glob
@@ -29,20 +17,15 @@ def log(message):
     print("[namesym] {}".format(message), flush=True)
 
 
-# Resolve the CMake executable the same way the launcher package does: CMAKE_COMMAND is one executable path, so retain it as
-# one argv item even when the path contains spaces. The project's CMake lives in a local Python venv that is not on
-# PATH, so honoring CMAKE_COMMAND lets the namesym target drive it without each caller having to edit the tree.
+# Keep CMAKE_COMMAND as one argv item so executable paths may contain spaces.
 def resolve_cmake_command():
     cmake_command = os.environ.get("CMAKE_COMMAND")
     return [cmake_command] if cmake_command else ["cmake"]
 
 
 def resolve_ctest_command():
-    # ctest lives alongside cmake. When CMAKE_COMMAND names a cmake binary, derive ctest by replacing the basename's
-    # "cmake" with "ctest" (handles both real binaries and the venv's "cmake"/"ctest" wrapper pair). We deliberately do
-    # NOT validate with os.path.isfile here: this script's CWD is the build directory (ninja runs custom commands there),
-    # while run_command() invokes ctest with cwd=source-dir, so a relative path only resolves correctly there. Shelling
-    # out with a path that is valid relative to source-dir is exactly what we want.
+    # Resolve ctest beside cmake. Relative paths are checked when launched from source-dir,
+    # not against this script's build-directory working directory.
     cmake_command = resolve_cmake_command()
     if cmake_command == ["cmake"]:
         return ["ctest"]
@@ -125,9 +108,7 @@ def run_workloads(arguments):
     for directory in arguments.mkdir:
         os.makedirs(directory, exist_ok=True)
 
-    # Headless runs. A nonzero exit is only a warning: a run can still write its sidecar on a non-clean exit (the app
-    # entry also writes it on init-failure / exception), and a partial table beats none. The post-run collect against a
-    # freshly-cleaned dir is what actually decides whether anything was produced.
+    # Failed workloads may still write useful sidecars; collect_sidecars checks the fresh output.
     for spec in arguments.run:
         parts = spec.split("|||")
         if not parts or not parts[0]:
@@ -144,9 +125,7 @@ def run_workloads(arguments):
         if run_command(command + parts[1:], cwd=arguments.buildmode_bin_dir) != 0:
             log("WARNING: headless run returned nonzero (sidecar still captured if it reached an exit handler): {}".format(parts[0]))
 
-    # GUI runs via ctest. IMPORTANT: a window-capture test that HARD-KILLS its app (TerminateProcess) prevents the
-    # app's graceful-exit sidecar write -- such a target must support a graceful / auto-quit shutdown to contribute
-    # symbols (otherwise this run produces nothing and is caught by --expect-sidecar below).
+    # GUI workloads must exit gracefully; a hard kill prevents the sidecar write.
     ctest = resolve_ctest_command()
     for regex in arguments.ctest_regex:
         rc = run_command(

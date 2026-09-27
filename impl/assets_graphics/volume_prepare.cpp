@@ -315,10 +315,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
     }
 
-    // Assign each material its deferred shading-model id from the unique set of `bxdf` declarations, then
-    // generate the deferred lighting BXDF dispatch module the engine harness includes. Both run before
-    // shader preparation (so the harness picks up the module + the dependency checksum covers each BXDF) and
-    // before the materials are built (so the id is baked into each cooked material).
+    // Assign BXDF ids before building materials; emit dispatch before shader preparation to include it in checksums.
     if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
         return false;
 
@@ -332,8 +329,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // Shadow-transmittance dispatch alongside the BXDF dispatch: before shader prep (checksum-covered includes),
-    // after surface-id assignment. Later trace units #include it; cook + rasterizer unchanged.
+    // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
     Path shadowTransmittanceIncludeRoot(context.arena);
     if(!EmitShadowTransmittanceDispatchModule(
         context.resolvedPaths.cacheDirectory,
@@ -360,9 +356,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // The transparent-pass twin: generate each TRANSPARENT material's AVBOIT accumulate pixel shader from the
-    // SAME `surface` hook. The renderer binds it for the transparent draw, keyed by the material. Runs alongside
-    // the G-buffer PS generation (before shader prep + before ValidateMaterials).
+    // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
     MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitAccumulatePixelShaders(materialCookArena);
     if(!EmitMaterialAvboitAccumulatePixelShaders(
         materialCookArena,
@@ -374,9 +368,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     ))
         return false;
 
-    // The occupancy/extinction twins: each transparent material gets its own occupancy + extinction PS too, so all
-    // three AVBOIT passes read this material's SAME shader-decided surface.renderCoverage (an accumulate-only change would
-    // desync the extinction-built volume from the accumulate color-weight). The renderer binds them per material.
+    // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
     MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitOccupancyPixelShaders(materialCookArena);
     if(!EmitMaterialAvboitOccupancyPixelShaders(
         materialCookArena,

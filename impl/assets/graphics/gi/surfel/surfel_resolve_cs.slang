@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Half-res surfel resolve: one thread per half texel runs the (2*EXTENT+1)^3 gather (125 cells at 1/FACTOR^2 cost) and
-// writes rgb = irradiance, a = coverage (0 falls back to hemiAmbient). Compute-only pool access: no lighting overlap.
-// Query normal decodes as lighting does (n*0.5+0.5) so normalWeight matches the deferred path.
+// Resolve surfel irradiance at reduced resolution; alpha marks coverage for the ambient fallback.
+// Pool access is compute-only, so deferred lighting reads the resolved texture.
 
 
 #include "surfel_gather.slangi"

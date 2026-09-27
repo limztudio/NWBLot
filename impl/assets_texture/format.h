@@ -19,10 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The texture-asset payload contract lives in the neutral `global/texture_payload.h` domain so both the texture
-// asset implementation (cooker, runtime codec, loader) and the standalone `utilities/tex_conv` converter share one
-// source of truth. These aliases keep the existing `Impl::` spelling working for in-tree asset code while the
-// converter includes the neutral header directly.
+// Shared payload contract for texture assets and the standalone tex_conv utility.
 namespace TextureDimension = ::TextureDimension;
 namespace TexturePayloadFormat = ::TexturePayloadFormat;
 namespace TextureAlphaMode = ::TextureAlphaMode;

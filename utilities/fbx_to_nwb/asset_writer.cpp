@@ -43,9 +43,7 @@ inline constexpr AStringView s_AssetBunchDisplayName = "asset bunch";
 
 
 
-// Keep every generated metadata file canonical even when the converter runs on a non-Windows host.  The writers below
-// stream potentially large mesh payloads directly to disk, so normalize text at this one output boundary rather than
-// accumulating a second full copy of each asset just to replace line endings afterwards.
+// Normalize streamed metadata to CRLF without buffering another full copy of large mesh payloads.
 class NwbTextOutputStream final : NoCopy{
 public:
     explicit NwbTextOutputStream(BasicOutputFileStream<char>& stream)noexcept

@@ -54,8 +54,7 @@ struct GpuTaskSchedulingHint{
     bool avoidQueueCrossing = false;
     bool forceSubmissionBoundary = false;
     bool allowPacketMerge = true;
-    // Merging remains opt-in while imported recording bridges are retired incrementally.  When set, this task may
-    // share the immediately preceding compatible packet instead of creating a new queue submission.
+    // Opt in to sharing the preceding compatible packet instead of creating a new queue submission.
     bool mergeWithPrevious = false;
     // An explicit immediate successor may keep an accepting packet whole even when that task has direct cross-queue
     // consumers. Those consumers then wait for the complete merged packet, including packet-local tail work and its

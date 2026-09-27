@@ -29,7 +29,7 @@ static bool ContainsText(const AStringView text, const AStringView expected){
     return text.find(expected) != AStringView::npos;
 }
 
-// A graph task may not retain a prepared material callback if its dynamic geometry or sampled-image collection failed. Keep this source-level contract narrow: the graph builder must leave the current frame for the native compatibility path before it can compile a callback with an undeclared bindless access.
+// Check that incomplete resource declarations return before publishing a prepared graph callback.
 static bool ContainsBeforeClosingBrace(
     const AStringView text,
     const AStringView anchor,
@@ -144,7 +144,6 @@ TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction
     const AStringView hw(hwSource.data(), hwSource.size());
 
     EXPECT_TRUE(ContainsText(common, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);"));
-    EXPECT_TRUE(ContainsText(common, "nwbGiTraceOccluded("));
     EXPECT_TRUE(ContainsText(common, "nwbGiShadeHit"));
     EXPECT_TRUE(ContainsText(sw, "bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){"));
     EXPECT_TRUE(ContainsText(sw, "nwbGiSwInstanceOccluded"));
@@ -154,7 +153,7 @@ TEST(EcsGraphics, GiBooleanOcclusionSharesClosestAcceptanceWithoutReconstruction
 }
 
 
-// Every trace backend evaluates the generated material-surface dispatcher. Keep its dynamic Texture2D accesses coupled to the preflight snapshot and the graph's immutable ShaderResource set, rather than relying on the material heap selector alone.
+// Trace dispatch must declare the sampled textures captured during material preflight.
 TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     TestArena testArena;
     const TestPath repoRoot = RepoRoot(testArena);
@@ -231,7 +230,6 @@ TEST(EcsGraphics, TraceMaterialSampledTexturesAreFrozenAndGraphDeclared){
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "render.trace_material_sampled_textures"));
     EXPECT_TRUE(ContainsText(deferredLightingTaskGraph, "Trace Material Sampled Textures"));
     EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "render.shadow_visibility.soft_transparent_trace"));
-    EXPECT_TRUE(ContainsText(shadowVisibilityTaskGraph, "render.shadow_visibility"));
     EXPECT_TRUE(ContainsText(causticsTaskGraph, "render.software_caustics.photons"));
     EXPECT_TRUE(ContainsText(hardwareCausticsStage, "render.hardware_caustics.photons"));
     EXPECT_TRUE(ContainsText(surfelGiTaskGraph, "render.surfel_gi.trace"));

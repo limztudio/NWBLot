@@ -689,7 +689,7 @@ struct GpuTaskRecordContext{
     GpuPhysicalQueueId queue;
     // Recording attempts isolate retryable native captures sharing one immutable compiler plan.
     u64 recordingAttemptGeneration = 0u;
-    // Optional Phase 11 tooling sink. Null keeps direct native task recording on the ordinary runtime path.
+    // Optional capture sink; null keeps direct native task recording.
     GpuCommandIrCapture* commandIrCapture = nullptr;
 };
 

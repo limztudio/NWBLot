@@ -19,7 +19,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Phase 11 capture is opt-in; native recording stays the ordinary path.
+// Command capture is opt-in; native recording is the default.
 namespace GpuCommandIrOpcode{
     // Original in-memory capture enum; keep width and ordinals stable.
     static constexpr u8 kGpuCommandIrOpcodeCopyBufferBase = 0u;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run and report the Phase 11 command-IR CPU-overhead probe.
+"""Run and report the command-IR CPU-overhead probe.
 
 One native process records the same built-in copy-buffer command set through the stable direct
 path and through command-IR capture, then measures reader decode, replay preflight,

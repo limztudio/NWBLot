@@ -56,7 +56,7 @@ public:
         m_memory.recordArenaSnapshot(scope, arena, m_frameIndex);
     }
 
-    // Setup-time helper: registers the scope, then records. Per-frame update/render paths must use the MemoryScopeId overload below with a scope registered during setup.
+    // Registers before recording; per-frame callers must use a scope ID registered during setup.
     template<typename Arena>
     void recordMemorySnapshot(const Name& scopeName, const Arena& arena){
         if(!captureOptions().memoryActive())

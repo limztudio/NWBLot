@@ -42,7 +42,6 @@ SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTange
 }
 
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
-    // Beginner boundary: load each Float# lane once, blend on SIMD cores, store once.
     // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise.
     const f32 blend = CsgDeformValidator::SaturateFloat(firstWeight);
     const f32 other = s_OneWeight - blend;
@@ -68,7 +67,7 @@ CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, 
 }
 
 bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
-    // Beginner boundary: one load per Float# lane, normalize on SIMD cores, one store per lane. The degenerate fallback and w/handedness pick the identical deterministic branch in preview and commit.
+    // Preview and commit share the same degenerate fallback and tangent handedness.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){

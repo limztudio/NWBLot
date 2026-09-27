@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared GI trace body (hit + Lambert shade); traversal is the seam (each backend defines nwbGiTraceClosest, shade re-enters it). Backend provides heap-slot expressions + NWB_GI_HIT_SHADOW_RAYS.
+// Shared GI hit data and Lambert shading; hardware/software backends provide traversal and heap-slot access.
 
 
 #include "constants.h"
@@ -40,13 +40,10 @@ struct NwbGiTraceHit{
     half3 albedo;
 };
 
-// The traversal SEAM: each backend (SW BVH walk / HW inline RayQuery) defines this to return the nearest hit.
-// Declared here so the shared shade can re-enter it for the occlusion ray before the backend supplies the definition.
+// Backend-provided nearest-hit query.
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax);
 
-// P8.2 boolean occlusion seam: same geometric-blocking acceptance as the legacy GI contract, but returns only whether a valid blocker exists.
-// No normal/UV/material reconstruction: the SW walk returns on the first valid blocker, and the HW route uses first-accepted-hit behavior.
-// Named for geometric blocking under the legacy GI contract, not opaque-material-only blocking.
+// Geometric blockers include transparent surfaces; occlusion needs no attribute or material reconstruction.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax);
 
 
@@ -54,7 +51,7 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
 
 
 // Lambert hit shade: direct light * the authored material-surface base colour. The caller adds any surfel-to-surfel multi-bounce term.
-// The occlusion ray re-enters the traversal seam (nwbGiTraceClosest), so it uses whichever backend the producer selected.
+// Shadow rays use the backend's nwbGiTraceOccluded implementation.
 half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
     half3 irradiance = half3(0.0h, 0.0h, 0.0h);
 

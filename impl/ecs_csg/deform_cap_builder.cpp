@@ -143,7 +143,6 @@ bool CsgDeformCapBuilder::CapNormal(
     outNormal = s_UpAxis;
     if(loop.size() < s_MinLoopVertices)
         return false;
-    // Beginner boundary: load each loop position once, accumulate the fan area on the SIMD core, store the normal once.
     const SIMDVector originVec = LoadFloat(vertices[loop[0u]].position);
     SIMDVector areaVec = VectorZero();
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
@@ -172,7 +171,6 @@ bool CsgDeformCapBuilder::FillCapLoop(
         return false;
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
         return false;
-    // SIMD center accumulation keeps position/uv/color sums on vector lanes.
     SIMDVector centerPositionVec = VectorZero();
     SIMDVector centerUvVec = VectorZero();
     SIMDVector centerColorVec = VectorZero();
@@ -183,7 +181,6 @@ bool CsgDeformCapBuilder::FillCapLoop(
         centerUvVec = VectorAdd(centerUvVec, LoadFloat(vertex.uv0));
         centerColorVec = VectorAdd(centerColorVec, LoadFloat(vertex.color));
     }
-    // Beginner boundary: loopNormal crosses into SIMD once; center lanes average on SIMD cores and store once.
     const SIMDVector loopNormalVec = LoadFloat(loopNormal);
     const SIMDVector loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
     const SIMDVector centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);

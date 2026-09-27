@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and run the Phase 10 Transfer upload profiling harness.
+"""Build and run the transfer-upload profiling harness.
 
 The workflow compares an explicit Graphics setup-upload baseline with the automatic
 Transfer-preferred route.  It is target-hardware-only: hosts without a distinct

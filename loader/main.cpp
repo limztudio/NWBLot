@@ -236,8 +236,6 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
     return true;
 }
 
-// Earliest crash capture (pre-CLI): app name + spool + detail mode only. Upload/metadata come later; disk capture
-// works without them. No logging here (logger not up yet).
 bool InstallCrashCapture(CrashArena& crashArena){
     ::Path<CrashArena> executableDirectory(crashArena);
     if(!GetExecutableDirectory(executableDirectory))
@@ -288,8 +286,6 @@ bool InstallCrashCapture(CrashArena& crashArena){
     return true;
 }
 
-// Applies the options-derived crash configuration once the CLI is parsed and the logger is up: the upload
-// destination (log-server URL + token) and the runtime/gpu_debug metadata. Logs here are safe (logger is up).
 void ConfigureCrashReporting(const LoaderOptions& options){
     const AStringView logServerUrl = options.useStandaloneLogger
         ? AStringView()
@@ -325,10 +321,7 @@ static int RunProjectRuntime(
     NWB::Log::Client* telemetryClient
 ){
     {
-        // Name symbols are a server-side concern: this client emits debug-hash tokens, and the log server loads the
-        // .namesym sidecars (NameSymbols::LoadDefaultFile) + ingests uploads (LoadFromMemory) and rewrites those tokens
-        // to readable text centrally (DecodeHashTokens). Do NOT load them here -- Name::c_str() intentionally falls back
-        // to the hash hex in release, which the server resolves.
+        // The log server resolves Name tokens; release clients do not load .namesym files.
 
         const NWB::ProjectFrameClientSize frameClientSize = NWB::QueryProjectFrameClientSize();
         if(frameClientSize.width == __hidden_loader::s_EmptyFrameClientExtent || frameClientSize.height == __hidden_loader::s_EmptyFrameClientExtent){
@@ -507,10 +500,8 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
-    // Arm crash/diagnostic capture as the VERY FIRST action, before anything that can fault (CLI parsing,
-    // logger init, graphics/device creation). Capture-to-disk only needs executable-derived config, so the
-    // upload destination + metadata are applied later (ConfigureCrashReporting) once the CLI is parsed and
-    // the logger is up. From here on, any ERROR/FATAL/crash/exception leaves a dump in the spool.
+    // Install local crash capture before CLI parsing, logging, or graphics initialization.
+    // Configure upload settings after CLI parsing and logger startup.
     const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);

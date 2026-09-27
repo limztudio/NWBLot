@@ -61,7 +61,6 @@ void Session::publishFrame(){
 
     ensureMemoryScopes();
 
-    // The record loop below only consumes scopes registered above; it never creates them.
     const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
     while(owner){
         ArenaMemoryOwnerSnapshot snapshot;

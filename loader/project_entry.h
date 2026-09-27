@@ -91,14 +91,12 @@ struct ProjectRuntimeContext{
     Core::Assets::AssetManager& assetManager;
     Core::Filesystem::IFilesystem& filesystem;
     Core::Telemetry::FrameGraphRegistry& frameGraphRegistry;
-    // Read-only handle to the captured perf data (per-pass cpu/gpu timing views, memory). Owned by the Frame; bound
-    // here so a project can read per-pass GPU times (gpuTimingView()) for a live readout.
+    // Read-only timing and memory capture owned by the Frame.
     const Core::Perf::Session& perfSession;
     ShaderPathResolveCallback shaderPathResolver;
     TelemetryCaptureCallback telemetryCapture;
     TelemetryUploadFlushCallback telemetryUploadFlush;
-    // Enable/disable perf capture (flips the GPU-timing double gate) without standing up telemetry upload. A project
-    // calls setPerfCapture(Perf::CaptureOptions::GpuTimingOnly()) to start collecting per-pass GPU timestamps.
+    // Controls both GPU-timing gates without enabling telemetry upload.
     PerfCaptureCallback perfCapture;
     RequestQuitCallback requestQuit;
 

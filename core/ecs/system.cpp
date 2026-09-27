@@ -140,7 +140,6 @@ void SystemScheduler::execute(World& world, f32 delta){
         return;
 
     using TaskHandle = CpuTaskScheduler::TaskHandle;
-    // Handles/dependencies are reused member storage; only capacity growth may allocate, never per-frame creation.
     m_executionHandles.clear();
     m_executionHandles.resize(m_allSystems.size(), TaskHandle{});
     m_executionDependencies.clear();

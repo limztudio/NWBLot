@@ -125,9 +125,7 @@ bool ValidateMaterials(
             if(!__hidden_material_validation::ValidateMaterialVariant(shaderCook, materialEntry, *foundShader.value(), stageName, scratchArena))
                 return false;
 
-            // The pixel stage is the one that reads typed material constants (the material's surface hook), so it
-            // is the stage that must include the material's generated bind interface. The mesh stage is the shared
-            // engine geometry shader and carries no interface.
+            // Only the pixel surface hook requires the material interface; the shared mesh stage has none.
             if(shaderType == Core::ShaderType::PixelStage){
                 hasInterfaceStage = true;
                 const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;

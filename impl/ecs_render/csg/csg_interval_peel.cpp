@@ -84,11 +84,12 @@ static void SetCsgIntervalCombineStorageStates(
 ){
     const Core::Rect workRect = ResolveCsgFrameWorkRect(targets, csgFrameData);
 
+    const SIMDVector workRectLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.maxX), static_cast<f32>(workRect.maxY)), VectorZero());
     CsgIntervalSampleStateGpuData state;
-    state.workMinX = static_cast<u32>(Max(workRect.minX, 0));
-    state.workMinY = static_cast<u32>(Max(workRect.minY, 0));
-    state.workMaxX = static_cast<u32>(Max(workRect.maxX, 0));
-    state.workMaxY = static_cast<u32>(Max(workRect.maxY, 0));
+    state.workMinX = static_cast<u32>(VectorGetX(workRectLanes));
+    state.workMinY = static_cast<u32>(VectorGetY(workRectLanes));
+    state.workMaxX = static_cast<u32>(VectorGetZ(workRectLanes));
+    state.workMaxY = static_cast<u32>(VectorGetW(workRectLanes));
     state.meshViewHeapSlot = meshViewHeapSlot;
     return state;
 }
@@ -106,11 +107,12 @@ static void SetCsgIntervalCombineStorageStates(
     pushConstants.frameWidth = targets.width;
     pushConstants.frameHeight = targets.height;
     pushConstants.receiverCount = static_cast<u32>(csgFrameData.receiverRanges.size());
-    pushConstants.layerCount = Min(targets.csgPeelLayerCount, static_cast<u32>(NWB_CSG_PEEL_LAYER_COUNT));
-    pushConstants.workOffsetX = static_cast<u32>(Max(workRect.minX, 0));
-    pushConstants.workOffsetY = static_cast<u32>(Max(workRect.minY, 0));
-    pushConstants.workExtentX = static_cast<u32>(Max(workRect.width(), 0));
-    pushConstants.workExtentY = static_cast<u32>(Max(workRect.height(), 0));
+    const SIMDVector workOffsetExtentLanes = VectorMax(VectorSet(static_cast<f32>(workRect.minX), static_cast<f32>(workRect.minY), static_cast<f32>(workRect.width()), static_cast<f32>(workRect.height())), VectorZero());
+    pushConstants.layerCount = static_cast<u32>(VectorGetX(VectorMin(VectorReplicate(static_cast<f32>(targets.csgPeelLayerCount)), VectorReplicate(static_cast<f32>(NWB_CSG_PEEL_LAYER_COUNT)))));
+    pushConstants.workOffsetX = static_cast<u32>(VectorGetX(workOffsetExtentLanes));
+    pushConstants.workOffsetY = static_cast<u32>(VectorGetY(workOffsetExtentLanes));
+    pushConstants.workExtentX = static_cast<u32>(VectorGetZ(workOffsetExtentLanes));
+    pushConstants.workExtentY = static_cast<u32>(VectorGetW(workOffsetExtentLanes));
     pushConstants.meshViewHeapSlot = meshViewHeapSlot;
     pushConstants.csgContextHeapSlot = csgContextHeapSlot;
     return pushConstants;

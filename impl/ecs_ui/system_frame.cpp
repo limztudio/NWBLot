@@ -97,9 +97,10 @@ void UiSystem::beginFrame(const f32 delta){
     m_graphics.getWindowDimensions(windowWidth, windowHeight);
 
     ImGuiIO& io = ImGui::GetIO();
+    const SIMDVector windowExtent = VectorMax(VectorSet(static_cast<f32>(windowWidth), static_cast<f32>(windowHeight), 0.0f, 0.0f), VectorZero());
     io.DisplaySize = ImVec2(
-        static_cast<f32>(Max(windowWidth, 0)),
-        static_cast<f32>(Max(windowHeight, 0))
+        VectorGetX(windowExtent),
+        VectorGetY(windowExtent)
     );
     io.DisplayFramebufferScale = ImVec2(__hidden_ui_frame::s_DefaultFramebufferScale, __hidden_ui_frame::s_DefaultFramebufferScale);
     io.DeltaTime = m_deltaSeconds;

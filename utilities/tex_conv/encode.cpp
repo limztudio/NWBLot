@@ -104,22 +104,31 @@ private:
         return false;
     }
 
+    if(alphaSource.mode != AlphaSourceMode::Constant && alphaSource.mode != AlphaSourceMode::Image){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
+        return false;
+    }
+    const SIMDVector saturatedConstantAlpha = VectorSaturate(VectorReplicate(alphaSource.constant));
+
     for(basisu::image& plane : inOutPlanes){
         for(u32 y = 0u; y < height; ++y){
-            for(u32 x = 0u; x < width; ++x){
-                f32 alpha = 1.0f;
-                switch(alphaSource.mode){
-                case AlphaSourceMode::Constant:
-                    alpha = Saturate(alphaSource.constant);
-                    break;
-                case AlphaSourceMode::Image:
-                    alpha = alphaMask(x, y)[0u];
-                    break;
-                default:
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
-                    return false;
-                }
-                plane(x, y).a = static_cast<u8>(alpha * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias);
+            u32 x = 0u;
+            const u32 chunkEndX = width & ~3u;
+            for(; x < chunkEndX; x += 4u){
+                SIMDVector alphaLanes = (alphaSource.mode == AlphaSourceMode::Constant)
+                    ? saturatedConstantAlpha
+                    : VectorSet(alphaMask(x, y)[0u], alphaMask(x + 1u, y)[0u], alphaMask(x + 2u, y)[0u], alphaMask(x + 3u, y)[0u]);
+                const SIMDVector quantizedLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(alphaLanes), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
+                plane(x, y).a = static_cast<u8>(VectorGetX(quantizedLanes));
+                plane(x + 1u, y).a = static_cast<u8>(VectorGetY(quantizedLanes));
+                plane(x + 2u, y).a = static_cast<u8>(VectorGetZ(quantizedLanes));
+                plane(x + 3u, y).a = static_cast<u8>(VectorGetW(quantizedLanes));
+            }
+            for(; x < width; ++x){
+                const f32 alpha = (alphaSource.mode == AlphaSourceMode::Constant)
+                    ? VectorGetX(saturatedConstantAlpha)
+                    : alphaMask(x, y)[0u];
+                plane(x, y).a = static_cast<u8>(VectorGetX(VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)))));
             }
         }
     }
@@ -230,24 +239,26 @@ private:
     return true;
 }
 
-[[nodiscard]] static SIMDVector AverageLinearVolumeTexels(const SIMDVector channelSums, const u32 count){
-    NWB_ASSERT(count != 0u);
-    const u32 rounding = count / 2u;
-    return VectorSetInt(
-        (VectorGetIntX(channelSums) + rounding) / count,
-        (VectorGetIntY(channelSums) + rounding) / count,
-        (VectorGetIntZ(channelSums) + rounding) / count,
-        (VectorGetIntW(channelSums) + rounding) / count
-    );
+[[nodiscard]] static SIMDVector ConvertSrgbVolumeTexelToLinearRgb(const SIMDVector normalizedTexel){
+    const SIMDVector clamped = VectorSaturate(normalizedTexel);
+    const SIMDVector scaled = VectorDivide(VectorAdd(clamped, VectorReplicate(0.055f)), VectorReplicate(1.055f));
+    const SIMDVector nonlinear = VectorPow(scaled, VectorReplicate(2.4f));
+    const SIMDVector linearPart = VectorDivide(clamped, VectorReplicate(12.92f));
+    return VectorSelect(nonlinear, linearPart, VectorLess(clamped, VectorReplicate(0.04045f)));
 }
 
-[[nodiscard]] static SIMDVector ConvertSrgbVolumeTexelToLinearRgb(const SIMDVector texel){
-    return VectorSet(
-        basisu::srgb_to_linear(static_cast<f32>(VectorGetIntX(texel)) / s_BasisColorChannelMax),
-        basisu::srgb_to_linear(static_cast<f32>(VectorGetIntY(texel)) / s_BasisColorChannelMax),
-        basisu::srgb_to_linear(static_cast<f32>(VectorGetIntZ(texel)) / s_BasisColorChannelMax),
-        0.0f
-    );
+[[nodiscard]] static SIMDVector ConvertLinearVolumeRgbToSrgb(const SIMDVector linearRgb){
+    const SIMDVector clamped = VectorSaturate(linearRgb);
+    const SIMDVector nonlinear = VectorSubtract(VectorMultiply(VectorReplicate(1.055f), VectorPow(clamped, VectorReplicate(1.0f / 2.4f))), VectorReplicate(0.055f));
+    const SIMDVector linearPart = VectorMultiply(clamped, VectorReplicate(12.92f));
+    return VectorSaturate(VectorSelect(nonlinear, linearPart, VectorLess(clamped, VectorReplicate(0.0031308f))));
+}
+
+[[nodiscard]] static SIMDVector AverageLinearVolumeTexels(const SIMDVector channelSums, const u32 count){
+    NWB_ASSERT(count != 0u);
+    const SIMDVector bias = VectorReplicate(static_cast<f32>(count) * 0.5f);
+    const SIMDVector averaged = VectorDivide(VectorAdd(channelSums, bias), VectorReplicate(static_cast<f32>(count)));
+    return VectorTruncate(averaged);
 }
 
 [[nodiscard]] static SIMDVector AverageSrgbVolumeTexels(
@@ -256,14 +267,13 @@ private:
     const u32 count
 ){
     NWB_ASSERT(count != 0u);
-    const f32 floatCount = static_cast<f32>(count);
-    const u32 rounding = count / 2u;
-    return VectorSetInt(
-        static_cast<u32>(basisu::linear_to_srgb(VectorGetX(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        static_cast<u32>(basisu::linear_to_srgb(VectorGetY(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        static_cast<u32>(basisu::linear_to_srgb(VectorGetZ(linearRgbSum) / floatCount) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias),
-        (VectorGetIntW(alphaSum) + rounding) / count
-    );
+    const SIMDVector averagedLinear = VectorDivide(linearRgbSum, VectorReplicate(static_cast<f32>(count)));
+    const SIMDVector encodedRgb = ConvertLinearVolumeRgbToSrgb(averagedLinear);
+    const SIMDVector scaledRgb = VectorMultiply(encodedRgb, VectorReplicate(s_BasisColorChannelMax));
+    const SIMDVector roundedRgb = VectorTruncate(VectorAdd(scaledRgb, VectorReplicate(s_BasisColorChannelRoundingBias)));
+    const SIMDVector alphaLane = VectorSelect(VectorZero(), alphaSum, s_SIMDMaskW);
+    const SIMDVector averagedAlpha = VectorDivide(VectorAdd(alphaLane, VectorSelect(VectorZero(), VectorReplicate(static_cast<f32>(count) * 0.5f), s_SIMDMaskW)), VectorReplicate(static_cast<f32>(count)));
+    return VectorSelect(VectorSet(VectorGetX(roundedRgb), VectorGetY(roundedRgb), VectorGetZ(roundedRgb), 0.0f), VectorTruncate(averagedAlpha), s_SIMDMaskW);
 }
 
 [[nodiscard]] static bool GenerateNextVolumeMip(
@@ -312,18 +322,14 @@ private:
                 SIMDVector alphaSum = VectorZero();
                 for(const basisu::image& filteredPlane : filteredPlanes){
                     const basisu::color_rgba& sourceColor = filteredPlane(x, y);
-                    UInt4 sourceTexel = {};
-                    sourceTexel.r = static_cast<u32>(sourceColor.r);
-                    sourceTexel.g = static_cast<u32>(sourceColor.g);
-                    sourceTexel.b = static_cast<u32>(sourceColor.b);
-                    sourceTexel.a = static_cast<u32>(sourceColor.a);
-                    const SIMDVector texel = LoadInt(sourceTexel);
+                    const SIMDVector texel = VectorSet(static_cast<f32>(sourceColor.r), static_cast<f32>(sourceColor.g), static_cast<f32>(sourceColor.b), static_cast<f32>(sourceColor.a));
                     if(srgb){
-                        linearRgbSum = VectorAdd(linearRgbSum, ConvertSrgbVolumeTexelToLinearRgb(texel));
-                        alphaSum = VectorAddInt(alphaSum, VectorAndInt(texel, s_SIMDMaskW));
+                        const SIMDVector normalizedTexel = VectorDivide(texel, VectorReplicate(s_BasisColorChannelMax));
+                        linearRgbSum = VectorAdd(linearRgbSum, ConvertSrgbVolumeTexelToLinearRgb(normalizedTexel));
+                        alphaSum = VectorAdd(alphaSum, VectorSelect(VectorZero(), texel, s_SIMDMaskW));
                     }
                     else{
-                        channelSums = VectorAddInt(channelSums, texel);
+                        channelSums = VectorAdd(channelSums, texel);
                     }
                 }
 
@@ -331,8 +337,8 @@ private:
                     ? AverageSrgbVolumeTexels(linearRgbSum, alphaSum, filteredPlaneCount)
                     : AverageLinearVolumeTexels(channelSums, filteredPlaneCount)
                 ;
-                UInt4 targetTexel = {};
-                StoreInt(average, targetTexel);
+                Float4 targetTexel = {};
+                StoreFloat(average, targetTexel);
                 targetPlane(x, y) = basisu::color_rgba(
                     static_cast<int>(targetTexel.r),
                     static_cast<int>(targetTexel.g),

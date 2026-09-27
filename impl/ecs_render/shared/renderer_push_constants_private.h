@@ -155,7 +155,7 @@ NWB_INLINE ShaderDrivenPushConstants BuildShaderDrivenPushConstants(
     pushConstants.dispatchFlags |= s_MeshDispatchFlagScissorCull;
     pushConstants.viewportRect = Float4(viewport.minX, viewport.minY, viewport.maxX, viewport.maxY);
 
-    Core::Rect scissorRect(viewport);
+    Core::Rect scissorRect = Core::Rect::FromViewport(viewport);
     if(!viewportState.scissorRects.empty())
         scissorRect = viewportState.scissorRects[0];
 

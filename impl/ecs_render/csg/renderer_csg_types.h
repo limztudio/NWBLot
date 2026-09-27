@@ -152,27 +152,33 @@ struct CsgFrameWorkRegion{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)
             return;
 
-        const i32 clampedMinX = Max<i32>(0, Min<i32>(rectMinX, static_cast<i32>(frameWidth)));
-        const i32 clampedMaxX = Max<i32>(0, Min<i32>(rectMaxX, static_cast<i32>(frameWidth)));
-        const i32 clampedMinY = Max<i32>(0, Min<i32>(rectMinY, static_cast<i32>(frameHeight)));
-        const i32 clampedMaxY = Max<i32>(0, Min<i32>(rectMaxY, static_cast<i32>(frameHeight)));
+        const SIMDVector clampInput = VectorSet(static_cast<f32>(rectMinX), static_cast<f32>(rectMaxX), static_cast<f32>(rectMinY), static_cast<f32>(rectMaxY));
+        const SIMDVector clampExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), static_cast<f32>(frameHeight));
+        const SIMDVector clampedLanes = VectorMax(VectorMin(clampInput, clampExtent), VectorZero());
+        const i32 clampedMinX = static_cast<i32>(VectorGetX(clampedLanes));
+        const i32 clampedMaxX = static_cast<i32>(VectorGetY(clampedLanes));
+        const i32 clampedMinY = static_cast<i32>(VectorGetZ(clampedLanes));
+        const i32 clampedMaxY = static_cast<i32>(VectorGetW(clampedLanes));
         if(clampedMinX >= clampedMaxX || clampedMinY >= clampedMaxY)
             return;
 
-        minX = Min(minX, static_cast<u32>(clampedMinX));
-        minY = Min(minY, static_cast<u32>(clampedMinY));
-        maxX = Max(maxX, static_cast<u32>(clampedMaxX));
-        maxY = Max(maxY, static_cast<u32>(clampedMaxY));
+        const SIMDVector accumulatedMin = VectorMin(VectorSet(static_cast<f32>(minX), static_cast<f32>(minY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMinX), static_cast<f32>(clampedMinY), 0.0f, 0.0f));
+        const SIMDVector accumulatedMax = VectorMax(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(clampedMaxX), static_cast<f32>(clampedMaxY), 0.0f, 0.0f));
+        minX = static_cast<u32>(VectorGetX(accumulatedMin));
+        minY = static_cast<u32>(VectorGetY(accumulatedMin));
+        maxX = static_cast<u32>(VectorGetX(accumulatedMax));
+        maxY = static_cast<u32>(VectorGetY(accumulatedMax));
     }
     [[nodiscard]] Core::Rect resolveRect(const u32 frameWidth, const u32 frameHeight)const noexcept{
         if(!bounded())
             return Core::Rect(static_cast<i32>(frameWidth), static_cast<i32>(frameHeight));
 
+        const SIMDVector resolvedMax = VectorMin(VectorSet(static_cast<f32>(maxX), static_cast<f32>(maxY), 0.0f, 0.0f), VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f));
         return Core::Rect(
             static_cast<i32>(minX),
-            static_cast<i32>(Min(maxX, frameWidth)),
+            static_cast<i32>(VectorGetX(resolvedMax)),
             static_cast<i32>(minY),
-            static_cast<i32>(Min(maxY, frameHeight))
+            static_cast<i32>(VectorGetY(resolvedMax))
         );
     }
 };

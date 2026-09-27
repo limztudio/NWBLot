@@ -104,29 +104,59 @@ namespace EncodeBackendDetail{
         return false;
     }
 
+    if(alphaSource.mode != AlphaSourceMode::Original && alphaSource.mode != AlphaSourceMode::Constant && alphaSource.mode != AlphaSourceMode::Image){
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
+        return false;
+    }
+    const SIMDVector saturatedConstantAlpha = VectorSaturate(VectorReplicate(alphaSource.constant));
     for(basisu::imagef& plane : inOutPlanes){
         for(u32 y = 0u; y < height; ++y){
-            for(u32 x = 0u; x < width; ++x){
+            u32 x = 0u;
+            const u32 chunkEndX = width & ~3u;
+            for(; x < chunkEndX; x += 4u){
+                if(alphaSource.mode == AlphaSourceMode::Original){
+                    const f32 alpha0 = plane(x, y)[3u];
+                    const f32 alpha1 = plane(x + 1u, y)[3u];
+                    const f32 alpha2 = plane(x + 2u, y)[3u];
+                    const f32 alpha3 = plane(x + 3u, y)[3u];
+                    if(!IsFinite(alpha0) || !IsFinite(alpha1) || !IsFinite(alpha2) || !IsFinite(alpha3)){
+                        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
+                        return false;
+                    }
+                    const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
+                    plane(x, y)[3u] = VectorGetX(saturatedLanes);
+                    plane(x + 1u, y)[3u] = VectorGetY(saturatedLanes);
+                    plane(x + 2u, y)[3u] = VectorGetZ(saturatedLanes);
+                    plane(x + 3u, y)[3u] = VectorGetW(saturatedLanes);
+                }
+                else if(alphaSource.mode == AlphaSourceMode::Constant){
+                    plane(x, y)[3u] = VectorGetX(saturatedConstantAlpha);
+                    plane(x + 1u, y)[3u] = VectorGetX(saturatedConstantAlpha);
+                    plane(x + 2u, y)[3u] = VectorGetX(saturatedConstantAlpha);
+                    plane(x + 3u, y)[3u] = VectorGetX(saturatedConstantAlpha);
+                }
+                else{
+                    const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alphaMask(x, y)[0u], alphaMask(x + 1u, y)[0u], alphaMask(x + 2u, y)[0u], alphaMask(x + 3u, y)[0u]));
+                    plane(x, y)[3u] = VectorGetX(saturatedLanes);
+                    plane(x + 1u, y)[3u] = VectorGetY(saturatedLanes);
+                    plane(x + 2u, y)[3u] = VectorGetZ(saturatedLanes);
+                    plane(x + 3u, y)[3u] = VectorGetW(saturatedLanes);
+                }
+            }
+            for(; x < width; ++x){
                 f32 alpha = 1.0f;
-                switch(alphaSource.mode){
-                case AlphaSourceMode::Original:
+                if(alphaSource.mode == AlphaSourceMode::Original){
                     alpha = plane(x, y)[3u];
                     if(!IsFinite(alpha)){
                         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR input contains a non-finite alpha value."));
                         return false;
                     }
-                    break;
-                case AlphaSourceMode::Constant:
-                    alpha = alphaSource.constant;
-                    break;
-                case AlphaSourceMode::Image:
-                    alpha = alphaMask(x, y)[0u];
-                    break;
-                default:
-                    NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
-                    return false;
                 }
-                plane(x, y)[3u] = Saturate(alpha);
+                else if(alphaSource.mode == AlphaSourceMode::Constant)
+                    alpha = VectorGetX(saturatedConstantAlpha);
+                else
+                    alpha = alphaMask(x, y)[0u];
+                plane(x, y)[3u] = VectorGetX(VectorSaturate(VectorReplicate(alpha)));
             }
         }
     }
@@ -256,9 +286,8 @@ namespace EncodeBackendDetail{
                         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
                         return false;
                     }
-                    const u8 quantizedAlpha = static_cast<u8>(
-                        Saturate(alpha) * s_BasisColorChannelMax + s_BasisColorChannelRoundingBias
-                    );
+                    const SIMDVector quantizedAlphaLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
+                    const u8 quantizedAlpha = static_cast<u8>(VectorGetX(quantizedAlphaLanes));
                     alphaPlane(x, y) = basisu::color_rgba(
                         quantizedAlpha,
                         quantizedAlpha,

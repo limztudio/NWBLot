@@ -69,7 +69,7 @@ static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directi
 }
 
 [[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
-    return Clamp(pitchRadians, -pitchLimitRadians, pitchLimitRadians);
+    return VectorGetX(VectorClamp(VectorReplicate(pitchRadians), VectorReplicate(-pitchLimitRadians), VectorReplicate(pitchLimitRadians)));
 }
 
 [[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
@@ -132,9 +132,10 @@ static void ResolveFlyCameraInput(
 
     const f32 safeMouseDeltaX = IsFinite(mouseDeltaX) ? mouseDeltaX : 0.0f;
     const f32 safeMouseDeltaY = IsFinite(mouseDeltaY) ? mouseDeltaY : 0.0f;
-    const f32 safeRightAxis = IsFinite(rightAxis) ? Clamp(rightAxis, -1.0f, 1.0f) : 0.0f;
-    const f32 safeForwardAxis = IsFinite(forwardAxis) ? Clamp(forwardAxis, -1.0f, 1.0f) : 0.0f;
-    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+    const SIMDVector sanitizedAxes = VectorSaturate(VectorSet(IsFinite(rightAxis) ? rightAxis : 0.0f, IsFinite(forwardAxis) ? forwardAxis : 0.0f, 0.0f, 0.0f));
+    const f32 safeRightAxis = VectorGetX(sanitizedAxes);
+    const f32 safeForwardAxis = VectorGetY(sanitizedAxes);
+    const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
     yawRadians += safeMouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;
     if(!IsFinite(yawRadians))
@@ -355,7 +356,7 @@ void ProjectTestbed::onShutdown(){
 }
 
 bool ProjectTestbed::onUpdate(f32 delta){
-    const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
+    const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
     updateMainCamera(safeDelta);
     m_world->tick(safeDelta);

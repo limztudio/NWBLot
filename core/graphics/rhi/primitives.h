@@ -171,6 +171,13 @@ struct Rect{
         , maxY(static_cast<i32>(Ceil(viewport.maxY)))
     {}
 
+    [[nodiscard]] static Rect FromViewport(const Viewport& viewport)noexcept{
+        const SIMDVector bounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+        const SIMDVector flooredBounds = VectorFloor(bounds);
+        const SIMDVector ceiledBounds = VectorCeiling(bounds);
+        return Rect(static_cast<i32>(VectorGetX(flooredBounds)), static_cast<i32>(VectorGetY(ceiledBounds)), static_cast<i32>(VectorGetZ(flooredBounds)), static_cast<i32>(VectorGetW(ceiledBounds)));
+    }
+
     [[nodiscard]] constexpr i32 width()const noexcept{ return maxX - minX; }
     [[nodiscard]] constexpr i32 height()const noexcept{ return maxY - minY; }
 };

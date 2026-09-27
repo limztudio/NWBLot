@@ -1489,10 +1489,14 @@ void UiSystem::renderDrawData(Core::CommandList& commandList, Core::Framebuffer*
             if(clipMaxX <= clipMinX || clipMaxY <= clipMinY)
                 continue;
 
-            const i32 scissorMinX = Max(static_cast<i32>(clipMinX), 0);
-            const i32 scissorMinY = Max(static_cast<i32>(clipMinY), 0);
-            const i32 scissorMaxX = Min(static_cast<i32>(Ceil(clipMaxX)), framebufferWidth);
-            const i32 scissorMaxY = Min(static_cast<i32>(Ceil(clipMaxY)), framebufferHeight);
+            const SIMDVector scissorBounds = VectorSet(clipMinX, clipMinY, clipMaxX, clipMaxY);
+            const SIMDVector flooredScissorMin = VectorMax(VectorFloor(scissorBounds), VectorZero());
+            const SIMDVector framebufferExtent = VectorSet(static_cast<f32>(framebufferWidth), static_cast<f32>(framebufferHeight), static_cast<f32>(framebufferWidth), static_cast<f32>(framebufferHeight));
+            const SIMDVector clampedScissorMax = VectorMin(VectorCeiling(scissorBounds), framebufferExtent);
+            const i32 scissorMinX = static_cast<i32>(VectorGetX(flooredScissorMin));
+            const i32 scissorMinY = static_cast<i32>(VectorGetY(flooredScissorMin));
+            const i32 scissorMaxX = static_cast<i32>(VectorGetZ(clampedScissorMax));
+            const i32 scissorMaxY = static_cast<i32>(VectorGetW(clampedScissorMax));
             if(scissorMaxX <= scissorMinX || scissorMaxY <= scissorMinY)
                 continue;
 

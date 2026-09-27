@@ -190,13 +190,30 @@ void ResetPayload(
     }
 
     for(u32 y = 0u; y < expectedHeight; ++y){
-        for(u32 x = 0u; x < expectedWidth; ++x){
+        u32 x = 0u;
+        const u32 chunkEndX = expectedWidth & ~3u;
+        for(; x < chunkEndX; x += 4u){
+            const f32 alpha0 = outMask(x, y)[0u];
+            const f32 alpha1 = outMask(x + 1u, y)[0u];
+            const f32 alpha2 = outMask(x + 2u, y)[0u];
+            const f32 alpha3 = outMask(x + 3u, y)[0u];
+            if(!IsFinite(alpha0) || !IsFinite(alpha1) || !IsFinite(alpha2) || !IsFinite(alpha3)){
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
+                return false;
+            }
+            const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
+            outMask(x, y)[0u] = VectorGetX(saturatedLanes);
+            outMask(x + 1u, y)[0u] = VectorGetY(saturatedLanes);
+            outMask(x + 2u, y)[0u] = VectorGetZ(saturatedLanes);
+            outMask(x + 3u, y)[0u] = VectorGetW(saturatedLanes);
+        }
+        for(; x < expectedWidth; ++x){
             f32& alpha = outMask(x, y)[0u];
             if(!IsFinite(alpha)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
                 return false;
             }
-            alpha = Saturate(alpha);
+            alpha = VectorGetX(VectorSaturate(VectorReplicate(alpha)));
         }
     }
     return true;

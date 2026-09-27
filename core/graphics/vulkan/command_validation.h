@@ -91,10 +91,13 @@ namespace VulkanDetail{
     )
         return false;
 
-    const f64 minX = static_cast<f64>(Floor(viewport.minX));
-    const f64 maxX = static_cast<f64>(Ceil(viewport.maxX));
-    const f64 minY = static_cast<f64>(Floor(viewport.minY));
-    const f64 maxY = static_cast<f64>(Ceil(viewport.maxY));
+    const SIMDVector viewportBounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
+    const SIMDVector flooredBounds = VectorFloor(viewportBounds);
+    const SIMDVector ceiledBounds = VectorCeiling(viewportBounds);
+    const f64 minX = static_cast<f64>(VectorGetX(flooredBounds));
+    const f64 maxX = static_cast<f64>(VectorGetY(ceiledBounds));
+    const f64 minY = static_cast<f64>(VectorGetZ(flooredBounds));
+    const f64 maxY = static_cast<f64>(VectorGetW(ceiledBounds));
     return
         minX >= 0.0
         && minY >= 0.0
@@ -109,7 +112,7 @@ namespace VulkanDetail{
     if(!IsImplicitScissorValid(viewport))
         return false;
 
-    const Rect rect(viewport);
+    const Rect rect = Rect::FromViewport(viewport);
     outScissor = {};
     outScissor.offset = { rect.minX, rect.minY };
     outScissor.extent = {

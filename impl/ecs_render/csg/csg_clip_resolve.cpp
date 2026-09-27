@@ -429,11 +429,16 @@ void CsgFrameWorkRegion::expandWorldBounds(
     if(maxPixelX < 0.0f || maxPixelY < 0.0f || minPixelX > static_cast<f32>(frameWidth) || minPixelY > static_cast<f32>(frameHeight))
         return;
 
+    const SIMDVector workPixelMin = VectorMax(VectorSet(minPixelX, minPixelY, 0.0f, 0.0f), VectorZero());
+    const SIMDVector workFrameExtent = VectorSet(static_cast<f32>(frameWidth), static_cast<f32>(frameHeight), 0.0f, 0.0f);
+    const SIMDVector workPixelMax = VectorMin(VectorSet(maxPixelX, maxPixelY, 0.0f, 0.0f), workFrameExtent);
+    const SIMDVector flooredWorkMin = VectorFloor(workPixelMin);
+    const SIMDVector ceiledWorkMax = VectorCeiling(workPixelMax);
     expandClamped(
-        static_cast<i32>(Floor(Max(minPixelX, 0.0f))) - s_WorkRegionPixelPadding,
-        static_cast<i32>(Ceil(Min(maxPixelX, static_cast<f32>(frameWidth)))) + s_WorkRegionPixelPadding,
-        static_cast<i32>(Floor(Max(minPixelY, 0.0f))) - s_WorkRegionPixelPadding,
-        static_cast<i32>(Ceil(Min(maxPixelY, static_cast<f32>(frameHeight)))) + s_WorkRegionPixelPadding,
+        static_cast<i32>(VectorGetX(flooredWorkMin)) - s_WorkRegionPixelPadding,
+        static_cast<i32>(VectorGetX(ceiledWorkMax)) + s_WorkRegionPixelPadding,
+        static_cast<i32>(VectorGetY(flooredWorkMin)) - s_WorkRegionPixelPadding,
+        static_cast<i32>(VectorGetY(ceiledWorkMax)) + s_WorkRegionPixelPadding,
         frameWidth,
         frameHeight
     );

@@ -372,28 +372,7 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationAxis(SIMDVector axis, f32 angle
 }
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
-#if defined(NWB_HAS_SCALAR)
-    const f32 halfPitch = s_QuaternionHalfAngleScale * angles.f[0];
-    const f32 cp = Cos(halfPitch);
-    const f32 sp = Sin(halfPitch);
-
-    const f32 halfYaw = s_QuaternionHalfAngleScale * angles.f[1];
-    const f32 cy = Cos(halfYaw);
-    const f32 sy = Sin(halfYaw);
-
-    const f32 halfRoll = s_QuaternionHalfAngleScale * angles.f[2];
-    const f32 cr = Cos(halfRoll);
-    const f32 sr = Sin(halfRoll);
-
-    return SIMDConvertDetail::MakeF32(
-        (cr * sp * cy) + (sr * cp * sy),
-        (cr * cp * sy) - (sr * sp * cy),
-        (sr * cp * cy) - (cr * sp * sy),
-        (cr * cp * cy) + (sr * sp * sy)
-    );
-#else
     const SIMDVector halfAngles = VectorMultiply(angles, s_SIMDOneHalf);
-
     SIMDVector sinAngles{};
     SIMDVector cosAngles{};
     VectorSinCos(sinAngles, cosAngles, halfAngles);
@@ -410,7 +389,6 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYawFromVector(SIMDVect
     q1 = VectorMultiply(q1, y1);
     q0 = VectorMultiply(q0, r0);
     return VectorMultiplyAdd(q1, r1, q0);
-#endif
 }
 
 NWB_INLINE SIMDVector SIMDCALL QuaternionRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{

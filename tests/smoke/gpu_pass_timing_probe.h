@@ -10,6 +10,7 @@
 #include <core/common/log.h>
 #include <core/perf/timing.h>
 #include <global/basic_string.h>
+#include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/name.h>
 #include <global/simplemath.h>
@@ -34,7 +35,7 @@ private:
     static constexpr f64 s_MaxMeasuredFrameSeconds = 0.25;
     static constexpr f64 s_MillisecondsPerSecond = 1000.0;
     static constexpr int s_TimingFilePrecision = 4;
-    static constexpr usize s_MaxScopes = 64u;
+    static constexpr Name s_Arena{ "tests/smoke/gpu_pass_timing_probe" };
 
 
 private:
@@ -42,8 +43,13 @@ private:
         f64 sumSeconds = 0.0;
         f64 minSeconds = 0.0;
         f64 maxSeconds = 0.0;
-        u32 frames = 0u;
         u64 samples = 0u;
+        u32 frames = 0u;
+    };
+
+    struct ScopeState{
+        ScopeAccum interval;
+        u64 lastFoldedPublish = 0u;
     };
 
 
@@ -60,9 +66,13 @@ private:
 
 public:
     explicit GpuPassTimingProbe(const tchar* label)
-        : m_label(label)
+        : m_arena(s_Arena)
+        , m_scopes(m_arena)
+        , m_label(label)
     {}
 
+
+public:
     void recordFrame(const f32 delta, const Core::Perf::TimingView& gpuTiming){
         const f64 safeDelta = IsFinite(delta) && delta > 0.0f ? static_cast<f64>(delta) : 0.0;
         if(safeDelta <= 0.0)
@@ -90,7 +100,9 @@ public:
 
 private:
     void accumulate(const Core::Perf::TimingView& gpuTiming){
-        const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
+        const usize scopeCount = gpuTiming.scopeCount();
+        if(m_scopes.size() < scopeCount)
+            m_scopes.resize(scopeCount);
         for(usize i = 0u; i < scopeCount; ++i){
             const Core::Perf::TimingStats& stats = gpuTiming.statsAt(i);
             if(!stats.valid())
@@ -98,11 +110,11 @@ private:
 
             // Fold each GPU window once: persistent watermark survives resets, so straddling windows never double-count.
             // Publish indices > 0 post-warmup, so 0 means none folded yet.
-            if(m_scopeLastFoldedPublish[i] == stats.publishFrameIndex)
+            if(m_scopes[i].lastFoldedPublish == stats.publishFrameIndex)
                 continue;
-            m_scopeLastFoldedPublish[i] = stats.publishFrameIndex;
+            m_scopes[i].lastFoldedPublish = stats.publishFrameIndex;
 
-            ScopeAccum& accum = m_scopes[i];
+            ScopeAccum& accum = m_scopes[i].interval;
             if(accum.frames == 0u){
                 accum.minSeconds = stats.seconds;
                 accum.maxSeconds = stats.seconds;
@@ -136,9 +148,9 @@ private:
             timingFile << "=== interval: " << static_cast<unsigned>(m_intervalFrames) << " frames / " << m_intervalSeconds << "s ===\n";
         }
 
-        const usize scopeCount = Min(gpuTiming.scopeCount(), s_MaxScopes);
+        const usize scopeCount = gpuTiming.scopeCount();
         for(usize i = 0u; i < scopeCount; ++i){
-            const ScopeAccum& accum = m_scopes[i];
+            const ScopeAccum& accum = m_scopes[i].interval;
             if(accum.frames == 0u)
                 continue;
 
@@ -171,19 +183,17 @@ private:
     void resetInterval(){
         m_intervalSeconds = 0.0;
         m_intervalFrames = 0u;
-        for(ScopeAccum& accum : m_scopes)
-            accum = ScopeAccum{};
+        for(ScopeState& scope : m_scopes)
+            scope.interval = ScopeAccum{};
     }
 
 
 private:
+    Core::Alloc::GlobalArena m_arena;
+    Vector<ScopeState, Core::Alloc::GlobalArena> m_scopes;
     const tchar* m_label = NWB_TEXT("Smoke");
     f64 m_elapsedSeconds = 0.0;
     f64 m_intervalSeconds = 0.0;
-    ScopeAccum m_scopes[s_MaxScopes] = {};
-    // Per-scope last-folded publish-frame watermark. NOT reset between intervals (resetInterval only clears
-    // m_scopes), so a GPU window folded in one interval is never re-folded into the next at the boundary.
-    u64 m_scopeLastFoldedPublish[s_MaxScopes] = {};
     u32 m_intervalFrames = 0u;
 };
 

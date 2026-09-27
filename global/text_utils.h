@@ -25,12 +25,12 @@ template<typename CharT>
     return text ? BasicStringView<CharT>(text) : BasicStringView<CharT>();
 }
 
-[[nodiscard]] inline constexpr const char* BoolToYesNoText(const bool value)noexcept{
-    return value ? "yes" : "no";
+[[nodiscard]] inline constexpr StringView BoolToYesNoText(const bool value)noexcept{
+    return value ? StringView("yes") : StringView("no");
 }
 
-[[nodiscard]] inline constexpr const char* BoolToAvailabilityText(const bool value)noexcept{
-    return value ? "available" : "unavailable";
+[[nodiscard]] inline constexpr StringView BoolToAvailabilityText(const bool value)noexcept{
+    return value ? StringView("available") : StringView("unavailable");
 }
 
 template<typename CharT>

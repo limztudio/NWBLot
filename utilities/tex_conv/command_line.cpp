@@ -25,13 +25,13 @@ namespace TexConvCliDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_InputOptionName = "input";
-inline constexpr const char* s_CubeOptionName = "--cube";
-inline constexpr const char* s_VolumeOptionName = "--volume";
-inline constexpr const char* s_OutputOptionName = "-o,--output";
-inline constexpr const char* s_AlphaOptionName = "--alpha";
-inline constexpr const char* s_LinearFlagName = "--linear";
-inline constexpr const char* s_ForceFlagName = "--force";
+inline constexpr StringView s_InputOptionName = "input";
+inline constexpr StringView s_CubeOptionName = "--cube";
+inline constexpr StringView s_VolumeOptionName = "--volume";
+inline constexpr StringView s_OutputOptionName = "-o,--output";
+inline constexpr StringView s_AlphaOptionName = "--alpha";
+inline constexpr StringView s_LinearFlagName = "--linear";
+inline constexpr StringView s_ForceFlagName = "--force";
 inline constexpr int s_MinVolumeSliceCount = 1;
 inline constexpr int s_UnboundedOptionCount = -1;
 inline constexpr u32 s_SingleTextureInputModeCount = 1u;
@@ -60,13 +60,13 @@ int Run(const int argc, char** argv){
     bool linear = false;
 
     CLI::App app{ "Convert LDR or HDR images into an NWB 2D, cube, or volume texture asset." };
-    app.add_option(TexConvCliDetail::s_InputOptionName, inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
-    app.add_option(TexConvCliDetail::s_CubeOptionName, cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
-    app.add_option(TexConvCliDetail::s_VolumeOptionName, volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
-    app.add_option(TexConvCliDetail::s_OutputOptionName, outputArgument, "Output base name or .nwb filename");
-    CLI::Option* alphaOption = app.add_option(TexConvCliDetail::s_AlphaOptionName, alphaArgument, "Alpha source: mask image red channel, white, or black");
-    app.add_flag(TexConvCliDetail::s_LinearFlagName, linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
-    app.add_flag(TexConvCliDetail::s_ForceFlagName, force, "Replace existing .nwb and .tex output files");
+    app.add_option(TexConvCliDetail::s_InputOptionName.data(), inputArgument, "2D input image (.png, .jpg, .jpeg, .jfif, .tga, .qoi, .exr, or .hdr)");
+    app.add_option(TexConvCliDetail::s_CubeOptionName.data(), cubeArguments, "Six cubemap faces: +X -X +Y -Y +Z -Z")->expected(static_cast<int>(TextureFormat::s_TextureCubeFaceCount));
+    app.add_option(TexConvCliDetail::s_VolumeOptionName.data(), volumeArguments, "Ordered volume Z slices: z0 z1 ... zN")->expected(TexConvCliDetail::s_MinVolumeSliceCount, TexConvCliDetail::s_UnboundedOptionCount);
+    app.add_option(TexConvCliDetail::s_OutputOptionName.data(), outputArgument, "Output base name or .nwb filename");
+    CLI::Option* alphaOption = app.add_option(TexConvCliDetail::s_AlphaOptionName.data(), alphaArgument, "Alpha source: mask image red channel, white, or black");
+    app.add_flag(TexConvCliDetail::s_LinearFlagName.data(), linear, "Treat LDR input as linear data instead of sRGB color (HDR input is always linear)");
+    app.add_flag(TexConvCliDetail::s_ForceFlagName.data(), force, "Replace existing .nwb and .tex output files");
 
     return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){
         app.parse(argc, argv);

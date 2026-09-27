@@ -196,7 +196,7 @@ inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-inline const char* BoolToString(bool value){
+inline StringView BoolToString(bool value){
     return BoolToYesNoText(value);
 }
 
@@ -213,7 +213,7 @@ inline ScratchString VulkanVersionToString(Alloc::ScratchArena& arena, u32 versi
     return ss.str();
 }
 
-inline constexpr const char* s_UnknownDebugLabel = "unknown";
+inline constexpr StringView s_UnknownDebugLabel = "unknown";
 
 
 inline const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
@@ -223,7 +223,7 @@ inline const char* PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
     case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: return "discrete GPU";
     case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU: return "virtual GPU";
     case VK_PHYSICAL_DEVICE_TYPE_CPU: return "CPU";
-    default: return s_UnknownDebugLabel;
+    default: return s_UnknownDebugLabel.data();
     }
 }
 
@@ -234,7 +234,7 @@ inline const char* SwapChainFormatToString(VkFormat format){
     case VK_FORMAT_R8G8B8A8_SRGB: return "VK_FORMAT_R8G8B8A8_SRGB";
     case VK_FORMAT_B8G8R8A8_UNORM: return "VK_FORMAT_B8G8R8A8_UNORM";
     case VK_FORMAT_B8G8R8A8_SRGB: return "VK_FORMAT_B8G8R8A8_SRGB";
-    default: return s_UnknownDebugLabel;
+    default: return s_UnknownDebugLabel.data();
     }
 }
 
@@ -242,7 +242,7 @@ inline const char* ColorSpaceToString(VkColorSpaceKHR colorSpace){
     switch(colorSpace){
     case VK_COLOR_SPACE_HDR10_ST2084_EXT: return "VK_COLOR_SPACE_HDR10_ST2084_EXT";
     case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
-    default: return s_UnknownDebugLabel;
+    default: return s_UnknownDebugLabel.data();
     }
 }
 
@@ -252,7 +252,7 @@ inline const char* PresentModeToString(VkPresentModeKHR mode){
     case VK_PRESENT_MODE_MAILBOX_KHR: return "VK_PRESENT_MODE_MAILBOX_KHR";
     case VK_PRESENT_MODE_FIFO_KHR: return "VK_PRESENT_MODE_FIFO_KHR";
     case VK_PRESENT_MODE_FIFO_RELAXED_KHR: return "VK_PRESENT_MODE_FIFO_RELAXED_KHR";
-    default: return s_UnknownDebugLabel;
+    default: return s_UnknownDebugLabel.data();
     }
 }
 
@@ -400,7 +400,7 @@ inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT: return "warning";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT: return "error";
-    default: return s_UnknownDebugLabel;
+    default: return s_UnknownDebugLabel.data();
     }
 }
 

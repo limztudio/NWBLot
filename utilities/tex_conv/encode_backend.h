@@ -41,7 +41,7 @@ static constexpr f32 s_BasisColorChannelMax = 255.0f;
 static constexpr f32 s_BasisColorChannelRoundingBias = 0.5f;
 static constexpr f32 s_UastcHdrMaximum = 65216.0f;
 static constexpr u32 s_HdrChannelCount = 4u;
-static constexpr const char* s_BasisResampleBoxFilter = "box";
+static constexpr StringView s_BasisResampleBoxFilter = "box";
 static constexpr f32 s_BasisResampleFilterScale = 1.0f;
 static constexpr u32 s_BasisResampleFilterChannelStart = 0u;
 

@@ -23,8 +23,8 @@ namespace FbxSkinDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr const char* s_NullNodeLabel = "<null>";
-inline constexpr const char* s_UnnamedNodeLabel = "<unnamed node>";
+inline constexpr StringView s_NullNodeLabel = "<null>";
+inline constexpr StringView s_UnnamedNodeLabel = "<unnamed node>";
 
 
 struct ExportContext{

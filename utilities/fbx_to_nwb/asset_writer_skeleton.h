@@ -41,7 +41,7 @@ struct SkeletonOutputData{
 [[nodiscard]] bool RemapSkinInfluences(UtilityVector<MeshSkinInfluence>& inOutInfluences, const UtilityVector<u16>& oldToNewJointIndices);
 [[nodiscard]] bool BuildPositionAlignedSkinnedMesh(const SourceMeshStreams& sourceMesh, SourceMeshStreams& outMesh, UtilityVector<MeshSkinInfluence>& outPositionSkin);
 [[nodiscard]] bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh);
-[[nodiscard]] bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, const AStringView context);
+[[nodiscard]] bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context);
 [[nodiscard]] bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView context);
 [[nodiscard]] AString NodeName(const ufbx_node* node, const usize fallbackIndex);
 

@@ -26,18 +26,18 @@ namespace AssetWriterSkeletonDetail{
 
 static constexpr f32 s_InvertibleJointDeterminantEpsilon = 0.000000000001f;
 static constexpr usize s_PositionSkinKeySkinShiftBits = 32u;
-inline constexpr const char* s_PositionStreamLabel = "position";
-inline constexpr const char* s_NormalStreamLabel = "normal";
-inline constexpr const char* s_TangentStreamLabel = "tangent";
-inline constexpr const char* s_Uv0StreamLabel = "uv0";
-inline constexpr const char* s_ColorsStreamLabel = "color";
+inline constexpr StringView s_PositionStreamLabel = "position";
+inline constexpr StringView s_NormalStreamLabel = "normal";
+inline constexpr StringView s_TangentStreamLabel = "tangent";
+inline constexpr StringView s_Uv0StreamLabel = "uv0";
+inline constexpr StringView s_ColorsStreamLabel = "color";
 inline constexpr AStringView s_JointFallbackNamePrefix = "joint_";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateStreamIndex(const u32 index, const usize count, const char* fieldName, const AStringView context){
+bool ValidateStreamIndex(const u32 index, const usize count, const AStringView fieldName, const AStringView context){
     if(index < count)
         return true;
 

@@ -33,12 +33,12 @@ using TextWrite::WriteVec4;
 using TextWrite::s_OutputFloatPrecision;
 
 static constexpr usize s_DeduplicateParallelGrainSize = 4096u;
-inline constexpr const char* s_PositionStreamLabel = "position";
-inline constexpr const char* s_NormalStreamLabel = "normal";
-inline constexpr const char* s_TangentStreamLabel = "tangent";
-inline constexpr const char* s_Uv0StreamLabel = "uv0";
-inline constexpr const char* s_ColorsStreamLabel = "color";
-inline constexpr const char* s_SkinStreamLabel = "skin";
+inline constexpr StringView s_PositionStreamLabel = "position";
+inline constexpr StringView s_NormalStreamLabel = "normal";
+inline constexpr StringView s_TangentStreamLabel = "tangent";
+inline constexpr StringView s_Uv0StreamLabel = "uv0";
+inline constexpr StringView s_ColorsStreamLabel = "color";
+inline constexpr StringView s_SkinStreamLabel = "skin";
 
 template<typename Value>
 struct StreamSortEntry{
@@ -120,7 +120,7 @@ template<typename Value>
     UtilityVector<Value>& stream,
     Core::CpuTaskScheduler& cpuScheduler,
     UtilityVector<u32>& outRemap,
-    const char* streamName
+    const AStringView streamName
 ){
     outRemap.clear();
     outRemap.reserve(stream.size());
@@ -189,7 +189,7 @@ template<typename Value>
     return true;
 }
 
-[[nodiscard]] bool RemapRequiredIndex(u32& inOutIndex, const UtilityVector<u32>& remap, const char* streamName){
+[[nodiscard]] bool RemapRequiredIndex(u32& inOutIndex, const UtilityVector<u32>& remap, const AStringView streamName){
     if(inOutIndex < remap.size()){
         inOutIndex = remap[inOutIndex];
         return true;
@@ -199,7 +199,7 @@ template<typename Value>
     return false;
 }
 
-[[nodiscard]] bool RemapOptionalIndex(u32& inOutIndex, const UtilityVector<u32>& remap, const char* streamName){
+[[nodiscard]] bool RemapOptionalIndex(u32& inOutIndex, const UtilityVector<u32>& remap, const AStringView streamName){
     if(inOutIndex == s_MissingSourceStreamIndex)
         return true;
     return RemapRequiredIndex(inOutIndex, remap, streamName);

@@ -50,11 +50,11 @@ public:
 
     [[nodiscard]] bool prepareQueries(){
         auto& graphics = getGraphics();
-        for(const char* scope : RendererGatherBenchmarkProbe::s_GpuNames){
+        for(const StringView scope : RendererGatherBenchmarkProbe::s_GpuNames){
             // Hardware-only reflection has no depth pyramid, temporal pass or spatial filter.
-            if(AStringView(scope) == "render.reflection_depth_pyramid")
+            if(scope == "render.reflection_depth_pyramid")
                 continue;
-            if(!graphics.gpuTiming().prepareScopeQueries(Name(scope), graphics.getDevice(), s_InFlightRanges))
+            if(!graphics.gpuTiming().prepareScopeQueries(Name(scope.data()), graphics.getDevice(), s_InFlightRanges))
                 return false;
         }
         return true;

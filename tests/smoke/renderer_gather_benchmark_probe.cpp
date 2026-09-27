@@ -29,7 +29,7 @@ RendererGatherBenchmarkProbe::RendererGatherBenchmarkProbe(Core::Alloc::GlobalAr
 }
 
 bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report, const bool memoryEnabled){
-    const auto& frame = report.cpuTiming.stats(Name(s_CpuNames[0u]));
+    const auto& frame = report.cpuTiming.stats(Name(s_CpuNames[0u].data()));
     if(!frame.valid() || (m_hasPublication && frame.publishFrameIndex == m_lastPublish))
         return true;
     if((m_hasPublication && frame.publishFrameIndex < m_lastPublish) || frame.sampleCount != 1u || frame.firstSampleFrameIndex != frame.lastSampleFrameIndex)
@@ -44,7 +44,7 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     sample.sourceFrame = frame.firstSampleFrameIndex;
     sample.publishFrame = frame.publishFrameIndex;
     for(u32 scope = 0u; scope < s_CpuScopeCount; ++scope){
-        const auto& timing = report.cpuTiming.stats(Name(s_CpuNames[scope]));
+        const auto& timing = report.cpuTiming.stats(Name(s_CpuNames[scope].data()));
         if(
             !timing.valid() || timing.sampleCount != 1u || timing.publishFrameIndex != frame.publishFrameIndex
             || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame
@@ -54,14 +54,14 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
     }
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
-            const auto& snapshot = report.memory.snapshot(Name(s_ArenaNames[scope]), Core::Perf::MemorySource::Arena);
+            const auto& snapshot = report.memory.snapshot(Name(s_ArenaNames[scope].data()), Core::Perf::MemorySource::Arena);
             if(snapshot.valid() && snapshot.frameIndex != sample.publishFrame)
                 return false;
             sample.memory[scope] = snapshot;
         }
     }
     for(u32 scope = 0u; scope < s_GpuScopeCount; ++scope){
-        const auto& timing = report.gpuTiming.stats(Name(s_GpuNames[scope]));
+        const auto& timing = report.gpuTiming.stats(Name(s_GpuNames[scope].data()));
         if(!timing.valid() || (m_hasGpuPublication[scope] && timing.publishFrameIndex == m_gpuPublish[scope]))
             continue;
         if(m_hasGpuPublication[scope] && timing.publishFrameIndex < m_gpuPublish[scope])

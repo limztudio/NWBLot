@@ -296,7 +296,7 @@ private:
         for(u32 sourceZ = sourceFirst; sourceZ < sourceEnd; ++sourceZ){
             basisu::image& filteredPlane = filteredPlanes[sourceZ - sourceFirst];
             filteredPlane.resize(targetWidth, targetHeight);
-            if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, srgb, s_BasisResampleBoxFilter, s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
+            if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, srgb, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate a volume mip level."));
                 return false;
             }

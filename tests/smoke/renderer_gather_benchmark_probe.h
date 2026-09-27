@@ -35,18 +35,18 @@ public:
     static constexpr u32 s_CpuScopeCount = 8u;
     static constexpr u32 s_GpuScopeCount = 18u;
     static constexpr u32 s_ArenaScopeCount = 9u;
-    static constexpr const char* s_CpuNames[s_CpuScopeCount] = {
+    static constexpr StringView s_CpuNames[s_CpuScopeCount] = {
         "graphics.frame", "graphics.frame_preamble", "graphics.prepare_resources", "graphics.render_passes",
         "graphics.render", "frame.project_update", "graphics.present", "graphics.begin_frame",
     };
-    static constexpr const char* s_GpuNames[s_GpuScopeCount] = {
+    static constexpr StringView s_GpuNames[s_GpuScopeCount] = {
         "render.frame", "render.opaque_regular", "render.shadow_visibility", "render.deferred_lighting",
         "render.deferred_composite", "render.deferred_present", "render.avboit_clear", "render.avboit_occupancy",
         "render.avboit_depth_warp", "render.avboit_extinction", "render.avboit_integration", "render.avboit_accumulate",
         "render.reflection_classify", "render.reflection_build_args", "render.reflection_hardware",
         "render.reflection_depth_pyramid", "render.reflection_temporal", "render.reflection_spatial",
     };
-    static constexpr const char* s_ArenaNames[s_ArenaScopeCount] = {
+    static constexpr StringView s_ArenaNames[s_ArenaScopeCount] = {
         "impl/ecs_render/prepare", "impl/ecs_render/render", "impl/ecs_render/task_graph",
         "impl/ecs_render/avboit_transparent_csg", "impl/ecs_render/material_pass_prepare",
         "impl/ecs_render/material_pass_render", "impl/ecs_render/material_instance_mutable",

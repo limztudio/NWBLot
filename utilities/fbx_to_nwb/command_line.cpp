@@ -287,7 +287,7 @@ bool IsNwbRefreshMode(const ImportOptions& options){
     return options.refreshNwb || LowerPathExtension<AString>(Path(UtilityDetail::Arena(), options.inputPath)) == s_NwbOutputExtension;
 }
 
-void WriteRefreshCount(AStringStream& report, const char* name, const usize before, const usize after){
+void WriteRefreshCount(AStringStream& report, const AStringView name, const usize before, const usize after){
     report << "  " << name << ": " << before << " -> " << after << "\n";
 }
 

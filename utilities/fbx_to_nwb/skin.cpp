@@ -77,12 +77,12 @@ bool NearlyEqualJointMatrices(const SIMDMatrix& lhs, const SIMDMatrix& rhs){
 
 AString NodeDisplayName(const ufbx_node* node){
     if(!node)
-        return AString(s_NullNodeLabel);
+        return AString(s_NullNodeLabel.data(), s_NullNodeLabel.size());
     AString name;
     if(node->name.data && node->name.length != 0u)
         name.assign(node->name.data, node->name.length);
     if(name.empty())
-        return AString(s_UnnamedNodeLabel);
+        return AString(s_UnnamedNodeLabel.data(), s_UnnamedNodeLabel.size());
     return name;
 }
 

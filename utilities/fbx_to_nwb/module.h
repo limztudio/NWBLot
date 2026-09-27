@@ -154,16 +154,16 @@ inline constexpr AStringView s_DefaultColorText = "1,1,1,1";
 inline constexpr AStringView s_GeneratedUvTangentModeText = "generated_uv";
 inline constexpr AStringView s_GeneratedFallbackTangentModeText = "generated_fallback";
 inline constexpr AStringView s_NwbOutputExtension = ".nwb";
-inline constexpr const char* s_PositionsStreamLabel = "positions";
-inline constexpr const char* s_NormalsStreamLabel = "normals";
-inline constexpr const char* s_TangentsStreamLabel = "tangents";
-inline constexpr const char* s_Uv0StreamLabel = "uv0";
-inline constexpr const char* s_ColorsStreamLabel = "colors";
-inline constexpr const char* s_SkinStreamLabel = "skin";
-inline constexpr const char* s_VertexRefsStreamLabel = "vertex_refs";
-inline constexpr const char* s_IndicesStreamLabel = "indices";
-inline constexpr const char* s_ImportedSourceLabel = "imported";
-inline constexpr const char* s_DefaultSourceLabel = "default";
+inline constexpr AStringView s_PositionsStreamLabel = "positions";
+inline constexpr AStringView s_NormalsStreamLabel = "normals";
+inline constexpr AStringView s_TangentsStreamLabel = "tangents";
+inline constexpr AStringView s_Uv0StreamLabel = "uv0";
+inline constexpr AStringView s_ColorsStreamLabel = "colors";
+inline constexpr AStringView s_SkinStreamLabel = "skin";
+inline constexpr AStringView s_VertexRefsStreamLabel = "vertex_refs";
+inline constexpr AStringView s_IndicesStreamLabel = "indices";
+inline constexpr AStringView s_ImportedSourceLabel = "imported";
+inline constexpr AStringView s_DefaultSourceLabel = "default";
 inline constexpr AStringView s_SeparateAssetLayoutLabel = "separate";
 
 struct ImportOptions{

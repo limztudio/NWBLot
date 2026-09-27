@@ -24,12 +24,12 @@ NWB_FBX_TO_NWB_BEGIN
 // Source stream state and interning for FBX mesh import.
 
 
-inline constexpr const char* s_SourcePositionLabel = "position";
-inline constexpr const char* s_SourceNormalLabel = "normal";
-inline constexpr const char* s_SourceTangentLabel = "tangent";
-inline constexpr const char* s_SourceUv0Label = "uv0";
-inline constexpr const char* s_SourceColorLabel = "color";
-inline constexpr const char* s_SourceVertexRefLabel = "vertex_ref";
+inline constexpr StringView s_SourcePositionLabel = "position";
+inline constexpr StringView s_SourceNormalLabel = "normal";
+inline constexpr StringView s_SourceTangentLabel = "tangent";
+inline constexpr StringView s_SourceUv0Label = "uv0";
+inline constexpr StringView s_SourceColorLabel = "color";
+inline constexpr StringView s_SourceVertexRefLabel = "vertex_ref";
 
 
 struct SourceTriangleCorner{

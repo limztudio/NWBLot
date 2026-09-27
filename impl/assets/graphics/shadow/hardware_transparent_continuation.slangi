@@ -23,7 +23,7 @@ bool nwbHwShadowFindNextCrossing(
     next = (NwbHardwareTransparentCrossing)0;
     bool found = false;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK, ray);
     while(query.Proceed()){
         if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE)
             continue;

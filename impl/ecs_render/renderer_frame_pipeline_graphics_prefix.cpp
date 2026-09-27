@@ -828,6 +828,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
     ))
         return false;
+    if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
+        opaqueDrawItems.csgReceiverSurface.indexedDrawItems.data(), opaqueDrawItems.csgReceiverSurface.indexedDrawItems.size(),
+        frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
+        nullptr, timingTicketSlot(PrefixTimingSlot::Gbuffer)
+    ))
+        return false;
     gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
 
     if(opaqueComputeEmulationOutputStatesGraphOwned){
@@ -1429,6 +1435,12 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         }
 
         Core::GpuTaskId csgIntervalSampleDependency = m_graphicsPrefixCsgIntervalCombineTask;
+        if(csgIntervalSamplePayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
+            opaqueDrawItems.csg.indexedDrawItems.data(), opaqueDrawItems.csg.indexedDrawItems.size(),
+            frameBindings, deferredTargets, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
+            csgIntervalSampleResourceScratch, nullptr, timingTicketSlot(PrefixTimingSlot::CsgIntervalSample)
+        ))
+            return false;
         if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
             opaqueCsgIntervalSampleComputeEmulationPayload.graphics = &m_graphics;
             opaqueCsgIntervalSampleComputeEmulationPayload.materialSystem = &m_materialSystem;
@@ -1533,7 +1545,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 .setMarkerLabel("Opaque CSG Interval-Sample Compute Emulation")
                 .setQueue(GraphicsComputeQueueRequest())
                 .setScheduling(opaqueCsgIntervalSampleComputeEmulationScheduling)
-                .setDependencies(&m_graphicsPrefixCsgIntervalCombineTask, 1u)
+                .setDependencies(&csgIntervalSampleDependency, 1u)
                 .setResourceUses(
                     opaqueCsgIntervalSampleComputeEmulationResourceUses.data(),
                     opaqueCsgIntervalSampleComputeEmulationResourceUses.size()

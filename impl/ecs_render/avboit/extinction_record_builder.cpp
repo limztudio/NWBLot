@@ -315,6 +315,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
     ))
         return false;
+    if(inputs.streamsUploaded && !objectGeometry.prepare(
+        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
+        extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
+        frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
+    ))
+        return false;
 
     if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;

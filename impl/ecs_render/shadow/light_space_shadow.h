@@ -7,6 +7,7 @@
 
 #include "light_space_plan.h"
 #include "light_space_capture_history.h"
+#include "light_space_csg.h"
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>
@@ -57,6 +58,10 @@ struct LightSpaceShadowPush{
     u32 outputSlot = 0u;
     u32 sceneRootSlot = 0u;
     u32 viewCount = 0u;
+    u32 csgContextSlot = 0u;
+    u32 csgOpaqueDepthSlot = 0u;
+    u32 csgFlags = 0u;
+    u32 padding = 0u;
 };
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
 
@@ -75,6 +80,7 @@ struct LightSpaceShadowCaster{
     u32 instanceIndex = 0u;
     u32 indexCount = 0u;
     bool transparent = false;
+    bool csg = false;
     Core::BufferHandle triangleIndexBuffer;
 };
 
@@ -85,11 +91,15 @@ struct LightSpaceShadowSnapshot{
     Core::BufferHandle events;
     Core::BufferHandle views;
     Core::BufferHandle drawArguments;
+    Core::BufferHandle csgContext;
+    Core::BufferHandle csgOpaqueDepth;
     Core::TextureHandle depth;
     Core::GpuDescriptorHandle countsDescriptor;
     Core::GpuDescriptorHandle eventsDescriptor;
     Core::GpuDescriptorHandle viewsDescriptor;
     Core::GpuDescriptorHandle drawArgumentsDescriptor;
+    Core::GpuDescriptorHandle csgContextDescriptor;
+    Core::GpuDescriptorHandle csgOpaqueDepthDescriptor;
     Core::GpuDescriptorHandle depthDescriptor;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaqueFramebuffers;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparentFramebuffers;
@@ -100,6 +110,11 @@ struct LightSpaceShadowSnapshot{
     Core::ComputePipelineHandle opaqueFallback;
     Core::ComputePipelineHandle transparentFallback;
     Core::ComputePipelineHandle shadePipeline;
+    Core::ComputePipelineHandle csgShadePipeline;
+    Core::ComputePipelineHandle csgOpaqueResolve;
+    Core::ComputePipelineHandle csgTransparentResolve;
+    Core::ComputePipelineHandle csgOpaqueFallback;
+    Core::ComputePipelineHandle csgTransparentFallback;
     Core::GraphicsPipelineHandle opaqueCapture;
     Core::GraphicsPipelineHandle transparentCapture;
     LightSpaceShadowPush push;
@@ -107,11 +122,20 @@ struct LightSpaceShadowSnapshot{
     usize casterCount = 0u;
     LightSpaceCaptureTicket captureTicket;
     LightSpaceCaptureHistory* captureHistory = nullptr;
+    const u8* csgContextBytes = nullptr;
+    usize csgContextByteCount = 0u;
+    const Core::BufferHandle* csgDynamicBounds = nullptr;
+    usize csgDynamicBoundsCount = 0u;
     bool ready = false;
 };
 
 struct LightSpaceShadowState{
+    static constexpr usize s_LightSpaceShaderCount = 13u;
+
+
+public:
     SoftwareShadowSettings m_settings;
+    LightSpaceCsgState m_csg;
     LightSpaceShadowSnapshot m_snapshot;
     LightSpaceCaptureHistory m_captureHistory;
     u64 m_captureSceneIdentity = 0u;
@@ -122,15 +146,19 @@ struct LightSpaceShadowState{
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> m_captureBuffers;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_sceneTextures;
     Vector<Core::TextureHandle, Core::Alloc::GlobalArena> m_captureTextures;
-    static constexpr usize s_LightSpaceShaderCount = 8u;
     Core::ShaderHandle m_shaders[s_LightSpaceShaderCount];
     bool m_sceneEligible = false;
     bool m_resourcesPrepared = false;
     bool m_pipelineFailed = false;
     bool m_dispatchLogged = false;
+    bool m_csgDispatchLogged = false;
+    bool m_csgRequired = false;
 
+
+public:
     explicit LightSpaceShadowState(Core::Alloc::GlobalArena& arena)
-        : m_casters(arena)
+        : m_csg(arena)
+        , m_casters(arena)
         , m_sceneBuffers(arena)
         , m_captureBuffers(arena)
         , m_sceneTextures(arena)

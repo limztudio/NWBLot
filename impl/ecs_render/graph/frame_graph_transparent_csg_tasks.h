@@ -26,6 +26,7 @@ NWB_IMPL_BEGIN
 class RendererMaterialSystem;
 class RendererCsgSystem;
 class RendererAvboitSystem;
+class ObjectGeometryCacheGraph;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -93,6 +94,7 @@ public:
 public:
     [[nodiscard]] bool declare(
         const FrameGraphTransparentCsgTaskInputs& inputs,
+        ObjectGeometryCacheGraph& objectGeometry,
         RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
         ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
         ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,

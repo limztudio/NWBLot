@@ -34,6 +34,8 @@ static void MaterializeCsgComputePlan(
 ){
     outDrawItems.meshDrawItems.reserve(plan.meshDrawItems.size());
     outDrawItems.meshDrawItems.assign(plan.meshDrawItems.begin(), plan.meshDrawItems.end());
+    outDrawItems.indexedDrawItems.reserve(plan.indexedDrawItems.size());
+    outDrawItems.indexedDrawItems.assign(plan.indexedDrawItems.begin(), plan.indexedDrawItems.end());
     outDrawItems.computeDrawItems.reserve(plan.drawItems.size());
     outDrawItems.computeDrawItems.assign(plan.drawItems.begin(), plan.drawItems.end());
     outCsgFrameData.receiverRanges.reserve(plan.receiverRanges.size());
@@ -52,6 +54,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
     DrawItemVector meshDrawItems;
+    DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
     DrawItemVector regularDrawItems;
     BufferVector outputBuffers;
@@ -65,6 +68,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 
     explicit OpaqueCsgReceiverComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
         : meshDrawItems(arena)
+        , indexedDrawItems(arena)
         , drawItems(arena)
         , regularDrawItems(arena)
         , outputBuffers(arena)
@@ -77,6 +81,7 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
 
     void reset(){
         meshDrawItems.clear();
+        indexedDrawItems.clear();
         drawItems.clear();
         regularDrawItems.clear();
         outputBuffers.clear();
@@ -103,6 +108,11 @@ struct OpaqueCsgReceiverComputeEmulationGraphPlan{
         meshDrawItems.assign(
             receiverSurfaceDrawItems.meshDrawItems.begin(),
             receiverSurfaceDrawItems.meshDrawItems.end()
+        );
+        indexedDrawItems.reserve(receiverSurfaceDrawItems.indexedDrawItems.size());
+        indexedDrawItems.assign(
+            receiverSurfaceDrawItems.indexedDrawItems.begin(),
+            receiverSurfaceDrawItems.indexedDrawItems.end()
         );
         regularDrawItems.reserve(sourceRegularDrawItems.computeDrawItems.size());
         regularDrawItems.assign(
@@ -210,6 +220,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
     DrawItemVector meshDrawItems;
+    DrawItemVector indexedDrawItems;
     DrawItemVector drawItems;
     BufferVector outputBuffers;
     OutputLayoutVector outputLayouts;
@@ -221,6 +232,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
 
     explicit OpaqueCsgIntervalSampleComputeEmulationGraphPlan(Core::Alloc::GlobalArena& arena)
         : meshDrawItems(arena)
+        , indexedDrawItems(arena)
         , drawItems(arena)
         , outputBuffers(arena)
         , outputLayouts(arena)
@@ -231,6 +243,7 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
 
     void reset(){
         meshDrawItems.clear();
+        indexedDrawItems.clear();
         drawItems.clear();
         outputBuffers.clear();
         outputLayouts.clear();
@@ -252,6 +265,8 @@ struct OpaqueCsgIntervalSampleComputeEmulationGraphPlan{
 
         meshDrawItems.reserve(sourceDrawItems.meshDrawItems.size());
         meshDrawItems.assign(sourceDrawItems.meshDrawItems.begin(), sourceDrawItems.meshDrawItems.end());
+        indexedDrawItems.reserve(sourceDrawItems.indexedDrawItems.size());
+        indexedDrawItems.assign(sourceDrawItems.indexedDrawItems.begin(), sourceDrawItems.indexedDrawItems.end());
         drawItems.reserve(sourceDrawItems.computeDrawItems.size());
         outputBuffers.reserve(sourceDrawItems.computeDrawItems.size());
         outputLayouts.reserve(sourceDrawItems.computeDrawItems.size());

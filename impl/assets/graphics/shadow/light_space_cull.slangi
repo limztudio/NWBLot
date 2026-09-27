@@ -15,7 +15,7 @@ bool nwbLightSpaceCasterOutside(const NwbLightSpaceView view, const uint instanc
     if(view.depthRange.w == 0.0)
         return false;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
-    const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[0u];
+    const NwbBvhNode root = nwbLightSpaceMeshRoot(instanceIndex);
     const NwbMeshInstanceData transform = NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
     if(
         !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)

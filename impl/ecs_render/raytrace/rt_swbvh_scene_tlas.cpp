@@ -53,6 +53,8 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
 
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
+    if(!commandList)
+        BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, true);
     Vector<Core::RayTracingInstanceDesc, Core::Alloc::ScratchArena> instances{ scratchArena };
     // RayTracingInstanceDesc contains only a raw BLAS pointer. The opaque graph-owned TLAS build retains this parallel handle stream until the accepting Shadow Preparation packet has submitted.
     Vector<Core::RayTracingAccelStructHandle, Core::Alloc::ScratchArena> instanceBlases{ scratchArena };
@@ -225,13 +227,20 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         instanceMaterial.attributeSlot = m_rayTracingState.m_shadowMeshAttributeHandles[meshSlot].slot();
         instanceMaterial.positionSlot = m_rayTracingState.m_shadowMeshPositionHandles[meshSlot].slot();
 
-        // Opaque candidates terminate RayQuery; software handles transparent transmittance.
+        // Opaque candidates terminate RayQuery; transparent candidates retain material evaluation.
         if(!(materialInfo && materialInfo->transparent))
             instanceDesc.setFlags(Core::RayTracingInstanceFlags::ForceOpaque);
 
         const bool transparent = (instanceMaterial.flags & RtInstanceMaterialFlag::Transparent) != 0u;
-        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK
-            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
+        instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
+            | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
+        if(!commandList && m_lightSpaceShadow.m_csg.gathering){
+            AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, LoadFloat(instanceDesc.transform), mesh);
+            m_lightSpaceShadow.m_casters.push_back({ meshInstanceIndex, mesh.meshletPrimitiveIndexCount, transparent, false, mesh.triangleIndexBuffer });
+            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
+            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
+            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
+        }
         Float3U opticalLocalMin{};
         Float3U opticalLocalMax{};
         StoreFloat(LoadFloatInt(mesh.csgLocalBounds.minBounds), opticalLocalMin);
@@ -263,6 +272,32 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
         instanceBlases.push_back(mesh.blas);
         instanceMaterials.push_back(instanceMaterial);
         shadowInstanceData.push_back(shadowInstance);
+    }
+
+    if(!commandList && !FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
+        return false;
+    const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
+    if(csg.hasCsg){
+        if(csg.receiverRanges.size() != instances.size())
+            return false;
+        for(u32 index = 0u; index < static_cast<u32>(instances.size()); ++index){
+            if((csg.receiverRanges[index].flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) == 0u)
+                continue;
+            const bool transparent = (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
+            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK
+                | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
+            instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
+            if(!commandList)
+                m_lightSpaceShadow.m_casters[index].csg = true;
+        }
+        m_rayTracingState.m_sceneHasTransparentOccluder = true;
+    }
+    if(!commandList){
+        m_lightSpaceShadow.m_sceneEligible = csg.hasCsg && contentComplete;
+        if(!csg.hasCsg){
+            m_lightSpaceShadow.m_casters.clear();
+            m_lightSpaceShadow.m_sceneBuffers.clear();
+        }
     }
 
     if(m_rayTracingState.m_shadowMeshCount > m_rayTracingState.m_shadowMeshHeapHighWater){
@@ -502,6 +537,16 @@ bool RendererRayTracingSystem::buildSceneTlasImpl(
             return false;
         Fnv64AppendValue(gatheredMaterialContentHash, opticalScene.contentHash());
         m_preparedSceneContentStamp = { tlasStaticSceneHash, gatheredMaterialContentHash, staticScene && contentComplete };
+        if(csg.hasCsg){
+            u64 captureIdentity = gatheredMaterialContentHash;
+            Fnv64AppendValue(captureIdentity, tlasStaticSceneHash);
+            Fnv64AppendValue(captureIdentity, csg.identity);
+            for(const auto& buffer : m_lightSpaceShadow.m_sceneBuffers)
+                Fnv64AppendValue(captureIdentity, buffer.get());
+            m_lightSpaceShadow.m_captureSceneIdentity = captureIdentity;
+            m_lightSpaceShadow.m_captureSceneTrusted = staticScene && contentComplete;
+            m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
+        }
     }
     return true;
 }

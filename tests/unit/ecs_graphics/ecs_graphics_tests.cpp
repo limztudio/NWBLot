@@ -260,6 +260,229 @@ TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){
 }
 
 
+TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedRejection){
+    NWB::Tests::TestArena<> arena;
+    NWB::Impl::CsgShapeRegistry registry(arena.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    NWB::Impl::CsgShapeTypeInfo shape;
+    ASSERT_TRUE(registry.findShapeType(NWB::Impl::s_CsgBoxShapeName, shape));
+    NWB::Impl::CsgBoxShapeParameters parameters;
+    parameters.halfExtents = Float4(0.25f, 0.125f, 0.5f, 0.f);
+    const SIMDMatrix shapeToWorld = MatrixTranslation(0.5f, 0.25f, 2.f);
+    NWB::Impl::CsgClipWorkBounds receiver;
+    receiver.minBounds = VectorSet(-20.f, -20.f, -20.f, 0.f);
+    receiver.maxBounds = VectorSet(-10.f, -10.f, -10.f, 0.f);
+    NWB::Impl::CsgClipWorkBounds work;
+    ASSERT_TRUE(work.resolveCutter(
+        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
+    ));
+    ASSERT_TRUE(work.valid);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.25f);
+    EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.125f);
+    EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 1.5f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 0.75f);
+    EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
+    EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
+    NWB::Impl::CsgFrameWorkRegion region;
+    region.expandWorldBounds(MatrixIdentity(), work.minBounds, work.maxBounds, 1024u, 768u);
+    ASSERT_TRUE(region.bounded());
+    const NWB::Core::Rect rect = region.resolveRect(1024u, 768u);
+    EXPECT_EQ(rect.minX, 638);
+    EXPECT_EQ(rect.maxX, 898);
+    EXPECT_EQ(rect.minY, 238);
+    EXPECT_EQ(rect.maxY, 338);
+
+    receiver.valid = true;
+    EXPECT_FALSE(work.resolveCutter(
+        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
+    ));
+    EXPECT_FALSE(work.valid);
+    receiver.minBounds = VectorSet(0.5f, 0.25f, 1.75f, 0.f);
+    receiver.maxBounds = VectorSet(1.f, 1.f, 3.f, 0.f);
+    ASSERT_TRUE(work.resolveCutter(
+        registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
+    ));
+    ASSERT_TRUE(work.valid);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 0.5f);
+    EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 0.25f);
+    EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 1.75f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 0.75f);
+    EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
+    EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
+}
+
+TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviousBounds){
+    NWB::Tests::TestArena<> arena;
+    NWB::Impl::CsgShapeRegistry registry(arena.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    NWB::Impl::CsgShapeTypeInfo shape;
+    ASSERT_TRUE(registry.findShapeType(NWB::Impl::s_CsgBoxShapeName, shape));
+    NWB::Impl::CsgClipWorkBounds receiver;
+    NWB::Impl::CsgClipWorkBounds work;
+    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
+    ASSERT_TRUE(work.valid);
+
+    NWB::Impl::CsgBoxShapeParameters invalidParameters;
+    invalidParameters.halfExtents.x = 0.f;
+    EXPECT_TRUE(work.resolveCutter(
+        registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver
+    ));
+    EXPECT_FALSE(work.valid);
+    receiver.minBounds = VectorReplicate(-2.f);
+    receiver.maxBounds = VectorReplicate(2.f);
+    receiver.valid = true;
+    EXPECT_FALSE(work.resolveCutter(
+        registry, shape, MatrixIdentity(), reinterpret_cast<const u8*>(&invalidParameters), sizeof(invalidParameters), receiver
+    ));
+    EXPECT_FALSE(work.valid);
+
+    ASSERT_TRUE(registry.findShapeType(NWB::Impl::s_CsgPlaneShapeName, shape));
+    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
+    ASSERT_TRUE(work.valid);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -2.f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 2.f);
+    receiver.valid = false;
+    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
+    EXPECT_FALSE(work.valid);
+
+    ASSERT_TRUE(registry.findShapeType(NWB::Impl::s_CsgBoxShapeName, shape));
+    NWB::Impl::CsgShapeTypeDesc custom = shape.desc;
+    custom.name = Name("tests/csg/finite_custom_cutter");
+    custom.shaderModule = Name("tests/csg/finite_custom_cutter_eval");
+    custom.shaderModuleInclude = ACompactString("tests/csg/finite_custom_cutter_eval.slangi");
+    NWB::Impl::CsgShapeTypeId customId = NWB::Impl::s_InvalidCsgShapeTypeId;
+    ASSERT_TRUE(registry.registerShapeType(custom, customId));
+    ASSERT_TRUE(registry.findShapeType(customId, shape));
+    EXPECT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
+    EXPECT_FALSE(work.valid);
+    receiver.valid = true;
+    ASSERT_TRUE(work.resolveCutter(registry, shape, MatrixIdentity(), nullptr, 0u, receiver));
+    ASSERT_TRUE(work.valid);
+    EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), -1.f);
+    EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.f);
+}
+
+TEST(EcsGraphics, CsgCutterWorkBoundsUseTransformedSphereAndCapsuleWithoutReceiverBounds){
+    NWB::Tests::TestArena<> arena;
+    NWB::Impl::CsgShapeRegistry registry(arena.arena);
+    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
+    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(
+        VectorSet(2.f, 0.5f, 3.f, 0.f), VectorZero(), QuaternionIdentity(), VectorSet(4.f, 5.f, 6.f, 0.f)
+    );
+    const Name shapeNames[] = { NWB::Impl::s_CsgSphereShapeName, NWB::Impl::s_CsgCapsuleShapeName };
+    for(const Name& shapeName : shapeNames){
+        NWB::Impl::CsgShapeTypeInfo shape;
+        ASSERT_TRUE(registry.findShapeType(shapeName, shape));
+        NWB::Impl::CsgClipWorkBounds receiver;
+        NWB::Impl::CsgClipWorkBounds work;
+        ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, nullptr, 0u, receiver));
+        ASSERT_TRUE(work.valid);
+        const f32 yExtent = shapeName == NWB::Impl::s_CsgSphereShapeName ? 0.5f : 1.f;
+        EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 2.f);
+        EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 6.f);
+        EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 5.f - yExtent);
+        EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 5.f + yExtent);
+        EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 3.f);
+        EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 9.f);
+    }
+}
+
+TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
+    NWB::Impl::CsgFrameWorkRegion region;
+    region.expandWorldBounds(
+        MatrixIdentity(), VectorSet(-0.5f, -0.25f, 1.f, 0.f), VectorSet(0.5f, 0.25f, 2.f, 0.f), 1001u, 701u
+    );
+    ASSERT_TRUE(region.bounded());
+    const NWB::Core::Rect rect = region.resolveRect(1001u, 701u);
+    EXPECT_EQ(rect.minX, 248);
+    EXPECT_EQ(rect.maxX, 753);
+    EXPECT_EQ(rect.minY, 260);
+    EXPECT_EQ(rect.maxY, 441);
+}
+
+TEST(EcsGraphics, CsgReceiverWorkRegionTracksViewChangesAndResize){
+    const SIMDVector minimum = VectorSet(-0.2f, -0.2f, 1.f, 0.f);
+    const SIMDVector maximum = VectorSet(0.2f, 0.2f, 2.f, 0.f);
+    NWB::Impl::CsgFrameWorkRegion original;
+    original.expandWorldBounds(MatrixIdentity(), minimum, maximum, 1000u, 600u);
+    NWB::Impl::CsgFrameWorkRegion shifted;
+    shifted.expandWorldBounds(MatrixTranslation(-0.4f, 0.f, 0.f), minimum, maximum, 1000u, 600u);
+    ASSERT_TRUE(original.bounded());
+    ASSERT_TRUE(shifted.bounded());
+    EXPECT_NEAR(static_cast<f32>(original.minX - shifted.minX), 200.f, 1.f);
+    EXPECT_NEAR(static_cast<f32>(original.maxX - shifted.maxX), 200.f, 1.f);
+
+    NWB::Impl::CsgFrameWorkRegion resized;
+    resized.expandWorldBounds(MatrixIdentity(), minimum, maximum, 501u, 301u);
+    ASSERT_TRUE(resized.bounded());
+    const NWB::Core::Rect rect = resized.resolveRect(501u, 301u);
+    EXPECT_EQ(rect.minX, 198);
+    EXPECT_EQ(rect.maxX, 303);
+    EXPECT_EQ(rect.minY, 118);
+    EXPECT_EQ(rect.maxY, 183);
+}
+
+TEST(EcsGraphics, CsgReceiverWorkRegionKeepsSeparateReceiversNarrow){
+    NWB::Impl::CsgFrameWorkRegion left;
+    left.expandWorldBounds(
+        MatrixIdentity(), VectorSet(-0.75f, -0.25f, 1.f, 0.f), VectorSet(-0.5f, 0.25f, 2.f, 0.f), 1000u, 600u
+    );
+    NWB::Impl::CsgFrameWorkRegion right;
+    right.expandWorldBounds(
+        MatrixIdentity(), VectorSet(0.5f, -0.25f, 1.f, 0.f), VectorSet(0.75f, 0.25f, 2.f, 0.f), 1000u, 600u
+    );
+    ASSERT_TRUE(left.bounded());
+    ASSERT_TRUE(right.bounded());
+    EXPECT_LT(left.maxX, right.minX);
+    NWB::Impl::CsgFrameWorkRegion frame;
+    const NWB::Core::Rect leftRect = left.resolveRect(1000u, 600u);
+    const NWB::Core::Rect rightRect = right.resolveRect(1000u, 600u);
+    frame.expandClamped(leftRect.minX, leftRect.maxX, leftRect.minY, leftRect.maxY, 1000u, 600u);
+    frame.expandClamped(rightRect.minX, rightRect.maxX, rightRect.minY, rightRect.maxY, 1000u, 600u);
+    EXPECT_EQ(frame.minX, left.minX);
+    EXPECT_EQ(frame.maxX, right.maxX);
+    EXPECT_LT(left.width(), frame.width());
+    EXPECT_LT(right.width(), frame.width());
+}
+
+TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections){
+    NWB::Impl::CsgFrameWorkRegion unknown;
+    const NWB::Core::Rect unknownRect = unknown.resolveRect(1001u, 701u);
+    EXPECT_EQ(unknownRect.minX, 0);
+    EXPECT_EQ(unknownRect.minY, 0);
+    EXPECT_EQ(unknownRect.maxX, 1001);
+    EXPECT_EQ(unknownRect.maxY, 701);
+
+    NWB::Impl::CsgFrameWorkRegion crossing;
+    crossing.expandWorldBounds(
+        MatrixPerspectiveFovLH(s_PIDIV2, 1.f, 0.1f, 100.f),
+        VectorSet(-1.f, -1.f, -1.f, 0.f), VectorSet(1.f, 1.f, 1.f, 0.f), 1001u, 701u
+    );
+    EXPECT_TRUE(crossing.fullFrame);
+    EXPECT_EQ(crossing.resolveRect(1001u, 701u).maxX, 1001);
+
+    NWB::Impl::CsgFrameWorkRegion invalid;
+    invalid.expandWorldBounds(MatrixIdentity(), VectorSet(1.f, 1.f, 1.f, 0.f), VectorZero(), 1001u, 701u);
+    EXPECT_TRUE(invalid.fullFrame);
+    NWB::Impl::CsgFrameWorkRegion nonfinite;
+    nonfinite.expandWorldBounds(
+        MatrixIdentity(), VectorSet(-Limit<f32>::s_Infinity, -1.f, 1.f, 0.f),
+        VectorSet(1.f, 1.f, 2.f, 0.f), 1001u, 701u
+    );
+    EXPECT_TRUE(nonfinite.fullFrame);
+
+    NWB::Impl::CsgFrameWorkRegion large;
+    large.expandWorldBounds(
+        MatrixIdentity(), VectorSet(-1e20f, -0.25f, 1.f, 0.f), VectorSet(0.f, 0.25f, 2.f, 0.f), 1000u, 600u
+    );
+    ASSERT_TRUE(large.bounded());
+    EXPECT_EQ(large.minX, 0u);
+    EXPECT_EQ(large.maxX, 502u);
+    large.expandFull();
+    EXPECT_EQ(large.resolveRect(1000u, 600u).maxX, 1000);
+}
+
+
 using TestWorld = NWB::Tests::EcsTestWorld;
 
 TEST(EcsGraphics, SceneBvhTransparentSubtreeClassificationPropagatesToRoot){
@@ -552,6 +775,12 @@ TEST(EcsGraphics, CsgReceiverRangeCarriesMaterialSurfaceContext){
     EXPECT_EQ(defaultRange.materialConstantByteOffset, 0u);
     EXPECT_EQ(defaultRange.meshInstanceIndex, 0u);
     EXPECT_EQ(defaultRange.materialContextPadding, 0u);
+    EXPECT_EQ(sizeof(defaultRange), 128u);
+    EXPECT_EQ(offsetof(NWB::Impl::CsgReceiverRangeGpuData, screenWorkRect), 112u);
+    EXPECT_EQ(defaultRange.screenWorkRect.x, 0u);
+    EXPECT_EQ(defaultRange.screenWorkRect.y, 0u);
+    EXPECT_EQ(defaultRange.screenWorkRect.z, Limit<u32>::s_Max);
+    EXPECT_EQ(defaultRange.screenWorkRect.w, Limit<u32>::s_Max);
 
     NWB::Impl::CsgReceiverRangeGpuData range;
     range.surfaceDispatchId = 19u;

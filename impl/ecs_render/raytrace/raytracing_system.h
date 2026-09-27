@@ -61,6 +61,7 @@ class RendererMeshSystem;
 class RendererMaterialSystem;
 class RendererRayTracingState;
 class RendererOpticalVolumeSelection;
+class CsgShapeRegistry;
 struct MaterialSurfaceInfo;
 
 namespace ECSRenderDetail{
@@ -189,7 +190,8 @@ public:
         RendererMeshSystem& meshSystem,
         RendererMaterialSystem& materialSystem,
         RendererRayTracingState& rayTracingState,
-        const RendererOpticalVolumeSelection& opticalVolumes
+        const RendererOpticalVolumeSelection& opticalVolumes,
+        const CsgShapeRegistry& csgShapeRegistry
     );
     ~RendererRayTracingSystem();
 
@@ -341,7 +343,8 @@ public:
         bool splitSoftTransparentFold = false,
         u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
-        bool splitOpaqueSoftResolve = false
+        bool splitOpaqueSoftResolve = false,
+        const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     [[nodiscard]] Core::GpuTaskId declareShadowVisibilityTask(
         Core::GpuTaskGraph& graph,
@@ -1058,7 +1061,8 @@ private:
         const DeferredLightingGraphResources& deferredLightingResources,
         u32& outFrameIndex,
         bool graphEntryStatesOwned,
-        bool graphOwnsOpaqueTemporalMergeEntryStates
+        bool graphOwnsOpaqueTemporalMergeEntryStates,
+        const LightSpaceShadowSnapshot* lightSpace
     );
     [[nodiscard]] bool renderSoftOpaqueShadowResolvePhase(
         Core::CommandList& commandList,
@@ -1213,6 +1217,7 @@ private:
     RendererMaterialSystem& m_materialSystem;
     RendererRayTracingState& m_rayTracingState;
     const RendererOpticalVolumeSelection& m_opticalVolumes;
+    const CsgShapeRegistry& m_csgShapeRegistry;
     RayTracingOpticalSceneResources m_hardwareOpticalScene;
     RayTracingOpticalSceneResources m_softwareOpticalScene;
     SoftwareSceneRefitResources m_sceneSwBvhRefit;

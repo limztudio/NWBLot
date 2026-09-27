@@ -28,7 +28,8 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     RendererMeshSystem& meshSystem,
     RendererMaterialSystem& materialSystem,
     RendererRayTracingState& rayTracingState,
-    const RendererOpticalVolumeSelection& opticalVolumes
+    const RendererOpticalVolumeSelection& opticalVolumes,
+    const CsgShapeRegistry& csgShapeRegistry
 )
     : m_arena(arena)
     , m_world(world)
@@ -38,6 +39,7 @@ RendererRayTracingSystem::RendererRayTracingSystem(
     , m_materialSystem(materialSystem)
     , m_rayTracingState(rayTracingState)
     , m_opticalVolumes(opticalVolumes)
+    , m_csgShapeRegistry(csgShapeRegistry)
     , m_hardwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_hw"))
     , m_softwareOpticalScene(arena, graphics, Name("raytrace_optical_scene_sw"))
     , m_sceneSwBvhRefit(arena, graphics)
@@ -870,6 +872,11 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         if(!ensureRayTraceMaterialContextSlotsHeapHandle())
             return false;
         m_shadowVisibilityPreparedTargets = &targets;
+        preflightLightSpaceShadowResources();
+        if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shadow map preparation failed"));
+            return false;
+        }
         m_shadowVisibilityResourcesPreflighted = true;
         return true;
     }
@@ -951,6 +958,10 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
         return false;
     m_shadowVisibilityPreparedTargets = &targets;
     preflightLightSpaceShadowResources();
+    if(m_lightSpaceShadow.m_csgRequired && !m_lightSpaceShadow.m_resourcesPrepared){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG shadow map preparation failed"));
+        return false;
+    }
     m_shadowVisibilityResourcesPreflighted = true;
     return true;
 }

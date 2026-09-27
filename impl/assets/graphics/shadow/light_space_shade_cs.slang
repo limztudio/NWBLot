@@ -2,11 +2,18 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_LIGHT_SPACE_CSG_SHADE
+#define NWB_LIGHT_SPACE_CSG_SHADE 0
+#endif
+
 #include "light_space_scene.slangi"
 #include "light_space_interpolation.slangi"
 #include "shadow_surface.slangi"
 #include "shadow/generated/transmittance_dispatch.slangi"
 #include "shadow_integrate.slangi"
+#if NWB_LIGHT_SPACE_CSG_SHADE
+#include "csg_shadow_shade.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,6 +32,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixelIndex >= g_NwbLightSpacePush.width)
         return;
     const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+#if NWB_LIGHT_SPACE_CSG_SHADE
+    if(nwbCsgShadowEnabled()){
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixelIndex * 4u, 0x7f7fffffu);
+        if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
+            nwbCsgShadowConservativeTexel(pixelIndex);
+    }
+#endif
     if(count == 0u || count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return;
     NwbLightSpaceView view = (NwbLightSpaceView)0;
@@ -57,6 +71,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 p0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 p2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        const float3 geometric = cross(p1 - p0, p2 - p0);
+#if NWB_LIGHT_SPACE_CSG_SHADE
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u){
+            const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
+                ? view.originOrDirection.xyz - nwbLightSpaceWorldPosition(p0, instanceIndex) : view.originOrDirection.xyz;
+            const float3 objectDirection = nwbSwBvhTransformVector(instance, towardLight);
+            if(!all(isfinite(geometric)) || !all(isfinite(objectDirection))){
+                nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
+                continue;
+            }
+            const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address,
+                uint4(raw.x, instanceIndex | facing, primitive, 0u));
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
+            continue;
+        }
+#endif
         float3 weights;
         const float4 clip0 = nwbLightSpaceProject(view, nwbLightSpaceWorldPosition(p0, instanceIndex));
         const float4 clip1 = nwbLightSpaceProject(view, nwbLightSpaceWorldPosition(p1, instanceIndex));
@@ -74,7 +105,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 n1 = float3(a1.normal);
         const float3 n2 = float3(a2.normal);
         const float3 normal = n0 * weights.x + n1 * weights.y + n2 * weights.z;
-        const float3 geometric = cross(p1 - p0, p2 - p0);
         const float spread = max(max(dot(n0 - n1, n0 - n1), dot(n1 - n2, n1 - n2)), dot(n2 - n0, n2 - n0));
         const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
             ? normalize(view.originOrDirection.xyz - world) : view.originOrDirection.xyz;
@@ -88,8 +118,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         hit.worldPosition = world;
         hit.rayDirection = towardLight;
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
-        const half cosI = nwbShadowCosineToRay(geometric, objectDirection);
-        const half smoothCosI = nwbShadowCosineToRay(normal, objectDirection);
+        const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometric), towardLight);
+        const half smoothCosI = nwbShadowCosineToRay(hit.worldNormal, towardLight);
         const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
         const bool valid = all(isfinite(world)) && isfinite(depth)
@@ -125,6 +155,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(destinationAddress, value);
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + 16u, optical);
     }
+#if NWB_LIGHT_SPACE_CSG_SHADE
+    if(nwbCsgShadowEnabled()){
+        if(!nwbCsgShadowConvertEvents(pixelIndex, view, pixel, count))
+            nwbCsgShadowConservativeTexel(pixelIndex);
+    }
+#endif
 }
 
 

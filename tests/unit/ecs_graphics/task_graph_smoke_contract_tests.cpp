@@ -328,16 +328,16 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
         "TransparentMultiSmokeProject: natural software-only shadow route selected because RayQuery-capable hardware is unavailable";
     static constexpr StringView s_NativeMeshMarker =
         "CsgVisibleSmokeProject: natural native mesh-shader route selected";
-    static constexpr StringView s_NativeComputeMarker =
-        "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable";
+    static constexpr StringView s_NativeIndexedMarker =
+        "CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable";
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeHardwareMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeSoftwareMarker));
     EXPECT_TRUE(ContainsText(smokeProjects, s_NativeMeshMarker));
-    EXPECT_TRUE(ContainsText(smokeProjects, s_NativeComputeMarker));
+    EXPECT_TRUE(ContainsText(smokeProjects, s_NativeIndexedMarker));
     EXPECT_EQ(CountText(smokeCmake, s_NativeHardwareMarker), s_ExpectedDualCount);
     EXPECT_EQ(CountText(smokeCmake, s_NativeSoftwareMarker), s_ExpectedDualCount);
     EXPECT_EQ(CountText(smokeCmake, s_NativeMeshMarker), s_ExpectedDualCount);
-    EXPECT_EQ(CountText(smokeCmake, s_NativeComputeMarker), s_ExpectedDualCount);
+    EXPECT_EQ(CountText(smokeCmake, s_NativeIndexedMarker), s_ExpectedDualCount);
     EXPECT_TRUE(ContainsText(
         smokeCmake,
         "nwb_transparent_multi_sw_capture_smoke\n"
@@ -346,8 +346,8 @@ TEST(EcsGraphics, FeatureSupportAndSmokeRoutesRemainNativeCapabilityAuthoritativ
     ));
     EXPECT_TRUE(ContainsText(
         smokeCmake,
-        "nwb_csg_visible_compute_emulation_capture_smoke\n"
-        "            csg_visible_compute_emulation_capture.bmp\n"
+        "nwb_csg_visible_indexed_capture_smoke\n"
+        "            csg_visible_indexed_capture.bmp\n"
         "            \"$<TARGET_FILE:nwb_csg_visible_smoke>\""
     ));
     EXPECT_GE(CountText(smokeCmake, "\"--skip-blocking-log-message\" \"VUID-\""), 4u);

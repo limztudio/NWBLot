@@ -878,6 +878,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
             .transparentCsgMaterialGeometrySet = transparentCsgIntervalResult.materialGeometrySet,
             .transparentCsgMaterialSampledTextureSet = transparentCsgIntervalResult.materialSampledTextureSet,
         },
+        objectGeometry,
         avboitPrePayload,
         avboitCsgReceiverSpanPayload,
         avboitCsgIntervalCombinePayload,

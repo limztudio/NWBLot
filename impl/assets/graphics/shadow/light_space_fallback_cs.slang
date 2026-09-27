@@ -2,6 +2,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_LIGHT_SPACE_CSG_ENABLED
+#define NWB_LIGHT_SPACE_CSG_ENABLED 0
+#endif
+
 #include "light_space_resources.slangi"
 #include "shadow_heap_resources.slangi"
 #include "sw_binding_slots.h"
@@ -16,7 +20,11 @@
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
 #include "../scene/buffer.slangi"
+#define NWB_SW_SHADOW_SKIP_CSG NWB_LIGHT_SPACE_CSG_ENABLED
 #include "sw_shadow_ray.slangi"
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+#include "csg_shadow_fallback.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -41,7 +49,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 position = NwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
         const float3 normal = normalize(NwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
         const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
-        // Visibility visibility is a (0, 1) bounded factor; nwbSwShadowLightVisible already returns half3.
         half3 result = half3(0.0h);
         for(uint sample = 0u; sample < sampleCount; ++sample){
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
@@ -51,7 +58,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 #endif
             const float2 jitter = nwbShadowLowDiscrepancy2D(pixel,
                 g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
-            result += nwbSwShadowLightVisible(position, normal, light, jitter) / half(sampleCount);
+            half3 visibility = nwbSwShadowLightVisible(position, normal, light, jitter);
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+            float3 direction;
+            float minimum;
+            float maximum;
+            if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum))
+                visibility *= nwbCsgShadowBoundsVisibility(position + normal * minimum, direction, minimum, maximum);
+#endif
+            result += visibility / half(sampleCount);
         }
         NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(result, 1.0);
     }

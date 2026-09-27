@@ -108,7 +108,8 @@ RendererFramePipeline::RendererFramePipeline(
         m_meshSystem,
         m_materialSystem,
         m_rayTracingState,
-        m_opticalVolumes
+        m_opticalVolumes,
+        m_csgShapeRegistry
     )
     , m_deferredTaskTimingFeedback(
         arena,

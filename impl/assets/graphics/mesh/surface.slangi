@@ -93,6 +93,8 @@ NwbMeshSurface nwbMakeGlassSurface(half3 baseColor, float3 normal, half refracti
 // Trace backends share engine-side Fresnel and Beer-Lambert helpers.
 
 half nwbShadowFresnelTransmittedFraction(float ior, half cosI){
+    if(ior == 1.0)
+        return half(1.0h);
     // The Schlick transmitted fraction is a (0, 1) bounded factor, so half arithmetic is sufficient here.
     const half r0base = half((ior - 1.0) / (ior + 1.0));
     const half r0 = r0base * r0base;

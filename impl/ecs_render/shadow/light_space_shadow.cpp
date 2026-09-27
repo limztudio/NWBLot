@@ -61,6 +61,10 @@ LightSpaceShadowSnapshot RendererRayTracingSystem::lightSpaceShadowSnapshot()con
     LightSpaceShadowSnapshot result = m_lightSpaceShadow.m_snapshot;
     result.casters = m_lightSpaceShadow.m_casters.data();
     result.casterCount = m_lightSpaceShadow.m_casters.size();
+    result.csgContextBytes = m_lightSpaceShadow.m_csg.bytes.data();
+    result.csgContextByteCount = m_lightSpaceShadow.m_csg.bytes.size();
+    result.csgDynamicBounds = m_lightSpaceShadow.m_csg.dynamicBounds.data();
+    result.csgDynamicBoundsCount = m_lightSpaceShadow.m_csg.dynamicBounds.size();
     return result;
 }
 
@@ -82,8 +86,8 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
     const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount, LightSpacePlan& plan)const{
     const auto& state = m_lightSpaceShadow;
     if(
-        m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace
-        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || !m_preparedSceneSwBvhReady
+        (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))
+        || !state.m_sceneEligible || !m_shadowVisibilityPreparedTargets || (!m_shadowVisibilityHardwareSupported && !m_preparedSceneSwBvhReady)
         || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
         || state.m_casters.empty() || !lights || lightCount > NWB_SCENE_MAX_LIGHTS
     )
@@ -98,11 +102,19 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
             return false;
         const auto type = light.params.y < ECSRenderDetail::s_LightTypeDirectionalMax ? Scene::LightType::Directional
             : light.params.y < ECSRenderDetail::s_LightTypePointMax ? Scene::LightType::Point : Scene::LightType::Spot;
-        requests[requestCount++] = { index, static_cast<u32>(light.params.z), type, true };
+        requests[requestCount++] = { index, static_cast<u32>(light.params.z),
+            state.m_csg.snapshot.hasCsg && type == Scene::LightType::Spot ? Scene::LightType::Point : type, true };
+    }
+    SoftwareShadowSettings settings = state.m_settings;
+    if(state.m_csg.snapshot.hasCsg){
+        settings.backend = SoftwareShadowBackend::Automatic;
+        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size())
+            return false;
+        settings.memoryBudgetBytes -= state.m_csg.bytes.size();
     }
     return
-        BuildLightSpacePlan(state.m_settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
-            static_cast<u32>(state.m_casters.size()), plan)
+        BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
+            static_cast<u32>(state.m_casters.size()), plan, state.m_csg.snapshot.hasCsg)
         && plan.viewCount != 0u
     ;
 }
@@ -110,12 +122,16 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     auto& state = m_lightSpaceShadow;
     state.m_resourcesPrepared = false;
-    if(m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace || !state.m_sceneEligible)
+    state.m_csgRequired = false;
+    if(!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace
+        || !state.m_sceneEligible))
         return;
     // Use the same scene ordering and shadow-slot allocator as the later prefix. That prefix may only select a fitting generation.
     ECSRenderDetail::SceneLightGpuData lights[NWB_SCENE_MAX_LIGHTS];
     f32 causticImportance[NWB_SCENE_MAX_LIGHTS] = {};
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, lights, causticImportance, NWB_SCENE_MAX_LIGHTS);
+    for(u32 index = 0u; index < lightCount; ++index)
+        state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
     LightSpacePlan plan;
     if(!buildLightSpaceShadowPlan(lights, lightCount, plan))
         return;
@@ -191,7 +207,20 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.width = targets.width;
     snapshot.push.height = targets.height;
     snapshot.push.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
-    snapshot.push.sceneRootSlot = m_preparedSceneBvhNodeHeapHandle.slot();
+    snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvhNodeHeapHandle.slot();
+    snapshot.push.csgFlags = state.m_csg.snapshot.hasCsg ? NWB_CSG_SHADOW_FLAG_ENABLED
+        | (m_shadowVisibilityHardwareSupported ? NWB_CSG_SHADOW_FLAG_HW_COMPOSE : 0u) : 0u;
+    if((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u){
+        bool hasOrdinaryTransparent = false;
+        for(const LightSpaceShadowCaster& caster : state.m_casters)
+            hasOrdinaryTransparent = hasOrdinaryTransparent || (caster.transparent && !caster.csg);
+        if(!hasOrdinaryTransparent)
+            snapshot.push.csgFlags |= NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT;
+    }
+    if(state.m_csg.snapshot.hasCsg){
+        snapshot.push.csgContextSlot = snapshot.csgContextDescriptor.slot();
+        snapshot.push.csgOpaqueDepthSlot = snapshot.csgOpaqueDepthDescriptor.slot();
+    }
     snapshot.push.viewCount = plan.viewCount;
     snapshot.push.outputSlot = snapshot.drawArgumentsDescriptor.slot();
     snapshot.casters = state.m_casters.data();

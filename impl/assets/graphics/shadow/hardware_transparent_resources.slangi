@@ -10,6 +10,7 @@
 
 
 #include "hardware_transparent_binding_slots.h"
+#include "constants.h"
 #include "shadow_heap_resources.slangi"
 #include "../raytrace/optical_scene_constants.h"
 

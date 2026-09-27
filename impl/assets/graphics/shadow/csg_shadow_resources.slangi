@@ -1,0 +1,145 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_CSG_SHADOW_RESOURCES_SLANGI
+#define NWB_GRAPHICS_SHADOW_CSG_SHADOW_RESOURCES_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_LIGHT_SPACE_CSG_ENABLED
+#if defined(NWB_LIGHT_SPACE_CSG_SHADE)
+#define NWB_LIGHT_SPACE_CSG_ENABLED NWB_LIGHT_SPACE_CSG_SHADE
+#else
+#define NWB_LIGHT_SPACE_CSG_ENABLED 1
+#endif
+#endif
+
+#include "light_space_resources.slangi"
+#include "../bvh/sw_instance.slangi"
+#include "../bvh/bvh_common.slangi"
+#include "../bindless/bindless_heap_bvh.slangi"
+#include "../mesh/runtime_bounds_constants.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgShadowCutter{
+    uint shapeType;
+    float worldToShapeScaleBound;
+    uint padding0;
+    uint padding1;
+    float4 worldToShapeRow0;
+    float4 worldToShapeRow1;
+    float4 worldToShapeRow2;
+    float4 parameter0;
+    float4 parameter1;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbCsgShadowEnabled(){
+#if !NWB_LIGHT_SPACE_CSG_ENABLED
+    return false;
+#else
+    return (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+#endif
+}
+
+bool nwbCsgShadowHardwareCompose(){
+#if !NWB_LIGHT_SPACE_CSG_ENABLED
+    return false;
+#else
+    return (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
+#endif
+}
+
+uint4 nwbCsgShadowRange(const uint instance){
+    if(!nwbCsgShadowEnabled() || instance >= g_NwbLightSpacePush.instanceCount)
+        return uint4(0u);
+    const uint4 header = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(0u);
+    if(instance >= header.x)
+        return uint4(0u);
+    return NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(header.y + instance * NWB_CSG_SHADOW_RANGE_BYTES);
+}
+
+bool nwbCsgShadowReceiver(const uint instance){
+    return (nwbCsgShadowRange(instance).z & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
+}
+
+NwbCsgShadowCutter nwbCsgShadowLoadCutter(const uint index){
+    const uint offset = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u)
+        + index * NWB_CSG_SHADOW_CUTTER_BYTES;
+    const uint4 header = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
+    NwbCsgShadowCutter cutter;
+    cutter.shapeType = header.x;
+    cutter.worldToShapeScaleBound = asfloat(header.y);
+    cutter.padding0 = header.z;
+    cutter.padding1 = header.w;
+    cutter.worldToShapeRow0 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u));
+    cutter.worldToShapeRow1 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 32u));
+    cutter.worldToShapeRow2 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 48u));
+    cutter.parameter0 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 64u));
+    cutter.parameter1 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 80u));
+    return cutter;
+}
+
+uint nwbCsgShadowInstanceOffset(const uint index){
+    return NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(16u) + index * NWB_CSG_SHADOW_INSTANCE_BYTES;
+}
+
+NwbSwBvhInstance nwbCsgShadowInstance(const uint index){
+    const uint offset = nwbCsgShadowInstanceOffset(index);
+    NwbSwBvhInstance instance;
+    instance.worldToObjectRow0 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset));
+    instance.worldToObjectRow1 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u));
+    instance.worldToObjectRow2 = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 32u));
+    const uint4 tail = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 48u);
+    instance.reservedMeshIndex = tail.x;
+    instance.primitiveCount = tail.y;
+    instance.pad0 = tail.z;
+    instance.pad1 = tail.w;
+    return instance;
+}
+
+NwbBvhNode nwbCsgShadowRoot(const uint index){
+    const NwbSwBvhInstance instance = nwbCsgShadowInstance(index);
+    if(instance.reservedMeshIndex != 0xffffffffu){
+        const uint4 lower = NwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET);
+        const uint4 upper = NwbHeapRawBuffer(instance.reservedMeshIndex).Load4(NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET);
+        NwbBvhNode root = (NwbBvhNode)0;
+        root.aabbMin = (lower.w & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u ? asfloat(lower.xyz) : float3(asfloat(0x7fc00000u));
+        root.aabbMax = asfloat(upper.xyz);
+        return root;
+    }
+    if(instance.pad0 != 0xffffffffu)
+        return NwbHeapBvhNodes(instance.pad0)[0u];
+    const uint offset = nwbCsgShadowInstanceOffset(index) + 64u;
+    const uint4 lower = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
+    const uint4 upper = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset + 16u);
+    NwbBvhNode root;
+    root.aabbMin = asfloat(lower.xyz);
+    root.leftChild = lower.w;
+    root.aabbMax = asfloat(upper.xyz);
+    root.rightChild = upper.w;
+    return root;
+}
+
+float nwbCsgShadowOpaqueDepth(const uint pixel){
+    return asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.csgOpaqueDepthSlot).Load(pixel * 4u));
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

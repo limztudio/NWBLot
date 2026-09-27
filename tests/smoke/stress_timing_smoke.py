@@ -44,6 +44,10 @@ SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1}
 SOFTWARE_SHADOW_CAPTURE_CADENCE = {"every_frame": 0, "reuse_one_frame": 1}
 SOFTWARE_SHADOW_CAPTURE_REUSE = "RendererSystem: accepted light-space capture reuse (cadence=2)"
 
+CSG_PROFILE = "StressTestSmokeProject: CSG "
+CSG_DISPATCH = "RendererSystem: dispatched CSG light-space shadows "
+CSG_DEVICE = "StressTestSmokeProject: device capability "
+
 
 WORKLOAD = "StressTestSmokeProject: workload "
 SPAWN = "StressTestSmokeProject: spawned "
@@ -331,6 +335,57 @@ def verify_software_shadow_settings(text, args):
         "blocker_search_name": args.software_shadow_blocker_search, "requested": requested, "observed": observed, "verified": True}
 
 
+def verify_csg_profile(text, args):
+    requested = getattr(args, "csg_profile", "none")
+    lines = [line.strip() for line in text.splitlines()]
+    records = [line for line in lines if line.startswith(CSG_PROFILE)]
+    dispatches = [line for line in lines if line.startswith(CSG_DISPATCH)]
+    if requested == "none":
+        if records or dispatches:
+            raise SmokeFailure("unrequested CSG profile or dispatch changes the stress workload")
+        return {"requested": "none", "enabled": False, "verified": True}
+    if requested != "waist_bands" or len(records) != 1 or len(dispatches) != 1:
+        raise SmokeFailure("waist_bands requires exactly one profile and actual CSG shadow dispatch record")
+    fields = ("profile", "receivers", "transparent", "opaque", "cutters", "half_x", "half_y", "half_z",
+        "center_y", "amplitude_y", "front_z", "back_z", "motion")
+    match = re.fullmatch(re.escape(CSG_PROFILE) + " ".join(re.escape(field) + r"=(\S+)" for field in fields), records[0])
+    if not match:
+        raise SmokeFailure("malformed CSG stress profile signature")
+    observed = dict(zip(fields, match.groups()))
+    expected = dict(profile="waist_bands", receivers=20, transparent=10, opaque=10, cutters=2,
+        half_x=4.5, half_y=.08, half_z=.65, center_y=.9, amplitude_y=.1, front_z=-.55, back_z=.55, motion="crowd_yaw")
+    for field, value in expected.items():
+        if isinstance(value, str):
+            matches = observed[field] == value
+        else:
+            try:
+                observed[field] = int(observed[field]) if isinstance(value, int) else float(observed[field])
+                matches = math.isfinite(observed[field]) and math.isclose(observed[field], value, rel_tol=1e-6, abs_tol=1e-6)
+            except (ValueError, OverflowError):
+                matches = False
+        if not matches:
+            raise SmokeFailure(f"CSG stress profile disagrees with requested {field}")
+    devices = [line for line in lines if line.startswith(CSG_DEVICE)]
+    capability = re.match(re.escape(CSG_DEVICE) + r"meshlets=[01] rayquery=([01]) raypipeline=[01] accelstruct=([01]) ",
+        devices[0]) if len(devices) == 1 else None
+    dispatch = re.fullmatch(re.escape(CSG_DISPATCH) + r"\(hardware_compose=([01]), ([0-9]+) instances\)", dispatches[0])
+    if not capability or not dispatch:
+        raise SmokeFailure("CSG stress requires enabled-device capability and actual map route evidence")
+    hardware = capability.groups() == ("1", "1")
+    if int(dispatch[1]) != int(hardware) or int(dispatch[2]) < observed["receivers"]:
+        raise SmokeFailure("CSG stress map route or instance population disagrees with the active workload")
+    if "--disable-hardware-ray-tracing" in args.application_arg:
+        disabled = "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0"
+        if hardware or disabled not in text:
+            raise SmokeFailure("requested software CSG stress lacks the disabled logical-device proof")
+    first_interval = next((index for index, line in enumerate(lines) if line.startswith(INTERVAL)), -1)
+    completion = next((index for index, line in enumerate(lines) if line.startswith(DONE)), -1)
+    if not lines.index(records[0]) < lines.index(dispatches[0]) < first_interval < completion:
+        raise SmokeFailure("CSG setup and dispatch must precede the first measurement interval")
+    return {"requested": requested, "enabled": True, "observed": observed, "hardware_compose": hardware,
+        "map_instances": int(dispatch[2]), "signature": records[0], "verified": True}
+
+
 def verify_shadow_quality_settings(text, args):
     records = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_QUALITY_SETTINGS)]
     if len(records) != 1:
@@ -377,6 +432,7 @@ def launch_environment(base, args, output):
         result["NWB_LINUX_BACKEND"] = "x11"
     result.update(NWB_STRESS_SMOKE_TIMING="1",
         NWB_STRESS_CHARACTERS_PER_CLASS=str(args.characters_per_class),
+        NWB_STRESS_CSG_PROFILE=getattr(args, "csg_profile", "none"),
         NWB_REFLECTION_SCREEN_STEPS=str(args.reflection_screen_steps),
         NWB_SOFTWARE_SHADOW_BACKEND=args.software_shadow_backend,
         NWB_SOFTWARE_SHADOW_COVERAGE=args.software_shadow_coverage,
@@ -479,6 +535,7 @@ def acquire(args, output):
         if getattr(args, "cpu_diagnostics", False):
             write_json(output / "cpu_gpu_summary.json", result["cpu_diagnostics"])
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
+        result["csg_profile"] = verify_csg_profile(text, args)
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
         result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
         result["reflection_quality_settings"] = verify_reflection_quality_settings(text, args, result["optical_reflection"])
@@ -534,6 +591,8 @@ def parse_args(argv=None):
         help="Require strictly greater accepted presentation FPS; equality fails. Diagnostic runs cannot qualify.")
     parser.add_argument("--characters-per-class", type=int, choices=(5, 10), default=10,
         help="Ten per class is the twenty-body target; five preserves the historical comparison layout/camera.")
+    parser.add_argument("--csg-profile", choices=("none", "waist_bands"), default="none",
+        help="Waist bands add two moving box cutters to all twenty mesh children; requires every-frame maps.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
         help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
@@ -561,6 +620,9 @@ def parse_args(argv=None):
     parser.add_argument("--reflection-diagnostics", action="store_true",
         help="Enable accepted reflection-path counters; diagnostic runs are separate from performance comparisons.")
     args = parser.parse_args(argv)
+    if args.csg_profile != "none":
+        if args.characters_per_class != 10 or args.software_shadow_capture_cadence != "every_frame" or args.software_shadow_backend == "trace":
+            parser.error("waist_bands requires ten bodies per class, every-frame maps, and automatic or light-space shadows")
     try:
         validate_performance_target_request(args)
     except SmokeFailure as error:

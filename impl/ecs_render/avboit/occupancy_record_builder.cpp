@@ -309,6 +309,12 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
     ))
         return false;
+    if(occupancyPayload.occupancyStreamsUploaded && !objectGeometry.prepare(
+        occupancyPayload.occupancySnapshot.csgIndexedDrawItems.data(),
+        occupancyPayload.occupancySnapshot.csgIndexedDrawItems.size(),
+        frameBindings, *inputs.targets, occupancyDependency, avboitPreResourceUses, avboitPreResourceScratch, inputs.preTimingTicket
+    ))
+        return false;
 
 
     Core::GpuTaskSchedulingHint avboitOccupancyScheduling;

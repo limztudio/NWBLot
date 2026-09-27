@@ -59,6 +59,8 @@ struct LightSpaceShadowGraph{
     Core::GpuGraphResourceId views;
     Core::GpuGraphResourceId drawArguments;
     Core::GpuGraphResourceId depth;
+    Core::GpuGraphResourceId csgContext;
+    Core::GpuGraphResourceId csgOpaqueDepth;
     Core::GpuTaskId viewUpload;
     Core::GpuTaskId countsClear;
     Core::GpuTaskId viewFit;

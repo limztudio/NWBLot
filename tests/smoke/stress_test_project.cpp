@@ -6,6 +6,7 @@
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
 #include "stress_cpu_timing_probe.h"
+#include "stress_csg_scene.h"
 #include "presentation_fps_probe.h"
 #include "presentation_pacing_ring.h"
 #include "reflection_quality_settings.h"
@@ -511,6 +512,10 @@ public:
             m_characterOwners.push_back(createCharacter(index));
 
         SyncSmokeModelRuntimes(*m_world);
+        if(!m_csgScene.initialize(
+            *m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), hybridShadowOpaqueBaseline()
+        ))
+            return false;
 
         bool allCharactersValid = m_characterOwners.size() == characterCount;
         for(const NWB::Core::ECS::EntityID owner : m_characterOwners)
@@ -625,6 +630,8 @@ public:
         const f32 frozen = frozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
+        if(!m_csgScene.update(*m_world, m_yaw.yaw()))
+            return false;
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);
         m_world->tick(safeDelta);
         reportReflectionStatistics();
@@ -638,6 +645,7 @@ private:
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
     NWB::Impl::RendererSystem& m_renderer;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_characterOwners;
+    NWB::Tests::Smoke::StressCsgScene m_csgScene;
     NWB::Core::ECS::EntityID m_groundEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_wallPosX = NWB::Core::ECS::ENTITY_ID_INVALID;
     NWB::Core::ECS::EntityID m_wallNegX = NWB::Core::ECS::ENTITY_ID_INVALID;

@@ -149,6 +149,8 @@ void ExpectCleared(const Plan& plan){
     EXPECT_TRUE(plan.outputBuffers.empty());
     if constexpr(requires{ plan.meshDrawItems; })
         EXPECT_TRUE(plan.meshDrawItems.empty());
+    if constexpr(requires{ plan.indexedDrawItems; })
+        EXPECT_TRUE(plan.indexedDrawItems.empty());
     if constexpr(requires{ plan.outputLayouts; })
         EXPECT_TRUE(plan.outputLayouts.empty());
     if constexpr(requires{ plan.outputHeapSlots; })
@@ -292,10 +294,16 @@ TEST(ComputeEmulationAliasPlan, EmptyAndLateInvalidInputsClearEveryCapturedPlan)
 TEST(ComputeEmulationAliasPlan, CsgPlansRetainFrozenFramePayloadsAndRequireBothWorkArrays){
     AliasPlanContext context(40u);
     context.m_receivers.meshDrawItems.push_back(context.m_regular.computeDrawItems.front());
+    MaterialPassDrawItem indexed = context.m_receivers.computeDrawItems.front();
+    indexed.meshResources.emulationVertexBuffer.reset();
+    indexed.meshResources.objectGeometryCache.buffer = context.m_buffers.front();
+    indexed.meshResources.objectGeometryCache.sourceRevision = 17u;
+    context.m_receivers.indexedDrawItems.push_back(indexed);
     IntervalPlan interval(context.m_planArena);
     ReceiverPlan receiver(context.m_planArena);
     ASSERT_TRUE(CapturePlan(interval, context, context.m_operationArena));
     ASSERT_TRUE(CapturePlan(receiver, context, context.m_operationArena));
+    context.m_receivers.indexedDrawItems.clear();
     context.m_csg.receiverRanges[0u].shadingModelId = 19u;
     context.m_csg.workRegion.expandFull();
     EXPECT_EQ(interval.receiverRanges[0u].shadingModelId, 7u);
@@ -308,12 +316,20 @@ TEST(ComputeEmulationAliasPlan, CsgPlansRetainFrozenFramePayloadsAndRequireBothW
         interval.materialize(materialized, frame);
         ASSERT_EQ(materialized.computeDrawItems.size(), 40u);
         ASSERT_EQ(materialized.meshDrawItems.size(), 1u);
+        ASSERT_EQ(materialized.indexedDrawItems.size(), 1u);
+        EXPECT_EQ(materialized.indexedDrawItems.front().meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
+        EXPECT_EQ(materialized.indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision, 17u);
+        EXPECT_FALSE(materialized.indexedDrawItems.front().meshResources.emulationVertexBuffer);
         ASSERT_EQ(frame.receiverRanges.size(), 1u);
         ASSERT_EQ(frame.cutters.size(), 1u);
         EXPECT_EQ(frame.receiverRanges[0u].shadingModelId, 7u);
         EXPECT_EQ(frame.workRegion.minX, s_ExpectedDualCount);
         EXPECT_EQ(frame.workRegion.maxY, 13u);
         receiver.materialize(materialized, frame);
+        ASSERT_EQ(materialized.indexedDrawItems.size(), 1u);
+        EXPECT_EQ(materialized.indexedDrawItems.front().meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
+        EXPECT_EQ(materialized.indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision, 17u);
+        EXPECT_FALSE(materialized.indexedDrawItems.front().meshResources.emulationVertexBuffer);
         EXPECT_EQ(materialized.computeDrawItems.back().meshKey, context.m_receivers.computeDrawItems.back().meshKey);
         EXPECT_EQ(frame.receiverRanges[0u].shadingModelId, 7u);
     }
@@ -456,30 +472,58 @@ TEST(ComputeEmulationAliasPlan, OpaqueAndTransparentSnapshotsRetainAndReplaceInd
     indexed.meshResources.objectGeometryCache.indexCount = 6u;
     source.regular.indexedDrawItems.push_back(indexed);
     source.regular.computeDrawItems.push_back(context.m_regular.computeDrawItems.front());
+    indexed.pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
+    source.csg.indexedDrawItems.push_back(indexed);
+    source.csgReceiverSurface.indexedDrawItems.push_back(indexed);
     ECSRenderDetail::OpaqueMaterialPassGraphSnapshot opaque(context.m_planArena);
     ECSRenderDetail::TransparentMaterialPassGraphSnapshot transparent(context.m_planArena);
+    ECSRenderDetail::TransparentCsgIntervalGraphSnapshot intervals(context.m_planArena);
     opaque.capture(source, context.m_csg, s_ExpectedDualCount, 64u);
     transparent.capture(source, context.m_csg, s_ExpectedDualCount, 64u);
-    source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision = 18u;
-    source.regular.indexedDrawItems.front().meshResources.objectGeometryCache.buffer.reset();
-    const auto verify = [&](auto& snapshot){
-        MaterialPassDrawItemPartitions replay(context.m_inputArena);
-        CsgFrameGpuData frame(context.m_inputArena);
-        snapshot.materialize(replay, frame);
-        ASSERT_EQ(replay.regular.indexedDrawItems.size(), 1u);
-        ASSERT_EQ(replay.regular.computeDrawItems.size(), 1u);
-        const auto& retained = replay.regular.indexedDrawItems.front();
+    intervals.capture(source.csgReceiverSurface, context.m_csg, s_ExpectedDualCount, 64u);
+    for(MaterialPassDrawItems* draws : { &source.regular, &source.csg, &source.csgReceiverSurface }){
+        draws->indexedDrawItems.front().meshResources.objectGeometryCache.sourceRevision = 18u;
+        draws->indexedDrawItems.front().meshResources.objectGeometryCache.buffer.reset();
+    }
+    const auto verifyIndexed = [&](const MaterialPassDrawItems& draws, const MaterialPipelineCsgMode::Enum csgMode){
+        ASSERT_EQ(draws.indexedDrawItems.size(), 1u);
+        const auto& retained = draws.indexedDrawItems.front();
         EXPECT_EQ(retained.meshKey, indexed.meshKey);
+        EXPECT_EQ(retained.pipelineKey.csgMode, csgMode);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.buffer, indexed.meshResources.objectGeometryCache.buffer);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.sourceRevision, 17u);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.indexByteOffset, 192u);
         EXPECT_EQ(retained.meshResources.objectGeometryCache.indexCount, 6u);
+    };
+    {
+        MaterialPassDrawItemPartitions replay(context.m_inputArena);
+        MaterialPassDrawItems receiverReplay(context.m_inputArena);
+        CsgFrameGpuData frame(context.m_inputArena);
+        opaque.materialize(replay, frame);
+        ASSERT_NO_FATAL_FAILURE(verifyIndexed(replay.csgReceiverSurface, MaterialPipelineCsgMode::ClipOnly));
+        intervals.materialize(receiverReplay, frame);
+        ASSERT_NO_FATAL_FAILURE(verifyIndexed(receiverReplay, MaterialPipelineCsgMode::ClipOnly));
+        source.csgReceiverSurface.indexedDrawItems.clear();
+        intervals.capture(source.csgReceiverSurface, context.m_csg, 0u, 0u);
+        intervals.materialize(receiverReplay, frame);
+        EXPECT_TRUE(receiverReplay.indexedDrawItems.empty());
+    }
+    const auto verify = [&](auto& snapshot){
+        MaterialPassDrawItemPartitions replay(context.m_inputArena);
+        CsgFrameGpuData frame(context.m_inputArena);
+        snapshot.materialize(replay, frame);
+        ASSERT_NO_FATAL_FAILURE(verifyIndexed(replay.regular, MaterialPipelineCsgMode::None));
+        ASSERT_NO_FATAL_FAILURE(verifyIndexed(replay.csg, MaterialPipelineCsgMode::ClipOnly));
+        ASSERT_EQ(replay.regular.computeDrawItems.size(), 1u);
         EXPECT_EQ(snapshot.instanceCount, s_ExpectedDualCount);
         EXPECT_EQ(snapshot.materialTypedByteCount, 64u);
         source.regular.indexedDrawItems.clear();
+        source.csg.indexedDrawItems.clear();
         snapshot.capture(source, context.m_csg, 1u, 32u);
         snapshot.materialize(replay, frame);
         EXPECT_TRUE(replay.regular.indexedDrawItems.empty());
+        EXPECT_TRUE(replay.csg.indexedDrawItems.empty());
+        EXPECT_TRUE(replay.csgReceiverSurface.indexedDrawItems.empty());
         EXPECT_EQ(replay.regular.computeDrawItems.size(), 1u);
     };
     ASSERT_NO_FATAL_FAILURE(verify(opaque));

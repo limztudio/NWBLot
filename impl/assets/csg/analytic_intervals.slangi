@@ -1,0 +1,151 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_ASSETS_CSG_ANALYTIC_INTERVALS_SLANGI
+#define NWB_ASSETS_CSG_ANALYTIC_INTERVALS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Directions remain unnormalized so transformed intervals preserve the caller's ray parameter.
+bool nwbCsgAnalyticSlab(const float origin, const float direction, const float extent, inout float2 interval){
+    if(direction == 0.0)
+        return abs(origin) <= extent;
+    const float first = (-extent - origin) / direction;
+    const float second = (extent - origin) / direction;
+    if(!isfinite(first) || !isfinite(second))
+        return false;
+    interval.x = max(interval.x, min(first, second));
+    interval.y = min(interval.y, max(first, second));
+    return true;
+}
+
+bool nwbCsgAnalyticQuadratic(const float a, const float b, const float c, out float2 interval){
+    interval = float2(1.0, 0.0);
+    if(!isfinite(a) || !isfinite(b) || !isfinite(c) || a <= 0.0)
+        return false;
+    const float discriminant = b * b - a * c;
+    if(!isfinite(discriminant))
+        return false;
+    if(discriminant <= 0.0)
+        return true;
+    const float root = sqrt(discriminant);
+    const float q = -b - (b < 0.0 ? -root : root);
+    if(q == 0.0)
+        return true;
+    const float first = q / a;
+    const float second = c / q;
+    if(!isfinite(first) || !isfinite(second))
+        return false;
+    interval = float2(min(first, second), max(first, second));
+    return true;
+}
+
+bool nwbCsgAnalyticSphereInterval(const float3 origin, const float3 direction, const float radius, out float2 interval){
+    interval = float2(1.0, 0.0);
+    if(radius < 0.0)
+        return false;
+    return nwbCsgAnalyticQuadratic(dot(direction, direction), dot(origin, direction), dot(origin, origin) - radius * radius, interval);
+}
+
+void nwbCsgAnalyticUnionConvexPart(const float2 part, inout float2 interval){
+    if(part.y <= part.x)
+        return;
+    if(interval.y <= interval.x)
+        interval = part;
+    else
+        interval = float2(min(interval.x, part.x), max(interval.y, part.y));
+}
+
+bool nwbCsgAnalyticPlaneInterval(
+    const float3 origin,
+    const float3 direction,
+    const float4 normalDistance,
+    out float2 interval){
+    interval = float2(1.0, 0.0);
+    const float distance = dot(origin, normalDistance.xyz) + normalDistance.w;
+    const float slope = dot(direction, normalDistance.xyz);
+    if(!isfinite(distance) || !isfinite(slope) || dot(normalDistance.xyz, normalDistance.xyz) <= 0.0)
+        return false;
+    const float unbounded = asfloat(0x7f7fffffu);
+    if(slope == 0.0){
+        if(distance <= 0.0)
+            interval = float2(-unbounded, unbounded);
+        return true;
+    }
+    const float boundary = -distance / slope;
+    if(!isfinite(boundary))
+        return false;
+    interval = slope > 0.0 ? float2(-unbounded, boundary) : float2(boundary, unbounded);
+    return true;
+}
+
+bool nwbCsgAnalyticBoxInterval(
+    const float3 origin,
+    const float3 direction,
+    const float3 halfExtents,
+    out float2 interval){
+    interval = float2(1.0, 0.0);
+    if(any(halfExtents < 0.0))
+        return false;
+    const float unbounded = asfloat(0x7f7fffffu);
+    interval = float2(-unbounded, unbounded);
+    for(uint axis = 0u; axis < 3u; ++axis){
+        if(direction[axis] == 0.0 && abs(origin[axis]) > halfExtents[axis]){
+            interval = float2(1.0, 0.0);
+            return true;
+        }
+        if(!nwbCsgAnalyticSlab(origin[axis], direction[axis], halfExtents[axis], interval))
+            return false;
+    }
+    return true;
+}
+
+bool nwbCsgAnalyticCapsuleInterval(
+    const float3 origin,
+    const float3 direction,
+    const float radius,
+    const float halfHeight,
+    out float2 interval){
+    interval = float2(1.0, 0.0);
+    if(radius < 0.0 || halfHeight < 0.0)
+        return false;
+    float2 lower;
+    float2 upper;
+    if(
+        !nwbCsgAnalyticSphereInterval(origin + float3(0.0, halfHeight, 0.0), direction, radius, lower)
+        || !nwbCsgAnalyticSphereInterval(origin - float3(0.0, halfHeight, 0.0), direction, radius, upper)
+    )
+        return false;
+    nwbCsgAnalyticUnionConvexPart(lower, interval);
+    nwbCsgAnalyticUnionConvexPart(upper, interval);
+    const float radialSpeed = dot(direction.xz, direction.xz);
+    const float unbounded = asfloat(0x7f7fffffu);
+    float2 cylinder = float2(-unbounded, unbounded);
+    if(radialSpeed == 0.0){
+        if(dot(origin.xz, origin.xz) > radius * radius)
+            cylinder = float2(1.0, 0.0);
+    }
+    else if(!nwbCsgAnalyticQuadratic(radialSpeed, dot(origin.xz, direction.xz), dot(origin.xz, origin.xz) - radius * radius, cylinder))
+        return false;
+    if(cylinder.y > cylinder.x){
+        if(direction.y == 0.0 && abs(origin.y) > halfHeight)
+            cylinder = float2(1.0, 0.0);
+        else if(!nwbCsgAnalyticSlab(origin.y, direction.y, halfHeight, cylinder))
+            return false;
+    }
+    nwbCsgAnalyticUnionConvexPart(cylinder, interval);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

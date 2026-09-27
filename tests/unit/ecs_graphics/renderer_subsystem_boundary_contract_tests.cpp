@@ -1945,6 +1945,7 @@ TEST(EcsGraphics, RootFreezesDeferredLightingResourcesForRayTracingTasks){
             "RendererMaterialSystem&",
             "RendererRayTracingState&",
             "constRendererOpticalVolumeSelection&",
+            "constCsgShapeRegistry&",
         }
     ));
     EXPECT_FALSE(ContainsText(AStringView(rayTracingHeaderSource.data(), rayTracingHeaderSource.size()), "RendererDeferredState"));

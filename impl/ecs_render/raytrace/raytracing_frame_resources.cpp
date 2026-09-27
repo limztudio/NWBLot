@@ -189,7 +189,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
 
     return RayTracingShadowVisibilityGraphPlanSnapshot{
         .adaptivePlan = adaptivePlan,
-        .lightSpace = hardwareShadowSupported ? LightSpaceShadowSnapshot{} : lightSpaceShadowSnapshot(),
+        .lightSpace = lightSpaceShadowSnapshot(),
         .hardwareTransparentTrace = hardwareTransparentTrace,
         .softTransparentFoldReady = softTransparentFoldReady,
         .combinedSoftUpsample = softTransparentFoldReady

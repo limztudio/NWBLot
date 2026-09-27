@@ -10,6 +10,7 @@
 
 
 #include "light_space_resources.slangi"
+#include "csg_shadow_resources.slangi"
 #include "shadow_heap_resources.slangi"
 #include "sw_binding_slots.h"
 #include "../raytrace/optical_scene_constants.h"
@@ -112,12 +113,20 @@ float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
 bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, out float blocker){
     blocker = asfloat(0x7f7fffffu);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-    const float depth = nwbLightSpaceOpaqueDepth(view, pixel);
+    float depth = asfloat(0x7f7fffffu);
+    if(!nwbCsgShadowHardwareCompose())
+        depth = nwbLightSpaceOpaqueDepth(view, pixel);
+    if(nwbCsgShadowEnabled())
+        depth = min(depth, nwbCsgShadowOpaqueDepth(nwbLightSpacePixelIndex(view, pixel)));
     if(depth < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE)
         blocker = depth;
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
     const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    if(nwbCsgShadowEnabled() && count == NWB_CSG_SHADOW_CONSERVATIVE_COUNT){
+        blocker = 0.0;
+        return true;
+    }
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     for(uint index = 0u; index < count; ++index){
@@ -138,18 +147,25 @@ uint nwbLightSpaceBoundaryMode(const uint instance){
         NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
 }
 
-// Raw event count, including all distinct instances, is bounded before any load. Overflow asks the caller for SW traversal.
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth,
     const float projectedDepth, out half3 visibility){
-    // Visibility visibility is a (0, 1) bounded factor; half math matches the SW visibility accumulator.
     visibility = half3(1.0h);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-    const float depth = NwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
-    visibility = depth < projectedDepth ? half3(0.0h) : half3(1.0h);
+    float depth = 1.0;
+    if(!nwbCsgShadowHardwareCompose())
+        depth = NwbHeapSampledImage2DArray(g_NwbLightSpacePush.depthSlot).Load(int4(pixel, view.map.w, 0)).r;
+    bool csgBlocked = false;
+    if(nwbCsgShadowEnabled())
+        csgBlocked = nwbCsgShadowOpaqueDepth(nwbLightSpacePixelIndex(view, pixel)) < receiverDepth - NWB_SHADOW_RAY_MIN_DISTANCE;
+    visibility = depth < projectedDepth || csgBlocked ? half3(0.0h) : half3(1.0h);
     return true;
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
     const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    if(nwbCsgShadowEnabled() && count == NWB_CSG_SHADOW_CONSERVATIVE_COUNT){
+        visibility = half3(0.0h);
+        return true;
+    }
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.
@@ -170,7 +186,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         }
         const uint instance = firstEvent.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
         const uint mode = nwbLightSpaceBoundaryMode(instance);
-        const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY;
+        const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY
+            || nwbCsgShadowReceiver(instance);
         half3 absorption = half3(0.0h);
         half transmission = half(1.0h);
         float chord = 0.0;
@@ -226,8 +243,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 #endif
 }
 
-// A finite blocker search estimates the footprint of the real light source. It is a spatial approximation,
-// Overflow, missing faces and invalid fits retain software traversal. Fitted-volume coverage skips empty directional margins.
+// A finite blocker search estimates the footprint of the real light source.
 bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
     const NwbLightSpaceView centerView, out float distance){
     distance = 0.0;
@@ -303,7 +319,6 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
 
 bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction,
     const float blockerDistance, out half3 visibility){
-    // Visibility visibility is a (0, 1) bounded factor; half math matches the SW visibility accumulator.
     visibility = half3(1.0h);
     const float3 samplePosition = origin + direction * blockerDistance;
     NwbLightSpaceView view;

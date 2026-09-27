@@ -6,6 +6,7 @@
 
 #include <impl/ecs_render/csg/csg_system.h>
 #include <impl/ecs_render/material/material_system.h>
+#include <impl/ecs_render/material/task_graph_object_geometry_cache.h>
 #include <impl/ecs_render/avboit/avboit_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/kernel/task_graph_queue_requests.h>
@@ -38,6 +39,7 @@ FrameGraphTransparentCsgTasks::FrameGraphTransparentCsgTasks(
 
 bool FrameGraphTransparentCsgTasks::declare(
     const FrameGraphTransparentCsgTaskInputs& inputs,
+    ObjectGeometryCacheGraph& objectGeometry,
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
@@ -78,7 +80,7 @@ bool FrameGraphTransparentCsgTasks::declare(
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& avboitPrePayload = prePayload;
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& avboitCsgReceiverSpanPayload = receiverSpanPayload;
     ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& avboitCsgIntervalCombinePayload = intervalCombinePayload;
-    const Core::GpuTaskId intervalUploadTask = inputs.transparentCsgUploadTask;
+    Core::GpuTaskId intervalDependency = inputs.transparentCsgUploadTask;
     const Core::GpuGraphResourceSetId intervalMaterialGeometrySet = inputs.transparentCsgMaterialGeometrySet;
     const Core::GpuGraphResourceSetId intervalMaterialSampledTextureSet = inputs.transparentCsgMaterialSampledTextureSet;
 
@@ -160,6 +162,14 @@ bool FrameGraphTransparentCsgTasks::declare(
     avboitIntervalResourceUses.push_back(ReadUse(avboitMaterialDomain));
     avboitIntervalResourceUses.push_back(ReadWriteUse(avboitCsgDomain, Core::ResourceStates::ShaderResource));
 
+    if(avboitPrePayload.transparentCsgStreamsUploaded && !objectGeometry.prepare(
+        avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.data(),
+        avboitPrePayload.transparentCsgSnapshot.receiverSurfaceIndexedDrawItems.size(),
+        avboitPrePayload.frameBindings, deferredTargets, intervalDependency, avboitIntervalResourceUses,
+        avboitIntervalResourceScratch, inputs.timingTicket
+    ))
+        return false;
+
     Core::GpuTaskSchedulingHint avboitIntervalScheduling;
     avboitIntervalScheduling.cost = Core::GpuTaskCostHint::Large;
     avboitIntervalScheduling.forceSubmissionBoundary = false;
@@ -171,7 +181,7 @@ bool FrameGraphTransparentCsgTasks::declare(
         .setMarkerLabel("Transparent CSG Intervals")
         .setQueue(GraphicsComputeQueueRequest())
         .setScheduling(avboitIntervalScheduling)
-        .setDependencies(&intervalUploadTask, 1u)
+        .setDependencies(&intervalDependency, 1u)
         .setResourceUses(avboitIntervalResourceUses.data(), avboitIntervalResourceUses.size())
         .setResourceSetUses(
             transparentCsgMaterialResourceSetUseCount != 0u ? transparentCsgMaterialResourceSetUses : nullptr,

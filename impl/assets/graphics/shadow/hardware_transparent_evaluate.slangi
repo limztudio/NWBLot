@@ -121,9 +121,10 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
     hit.rayDirection = ray.Direction;
     const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
     const half smoothWeight = nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal));
+    const float3 worldGeometricNormal = nwbRotateVectorByQuaternion(geometricNormal / instance.scale.xyz, instance.rotation);
     const half cosine = lerp(
-        nwbShadowCosineToRay(geometricNormal, objectDirection),
-        nwbShadowCosineToRay(objectNormal, objectDirection),
+        nwbShadowCosineToRay(worldGeometricNormal, ray.Direction),
+        nwbShadowCosineToRay(hit.worldNormal, ray.Direction),
         smoothWeight
     );
     NwbHardwareTransparentCrossingOptics optics;

@@ -245,7 +245,7 @@ private:
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgVisibleSmokeProject: natural native mesh-shader route selected"));
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
-                NWB_TEXT("CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable")
+                NWB_TEXT("CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable")
             );
         }
 

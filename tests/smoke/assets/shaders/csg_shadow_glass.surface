@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbMeshSurface nwbMaterialSurface(){
+    // Unit IOR removes interface loss, isolating Beer thickness and per-instance overlap accumulation.
+    NwbMeshSurface result = nwbMakeGlassSurface(half3(1.0h), inNormal, half(1.0h), half3(0.25h, 0.5h, 0.75h), half(1.0h));
+    result.shadowAbsorptionTint = half3(0.25h, 0.5h, 0.75h);
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

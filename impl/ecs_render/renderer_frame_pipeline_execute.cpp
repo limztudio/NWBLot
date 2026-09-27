@@ -794,7 +794,9 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
         || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable (declared={} scheduled={})")
+            , m_deferredLightingTaskGraphDeclared, deferredGraphScheduled
+        );
         deferredPresentTimingTicket.discard();
         deferredCompositeTimingTicket.discard();
         deferredLightingTimingTicket.discard();
@@ -1025,6 +1027,8 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         lightSpaceShadowResources.events,
         lightSpaceShadowResources.views,
         lightSpaceShadowResources.drawArguments,
+        lightSpaceShadowResources.csgContext,
+        lightSpaceShadowResources.csgOpaqueDepth,
         rayTracingShadowResources.swShadowEdgeCounterBuffer,
         rayTracingShadowResources.swShadowEdgeListBuffer,
         rayTracingShadowResources.swShadowIndirectArgsBuffer,

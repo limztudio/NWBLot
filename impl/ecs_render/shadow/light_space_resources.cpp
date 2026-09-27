@@ -27,12 +27,15 @@ NWB_IMPL_BEGIN
 bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
+    const bool csg = state.m_csg.snapshot.hasCsg;
     if(state.m_pipelineFailed)
         return false;
     if(
         snapshot.viewPipeline && snapshot.opaqueResolve && snapshot.transparentResolve
         && snapshot.opaqueFallback && snapshot.transparentFallback && snapshot.shadePipeline
         && snapshot.opaqueCapture && snapshot.transparentCapture
+        && (!csg || (snapshot.csgShadePipeline && snapshot.csgOpaqueResolve && snapshot.csgTransparentResolve
+            && snapshot.csgOpaqueFallback && snapshot.csgTransparentFallback))
     )
         return true;
     auto& device = m_graphics.getDevice();
@@ -51,14 +54,25 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     const Name names[] = { AssetsGraphicsShadow::s_LightSpaceViewShaderName, AssetsGraphicsShadow::s_LightSpaceCaptureVertexShaderName,
         AssetsGraphicsShadow::s_LightSpaceCapturePixelShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
         AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
-        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceShadeShaderName };
+        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
+        AssetsGraphicsShadow::s_LightSpaceShadeShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
+        AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
+        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName };
     const Core::ShaderType::Mask stages[] = { Core::ShaderType::Compute, Core::ShaderType::Vertex, Core::ShaderType::Pixel,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
-        Core::ShaderType::Compute };
+        Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
+        Core::ShaderType::Compute, Core::ShaderType::Compute };
     const AStringView variants[] = { AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant),
-        AStringView("NWB_LIGHT_SPACE_OCCLUDER=0"), AStringView("NWB_LIGHT_SPACE_OCCLUDER=1"),
-        AStringView("NWB_LIGHT_SPACE_OCCLUDER=0"), AStringView("NWB_LIGHT_SPACE_OCCLUDER=1"), AStringView(::__hidden_light_space::s_DefaultLightVariant) };
-    for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
+        AStringView("NWB_LIGHT_SPACE_CSG_SHADE=0"), AStringView("NWB_LIGHT_SPACE_CSG_SHADE=1"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
+        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1") };
+    for(u32 index = 0u; index < (csg ? LengthOf(state.m_shaders) : 8u); ++index){
         if(
             !state.m_shaders[index] && !m_shaderSystem.loadShader(state.m_shaders[index], names[index], variants[index], stages[index],
             Name("ECSRender_LightSpaceShadow"))
@@ -68,9 +82,10 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         }
     }
     Core::ComputePipelineHandle* outputs[] = { &snapshot.viewPipeline, &snapshot.opaqueResolve, &snapshot.transparentResolve,
-        &snapshot.opaqueFallback, &snapshot.transparentFallback, &snapshot.shadePipeline };
-    const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u };
-    for(u32 index = 0u; index < LengthOf(outputs); ++index){
+        &snapshot.opaqueFallback, &snapshot.transparentFallback, &snapshot.shadePipeline, &snapshot.csgShadePipeline,
+        &snapshot.csgOpaqueResolve, &snapshot.csgTransparentResolve, &snapshot.csgOpaqueFallback, &snapshot.csgTransparentFallback };
+    const u32 shaderIndices[] = { 0u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u };
+    for(u32 index = 0u; index < (csg ? LengthOf(outputs) : 6u); ++index){
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
@@ -115,6 +130,43 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
     for(const u64 size : sizes){
         if(size == 0u || size > maximumRange || size > Limit<u32>::s_Max)
             return false;
+    }
+    if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        const u64 contextSize = m_lightSpaceShadow.m_csg.bytes.size();
+        if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
+            return false;
+        if(!snapshot.csgContext || snapshot.csgContext->getCreationDescription().byteSize < contextSize
+            || !snapshot.csgOpaqueDepth || snapshot.csgOpaqueDepth->getCreationDescription().byteSize < plan.countByteSize){
+            Core::BufferHandle csgBuffers[2];
+            Core::GpuDescriptorHandle csgDescriptors[2];
+            ScopeExit retireCsg([&]()noexcept{
+                for(auto& descriptor : csgDescriptors)
+                    RayTracingDetail::RetireHeapHandle(heap, descriptor);
+            });
+            const u64 csgSizes[] = { contextSize, plan.countByteSize };
+            const Name csgNames[] = { Name("light_space_csg_context"), Name("light_space_csg_opaque_depth") };
+            for(u32 index = 0u; index < 2u; ++index){
+                Core::BufferDesc desc;
+                desc
+                    .setByteSize(csgSizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(index == 1u)
+                    .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(csgNames[index])
+                    .enableAutomaticStateTracking(Core::ResourceStates::Common)
+                ;
+                csgBuffers[index] = m_graphics.createBuffer(desc);
+                if(!csgBuffers[index] || !RayTracingDetail::RegisterHeapBuffer(heap, *csgBuffers[index],
+                    Core::GpuDescriptorClass::StorageBuffer, index == 1u, csgDescriptors[index]))
+                    return false;
+            }
+            RayTracingDetail::RetireHeapHandle(heap, snapshot.csgContextDescriptor);
+            RayTracingDetail::RetireHeapHandle(heap, snapshot.csgOpaqueDepthDescriptor);
+            snapshot.csgContext = Move(csgBuffers[0]);
+            snapshot.csgOpaqueDepth = Move(csgBuffers[1]);
+            snapshot.csgContextDescriptor = csgDescriptors[0];
+            snapshot.csgOpaqueDepthDescriptor = csgDescriptors[1];
+            for(auto& descriptor : csgDescriptors)
+                descriptor = Core::GpuDescriptorHandle::invalid();
+            m_lightSpaceShadow.m_captureHistory.invalidate();
+        }
     }
     if(
         snapshot.counts && snapshot.events && snapshot.views && snapshot.drawArguments && snapshot.depth
@@ -207,6 +259,8 @@ void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.viewsDescriptor);
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.drawArgumentsDescriptor);
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.depthDescriptor);
+        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgContextDescriptor);
+        RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgOpaqueDepthDescriptor);
     }
     state.m_captureHistory.invalidate();
     state.m_captureSceneTrusted = false;
@@ -223,6 +277,9 @@ void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
     state.m_resourcesPrepared = false;
     state.m_pipelineFailed = false;
     state.m_dispatchLogged = false;
+    state.m_csgDispatchLogged = false;
+    state.m_csg.snapshot.hasCsg = false;
+    state.m_csg.bytes.clear();
 }
 
 

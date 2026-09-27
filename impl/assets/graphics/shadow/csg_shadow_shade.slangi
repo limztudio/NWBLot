@@ -1,0 +1,283 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_CSG_SHADOW_SHADE_SLANGI
+#define NWB_GRAPHICS_SHADOW_CSG_SHADOW_SHADE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "csg_shadow_math.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgShadowInterval{
+    float2 depth;
+    uint cutter;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbCsgShadowPixelRay(const NwbLightSpaceView view, const uint2 pixel, out float3 origin, out float3 direction){
+    origin = float3(0.0);
+    direction = float3(0.0);
+    if(any(view.map.xy == 0u))
+        return false;
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
+        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    if((view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
+        origin = view.originOrDirection.xyz;
+        direction = normalize(view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y
+            + view.worldToClipRows[3].xyz);
+    }
+    else{
+        direction = -view.originOrDirection.xyz;
+        const float3 right = view.worldToClipRows[0].xyz;
+        const float3 up = view.worldToClipRows[1].xyz;
+        const float rightLength = dot(right, right);
+        const float upLength = dot(up, up);
+        if(rightLength <= 0.0 || upLength <= 0.0)
+            return false;
+        origin = right * ((ndc.x - view.worldToClipRows[0].w) / rightLength)
+            + up * ((ndc.y - view.worldToClipRows[1].w) / upLength) + direction * view.depthRange.z;
+    }
+    return all(isfinite(origin)) && all(isfinite(direction));
+}
+
+void nwbCsgShadowStoreEvent(const uint pixel, const uint index, const NwbLightSpaceEvent event){
+    const uint address = (pixel * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address,
+        uint4(asuint(event.depth), event.instanceAndFacing, event.primitive, event.absorptionRG));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, event.absorptionBInterface);
+}
+
+void nwbCsgShadowConservativeTexel(const uint pixel){
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * 4u, NWB_CSG_SHADOW_CONSERVATIVE_COUNT);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(0.0));
+}
+
+bool nwbCsgShadowCapEvent(
+    const uint instance,
+    const uint cutterIndex,
+    const float depth,
+    const bool entering,
+    const float3 rayOrigin,
+    const float3 rayDirection,
+    out NwbLightSpaceEvent event){
+    event = (NwbLightSpaceEvent)0;
+    const float3 world = rayOrigin + rayDirection * depth;
+    float3 normal;
+    if(!nwbCsgShadowCapNormal(nwbCsgShadowLoadCutter(cutterIndex), world, normal))
+        return false;
+    const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instance);
+    NwbShadowHit hit;
+    hit.meshInstanceIndex = material.meshInstanceIndex;
+    hit.shadowTransmittanceModelId = material.shadowTransmittanceModelId;
+    hit.materialConstantByteOffset = material.materialConstantByteOffset;
+    hit.uv0 = float2(0.0);
+    hit.worldNormal = normal;
+    hit.worldPosition = world;
+    hit.rayDirection = -rayDirection;
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
+    const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
+    const half transmission = nwbShadowFresnelTransmittedFraction(surface.refractionIor, nwbShadowCosineToRay(normal, rayDirection));
+    if(!all(isfinite(world)) || !all(isfinite(float3(absorption))) || !isfinite(float(transmission)))
+        return false;
+    event.depth = depth;
+    event.instanceAndFacing = instance | (entering ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u);
+    event.primitive = NWB_CSG_SHADOW_CAP_PRIMITIVE;
+    event.absorptionRG = f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u);
+    event.absorptionBInterface = f32tof16(float(absorption.z)) | (f32tof16(float(transmission)) << 16u);
+    return true;
+}
+
+bool nwbCsgShadowEmitSpan(
+    const uint pixel,
+    const bool transparent,
+    const uint instance,
+    const NwbLightSpaceEvent farEvent,
+    const NwbLightSpaceEvent nearEvent,
+    const uint farCutter,
+    const uint nearCutter,
+    const float3 rayOrigin,
+    const float3 rayDirection,
+    inout uint outputCount,
+    inout float opaqueDepth){
+    if(farEvent.depth <= nearEvent.depth)
+        return true;
+    if(!transparent){
+        opaqueDepth = min(opaqueDepth, nearEvent.depth);
+        return true;
+    }
+    if(outputCount > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL - 2u)
+        return false;
+    NwbLightSpaceEvent outputFar = farEvent;
+    NwbLightSpaceEvent outputNear = nearEvent;
+    if(farCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, farCutter, farEvent.depth, true, rayOrigin, rayDirection, outputFar))
+        return false;
+    if(nearCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, nearCutter, nearEvent.depth, false, rayOrigin, rayDirection, outputNear))
+        return false;
+    nwbCsgShadowStoreEvent(pixel, outputCount, outputFar);
+    nwbCsgShadowStoreEvent(pixel, outputCount + 1u, outputNear);
+    outputCount += 2u;
+    return true;
+}
+
+bool nwbCsgShadowSubtractSpan(
+    const uint pixel,
+    const bool transparent,
+    const uint instance,
+    const NwbLightSpaceEvent farEvent,
+    const NwbLightSpaceEvent nearEvent,
+    const NwbCsgShadowInterval intervals[NWB_CSG_SHADOW_MAX_CUTTERS],
+    const uint intervalCount,
+    const float3 rayOrigin,
+    const float3 rayDirection,
+    inout uint outputCount,
+    inout float opaqueDepth){
+    NwbLightSpaceEvent cursor = farEvent;
+    uint cursorCutter = 0xffffffffu;
+    for(uint index = 0u; index < intervalCount; ++index){
+        const NwbCsgShadowInterval cut = intervals[index];
+        if(cut.depth.x >= cursor.depth || cut.depth.y <= nearEvent.depth)
+            continue;
+        if(cut.depth.y < cursor.depth){
+            NwbLightSpaceEvent boundary = nearEvent;
+            boundary.depth = cut.depth.y;
+            if(!nwbCsgShadowEmitSpan(
+                pixel, transparent, instance, cursor, boundary, cursorCutter, cut.cutter,
+                rayOrigin, rayDirection, outputCount, opaqueDepth
+            ))
+                return false;
+        }
+        if(cut.depth.x < cursor.depth){
+            cursor.depth = cut.depth.x;
+            cursorCutter = cut.cutter;
+        }
+        if(cursor.depth <= nearEvent.depth)
+            return true;
+    }
+    return nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, nearEvent, cursorCutter, 0xffffffffu,
+        rayOrigin, rayDirection, outputCount, opaqueDepth);
+}
+
+// Input records stay local while expanded cap records overwrite the same bounded global stream.
+bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, const uint2 viewPixel, const uint count){
+    NwbLightSpaceEvent input[NWB_LIGHT_SPACE_EVENTS_PER_TEXEL];
+    bool hasCsg = false;
+    for(uint index = 0u; index < count; ++index){
+        input[index] = nwbLightSpaceLoadEvent(pixel, index);
+        const uint instance = input[index].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+        if(!isfinite(input[index].depth) || instance >= g_NwbLightSpacePush.instanceCount)
+            return false;
+        hasCsg = hasCsg || nwbCsgShadowReceiver(instance);
+    }
+    if(!hasCsg)
+        return true;
+    float3 rayOrigin;
+    float3 rayDirection;
+    if(!nwbCsgShadowPixelRay(view, viewPixel, rayOrigin, rayDirection))
+        return false;
+    uint outputCount = 0u;
+    float opaqueDepth = asfloat(0x7f7fffffu);
+    uint first = 0u;
+    while(first < count){
+        const uint instance = input[first].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+        uint end = first + 1u;
+        while(end < count && (input[end].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) == instance)
+            ++end;
+        const uint4 range = nwbCsgShadowRange(instance);
+        if((range.z & NWB_CSG_SHADOW_RECEIVER_ACTIVE) == 0u){
+            for(uint index = first; index < end; ++index){
+                if(outputCount == NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
+                    return false;
+                nwbCsgShadowStoreEvent(pixel, outputCount, input[index]);
+                ++outputCount;
+            }
+            first = end;
+            continue;
+        }
+        const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instance);
+        const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+        NwbCsgShadowInterval intervals[NWB_CSG_SHADOW_MAX_CUTTERS];
+        for(uint index = 0u; index < NWB_CSG_SHADOW_MAX_CUTTERS; ++index)
+            intervals[index] = (NwbCsgShadowInterval)0;
+        uint intervalCount = 0u;
+        const uint cutterCount = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
+        const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x
+            && range.y <= NWB_CSG_SHADOW_MAX_CUTTERS;
+        bool supported = bounded && (range.z & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u;
+        if(supported){
+            for(uint index = 0u; index < range.y; ++index){
+                NwbCsgShadowInterval interval;
+                interval.cutter = range.x + index;
+                if(!nwbCsgShadowCutterInterval(nwbCsgShadowLoadCutter(interval.cutter), rayOrigin, rayDirection, interval.depth)){
+                    supported = false;
+                    break;
+                }
+                if(interval.depth.y > interval.depth.x){
+                    uint destination = intervalCount;
+                    while(destination > 0u && intervals[destination - 1u].depth.y < interval.depth.y){
+                        intervals[destination] = intervals[destination - 1u];
+                        --destination;
+                    }
+                    intervals[destination] = interval;
+                    ++intervalCount;
+                }
+            }
+        }
+        if(!supported)
+            intervalCount = 0u;
+        uint index = first;
+        uint winding = 0u;
+        NwbLightSpaceEvent farEvent = (NwbLightSpaceEvent)0;
+        while(index < end){
+            const NwbLightSpaceEvent event = input[index];
+            uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+            ++index;
+            while(index < end && nwbShadowCrossingMatchesEndpoint(event.depth, input[index].depth)){
+                facing |= (input[index].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+                ++index;
+            }
+            if(facing == 3u)
+                continue;
+            if(facing == 1u){
+                if(winding == 0u)
+                    farEvent = event;
+                ++winding;
+            }
+            else{
+                if(winding == 0u)
+                    return false;
+                --winding;
+                if(
+                    winding == 0u && !nwbCsgShadowSubtractSpan(pixel, transparent, instance, farEvent, event,
+                    intervals, intervalCount, rayOrigin, rayDirection, outputCount, opaqueDepth)
+                )
+                    return false;
+            }
+        }
+        if(winding != 0u)
+            return false;
+        first = end;
+    }
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * 4u, outputCount);
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(opaqueDepth));
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

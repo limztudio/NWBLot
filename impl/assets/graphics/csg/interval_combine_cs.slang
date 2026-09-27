@@ -8,11 +8,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbCsgRemovedIntervalEntry{
-    float4 depth;
-    half4 capNormal;
-    uint4 data;
+struct NwbCsgRemovedIntervalCandidate{
     float sortDepth;
+    uint source;
 };
 
 // Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps;
@@ -30,15 +28,6 @@ struct NwbCsgRemovedIntervalEntry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-NwbCsgRemovedIntervalEntry nwbCsgInvalidRemovedIntervalEntry(){
-    NwbCsgRemovedIntervalEntry entry;
-    entry.depth = float4(0.0, 0.0, 0.0, 0.0);
-    entry.capNormal = half4(0.0h, 0.0h, 0.0h, 0.0h);
-    entry.data = uint4(0u, 0u, 0u, 0u);
-    entry.sortDepth = NWB_CSG_INVALID_DISTANCE;
-    return entry;
-}
 
 uint2 nwbCsgIntervalCombineFrameExtent(){
     uint width = 1u;
@@ -97,12 +86,11 @@ uint nwbCsgIntervalCombineReceiverSpanFlagsToRemovedFlags(const uint spanFlags){
 }
 
 void nwbCsgIntervalCombineInsertEntry(
-    inout NwbCsgRemovedIntervalEntry entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
-    const NwbCsgRemovedIntervalEntry candidate,
+    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
+    const NwbCsgRemovedIntervalCandidate candidate,
     const uint removedIntervalLayerCount,
     inout uint inOutRemovedIntervalCount,
-    inout uint inOutFlags
-){
+    inout uint inOutFlags){
     const uint entryIndex = inOutRemovedIntervalCount;
     ++inOutRemovedIntervalCount;
     if(entryIndex >= removedIntervalLayerCount){
@@ -110,20 +98,16 @@ void nwbCsgIntervalCombineInsertEntry(
         return;
     }
 
-    [unroll]
-    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
-        if(layerIndex >= removedIntervalLayerCount)
-            return;
+    [loop]
+    for(uint layerIndex = 0u; layerIndex < removedIntervalLayerCount; ++layerIndex){
         if(candidate.sortDepth >= entries[layerIndex].sortDepth)
             continue;
 
-        NwbCsgRemovedIntervalEntry displaced = entries[layerIndex];
+        NwbCsgRemovedIntervalCandidate displaced = entries[layerIndex];
         entries[layerIndex] = candidate;
-        [unroll]
-        for(uint shiftIndex = layerIndex + 1u; shiftIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++shiftIndex){
-            if(shiftIndex >= removedIntervalLayerCount)
-                return;
-            NwbCsgRemovedIntervalEntry next = entries[shiftIndex];
+        [loop]
+        for(uint shiftIndex = layerIndex + 1u; shiftIndex < removedIntervalLayerCount; ++shiftIndex){
+            NwbCsgRemovedIntervalCandidate next = entries[shiftIndex];
             entries[shiftIndex] = displaced;
             displaced = next;
         }
@@ -132,16 +116,14 @@ void nwbCsgIntervalCombineInsertEntry(
 }
 
 void nwbCsgIntervalCombineAppendCandidate(
-    inout NwbCsgRemovedIntervalEntry entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
+    inout NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const uint2 pixel,
+    const uint4 spanData,
     const uint spanIndex,
     const uint intervalIndex,
     const uint removedIntervalLayerCount,
     inout uint inOutRemovedIntervalCount,
-    inout uint inOutFlags
-){
-    const int3 spanTexel = int3(int2(pixel), int(spanIndex));
-    const uint4 spanData = g_NwbCsgReceiverSpanData.Load(spanTexel);
+    inout uint inOutFlags){
     const uint receiverIndex = spanData.x;
     const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
 
@@ -163,14 +145,10 @@ void nwbCsgIntervalCombineAppendCandidate(
         cutterLinearDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x
         && cutterLinearDepth.y <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON
     ;
-    const uint entryFlags = backCapVisible ? NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG : 0u;
-    const float2 cutterHardwareDepth = cutterDepth.xy;
-
-    NwbCsgRemovedIntervalEntry entry;
-    entry.depth = float4(cutterHardwareDepth.x, cutterHardwareDepth.y, removedEnterLinearDepth, removedExitLinearDepth);
-    entry.capNormal = half4(g_NwbCsgBackCapNormal.Load(intervalTexel));
-    entry.data = uint4(receiverIndex, entryFlags, spanIndex, intervalIndex);
+    NwbCsgRemovedIntervalCandidate entry;
     entry.sortDepth = backCapVisible ? cutterLinearDepth.y : removedEnterLinearDepth;
+    // Zero retains the original empty entry when no candidate sorts before the invalid-distance sentinel.
+    entry.source = 1u + spanIndex * NWB_CSG_PEEL_LAYER_COUNT + intervalIndex;
 
     nwbCsgIntervalCombineInsertEntry(
         entries,
@@ -183,22 +161,40 @@ void nwbCsgIntervalCombineAppendCandidate(
 
 void nwbCsgIntervalCombineWriteEntries(
     const uint2 pixel,
-    const NwbCsgRemovedIntervalEntry entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
+    const NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const uint removedIntervalLayerCount,
     const uint removedIntervalCount,
-    const uint flags
-){
+    const uint flags){
     const uint storedIntervalCount = min(removedIntervalCount, removedIntervalLayerCount);
-    [unroll]
-    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
-        if(layerIndex >= storedIntervalCount)
-            break;
-
+    [loop]
+    for(uint layerIndex = 0u; layerIndex < storedIntervalCount; ++layerIndex){
         const uint3 texel = uint3(pixel, layerIndex);
-        const NwbCsgRemovedIntervalEntry entry = entries[layerIndex];
-        g_NwbCsgRemovedIntervalDepth[texel] = entry.depth;
-        g_NwbCsgRemovedIntervalCapNormal[texel] = float4(entry.capNormal);
-        g_NwbCsgRemovedIntervalData[texel] = entry.data;
+        const uint source = entries[layerIndex].source;
+        if(source == 0u){
+            g_NwbCsgRemovedIntervalDepth[texel] = float4(0.0, 0.0, 0.0, 0.0);
+            g_NwbCsgRemovedIntervalCapNormal[texel] = float4(0.0, 0.0, 0.0, 0.0);
+            g_NwbCsgRemovedIntervalData[texel] = uint4(0u, 0u, 0u, 0u);
+            continue;
+        }
+
+        const uint spanIndex = (source - 1u) / NWB_CSG_PEEL_LAYER_COUNT;
+        const uint intervalIndex = (source - 1u) % NWB_CSG_PEEL_LAYER_COUNT;
+        const uint4 spanData = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
+        const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
+        const int3 intervalTexel = int3(int2(pixel), int(intervalIndex));
+        const float4 cutterDepth = g_NwbCsgIntervalDepth.Load(intervalTexel);
+        const float2 cutterLinearDepth = cutterDepth.zw;
+        const float removedEnterLinearDepth = max(spanDepth.x, cutterLinearDepth.x);
+        const float removedExitLinearDepth = min(spanDepth.y, cutterLinearDepth.y);
+        const bool backCapVisible =
+            cutterLinearDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x
+            && cutterLinearDepth.y <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON
+        ;
+        const uint entryFlags = backCapVisible ? NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG : 0u;
+        const half4 capNormal = half4(g_NwbCsgBackCapNormal.Load(intervalTexel));
+        g_NwbCsgRemovedIntervalDepth[texel] = float4(cutterDepth.xy, removedEnterLinearDepth, removedExitLinearDepth);
+        g_NwbCsgRemovedIntervalCapNormal[texel] = float4(capNormal);
+        g_NwbCsgRemovedIntervalData[texel] = uint4(spanData.x, entryFlags, spanIndex, intervalIndex);
     }
 
     g_NwbCsgRemovedIntervalCount[uint3(pixel, 0u)] = uint2(removedIntervalCount, flags);
@@ -223,10 +219,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint spanLayerCount = nwbCsgIntervalCombineReceiverSpanLayerCount();
     const uint removedIntervalLayerCount = nwbCsgIntervalCombineRemovedIntervalLayerCount();
 
-    NwbCsgRemovedIntervalEntry entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT];
+    NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT];
     [unroll]
-    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex)
-        entries[layerIndex] = nwbCsgInvalidRemovedIntervalEntry();
+    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
+        entries[layerIndex].sortDepth = NWB_CSG_INVALID_DISTANCE;
+        entries[layerIndex].source = 0u;
+    }
 
     const uint2 spanCounts = g_NwbCsgReceiverSpanCount.Load(int3(int2(pixel), 0));
     uint flags = 0u;
@@ -238,19 +236,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint spanCount = min(rawSpanCount, spanLayerCount);
 
     uint removedIntervalCount = 0u;
-    [unroll]
-    for(uint spanIndex = 0u; spanIndex < NWB_CSG_RECEIVER_SPAN_LAYER_COUNT; ++spanIndex){
-        if(spanIndex >= spanCount)
-            break;
-
-        [unroll]
-        for(uint intervalIndex = 0u; intervalIndex < NWB_CSG_PEEL_LAYER_COUNT; ++intervalIndex){
-            if(intervalIndex >= intervalLayerCount)
-                break;
-
+    [loop]
+    for(uint spanIndex = 0u; spanIndex < spanCount; ++spanIndex){
+        const uint4 spanData = g_NwbCsgReceiverSpanData.Load(int3(int2(pixel), int(spanIndex)));
+        [loop]
+        for(uint intervalIndex = 0u; intervalIndex < intervalLayerCount; ++intervalIndex){
             nwbCsgIntervalCombineAppendCandidate(
                 entries,
                 pixel,
+                spanData,
                 spanIndex,
                 intervalIndex,
                 removedIntervalLayerCount,

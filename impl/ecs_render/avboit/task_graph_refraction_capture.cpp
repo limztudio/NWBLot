@@ -358,6 +358,11 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         frameBindings, targets, dependency, commonUses, scratch
     ))
         return {};
+    if(!objectGeometry.prepare(
+        drawItems.csg.indexedDrawItems.data(), drawItems.csg.indexedDrawItems.size(),
+        frameBindings, targets, dependency, commonUses, scratch
+    ))
+        return {};
 
     usize drawTaskIndex = 0u;
     const auto appendDraw = [&](const MaterialPassDrawItem* items, const usize count, const bool csg,

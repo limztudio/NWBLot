@@ -57,6 +57,7 @@ struct CsgReceiverRangeGpuData{
     u32 materialConstantByteOffset = 0u;
     u32 meshInstanceIndex = 0u;
     u32 materialContextPadding = 0u;
+    UInt4 screenWorkRect = { { { 0u, 0u, Limit<u32>::s_Max, Limit<u32>::s_Max } } };
 };
 
 struct CsgCutterGpuData{
@@ -93,7 +94,7 @@ struct CsgIntervalSampleStateGpuData{
     u32 resourceSlotPadding2 = 0u;
 };
 
-static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 8u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
+static_assert(sizeof(CsgReceiverRangeGpuData) == sizeof(u32) * 12u + sizeof(Float34) + sizeof(CsgBoundsGpuData), "CsgReceiverRangeGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgCutterGpuData) == sizeof(Float4) + sizeof(Float34) + sizeof(Float4) * 2u, "CsgCutterGpuData layout must match the CSG shader");
 static_assert(sizeof(CsgClipContextSlots) == sizeof(u32) * 8u, "CSG clip context slots must stay two uint4 lanes");
 static_assert(sizeof(CsgIntervalSampleStateGpuData) == sizeof(u32) * 8u, "CSG interval sample state must match shader layout");
@@ -111,6 +112,22 @@ using CsgReceiverRangeGpuDataVector = Vector<CsgReceiverRangeGpuData, Core::Allo
 using CsgCutterGpuDataVector = Vector<CsgCutterGpuData, Core::Alloc::ScratchArena>;
 
 
+struct CsgClipWorkBounds{
+    SIMDVector minBounds = VectorZero();
+    SIMDVector maxBounds = VectorZero();
+    bool valid = false;
+
+    // False rejects the cutter; accepted bounds with valid=false require full screen coverage.
+    [[nodiscard]] bool resolveCutter(
+        const CsgShapeRegistry& shapeRegistry,
+        const CsgShapeTypeInfo& shapeType,
+        const SIMDMatrix& shapeToWorld,
+        const u8* parameterBytes,
+        usize parameterByteSize,
+        const CsgClipWorkBounds& receiverBounds
+    );
+};
+
 struct CsgFrameWorkRegion{
     u32 minX = Limit<u32>::s_Max;
     u32 minY = Limit<u32>::s_Max;
@@ -123,6 +140,13 @@ struct CsgFrameWorkRegion{
     [[nodiscard]] u32 width()const noexcept{ return bounded() ? maxX - minX : 0u; }
     [[nodiscard]] u32 height()const noexcept{ return bounded() ? maxY - minY : 0u; }
 
+    void expandWorldBounds(
+        const SIMDMatrix& worldToClip,
+        SIMDVector minBounds,
+        SIMDVector maxBounds,
+        u32 frameWidth,
+        u32 frameHeight
+    );
     void expandFull()noexcept{ fullFrame = true; }
     void expandClamped(const i32 rectMinX, const i32 rectMaxX, const i32 rectMinY, const i32 rectMaxY, const u32 frameWidth, const u32 frameHeight)noexcept{
         if(fullFrame || frameWidth == 0u || frameHeight == 0u)

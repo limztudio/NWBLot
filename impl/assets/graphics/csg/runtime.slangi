@@ -46,6 +46,7 @@ struct NwbCsgReceiverRange{
     float4 worldToReceiverRow2;
     NwbCsgBounds localBounds;
     uint4 materialContext; // x: surface dispatch id, y: constant byte offset, z: mesh instance index
+    uint4 screenWorkRect; // Absolute pixel bounds: min.xy inclusive, max.zw exclusive.
 };
 
 struct NwbCsgSample{

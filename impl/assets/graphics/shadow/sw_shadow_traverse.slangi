@@ -62,6 +62,12 @@ uint nwbSwShadowInstanceCount(){
 NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
     const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
     const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
+#if defined(NWB_SW_SHADOW_SKIP_CSG)
+#if NWB_SW_SHADOW_SKIP_CSG
+    if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
+        return NwbShadowInstanceStatus::NoIntersection;
+#endif
+#endif
     const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
     // Compile-time class filter avoids runtime traversal branching.
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
@@ -127,8 +133,8 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 
                 const NwbMeshSurface surface = nwbShadowDispatchSurface(material.shadowTransmittanceModelId, hit);
                 const float3 geometricNormal = cross(v1 - v0, v2 - v0);
-                const half cosI = nwbShadowCosineToRay(geometricNormal, direction);
-                const half shadingCosI = nwbShadowCosineToRay(objectNormal, direction);
+                const half cosI = nwbShadowCosineToRay(nwbSwBvhTransformNormal(instance, geometricNormal), worldDirection);
+                const half shadingCosI = nwbShadowCosineToRay(hit.worldNormal, worldDirection);
                 const half fresnelCosI = lerp(cosI, shadingCosI, smoothNormalWeight);
                 nwbShadowInstanceIntegrateCrossing(optics, hasAbsorption, surface.refractionIor, surface.shadowAbsorptionTint, fresnelCosI, triangleHit.t);
             }

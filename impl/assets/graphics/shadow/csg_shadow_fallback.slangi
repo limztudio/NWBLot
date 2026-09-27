@@ -1,0 +1,79 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_CSG_SHADOW_FALLBACK_SLANGI
+#define NWB_GRAPHICS_SHADOW_CSG_SHADOW_FALLBACK_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "csg_shadow_resources.slangi"
+#include "../bindless/bindless_heap_rt.slangi"
+#include "shadow_heap_resources.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Missing map coverage uses the receiver's enclosing current-pose box, never an uncut mesh claimed as exact CSG.
+half3 nwbCsgShadowBoundsVisibility(const float3 worldOrigin, const float3 worldDirection, const float minimum, const float maximum){
+    if(!nwbCsgShadowEnabled())
+        return half3(1.0h);
+    if(!all(isfinite(worldOrigin)) || !all(isfinite(worldDirection)) || !isfinite(minimum) || !isfinite(maximum))
+        return half3(0.0h);
+    const NwbRayTraceMaterialContextSlots context = NwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot);
+    for(uint index = 0u; index < g_NwbLightSpacePush.instanceCount; ++index){
+        if(!nwbCsgShadowReceiver(index))
+            continue;
+        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(context.sceneSlots.z)[index];
+        const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+        if(transparent)
+            continue;
+#else
+        if(!transparent)
+            continue;
+#endif
+        const NwbSwBvhInstance instance = nwbCsgShadowInstance(index);
+        const NwbBvhNode root = nwbCsgShadowRoot(index);
+        const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
+        const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
+        if(
+            !all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(root.aabbMin))
+            || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)
+        )
+            return half3(0.0h);
+        float lower = minimum;
+        float upper = maximum;
+        bool missed = false;
+        for(uint axis = 0u; axis < 3u; ++axis){
+            if(direction[axis] == 0.0){
+                if(origin[axis] < root.aabbMin[axis] || origin[axis] > root.aabbMax[axis])
+                    missed = true;
+            }
+            else{
+                const float first = (root.aabbMin[axis] - origin[axis]) / direction[axis];
+                const float second = (root.aabbMax[axis] - origin[axis]) / direction[axis];
+                if(!isfinite(first) || !isfinite(second))
+                    return half3(0.0h);
+                lower = max(lower, min(first, second));
+                upper = min(upper, max(first, second));
+            }
+        }
+        if(!missed && upper > lower)
+            return half3(0.0h);
+    }
+    return half3(1.0h);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

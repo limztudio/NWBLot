@@ -99,7 +99,8 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsOpaqueTemporalMergeEntryStates
+    const bool graphOwnsOpaqueTemporalMergeEntryStates,
+    const LightSpaceShadowSnapshot* const lightSpace
 ){
     outFrameIndex = 0u;
     if(
@@ -116,7 +117,8 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
         true,
         &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,
-        true
+        true,
+        lightSpace
     );
 }
 

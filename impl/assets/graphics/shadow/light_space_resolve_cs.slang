@@ -2,8 +2,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#ifndef NWB_LIGHT_SPACE_CSG_ENABLED
+#define NWB_LIGHT_SPACE_CSG_ENABLED 0
+#endif
+
 #define NWB_LIGHT_SPACE_MAP_ONLY 1
 #include "light_space_resolve.slangi"
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+#include "csg_shadow_fallback.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,7 +32,6 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const NwbSceneLight light = g_NwbSceneLights[index];
         if(light.params.z < 0.0)
             continue;
-        // Visibility visibility is a (0, 1) bounded factor; keep the multi-sample mean in half.
         half3 result = half3(1.0h);
         bool requiresFallback = false;
         if(!background){
@@ -50,14 +56,30 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 half3 visibility = half3(1.0h);
                 if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
                     if(!mapReady || !nwbLightSpaceEvaluate(index, origin, normal, direction, blockerDistance, visibility)){
-                        requiresFallback = true;
-                        break;
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+                        if(nwbCsgShadowHardwareCompose())
+                            visibility = nwbCsgShadowBoundsVisibility(origin, direction, minimum, maximum);
+                        else
+#endif
+                        {
+                            requiresFallback = true;
+                            break;
+                        }
                     }
                 }
                 result += visibility / half(sampleCount);
             }
         }
-        NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[uint3(pixel, uint(light.params.z))] = float4(result, requiresFallback ? 0.0 : 1.0);
+        const uint3 outputPixel = uint3(pixel, uint(light.params.z));
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+        bool compose = nwbCsgShadowHardwareCompose();
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+        compose = compose && (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) == 0u;
+#endif
+        if(compose)
+            result *= half3(NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel].rgb);
+#endif
+        NwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(result, requiresFallback ? 0.0 : 1.0);
     }
 }
 

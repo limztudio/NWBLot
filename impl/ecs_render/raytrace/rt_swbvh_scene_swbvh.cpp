@@ -36,6 +36,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     auto rendererView = m_world.view<RendererComponent>();
     const usize candidateCount = rendererView.candidateCount();
     m_lightSpaceShadow.m_sceneBuffers.reserve(candidateCount * 3u);
+    BeginLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, candidateCount, false);
 
     // Parallel instance records and CPU BVH build values.
     Vector<SceneSwBvhInstanceGpu, Core::Alloc::ScratchArena> instances{ scratchArena };
@@ -88,7 +89,6 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_rayTracingState.m_swShadowMeshAttributeHandles.clear();
     m_rayTracingState.m_swShadowMeshCount = 0u;
     bool staticScene = true;
-    bool samplingSceneTrusted = true;
     bool contentComplete = true;
     bool captureSceneTrusted = true;
     u64 captureSceneIdentity = FNV64_OFFSET_BASIS;
@@ -99,9 +99,6 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     for(auto&& [entity, renderer] : rendererView){
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
-        if(m_world.tryGetComponent<StaticCsgMeshComponent>(entity) || m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
-            || m_world.tryGetComponent<CsgReceiverComponent>(entity))
-            samplingSceneTrusted = false;
 
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         RenderableMeshDesc resolvedMesh;
@@ -298,6 +295,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
         m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
 
+        AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, mesh);
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
         lightSpaceIndexBuffers.push_back(mesh.triangleIndexBuffer);
@@ -316,8 +314,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     }
     SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
 
+    if(!FinishLightSpaceCsgGather(m_lightSpaceShadow.m_csg, m_world, m_csgShapeRegistry, scratchArena))
+        return false;
+    const auto& csg = m_lightSpaceShadow.m_csg.snapshot;
     const u32 instanceCount = static_cast<u32>(instances.size());
-    m_lightSpaceShadow.m_sceneEligible = samplingSceneTrusted && contentComplete && instanceCount <= NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+    m_lightSpaceShadow.m_sceneEligible = contentComplete && instanceCount <= NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
     m_lightSpaceShadow.m_casters.clear();
     m_lightSpaceShadow.m_casters.reserve(instanceCount);
     for(u32 index = 0u; index < instanceCount; ++index){
@@ -329,8 +330,11 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32)
         )
             m_lightSpaceShadow.m_sceneEligible = false;
+        const bool csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
+        if(csgReceiver)
+            instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
         m_lightSpaceShadow.m_casters.push_back({ index, static_cast<u32>(indexCount),
-            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u, indexBuffer });
+            (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u, csgReceiver, indexBuffer });
     }
     if(instanceCount == 0u){
         m_rayTracingState.m_sceneBvhInstanceCount = 0u;
@@ -520,7 +524,8 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     m_preparedSceneContentStamp = { sceneStaticHash, opticalMaterialContentHash, staticScene && contentComplete };
     RayTracingSceneContentStamp samplingStamp = m_preparedSceneContentStamp;
     // The material collector admits immutable uploaded assets/fixtures; runtime image bindings must also invalidate sampling trust.
-    samplingStamp.trusted = samplingStamp.trusted && samplingSceneTrusted;
+    if(csg.hasCsg)
+        Fnv64AppendValue(samplingStamp.material, csg.identity);
     m_rayTracingState.m_softwareTransparentSampling.m_history.prepareScene(samplingStamp);
     Fnv64AppendValue(captureSceneIdentity, instanceCount);
     Fnv64AppendBuffer(captureSceneIdentity, shadowMaterialTypedBytes.data(), shadowMaterialTypedBytes.size());
@@ -528,8 +533,10 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         Fnv64AppendValue(captureSceneIdentity, texture.get());
     m_lightSpaceShadow.m_sceneTextures.assign(m_preparedShadowTraceMaterialSampledTextures.begin(), m_preparedShadowTraceMaterialSampledTextures.end());
     // Sampled material assets are immutable under this collector; resource/shader invalidation also clears capture history.
+    if(csg.hasCsg)
+        Fnv64AppendValue(captureSceneIdentity, csg.identity);
     m_lightSpaceShadow.m_captureSceneIdentity = captureSceneIdentity;
-    m_lightSpaceShadow.m_captureSceneTrusted = captureSceneTrusted && samplingSceneTrusted && contentComplete;
+    m_lightSpaceShadow.m_captureSceneTrusted = captureSceneTrusted && contentComplete;
     return true;
 }
 

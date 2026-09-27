@@ -20,6 +20,7 @@ void nwbLightSpaceStoreView(const uint index, const NwbLightSpaceView view){
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + row * 16u, asuint(view.worldToClipRows[row]));
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 64u, asuint(view.originOrDirection));
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 80u, asuint(view.depthRange));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.viewSlot].Store4(address + 112u, view.light);
 }
 
 float3 nwbLightSpaceCorner(const NwbBvhNode root, const uint corner){
@@ -34,7 +35,7 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         view.worldToClipRows[row] = float4(0.0);
     if((view.light.w & NWB_LIGHT_SPACE_FLAG_ELIGIBLE) == 0u || view.light.x >= min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS))
         return false;
-    const NwbBvhNode root = NwbHeapBvhNodes(g_NwbLightSpacePush.sceneRootSlot)[0u];
+    const NwbBvhNode root = nwbLightSpaceSceneRoot();
     if(!all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax))
         return false;
     const NwbSceneLight light = g_NwbSceneLights[view.light.x];
@@ -64,9 +65,10 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         float minimumCasterDistance = farPlane;
         // A near-plane-clipped caster needs ray traversal. Current posed mesh roots prove this without CPU readback.
         for(uint instanceIndex = 0u; instanceIndex < g_NwbLightSpacePush.instanceCount; ++instanceIndex){
-            const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
+            if(nwbCsgShadowHardwareCompose() && !nwbCsgShadowReceiver(instanceIndex))
+                continue;
             const NwbSwBvhInstance instance = nwbLightSpaceInstance(instanceIndex);
-            const NwbBvhNode meshRoot = NwbHeapBvhNodes(material.nodeSlot)[0u];
+            const NwbBvhNode meshRoot = nwbLightSpaceMeshRoot(instanceIndex);
             const float3 origin = nwbSwBvhTransformPoint(instance, light.position.xyz);
             const float inverseNorm = sqrt(dot(instance.worldToObjectRow0.xyz, instance.worldToObjectRow0.xyz)
                 + dot(instance.worldToObjectRow1.xyz, instance.worldToObjectRow1.xyz)
@@ -122,6 +124,9 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
         if(!all(isfinite(view.worldToClipRows[row])))
             return false;
     }
+    // Hardware composition fits the complete CSG caster set, independently of the ordinary map-quality setting.
+    if(nwbCsgShadowHardwareCompose())
+        view.light.w |= NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE;
     return true;
 }
 

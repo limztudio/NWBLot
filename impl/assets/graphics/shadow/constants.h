@@ -12,6 +12,10 @@
 // flags bits shared by CPU and ray-tracing shaders.
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT 0x1u
 #define NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE 0x2u
+#define NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW 0x4u
+
+#define NWB_RT_SHADOW_BASE_INSTANCE_MASK 0x4u
+#define NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK 0x8u
 
 // Shared by hardware RayQuery and software BVH traversal.
 #define NWB_SHADOW_RAY_MIN_DISTANCE 0.001

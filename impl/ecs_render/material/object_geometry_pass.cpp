@@ -172,7 +172,6 @@ void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(
         const auto& mesh = drawItem.meshResources;
         const auto& cache = mesh.objectGeometryCache;
         const Core::GraphicsPipelineHandle& pipeline = drawItem.pipelineResources.indexedPipeline;
-        NWB_ASSERT(drawItem.pipelineKey.csgMode == MaterialPipelineCsgMode::None);
         setMaterialPassDrawItemResourceStates(context, drawItem, mesh);
         Core::GraphicsState state;
         state.setPipeline(pipeline.get());

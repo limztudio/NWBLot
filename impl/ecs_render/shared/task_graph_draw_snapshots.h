@@ -33,8 +33,10 @@ struct OpaqueMaterialPassGraphSnapshot{
     DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
     DrawItemVector csgMeshDrawItems;
+    DrawItemVector csgIndexedDrawItems;
     DrawItemVector csgComputeDrawItems;
     DrawItemVector csgReceiverSurfaceMeshDrawItems;
+    DrawItemVector csgReceiverSurfaceIndexedDrawItems;
     DrawItemVector csgReceiverSurfaceComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
@@ -48,8 +50,10 @@ struct OpaqueMaterialPassGraphSnapshot{
         , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)
         , csgMeshDrawItems(arena)
+        , csgIndexedDrawItems(arena)
         , csgComputeDrawItems(arena)
         , csgReceiverSurfaceMeshDrawItems(arena)
+        , csgReceiverSurfaceIndexedDrawItems(arena)
         , csgReceiverSurfaceComputeDrawItems(arena)
         , csgReceiverRanges(arena)
         , csgCutters(arena)
@@ -69,12 +73,19 @@ struct OpaqueMaterialPassGraphSnapshot{
         regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
         csgMeshDrawItems.reserve(drawItems.csg.meshDrawItems.size());
         csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
+        csgIndexedDrawItems.reserve(drawItems.csg.indexedDrawItems.size());
+        csgIndexedDrawItems.assign(drawItems.csg.indexedDrawItems.begin(), drawItems.csg.indexedDrawItems.end());
         csgComputeDrawItems.reserve(drawItems.csg.computeDrawItems.size());
         csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
         csgReceiverSurfaceMeshDrawItems.reserve(drawItems.csgReceiverSurface.meshDrawItems.size());
         csgReceiverSurfaceMeshDrawItems.assign(
             drawItems.csgReceiverSurface.meshDrawItems.begin(),
             drawItems.csgReceiverSurface.meshDrawItems.end()
+        );
+        csgReceiverSurfaceIndexedDrawItems.reserve(drawItems.csgReceiverSurface.indexedDrawItems.size());
+        csgReceiverSurfaceIndexedDrawItems.assign(
+            drawItems.csgReceiverSurface.indexedDrawItems.begin(),
+            drawItems.csgReceiverSurface.indexedDrawItems.end()
         );
         csgReceiverSurfaceComputeDrawItems.reserve(drawItems.csgReceiverSurface.computeDrawItems.size());
         csgReceiverSurfaceComputeDrawItems.assign(
@@ -103,12 +114,19 @@ struct OpaqueMaterialPassGraphSnapshot{
         outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
         outDrawItems.csg.meshDrawItems.reserve(csgMeshDrawItems.size());
         outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
+        outDrawItems.csg.indexedDrawItems.reserve(csgIndexedDrawItems.size());
+        outDrawItems.csg.indexedDrawItems.assign(csgIndexedDrawItems.begin(), csgIndexedDrawItems.end());
         outDrawItems.csg.computeDrawItems.reserve(csgComputeDrawItems.size());
         outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());
         outDrawItems.csgReceiverSurface.meshDrawItems.reserve(csgReceiverSurfaceMeshDrawItems.size());
         outDrawItems.csgReceiverSurface.meshDrawItems.assign(
             csgReceiverSurfaceMeshDrawItems.begin(),
             csgReceiverSurfaceMeshDrawItems.end()
+        );
+        outDrawItems.csgReceiverSurface.indexedDrawItems.reserve(csgReceiverSurfaceIndexedDrawItems.size());
+        outDrawItems.csgReceiverSurface.indexedDrawItems.assign(
+            csgReceiverSurfaceIndexedDrawItems.begin(),
+            csgReceiverSurfaceIndexedDrawItems.end()
         );
         outDrawItems.csgReceiverSurface.computeDrawItems.reserve(csgReceiverSurfaceComputeDrawItems.size());
         outDrawItems.csgReceiverSurface.computeDrawItems.assign(
@@ -130,6 +148,7 @@ struct TransparentCsgIntervalGraphSnapshot{
     using CutterVector = Vector<CsgCutterGpuData, Core::Alloc::GlobalArena>;
 
     DrawItemVector receiverSurfaceMeshDrawItems;
+    DrawItemVector receiverSurfaceIndexedDrawItems;
     DrawItemVector receiverSurfaceComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
@@ -140,6 +159,7 @@ struct TransparentCsgIntervalGraphSnapshot{
 
     explicit TransparentCsgIntervalGraphSnapshot(Core::Alloc::GlobalArena& arena)
         : receiverSurfaceMeshDrawItems(arena)
+        , receiverSurfaceIndexedDrawItems(arena)
         , receiverSurfaceComputeDrawItems(arena)
         , csgReceiverRanges(arena)
         , csgCutters(arena)
@@ -155,6 +175,11 @@ struct TransparentCsgIntervalGraphSnapshot{
         receiverSurfaceMeshDrawItems.assign(
             receiverSurfaceDrawItems.meshDrawItems.begin(),
             receiverSurfaceDrawItems.meshDrawItems.end()
+        );
+        receiverSurfaceIndexedDrawItems.reserve(receiverSurfaceDrawItems.indexedDrawItems.size());
+        receiverSurfaceIndexedDrawItems.assign(
+            receiverSurfaceDrawItems.indexedDrawItems.begin(),
+            receiverSurfaceDrawItems.indexedDrawItems.end()
         );
         receiverSurfaceComputeDrawItems.reserve(receiverSurfaceDrawItems.computeDrawItems.size());
         receiverSurfaceComputeDrawItems.assign(
@@ -179,6 +204,11 @@ struct TransparentCsgIntervalGraphSnapshot{
         outReceiverSurfaceDrawItems.meshDrawItems.assign(
             receiverSurfaceMeshDrawItems.begin(),
             receiverSurfaceMeshDrawItems.end()
+        );
+        outReceiverSurfaceDrawItems.indexedDrawItems.reserve(receiverSurfaceIndexedDrawItems.size());
+        outReceiverSurfaceDrawItems.indexedDrawItems.assign(
+            receiverSurfaceIndexedDrawItems.begin(),
+            receiverSurfaceIndexedDrawItems.end()
         );
         outReceiverSurfaceDrawItems.computeDrawItems.reserve(receiverSurfaceComputeDrawItems.size());
         outReceiverSurfaceDrawItems.computeDrawItems.assign(
@@ -207,6 +237,7 @@ struct TransparentMaterialPassGraphSnapshot{
     DrawItemVector regularIndexedDrawItems;
     DrawItemVector regularComputeDrawItems;
     DrawItemVector csgMeshDrawItems;
+    DrawItemVector csgIndexedDrawItems;
     DrawItemVector csgComputeDrawItems;
     ReceiverRangeVector csgReceiverRanges;
     CutterVector csgCutters;
@@ -220,6 +251,7 @@ struct TransparentMaterialPassGraphSnapshot{
         , regularIndexedDrawItems(arena)
         , regularComputeDrawItems(arena)
         , csgMeshDrawItems(arena)
+        , csgIndexedDrawItems(arena)
         , csgComputeDrawItems(arena)
         , csgReceiverRanges(arena)
         , csgCutters(arena)
@@ -239,6 +271,8 @@ struct TransparentMaterialPassGraphSnapshot{
         regularComputeDrawItems.assign(drawItems.regular.computeDrawItems.begin(), drawItems.regular.computeDrawItems.end());
         csgMeshDrawItems.reserve(drawItems.csg.meshDrawItems.size());
         csgMeshDrawItems.assign(drawItems.csg.meshDrawItems.begin(), drawItems.csg.meshDrawItems.end());
+        csgIndexedDrawItems.reserve(drawItems.csg.indexedDrawItems.size());
+        csgIndexedDrawItems.assign(drawItems.csg.indexedDrawItems.begin(), drawItems.csg.indexedDrawItems.end());
         csgComputeDrawItems.reserve(drawItems.csg.computeDrawItems.size());
         csgComputeDrawItems.assign(drawItems.csg.computeDrawItems.begin(), drawItems.csg.computeDrawItems.end());
         csgReceiverRanges.reserve(csgFrameData.receiverRanges.size());
@@ -263,6 +297,8 @@ struct TransparentMaterialPassGraphSnapshot{
         outDrawItems.regular.computeDrawItems.assign(regularComputeDrawItems.begin(), regularComputeDrawItems.end());
         outDrawItems.csg.meshDrawItems.reserve(csgMeshDrawItems.size());
         outDrawItems.csg.meshDrawItems.assign(csgMeshDrawItems.begin(), csgMeshDrawItems.end());
+        outDrawItems.csg.indexedDrawItems.reserve(csgIndexedDrawItems.size());
+        outDrawItems.csg.indexedDrawItems.assign(csgIndexedDrawItems.begin(), csgIndexedDrawItems.end());
         outDrawItems.csg.computeDrawItems.reserve(csgComputeDrawItems.size());
         outDrawItems.csg.computeDrawItems.assign(csgComputeDrawItems.begin(), csgComputeDrawItems.end());
         outCsgFrameData.receiverRanges.reserve(csgReceiverRanges.size());

@@ -1,0 +1,9 @@
+material asset;
+
+asset.interface = "project/shaders/csg_shadow.bind";
+asset.surface = "project/shaders/csg_shadow.surface";
+asset.bxdf = "project/shaders/csg_shadow.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+asset.shader_variant = "default";

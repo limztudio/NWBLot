@@ -33,7 +33,11 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
-    if(lightSpace && lightSpace->ready){
+    const bool composeCsg = lightSpace && lightSpace->ready
+        && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
+    const bool replaceTransparent = composeCsg
+        && (lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) != 0u;
+    if(lightSpace && lightSpace->ready && (!composeCsg || replaceTransparent)){
         NWB_ASSERT(graphEntryStatesOwned && graphOwnsOpaqueToTransparentBoundary);
         Core::GpuTimingMeasure timing(
             m_graphics.gpuTiming(), RendererGpuTimingScope::s_ShadowTransparentTrace, m_graphics.getDevice(), commandList
@@ -72,6 +76,15 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
         false,
         false
     );
+    if(composeCsg){
+        commandList.setTextureState(targets.transparentSoftHalf.get(), ECSRenderDetail::s_ShadowVisibilitySubresources,
+            Core::ResourceStates::UnorderedAccess, true);
+        commandList.commitBarriers();
+        if(!RecordLightSpaceResolve(commandList, m_graphics.getDevice().getDescriptorHeap(), m_graphics.gpuTiming(),
+            *lightSpace, *targets.transparentSoftHalf, frameIndex, transparentShadowSampleCount(),
+            targets.bindless.transparentSoftHalfStorage.slot(), true))
+            return false;
+    }
     if(!hardwareTransparentShadowReady())
         reportSoftwareShadowTraversal(targets);
     return true;

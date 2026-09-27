@@ -791,7 +791,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     if(splitSoftTransparentFold && rayTracingPlan.lightSpace.ready){
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
         constexpr usize s_LightSpaceReadCapacity = 9u;
-        lightSpaceReads.reserve(s_LightSpaceReadCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+        lightSpaceReads.reserve(s_LightSpaceReadCapacity + rayTracingPlan.lightSpace.csgDynamicBoundsCount
+            + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
         if(!RendererFramePipelineDetail::AppendRayTracingSceneShadowBuffers(
             rayTracingResources, importBuffer,
             [&](const Core::GpuGraphResourceId resource, const Core::ResourceStates::Mask state){
@@ -806,6 +807,28 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(!traceGeometryStatesGraphOwned){
             for(usize index = 0u; index < traceGeometryResourceCount; ++index)
                 lightSpaceReads.push_back(ReadUse(traceGeometryResources[index], Core::ResourceStates::ShaderResource));
+        }
+        Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> csgBoundsResources{ scratchArena };
+        csgBoundsResources.reserve(rayTracingPlan.lightSpace.csgDynamicBoundsCount);
+        for(usize index = 0u; index < rayTracingPlan.lightSpace.csgDynamicBoundsCount; ++index){
+            const Core::BufferHandle& buffer = rayTracingPlan.lightSpace.csgDynamicBounds[index];
+            Core::GpuGraphResourceId resource;
+            {
+                const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+                resource = declarations.findImportedBuffer(buffer);
+            }
+            if(!resource.valid())
+                resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "CSG Shadow Dynamic Bounds");
+            if(!resource.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import CSG shadow dynamic bounds"));
+                return false;
+            }
+            if(FindIf(csgBoundsResources.begin(), csgBoundsResources.end(), [&](const auto existing){ return existing == resource; }) != csgBoundsResources.end())
+                continue;
+            csgBoundsResources.push_back(resource);
+            lightSpaceReads.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            opaqueResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
         const LightSpaceShadowGraph maps = DeclareLightSpaceShadowMaps(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
             .graphics = m_graphics,
@@ -829,6 +852,12 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         for(const auto resource : mapBuffers){
             opaqueResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
             transparentTraceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+        }
+        if(maps.csgContext.valid()){
+            opaqueResourceUses.push_back(ReadUse(maps.csgContext, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(maps.csgContext, Core::ResourceStates::ShaderResource));
+            opaqueResourceUses.push_back(ReadUse(maps.csgOpaqueDepth, Core::ResourceStates::ShaderResource));
+            transparentTraceResourceUses.push_back(ReadUse(maps.csgOpaqueDepth, Core::ResourceStates::ShaderResource));
         }
         const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, rayTracingPlan.lightSpace.plan.viewCount };
         opaqueResourceUses.push_back(ReadTextureUse(maps.depth, layers, Core::ResourceStates::ShaderResource));

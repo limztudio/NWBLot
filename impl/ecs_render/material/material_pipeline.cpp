@@ -278,6 +278,11 @@ bool RendererMaterialSystem::createRendererPipeline(
         : shaderVariant
     ;
 
+    const bool sharedObjectGeometry = materialInfo.meshShader.name() == Name("engine/graphics/mesh/shared_ms")
+        && shaderVariant == Core::ShaderArchive::s_DefaultVariant
+    ;
+    const AStringView objectGeometryShaderVariant = sharedObjectGeometry ? shaderVariant : meshShaderVariant;
+
     const bool hasPixelShader = materialInfo.pixelShader.valid();
     const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
@@ -395,7 +400,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     };
 
     auto tryBuildIndexedPipeline = [&]() -> bool{
-        if(!createObjectGeometryPipelineResources(materialInfo.meshShader.name(), meshShaderVariant, resources))
+        if(!createObjectGeometryPipelineResources(materialInfo.meshShader.name(), objectGeometryShaderVariant, resources))
             return false;
         if(!loadPassPixelShader())
             return false;
@@ -504,9 +509,9 @@ bool RendererMaterialSystem::createRendererPipeline(
         return true;
     }
 
-    const bool indexedAvailable = pipelineKey.csgMode == MaterialPipelineCsgMode::None
+    const bool indexedAvailable = (pipelineKey.csgMode == MaterialPipelineCsgMode::None || sharedObjectGeometry)
         && m_shaderSystem.hasShaderArchiveStage(
-            materialInfo.meshShader.name(), meshShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
+            materialInfo.meshShader.name(), objectGeometryShaderVariant, MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
         )
     ;
     if(indexedAvailable){

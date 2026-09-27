@@ -333,6 +333,12 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
         frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
     ))
         return false;
+    if(inputs.streamsUploaded && !objectGeometry.prepare(
+        accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.data(),
+        accumulationPayload.accumulationSnapshot.csgIndexedDrawItems.size(),
+        frameBindings, *inputs.targets, accumulationDependency, accumulationResourceUses, accumulationResourceScratch, inputs.accumulationTimingTicket
+    ))
+        return false;
 
     if(accumulationComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;

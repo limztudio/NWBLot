@@ -194,6 +194,13 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
             .setInitialState(Core::ResourceStates::Unknown).setExternalFinalState(Core::ResourceStates::Common));
     if(!result.counts.valid() || !result.events.valid() || !result.views.valid() || !result.depth.valid())
         return {};
+    const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    if(csg){
+        result.csgContext = importBuffer(snapshot.csgContext, Name("render.light_space_shadow.csg_context"), "CSG Shadow Context");
+        result.csgOpaqueDepth = importBuffer(snapshot.csgOpaqueDepth, Name("render.light_space_shadow.csg_depth"), "CSG Shadow Depth");
+        if(!result.csgContext.valid() || !result.csgOpaqueDepth.valid())
+            return {};
+    }
     if(snapshot.captureTicket.reuse){
         // Receiver tasks retain all current scene/BVH reads and the accepted native map state sources.
         result.ready = inputs.dependency;
@@ -222,6 +229,20 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
         .setDependencies(&inputs.dependency, 1u)
         .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
     ;
+    Core::GpuTaskId csgUpload;
+    if(csg){
+        const Core::GpuUploadBlobId csgBytes = graph.copyUploadData(snapshot.csgContextBytes, snapshot.csgContextByteCount, alignof(u32));
+        if(!csgBytes.valid())
+            return {};
+        uploadDesc.setIdentity(Name("render.light_space_shadow.csg_upload")).setMarkerLabel("CSG Shadow Context Upload");
+        csgUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
+            .source = csgBytes, .destination = result.csgContext, .finalState = Core::ResourceStates::Common,
+        });
+        if(!csgUpload.valid())
+            return {};
+        uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload")
+            .setDependencies(&csgUpload, 1u);
+    }
     result.viewUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
         .source = upload,
         .destination = result.views,
@@ -249,6 +270,8 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     uses.reserve(inputs.sceneReadCount + 5u);
     for(usize index = 0u; index < inputs.sceneReadCount; ++index)
         uses.push_back(inputs.sceneReads[index]);
+    if(csg)
+        uses.push_back(ReadUse(result.csgContext, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadWriteUse(result.views, Core::ResourceStates::UnorderedAccess));
     uses.push_back(WriteUse(result.drawArguments, Core::ResourceStates::UnorderedAccess));
     Core::GpuTaskDesc viewDesc;
@@ -272,6 +295,8 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     const Core::TextureSubresourceSet layers{ 0u, 1u, 0u, snapshot.plan.viewCount };
     if(!__hidden_task_graph_light_space_shadow::GatherCaptureReads(graph, inputs, uses))
         return {};
+    if(csg)
+        uses.push_back(ReadUse(result.csgContext, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.drawArguments, Core::ResourceStates::IndirectArgument));
     uses.push_back(WriteTextureUse(result.depth, layers, Core::ResourceStates::DepthWrite));
@@ -313,8 +338,13 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     uses.clear();
     for(usize index = 0u; index < inputs.sceneReadCount; ++index)
         uses.push_back(inputs.sceneReads[index]);
+    if(csg)
+        uses.push_back(ReadUse(result.csgContext, Core::ResourceStates::ShaderResource));
     uses.push_back(ReadUse(result.views, Core::ResourceStates::ShaderResource));
-    uses.push_back(ReadUse(result.counts, Core::ResourceStates::ShaderResource));
+    uses.push_back(csg ? ReadWriteUse(result.counts, Core::ResourceStates::UnorderedAccess)
+        : ReadUse(result.counts, Core::ResourceStates::ShaderResource));
+    if(csg)
+        uses.push_back(WriteUse(result.csgOpaqueDepth, Core::ResourceStates::UnorderedAccess));
     uses.push_back(ReadWriteUse(result.events, Core::ResourceStates::UnorderedAccess));
     Core::GpuTaskDesc shadeDesc;
     shadeDesc

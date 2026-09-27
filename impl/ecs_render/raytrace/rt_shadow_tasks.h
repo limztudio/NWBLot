@@ -108,7 +108,8 @@ struct ShadowVisibilityOpaqueGraphTask{
                     payload.deferredLightingResources,
                     *payload.opaqueFrameIndex,
                     payload.graphEntryStatesOwned,
-                    payload.graphOwnsOpaqueTemporalMergeEntryStates
+                    payload.graphOwnsOpaqueTemporalMergeEntryStates,
+                    &payload.lightSpace
                 )
                 : payload.raytracingSystem->renderGpuBvhShadowVisibilityOpaque(
                     commandList,

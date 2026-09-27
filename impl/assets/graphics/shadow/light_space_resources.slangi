@@ -10,6 +10,7 @@
 
 
 #include "light_space_constants.h"
+#include "csg_shadow_constants.h"
 #include "../bindless/bindless_heap.slangi"
 #include "../deferred/bindless_resources.slangi"
 #include "../raytrace/material_context_slots.slangi"
@@ -35,6 +36,10 @@ struct NwbLightSpacePushConstants{
     uint outputSlot;
     uint sceneRootSlot;
     uint viewCount;
+    uint csgContextSlot;
+    uint csgOpaqueDepthSlot;
+    uint csgFlags;
+    uint padding;
 };
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 

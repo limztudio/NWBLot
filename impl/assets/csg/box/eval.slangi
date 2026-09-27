@@ -9,6 +9,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(NWB_CSG_EVAL_SHAPE_ID)
+#define NWB_CSG_HAS_SHAPE_ID_BOX 1
+static const uint s_NwbCsgBoxShapeId = NWB_CSG_EVAL_SHAPE_ID;
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 float nwbCsgBoxDistance(const float3 shapePosition, const NwbCsgCutter cutter){
     const float3 q = abs(shapePosition) - cutter.parameter0.xyz;
     return length(max(q, float3(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);

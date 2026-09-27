@@ -188,6 +188,12 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                     targets.bindless.shadowSoftHalfAStorage.slot(), false
                 ))
                     return false;
+                if((lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u && !m_lightSpaceShadow.m_csgDispatchLogged){
+                    m_lightSpaceShadow.m_csgDispatchLogged = true;
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)")
+                        , static_cast<u64>(lightSpace->push.instanceCount)
+                    );
+                }
                 if(!m_lightSpaceShadow.m_dispatchLogged){
                     m_lightSpaceShadow.m_dispatchLogged = true;
                     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched light-space shadow maps"));

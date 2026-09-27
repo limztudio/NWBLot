@@ -194,6 +194,44 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
+        nwb_declare_executable(nwb_csg_shadow_smoke)
+        target_sources(nwb_csg_shadow_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+        )
+        target_compile_definitions(nwb_csg_shadow_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
+        nwb_configure_runtime_smoke_target(nwb_csg_shadow_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_csg_shadow_smoke nwb_transparent_multi_smoke_assets)
+        foreach(_nwb_csg_route IN ITEMS hardware software)
+            foreach(_nwb_csg_light IN ITEMS directional point)
+                set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_smoke")
+                add_test(NAME "${_nwb_csg_shadow_test}"
+                    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                        --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+                        --working-directory "${_nwb_transparent_multi_runtime_root}"
+                        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}"
+                        --route "${_nwb_csg_route}" --light "${_nwb_csg_light}"
+                )
+                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
+                    RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
+                )
+            endforeach()
+            set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_analytic_smoke")
+            add_test(NAME "${_nwb_csg_shadow_test}"
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                    --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+                    --working-directory "${_nwb_transparent_multi_runtime_root}"
+                    --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_analytic"
+                    --route "${_nwb_csg_route}" --atlas analytic
+            )
+            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
+                RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 240 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
+            )
+        endforeach()
+        unset(_nwb_csg_shadow_test)
+        unset(_nwb_csg_light)
+        unset(_nwb_csg_route)
+
         nwb_declare_executable(nwb_reflection_smoke)
         target_sources(nwb_reflection_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
@@ -701,7 +739,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "NWB CSG Visible Smoke"
             "--expect-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
             "--expect-log-message" "selected MeshShader + PS on this device"
-            "--skip-log-message" "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable"
+            "--skip-log-message" "CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"
             "--skip-blocking-log-message" "[ERROR]"
             "--skip-blocking-log-message" "VUID-"
             "--skip-blocking-log-message" "Validation Error"
@@ -711,13 +749,13 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         )
 
         nwb_add_window_capture_smoke(
-            nwb_csg_visible_compute_emulation_capture_smoke
-            csg_visible_compute_emulation_capture.bmp
+            nwb_csg_visible_indexed_capture_smoke
+            csg_visible_indexed_capture.bmp
             "$<TARGET_FILE:nwb_csg_visible_smoke>"
             "${_nwb_csg_visible_runtime_root}"
             "NWB CSG Visible Smoke"
-            "--expect-log-message" "CsgVisibleSmokeProject: natural compute-emulation route selected because Meshlets are unavailable"
-            "--expect-log-message" "selected CS + PS by compiling its mesh shader for compute emulation"
+            "--expect-log-message" "CsgVisibleSmokeProject: natural indexed route selected because Meshlets are unavailable"
+            "--expect-log-message" "selected VertexIndexed + PS from persistent object-space geometry"
             "--skip-log-message" "CsgVisibleSmokeProject: natural native mesh-shader route selected"
             "--skip-blocking-log-message" "[ERROR]"
             "--skip-blocking-log-message" "VUID-"
@@ -1042,6 +1080,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_stress_test_smoke)
         target_sources(nwb_stress_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
@@ -1088,6 +1128,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_hybrid_shadow_boundary_healthy_benchmark)
         target_sources(nwb_hybrid_shadow_boundary_healthy_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
@@ -1188,6 +1230,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
@@ -1210,6 +1254,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"

@@ -138,7 +138,7 @@ TEST(EcsGraphics, OpaqueCsgAndGlassWritersUseOneSanitizedReflectionPacking){
     EXPECT_TRUE(ContainsText(AStringView(meshSource.data(), meshSource.size()), pack));
     EXPECT_TRUE(ContainsText(AStringView(capSource.data(), capSource.size()), pack));
     const AStringView capture(captureSource.data(), captureSource.size());
-    const usize captureBegin = capture.find("if(nwbAvboitRefractionCapture())");
+    const usize captureBegin = capture.find("if(refractionCapture)");
     ASSERT_NE(captureBegin, AStringView::npos);
     const usize captureEnd = capture.find("return capture;", captureBegin);
     ASSERT_NE(captureEnd, AStringView::npos);

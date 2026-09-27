@@ -122,7 +122,8 @@ TEST(EcsGraphics, ClearRefractionCapturePrecedesCoverageRejectionAndHonorsOpaque
     AString shaderSource;
     ASSERT_TRUE(ReadTextFile(RepoRoot(testArena) / "impl" / "assets" / "graphics" / "avboit" / "accumulate_ps_authoring.slangi", shaderSource));
     const AStringView shader(shaderSource.data(), shaderSource.size());
-    const usize capture = shader.find("if(nwbAvboitRefractionCapture())");
+    EXPECT_TRUE(ContainsText(shader, "const bool refractionCapture = nwbAvboitRefractionCapture();"));
+    const usize capture = shader.find("if(refractionCapture)");
     const usize captureReturn = shader.find("return capture;", capture);
     const usize coverageRejection = shader.find("if(alpha <= half(0.0))");
     ASSERT_NE(capture, AStringView::npos);

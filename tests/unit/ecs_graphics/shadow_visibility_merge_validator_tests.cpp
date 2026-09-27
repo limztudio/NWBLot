@@ -44,7 +44,7 @@ struct ShadowPacketPlan{
         , compiledGraph(testArena.arena){
     }
 
-    [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false){
+    [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false, const bool combinedTemporal = false){
         const Name identities[] = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
             Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
@@ -59,7 +59,7 @@ struct ShadowPacketPlan{
         Core::GpuTaskId stages[LengthOf(identities)]{};
         Core::GpuTaskId previous;
         for(u32 index = 0u; index < LengthOf(identities); ++index){
-            if((index == 2u && combinedUpsample) || (index == 4u && !temporalMerge))
+            if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge))
                 continue;
             Core::GpuTaskSchedulingHint scheduling;
             scheduling.mergeWithPrevious = previous.valid();
@@ -83,6 +83,7 @@ struct ShadowPacketPlan{
             .transparentTrace = stages[3], .transparentTemporalMerge = stages[4], .transparentFirstWavelet = stages[5],
             .combinedUpsample = combinedUpsample,
             .combinedWavelet = combinedWavelet,
+            .combinedTemporal = combinedTemporal,
         };
         const Core::GpuPhysicalQueueInfo queue{
             .familyIndex = 0u,
@@ -205,6 +206,37 @@ TEST(ShadowVisibilityMergeValidator, CombinedWaveletRejectsEveryProducerOrTermin
     for(const u32 stage : { 1u, 3u, 4u, 5u, 6u }){
         ShadowPacketPlan fixture;
         ASSERT_TRUE(fixture.build(true, true, stage, true));
+        const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks)) << stage;
+    }
+}
+
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalOmitsOnlyTheIndependentOpaqueMerge){
+    ShadowPacketPlan fixture;
+    ASSERT_TRUE(fixture.build(true, true, Limit<u32>::s_Max, true, true));
+    const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+    EXPECT_FALSE(fixture.tasks.opaqueFirstWavelet.valid());
+    EXPECT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+
+    Impl::PreparedShadowVisibilityTasks separateTemporal = fixture.tasks;
+    separateTemporal.combinedTemporal = false;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, separateTemporal));
+    Impl::PreparedShadowVisibilityTasks missingMerge = fixture.tasks;
+    missingMerge.transparentTemporalMerge = {};
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingMerge));
+    Impl::PreparedShadowVisibilityTasks missingCombinedWavelet = fixture.tasks;
+    missingCombinedWavelet.combinedWavelet = false;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, missingCombinedWavelet));
+    Impl::PreparedShadowVisibilityTasks duplicateMerge = fixture.tasks;
+    duplicateMerge.opaqueFirstWavelet = fixture.tasks.transparentTemporalMerge;
+    EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, duplicateMerge));
+}
+
+TEST(ShadowVisibilityMergeValidator, CombinedTemporalRejectsEveryRemainingPacketSplit){
+    for(const u32 stage : { 3u, 4u, 5u, 6u }){
+        ShadowPacketPlan fixture;
+        ASSERT_TRUE(fixture.build(true, true, stage, true, true));
         const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
         EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks)) << stage;
     }

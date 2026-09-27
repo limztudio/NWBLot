@@ -243,7 +243,9 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     bool* const transparentTraceProduced,
     const u32* const opaqueFrameIndex,
     const bool graphEntryStatesOwned,
-    const bool graphOwnsTransparentTemporalMergeEntryStates
+    const bool graphOwnsTransparentTemporalMergeEntryStates,
+    const bool combinedTemporal,
+    const bool hardwareShadowSupported
 ){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask>(
         desc,
@@ -259,6 +261,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
             .opaqueFrameIndex = opaqueFrameIndex,
             .graphEntryStatesOwned = graphEntryStatesOwned,
             .graphOwnsTransparentTemporalMergeEntryStates = graphOwnsTransparentTemporalMergeEntryStates,
+            .combinedTemporal = combinedTemporal,
+            .hardwareShadowSupported = hardwareShadowSupported,
         }
     );
 }

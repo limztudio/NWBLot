@@ -323,6 +323,8 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_pipelines.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_upsample.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_wavelet.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_softshadow_temporal.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/soft_shadow_temporal.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/software_transparent_sampling.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/software_transparent_sampling.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_software_transparent_sampling.cpp"

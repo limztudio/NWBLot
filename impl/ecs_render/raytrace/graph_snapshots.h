@@ -37,6 +37,7 @@ struct RayTracingShadowVisibilityGraphPlanSnapshot{
     bool softTransparentFoldReady = false;
     bool combinedSoftUpsample = false;
     bool combinedSoftWaveletReady = false;
+    bool combinedSoftTemporalReady = false;
     bool softShadowHistoryReadable = false;
     bool opaqueTemporalMergeReady = false;
     bool transparentTemporalMergeReady = false;

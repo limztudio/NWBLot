@@ -18,19 +18,23 @@ NWB_IMPL_BEGIN
 bool PreparedShadowVisibilityTasksSharePacket(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
     const PreparedShadowVisibilityTasks& tasks){
+    if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
+        return false;
     if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
         return false;
     if(!tasks.opaque.valid())
-        return !tasks.combinedUpsample && !tasks.combinedWavelet;
+        return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal;
     if(tasks.combinedUpsample ? tasks.opaqueResolve.valid() : !tasks.opaqueResolve.valid())
         return false;
     const Core::GpuTaskId required[] = {
-        tasks.opaque, tasks.opaqueFirstWavelet, tasks.transparentTrace, tasks.transparentFirstWavelet
+        tasks.opaque, tasks.transparentTrace, tasks.transparentFirstWavelet
     };
     for(const Core::GpuTaskId task : required){
         if(!task.valid() || !compiledPlan.tasksSharePacket(tasks.terminal, task))
             return false;
     }
+    if(!tasks.combinedTemporal && (!tasks.opaqueFirstWavelet.valid() || !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueFirstWavelet)))
+        return false;
     if(tasks.opaqueResolve.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueResolve))
         return false;
     return !tasks.transparentTemporalMerge.valid() || compiledPlan.tasksSharePacket(tasks.terminal, tasks.transparentTemporalMerge);
@@ -66,6 +70,7 @@ void ShadowVisibilityMergeValidator::validate(
             .transparentFirstWavelet = pipeline.m_deferredShadowVisibilityTransparentFirstWaveletTask,
             .combinedUpsample = pipeline.m_deferredShadowCombinedUpsample,
             .combinedWavelet = pipeline.m_deferredShadowCombinedWavelet,
+            .combinedTemporal = pipeline.m_deferredShadowCombinedTemporal,
         }
     );
     // Keep the all-lit clear in its packet; split-soft frames keep native clear.

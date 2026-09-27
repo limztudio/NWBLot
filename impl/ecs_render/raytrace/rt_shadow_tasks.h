@@ -432,6 +432,8 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         const u32* opaqueFrameIndex = nullptr;
         bool graphEntryStatesOwned = false;
         bool graphOwnsTransparentTemporalMergeEntryStates = false;
+        bool combinedTemporal = false;
+        bool hardwareShadowSupported = false;
     };
 
     [[nodiscard]] static bool record(
@@ -452,10 +454,20 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             || !payload.opaqueFrameIndex
         )
             return false;
-        if(!*payload.opaqueProduced || !*payload.transparentTraceProduced)
+        if(!*payload.opaqueProduced)
             return true;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        const auto recoverOpaqueTemporal = [&](){
+            if(!payload.combinedTemporal)
+                return true;
+            return payload.raytracingSystem->renderSoftOpaqueShadowResolvePhase(
+                commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
+                payload.hardwareShadowSupported, payload.graphEntryStatesOwned, true, SoftShadowOpaqueResolvePhase::TemporalOnly
+            );
+        };
+        if(!*payload.transparentTraceProduced)
+            return recoverOpaqueTemporal();
         if(payload.transparentResolveTiming->has_value()){
             payload.transparentResolveTiming->value().discardTiming();
             payload.transparentResolveTiming->reset();
@@ -466,14 +478,14 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
             payload.graphics->getDevice(),
             commandList
         );
-        if(payload.raytracingSystem->renderSoftTransparentShadowTemporalMerge(
-            commandList,
-            *payload.targets,
-            payload.deferredLightingResources,
-            *payload.opaqueFrameIndex,
-            payload.graphEntryStatesOwned,
-            payload.graphOwnsTransparentTemporalMergeEntryStates
-        )){
+        const bool merged = payload.combinedTemporal
+            ? payload.raytracingSystem->renderSoftShadowCombinedTemporalMerge(commandList, *payload.targets)
+            : payload.raytracingSystem->renderSoftTransparentShadowTemporalMerge(
+                commandList, *payload.targets, payload.deferredLightingResources, *payload.opaqueFrameIndex,
+                payload.graphEntryStatesOwned, payload.graphOwnsTransparentTemporalMergeEntryStates
+            )
+        ;
+        if(merged){
             return Core::FinishSplitGpuTimingMarker(payload.transparentResolveTiming);
         }
 
@@ -481,7 +493,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         *payload.transparentTraceProduced = false;
         payload.transparentResolveTiming->value().discardTiming();
         payload.transparentResolveTiming->reset();
-        return true;
+        return recoverOpaqueTemporal();
     }
 
     static void discarded(Payload& payload){

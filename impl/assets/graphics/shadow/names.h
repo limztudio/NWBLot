@@ -57,6 +57,7 @@ inline constexpr Name s_SoftResolveCombinedShaderName("engine/graphics/shadow/sh
 inline constexpr Name s_SoftResolveCombinedWaveletShaderName("engine/graphics/shadow/shadow_resolve_wavelet_combined_cs");
 // Temporal merge between the half-res trace and the resolve.
 inline constexpr Name s_SoftReprojectMergeShaderName("engine/graphics/shadow/shadow_reproject_merge_cs");
+inline constexpr Name s_SoftReprojectMergeCombinedShaderName("engine/graphics/shadow/shadow_reproject_merge_combined_cs");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

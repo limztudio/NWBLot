@@ -26,7 +26,7 @@ class RendererFramePipeline;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Prepared shadow callbacks share one acceptance endpoint. Fusion omits only the opaque upsample tail.
+// Prepared shadow callbacks share one acceptance endpoint; combined stages omit their independent predecessors.
 struct PreparedShadowVisibilityTasks{
     Core::GpuTaskId terminal;
     Core::GpuTaskId opaque;
@@ -37,6 +37,7 @@ struct PreparedShadowVisibilityTasks{
     Core::GpuTaskId transparentFirstWavelet;
     bool combinedUpsample = false;
     bool combinedWavelet = false;
+    bool combinedTemporal = false;
 };
 
 [[nodiscard]] bool PreparedShadowVisibilityTasksSharePacket(

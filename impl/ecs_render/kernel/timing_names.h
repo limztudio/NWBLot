@@ -54,6 +54,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_LightSpaceShadowFallbackTransp
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTrace("render.shadow_opaque_trace");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowGeometryDownsample("render.shadow_geometry_downsample");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueTemporal("render.shadow_opaque_temporal");
+inline constexpr Core::GpuTimingScopeDefinition s_ShadowCombinedTemporal("render.shadow_combined_temporal");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowOpaqueResolve("render.shadow_opaque_resolve");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentTrace("render.shadow_transparent_trace");
 inline constexpr Core::GpuTimingScopeDefinition s_ShadowTransparentGather("render.shadow_transparent_gather");

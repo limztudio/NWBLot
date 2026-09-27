@@ -197,6 +197,7 @@ RayTracingShadowVisibilityGraphPlanSnapshot RendererRayTracingSystem::snapshotSh
             && NWB_SHADOW_RESOLVE_PASS_COUNT == 1u && NWB_SHADOW_RESOLVE_TRANSPARENT_PASS_COUNT == 1u,
         .combinedSoftWaveletReady = state.m_softShadowResolve.m_combinedWavelet.m_pipeline
             && state.m_softShadowTemporalReady && state.m_softTransparentTemporalReady,
+        .combinedSoftTemporalReady = static_cast<bool>(state.m_softShadowResolve.m_combinedTemporal.m_pipeline),
         .softShadowHistoryReadable =
             state.m_softShadowTemporalReady
             && state.m_prevWorldToClipValid

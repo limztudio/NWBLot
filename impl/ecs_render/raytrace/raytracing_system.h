@@ -423,7 +423,9 @@ public:
         bool* transparentTraceProduced,
         const u32* opaqueFrameIndex,
         bool graphEntryStatesOwned = false,
-        bool graphOwnsTransparentTemporalMergeEntryStates = false
+        bool graphOwnsTransparentTemporalMergeEntryStates = false,
+        bool combinedTemporal = false,
+        bool hardwareShadowSupported = false
     );
     // The prepared transparent trace or temporal merge's first wavelet inherits its graph-declared input and output states.
     // The terminal fold remains responsible for the final upsample, submission acceptance, and history publication.
@@ -999,6 +1001,8 @@ private:
     void prepareSoftCombinedResolvePipelines();
     [[nodiscard]] bool ensureSoftCombinedUpsamplePipeline();
     [[nodiscard]] bool ensureSoftCombinedWaveletPipeline();
+    [[nodiscard]] bool ensureSoftCombinedTemporalPipeline();
+    [[nodiscard]] bool renderSoftShadowCombinedTemporalMerge(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSoftShadowCombinedWavelet(Core::CommandList& commandList, DeferredFrameTargets& targets);
     [[nodiscard]] bool renderSoftShadowTerminalUpsample(
         Core::CommandList& commandList,

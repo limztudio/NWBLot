@@ -164,6 +164,8 @@ void RendererRayTracingSystem::prepareSoftCombinedResolvePipelines(){
         m_rayTracingState.m_softShadowResolve.m_combinedUpsampleFailed = true;
     if(!ensureSoftCombinedWaveletPipeline())
         m_rayTracingState.m_softShadowResolve.m_combinedWaveletFailed = true;
+    if(!ensureSoftCombinedTemporalPipeline())
+        m_rayTracingState.m_softShadowResolve.m_combinedTemporalFailed = true;
 }
 
 void RendererRayTracingSystem::dispatchSoftShadowResolve(

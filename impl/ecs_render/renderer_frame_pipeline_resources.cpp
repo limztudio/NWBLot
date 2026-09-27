@@ -221,6 +221,7 @@ bool RendererFramePipeline::prepareGpuTimingScopes(){
         { &RendererGpuTimingScope::s_ShadowOpaqueTrace, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowGeometryDownsample, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowOpaqueTemporal, s_GpuTimingQueriesPerRange },
+        { &RendererGpuTimingScope::s_ShadowCombinedTemporal, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowOpaqueResolve, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowTransparentTrace, s_GpuTimingQueriesPerRange },
         { &RendererGpuTimingScope::s_ShadowTransparentGather, s_GpuTimingHighFrequencyScopeQueryBudget },

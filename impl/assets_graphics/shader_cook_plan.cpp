@@ -39,6 +39,7 @@ using namespace AssetsGraphicsCookDetail;
 
 static constexpr AStringView s_EnabledImplicitDefineValue = "1";
 using IncludeDirectoryScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
+using DependencyPathScratchSet = HashSet<ScratchString, Hasher<ScratchString>, EqualTo<ScratchString>, ScratchArena>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -265,32 +266,12 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
     return false;
 }
 
-static bool SameDependencyPath(const Path& lhs, const Path& rhs, ScratchArena& scratchArena){
-    ErrorCode errorCode;
-    const Path lhsAbsolute = AbsolutePath(lhs, errorCode).lexically_normal();
-    if(errorCode)
-        return false;
-    const Path rhsAbsolute = AbsolutePath(rhs, errorCode).lexically_normal();
-    if(errorCode)
-        return false;
-
-    ScratchString lhsText = PathToString(scratchArena, lhsAbsolute);
-    ScratchString rhsText = PathToString(scratchArena, rhsAbsolute);
-    CanonicalizeTextInPlace(lhsText);
-    CanonicalizeTextInPlace(rhsText);
-    return lhsText == rhsText;
-}
-
 static bool AppendUniqueDependency(
     ShaderCook::CookVector<Path>& inOutDependencies,
     const Path& dependency,
+    DependencyPathScratchSet& seenDependencies,
     ScratchArena& scratchArena
 ){
-    for(const Path& existingDependency : inOutDependencies){
-        if(SameDependencyPath(existingDependency, dependency, scratchArena))
-            return true;
-    }
-
     ErrorCode errorCode;
     Path absoluteDependency = AbsolutePath(dependency, errorCode).lexically_normal();
     if(errorCode){
@@ -300,7 +281,10 @@ static bool AppendUniqueDependency(
         );
         return false;
     }
-    inOutDependencies.push_back(Move(absoluteDependency));
+    ScratchString canonicalPath = PathToString(scratchArena, absoluteDependency);
+    CanonicalizeTextInPlace(canonicalPath);
+    if(seenDependencies.insert(Move(canonicalPath)).second)
+        inOutDependencies.push_back(Move(absoluteDependency));
     return true;
 }
 
@@ -316,6 +300,16 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
     const auto foundDefine = entry.defineValues.find(defineName);
     if(foundDefine == entry.defineValues.end())
         return true;
+
+    DependencyPathScratchSet seenDependencies(0, Hasher<ScratchString>(), EqualTo<ScratchString>(), scratchArena);
+    seenDependencies.reserve(inOutDependencies.size());
+    // Dependency collection already produces normalized absolute paths; retain its first-seen ordering.
+    for(const Path& dependency : inOutDependencies){
+        ScratchString canonicalPath = PathToString(scratchArena, dependency);
+        CanonicalizeTextInPlace(canonicalPath);
+        if(!seenDependencies.insert(Move(canonicalPath)).second)
+            continue;
+    }
 
     ShaderCook::CookVector<Path> moduleDependencies(cookArena);
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
@@ -335,7 +329,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
         if(!shaderCook.gatherShaderDependencies(modulePath, includeDirectories, moduleDependencies, scratchArena))
             return false;
         for(const Path& dependency : moduleDependencies){
-            if(!AppendUniqueDependency(inOutDependencies, dependency, scratchArena))
+            if(!AppendUniqueDependency(inOutDependencies, dependency, seenDependencies, scratchArena))
                 return false;
         }
     }
@@ -503,6 +497,7 @@ bool PrepareShaderEntriesForCook(
             return false;
 
         shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
+        const usize initialDependencyCount = preparedEntry.dependencies.size();
         if(!__hidden_shader_cook_plan::AppendCsgProjectEvaluatorModuleDependencies(
             cookArena,
             shaderCook,
@@ -512,7 +507,8 @@ bool PrepareShaderEntriesForCook(
             scratchArena
         ))
             return false;
-        shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
+        if(preparedEntry.dependencies.size() != initialDependencyCount)
+            shaderCook.mergeInheritedDefines(preparedEntry.entry, preparedEntry.dependencies, includeMetadata);
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, MaterialBindNames::TypedBindingImplicitDefineText()))
             return false;
         if(!__hidden_shader_cook_plan::ValidateShaderDoesNotUseImplicitDefine(preparedEntry.entry, AssetsGraphicsCsgShaderVariants::s_ClipImplicitDefineName))

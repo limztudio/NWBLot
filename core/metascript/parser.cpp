@@ -1033,7 +1033,6 @@ private:
 
 
     void advance(){
-        m_previous = m_current;
         m_current = m_lexer.next();
 
         if(m_current.type == TokenType::Error)
@@ -1124,7 +1123,6 @@ private:
     MStringView m_declaredAssetVariable;
 
     Token m_current;
-    Token m_previous;
 };
 
 

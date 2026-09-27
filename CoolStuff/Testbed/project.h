@@ -57,7 +57,6 @@ private:
     f64 m_lastMouseY = 0.0;
     f32 m_pendingMouseDeltaX = 0.0f;
     f32 m_pendingMouseDeltaY = 0.0f;
-    NWB::Core::ECS::EntityID m_characterEntity = NWB::Core::ECS::ENTITY_ID_INVALID;
     bool m_inputRegistered = false;
     bool m_mouseLookActive = false;
     bool m_mousePositionValid = false;

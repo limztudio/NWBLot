@@ -29,35 +29,3 @@ function(nwb_set_imported_library_locations target_name)
         IMPORTED_LOCATION_FIN "${ARG_FIN}"
     )
 endfunction()
-
-function(nwb_find_library_target target_name)
-    set(options REQUIRED)
-    set(oneValueArgs INCLUDE_NAME)
-    set(multiValueArgs LIB_NAMES HINTS)
-    cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
-    find_path(_include_dir
-        NAMES "${ARG_INCLUDE_NAME}"
-        HINTS ${ARG_HINTS}
-        PATH_SUFFIXES include Include
-    )
-
-    find_library(_library
-        NAMES ${ARG_LIB_NAMES}
-        HINTS ${ARG_HINTS}
-        PATH_SUFFIXES lib Lib lib64
-    )
-
-    if(ARG_REQUIRED AND (NOT _include_dir OR NOT _library))
-        message(FATAL_ERROR "Failed to locate dependency for ${target_name}")
-    endif()
-
-    if(_include_dir AND _library AND NOT TARGET ${target_name})
-        add_library(${target_name} UNKNOWN IMPORTED GLOBAL)
-        nwb_set_imported_library_locations(${target_name} DEFAULT "${_library}")
-        set_target_properties(${target_name} PROPERTIES
-            INTERFACE_INCLUDE_DIRECTORIES "${_include_dir}"
-            INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_include_dir}"
-        )
-    endif()
-endfunction()

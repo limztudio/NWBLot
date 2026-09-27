@@ -38,7 +38,6 @@ inline constexpr AStringView s_MeshAssetKindText = "mesh";
 inline constexpr AStringView s_ModelAssetKindText = "model";
 inline constexpr AStringView s_SkeletonAssetKindText = "skeleton";
 inline constexpr AStringView s_SkinAssetKindText = "skin";
-inline constexpr AStringView s_AssetBunchAssetKindText = "asset_bunch";
 inline constexpr AStringView s_AssetVariableName = "asset";
 inline constexpr AStringView s_AssetBunchDisplayName = "asset bunch";
 

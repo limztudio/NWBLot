@@ -42,7 +42,6 @@ struct OptionPresence{
 
 inline constexpr int s_FbxToNwbExitSuccess = 0;
 inline constexpr int s_FbxToNwbExitFailure = 1;
-inline constexpr int s_FbxToNwbExitFatal = -1;
 inline constexpr char s_FbxToNwbAppName[] = "fbx_to_nwb";
 inline constexpr char s_FbxToNwbHelpFlag[] = "-h,--help";
 inline constexpr char s_FbxToNwbInputOption[] = "input";

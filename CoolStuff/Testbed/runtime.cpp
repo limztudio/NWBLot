@@ -326,8 +326,8 @@ bool ProjectTestbed::onStartup(){
 }
 
 void ProjectTestbed::createDefaultScene(){
-    m_characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
-    NWB_ASSERT(m_characterEntity.valid());
+    const auto characterEntity = __hidden_runtime::CreateSkinnedCharacterEntity(*m_world);
+    NWB_ASSERT(characterEntity.valid());
     __hidden_runtime::CreateStaticGroundPlaneEntity(*m_world);
 
     auto uiEntity = m_world->createEntity();

@@ -127,7 +127,7 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
+    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
     const __hidden_caustics::CausticResolvePassResources halfA{
         targets.causticHistory.get(),

@@ -93,7 +93,7 @@ f32 MeshCookMeshlets::MeshletScoreCentroidDistance(const MeshletScoreState& stat
     if(state.primitiveCount == 0u)
         return 0.0f;
 
-    const SIMDVector meshletCentroid = VectorScale(state.centroidSum, 1.0f / static_cast<f32>(state.primitiveCount));
+    const SIMDVector meshletCentroid = VectorDivide(state.centroidSum, VectorReplicate(static_cast<f32>(state.primitiveCount)));
     return VectorGetX(Vector3Length(VectorSubtract(triangleCentroid, meshletCentroid)));
 }
 
@@ -118,7 +118,8 @@ void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(
         return;
 
     hasNormal = true;
-    coneCutoff = Min(coneCutoff, VectorGetX(Vector3Dot(axis, faceNormal)));
+    // Cutoff tracks the minimum dot over faces; both candidates stay replicated on SIMD lanes.
+    coneCutoff = VectorGetX(VectorMin(VectorReplicate(coneCutoff), Vector3Dot(axis, faceNormal)));
 }
 
 

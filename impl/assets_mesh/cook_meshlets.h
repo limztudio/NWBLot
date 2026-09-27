@@ -656,7 +656,7 @@ MeshletBoundsCalculation MeshCookMeshlets::CalculateMeshletBounds(
         visitFaceNormals([&](const SIMDVector meshletFaceNormal){
             const SIMDVector faceNormal = NormalizeMeshletDirectionOrZero(meshletFaceNormal);
             if(::FrameValidDirection(faceNormal))
-                result.coneCutoff = Min(result.coneCutoff, VectorGetX(Vector3Dot(result.coneAxis, faceNormal)));
+                result.coneCutoff = VectorGetX(VectorMin(VectorReplicate(result.coneCutoff), Vector3Dot(result.coneAxis, faceNormal)));
         });
         if(result.coneCutoff <= 0.0f)
             result.coneCutoff = -1.0f;
@@ -821,7 +821,8 @@ f32 MeshCookMeshlets::PredictMeshletScoreConeWidening(
     if(!predictedConeEnabled)
         return 1.0f;
 
-    return Max(0.0f, state.coneCutoff - predictedConeCutoff);
+    // Widening is the positive part of (state - predicted); the difference and the zero floor both stay on SIMD lanes.
+    return VectorGetX(VectorMax(VectorSubtract(VectorReplicate(state.coneCutoff), VectorReplicate(predictedConeCutoff)), VectorZero()));
 }
 
 
@@ -837,7 +838,11 @@ f32 MeshCookMeshlets::ScoreMeshletCandidate(
     const bool disconnected
 ){
     const f32 predictedRadius = PredictMeshletScoreRadius(state, triangleVectors.positions);
-    const f32 predictedRadiusGrowth = Max(0.0f, predictedRadius - state.radius);
+    // Radius growth is the positive part of (predicted - current); difference and zero floor stay on SIMD lanes.
+    const f32 predictedRadiusGrowth = VectorGetX(VectorMax(
+        VectorSubtract(VectorReplicate(predictedRadius), VectorReplicate(state.radius)),
+        VectorZero()
+    ));
     const f32 centroidDistance = MeshletScoreCentroidDistance(state, triangleVectors.centroid);
     const f32 normalCoherence = MeshletScoreNormalCoherence(state, triangleVectors.areaNormal);
     const f32 coneWidening = PredictMeshletScoreConeWidening(

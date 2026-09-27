@@ -50,6 +50,14 @@ f32 CsgDeformValidator::SaturateFloat(const f32 value){
     return VectorGetX(VectorSaturate(VectorReplicate(value)));
 }
 
+SIMDVector CsgDeformValidator::SaturateVec(const SIMDVector value){
+    return VectorSaturate(value);
+}
+
+SIMDVector CsgDeformValidator::AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator){
+    return VectorAbs(VectorDivide(numerator, denominator));
+}
+
 f32 CsgDeformValidator::ShapeEpsilon(const CsgDeformBuildOptions& options){
     return options.distanceEpsilon > s_MinEpsilon ? options.distanceEpsilon : s_MinEpsilon;
 }

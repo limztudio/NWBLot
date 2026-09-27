@@ -65,7 +65,10 @@ static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directi
 
 
 [[nodiscard]] static f32 KeyAxis(const bool negative, const bool positive){
-    return (positive ? 1.0f : 0.0f) - (negative ? 1.0f : 0.0f);
+    // Branchless selection on SIMD lanes: replicate the integer mask onto every lane, then pick the lane value.
+    const SIMDVector positiveLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(positive ? 0xFFFFFFFFu : 0u));
+    const SIMDVector negativeLane = VectorSelect(VectorZero(), s_SIMDOne, VectorReplicateInt(negative ? 0xFFFFFFFFu : 0u));
+    return VectorGetX(VectorSubtract(positiveLane, negativeLane));
 }
 
 [[nodiscard]] static f32 ClampPitch(const f32 pitchRadians, const f32 pitchLimitRadians){
@@ -151,9 +154,12 @@ static void ResolveFlyCameraInput(
     const SIMDVector moveAxis = VectorSet(safeRightAxis, safeForwardAxis, 0.0f, 0.0f);
     const SIMDVector moveLengthSqVector = Vector2LengthSq(moveAxis);
     if(Vector4Greater(moveLengthSqVector, VectorReplicate(s_CameraMoveEpsilon))){
-        const f32 speed = s_FlyCameraMoveSpeed * (boosted ? s_FlyCameraBoostMultiplier : 1.0f);
+        // Boost select and speed*delta both run on lanes; the scalar multiply is superseded by speedLanes/speedDeltaLanes.
+        const SIMDVector boostLanes = VectorSelect(s_SIMDOne, VectorReplicate(s_FlyCameraBoostMultiplier), VectorReplicateInt(boosted ? 0xFFFFFFFFu : 0u));
+        const SIMDVector speedLanes = VectorMultiply(VectorReplicate(s_FlyCameraMoveSpeed), boostLanes);
+        const SIMDVector speedDeltaLanes = VectorMultiply(speedLanes, VectorReplicate(safeDelta));
         const SIMDVector moveScale = VectorMultiply(
-            VectorReplicate(speed * safeDelta),
+            speedDeltaLanes,
             VectorReciprocalSqrt(moveLengthSqVector)
         );
         if(!VectorIsFinite(moveScale, VectorComponentMask::s_XYZW))

@@ -250,9 +250,17 @@ u32 BuildSceneBvhNode(
 
             const f32 leftArea = AabbTests::SurfaceArea(leftMin, leftMax);
             const f32 rightArea = AabbTests::SurfaceArea(suffixMin[k], suffixMax[k]);
-            const f32 cost = parentArea * s_SceneBvhSahTraversalCost
-                + leftArea * leftCost
-                + rightArea * suffixCost[k];
+            // SAH cost on lanes: parent*s_Traversal + left*leftCost + right*rightCost via multiply-add chains.
+            const SIMDVector sahCostLanes = VectorMultiplyAdd(
+                VectorReplicate(leftArea),
+                VectorReplicate(leftCost),
+                VectorMultiplyAdd(
+                    VectorReplicate(rightArea),
+                    VectorReplicate(suffixCost[k]),
+                    VectorMultiply(VectorReplicate(parentArea), VectorReplicate(s_SceneBvhSahTraversalCost))
+                )
+            );
+            const f32 cost = VectorGetX(sahCostLanes);
             if(cost < bestCost){
                 bestCost = cost;
                 bestAxis = axis;

@@ -39,7 +39,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
+    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const bool inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
     const __hidden_caustics::CausticResolvePassResources halfA{
@@ -102,7 +102,7 @@ void RendererRayTracingSystem::dispatchCausticWaveletResolve(
 
     // Normalize temporal accumulation to retain non-temporal brightness.
     const f32 temporalDecay = causticTemporalDecay();
-    const f32 effectiveIntensity = (temporalDecay > 0.f) ? (s_CausticIntensity * (1.f - temporalDecay)) : s_CausticIntensity;
+    const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
 
     const __hidden_caustics::CausticResolvePassResources halfB{
         targets.causticResolveHalf.get(),

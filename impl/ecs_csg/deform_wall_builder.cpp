@@ -42,11 +42,9 @@ SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTange
 }
 
 CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
-    // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise.
-    const f32 blend = CsgDeformValidator::SaturateFloat(firstWeight);
-    const f32 other = s_OneWeight - blend;
-    const SIMDVector blendVec = VectorReplicate(blend);
-    const SIMDVector otherVec = VectorReplicate(other);
+    // Op order matches the scalar form (first*blend + second*(1-blend)) lane-wise; the complement runs on lanes too.
+    const SIMDVector blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
+    const SIMDVector otherVec = VectorSubtract(s_SIMDOne, blendVec);
     const SIMDVector firstPosition = LoadFloat(first.position);
     const SIMDVector secondPosition = LoadFloat(second.position);
     const SIMDVector firstNormal = LoadFloat(first.normal);
@@ -112,8 +110,10 @@ bool CsgDeformWallBuilder::SplitEdgeVertex(
     const f32 denominator = firstDistance - secondDistance;
     if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
         return false;
-    // firstWeight lands on second when secondDistance is zero.
-    const f32 firstWeight = CsgDeformValidator::SaturateFloat(Abs(secondDistance / denominator));
+    // firstWeight lands on second when secondDistance is zero; abs/divide/saturate all run on SIMD lanes.
+    const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(
+        CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
+    ));
     CsgDeformVertex mixed = CsgDeformWallBuilder::MixVertices(vertices[first], vertices[second], firstWeight);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(mixed))
         return false;

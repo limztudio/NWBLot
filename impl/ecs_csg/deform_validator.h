@@ -26,6 +26,8 @@ public:
     [[nodiscard]] static bool FiniteFloat(const f32 value);
     [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex);
     [[nodiscard]] static f32 SaturateFloat(const f32 value);
+    [[nodiscard]] static SIMDVector SaturateVec(const SIMDVector value);
+    [[nodiscard]] static SIMDVector AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator);
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options);
     [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options);
     [[nodiscard]] static bool ValidTopology(

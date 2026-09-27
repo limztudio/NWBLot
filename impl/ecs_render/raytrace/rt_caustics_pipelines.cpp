@@ -524,7 +524,9 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        if(temporalDecay > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
+        // Temporal gate on SIMD lanes: the decay-vs-zero compare selects the branch without scalar float math.
+        const SIMDVector decayGate = VectorGreater(VectorReplicate(temporalDecay), VectorZero());
+        if(VectorGetX(decayGate) > 0.f && !graphOwnsAccumulatorBootstrapClear && !graphOwnsAccumulatorDecay)
             prepareCausticAccumulatorForSplat(commandList, targets, temporalDecay);
 
         if(!graphEntryStatesOwned){

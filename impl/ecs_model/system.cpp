@@ -566,23 +566,15 @@ void ModelSystem::updateStaticMeshAttachments(){
             const Scene::TransformComponent* parentTransform = attachment.parentEntity.valid()
                 ? m_world.tryGetComponent<Scene::TransformComponent>(attachment.parentEntity)
                 : ownerTransform;
-            const SIMDMatrix ownerMatrix = ownerTransform
+            const Scene::TransformComponent* basisTransform = parentTransform ? parentTransform : ownerTransform;
+            const SIMDMatrix parentMatrix = basisTransform
                 ? MatrixAffineTransformation(
-                    LoadFloat(ownerTransform->scale),
+                    LoadFloat(basisTransform->scale),
                     VectorZero(),
-                    LoadFloat(ownerTransform->rotation),
-                    LoadFloat(ownerTransform->position)
+                    LoadFloat(basisTransform->rotation),
+                    LoadFloat(basisTransform->position)
                 )
                 : MatrixIdentity()
-            ;
-            const SIMDMatrix parentMatrix = parentTransform
-                ? MatrixAffineTransformation(
-                    LoadFloat(parentTransform->scale),
-                    VectorZero(),
-                    LoadFloat(parentTransform->rotation),
-                    LoadFloat(parentTransform->position)
-                )
-                : ownerMatrix
             ;
             const SIMDMatrix localMatrix = LoadFloat(attachment.localTransform);
 

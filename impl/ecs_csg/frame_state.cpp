@@ -118,14 +118,15 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
             if(!__hidden_frame_state::ActiveCutter(cutter))
                 return;
 
-            auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CsgFrameCutterRange{});
-            result.first.value().cutterCount = AddSaturating<u32>(result.first.value().cutterCount, 1u);
+            auto result = m_cutterRanges.try_emplace(cutter.receiverGroup, CutterRangeEntry{});
+            CsgFrameCutterRange& range = result.first.value().range;
+            range.cutterCount = AddSaturating<u32>(range.cutterCount, 1u);
         }
     );
 
     u32 firstCutter = 0u;
     for(auto it = m_cutterRanges.begin(); it != m_cutterRanges.end(); ++it){
-        CsgFrameCutterRange& range = it.value();
+        CsgFrameCutterRange& range = it.value().range;
         range.firstCutter = firstCutter;
         firstCutter = AddSaturating<u32>(firstCutter, range.cutterCount);
     }
@@ -134,8 +135,6 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
         return;
 
     m_cutterRefs.resize(static_cast<usize>(firstCutter));
-    CutterWriteCountMap writtenCounts(0, Hasher<Name>(), EqualTo<Name>(), scratchArena);
-    writtenCounts.reserve(m_cutterRanges.size());
 
     cutterView.each(
         [&](const Core::ECS::EntityID entity, CsgCutterComponent& cutter){
@@ -146,9 +145,9 @@ CsgFrameReceiverLookup::CsgFrameReceiverLookup(Core::ECS::World& world, Core::Al
             if(foundRange == m_cutterRanges.end())
                 return;
 
-            auto writtenResult = writtenCounts.try_emplace(cutter.receiverGroup, 0u);
-            u32& writtenCount = writtenResult.first.value();
-            const CsgFrameCutterRange& range = foundRange.value();
+            CutterRangeEntry& entry = foundRange.value();
+            u32& writtenCount = entry.writtenCount;
+            const CsgFrameCutterRange& range = entry.range;
             if(writtenCount >= range.cutterCount)
                 return;
 
@@ -176,13 +175,13 @@ bool CsgFrameReceiverLookup::resolveReceiverDrawState(
         return false;
 
     const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);
-    if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().cutterCount == 0u)
+    if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().range.cutterCount == 0u)
         return false;
 
     outState.active = true;
     outState.receiverKind = receiverKind;
-    outState.firstCutter = foundCutterRange.value().firstCutter;
-    outState.cutterCount = foundCutterRange.value().cutterCount;
+    outState.firstCutter = foundCutterRange.value().range.firstCutter;
+    outState.cutterCount = foundCutterRange.value().range.cutterCount;
     return true;
 }
 
@@ -200,10 +199,10 @@ bool CsgFrameReceiverLookup::resolveReceiverCutterRange(
         return false;
 
     const auto foundCutterRange = m_cutterRanges.find(receiver->receiverGroup);
-    if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().cutterCount == 0u)
+    if(foundCutterRange == m_cutterRanges.end() || foundCutterRange.value().range.cutterCount == 0u)
         return false;
 
-    outRange = foundCutterRange.value();
+    outRange = foundCutterRange.value().range;
     return true;
 }
 

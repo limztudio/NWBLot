@@ -102,8 +102,12 @@ private:
         const CsgCutterComponent* cutter = nullptr;
     };
 
-    using CutterRangeMap = HashMap<Name, CsgFrameCutterRange, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
-    using CutterWriteCountMap = HashMap<Name, u32, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
+    struct CutterRangeEntry{
+        CsgFrameCutterRange range;
+        u32 writtenCount = 0u;
+    };
+
+    using CutterRangeMap = HashMap<Name, CutterRangeEntry, Hasher<Name>, EqualTo<Name>, Core::Alloc::ScratchArena>;
     using CutterRefVector = Vector<CsgFrameCutterRef, Core::Alloc::ScratchArena>;
 
 

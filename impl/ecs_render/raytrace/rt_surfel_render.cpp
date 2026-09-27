@@ -3,6 +3,7 @@
 
 
 #include <impl/ecs_render/raytrace/rt_private.h>
+#include <impl/ecs_render/gi/quality_settings.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 #include <core/task/gpu/compiled_graph.h>
 #include <impl/ecs_render/raytrace/rt_surfel_tasks.h>
@@ -282,6 +283,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     if(
         !targets.bindless.valid()
+        || (targets.surfelResolveFactor != 2u && targets.surfelResolveFactor != 4u)
         || !deferredLightingResources.valid()
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelConstantsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
@@ -482,10 +484,9 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     if(!dispatchResolve && !dispatchRemaining)
         return true;
 
-    // Resolve at half resolution so deferred lighting never touches the writable pool.
+    // Resolve at the target generation's selected scale so deferred lighting never touches the writable pool.
     if(dispatchResolve){
-        const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
-        const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR));
+        const SurfelGiResolveSize resolveSize = MakeSurfelGiResolveSize(targets.width, targets.height, targets.surfelResolveFactor);
         {
             Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SurfelResolve, m_graphics.getDevice(), commandList);
             if(!graphEntryStatesOwned)
@@ -511,7 +512,19 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             heap.bindCompute(commandList, *m_rayTracingState.m_surfelResolvePipeline.get());
             commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
             const u32 groupSize = static_cast<u32>(NWB_SURFEL_RESOLVE_GROUP_SIZE);
-            commandList.dispatch(DivideUp(halfWidth, groupSize), DivideUp(halfHeight, groupSize), 1u);
+            commandList.dispatch(DivideUp(resolveSize.width, groupSize), DivideUp(resolveSize.height, groupSize), 1u);
+            if(commandList.commandRecordingFailed())
+                return false;
+            if(!m_rayTracingState.m_surfelResolveDispatchLogged){
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched surfel GI resolve (factor={}, source={}x{}, resolve={}x{})")
+                    , targets.surfelResolveFactor
+                    , targets.width
+                    , targets.height
+                    , resolveSize.width
+                    , resolveSize.height
+                );
+                m_rayTracingState.m_surfelResolveDispatchLogged = true;
+            }
         }
     }
 

@@ -12,7 +12,6 @@
 // No surfel pass owns local bindings; one surfel per hash bucket.
 
 #define NWB_SURFEL_RESOLVE_GROUP_SIZE 8
-#define NWB_SURFEL_RESOLVE_HALF_FACTOR 2
 
 #define NWB_SURFEL_UPSAMPLE_GROUP_SIZE 8
 // Keeps GI out of creases.

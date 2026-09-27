@@ -12,6 +12,7 @@
 #include <impl/ecs_render/csg/renderer_csg_state.h>
 #include <impl/ecs_render/deferred/deferred_system.h>
 #include <impl/ecs_render/deferred/renderer_deferred_state.h>
+#include <impl/ecs_render/gi/quality_settings.h>
 #include <impl/ecs_render/kernel/task_timing_feedback.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
@@ -160,6 +161,13 @@ public:
     }
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings){
         return m_raytracingSystem.setCausticQualitySettings(settings);
+    }
+
+    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings){
+        if(!ValidateSurfelGiQualitySettings(settings))
+            return false;
+        m_surfelGiQualitySettings = settings;
+        return true;
     }
 
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
@@ -596,6 +604,7 @@ private:
     ShadowPreparationOutcome m_shadowPreparationOutcome;
     bool m_frameLaggedAsyncLightingEnabled = false;
     ReflectionSettings m_reflectionSettings;
+    SurfelGiQualitySettings m_surfelGiQualitySettings;
     u32 m_reflectionFrameIndex = 0u;
     RayTracingRefractionGraphResources m_preparedRefractionResources;
     u64 m_laggedLightingReportGeneration = 0u;

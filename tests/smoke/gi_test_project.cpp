@@ -120,6 +120,15 @@ public:
 
 public:
     virtual bool onStartup()override{
+        m_resolveSwitchEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_RESOLVE_SWITCH");
+        if(m_resolveSwitchEnabled){
+            auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+            if(!renderer)
+                return false;
+            renderer->setFrameLaggedAsyncLightingEnabled(true);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)"));
+        }
+
         // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
         m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
@@ -213,6 +222,20 @@ public:
             return true;
         }
 
+        if(m_resolveSwitchEnabled && (m_rendererBaselineRenderedFrameCount == 30u || m_rendererBaselineRenderedFrameCount == 90u)){
+            auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+            NWB::Impl::SurfelGiQualitySettings settings;
+            settings.resolveResolution = m_rendererBaselineRenderedFrameCount == 30u
+                ? NWB::Impl::SurfelGiResolveResolution::Quarter
+                : NWB::Impl::SurfelGiResolveResolution::Half
+            ;
+            if(!renderer || !renderer->setSurfelGiQualitySettings(settings))
+                return false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: requested surfel GI resolve switch factor={}")
+                , static_cast<u32>(settings.resolveResolution)
+            );
+        }
+
         const f32 fixedDelta = rendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
@@ -267,6 +290,7 @@ private:
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("GiTestSmokeProject") };
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     bool m_rendererBaselineCapturePaused = false;
+    bool m_resolveSwitchEnabled = false;
 };
 
 

@@ -15,6 +15,7 @@ from types import SimpleNamespace
 import renderer_ab_benchmark as ab
 from smoke_volume_identity import file_identity
 import caustic_quality_smoke
+import surfel_gi_quality_smoke
 import stress_cpu_timing
 from window_capture_smoke import (
     STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
@@ -445,6 +446,7 @@ def launch_environment(base, args, output):
         NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
         NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
         NWB_CAUSTIC_PHOTON_GRID_DIVISOR=str(args.caustic_photon_grid_divisor),
+        NWB_SURFEL_GI_RESOLVE_RESOLUTION=args.surfel_gi_resolve_resolution,
         NWB_GPU_TIMING_FILE=str(output / "gpu_timing.txt"))
     if getattr(args, "cpu_diagnostics", False):
         result.update(NWB_STRESS_CPU_DIAGNOSTICS="1", NWB_STRESS_CPU_TIMING_FILE=str(output / "cpu_gpu_timing.txt"))
@@ -539,6 +541,8 @@ def acquire(args, output):
         result["software_shadow_settings"] = verify_software_shadow_settings(text, args)
         result["csg_profile"] = verify_csg_profile(text, args)
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
+        result["surfel_gi_quality_settings"] = surfel_gi_quality_smoke.verify_settings(
+            text, args.surfel_gi_resolve_resolution, (result["width"], result["height"]))
         result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
         result["reflection_quality_settings"] = verify_reflection_quality_settings(text, args, result["optical_reflection"])
         result["runtime_signature"] = ab.device_material_signature(text)
@@ -615,6 +619,7 @@ def parse_args(argv=None):
     parser.add_argument("--fixed-delta-seconds", type=float)
     parser.add_argument("--application-arg", action="append", default=[])
     caustic_quality_smoke.add_arguments(parser)
+    surfel_gi_quality_smoke.add_arguments(parser)
     parser.add_argument("--reflection-screen-steps", type=int, default=96,
         help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
     parser.add_argument("--cpu-diagnostics", action="store_true",

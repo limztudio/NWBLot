@@ -7,6 +7,7 @@
 
 #include <impl/ecs_render/components.h>
 #include <impl/ecs_render/caustic/settings.h>
+#include <impl/ecs_render/gi/quality_settings.h>
 #include <impl/ecs_render/material/material_instance.h>
 #include <impl/ecs_render/reflection/settings.h>
 #include <impl/ecs_render/reflection/statistics.h>
@@ -86,6 +87,7 @@ public:
     void setRefractionEnabled(bool enabled)noexcept;
     void setRefractionHardwareTracingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
+    [[nodiscard]] bool setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings);
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);

@@ -26,7 +26,7 @@ struct NwbSurfelConstantsGpu{
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
     Float4 coverageRadiusBiasHyst;  // x = reserved (coverage sum dropped for one-surfel-per-cell), y = default radius, z = normal bias, w = accumulation cap
     Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
-    Float4 screenHeightPad;         // x = screen height, yzw = pad
+    Float4 screenHeightPad;         // x = screen height, y = resolve factor, zw = pad
 };
 static_assert(sizeof(NwbSurfelConstantsGpu) == sizeof(Float4) * NWB_SURFEL_CONSTANTS_FLOAT4_COUNT, "NwbSurfelConstantsGpu must match the shader NwbSurfelConstants layout");
 
@@ -57,7 +57,7 @@ template<typename StateT>
         static_cast<f32>(NWB_SURFEL_SPAWN_TILE),
         static_cast<f32>(targets.width)
     );
-    params.screenHeightPad = Float4(static_cast<f32>(targets.height), 0.0f, 0.0f, 0.0f);
+    params.screenHeightPad = Float4(static_cast<f32>(targets.height), static_cast<f32>(targets.surfelResolveFactor), 0.0f, 0.0f);
     return params;
 }
 

@@ -191,39 +191,6 @@ bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& target
         return false;
     }
 
-    // Deferred lighting samples resolved surfel GI, never the writable pool.
-    targets.surfelIrradianceFormat = Core::Format::RGBA16_FLOAT;
-    Core::TextureDesc surfelIrradianceDesc;
-    surfelIrradianceDesc
-        .setWidth(targets.width)
-        .setHeight(targets.height)
-        .setFormat(targets.surfelIrradianceFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
-        .setName("engine/gi/surfel_irradiance")
-    ;
-    targets.surfelIrradiance = m_graphics.createTexture(surfelIrradianceDesc);
-    if(!targets.surfelIrradiance){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel irradiance target"));
-        return false;
-    }
-
-    // Transient half-resolution surfel resolve input.
-    Core::TextureDesc surfelIrradianceHalfDesc;
-    surfelIrradianceHalfDesc
-        .setWidth(DivideUp(targets.width, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
-        .setHeight(DivideUp(targets.height, static_cast<u32>(NWB_SURFEL_RESOLVE_HALF_FACTOR)))
-        .setFormat(targets.surfelIrradianceFormat)
-        .setInUAV(true)
-        .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
-        .setName("engine/gi/surfel_irradiance_half")
-    ;
-    targets.surfelIrradianceHalf = m_graphics.createTexture(surfelIrradianceHalfDesc);
-    if(!targets.surfelIrradianceHalf){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel half-res irradiance target"));
-        return false;
-    }
-
     Core::TextureDesc accumulatorDesc;
     accumulatorDesc
         .setWidth(targets.width)

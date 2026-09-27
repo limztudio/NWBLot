@@ -10,6 +10,7 @@
 #include "smoke_environment.h"
 #include "software_shadow_settings.h"
 #include "caustic_quality_settings.h"
+#include "surfel_gi_quality_settings.h"
 #include "shadow_quality_settings.h"
 #include "render_quality_settings.h"
 
@@ -140,6 +141,10 @@ struct SmokeRenderSystems{
     NWB_FATAL_ASSERT_MSG(
         ApplyCausticQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.caustic),
         NWB_TEXT("Invalid caustic quality smoke settings")
+    );
+    NWB_FATAL_ASSERT_MSG(
+        ApplySurfelGiQualitySmokeSettings(rendererSystem, context.objectArena, baseSettings.surfelGi),
+        NWB_TEXT("Invalid surfel GI quality smoke settings")
     );
     NWB_FATAL_ASSERT_MSG(
         ApplySoftwareShadowSmokeSettings(rendererSystem, context.objectArena, baseSettings.softwareShadow),

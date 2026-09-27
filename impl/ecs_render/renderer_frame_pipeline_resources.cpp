@@ -28,11 +28,20 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
     if(width == 0 || height == 0)
         return true;
 
+    const u32 surfelResolveFactor = static_cast<u32>(m_surfelGiQualitySettings.resolveResolution);
+    if(m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor){
+        // Shared producers must drain and recreate before their retained queue handoffs are cleared.
+        if(!m_graphics.waitForIdle())
+            return false;
+        invalidateResources();
+    }
+
     if(!prepareGpuTimingScopes())
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: GPU timing scope preparation failed; timing samples may be skipped"));
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
-    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height;
+    bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height
+        && deferredTargets->surfelResolveFactor == surfelResolveFactor;
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
@@ -66,6 +75,11 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             return false;
         }
         if(!m_raytracingSystem.createCausticTargets(createdTargets)){
+            resetCreatedTargets();
+            return false;
+        }
+        createdTargets.surfelResolveFactor = surfelResolveFactor;
+        if(!m_raytracingSystem.createSurfelTargets(createdTargets)){
             resetCreatedTargets();
             return false;
         }
@@ -437,6 +451,12 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: presentation preparation did not match the acquired frame; requesting recreation"));
         m_graphics.requestDeviceRecreation();
         return false;
+    }
+
+    if(m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution)){
+        const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
+        if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
+            return false;
     }
 
     m_meshSystem.pruneRuntimeMeshResources();

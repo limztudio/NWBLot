@@ -5,10 +5,7 @@
 #pragma once
 
 
-#include <impl/ecs_render/caustic/settings.h>
-#include <impl/ecs_render/gi/quality_settings.h>
-#include <impl/ecs_render/shadow/light_space_settings.h>
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/ecs_render/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,13 +17,11 @@ namespace NWB::Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scene defaults are applied before explicit smoke environment overrides.
-struct SmokeRenderQualitySettings{
-    Impl::CausticQualitySettings caustic;
-    Impl::SurfelGiQualitySettings surfelGi;
-    Impl::ShadowQualitySettings shadow;
-    Impl::SoftwareShadowSettings softwareShadow;
-};
+[[nodiscard]] bool ApplySurfelGiQualitySmokeSettings(
+    Impl::RendererSystem& renderer,
+    Core::Alloc::GlobalArena& arena,
+    const Impl::SurfelGiQualitySettings& baseSettings = {}
+);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

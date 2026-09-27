@@ -16,7 +16,7 @@ struct NwbSurfelConstants{
     float4 hashPoolFrameDivisor;    // x = hash cell count (pow2), y = pool capacity, z = frame index, w = update divisor
     float4 coverageRadiusBiasHyst;  // x = reserved (one-surfel-per-cell dropped the coverage sum), y = default spawn radius, z = normal bias, w = accumulation cap (bounded running-mean window)
     float4 ageRaysTileScreen;       // x = max age (frames before recycle), y = maximum rays/surfel, z = spawn tile (px), w = screen width
-    float4 screenHeightPad;         // x = screen height, yzw = pad
+    float4 screenHeightPad;         // x = screen height, y = resolve factor, zw = pad
 };
 
 

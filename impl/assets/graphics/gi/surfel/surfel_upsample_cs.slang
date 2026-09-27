@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Half-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses
+// Reduced-res to full-res joint-bilateral upsample gated by surface similarity (distance + normal; distance-only misses
 // creases like the Cornell corner). Mirrors caustic stage-2 plus a normal gate; plain bilinear would smear coverage.
 // Output: rgb = HDR irradiance (no [0,1] clamp), a = coverage (0 falls back to hemiAmbient).
 
@@ -71,9 +71,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     uint halfWidth, halfHeight;
     nwbSurfelUpsampleHalfIrradiance().GetDimensions(halfWidth, halfHeight);
-    const uint factor = uint(NWB_SURFEL_RESOLVE_HALF_FACTOR);
+    const uint factor = uint(g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot].screenHeightPad.y);
 
-    // Half index is p/factor (top-left point sample), not the texel-centre (p+0.5)/f-0.5 (block-centre mis-registers ~half tap).
+    // Reduced-grid index follows the resolve's top-left point sample at p/factor.
     const float2 src = float2(pixel) / float(factor);
     const int2 baseTexel = int2(floor(src));
     const float2 lerpFrac = src - float2(baseTexel);
@@ -88,7 +88,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             // transported through this filter; geometry and the weighted accumulation remain FP32 below.
             const half4 tapValue = half4(nwbSurfelUpsampleHalfIrradiance().Load(int3(tap, 0)));
             if(tapValue.a < half(NWB_SURFEL_UPSAMPLE_COVERAGE_MIN))
-                continue;   // this half texel had no surfel coverage -> nothing to upsample from
+                continue;   // This reduced-grid texel has no surfel coverage.
             // Recover the tap's geometry from the SAME full texel the resolve gathered at (tap * factor, top-left).
             const int2 tapFull = int2(min(uint(tap.x) * factor, fullWidth - 1u), min(uint(tap.y) * factor, fullHeight - 1u));
             const half3 tapRawNormalSample = half3(nwbSurfelUpsampleGbufferNormal().Load(int3(tapFull, 0)).xyz);
@@ -108,8 +108,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
 
-    // Every tap rejected (a full-res surface sliver whose 2x2 half neighbours are all uncovered/other-surface): no GI here
-    // -> a = 0 -> lighting uses hemiAmbient, exactly as an uncovered full-res gather would have.
+    // If all four reduced-grid taps lack coverage or belong to another surface, retain the ambient fallback.
     g_NwbSurfelUpsampleOutput[pixel] = (weightSum > half(0.0h)) ? float4(sum / float(weightSum), 1.0) : float4(0.0, 0.0, 0.0, 0.0);
 }
 

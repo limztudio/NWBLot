@@ -15,7 +15,8 @@ import stress_timing_smoke as smoke
 
 
 def shadow_defaults():
-    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, shadow_transparent_sampling="reference_three",
+    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, surfel_gi_resolve_resolution="half",
+        shadow_transparent_sampling="reference_three",
         software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
         software_shadow_capture_cadence="every_frame", software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
@@ -47,6 +48,8 @@ def valid_log(characters_per_class=10):
     # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
     lines.append("Fixture: fixed simulation delta 0.016666667")
     lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
+    lines.append("SurfelGiQualitySmoke: requested resolve_factor=2")
+    lines.append("RendererSystem: dispatched surfel GI resolve (factor=2, source=1280x900, resolve=640x450)")
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, "
         "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
     lines.append(smoke.SHADOW_QUALITY_SETTINGS + "0")
@@ -83,6 +86,29 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         executable = self.output / "renderer.exe"
         executable.write_bytes(b"fixture")
         self.argv = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
+
+    def test_surfel_quarter_override_requires_matching_recorded_dispatch(self):
+        args = smoke.parse_args(self.argv + ["--surfel-gi-resolve-resolution", "quarter"])
+        env = smoke.launch_environment({"NWB_SURFEL_GI_RESOLVE_RESOLUTION": "half"}, args, self.output)
+        self.assertEqual(env["NWB_SURFEL_GI_RESOLVE_RESOLUTION"], "quarter")
+        setting = "SurfelGiQualitySmoke: requested resolve_factor=4"
+        dispatch = "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)"
+        observed = smoke.surfel_gi_quality_smoke.verify_settings(setting + "\n" + dispatch, "quarter", (1280, 900))
+        self.assertTrue(observed["verified"])
+        for text in (setting, setting + "\n" + dispatch.replace("factor=4", "factor=2"),
+                setting + "\n" + dispatch.replace("320x225", "640x450"),
+                setting + "\n" + dispatch.replace("1280x900", "1001x701")):
+            with self.subTest(text=text), self.assertRaises(smoke.SmokeFailure):
+                smoke.surfel_gi_quality_smoke.verify_settings(text, "quarter", (1280, 900))
+
+    def test_surfel_resize_checks_each_target_generation_and_odd_extent(self):
+        records = ("SurfelGiQualitySmoke: requested resolve_factor=4\n"
+            "RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)\n"
+            "RendererSystem: dispatched surfel GI resolve (factor=4, source=1001x701, resolve=251x176)")
+        observed = smoke.surfel_gi_quality_smoke.verify_settings(records, "quarter")
+        self.assertEqual(len(observed["dispatches"]), 2)
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.surfel_gi_quality_smoke.verify_settings(records.replace("251x176", "250x175"), "quarter")
 
     def test_capture_cadence_requires_observed_accepted_reuse(self):
         args = smoke.parse_args(self.argv + ["--software-shadow-capture-cadence", "reuse_one_frame"])

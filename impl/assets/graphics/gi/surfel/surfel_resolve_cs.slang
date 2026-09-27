@@ -21,17 +21,16 @@
 
 [numthreads(NWB_SURFEL_RESOLVE_GROUP_SIZE, NWB_SURFEL_RESOLVE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint factor = uint(NWB_SURFEL_RESOLVE_HALF_FACTOR);
+    const uint factor = uint(g_NwbSceneSurfelParams.screenHeightPad.y);
     const uint screenWidth = uint(g_NwbSceneSurfelParams.ageRaysTileScreen.w);
     const uint screenHeight = uint(g_NwbSceneSurfelParams.screenHeightPad.x);
-    const uint halfWidth = (screenWidth + factor - 1u) / factor;    // DivideUp -- matches the CPU half-dims dispatch
+    const uint halfWidth = (screenWidth + factor - 1u) / factor;    // Matches the CPU reduced-size dispatch.
     const uint halfHeight = (screenHeight + factor - 1u) / factor;
     const uint2 halfPixel = dispatchThreadID.xy;
     if(halfPixel.x >= halfWidth || halfPixel.y >= halfHeight)
         return;
 
-    // Point-sample the full-res G-buffer at the half texel's top-left full pixel -- the SAME full texel the upsample
-    // re-reads per tap to recover this texel's geometry, so the gather normal and the upsample gate agree exactly.
+    // Gather and upsample use the same top-left full-resolution pixel for each reduced-grid texel.
     const uint2 fullPixel = min(halfPixel * factor, uint2(screenWidth - 1u, screenHeight - 1u));
     const int3 loadCoord = int3(int2(fullPixel), 0);
     // G-buffer vectors are RGBA16F. Retain them as half during fetch and expand only for the spatial gather math.

@@ -279,6 +279,7 @@ public:
     void releaseCausticEmissionTargetHeapHandle();
     [[nodiscard]] bool createShadowVisibilityTarget(DeferredFrameTargets& targets);
     [[nodiscard]] bool createCausticTargets(DeferredFrameTargets& targets);
+    [[nodiscard]] bool createSurfelTargets(DeferredFrameTargets& targets);
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] bool snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots);

@@ -431,6 +431,7 @@ struct DeferredLaggedLightingHistoryResources{
 struct DeferredFrameTargets{
     u32 width = 0;
     u32 height = 0;
+    u32 surfelResolveFactor = 0u;
     Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
     Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;
@@ -504,7 +505,7 @@ struct DeferredFrameTargets{
     Core::TextureHandle causticIrradiance;
     // Screen-space surfel GI avoids sharing the writable pool with deferred lighting.
     Core::TextureHandle surfelIrradiance;
-    // Half-resolution surfel GI gather output.
+    // Reduced-resolution surfel GI gather output; surfelResolveFactor belongs to this target generation.
     Core::TextureHandle surfelIrradianceHalf;
     Core::TextureHandle causticAccumulator;
     // Half-resolution caustic a-trous ping-pong.

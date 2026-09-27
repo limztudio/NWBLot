@@ -5,34 +5,42 @@
 #pragma once
 
 
-#include <impl/ecs_render/caustic/settings.h>
-#include <impl/ecs_render/gi/quality_settings.h>
-#include <impl/ecs_render/shadow/light_space_settings.h>
-#include <impl/ecs_render/shadow/quality_settings.h>
+#include <impl/global.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace NWB::Tests::Smoke{
+NWB_IMPL_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scene defaults are applied before explicit smoke environment overrides.
-struct SmokeRenderQualitySettings{
-    Impl::CausticQualitySettings caustic;
-    Impl::SurfelGiQualitySettings surfelGi;
-    Impl::ShadowQualitySettings shadow;
-    Impl::SoftwareShadowSettings softwareShadow;
+namespace SurfelGiResolveResolution{
+    enum Enum : u8{
+        Half = 2u,
+        Quarter = 4u,
+    };
 };
 
+struct SurfelGiQualitySettings{
+    SurfelGiResolveResolution::Enum resolveResolution = SurfelGiResolveResolution::Half;
+};
+
+struct SurfelGiResolveSize{
+    u32 width = 0u;
+    u32 height = 0u;
+};
+
+[[nodiscard]] bool ValidateSurfelGiQualitySettings(const SurfelGiQualitySettings& settings);
+[[nodiscard]] SurfelGiResolveSize MakeSurfelGiResolveSize(u32 width, u32 height, u32 factor);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-};
+NWB_IMPL_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -66,6 +66,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/render_quality_settings.h"
             "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/caustic_quality_settings.h"
+            "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/surfel_gi_quality_settings.h"
             "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/shadow_quality_settings.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_quality_settings.cpp"

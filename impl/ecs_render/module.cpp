@@ -87,6 +87,10 @@ bool RendererSystem::setCausticQualitySettings(const CausticQualitySettings& set
     return m_pipeline->setCausticQualitySettings(settings);
 }
 
+bool RendererSystem::setSurfelGiQualitySettings(const SurfelGiQualitySettings& settings){
+    return m_pipeline->setSurfelGiQualitySettings(settings);
+}
+
 bool RendererSystem::setSoftwareShadowSettings(const SoftwareShadowSettings& settings){
     return m_pipeline->setSoftwareShadowSettings(settings);
 }

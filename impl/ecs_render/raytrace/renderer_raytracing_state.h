@@ -383,6 +383,7 @@ struct RtSurfelGiState{
     bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelUpsamplePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;
+    bool m_surfelResolveDispatchLogged = false;
     bool m_surfelTracePipelineFailed = false;
     bool m_surfelHashBuildPipelineFailed = false;
     bool m_surfelAgeFreePipelineFailed = false;

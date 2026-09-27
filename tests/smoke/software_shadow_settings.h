@@ -52,6 +52,8 @@ namespace NWB::Tests::Smoke{
             settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::ReferenceGrid9;
         else if(search == "compact_cross5")
             settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::CompactCross5;
+        else if(search == "center1")
+            settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::Center1;
         else
             return false;
     }

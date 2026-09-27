@@ -36,6 +36,7 @@ namespace SoftwareShadowBlockerSearch{
     enum Enum : u8{
         ReferenceGrid9,
         CompactCross5,
+        Center1,
     };
 };
 

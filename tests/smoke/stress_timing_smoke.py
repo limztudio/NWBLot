@@ -40,7 +40,7 @@ SHADOW_TRANSPARENT_SAMPLING = {"reference_three": 0, "temporal_one": 1}
 SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
 SOFTWARE_SHADOW_BACKENDS = {"automatic": 0, "trace": 1, "light_space": 2}
 SOFTWARE_SHADOW_COVERAGE = {"reference": 0, "fitted_volume": 1}
-SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1}
+SOFTWARE_SHADOW_BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1, "center1": 2}
 SOFTWARE_SHADOW_CAPTURE_CADENCE = {"every_frame": 0, "reuse_one_frame": 1, "reuse_two_frames": 2}
 SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX = "RendererSystem: accepted light-space capture reuse "
 SOFTWARE_SHADOW_CAPTURE_REUSE = SOFTWARE_SHADOW_CAPTURE_REUSE_PREFIX + "(cadence=2)"
@@ -601,7 +601,7 @@ def parse_args(argv=None):
     parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default="reference",
         help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")
     parser.add_argument("--software-shadow-blocker-search", choices=tuple(SOFTWARE_SHADOW_BLOCKER_SEARCH), default="reference_grid9",
-        help="Compact cross uses five blocker taps with cheap off-center opaque plane estimates; the center stays fully checked.")
+        help="Compact cross uses five blocker taps; center1 uses only the fully checked center and may narrow penumbras.")
     parser.add_argument("--software-shadow-capture-cadence", choices=tuple(SOFTWARE_SHADOW_CAPTURE_CADENCE), default="every_frame",
         help="Reuse accepted light-space captures for up to one or two frames, including CSG; receiver shading remains current.")
     parser.add_argument("--software-shadow-budget-mib", type=int, default=256,

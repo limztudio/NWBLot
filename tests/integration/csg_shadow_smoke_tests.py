@@ -97,11 +97,14 @@ class CsgShadowImageTests(unittest.TestCase):
 
     def test_capture_policy_overrides_inherited_quality_and_freeze(self):
         with patch.dict("os.environ", {"NWB_SOFTWARE_SHADOW_BACKEND": "trace", "NWB_SHADOW_TRANSPARENT_SAMPLING": "temporal_one",
-            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "8"}, clear=True):
+            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME": "8", "NWB_CSG_SHADOW_LIGHT_SOURCE": "finite",
+            "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "center1"}, clear=True):
             environment = capture_environment("moved", "point")
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_BACKEND"], "automatic")
         self.assertEqual(environment["NWB_SHADOW_TRANSPARENT_SAMPLING"], "reference_three")
         self.assertEqual(environment["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "every_frame")
+        self.assertEqual(environment["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "reference_grid9")
+        self.assertEqual(environment["NWB_CSG_SHADOW_LIGHT_SOURCE"], "hard")
         self.assertNotIn("NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", environment)
 
     def test_approximate_capture_preserves_explicit_quality_settings(self):
@@ -123,6 +126,25 @@ class CsgShadowImageTests(unittest.TestCase):
             self.assertIn("RendererSystem: accepted light-space capture reuse (cadence=3)", expected)
             self.assertIn("RendererSystem: accepted light-space capture reuse (cadence=2)", rejected)
             self.assertEqual(run.call_args.kwargs["env"]["NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE"], "reuse_two_frames")
+
+    def test_center_blocker_capture_requires_finite_source_and_requested_policy_evidence(self):
+        arguments = ["--executable", "test.exe", "--working-directory", ".", "--output-directory", "."]
+        for route in ("hardware", "software"):
+            for light in ("directional", "point"):
+                with self.subTest(route=route, light=light):
+                    args = parse_args(arguments + ["--route", route, "--light", light,
+                        "--blocker-search", "center1", "--light-source", "finite"])
+                    with patch.object(smoke.subprocess, "run", return_value=Mock(returncode=0)) as run, \
+                        patch.object(smoke, "read_bmp_24_rows", return_value=(960, 720, [])):
+                        smoke.capture_arm(args, "cut")
+                    command = run.call_args.args[0]
+                    expected = [command[index + 1] for index, value in enumerate(command[:-1]) if value == "--expect-log-message"]
+                    self.assertIn("SoftwareShadowSmoke: requested backend=0 directional_resolution=512 point_resolution=256 "
+                        "budget_bytes=268435456 coverage=0 blocker_search=2 capture_cadence=0", expected)
+                    self.assertIn("CsgShadowSmokeProject: light_source=finite angular_radius="
+                        + ("0.005 source_radius=0.000" if light == "directional" else "0.000 source_radius=0.020"), expected)
+                    self.assertEqual(run.call_args.kwargs["env"]["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "center1")
+                    self.assertEqual(run.call_args.kwargs["env"]["NWB_CSG_SHADOW_LIGHT_SOURCE"], "finite")
 
     def test_capture_requires_post_motion_settle_interval(self):
         arguments = ["--executable", "test.exe", "--working-directory", ".", "--output-directory", ".", "--route", "software"]

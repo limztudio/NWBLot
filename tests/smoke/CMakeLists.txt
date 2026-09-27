@@ -215,6 +215,17 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
                 set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
                     RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
                 )
+                set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker_smoke")
+                add_test(NAME "${_nwb_csg_shadow_test}"
+                    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke.py"
+                        --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+                        --working-directory "${_nwb_transparent_multi_runtime_root}"
+                        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_${_nwb_csg_light}_center_blocker"
+                        --route "${_nwb_csg_route}" --light "${_nwb_csg_light}" --light-source finite --blocker-search center1
+                )
+                set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
+                    RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 600 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
+                )
             endforeach()
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_analytic_smoke")
             add_test(NAME "${_nwb_csg_shadow_test}"

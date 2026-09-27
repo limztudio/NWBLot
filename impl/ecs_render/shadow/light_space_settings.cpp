@@ -20,7 +20,7 @@ bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
     return
         settings.backend <= SoftwareShadowBackend::LightSpace
         && settings.coverage <= SoftwareShadowCoverage::FittedVolume
-        && settings.blockerSearch <= SoftwareShadowBlockerSearch::CompactCross5
+        && settings.blockerSearch <= SoftwareShadowBlockerSearch::Center1
         && settings.captureCadence <= SoftwareShadowCaptureCadence::ReuseTwoFrames
         && settings.directionalResolution >= s_ShadowMinResolution && settings.directionalResolution <= s_ShadowMaxResolution
         && settings.pointResolution >= s_ShadowMinResolution && settings.pointResolution <= s_ShadowMaxResolution

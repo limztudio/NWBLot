@@ -227,29 +227,34 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_COVERAGE"], "reference")
 
     def test_blocker_search_is_explicit_forwarded_and_verified(self):
-        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
-        env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9"}, args, self.output)
-        self.assertEqual(env["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
-        report = smoke.verify_software_shadow_settings(shadow_record(blocker_search=1), args)
-        self.assertEqual(report["blocker_search_name"], "compact_cross5")
-        self.assertEqual(report["observed"]["blocker_search"], 1)
-        for record in (shadow_record(), shadow_record(blocker_search=2), shadow_record().replace(" blocker_search=0", "")):
-            with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
-                smoke.verify_software_shadow_settings(record, args)
-        defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
-        self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "reference_grid9")
+        for name, code in (("compact_cross5", 1), ("center1", 2)):
+            with self.subTest(name=name):
+                args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", name])
+                env = smoke.launch_environment({"NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9"}, args, self.output)
+                self.assertEqual(env["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], name)
+                report = smoke.verify_software_shadow_settings(shadow_record(blocker_search=code), args)
+                self.assertEqual(report["blocker_search_name"], name)
+                self.assertEqual(report["observed"]["blocker_search"], code)
+                for record in (shadow_record(), shadow_record(blocker_search=3 - code), shadow_record(blocker_search=3),
+                    shadow_record().replace(" blocker_search=0", "")):
+                    with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
+                        smoke.verify_software_shadow_settings(record, args)
+                defaults = smoke.launch_environment(env, smoke.parse_args(self.argv), self.output)
+                self.assertEqual(defaults["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "reference_grid9")
 
     def test_blocker_acquisition_records_policy_and_rejects_silent_reference_fallback(self):
-        args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", "compact_cross5"])
-        text = shadow_record(blocker_search=1) + "\n" + valid_log()
-        result = self.acquire_log(args, text)
-        self.assertEqual(result["software_shadow_settings"]["observed"]["blocker_search"], 1)
-        launch = json.loads((self.output / "launch.json").read_text(encoding="utf-8"))
-        self.assertEqual(launch["environment"]["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], "compact_cross5")
-        wrong = shadow_record() + "\n" + valid_log()
-        with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
-            self.acquire_log(args, wrong)
-        self.assertEqual((self.output / "runtime.log").read_text(encoding="utf-8"), wrong)
+        for name, code in (("compact_cross5", 1), ("center1", 2)):
+            with self.subTest(name=name):
+                args = smoke.parse_args(self.argv + ["--software-shadow-blocker-search", name])
+                text = shadow_record(blocker_search=code) + "\n" + valid_log()
+                result = self.acquire_log(args, text)
+                self.assertEqual(result["software_shadow_settings"]["observed"]["blocker_search"], code)
+                launch = json.loads((self.output / "launch.json").read_text(encoding="utf-8"))
+                self.assertEqual(launch["environment"]["NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH"], name)
+                wrong = shadow_record() + "\n" + valid_log()
+                with self.assertRaisesRegex(smoke.SmokeFailure, "software shadow settings mismatch"):
+                    self.acquire_log(args, wrong)
+                self.assertEqual((self.output / "runtime.log").read_text(encoding="utf-8"), wrong)
 
     def test_shadow_sampling_is_explicit_forwarded_and_verified(self):
         for name, code in smoke.SHADOW_TRANSPARENT_SAMPLING.items():

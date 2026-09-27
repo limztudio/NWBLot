@@ -13,7 +13,11 @@ from csg_shadow_reference import ANALYTIC_ARMS, ARMS, compare_analytic_frames, c
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
 
-def capture_environment(arm, light, atlas="boxes", cadence="every_frame", map_resolution_divisor=1):
+BLOCKER_SEARCH = {"reference_grid9": 0, "compact_cross5": 1, "center1": 2}
+
+
+def capture_environment(arm, light, atlas="boxes", cadence="every_frame", map_resolution_divisor=1,
+    blocker_search="reference_grid9", light_source="hard"):
     environment = dict(os.environ)
     for key in tuple(environment):
         if key.startswith(("NWB_CSG_SHADOW_", "NWB_SOFTWARE_SHADOW_", "NWB_SHADOW_")):
@@ -21,10 +25,11 @@ def capture_environment(arm, light, atlas="boxes", cadence="every_frame", map_re
     environment.update({
         "NWB_CSG_SHADOW_ARM": arm,
         "NWB_CSG_SHADOW_LIGHT": light,
+        "NWB_CSG_SHADOW_LIGHT_SOURCE": light_source,
         "NWB_CSG_SHADOW_ATLAS": atlas,
         "NWB_SOFTWARE_SHADOW_BACKEND": "automatic",
         "NWB_SOFTWARE_SHADOW_COVERAGE": "reference",
-        "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": "reference_grid9",
+        "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH": blocker_search,
         "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE": cadence,
         "NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION": str(512 // map_resolution_divisor),
         "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION": str(256 // map_resolution_divisor),
@@ -47,7 +52,13 @@ def capture_arm(args, arm):
         "--expect-log-message", "CsgShadowSmokeProject: shutdown",
         "--expect-log-message", f"CsgShadowSmokeProject: atlas arm={ARMS.index(arm)} light={args.light} hardware={int(args.route == 'hardware')}",
         "--expect-log-message", "caster_z_max=-5 receiver_z=0",
-        "--expect-log-message", "SoftwareShadowSmoke: requested backend=0",
+        "--expect-log-message", "SoftwareShadowSmoke: requested backend=0 directional_resolution="
+            + f"{512 // args.map_resolution_divisor} point_resolution={256 // args.map_resolution_divisor} "
+            + f"budget_bytes=268435456 coverage=0 blocker_search={BLOCKER_SEARCH[args.blocker_search]} "
+            + f"capture_cadence={('every_frame', 'reuse_one_frame', 'reuse_two_frames').index(args.capture_cadence)}",
+        "--expect-log-message", f"CsgShadowSmokeProject: light_source={args.light_source} "
+            + f"angular_radius={0.005 if args.light_source == 'finite' and args.light == 'directional' else 0.0:.3f} "
+            + f"source_radius={0.02 if args.light_source == 'finite' and args.light == 'point' else 0.0:.3f}",
         "--application-arg=--gpudbg"]
     if args.atlas == "analytic":
         command += ["--expect-log-message", "CsgShadowSmokeProject: analytic atlas tiles=6 shapes=plane,sphere,capsule"]
@@ -80,7 +91,8 @@ def capture_arm(args, arm):
         command.append("--no-logserver")
     command.extend("--application-arg=" + argument for argument in args.application_arg)
     print(f"Capturing CSG shadow {args.route}/{args.light}/{args.atlas}/{arm}...", flush=True)
-    environment = capture_environment(arm, args.light, args.atlas, args.capture_cadence, args.map_resolution_divisor)
+    environment = capture_environment(arm, args.light, args.atlas, args.capture_cadence, args.map_resolution_divisor,
+        args.blocker_search, args.light_source)
     result = subprocess.run(command, env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return None
@@ -100,6 +112,9 @@ def parse_args(argv):
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--route", choices=("hardware", "software"), required=True)
     parser.add_argument("--light", choices=("directional", "point"), default="directional")
+    parser.add_argument("--light-source", choices=("hard", "finite"), default="hard")
+    parser.add_argument("--blocker-search", choices=tuple(BLOCKER_SEARCH), default="reference_grid9",
+        help="Center1 estimates penumbra width from the fully checked central blocker only.")
     parser.add_argument("--atlas", choices=("boxes", "analytic"), default="boxes")
     parser.add_argument("--capture-cadence", choices=("every_frame", "reuse_one_frame", "reuse_two_frames"), default="every_frame")
     parser.add_argument("--map-resolution-divisor", type=int, choices=(1, 2, 4), default=1)
@@ -128,6 +143,8 @@ def main(argv):
         metrics = compare_analytic_frames(frames) if args.atlas == "analytic" else compare_frames(frames, args.light)
         metrics["atlas"] = args.atlas
         metrics["route"] = args.route
+        metrics["light_source"] = args.light_source
+        metrics["blocker_search"] = args.blocker_search
         metrics["capture_cadence"] = args.capture_cadence
         metrics["map_resolution_divisor"] = args.map_resolution_divisor
         (args.output_directory / "result.json").write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")

@@ -249,6 +249,33 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
     distance = 0.0;
     const float receiverDepth = nwbLightSpaceLinearDepth(centerView, origin);
     const bool point = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
+    if((centerView.light.w & NWB_LIGHT_SPACE_FLAG_CENTER_BLOCKER) != 0u){
+        // The center-only estimate preserves validation but may miss off-center penumbra blockers.
+        uint2 pixel;
+        float depth;
+        const uint address = nwbLightSpaceAddress(centerView, origin, pixel, depth);
+        if(address == NWB_LIGHT_SPACE_ADDRESS_EMPTY)
+            return true;
+        if(address != NWB_LIGHT_SPACE_ADDRESS_SAMPLE)
+            return false;
+        float comparisonDepth = receiverDepth;
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+        if(!nwbLightSpaceReceiverDepth(centerView, pixel, origin, receiverNormal, depth, comparisonDepth))
+            return false;
+#endif
+        float blocker;
+        if(!nwbLightSpaceNearestBlocker(centerView, pixel, comparisonDepth, blocker))
+            return false;
+        if(blocker < comparisonDepth){
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
+            const float gap = comparisonDepth - blocker;
+            distance = max(point ? gap * receiverDepth / comparisonDepth : gap, 0.0);
+#else
+            distance = max(receiverDepth - blocker, 0.0);
+#endif
+        }
+        return isfinite(distance);
+    }
     const float radius = point
         ? light.params2.y * max(receiverDepth - centerView.depthRange.z, 0.0) / max(centerView.depthRange.z, centerView.depthRange.x)
         : tan(light.params2.x) * receiverDepth;

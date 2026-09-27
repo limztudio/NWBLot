@@ -98,6 +98,12 @@ private:
                 return false;
             m_pointLight = light == "point";
         }
+        if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_LIGHT_SOURCE", value)){
+            const AStringView source(value.data(), value.size());
+            if(source != "hard" && source != "finite")
+                return false;
+            m_finiteLightSource = source == "finite";
+        }
         if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_ATLAS", value)){
             const AStringView atlas(value.data(), value.size());
             if(atlas != "boxes" && atlas != "analytic")
@@ -298,9 +304,13 @@ public:
             : NWB::Impl::Scene::CreateDirectionalLightEntity(*m_world, 0.0f, 0.0f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f);
         auto* lightComponent = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(light);
         NWB_FATAL_ASSERT_MSG(lightComponent, NWB_TEXT("CsgShadowSmokeProject: light creation failed"));
-        lightComponent->angularRadius = 0.0f;
-        lightComponent->sourceRadius = 0.0f;
+        lightComponent->angularRadius = m_finiteLightSource && !m_pointLight ? 0.005f : 0.0f;
+        lightComponent->sourceRadius = m_finiteLightSource && m_pointLight ? 0.02f : 0.0f;
         lightComponent->enableCaustics = false;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CsgShadowSmokeProject: light_source={} angular_radius={:.3f} source_radius={:.3f}")
+            , m_finiteLightSource ? NWB_TEXT("finite") : NWB_TEXT("hard")
+            , static_cast<f64>(lightComponent->angularRadius), static_cast<f64>(lightComponent->sourceRadius)
+        );
         if(m_analyticAtlas)
             createAnalyticAtlas();
         else
@@ -346,6 +356,7 @@ private:
     u32 m_update = 0u;
     Arm::Enum m_arm = Arm::Cut;
     bool m_pointLight = false;
+    bool m_finiteLightSource = false;
     bool m_analyticAtlas = false;
 };
 

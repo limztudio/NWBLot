@@ -160,8 +160,13 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
     ray.TMin = tMin;
     ray.TMax = tMax;
 
-    RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
+    RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+    query.TraceRayInline(
+        NwbHeapAccelStruct(),
+        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
+        NWB_RAY_TRACING_ALL_INSTANCE_MASK,
+        ray
+    );
     query.Proceed();
     return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
 }

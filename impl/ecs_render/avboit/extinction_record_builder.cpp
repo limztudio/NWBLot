@@ -456,7 +456,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             ECSRenderDetail::s_GeneratedGeometryRasterState
         ));
 
-        static_cast<void>(inputs.targets);
         Optional<Core::GpuTimingMeasure>& avboitExtinctionComputeEmulationTiming = *inputs.extinctionComputeEmulationTiming;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& planAlias = inputs.sharedComputeEmulationPlan;
         const usize countAlias = inputs.sharedComputeEmulationInstanceCount;

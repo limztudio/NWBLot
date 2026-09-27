@@ -198,7 +198,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 [[nodiscard]] u32 queryLinuxCapacity(u32 processorIndex){
     char path[s_SysfsCapacityPathCapacity];
-    const int pathLength = snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
+    const int pathLength = NWB_SPRINTF(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
     if(pathLength <= 0 || static_cast<usize>(pathLength) >= sizeof(path))
         return 0u;
     InputFileStream stream(path);

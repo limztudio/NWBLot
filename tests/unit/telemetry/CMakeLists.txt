@@ -18,6 +18,7 @@ target_sources(nwb_telemetry_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/recorder_codec_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/recorder_reuse_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/report_tests.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/text_log_payload_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/telemetry_test_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/telemetry_test_helpers.h"
 )

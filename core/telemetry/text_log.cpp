@@ -63,32 +63,39 @@ bool IsValidTextLogType(const Common::LogType::Enum type)noexcept{
 bool BuildTextLogPayload(
     TelemetryArena& arena,
     const Common::LogType::Enum type,
-    const TStringView message,
-    TelemetryBytes& outPayload
-){
-    outPayload.clear();
-
-    if(!IsValidTextLogType(type))
+    TStringView message,
+    TelemetryBytes& outPayload){
+    if(!IsValidTextLogType(type)){
+        outPayload.clear();
         return false;
+    }
 
-    AString<TelemetryArena> messageUtf8(arena);
-    messageUtf8.reserve(message.size());
-    __hidden_telemetry_text_log::AppendUtf8Text(messageUtf8, message);
+    // Preserve views into the previous payload before a header write or vector growth can invalidate them.
+    // Ordinary logger input is external, so it converts directly into the reusable destination allocation.
+    TString<TelemetryArena> aliasedMessage(arena);
+    if(!message.empty() && outPayload.data()){
+        const usize sourceAddress = reinterpret_cast<usize>(message.data());
+        const usize payloadAddress = reinterpret_cast<usize>(outPayload.data());
+        if(sourceAddress >= payloadAddress && sourceAddress - payloadAddress < outPayload.capacity()){
+            aliasedMessage.assign(message.data(), message.size());
+            message = TStringView(aliasedMessage.data(), aliasedMessage.size());
+        }
+    }
 
-    usize payloadBytes = sizeof(EncodedTextLogPayloadHeader);
-    if(!AddBinaryReserveBytes(payloadBytes, messageUtf8.size()))
+    outPayload.clear();
+    usize minimumPayloadBytes = sizeof(EncodedTextLogPayloadHeader);
+    if(!AddBinaryReserveBytes(minimumPayloadBytes, message.size()))
         return false;
 
     EncodedTextLogPayloadHeader header;
     header.type = static_cast<u8>(type);
-    header.messageBytes = static_cast<u64>(messageUtf8.size());
-
-    outPayload.reserve(payloadBytes);
+    outPayload.reserve(minimumPayloadBytes);
     AppendPOD(outPayload, header);
-    if(!messageUtf8.empty())
-        BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, messageUtf8.data(), messageUtf8.size());
+    __hidden_telemetry_text_log::AppendUtf8Text(outPayload, message);
 
-    return outPayload.size() == payloadBytes;
+    header.messageBytes = static_cast<u64>(outPayload.size() - sizeof(header));
+    NWB_MEMCPY(outPayload.data(), outPayload.size(), &header, sizeof(header));
+    return true;
 }
 
 bool ParseTextLogPayload(

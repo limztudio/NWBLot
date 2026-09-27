@@ -62,8 +62,9 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
             epoch = event.captureEpoch;
         EXPECT_EQ(event.captureEpoch, epoch);
         EXPECT_EQ(event.workerIndex, 0u);
-        EXPECT_GT(event.durationNanoseconds, 0u);
+        // Ready/execution spans include sleeps; an already complete join may finish within one clock tick.
         if(event.kind == CpuTaskProfileKind::QueueDelay){
+            EXPECT_GT(event.durationNanoseconds, 0u);
             ++queued;
             EXPECT_EQ(event.frameIndex, 7u);
             EXPECT_TRUE(event.label == scopeName || event.label == taskName);
@@ -71,6 +72,7 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
         else{
             EXPECT_EQ(event.frameIndex, 8u);
             if(event.kind == CpuTaskProfileKind::Execution){
+                EXPECT_GT(event.durationNanoseconds, 0u);
                 ++executed;
                 EXPECT_TRUE(event.label == scopeName || event.label == taskName);
             }

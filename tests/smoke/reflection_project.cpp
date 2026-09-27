@@ -505,8 +505,12 @@ private:
         FramebufferCaptureOptions options;
         if(m_extendedCase || m_feedbackCapture){
             if(!m_reflectionSettings.diagnosticsEnabled){
-                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
-                return false;
+                // Timing-only extended scenes do not request completed-state capture.
+                SmokeEnvironmentString capturePath(m_context.objectArena);
+                if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", capturePath)){
+                    NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
+                    return false;
+                }
             }
             options.quitWhenReady = false;
             options.predicateContext = this;

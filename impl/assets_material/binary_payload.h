@@ -7,6 +7,7 @@
 
 #include "asset.h"
 
+#include <global/binary.h>
 #include <global/hash_utils.h>
 
 
@@ -107,6 +108,59 @@ static_assert(
 inline constexpr usize s_TypedLayoutBlockBytes = sizeof(MaterialTypedLayoutBlockBinary);
 inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutFieldBinary);
 inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferenceBinary);
+
+// Shared walker for the material binary prefix (magic + shader variant + interface + typed layout extents).
+// Both the codec and test tooling must agree on these offsets; keep the walk in one place.
+template<typename BinaryContainer>
+[[nodiscard]] inline bool FindMaterialBinaryPrefixExtents(
+    const BinaryContainer& binary,
+    usize& outTypedLayoutBegin,
+    u32& outBlockCount,
+    u32& outFieldCount
+){
+    outTypedLayoutBegin = 0u;
+    outBlockCount = 0u;
+    outFieldCount = 0u;
+
+    usize cursor = 0u;
+    u32 magic = 0u;
+    if(!ReadPOD(binary, cursor, magic) || magic != s_MaterialMagic)
+        return false;
+
+    AStringView shaderVariantView;
+    if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, shaderVariantView) || shaderVariantView.empty())
+        return false;
+
+    NameHash materialInterfaceHash = {};
+    if(!ReadPOD(binary, cursor, materialInterfaceHash) || !Name(materialInterfaceHash))
+        return false;
+
+    outTypedLayoutBegin = cursor;
+
+    u64 layoutHash = 0u;
+    if(
+        !ReadPOD(binary, cursor, layoutHash)
+        || !ReadPOD(binary, cursor, outBlockCount)
+        || !ReadPOD(binary, cursor, outFieldCount)
+        || layoutHash == 0u
+    )
+        return false;
+
+    usize layoutBytes = 0u;
+    if(outBlockCount > (binary.size() - cursor) / s_TypedLayoutBlockBytes)
+        return false;
+    layoutBytes = static_cast<usize>(outBlockCount) * s_TypedLayoutBlockBytes;
+    cursor += layoutBytes;
+
+    usize fieldBytes = 0u;
+    if(outFieldCount > (binary.size() - cursor) / s_TypedLayoutFieldBytes)
+        return false;
+    fieldBytes = static_cast<usize>(outFieldCount) * s_TypedLayoutFieldBytes;
+    if(!BinaryDetail::SkipBytes(binary, cursor, fieldBytes))
+        return false;
+
+    return true;
+}
 
 template<typename BlockVector>
 [[nodiscard]] inline bool ComputeMaterialTypedBlockByteSize(const BlockVector& blocks, usize& outByteSize){

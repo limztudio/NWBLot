@@ -875,49 +875,22 @@ bool AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(
     outLayoutHashOffset = 0u;
     outBlockByteCountOffset = 0u;
 
-    usize cursor = 0u;
-    u32 value32 = 0u;
-    if(!ReadPOD(binary, cursor, value32))
-        return false;
-
-    u32 shaderVariantByteCount = 0u;
-    if(!ReadPOD(binary, cursor, shaderVariantByteCount))
-        return false;
-    if(cursor > binary.size() || shaderVariantByteCount > binary.size() - cursor)
-        return false;
-    cursor += shaderVariantByteCount;
-
-    if(cursor > binary.size() || sizeof(NameHash) > binary.size() - cursor)
-        return false;
-    cursor += sizeof(NameHash);
-
-    outLayoutHashOffset = cursor;
-
-    u64 layoutHash = 0u;
+    usize typedLayoutBegin = 0u;
     u32 blockCount = 0u;
     u32 fieldCount = 0u;
-    if(
-        !ReadPOD(binary, cursor, layoutHash)
-        || !ReadPOD(binary, cursor, blockCount)
-        || !ReadPOD(binary, cursor, fieldCount)
-    )
+    if(!NWB::Impl::MaterialBinaryPayload::FindMaterialBinaryPrefixExtents(binary, typedLayoutBegin, blockCount, fieldCount))
         return false;
 
-    if(
-        cursor > binary.size()
-        || blockCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes
-    )
+    outLayoutHashOffset = typedLayoutBegin;
+    outBlockByteCountOffset = typedLayoutBegin
+        + sizeof(u64)
+        + sizeof(u32)
+        + sizeof(u32)
+        + static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes
+        + static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
+    if(outBlockByteCountOffset > binary.size())
         return false;
-    cursor += static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes;
 
-    if(
-        cursor > binary.size()
-        || fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes
-    )
-        return false;
-    cursor += static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
-
-    outBlockByteCountOffset = cursor;
     return true;
 }
 

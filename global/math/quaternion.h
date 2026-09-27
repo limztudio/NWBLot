@@ -21,9 +21,9 @@ static const SIMDVectorConstF s_SIMDQuaternionControlWZYX = { { { 1.0f, -1.0f, 1
 static const SIMDVectorConstF s_SIMDQuaternionControlZWXY = { { { 1.0f, 1.0f, -1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionControlYXWZ = { { { -1.0f, 1.0f, 1.0f, -1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionRollPitchYawSign = { { { 1.0f, -1.0f, -1.0f, 1.0f } } };
-static const SIMDVectorConstF s_SIMDQuaternionXMPMMP = { { { 1.0f, -1.0f, -1.0f, 1.0f } } };
-static const SIMDVectorConstF s_SIMDQuaternionXMMPMP = { { { -1.0f, 1.0f, -1.0f, 1.0f } } };
-static const SIMDVectorConstF s_SIMDQuaternionXMMMPP = { { { -1.0f, -1.0f, 1.0f, 1.0f } } };
+static const SIMDVectorConstF s_SIMDQuaternionSignPNNP = { { { 1.0f, -1.0f, -1.0f, 1.0f } } };
+static const SIMDVectorConstF s_SIMDQuaternionSignNPNP = { { { -1.0f, 1.0f, -1.0f, 1.0f } } };
+static const SIMDVectorConstF s_SIMDQuaternionSignNNPP = { { { -1.0f, -1.0f, 1.0f, 1.0f } } };
 static const SIMDVectorConstF s_SIMDQuaternionColumnWSign = { { { 1.0f, -1.0f, 1.0f, 1.0f } } };
 static const SIMDVectorConstU s_SIMDQuaternionSignMask2 = { { { 0x80000000, 0x00000000, 0x00000000, 0x00000000 } } };
 static const SIMDVectorConstU s_SIMDQuaternionSelect0110 = { { { s_SELECT_0, s_SELECT_1, s_SELECT_1, s_SELECT_0 } } };
@@ -480,9 +480,9 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
     const uint32x4_t z2Gew2 = vcleq_f32(vaddq_f32(r11, r00), s_SIMDZero);
     const uint32x4_t x2Py2Gez2Pw2 = vcleq_f32(r22, s_SIMDZero);
 
-    SIMDVector t0 = vmulq_f32(SIMDQuaternionDetail::s_SIMDQuaternionXMPMMP, r00);
-    SIMDVector x2y2z2w2 = vmlaq_f32(t0, SIMDQuaternionDetail::s_SIMDQuaternionXMMPMP, r11);
-    x2y2z2w2 = vmlaq_f32(x2y2z2w2, SIMDQuaternionDetail::s_SIMDQuaternionXMMMPP, r22);
+    SIMDVector t0 = vmulq_f32(SIMDQuaternionDetail::s_SIMDQuaternionSignPNNP, r00);
+    SIMDVector x2y2z2w2 = vmlaq_f32(t0, SIMDQuaternionDetail::s_SIMDQuaternionSignNPNP, r11);
+    x2y2z2w2 = vmlaq_f32(x2y2z2w2, SIMDQuaternionDetail::s_SIMDQuaternionSignNNPP, r22);
     x2y2z2w2 = vaddq_f32(x2y2z2w2, s_SIMDOne);
 
     t0 = vextq_f32(r0, r0, 1);
@@ -546,9 +546,9 @@ NWB_INLINE SIMDVector SIMDCALL QuaternionRotationMatrix(const SIMDMatrix& matrix
     const SIMDVector z2Gew2 = _mm_cmple_ps(_mm_add_ps(r11, r00), s_SIMDZero);
     const SIMDVector x2Py2Gez2Pw2 = _mm_cmple_ps(r22, s_SIMDZero);
 
-    SIMDVector t0 = VectorMultiplyAdd(SIMDQuaternionDetail::s_SIMDQuaternionXMPMMP, r00, s_SIMDOne);
-    SIMDVector t1 = _mm_mul_ps(SIMDQuaternionDetail::s_SIMDQuaternionXMMPMP, r11);
-    SIMDVector t2 = VectorMultiplyAdd(SIMDQuaternionDetail::s_SIMDQuaternionXMMMPP, r22, t0);
+    SIMDVector t0 = VectorMultiplyAdd(SIMDQuaternionDetail::s_SIMDQuaternionSignPNNP, r00, s_SIMDOne);
+    SIMDVector t1 = _mm_mul_ps(SIMDQuaternionDetail::s_SIMDQuaternionSignNPNP, r11);
+    SIMDVector t2 = VectorMultiplyAdd(SIMDQuaternionDetail::s_SIMDQuaternionSignNNPP, r22, t0);
     const SIMDVector x2y2z2w2 = _mm_add_ps(t1, t2);
 
     t0 = _mm_shuffle_ps(r0, r1, _MM_SHUFFLE(1, 2, 2, 1));

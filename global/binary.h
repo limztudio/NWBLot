@@ -156,6 +156,16 @@ namespace BinaryDetail{
 
 
 template<typename Container>
+[[nodiscard]] inline bool SkipBytes(const Container& binary, usize& inOutOffset, const usize byteCount){
+    RequireByteContainer<Container>();
+    if(!CanReadBytes(binary, inOutOffset, byteCount))
+        return false;
+
+    inOutOffset += byteCount;
+    return true;
+}
+
+template<typename Container>
 [[nodiscard]] inline bool ReadLengthPrefixedString(const Container& binary, usize& inOutOffset, AStringView& outText){
     outText = {};
 

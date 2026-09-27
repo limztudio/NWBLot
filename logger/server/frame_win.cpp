@@ -3,6 +3,7 @@
 
 
 #include <core/alloc/standalone_runtime.h>
+#include <global/unique_ptr.h>
 #include "frame.h"
 
 
@@ -104,7 +105,7 @@ static HWND s_ListHwnd = nullptr;
 static constexpr int s_LogFontHeight = 10;
 
 // Points at the live Frame store; null outside Frame lifetime. Guarded by s_ListMutex.
-static MessageStore* s_Store = nullptr;
+static UniquePtr<MessageStore> s_Store;
 
 static Futex s_ListMutex;
 
@@ -375,7 +376,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 Frame::Frame(void* inst){
     {
         ScopedLock lock(FrameDetail::s_ListMutex);
-        FrameDetail::s_Store = new FrameDetail::MessageStore();
+        FrameDetail::s_Store.reset(new FrameDetail::MessageStore());
     }
     FrameDetail::s_Frame = this;
 
@@ -390,8 +391,7 @@ Frame::~Frame(){
     FrameDetail::s_Frame = nullptr;
 
     ScopedLock lock(FrameDetail::s_ListMutex);
-    delete FrameDetail::s_Store;
-    FrameDetail::s_Store = nullptr;
+    FrameDetail::s_Store.reset();
 }
 
 bool Frame::init(){

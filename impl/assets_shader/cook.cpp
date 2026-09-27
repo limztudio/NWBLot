@@ -1198,10 +1198,10 @@ bool ShaderCook::parseShaderMeta(
         { "stage", "target_profile", "optimization_level", "entry_point", "include_roots", "defines", "emit_mesh_compute_shadow", "mesh_object_vertex" }
     ))
         return false;
-    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Meta", "stage", false, outEntry.stage))
+    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "stage", false, outEntry.stage))
         return false;
     outEntry.archiveStage = outEntry.stage;
-    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Meta", "target_profile", false, outEntry.targetProfile))
+    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "target_profile", false, outEntry.targetProfile))
         return false;
     AStringView slangTargetProfile;
     AStringView targetProfileCapability;
@@ -1221,7 +1221,7 @@ bool ShaderCook::parseShaderMeta(
     if(!Assets::ReadMetadataStringField(
         nwbFilePath,
         asset,
-        "Meta",
+        "Shader meta",
         "optimization_level",
         false,
         optimizationLevelText,
@@ -1242,7 +1242,7 @@ bool ShaderCook::parseShaderMeta(
         return false;
     }
     AStringView entryPointText;
-    if(!Assets::ReadMetadataStringField(nwbFilePath, asset, "Meta", "entry_point", false, entryPointText))
+    if(!Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "entry_point", false, entryPointText))
         return false;
     outEntry.entryPoint.assign(entryPointText.data(), entryPointText.size());
     if(outEntry.entryPoint.empty()){

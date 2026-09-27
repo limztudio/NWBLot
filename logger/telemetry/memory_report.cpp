@@ -26,7 +26,7 @@ namespace __hidden_memory_report{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] const char* MemorySourceText(const Core::Perf::MemorySource::Enum source)noexcept{
+[[nodiscard]] AStringView MemorySourceText(const Core::Perf::MemorySource::Enum source)noexcept{
     switch(source){
     case Core::Perf::MemorySource::Arena:
         return TelemetryMemoryReportDetail::s_ArenaSourceText;

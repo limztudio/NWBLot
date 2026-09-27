@@ -20,8 +20,8 @@
 #include <global/process_execution.h>
 
 namespace __hidden_shader_cook{
-static constexpr char s_NoneOptText[] = "none";
-static constexpr char s_DefaultVariantText[] = "default";
+static constexpr StringView s_NoneOptText = "none";
+static constexpr StringView s_DefaultVariantText = "default";
 };
 
 

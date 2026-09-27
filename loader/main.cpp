@@ -53,24 +53,24 @@ inline constexpr Name s_CommandLineArena("loader/command_line");
 inline constexpr Name s_CrashReportingArena("loader/crash_reporting");
 inline constexpr AStringView s_ResourceDirectoryName = "res";
 inline constexpr AStringView s_GraphicsVolumeName = "graphics";
-inline constexpr char s_FallbackExecutableDirectory[] = ".";
-inline constexpr char s_FallbackExecutableName[] = "nwb";
-inline constexpr char s_UnknownBuildLabel[] = "unknown";
-inline constexpr char s_CrashSpoolDirectoryName[] = "crashes";
-inline constexpr char s_RuntimeCrashMetadataKey[] = "runtime";
-inline constexpr char s_LoaderCrashMetadataValue[] = "loader";
-inline constexpr char s_GpuDebugCrashMetadataKey[] = "gpu_debug";
-inline constexpr char s_EnabledText[] = "true";
-inline constexpr char s_DisabledText[] = "false";
+inline constexpr AStringView s_FallbackExecutableDirectory = ".";
+inline constexpr AStringView s_FallbackExecutableName = "nwb";
+inline constexpr AStringView s_UnknownBuildLabel = "unknown";
+inline constexpr AStringView s_CrashSpoolDirectoryName = "crashes";
+inline constexpr AStringView s_RuntimeCrashMetadataKey = "runtime";
+inline constexpr AStringView s_LoaderCrashMetadataValue = "loader";
+inline constexpr AStringView s_GpuDebugCrashMetadataKey = "gpu_debug";
+inline constexpr AStringView s_EnabledText = "true";
+inline constexpr AStringView s_DisabledText = "false";
 inline constexpr int s_LoaderExitSuccess = 0;
 inline constexpr int s_LoaderExitFailure = -1;
 inline constexpr u16 s_EmptyFrameClientExtent = 0u;
 inline constexpr tchar s_EmptyWindowTitleTerminator = 0;
 inline constexpr u16 s_StandaloneLoggerPort = 0u;
-inline constexpr char s_LoaderAppName[] = "loader";
-inline constexpr char s_CrashUploadTokenOption[] = "--crash-upload-token";
-inline constexpr char s_ForceSdrOutputFlag[] = "--sdr";
-inline constexpr char s_DisableHardwareRayTracingFlag[] = "--disable-hardware-ray-tracing";
+inline constexpr AStringView s_LoaderAppName = "loader";
+inline constexpr AStringView s_CrashUploadTokenOption = "--crash-upload-token";
+inline constexpr AStringView s_ForceSdrOutputFlag = "--sdr";
+inline constexpr AStringView s_DisableHardwareRayTracingFlag = "--disable-hardware-ray-tracing";
 inline constexpr i32 s_UninitializedFrameExtent = 0;
 
 
@@ -249,8 +249,8 @@ bool InstallCrashCapture(CrashArena& crashArena){
 
     NWB::Core::Crash::CrashConfig crashConfig(crashArena);
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
-    crashConfig.buildId = AStringView(s_UnknownBuildLabel);
-    crashConfig.version = AStringView(s_UnknownBuildLabel);
+    crashConfig.buildId = s_UnknownBuildLabel;
+    crashConfig.version = s_UnknownBuildLabel;
     crashConfig.spoolDirectory = executableDirectory / s_CrashSpoolDirectoryName;
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
 
@@ -508,15 +508,15 @@ static int EntryPoint(isize argc, CharT** argv, void* inst){
 
     NWB::Core::Alloc::GlobalArena commandLineArena(__hidden_loader::s_CommandLineArena);
     __hidden_loader::LoaderOptions options(commandLineArena);
-    CLI::App app{ __hidden_loader::s_LoaderAppName };
+    CLI::App app{ __hidden_loader::s_LoaderAppName.data() };
 
     AInteropString address = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogAddress)>(NWB::Core::Common::g_ArgDefault);
     u16 port = Get<static_cast<usize>(NWB::Core::Common::ArgCommand::LogPort)>(NWB::Core::Common::g_ArgDefault);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogAddress>(app, address);
     NWB::Core::Common::ArgAddOption<NWB::Core::Common::ArgCommand::LogPort>(app, port);
-    app.add_option(__hidden_loader::s_CrashUploadTokenOption, options.crashUploadToken, "Bearer token sent with crash uploads");
-    app.add_flag(__hidden_loader::s_ForceSdrOutputFlag, options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
-    app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag, options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
+    app.add_option(__hidden_loader::s_CrashUploadTokenOption.data(), options.crashUploadToken, "Bearer token sent with crash uploads");
+    app.add_flag(__hidden_loader::s_ForceSdrOutputFlag.data(), options.forceSdrOutput, "Force SDR presentation even when the project requests HDR10");
+    app.add_flag(__hidden_loader::s_DisableHardwareRayTracingFlag.data(), options.disableHardwareRayTracing, "Create the graphics device without hardware ray tracing capabilities");
     __hidden_loader::AddDebugCommandLineOptions(app, options);
 
     return NWB::Core::Common::InvokeTerminalEntry<CLI::ParseError>([&](){

@@ -14,8 +14,8 @@
 #include <cerrno>
 
 namespace __hidden_filesystem_volume_io{
-static constexpr char s_NoMountLabel[] = "none";
-static constexpr char s_UnknownMountLabel[] = "unknown";
+static constexpr StringView s_NoMountLabel = "none";
+static constexpr StringView s_UnknownMountLabel = "unknown";
 };
 
 
@@ -54,11 +54,11 @@ static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& ou
 ACompactString LastErrnoMessage(){
     const i32 errorNumber = errno;
     if(errorNumber == 0)
-        return ACompactString(__hidden_filesystem_volume_io::s_NoMountLabel);
+        return ACompactString(__hidden_filesystem_volume_io::s_NoMountLabel.data());
 
     char errorText[s_ErrnoMessageBufferBytes] = {};
     if(NWB_STRERROR(errorText, sizeof(errorText), errorNumber) != 0)
-        return ACompactString(__hidden_filesystem_volume_io::s_UnknownMountLabel);
+        return ACompactString(__hidden_filesystem_volume_io::s_UnknownMountLabel.data());
 
     ACompactString output(errorText);
     output += " (";

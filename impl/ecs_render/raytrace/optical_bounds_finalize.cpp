@@ -11,7 +11,7 @@
 #include <core/graphics/vulkan/backend.h>
 
 namespace __hidden_optical_shader{
-static constexpr char s_DefaultShaderVariant[] = "default";
+static constexpr StringView s_DefaultShaderVariant = "default";
 };
 
 
@@ -179,7 +179,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
         }
     }
     if(!shaderSystem.loadShader(
-        m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), AStringView(::__hidden_optical_shader::s_DefaultShaderVariant),
+        m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), ::__hidden_optical_shader::s_DefaultShaderVariant,
         Core::ShaderType::Compute, Name("RayOpticalBoundsFinalize")
     ))
         return false;

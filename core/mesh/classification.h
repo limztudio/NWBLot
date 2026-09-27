@@ -74,8 +74,8 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     return MeshClassUsesSkinning(meshClass) == hasSkin;
 }
 
-inline constexpr char s_InvalidMeshClassName[] = "invalid";
-inline constexpr char s_UnknownMeshClassName[] = "unknown";
+inline constexpr AStringView s_InvalidMeshClassName = "invalid";
+inline constexpr AStringView s_UnknownMeshClassName = "unknown";
 
 [[nodiscard]] inline AStringView MeshClassText(const u32 meshClass){
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);

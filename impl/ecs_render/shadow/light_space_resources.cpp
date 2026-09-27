@@ -11,7 +11,7 @@
 #include <global/scope_exit.h>
 
 namespace __hidden_light_space{
-static constexpr char s_DefaultLightVariant[] = "default";
+static constexpr StringView s_DefaultLightVariant = "default";
 };
 
 
@@ -62,7 +62,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute };
-    const AStringView variants[] = { AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant), AStringView(::__hidden_light_space::s_DefaultLightVariant),
+    const AStringView variants[] = { ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant,
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
         AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),

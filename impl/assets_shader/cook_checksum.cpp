@@ -19,10 +19,10 @@
 #include <global/process_execution.h>
 
 namespace __hidden_shader_cook_checksum{
-static constexpr char s_NoneOptName[] = "none";
-static constexpr char s_DefaultOptName[] = "default";
-static constexpr char s_HighOptName[] = "high";
-static constexpr char s_MaximalOptName[] = "maximal";
+static constexpr StringView s_NoneOptName = "none";
+static constexpr StringView s_DefaultOptName = "default";
+static constexpr StringView s_HighOptName = "high";
+static constexpr StringView s_MaximalOptName = "maximal";
 };
 
 

@@ -339,9 +339,7 @@ def terminate_process(process, name, window_handle=None):
     tail = ""
     try:
         if process.poll() is None:
-            # Prefer a graceful shutdown so the app's normal exit path runs (e.g. the NWB_BUILDMODE Name-symbol sidecar write);
-            # a hard terminate() (TerminateProcess on Windows) would skip it. The window capture has already happened by the
-            # time we tear down, so this never affects what was captured -- only how the app exits.
+            # Graceful exit writes Name-symbol sidecars; forced termination can skip the normal exit path.
             host_platform = platform.system()
             if host_platform == "Windows":
                 try:
@@ -385,11 +383,6 @@ def clamp_relative_point(width, height, relative_x, relative_y):
     return x, y
 
 
-def run_after_step(after_step, stage):
-    if after_step:
-        after_step(stage)
-
-
 def require_positive_arg(parser, name, value):
     if value <= 0.0:
         parser.error(f"{name} must be positive")
@@ -398,11 +391,6 @@ def require_positive_arg(parser, name, value):
 def require_non_negative_arg(parser, name, value):
     if value < 0.0:
         parser.error(f"{name} must not be negative")
-
-
-def require_unit_interval_arg(parser, name, value):
-    if value < 0.0 or value > 1.0:
-        parser.error(f"{name} must be between 0.0 and 1.0")
 
 
 def read_file_tail(path, max_bytes=65536):

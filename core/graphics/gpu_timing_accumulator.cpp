@@ -438,27 +438,6 @@ bool GpuTimingAccumulator::confirmQuery(
     return true;
 }
 
-bool GpuTimingAccumulator::retireQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept{
-    if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
-        return false;
-
-    QueryRecord& record = m_queries[scope.index];
-    if(
-        record.epoch != scope.epoch
-        || record.reservation != scope.reservation
-        || record.state != QueryState::Recording
-        || !validateQuerySubmission(scope, token)
-    )
-        return false;
-
-    record.acceptedSubmission = token;
-    record.state = QueryState::PendingRetirementAccepted;
-    record.publishSample = false;
-    ++m_pendingAcceptedQueryCount;
-    ++m_acceptedScopeCount;
-    return true;
-}
-
 bool GpuTimingAccumulator::prepareQueryForRecovery(const GpuTimingScope& scope){
     if(!scope.valid() || scope.scopeName != m_scopeName || scope.index >= m_queries.size())
         return false;

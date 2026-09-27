@@ -251,8 +251,8 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     EXPECT_LT(packetIdleStageOffset, packetRetireOffset);
 
     const usize confirmQueryDeclarationOffset = timingHeader.find("[[nodiscard]] bool confirmQuery(");
-    const usize retireQueryDeclarationOffset = timingHeader.find(
-        "[[nodiscard]] bool retireQuery(",
+    const usize prepareQueryForRecoveryDeclarationOffset = timingHeader.find(
+        "[[nodiscard]] bool prepareQueryForRecovery(",
         confirmQueryDeclarationOffset
     );
     const usize confirmScopeDeclarationOffset = timingHeader.find("[[nodiscard]] bool confirmScope(");
@@ -261,12 +261,12 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
         confirmScopeDeclarationOffset
     );
     ASSERT_NE(confirmQueryDeclarationOffset, AStringView::npos);
-    ASSERT_NE(retireQueryDeclarationOffset, AStringView::npos);
+    ASSERT_NE(prepareQueryForRecoveryDeclarationOffset, AStringView::npos);
     ASSERT_NE(confirmScopeDeclarationOffset, AStringView::npos);
     ASSERT_NE(prepareRecoveryDeclarationOffset, AStringView::npos);
     EXPECT_TRUE(ContainsText(timingHeader.substr(
         confirmQueryDeclarationOffset,
-        retireQueryDeclarationOffset - confirmQueryDeclarationOffset
+        prepareQueryForRecoveryDeclarationOffset - confirmQueryDeclarationOffset
     ), ")noexcept;"));
     EXPECT_TRUE(ContainsText(timingHeader.substr(
         confirmScopeDeclarationOffset,
@@ -282,8 +282,8 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     ));
 
     const usize confirmQueryDefinitionOffset = timingAccumulator.find("bool GpuTimingAccumulator::confirmQuery(");
-    const usize retireQueryDefinitionOffset = timingAccumulator.find(
-        "bool GpuTimingAccumulator::retireQuery(",
+    const usize prepareQueryForRecoveryDefinitionOffset = timingAccumulator.find(
+        "bool GpuTimingAccumulator::prepareQueryForRecovery(",
         confirmQueryDefinitionOffset
     );
     const usize confirmScopeDefinitionOffset = timing.find("bool GpuTimingRecorder::confirmScope(");
@@ -303,7 +303,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     );
     const usize ticketConfirmEndOffset = timingSubmission.find("\n}", ticketConfirmDefinitionOffset);
     ASSERT_NE(confirmQueryDefinitionOffset, AStringView::npos);
-    ASSERT_NE(retireQueryDefinitionOffset, AStringView::npos);
+    ASSERT_NE(prepareQueryForRecoveryDefinitionOffset, AStringView::npos);
     ASSERT_NE(confirmScopeDefinitionOffset, AStringView::npos);
     ASSERT_NE(prepareRecoveryDefinitionOffset, AStringView::npos);
     ASSERT_NE(resolveSubmissionDefinitionOffset, AStringView::npos);
@@ -312,7 +312,7 @@ TEST(EcsGraphics, FrameGraphExportsDeviceWideGpuTimingCapabilitiesAndOutcomes){
     ASSERT_NE(ticketConfirmEndOffset, AStringView::npos);
     EXPECT_TRUE(ContainsText(timingAccumulator.substr(
         confirmQueryDefinitionOffset,
-        retireQueryDefinitionOffset - confirmQueryDefinitionOffset
+        prepareQueryForRecoveryDefinitionOffset - confirmQueryDefinitionOffset
     ), ")noexcept{"));
     EXPECT_TRUE(ContainsText(timing.substr(
         confirmScopeDefinitionOffset,

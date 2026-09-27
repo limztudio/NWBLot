@@ -450,27 +450,6 @@ bool GpuTimingRecorder::prepareDeferredScopeForRecovery(const GpuTimingScope& sc
     return prepared;
 }
 
-bool GpuTimingRecorder::retireScope(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept{
-    if(!scope.valid())
-        return true;
-
-    NothrowScopedLock lock(m_mutex);
-    GpuTimingAccumulator* accumulator = findAccumulator(scope);
-    if(!accumulator)
-        return false;
-
-    const bool retired = accumulator->retireQuery(scope, token);
-    if(
-        !retired
-        && accumulator->quarantineQuery(
-            scope,
-            m_sampleSubscriptionIdentityLimit.load(MemoryOrder::acquire)
-        )
-    )
-        m_pendingAttributionRetirements = true;
-    return retired;
-}
-
 void GpuTimingRecorder::discardScope(GpuTimingScope& scope){
     if(!scope.valid()){
         scope = {};

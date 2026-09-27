@@ -143,7 +143,6 @@ public:
         const QueueSubmissionToken& token,
         bool publishSample
     )noexcept;
-    [[nodiscard]] bool retireQuery(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept;
     [[nodiscard]] bool prepareQueryForRecovery(const GpuTimingScope& scope);
     [[nodiscard]] bool discardQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit);
     [[nodiscard]] bool abandonQuery(const GpuTimingScope& scope, u64 subscriptionIdentityLimit)noexcept;
@@ -344,7 +343,6 @@ private:
         bool publishSample
     )noexcept;
     [[nodiscard]] bool prepareDeferredScopeForRecovery(const GpuTimingScope& scope);
-    [[nodiscard]] bool retireScope(const GpuTimingScope& scope, const QueueSubmissionToken& token)noexcept;
     void discardScope(GpuTimingScope& scope);
     void abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexcept;
     void quarantineScope(const GpuTimingScope& scope)noexcept;

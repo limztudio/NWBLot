@@ -58,13 +58,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 #endif
             const float2 jitter = nwbShadowLowDiscrepancy2D(pixel,
                 g_NwbLightSpacePush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + sample + salt);
-            half3 visibility = nwbSwShadowLightVisible(position, normal, light, jitter);
 #if NWB_LIGHT_SPACE_CSG_ENABLED
+            half3 visibility = half3(1.0h);
             float3 direction;
             float minimum;
             float maximum;
-            if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum))
-                visibility *= nwbCsgShadowBoundsVisibility(position + normal * minimum, direction, minimum, maximum);
+            if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
+                const float3 origin = position + normal * minimum;
+                visibility = nwbCsgShadowBoundsVisibility(origin, direction, minimum, maximum);
+                if(any(visibility > half3(0.0h))){
+                    NwbShadowVisibilityAccumulator accumulator = nwbShadowVisibilityBegin();
+                    nwbSwShadowOccluded(origin, direction, minimum, maximum, accumulator);
+                    visibility = nwbShadowFinalizeVisibility(accumulator) * visibility;
+                }
+            }
+#else
+            half3 visibility = nwbSwShadowLightVisible(position, normal, light, jitter);
 #endif
             result += visibility / half(sampleCount);
         }

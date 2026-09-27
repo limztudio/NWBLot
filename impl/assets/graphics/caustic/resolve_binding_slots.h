@@ -21,6 +21,9 @@
 #define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC 3u
 // Direct wavelet compilation excludes the small-dilation shared-memory path; the logical stage remains wavelet.
 #define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT 4u
+// Fixed small dilations reserve only the shared-memory footprint used by that pass.
+#define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE 5u
+#define NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO 6u
 
 // Accumulator layers, one per RGB channel.
 #define NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT 3u
@@ -32,8 +35,6 @@
 #define NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT 0xffffffffu
 
 #define NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP 4
-#define NWB_CAUSTIC_RESOLVE_TILE_SIDE (NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP)
-#define NWB_CAUSTIC_RESOLVE_TILE_TEXELS (NWB_CAUSTIC_RESOLVE_TILE_SIDE * NWB_CAUSTIC_RESOLVE_TILE_SIDE)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

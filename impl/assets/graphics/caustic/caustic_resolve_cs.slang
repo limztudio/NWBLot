@@ -22,8 +22,10 @@
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC \
     && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_WAVELET \
     && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_STAGE_UPSAMPLE \
-    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
-#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select the dynamic program, wavelet, direct wavelet or upsample stage.
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE \
+    && NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO
+#error NWB_CAUSTIC_RESOLVE_COMPILED_STAGE must select a supported resolve compilation.
 #endif
 
 struct NwbCausticResolvePushConstants{
@@ -50,6 +52,19 @@ struct NwbCausticResolvePushConstants{
 ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 #define g_NwbCausticResolveOutput NwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
+
+#if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH 1u
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP 1
+#elif NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH 2u
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP 2
+#else
+#define NWB_CAUSTIC_RESOLVE_STEP_WIDTH max(g_NwbCausticResolvePushConstants.stepWidth, 1u)
+#define NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP
+#endif
+#define NWB_CAUSTIC_RESOLVE_TILE_SIDE (NWB_CAUSTIC_RESOLVE_GROUP_SIZE + 4 * NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP)
+#define NWB_CAUSTIC_RESOLVE_TILE_TEXELS (NWB_CAUSTIC_RESOLVE_TILE_SIDE * NWB_CAUSTIC_RESOLVE_TILE_SIDE)
 
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
@@ -103,7 +118,7 @@ groupshared uint s_NwbCausticResolveOutputActivity;
 
 
 bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
-    const uint step = max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
+    const uint step = NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
     const bool smallStep = step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP;
     if(
         g_NwbCausticResolvePushConstants.activityInputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT
@@ -173,7 +188,7 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
     const int hh = (int)g_NwbCausticResolvePushConstants.halfHeight;
     const int2 texel = int2(pixel);
     const bool inBounds = pixel.x < (uint)hw && pixel.y < (uint)hh;
-    const int step = (int)max(g_NwbCausticResolvePushConstants.stepWidth, 1u);
+    const int step = (int)NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
 
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
     // All threads must complete the cooperative load and barriers before any bounds-dependent return.
@@ -280,7 +295,9 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_DYNAMIC
     const uint stage = g_NwbCausticResolvePushConstants.stage;
-#elif NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
+#elif NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT \
+    || NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE \
+    || NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_TWO
     const uint stage = NWB_CAUSTIC_RESOLVE_STAGE_WAVELET;
 #else
     const uint stage = NWB_CAUSTIC_RESOLVE_COMPILED_STAGE;
@@ -399,6 +416,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
 
 
 #undef g_NwbCausticResolveOutput
+#undef NWB_CAUSTIC_RESOLVE_STEP_WIDTH
+#undef NWB_CAUSTIC_RESOLVE_TILE_CAPACITY_STEP
+#undef NWB_CAUSTIC_RESOLVE_TILE_SIDE
+#undef NWB_CAUSTIC_RESOLVE_TILE_TEXELS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

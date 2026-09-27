@@ -87,6 +87,8 @@ bool RendererRayTracingSystem::causticResolveResourcesReady(const DeferredFrameT
     return
         m_rayTracingState.m_causticResolve.m_prepare.m_pipeline
         && m_rayTracingState.m_causticResolve.m_wavelet.m_pipeline
+        && m_rayTracingState.m_causticResolve.m_waveletStepOne.m_pipeline
+        && m_rayTracingState.m_causticResolve.m_waveletStepTwo.m_pipeline
         && m_rayTracingState.m_causticResolve.m_waveletDirect.m_pipeline
         && m_rayTracingState.m_causticResolve.m_upsample.m_pipeline
         && m_rayTracingState.m_causticGeometryDownsamplePipeline

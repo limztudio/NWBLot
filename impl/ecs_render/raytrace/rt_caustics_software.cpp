@@ -53,9 +53,12 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
         targets.bindless.causticResolveHalfStorage.slot()
     };
     const u32 stepWidth = 1u << passIndex;
-    const CausticResolveStageState& wavelet = stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP
-        ? m_rayTracingState.m_causticResolve.m_waveletDirect
-        : m_rayTracingState.m_causticResolve.m_wavelet
+    const CausticResolveState& resolve = m_rayTracingState.m_causticResolve;
+    const CausticResolveStageState& wavelet = stepWidth == 1u
+        ? resolve.m_waveletStepOne
+        : stepWidth == 2u
+            ? resolve.m_waveletStepTwo
+            : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet
     ;
     NWB_ASSERT(wavelet.m_pipeline);
     __hidden_caustics::DispatchCausticResolvePass(

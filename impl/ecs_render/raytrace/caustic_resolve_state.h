@@ -31,6 +31,8 @@ struct CausticResolveState{
     CausticResolveActivitySnapshot m_activity;
     CausticResolveStageState m_prepare;
     CausticResolveStageState m_wavelet;
+    CausticResolveStageState m_waveletStepOne;
+    CausticResolveStageState m_waveletStepTwo;
     CausticResolveStageState m_waveletDirect;
     CausticResolveStageState m_upsample;
     bool m_failed = false;

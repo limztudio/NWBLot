@@ -624,7 +624,7 @@ def parse_args(argv=None):
         help="Waist bands add two moving box cutters to all twenty mesh children.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
         help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
-    parser.add_argument("--shadow-receiver-resolution", choices=tuple(SHADOW_RECEIVER_RESOLUTION), default="half",
+    parser.add_argument("--shadow-receiver-resolution", choices=tuple(SHADOW_RECEIVER_RESOLUTION), default="quarter",
         help="Quarter reduces shadow tracing and filtering density; native geometry, final output and light-space map sizes stay unchanged.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
     parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default="reference",
@@ -645,6 +645,7 @@ def parse_args(argv=None):
     parser.add_argument("--application-arg", action="append", default=[])
     caustic_quality_smoke.add_arguments(parser)
     surfel_gi_quality_smoke.add_arguments(parser)
+    parser.set_defaults(surfel_gi_resolve_resolution="quarter")
     parser.add_argument("--reflection-screen-steps", type=int, default=96,
         help="Maximum SSR hierarchy iterations per attempted surface ray (8 through 256); lower budgets fall back normally.")
     parser.add_argument("--cpu-diagnostics", action="store_true",

@@ -15,8 +15,8 @@ import stress_timing_smoke as smoke
 
 
 def shadow_defaults():
-    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, surfel_gi_resolve_resolution="half",
-        shadow_transparent_sampling="reference_three", shadow_receiver_resolution="half",
+    return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, surfel_gi_resolve_resolution="quarter",
+        shadow_transparent_sampling="reference_three", shadow_receiver_resolution="quarter",
         software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
         software_shadow_capture_cadence="every_frame", software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
@@ -27,7 +27,7 @@ def shadow_record(backend=0, directional_resolution=512, point_resolution=256, b
         f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search} capture_cadence={capture_cadence}")
 
 
-def shadow_quality_record(sampling=0, factor=2, width=1280, height=900):
+def shadow_quality_record(sampling=0, factor=4, width=1280, height=900):
     return (smoke.SHADOW_QUALITY_SETTINGS + f"{sampling} receiver_factor={factor}\n" + smoke.SHADOW_RECEIVER_GRID
         + f"factor={factor} full={width}x{height} receiver={(width+factor-1)//factor}x{(height+factor-1)//factor}")
 
@@ -53,8 +53,8 @@ def valid_log(characters_per_class=10):
     # Synthetic fixed simulation delta is 1/60, while genuine wall/count evidence yields 16 FPS.
     lines.append("Fixture: fixed simulation delta 0.016666667")
     lines.append("CausticQualitySmoke: requested photon_grid_divisor=1")
-    lines.append("SurfelGiQualitySmoke: requested resolve_factor=2")
-    lines.append("RendererSystem: dispatched surfel GI resolve (factor=2, source=1280x900, resolve=640x450)")
+    lines.append("SurfelGiQualitySmoke: requested resolve_factor=4")
+    lines.append("RendererSystem: dispatched surfel GI resolve (factor=4, source=1280x900, resolve=320x225)")
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, "
         "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
     lines.append(shadow_quality_record())
@@ -104,7 +104,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
                 record.replace("grid factor=4", "grid factor=2"), record.replace("full=1001x701", "full=1000x701")):
             with self.subTest(record=invalid), self.assertRaises(smoke.SmokeFailure):
                 smoke.verify_shadow_quality_settings(invalid, args, (1001, 701))
-        self.assertEqual(smoke.parse_args(self.argv).shadow_receiver_resolution, "half")
+        self.assertEqual(smoke.parse_args(self.argv).shadow_receiver_resolution, "quarter")
         with patch("sys.stderr"), self.assertRaises(SystemExit):
             smoke.parse_args(self.argv + ["--shadow-receiver-resolution", "3"])
 
@@ -186,8 +186,11 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
                 self.assertEqual(args.software_shadow_point_resolution, 512)
 
     def test_reference_launch_explicitly_overrides_direct_stress_performance_defaults(self):
-        args = smoke.parse_args(self.argv)
+        args = smoke.parse_args(self.argv + ["--shadow-receiver-resolution", "half",
+            "--surfel-gi-resolve-resolution", "half"])
         inherited = {
+            "NWB_SHADOW_RECEIVER_RESOLUTION": "quarter",
+            "NWB_SURFEL_GI_RESOLVE_RESOLUTION": "quarter",
             "NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "4",
             "NWB_SHADOW_TRANSPARENT_SAMPLING": "temporal_one",
             "NWB_SOFTWARE_SHADOW_COVERAGE": "fitted_volume",
@@ -196,6 +199,8 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         }
         env = smoke.launch_environment(inherited, args, self.output)
         expected = {
+            "NWB_SHADOW_RECEIVER_RESOLUTION": "half",
+            "NWB_SURFEL_GI_RESOLVE_RESOLUTION": "half",
             "NWB_CAUSTIC_PHOTON_GRID_DIVISOR": "1",
             "NWB_SHADOW_TRANSPARENT_SAMPLING": "reference_three",
             "NWB_SOFTWARE_SHADOW_COVERAGE": "reference",
@@ -205,7 +210,15 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         for name, value in expected.items():
             with self.subTest(setting=name):
                 self.assertEqual(env[name], value)
-        self.assertTrue(smoke.verify_shadow_quality_settings(shadow_quality_record(), args)["verified"])
+        self.assertTrue(smoke.verify_shadow_quality_settings(shadow_quality_record(factor=2), args)["verified"])
+        gi_record = ("SurfelGiQualitySmoke: requested resolve_factor=2\n"
+            "RendererSystem: dispatched surfel GI resolve (factor=2, source=1280x900, resolve=640x450)")
+        self.assertTrue(smoke.surfel_gi_quality_smoke.verify_settings(gi_record,
+            args.surfel_gi_resolve_resolution, (1280, 900))["verified"])
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.verify_shadow_quality_settings(shadow_quality_record(), args)
+        with self.assertRaises(smoke.SmokeFailure):
+            smoke.surfel_gi_quality_smoke.verify_settings(valid_log(), args.surfel_gi_resolve_resolution, (1280, 900))
         self.assertTrue(smoke.verify_software_shadow_settings(shadow_record(), args)["verified"])
 
     def test_cli_rejects_invalid_ranges_types_and_backend(self):

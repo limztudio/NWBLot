@@ -197,6 +197,8 @@ private:
 
         NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
         settings.shadow.transparentSampling = NWB::Impl::TransparentShadowSampling::TemporalOne;
+        settings.shadow.receiverResolution = NWB::Impl::ShadowReceiverResolution::Quarter;
+        settings.surfelGi.resolveResolution = NWB::Impl::SurfelGiResolveResolution::Quarter;
         settings.softwareShadow.blockerSearch = NWB::Impl::SoftwareShadowBlockerSearch::Center1;
         settings.softwareShadow.coverage = NWB::Impl::SoftwareShadowCoverage::FittedVolume;
         settings.softwareShadow.captureCadence = NWB::Impl::SoftwareShadowCaptureCadence::ReuseTwoFrames;

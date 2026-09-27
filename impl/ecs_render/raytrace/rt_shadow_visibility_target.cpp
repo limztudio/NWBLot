@@ -19,6 +19,8 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets& targets){
+    if(targets.shadowReceiverFactor != 2u && targets.shadowReceiverFactor != 4u)
+        return false;
     // Deferred lighting always samples this per-slot transmittance target.
     targets.shadowVisibilityFormat = Core::Format::RGBA16_FLOAT;
 
@@ -63,8 +65,8 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     // Ping-pong half-resolution soft visibility and geometry cache.
     targets.shadowSoftFormat = Core::Format::RGBA16_FLOAT;
     targets.shadowSoftGeometryFormat = Core::Format::RGBA16_FLOAT;
-    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
 
     Core::TextureDesc softHalfADesc;
     softHalfADesc
@@ -239,6 +241,11 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     }
     m_rayTracingState.m_swShadowEdgeListBuffer = Move(edgeListBuffer);
     m_rayTracingState.m_swShadowEdgeListCapacity = edgeListCapacityRecords;
+
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created shadow receiver grid factor={} full={}x{} receiver={}x{}")
+        , targets.shadowReceiverFactor, targets.width, targets.height, softHalfWidth, softHalfHeight
+    );
+
     return true;
 }
 
@@ -290,8 +297,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(
 
     // Hardware tracing shares the half-resolution soft-shadow resolve when available.
     if(m_rayTracingState.m_softShadowReady && m_rayTracingState.m_shadowSoftPipeline && m_rayTracingState.m_softShadowSlotMask != 0u){
-        const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-        const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+        const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+        const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
         const u32 softGroupsX = DivideUp(softHalfWidth, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
         const u32 softGroupsY = DivideUp(softHalfHeight, static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE));
 
@@ -333,6 +340,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
 
             ShadowRqSoftPushConstants softPush;
             softPush.width = targets.width;
+            softPush.receiverFactor = targets.shadowReceiverFactor;
             softPush.height = targets.height;
             softPush.frameIndex = frameIndex;
             softPush.softSampleCount = softShadowTemporalHistoryUsable()

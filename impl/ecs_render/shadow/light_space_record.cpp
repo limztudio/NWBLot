@@ -117,8 +117,8 @@ bool RecordLightSpaceResolve(
     commandList.setComputeState(Core::ComputeState{}.setPipeline(pipeline.get()));
     heap.bindCompute(commandList, *pipeline);
     commandList.setPushConstants(&push, sizeof(push));
-    const u32 halfWidth = DivideUp(push.width, 2u);
-    const u32 halfHeight = DivideUp(push.height, 2u);
+    const u32 halfWidth = DivideUp(push.width, push.receiverFactor);
+    const u32 halfHeight = DivideUp(push.height, push.receiverFactor);
     const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
     const u32 groupsY = DivideUp(halfHeight, static_cast<u32>(NWB_LIGHT_SPACE_GROUP_SIZE));
     {

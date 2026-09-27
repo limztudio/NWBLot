@@ -94,8 +94,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     )
         return;
 
-    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
 
     const auto passState = [&](const Core::ComputePipelineHandle& pipeline){
         Core::ComputeState state;
@@ -128,6 +128,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                 commandList
             );
             ShadowGeometryDownsamplePushConstants geometryPush;
+            geometryPush.receiverFactor = targets.shadowReceiverFactor;
             geometryPush.width = targets.width;
             geometryPush.height = targets.height;
             geometryPush.halfWidth = softHalfWidth;
@@ -191,6 +192,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
         commandList.commitBarriers();
 
         ShadowReprojectMergePushConstants push;
+        push.receiverFactor = targets.shadowReceiverFactor;
         push.prevWorldToClip = m_rayTracingState.m_prevWorldToClip;
         push.width = targets.width;
         push.height = targets.height;
@@ -357,6 +359,7 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
                     commandList.commitBarriers();
                 }
                 SoftwareTransparentSamplingPush tracePush;
+                tracePush.receiverFactor = targets.shadowReceiverFactor;
                 tracePush.width = targets.width;
                 tracePush.height = targets.height;
                 tracePush.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;

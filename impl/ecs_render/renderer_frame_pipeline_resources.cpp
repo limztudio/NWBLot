@@ -29,7 +29,11 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         return true;
 
     const u32 surfelResolveFactor = static_cast<u32>(m_surfelGiQualitySettings.resolveResolution);
-    if(m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor){
+    const u32 shadowReceiverFactor = m_raytracingSystem.requestedShadowReceiverFactor();
+    if(
+        (m_frameTargets.surfelResolveFactor != 0u && m_frameTargets.surfelResolveFactor != surfelResolveFactor)
+        || (m_frameTargets.shadowReceiverFactor != 0u && m_frameTargets.shadowReceiverFactor != shadowReceiverFactor)
+    ){
         // Shared producers must drain and recreate before their retained queue handoffs are cleared.
         if(!m_graphics.waitForIdle())
             return false;
@@ -41,7 +45,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
 
     DeferredFrameTargets* deferredTargets = m_frameTargets.valid() ? &m_frameTargets : nullptr;
     bool targetsReady = deferredTargets && deferredTargets->width == width && deferredTargets->height == height
-        && deferredTargets->surfelResolveFactor == surfelResolveFactor;
+        && deferredTargets->surfelResolveFactor == surfelResolveFactor && deferredTargets->shadowReceiverFactor == shadowReceiverFactor;
     if(!targetsReady){
         // New targets invalidate stale compute scratch and visibility returns.
         resetTargetGenerationStateHandoffs();
@@ -70,6 +74,7 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
             resetCreatedTargets();
             return false;
         }
+        createdTargets.shadowReceiverFactor = shadowReceiverFactor;
         if(!m_raytracingSystem.createShadowVisibilityTarget(createdTargets)){
             resetCreatedTargets();
             return false;
@@ -453,7 +458,10 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         return false;
     }
 
-    if(m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution)){
+    if(
+        m_frameTargets.surfelResolveFactor != static_cast<u32>(m_surfelGiQualitySettings.resolveResolution)
+        || m_frameTargets.shadowReceiverFactor != m_raytracingSystem.requestedShadowReceiverFactor()
+    ){
         const Core::TextureDesc& presentationDesc = presentationFrame.backBuffer.texture->getDescription();
         if(!validateResources(presentationDesc.width, presentationDesc.height, presentationDesc.sampleCount))
             return false;

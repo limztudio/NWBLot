@@ -203,9 +203,9 @@ struct NwbCausticEmissionTargetGpu{
 };
 static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCausticEmissionTargetGpu must stay a tight 32-byte std430 record");
 
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 84u;
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 88u;
-static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 92u;
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 88u;
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 92u;
+static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 96u;
 static constexpr usize s_CausticResolvePushConstantsActivityInputSlotOffset = 56u;
 static constexpr usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 60u;
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
@@ -231,9 +231,11 @@ struct SwShadowHeapPushConstants{
     u32 edgeListStorageSlot = 0u;
     u32 indirectArgsStorageSlot = 0u;
     u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
+    u32 receiverFactor = 2u;
 };
 static_assert(NWB_SW_SHADOW_SOFT_TEMPORAL_SPP >= 1u && NWB_SW_SHADOW_SOFT_TEMPORAL_SPP <= NWB_SW_SHADOW_SOFT_SPP, "temporal soft-shadow sample budget must be within the bootstrap budget");
-static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 19u, "SwShadowHeapPushConstants must match the shader push-constant layout");
+static_assert(sizeof(SwShadowHeapPushConstants) == sizeof(u32) * 20u, "SwShadowHeapPushConstants must match the shader push-constant layout");
+static_assert(offsetof(SwShadowHeapPushConstants, receiverFactor) == 76u);
 
 // CPU mirror of hardware RayQuery shadow push constants.
 struct ShadowRqPushConstants{
@@ -257,8 +259,10 @@ struct ShadowRqSoftPushConstants{
     u32 deferredResourcesHeapSlot = 0u;
     u32 visibilityStorageSlot = 0u;
     u32 softSampleCount = NWB_SW_SHADOW_SOFT_SPP;
+    u32 receiverFactor = 2u;
 };
-static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 9u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowRqSoftPushConstants) == sizeof(u32) * 10u, "ShadowRqSoftPushConstants must match the shader push-constant layout");
+static_assert(offsetof(ShadowRqSoftPushConstants, receiverFactor) == 36u);
 
 // CPU mirror of NwbShadowResolvePushConstants.
 struct ShadowResolvePushConstants{
@@ -283,19 +287,21 @@ struct ShadowResolvePushConstants{
     u32 visibilityStorageSlot = 0u;
     u32 sceneShadingSlot = 0u;
     u32 opaqueInputColorSlot = 0u;
+    u32 receiverFactor = 2u;
 };
-static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 21u, "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(sizeof(ShadowResolvePushConstants) == sizeof(u32) * 22u, "ShadowResolvePushConstants must match the shader push-constant layout");
+static_assert(offsetof(ShadowResolvePushConstants, receiverFactor) == 84u);
 
 static_assert(offsetof(ShadowResolvePushConstants, opaqueInputColorSlot) == sizeof(u32) * 20u);
 
-// Only the fixed combined-wavelet program extends the existing 84-byte resolve ABI.
+// The combined wavelet extends the shared resolve ABI with opaque moments and output.
 struct ShadowCombinedWaveletPushConstants{
     ShadowResolvePushConstants resolve;
     u32 opaqueMomentsSlot = 0u;
     u32 opaqueMomentsValid = 0u;
     u32 opaqueOutputStorageSlot = 0u;
 };
-static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 96u);
+static_assert(sizeof(ShadowCombinedWaveletPushConstants) == 100u);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueMomentsValid) == s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset);
 static_assert(offsetof(ShadowCombinedWaveletPushConstants, opaqueOutputStorageSlot) == s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset);
@@ -319,9 +325,10 @@ struct ShadowGeometryDownsamplePushConstants{
     u32 depthSlot = 0u;
     u32 outputStorageSlot = 0u;
     u32 sceneShadingSlot = 0u;
-    u32 pad0 = 0u;
+    u32 receiverFactor = 2u;
 };
 static_assert(sizeof(ShadowGeometryDownsamplePushConstants) == sizeof(u32) * 10u, "ShadowGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(offsetof(ShadowGeometryDownsamplePushConstants, receiverFactor) == 36u);
 
 // CPU mirror of temporal shadow-reprojection push constants.
 struct ShadowReprojectMergePushConstants{
@@ -341,9 +348,10 @@ struct ShadowReprojectMergePushConstants{
     u32 worldPositionSlot = 0u;
     u32 historyOutputStorageSlot = 0u;
     u32 momentsOutputStorageSlot = 0u;
-    u32 pad2 = 0u;
+    u32 receiverFactor = 2u;
 };
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
+static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);
 
 // Shared CPU mirror of SW/HW caustic photon push constants.
 struct CausticPhotonPushConstants{

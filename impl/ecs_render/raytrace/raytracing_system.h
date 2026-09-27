@@ -227,6 +227,7 @@ public:
     [[nodiscard]] bool setCausticQualitySettings(const CausticQualitySettings& settings);
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
+    [[nodiscard]] u32 requestedShadowReceiverFactor()const noexcept;
     [[nodiscard]] LightSpaceShadowSnapshot lightSpaceShadowSnapshot()const;
     void acceptLightSpaceShadowCapture(const LightSpaceCaptureTicket& ticket, bool prepared);
     void invalidateLightSpaceShadowCapture()noexcept;

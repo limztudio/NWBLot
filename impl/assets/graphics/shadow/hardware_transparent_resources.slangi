@@ -31,6 +31,7 @@ struct NwbHardwareTransparentPushConstants{
     uint overflowListHeapSlot;
     uint overflowArgsHeapSlot;
     uint outputStorageSlot;
+    uint receiverFactor;
 };
 
 struct NwbHardwareTransparentCrossing{

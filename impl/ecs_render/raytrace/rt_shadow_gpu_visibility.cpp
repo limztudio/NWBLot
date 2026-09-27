@@ -101,6 +101,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     const auto makePush = [&](){
         SwShadowHeapPushConstants push;
+        push.receiverFactor = targets.shadowReceiverFactor;
         push.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
         push.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
         push.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
@@ -145,8 +146,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
     // Soft opaque resolve replaces the full-resolution mask.
     if(softWillRun){
-        const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-        const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+        const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+        const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
         const u32 softGroupsX = DivideUp(softHalfWidth, groupSize);
         const u32 softGroupsY = DivideUp(softHalfHeight, groupSize);
 

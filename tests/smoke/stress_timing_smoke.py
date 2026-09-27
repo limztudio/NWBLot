@@ -36,6 +36,8 @@ REQUIRED = (START, SHUTDOWN, "AvboitTimingProbe: in-flight ranges 32",
 SHADOW_QUALITY_SETTINGS = "ShadowQualitySmoke: requested transparent_sampling="
 SHADOW_TEMPORAL_ONE_RECORDED = "RendererSystem: recorded temporal-one transparent shadow sampling "
 SHADOW_TRANSPARENT_SAMPLING = {"reference_three": 0, "temporal_one": 1}
+SHADOW_RECEIVER_RESOLUTION = {"half": 2, "quarter": 4}
+SHADOW_RECEIVER_GRID = "RendererSystem: created shadow receiver grid "
 
 
 SOFTWARE_SHADOW_SETTINGS = "SoftwareShadowSmoke: requested "
@@ -389,13 +391,32 @@ def verify_csg_profile(text, args):
         "map_instances": int(dispatch[2]), "signature": records[0], "verified": True}
 
 
-def verify_shadow_quality_settings(text, args):
+def verify_shadow_quality_settings(text, args, expected_extent=None):
     records = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_QUALITY_SETTINGS)]
     if len(records) != 1:
         raise SmokeFailure("exactly one ShadowQualitySmoke requested-settings record is required")
-    expected = SHADOW_QUALITY_SETTINGS + str(SHADOW_TRANSPARENT_SAMPLING[args.shadow_transparent_sampling])
+    factor = SHADOW_RECEIVER_RESOLUTION[args.shadow_receiver_resolution]
+    expected = SHADOW_QUALITY_SETTINGS + str(SHADOW_TRANSPARENT_SAMPLING[args.shadow_transparent_sampling]) + f" receiver_factor={factor}"
     if records[0] != expected:
         raise SmokeFailure("shadow sampling quality mismatch between request and application")
+    lines = [line.strip() for line in text.splitlines()]
+    grids = [line for line in lines[lines.index(expected) + 1:] if line.startswith(SHADOW_RECEIVER_GRID)]
+    if not grids:
+        raise SmokeFailure("shadow quality requires an allocated receiver-grid record after the request")
+    allocations = []
+    for grid in grids:
+        match = re.fullmatch(re.escape(SHADOW_RECEIVER_GRID) + r"factor=([24]) full=(\d+)x(\d+) receiver=(\d+)x(\d+)", grid)
+        if not match:
+            raise SmokeFailure("malformed shadow receiver-grid allocation")
+        actual, width, height, reduced_width, reduced_height = map(int, match.groups())
+        if actual != factor or min(width, height, reduced_width, reduced_height) < 1:
+            raise SmokeFailure("shadow receiver factor or dimensions disagree with requested quality")
+        if expected_extent is not None and (width, height) != tuple(expected_extent):
+            raise SmokeFailure("shadow receiver source disagrees with measured frame extent")
+        if (reduced_width, reduced_height) != ((width + factor - 1) // factor, (height + factor - 1) // factor):
+            raise SmokeFailure("shadow receiver grid does not cover the source at the requested factor")
+        allocations.append(dict(factor=factor, width=width, height=height,
+            reduced_width=reduced_width, reduced_height=reduced_height))
     dispatched = [line.strip() for line in text.splitlines() if line.strip().startswith(SHADOW_TEMPORAL_ONE_RECORDED)]
     hardware = None
     if args.shadow_transparent_sampling == "temporal_one":
@@ -408,6 +429,7 @@ def verify_shadow_quality_settings(text, args):
     elif dispatched:
         raise SmokeFailure("unrequested temporal-one dispatch was recorded")
     return {"transparent_sampling": args.shadow_transparent_sampling,
+        "receiver_resolution": args.shadow_receiver_resolution, "receiver_factor": factor, "allocations": allocations,
         "bootstrap_samples": 3, "accepted_history_samples": 1 if args.shadow_transparent_sampling == "temporal_one" else 3,
         "effective_dispatch_verified": bool(dispatched), "hardware": hardware, "verified": True}
 
@@ -442,6 +464,7 @@ def launch_environment(base, args, output):
         NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH=args.software_shadow_blocker_search,
         NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE=args.software_shadow_capture_cadence,
         NWB_SHADOW_TRANSPARENT_SAMPLING=args.shadow_transparent_sampling,
+        NWB_SHADOW_RECEIVER_RESOLUTION=args.shadow_receiver_resolution,
         NWB_SOFTWARE_SHADOW_BUDGET_MIB=str(args.software_shadow_budget_mib),
         NWB_SOFTWARE_SHADOW_DIRECTIONAL_RESOLUTION=str(args.software_shadow_directional_resolution),
         NWB_SOFTWARE_SHADOW_POINT_RESOLUTION=str(args.software_shadow_point_resolution),
@@ -543,7 +566,7 @@ def acquire(args, output):
         result["caustic_quality_settings"] = caustic_quality_smoke.verify_settings(text, args.caustic_photon_grid_divisor)
         result["surfel_gi_quality_settings"] = surfel_gi_quality_smoke.verify_settings(
             text, args.surfel_gi_resolve_resolution, (result["width"], result["height"]))
-        result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args)
+        result["shadow_quality_settings"] = verify_shadow_quality_settings(text, args, (result["width"], result["height"]))
         result["reflection_quality_settings"] = verify_reflection_quality_settings(text, args, result["optical_reflection"])
         result["runtime_signature"] = ab.device_material_signature(text)
         result["motion"] = {"mode": "rotating" if args.animate else "fixed",
@@ -601,6 +624,8 @@ def parse_args(argv=None):
         help="Waist bands add two moving box cutters to all twenty mesh children.")
     parser.add_argument("--shadow-transparent-sampling", choices=tuple(SHADOW_TRANSPARENT_SAMPLING), default="reference_three",
         help="Temporal-one uses one transparent shadow sample after accepted temporal history, on either HW or SW.")
+    parser.add_argument("--shadow-receiver-resolution", choices=tuple(SHADOW_RECEIVER_RESOLUTION), default="half",
+        help="Quarter reduces shadow tracing and filtering density; native geometry, final output and light-space map sizes stay unchanged.")
     parser.add_argument("--software-shadow-backend", choices=tuple(SOFTWARE_SHADOW_BACKENDS), default="automatic")
     parser.add_argument("--software-shadow-coverage", choices=tuple(SOFTWARE_SHADOW_COVERAGE), default="reference",
         help="Fitted-volume coverage uses empty directional margins and retains receivers beyond a complete map's far plane.")

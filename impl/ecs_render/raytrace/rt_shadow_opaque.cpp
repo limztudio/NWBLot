@@ -170,8 +170,8 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
         || (phase != SoftShadowOpaqueResolvePhase::TemporalAndWavelet && !m_rayTracingState.m_softShadowTemporalReady)
     )
         return false;
-    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 groupSize = hardwareShadowSupported
         ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
         : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)
@@ -219,8 +219,8 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
         || m_rayTracingState.m_softShadowSlotMask == 0u
     )
         return false;
-    const u32 softHalfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    const u32 softHalfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 softHalfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 softHalfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 groupSize = hardwareShadowSupported
         ? static_cast<u32>(NWB_SHADOW_RT_GROUP_SIZE)
         : static_cast<u32>(NWB_SW_SHADOW_GROUP_SIZE)

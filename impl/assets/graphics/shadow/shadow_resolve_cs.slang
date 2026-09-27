@@ -81,6 +81,7 @@ struct NwbShadowResolvePushConstants{
     uint visibilityStorageSlot;
     uint sceneShadingSlot;
     uint opaqueInputColorSlot; // Combined upsample reads the opaque half-resolution input from this slot.
+    uint receiverFactor;
 };
 
 [[vk::push_constant]]
@@ -258,7 +259,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int hw = (int)g_NwbShadowResolvePushConstants.halfWidth;
         const int hh = (int)g_NwbShadowResolvePushConstants.halfHeight;
         // Trace and geometry samples lie at full pixel index factor*h, rather than the center of each block.
-        const float2 src = float2(pixel) / float(NWB_SW_SHADOW_SOFT_FACTOR);
+        const float2 src = float2(pixel) / float(g_NwbShadowResolvePushConstants.receiverFactor);
         const int2 baseTexel = int2(round(src));
         const float2 offset = src - float2(baseTexel);
         const half3 weightsX = nwbShadowResolveSpatialWeights(half(offset.x));

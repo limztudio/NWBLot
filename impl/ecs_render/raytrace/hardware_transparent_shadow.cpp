@@ -39,9 +39,11 @@ struct PushConstants{
     u32 overflowListHeapSlot;
     u32 overflowArgsHeapSlot;
     u32 outputStorageSlot;
+    u32 receiverFactor;
 };
 
 static_assert(sizeof(PushConstants) == NWB_HW_TRANSPARENT_PUSH_CONSTANT_BYTES);
+static_assert(offsetof(PushConstants, receiverFactor) == 48u);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -104,8 +106,8 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         }
     }
 
-    const u64 halfWidth = DivideUp(static_cast<u64>(targets.width), static_cast<u64>(NWB_SW_SHADOW_SOFT_FACTOR));
-    const u64 halfHeight = DivideUp(static_cast<u64>(targets.height), static_cast<u64>(NWB_SW_SHADOW_SOFT_FACTOR));
+    const u64 halfWidth = DivideUp(static_cast<u64>(targets.width), static_cast<u64>(targets.shadowReceiverFactor));
+    const u64 halfHeight = DivideUp(static_cast<u64>(targets.height), static_cast<u64>(targets.shadowReceiverFactor));
     const u64 pixels = halfWidth * halfHeight;
     if(pixels == 0u || pixels > Limit<u32>::s_Max / NWB_HW_TRANSPARENT_WORDS_PER_RAY){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware transparent-shadow scratch extent is invalid"));
@@ -209,8 +211,8 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
         commandList.setTextureState(targets.normal.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
         commandList.setTextureState(targets.depth.get(), ECSRenderDetail::s_FramebufferSubresources, Core::ResourceStates::ShaderResource);
     }
-    const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
-    const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+    const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
+    const u32 halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
     const u32 groupsX = DivideUp(halfWidth, static_cast<u32>(NWB_HW_TRANSPARENT_GROUP_SIZE));
     const u32 groupsY = DivideUp(halfHeight, static_cast<u32>(NWB_HW_TRANSPARENT_GROUP_SIZE));
     const u32 sampleCount = transparentShadowSampleCount();
@@ -218,7 +220,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
         targets.width, targets.height, frameIndex, 0u, 0u, sampleCount,
         targets.bindless.slotsBufferDescriptor.slot(), m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot(),
         state.m_crossingsHeapHandle.slot(), state.m_overflowListHeapHandle.slot(), state.m_overflowArgsHeapHandle.slot(),
-        targets.bindless.transparentSoftHalfStorage.slot(),
+        targets.bindless.transparentSoftHalfStorage.slot(), targets.shadowReceiverFactor,
     };
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
         if((m_rayTracingState.m_softShadowSlotMask & (1u << slot)) == 0u)

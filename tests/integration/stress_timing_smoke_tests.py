@@ -16,7 +16,7 @@ import stress_timing_smoke as smoke
 
 def shadow_defaults():
     return dict(reflection_screen_steps=96, caustic_photon_grid_divisor=1, surfel_gi_resolve_resolution="half",
-        shadow_transparent_sampling="reference_three",
+        shadow_transparent_sampling="reference_three", shadow_receiver_resolution="half",
         software_shadow_backend="automatic", software_shadow_coverage="reference", software_shadow_blocker_search="reference_grid9",
         software_shadow_capture_cadence="every_frame", software_shadow_budget_mib=256,
         software_shadow_directional_resolution=512, software_shadow_point_resolution=256)
@@ -25,6 +25,11 @@ def shadow_defaults():
 def shadow_record(backend=0, directional_resolution=512, point_resolution=256, budget_bytes=268435456, coverage=0, blocker_search=0, capture_cadence=0):
     return (smoke.SOFTWARE_SHADOW_SETTINGS + f"backend={backend} directional_resolution={directional_resolution} "
         f"point_resolution={point_resolution} budget_bytes={budget_bytes} coverage={coverage} blocker_search={blocker_search} capture_cadence={capture_cadence}")
+
+
+def shadow_quality_record(sampling=0, factor=2, width=1280, height=900):
+    return (smoke.SHADOW_QUALITY_SETTINGS + f"{sampling} receiver_factor={factor}\n" + smoke.SHADOW_RECEIVER_GRID
+        + f"factor={factor} full={width}x{height} receiver={(width+factor-1)//factor}x{(height+factor-1)//factor}")
 
 
 def workload_record(characters_per_class=10):
@@ -52,7 +57,7 @@ def valid_log(characters_per_class=10):
     lines.append("RendererSystem: dispatched surfel GI resolve (factor=2, source=1280x900, resolve=640x450)")
     lines.append("RendererSystem: dispatched hardware caustic producer (131072 photons/frame, 2 temporal phases, "
         "262144 full-grid budget, 2 caustic lights, 10 refractive instances)")
-    lines.append(smoke.SHADOW_QUALITY_SETTINGS + "0")
+    lines.append(shadow_quality_record())
     lines.append(smoke.REFLECTION_QUALITY_SETTINGS + "96")
     for index in range(60):
         lines.append(smoke.INTERVAL + f"avg=16 presentations=8 seconds=0.5 first={80+8*index} last={88+8*index}")
@@ -86,6 +91,22 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         executable = self.output / "renderer.exe"
         executable.write_bytes(b"fixture")
         self.argv = ["--executable", str(executable), "--working-directory", str(self.output), "--no-logserver"]
+
+    def test_shadow_quarter_requires_matching_allocated_grid(self):
+        args = smoke.parse_args(self.argv + ["--shadow-receiver-resolution", "quarter"])
+        env = smoke.launch_environment({"NWB_SHADOW_RECEIVER_RESOLUTION": "half"}, args, self.output)
+        self.assertEqual(env["NWB_SHADOW_RECEIVER_RESOLUTION"], "quarter")
+        record = shadow_quality_record(factor=4, width=1001, height=701)
+        report = smoke.verify_shadow_quality_settings(record, args, (1001, 701))
+        self.assertEqual(report["allocations"][0]["reduced_width"], 251)
+        self.assertEqual(report["allocations"][0]["reduced_height"], 176)
+        for invalid in (record.splitlines()[0], record.replace("receiver=251x176", "receiver=250x175"),
+                record.replace("grid factor=4", "grid factor=2"), record.replace("full=1001x701", "full=1000x701")):
+            with self.subTest(record=invalid), self.assertRaises(smoke.SmokeFailure):
+                smoke.verify_shadow_quality_settings(invalid, args, (1001, 701))
+        self.assertEqual(smoke.parse_args(self.argv).shadow_receiver_resolution, "half")
+        with patch("sys.stderr"), self.assertRaises(SystemExit):
+            smoke.parse_args(self.argv + ["--shadow-receiver-resolution", "3"])
 
     def test_surfel_quarter_override_requires_matching_recorded_dispatch(self):
         args = smoke.parse_args(self.argv + ["--surfel-gi-resolve-resolution", "quarter"])
@@ -184,7 +205,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
         for name, value in expected.items():
             with self.subTest(setting=name):
                 self.assertEqual(env[name], value)
-        self.assertTrue(smoke.verify_shadow_quality_settings(smoke.SHADOW_QUALITY_SETTINGS + "0", args)["verified"])
+        self.assertTrue(smoke.verify_shadow_quality_settings(shadow_quality_record(), args)["verified"])
         self.assertTrue(smoke.verify_software_shadow_settings(shadow_record(), args)["verified"])
 
     def test_cli_rejects_invalid_ranges_types_and_backend(self):
@@ -288,7 +309,7 @@ class StressSoftwareShadowSettingsTests(unittest.TestCase):
                 args = smoke.parse_args(self.argv + ["--shadow-transparent-sampling", name])
                 env = smoke.launch_environment({"NWB_SHADOW_TRANSPARENT_SAMPLING": "invalid"}, args, self.output)
                 self.assertEqual(env["NWB_SHADOW_TRANSPARENT_SAMPLING"], name)
-                request = smoke.SHADOW_QUALITY_SETTINGS + str(code)
+                request = shadow_quality_record(code)
                 dispatch = smoke.SHADOW_TEMPORAL_ONE_RECORDED + "samples=1 hardware=1"
                 record = request + ("\n" + dispatch if code == 1 else "")
                 report = smoke.verify_shadow_quality_settings(record, args)

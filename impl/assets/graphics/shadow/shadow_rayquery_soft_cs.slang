@@ -2,24 +2,17 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW analog of sw_shadow_soft_opaque_cs: per half texel, NWB_SW_SHADOW_SOFT_SPP cone-jittered RayQuery rays into the
-// shared half-res buffer for the resolve to denoise + upsample. Grid/SPP/sample conventions match the SW trace exactly.
+// Hardware and software traces share the receiver grid and cone-jittered sample conventions.
 
 
 #include "binding_slots.h"
 #include "shadow_heap_resources.slangi"
-// Pure #defines (no binding/resource declarations) shared with the SW trace: the half-res SHIFT/FACTOR and the per-frame
-// SPP, so the HW soft trace's half-res grid + sample count match the SW trace's exactly (no magic numbers).
 #include "sw_binding_slots.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Explicit half-res grid dims + the frame counter seeding the per-pixel low-discrepancy cone-jitter sample (so the
-// jittered rays walk the source across frames, decorrelated per pixel). It mirrors the corresponding grid fields in
-// NwbSwShadowHeapPushConstants; the HW path needs no instanceCount because the TLAS bounds the trace, preserving
-// downsample/resolve tap alignment with the software path.
 struct NwbShadowRqSoftPushConstants{
     uint width;
     uint height;
@@ -30,6 +23,7 @@ struct NwbShadowRqSoftPushConstants{
     uint deferredResourcesHeapSlot;
     uint visibilityStorageSlot;
     uint softSampleCount;
+    uint receiverFactor;
 };
 
 [[vk::push_constant]]
@@ -46,14 +40,13 @@ ConstantBuffer<NwbShadowRqSoftPushConstants> g_NwbShadowRqSoftPushConstants;
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 halfPixel = dispatchThreadID.xy;
-    // The half-res grid is width>>SOFT_SHIFT: guard against the padded tail. The trace samples the block's top-left
-    // full-res texel (matching the geometry downsample's + resolve's 2x point sample) -- the SAME grid the SW trace uses.
-    const uint halfWidth = (g_NwbShadowRqSoftPushConstants.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
-    const uint halfHeight = (g_NwbShadowRqSoftPushConstants.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
+    // Sample each receiver block's top-left texel, matching geometry downsampling and software tracing.
+    const uint halfWidth = (g_NwbShadowRqSoftPushConstants.width + g_NwbShadowRqSoftPushConstants.receiverFactor - 1u) / g_NwbShadowRqSoftPushConstants.receiverFactor;
+    const uint halfHeight = (g_NwbShadowRqSoftPushConstants.height + g_NwbShadowRqSoftPushConstants.receiverFactor - 1u) / g_NwbShadowRqSoftPushConstants.receiverFactor;
     if(halfPixel.x >= halfWidth || halfPixel.y >= halfHeight)
         return;
 
-    const uint2 base = halfPixel << NWB_SW_SHADOW_SOFT_SHIFT;
+    const uint2 base = halfPixel * g_NwbShadowRqSoftPushConstants.receiverFactor;
     const int3 texel = int3(int2(min(base.x, g_NwbShadowRqSoftPushConstants.width - 1u), min(base.y, g_NwbShadowRqSoftPushConstants.height - 1u)), 0);
     const uint sampleCount = min(max(g_NwbShadowRqSoftPushConstants.softSampleCount, 1u), NWB_SW_SHADOW_SOFT_SPP);
 

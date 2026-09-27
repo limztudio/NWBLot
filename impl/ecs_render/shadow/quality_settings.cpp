@@ -17,7 +17,8 @@ NWB_IMPL_BEGIN
 
 
 bool ValidateShadowQualitySettings(const ShadowQualitySettings& settings)noexcept{
-    return settings.transparentSampling <= TransparentShadowSampling::TemporalOne;
+    return settings.transparentSampling <= TransparentShadowSampling::TemporalOne
+        && (settings.receiverResolution == ShadowReceiverResolution::Half || settings.receiverResolution == ShadowReceiverResolution::Quarter);
 }
 
 u32 ResolveTransparentShadowSampleCount(const ShadowQualitySettings& settings, const bool temporalHistoryUsable)noexcept{

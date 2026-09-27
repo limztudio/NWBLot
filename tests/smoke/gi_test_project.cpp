@@ -236,6 +236,20 @@ public:
             );
         }
 
+        if(m_resolveSwitchEnabled && (m_rendererBaselineRenderedFrameCount == 150u || m_rendererBaselineRenderedFrameCount == 210u)){
+            auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
+            NWB::Impl::ShadowQualitySettings settings;
+            settings.receiverResolution = m_rendererBaselineRenderedFrameCount == 150u
+                ? NWB::Impl::ShadowReceiverResolution::Quarter
+                : NWB::Impl::ShadowReceiverResolution::Half
+            ;
+            if(!renderer || !renderer->setShadowQualitySettings(settings))
+                return false;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: requested shadow receiver switch factor={}")
+                , static_cast<u32>(settings.receiverResolution)
+            );
+        }
+
         const f32 fixedDelta = rendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);

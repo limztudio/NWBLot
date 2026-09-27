@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The first 84 bytes match the independent resolve. Each channel retains its own moments and output image.
+// The prefix matches the independent resolve. Each channel retains its own moments and output image.
 struct NwbCombinedShadowWaveletPushConstants{
     uint width;
     uint height;
@@ -35,6 +35,7 @@ struct NwbCombinedShadowWaveletPushConstants{
     uint visibilityStorageSlot;
     uint sceneShadingSlot;
     uint opaqueInputColorSlot;
+    uint receiverFactor;
     uint opaqueMomentsSlot;
     uint opaqueMomentsValid;
     uint opaqueOutputStorageSlot;

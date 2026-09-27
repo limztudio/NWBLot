@@ -34,7 +34,7 @@ struct NwbShadowReprojectMergePushConstants{
     uint worldPositionSlot;
     uint historyOutputStorageSlot;
     uint momentsOutputStorageSlot;
-    uint pad2;
+    uint receiverFactor;
 };
 
 [[vk::push_constant]]
@@ -80,8 +80,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float currentCameraDistance = float(gc.z);
 
     const int2 full = int2(
-        min((int)h.x * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.width - 1),
-        min((int)h.y * NWB_SW_SHADOW_SOFT_FACTOR, (int)g_NwbShadowMergePush.height - 1)
+        min((int)h.x * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.width - 1),
+        min((int)h.y * g_NwbShadowMergePush.receiverFactor, (int)g_NwbShadowMergePush.height - 1)
     );
     const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 Wc = float3(worldPositionSample);

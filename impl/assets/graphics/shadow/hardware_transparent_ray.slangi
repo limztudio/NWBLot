@@ -24,13 +24,13 @@
 
 
 uint2 nwbHwShadowTraceExtent(){
-    return (uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height) + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    return (uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height) + g_NwbHardwareTransparentPush.receiverFactor - 1u) / g_NwbHardwareTransparentPush.receiverFactor;
 }
 
 bool nwbHwShadowBuildRay(const uint2 halfPixel, out RayDesc ray){
     ray = (RayDesc)0;
     const uint2 fullExtent = uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height);
-    const int3 texel = int3(min(halfPixel * NWB_SW_SHADOW_SOFT_FACTOR, fullExtent - 1u), 0);
+    const int3 texel = int3(min(halfPixel * g_NwbHardwareTransparentPush.receiverFactor, fullExtent - 1u), 0);
     if(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH)
         return false;
     const half3 positionSample = half3(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);

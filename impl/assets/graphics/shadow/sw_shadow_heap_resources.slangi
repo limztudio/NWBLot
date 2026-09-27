@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The default 76-byte push ABI serves opaque and coarse software-shadow kernels. The soft transparent entry
+// The default 80-byte push ABI serves opaque and coarse software-shadow kernels. The soft transparent entry
 // supplies its dedicated history-aware push before including these shared traversal resources.
 #ifndef NWB_SW_SHADOW_PUSH_DECLARED
 struct NwbSwShadowHeapPushConstants{
@@ -38,6 +38,7 @@ struct NwbSwShadowHeapPushConstants{
     uint edgeListStorageSlot;
     uint indirectArgsStorageSlot;
     uint softSampleCount;
+    uint receiverFactor;
 };
 
 [[vk::push_constant]]

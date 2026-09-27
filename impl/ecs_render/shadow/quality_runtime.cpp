@@ -20,7 +20,10 @@ NWB_IMPL_BEGIN
 bool RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySettings& settings){
     if(!ValidateShadowQualitySettings(settings))
         return false;
-    if(m_shadowQualitySettings.transparentSampling == settings.transparentSampling)
+    if(
+        m_shadowQualitySettings.transparentSampling == settings.transparentSampling
+        && m_shadowQualitySettings.receiverResolution == settings.receiverResolution
+    )
         return true;
     m_shadowQualitySettings = settings;
     m_temporalOneShadowSamplingLogged = false;
@@ -29,6 +32,10 @@ bool RendererRayTracingSystem::setShadowQualitySettings(const ShadowQualitySetti
     m_rayTracingState.m_softShadowTemporalHistoryAdvancePending = false;
     m_rayTracingState.m_softwareTransparentSampling.m_history.discard();
     return true;
+}
+
+u32 RendererRayTracingSystem::requestedShadowReceiverFactor()const noexcept{
+    return static_cast<u32>(m_shadowQualitySettings.receiverResolution);
 }
 
 u32 RendererRayTracingSystem::transparentShadowSampleCount()const noexcept{

@@ -31,10 +31,20 @@ bool ApplyShadowQualitySmokeSettings(
         else
             return false;
     }
+    if(ReadSmokeEnvironmentText("NWB_SHADOW_RECEIVER_RESOLUTION", value)){
+        const AStringView resolution(value.data(), value.size());
+        if(resolution == "half")
+            settings.receiverResolution = Impl::ShadowReceiverResolution::Half;
+        else if(resolution == "quarter")
+            settings.receiverResolution = Impl::ShadowReceiverResolution::Quarter;
+        else
+            return false;
+    }
     if(!renderer.setShadowQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}")
         , static_cast<u32>(settings.transparentSampling)
+        , static_cast<u32>(settings.receiverResolution)
     );
     return true;
 }

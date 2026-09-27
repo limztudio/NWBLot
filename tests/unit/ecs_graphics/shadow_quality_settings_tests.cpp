@@ -22,6 +22,7 @@ using namespace NWB::Impl;
 TEST(ShadowQualitySettings, ReferenceDefaultPreservesTheThreeSampleBudget){
     const ShadowQualitySettings settings;
     EXPECT_EQ(settings.transparentSampling, TransparentShadowSampling::ReferenceThree);
+    EXPECT_EQ(settings.receiverResolution, ShadowReceiverResolution::Half);
     EXPECT_TRUE(ValidateShadowQualitySettings(settings));
     EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
     EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 3u);
@@ -45,6 +46,22 @@ TEST(ShadowQualitySettings, UnknownModesAreRejectedAndCannotRemoveAllSamples){
     settings.transparentSampling = static_cast<TransparentShadowSampling::Enum>(255u);
     EXPECT_FALSE(ValidateShadowQualitySettings(settings));
     EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
+}
+
+TEST(ShadowQualitySettings, ReceiverResolutionChangesSamplingDensityWithoutChangingRayBudget){
+    ShadowQualitySettings settings;
+    settings.receiverResolution = ShadowReceiverResolution::Quarter;
+    EXPECT_TRUE(ValidateShadowQualitySettings(settings));
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 3u);
+    settings.transparentSampling = TransparentShadowSampling::TemporalOne;
+    EXPECT_TRUE(ValidateShadowQualitySettings(settings));
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
+    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 1u);
+    for(const u8 invalid : { u8(0u), u8(1u), u8(3u), u8(255u) }){
+        settings.receiverResolution = static_cast<ShadowReceiverResolution::Enum>(invalid);
+        EXPECT_FALSE(ValidateShadowQualitySettings(settings));
+    }
 }
 
 TEST(ShadowQualitySettings, RgbHistoryRequiresAcceptedWritesForEveryRequestedSlot){

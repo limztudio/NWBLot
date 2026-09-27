@@ -208,6 +208,7 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.depthSlot = snapshot.depthDescriptor.slot();
     snapshot.push.instanceCount = static_cast<u32>(state.m_casters.size());
     snapshot.push.width = targets.width;
+    snapshot.push.receiverFactor = targets.shadowReceiverFactor;
     snapshot.push.height = targets.height;
     snapshot.push.deferredResourcesSlot = targets.bindless.slotsBufferDescriptor.slot();
     snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvhNodeHeapHandle.slot();

@@ -23,6 +23,7 @@ struct NwbSoftwareTransparentSamplingPush{
     uint geometryPrevSlot;
     uint momentsInSlot;
     row_major float4x4 prevWorldToClip;
+    uint receiverFactor;
 };
 [[vk::push_constant]] ConstantBuffer<NwbSoftwareTransparentSamplingPush> g_NwbSwShadowPush;
 
@@ -51,7 +52,7 @@ uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const 
         return maximumSamples;
     const uint2 extent = uint2(g_NwbSwShadowPush.width, g_NwbSwShadowPush.height);
     int2 previousPixel;
-    if(!nwbSwTransparentSamplingReproject(pixel, extent, world,
+    if(!nwbSwTransparentSamplingReproject(pixel, extent, g_NwbSwShadowPush.receiverFactor, world,
         g_NwbSwShadowPush.prevWorldToClip, g_NwbSwShadowPush.historyValid != 0u, previousPixel))
         return maximumSamples;
     const half4 current = half4(NwbHeapSampledImage2D(g_NwbSwShadowPush.geometryCurrSlot).Load(int3(pixel, 0)));

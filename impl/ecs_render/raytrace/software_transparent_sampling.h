@@ -65,8 +65,10 @@ struct SoftwareTransparentSamplingPush{
     u32 geometryPrevSlot = 0u;
     u32 momentsInSlot = 0u;
     Float44U prevWorldToClip = {};
+    u32 receiverFactor = 2u;
 };
-static_assert(sizeof(SoftwareTransparentSamplingPush) == 112u);
+static_assert(sizeof(SoftwareTransparentSamplingPush) == 116u);
+static_assert(offsetof(SoftwareTransparentSamplingPush, receiverFactor) == 112u);
 static constexpr usize s_SoftwareTransparentSamplingPushPrevWorldToClipOffset = 48u;
 static_assert(offsetof(SoftwareTransparentSamplingPush, prevWorldToClip) == s_SoftwareTransparentSamplingPushPrevWorldToClipOffset);
 

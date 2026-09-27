@@ -19,12 +19,12 @@
 
 void nwbSwShadowTraceSoft(const uint3 dispatchThreadID){
     const uint2 halfPixel = dispatchThreadID.xy;
-    const uint halfWidth = (g_NwbSwShadowPush.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
-    const uint halfHeight = (g_NwbSwShadowPush.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) >> NWB_SW_SHADOW_SOFT_SHIFT;
+    const uint halfWidth = (g_NwbSwShadowPush.width + g_NwbSwShadowPush.receiverFactor - 1u) / g_NwbSwShadowPush.receiverFactor;
+    const uint halfHeight = (g_NwbSwShadowPush.height + g_NwbSwShadowPush.receiverFactor - 1u) / g_NwbSwShadowPush.receiverFactor;
     if(halfPixel.x >= halfWidth || halfPixel.y >= halfHeight)
         return;
 
-    const uint2 base = halfPixel << NWB_SW_SHADOW_SOFT_SHIFT;
+    const uint2 base = halfPixel * g_NwbSwShadowPush.receiverFactor;
     const int3 texel = int3(int2(min(base.x, g_NwbSwShadowPush.width - 1u), min(base.y, g_NwbSwShadowPush.height - 1u)), 0);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     const uint maximumSamples = min(max(g_NwbSwShadowPush.softSampleCount, 1u), NWB_SW_SHADOW_SOFT_TRACE_SPP);

@@ -100,10 +100,11 @@ bool RendererRayTracingSystem::renderSoftShadowCombinedWavelet(Core::CommandList
     commandList.commitBarriers();
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     ShadowCombinedWaveletPushConstants push;
+    push.resolve.receiverFactor = targets.shadowReceiverFactor;
     push.resolve.width = targets.width;
     push.resolve.height = targets.height;
-    push.resolve.halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
-    push.resolve.halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+    push.resolve.halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
+    push.resolve.halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
     push.resolve.stage = NWB_SHADOW_RESOLVE_STAGE_WAVELET;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
         if((m_rayTracingState.m_softShadowSlotMask & (1u << slot)) != 0u)

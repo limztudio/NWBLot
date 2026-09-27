@@ -24,8 +24,16 @@ namespace TransparentShadowSampling{
     };
 };
 
+namespace ShadowReceiverResolution{
+    enum Enum : u8{
+        Half = 2u,
+        Quarter = 4u,
+    };
+};
+
 struct ShadowQualitySettings{
     TransparentShadowSampling::Enum transparentSampling = TransparentShadowSampling::ReferenceThree;
+    ShadowReceiverResolution::Enum receiverResolution = ShadowReceiverResolution::Half;
 };
 
 [[nodiscard]] bool ValidateShadowQualitySettings(const ShadowQualitySettings& settings)noexcept;

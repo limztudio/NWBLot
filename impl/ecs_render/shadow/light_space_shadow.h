@@ -61,9 +61,10 @@ struct LightSpaceShadowPush{
     u32 csgContextSlot = 0u;
     u32 csgOpaqueDepthSlot = 0u;
     u32 csgFlags = 0u;
-    u32 padding = 0u;
+    u32 receiverFactor = 2u;
 };
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
+static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
 
 struct LightSpaceShadowStorageCapacity{
     u64 countBytes = 0u;

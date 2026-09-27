@@ -178,8 +178,8 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
 ){
     NWB_ASSERT(dispatch.waveletPipeline && dispatch.upsamplePipeline);
     NWB_ASSERT(dispatch.visibilityTexture);
-    const u32 halfWidth = (targets.width + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
-    const u32 halfHeight = (targets.height + NWB_SW_SHADOW_SOFT_FACTOR - 1u) / NWB_SW_SHADOW_SOFT_FACTOR;
+    const u32 halfWidth = (targets.width + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
+    const u32 halfHeight = (targets.height + targets.shadowReceiverFactor - 1u) / targets.shadowReceiverFactor;
     const u32 halfGroupsX = DivideUp(halfWidth, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 halfGroupsY = DivideUp(halfHeight, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
     const u32 fullGroupsX = DivideUp(targets.width, static_cast<u32>(NWB_SHADOW_RESOLVE_GROUP_SIZE));
@@ -218,6 +218,7 @@ void RendererRayTracingSystem::dispatchSoftShadowResolve(
         commandList.commitBarriers();
 
         ShadowResolvePushConstants push;
+        push.receiverFactor = targets.shadowReceiverFactor;
         push.width = targets.width;
         push.height = targets.height;
         push.halfWidth = halfWidth;

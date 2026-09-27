@@ -90,10 +90,11 @@ bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
 
     const DeferredBindlessFrameResources& bindless = targets.bindless;
     ShadowResolvePushConstants push;
+    push.receiverFactor = targets.shadowReceiverFactor;
     push.width = targets.width;
     push.height = targets.height;
-    push.halfWidth = DivideUp(targets.width, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
-    push.halfHeight = DivideUp(targets.height, static_cast<u32>(NWB_SW_SHADOW_SOFT_FACTOR));
+    push.halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
+    push.halfHeight = DivideUp(targets.height, static_cast<u32>(targets.shadowReceiverFactor));
     push.stage = NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE;
     for(u32 slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot){
         if((m_rayTracingState.m_softShadowSlotMask & (1u << slot)) != 0u)

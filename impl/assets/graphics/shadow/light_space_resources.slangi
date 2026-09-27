@@ -39,7 +39,7 @@ struct NwbLightSpacePushConstants{
     uint csgContextSlot;
     uint csgOpaqueDepthSlot;
     uint csgFlags;
-    uint padding;
+    uint receiverFactor;
 };
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 

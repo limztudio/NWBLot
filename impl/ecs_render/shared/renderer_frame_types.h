@@ -432,6 +432,7 @@ struct DeferredFrameTargets{
     u32 width = 0;
     u32 height = 0;
     u32 surfelResolveFactor = 0u;
+    u32 shadowReceiverFactor = 0u;
     Core::Format::Enum albedoFormat = Core::Format::UNKNOWN;
     Core::Format::Enum normalFormat = Core::Format::UNKNOWN;
     Core::Format::Enum worldPositionFormat = Core::Format::UNKNOWN;

@@ -203,6 +203,14 @@ const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept{
     return __hidden_arena_memory::s_OwnerHead.load(MemoryOrder::acquire);
 }
 
+const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(
+    const ArenaMemoryOwnerRecord& record,
+    ArenaMemoryOwnerIdentity& outIdentity)noexcept{
+    outIdentity.ownerName = record.ownerName;
+    outIdentity.source = record.source;
+    return record.next;
+}
+
 const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(
     const ArenaMemoryOwnerRecord& record,
     ArenaMemoryOwnerSnapshot& outSnapshot

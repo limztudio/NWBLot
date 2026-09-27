@@ -40,13 +40,13 @@ void Session::ensureMemoryScopes(){
     // Scope creation for arena owners lives in this setup step, never in the record calls below.
     const ArenaMemoryOwnerRecord* owner = FirstArenaMemoryOwnerRecord();
     while(owner){
-        ArenaMemoryOwnerSnapshot snapshot;
-        owner = ReadArenaMemoryOwnerRecord(*owner, snapshot);
-        const MemorySource::Enum source = snapshot.source == ArenaMemorySource::HeapBacking
+        ArenaMemoryOwnerIdentity identity;
+        owner = ReadArenaMemoryOwnerIdentity(*owner, identity);
+        const MemorySource::Enum source = identity.source == ArenaMemorySource::HeapBacking
             ? MemorySource::HeapBacking
             : MemorySource::Arena
         ;
-        const MemoryScopeId scope = m_memory.registerScope(snapshot.ownerName, source);
+        const MemoryScopeId scope = m_memory.registerScope(identity.ownerName, source);
         if(!scope.valid()){
             NWB_ASSERT(false);
             continue;

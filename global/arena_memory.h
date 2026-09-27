@@ -154,6 +154,11 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ArenaMemoryOwnerIdentity{
+    Name ownerName = NAME_NONE;
+    ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
+};
+
 struct ArenaMemoryOwnerSnapshot{
     Name ownerName = NAME_NONE;
     ArenaMemoryStats stats;
@@ -162,6 +167,11 @@ struct ArenaMemoryOwnerSnapshot{
 
 // Records live for process lifetime; traversal captures head to stay bounded.
 [[nodiscard]] const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept;
+// Identity and successor are immutable after publication; this read does not sample counters or lock live trackers.
+[[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(
+    const ArenaMemoryOwnerRecord& record,
+    ArenaMemoryOwnerIdentity& outIdentity
+)noexcept;
 [[nodiscard]] const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerRecord(
     const ArenaMemoryOwnerRecord& record,
     ArenaMemoryOwnerSnapshot& outSnapshot

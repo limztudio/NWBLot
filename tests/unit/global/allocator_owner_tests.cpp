@@ -42,6 +42,77 @@ using namespace NWB::Core::Alloc;
     return {};
 }
 
+TEST(AllocationOwners, ImmutableOwnerIdentityMatchesFullSnapshotTraversal){
+    GlobalArena arena("tests/allocation_owners/identity_traversal");
+    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+    usize heapRecords = 0u;
+    usize arenaRecords = 0u;
+    while(record){
+        ArenaMemoryOwnerIdentity identity;
+        const ArenaMemoryOwnerRecord* const next = ReadArenaMemoryOwnerIdentity(*record, identity);
+        ArenaMemoryOwnerSnapshot snapshot;
+        EXPECT_EQ(ReadArenaMemoryOwnerRecord(*record, snapshot), next);
+        EXPECT_EQ(identity.ownerName, snapshot.ownerName);
+        EXPECT_EQ(identity.source, snapshot.source);
+        EXPECT_TRUE(static_cast<bool>(identity.ownerName));
+        if(identity.source == ArenaMemorySource::HeapBacking)
+            ++heapRecords;
+        else
+            ++arenaRecords;
+        record = next;
+    }
+    EXPECT_EQ(heapRecords, 1u);
+    EXPECT_GT(arenaRecords, 0u);
+}
+
+TEST(AllocationOwners, OwnerIdentitySurvivesRetirementAndLaterOwnerPublication){
+    constexpr Name s_Owner("tests/allocation_owners/identity_retirement");
+    constexpr Name s_LaterOwner("tests/allocation_owners/identity_later_publication");
+    const ArenaMemoryOwnerRecord* retained = nullptr;
+    const ArenaMemoryOwnerRecord* successor = nullptr;
+    {
+        GlobalArena arena(s_Owner);
+        const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+        while(record){
+            ArenaMemoryOwnerIdentity identity;
+            const ArenaMemoryOwnerRecord* const next = ReadArenaMemoryOwnerIdentity(*record, identity);
+            if(identity.ownerName == s_Owner){
+                retained = record;
+                successor = next;
+                break;
+            }
+            record = next;
+        }
+        ASSERT_NE(retained, nullptr);
+        void* const allocation = arena.allocate(1u, 37u);
+        ASSERT_NE(allocation, nullptr);
+        arena.deallocate(allocation, 1u, 37u);
+    }
+
+    GlobalArena later(s_LaterOwner);
+    ArenaMemoryOwnerIdentity identity;
+    EXPECT_EQ(ReadArenaMemoryOwnerIdentity(*retained, identity), successor);
+    EXPECT_EQ(identity.ownerName, s_Owner);
+    EXPECT_EQ(identity.source, ArenaMemorySource::Arena);
+    ArenaMemoryOwnerSnapshot retired;
+    EXPECT_EQ(ReadArenaMemoryOwnerRecord(*retained, retired), successor);
+    EXPECT_EQ(retired.ownerName, identity.ownerName);
+    EXPECT_EQ(retired.source, identity.source);
+    EXPECT_EQ(retired.stats.usedBytes, 0u);
+    EXPECT_EQ(retired.stats.reservedBytes, 0u);
+    EXPECT_GE(retired.stats.allocationCount, 1u);
+    EXPECT_GE(retired.stats.deallocationCount, 1u);
+
+    bool foundLater = false;
+    const ArenaMemoryOwnerRecord* record = FirstArenaMemoryOwnerRecord();
+    while(record){
+        ArenaMemoryOwnerIdentity current;
+        record = ReadArenaMemoryOwnerIdentity(*record, current);
+        foundLater |= current.ownerName == s_LaterOwner;
+    }
+    EXPECT_TRUE(foundLater);
+}
+
 TEST(AllocationOwners, GlobalArenaChargesUsableBytesAcrossOddSizeReallocations){
     constexpr Name s_Owner("tests/allocation_owners/odd_reallocation");
     GlobalArena arena(s_Owner);

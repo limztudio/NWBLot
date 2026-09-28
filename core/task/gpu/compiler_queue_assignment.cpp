@@ -109,13 +109,23 @@ bool GpuTaskGraphCompiler::assignQueues(
     outAssignments.m_assignmentIndicesByTask.resize(graph.taskCount(), Limit<u32>::s_Max);
     outAssignments.m_assignments.reserve(graph.taskCount());
 
-    GpuTaskSchedulingReachability schedulingReachability(scratchArena);
-    if(!BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
-        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
-    const GpuTaskQueueScoringData scoringData(graph, analysis, options, scratchArena);
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena> groups(scratchArena);
     if(!BuildQueuePlacementGroups(graph, analysis, topology, options, groups, outAssignments.m_diagnostic, scratchArena))
         return false;
+    bool needsSchedulingReachability = false;
+    if(topology.queueCount > 1u && graph.taskCount() > 1u && groups.size() > 1u){
+        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+            const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
+            if(scheduling.overlapPreferred && !scheduling.avoidQueueCrossing){
+                needsSchedulingReachability = true;
+                break;
+            }
+        }
+    }
+    GpuTaskSchedulingReachability schedulingReachability(scratchArena);
+    if(needsSchedulingReachability && !BuildGpuTaskSchedulingReachability(graph, analysis, schedulingReachability))
+        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
+    GpuTaskQueueScoringData scoringData(graph, analysis, options, scratchArena);
 
     // Establish every legal route before scoring. Explicit compatible merge chains share one provisional queue;
     // their command union and external ownership facts constrain the whole chain, while packetization retains its frontier checks.
@@ -152,6 +162,7 @@ bool GpuTaskGraphCompiler::assignQueues(
     }
     if(outAssignments.m_assignments.size() != outAssignments.m_assignmentIndicesByTask.size())
         return fail(GpuTaskGraphQueueAssignmentStatus::InvalidGraphAnalysis);
+    scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
 
     // Score complete groups against the same provisional plan, omitting group-local work from crossing/overlap costs.
     // This bounds automatic placement to the available queue classes and keeps physical-topology iteration order irrelevant.
@@ -174,7 +185,7 @@ bool GpuTaskGraphCompiler::assignQueues(
             GpuQueueAssignmentScore score;
         };
         Candidate candidates[CommandQueue::kCount] = {};
-        bool hasIndependentOverlap = false;
+        usize candidateCount = 0u;
         for(u8 queueClassValue = 0u; queueClassValue < CommandQueue::kCount; ++queueClassValue){
             Candidate& candidate = candidates[queueClassValue];
             candidate.queue = FindBestLegalQueuePlacementGroupCandidate(
@@ -184,55 +195,66 @@ bool GpuTaskGraphCompiler::assignQueues(
                 group,
                 static_cast<CommandQueue::Enum>(queueClassValue)
             );
-            if(!candidate.queue)
-                continue;
-            candidate.score = BuildQueuePlacementGroupScore(
-                graph,
-                analysis,
-                outAssignments.m_assignments,
-                outAssignments.m_assignmentIndicesByTask,
-                topology,
-                schedulingReachability,
-                scoringData,
-                group,
-                *candidate.queue
-            );
-            hasIndependentOverlap = hasIndependentOverlap || candidate.score.overlap > 0;
-            if(conservative){
-                candidate.score.overlap = 0;
-                candidate.score.queueLoad = 0;
+            if(candidate.queue){
+                selectedQueue = candidate.queue;
+                ++candidateCount;
             }
         }
-        // Finite crossing costs permit useful async overlap. Without independent work, graph-load estimates must
-        // not scatter a serial chain merely because its ancestors and descendants occupy the same queue.
-        const bool compareTotalScore = !conservative && hasIndependentOverlap;
-        for(const Candidate& candidate : candidates){
-            if(!candidate.queue)
-                continue;
-            bool better = IsBetterAutomaticQueueAssignmentCandidate(
-                candidate.score,
-                *candidate.queue,
-                selectedScore,
-                selectedQueue,
-                compareTotalScore
-            );
-            if(conservative && selectedQueue){
-                const i64 candidateCrossings = static_cast<i64>(candidate.score.incomingCrossings) + candidate.score.outgoingCrossings;
-                const i64 selectedCrossings = static_cast<i64>(selectedScore.incomingCrossings) + selectedScore.outgoingCrossings;
-                if(
-                    candidateCrossings == selectedCrossings
-                    && candidate.score.ownershipTransfers == selectedScore.ownershipTransfers
-                    && candidate.queue->queueClass != selectedQueue->queueClass
-                ){
-                    if(candidate.queue->queueClass == CommandQueue::Graphics)
-                        better = true;
-                    else if(selectedQueue->queueClass == CommandQueue::Graphics)
-                        better = false;
+        // A single legal class needs no choice score; final per-task diagnostics are still computed below.
+        if(candidateCount > 1u){
+            selectedQueue = nullptr;
+            bool hasIndependentOverlap = false;
+            for(Candidate& candidate : candidates){
+                if(!candidate.queue)
+                    continue;
+                candidate.score = BuildQueuePlacementGroupScore(
+                    graph,
+                    analysis,
+                    outAssignments.m_assignments,
+                    outAssignments.m_assignmentIndicesByTask,
+                    topology,
+                    schedulingReachability,
+                    scoringData,
+                    group,
+                    *candidate.queue
+                );
+                hasIndependentOverlap = hasIndependentOverlap || candidate.score.overlap > 0;
+                if(conservative){
+                    candidate.score.overlap = 0;
+                    candidate.score.queueLoad = 0;
                 }
             }
-            if(better){
-                selectedQueue = candidate.queue;
-                selectedScore = candidate.score;
+            // Finite crossing costs permit useful async overlap. Without independent work, graph-load estimates must
+            // not scatter a serial chain merely because its ancestors and descendants occupy the same queue.
+            const bool compareTotalScore = !conservative && hasIndependentOverlap;
+            for(const Candidate& candidate : candidates){
+                if(!candidate.queue)
+                    continue;
+                bool better = IsBetterAutomaticQueueAssignmentCandidate(
+                    candidate.score,
+                    *candidate.queue,
+                    selectedScore,
+                    selectedQueue,
+                    compareTotalScore
+                );
+                if(conservative && selectedQueue){
+                    const i64 candidateCrossings = static_cast<i64>(candidate.score.incomingCrossings) + candidate.score.outgoingCrossings;
+                    const i64 selectedCrossings = static_cast<i64>(selectedScore.incomingCrossings) + selectedScore.outgoingCrossings;
+                    if(
+                        candidateCrossings == selectedCrossings
+                        && candidate.score.ownershipTransfers == selectedScore.ownershipTransfers
+                        && candidate.queue->queueClass != selectedQueue->queueClass
+                    ){
+                        if(candidate.queue->queueClass == CommandQueue::Graphics)
+                            better = true;
+                        else if(selectedQueue->queueClass == CommandQueue::Graphics)
+                            better = false;
+                    }
+                }
+                if(better){
+                    selectedQueue = candidate.queue;
+                    selectedScore = candidate.score;
+                }
             }
         }
         NWB_ASSERT(selectedQueue);
@@ -313,104 +335,111 @@ bool GpuTaskGraphCompiler::assignQueues(
         assignment.initialQueue = selectedQueue->id;
     }
 
-    for(const GpuTaskQueuePlacementGroup& group : groups){
-        const GpuPhysicalQueueInfo* const staticQueue = FindPhysicalQueueInfo(
-            topology,
-            outAssignments.m_assignments[group.assignmentOffset].queue
-        );
-        NWB_ASSERT(staticQueue);
-        GpuPhysicalQueueId timingOverrideQueue;
-        GpuTaskId timingOverrideTask;
-        for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
-            const GpuTaskGraphTaskView task = graph.taskAt(outAssignments.m_assignments[group.assignmentOffset + taskOffset].task.index);
-            const GpuTaskTimingAssignmentKey key{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass };
-            const GpuTaskTimingQueueOverride* const override = FindGpuTaskTimingQueueOverride(
-                options.timingQueueOverrides,
-                options.timingQueueOverrideCount,
-                TimingHistoryKeyForQueue(key, staticQueue->queueClass)
+    const bool hasUsableTimingFeedback = HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration);
+    if(options.timingQueueOverrideCount != 0u || hasUsableTimingFeedback){
+        scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
+        for(const GpuTaskQueuePlacementGroup& group : groups){
+            const GpuPhysicalQueueInfo* const staticQueue = FindPhysicalQueueInfo(
+                topology,
+                outAssignments.m_assignments[group.assignmentOffset].queue
             );
-            if(!override)
-                continue;
-            if(timingOverrideQueue.valid() && timingOverrideQueue != override->queue)
-                return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, task.id, task.commands.requiredCapabilities);
-            timingOverrideQueue = override->queue;
-            timingOverrideTask = task.id;
-        }
-        if(timingOverrideQueue.valid()){
-            const GpuQueueCapability::Mask requiredCapabilities = graph.taskAt(timingOverrideTask.index).commands.requiredCapabilities;
-            GpuTaskQueuePlacementGroup forcedGroup = group;
-            if(forcedGroup.overrideQueue.valid() && forcedGroup.overrideQueue != timingOverrideQueue)
-                return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, timingOverrideTask, requiredCapabilities);
-            forcedGroup.overrideQueue = timingOverrideQueue;
-            const GpuPhysicalQueueInfo* const selectedQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, forcedGroup);
-            if(!selectedQueue)
-                return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, timingOverrideTask, requiredCapabilities);
+            NWB_ASSERT(staticQueue);
+            GpuPhysicalQueueId timingOverrideQueue;
+            GpuTaskId timingOverrideTask;
             for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
-                GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset + taskOffset];
-                const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
-                if(!IsLegalTimingFeedbackRoute(graph, topology, task, *staticQueue, *selectedQueue))
+                const GpuTaskGraphTaskView task = graph.taskAt(outAssignments.m_assignments[group.assignmentOffset + taskOffset].task.index);
+                const GpuTaskTimingAssignmentKey key{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass };
+                const GpuTaskTimingQueueOverride* const override = FindGpuTaskTimingQueueOverride(
+                    options.timingQueueOverrides,
+                    options.timingQueueOverrideCount,
+                    TimingHistoryKeyForQueue(key, staticQueue->queueClass)
+                );
+                if(!override)
+                    continue;
+                if(timingOverrideQueue.valid() && timingOverrideQueue != override->queue)
                     return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, task.id, task.commands.requiredCapabilities);
-                assignment.queue = selectedQueue->id;
-                assignment.queueClass = selectedQueue->queueClass;
-                assignment.dedicated = selectedQueue->dedicated;
-                assignment.modifiers |= GpuTaskQueueAssignmentModifier::DebugTimingOverride;
+                timingOverrideQueue = override->queue;
+                timingOverrideTask = task.id;
             }
-            continue;
-        }
-        if(
-            group.assignmentCount != 1u
-            || group.requiredQueue.valid()
-            || group.overrideQueue.valid()
-            || !HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration)
-        )
-            continue;
+            if(timingOverrideQueue.valid()){
+                const GpuQueueCapability::Mask requiredCapabilities = graph.taskAt(timingOverrideTask.index).commands.requiredCapabilities;
+                GpuTaskQueuePlacementGroup forcedGroup = group;
+                if(forcedGroup.overrideQueue.valid() && forcedGroup.overrideQueue != timingOverrideQueue)
+                    return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, timingOverrideTask, requiredCapabilities);
+                forcedGroup.overrideQueue = timingOverrideQueue;
+                const GpuPhysicalQueueInfo* const selectedQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, forcedGroup);
+                if(!selectedQueue)
+                    return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, timingOverrideTask, requiredCapabilities);
+                for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
+                    GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset + taskOffset];
+                    const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
+                    if(!IsLegalTimingFeedbackRoute(graph, topology, task, *staticQueue, *selectedQueue))
+                        return fail(GpuTaskGraphQueueAssignmentStatus::InvalidTimingFeedback, task.id, task.commands.requiredCapabilities);
+                    scoringData.moveAssignedTask(assignment.task, assignment.queue, selectedQueue->id);
+                    assignment.queue = selectedQueue->id;
+                    assignment.queueClass = selectedQueue->queueClass;
+                    assignment.dedicated = selectedQueue->dedicated;
+                    assignment.modifiers |= GpuTaskQueueAssignmentModifier::DebugTimingOverride;
+                }
+                continue;
+            }
+            if(
+                group.assignmentCount != 1u
+                || group.requiredQueue.valid()
+                || group.overrideQueue.valid()
+                || !hasUsableTimingFeedback
+            )
+                continue;
 
-        GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset];
-        const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
-        const GpuTaskTimingAssignmentKey key{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass };
-        const GpuPhysicalQueueInfo* selectedQueue = staticQueue;
-        const GpuPhysicalQueueInfo* const incumbent = FindTimingFeedbackIncumbent(graph, topology, task, *staticQueue, key, *options.timingHistory);
-        const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(
-            graph,
-            topology,
-            task,
-            *incumbent,
-            key,
-            *options.timingHistory,
-            options.timingFeedbackPolicy,
-            options.timingFrameIndex
-        );
-        if(calibrationQueue){
-            selectedQueue = calibrationQueue;
-            assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingCalibration;
+            GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[group.assignmentOffset];
+            const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
+            const GpuTaskTimingAssignmentKey key{ .task = task.identity, .variant = task.timing.variant, .resolutionClass = task.timing.resolutionClass };
+            const GpuPhysicalQueueInfo* selectedQueue = staticQueue;
+            const GpuPhysicalQueueInfo* const incumbent = FindTimingFeedbackIncumbent(graph, topology, task, *staticQueue, key, *options.timingHistory);
+            const GpuPhysicalQueueInfo* const calibrationQueue = FindTimingFeedbackCalibrationQueue(
+                graph,
+                topology,
+                task,
+                *incumbent,
+                key,
+                *options.timingHistory,
+                options.timingFeedbackPolicy,
+                options.timingFrameIndex
+            );
+            if(calibrationQueue){
+                selectedQueue = calibrationQueue;
+                assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingCalibration;
+            }
+            else if(const GpuPhysicalQueueInfo* const timingQueue = FindTimingFeedbackQueue(
+                graph,
+                analysis,
+                outAssignments.m_assignments,
+                outAssignments.m_assignmentIndicesByTask,
+                topology,
+                schedulingReachability,
+                scoringData,
+                task,
+                *incumbent,
+                key,
+                *options.timingHistory,
+                options.timingFeedbackPolicy,
+                options.timingFrameIndex
+            )){
+                selectedQueue = timingQueue;
+                assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
+            }
+            else if(incumbent != staticQueue){
+                selectedQueue = incumbent;
+                assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
+            }
+            scoringData.moveAssignedTask(assignment.task, assignment.queue, selectedQueue->id);
+            assignment.queue = selectedQueue->id;
+            assignment.queueClass = selectedQueue->queueClass;
+            assignment.dedicated = selectedQueue->dedicated;
         }
-        else if(const GpuPhysicalQueueInfo* const timingQueue = FindTimingFeedbackQueue(
-            graph,
-            analysis,
-            outAssignments.m_assignments,
-            outAssignments.m_assignmentIndicesByTask,
-            topology,
-            schedulingReachability,
-            scoringData,
-            task,
-            *incumbent,
-            key,
-            *options.timingHistory,
-            options.timingFeedbackPolicy,
-            options.timingFrameIndex
-        )){
-            selectedQueue = timingQueue;
-            assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
-        }
-        else if(incumbent != staticQueue){
-            selectedQueue = incumbent;
-            assignment.modifiers |= GpuTaskQueueAssignmentModifier::TimingFeedback;
-        }
-        assignment.queue = selectedQueue->id;
-        assignment.queueClass = selectedQueue->queueClass;
-        assignment.dedicated = selectedQueue->dedicated;
     }
 
+    scoringData.rebuildAssignmentLoads(outAssignments.m_assignments, topology);
     for(GpuTaskQueueAssignment& assignment : outAssignments.m_assignments){
         const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
         const GpuPhysicalQueueInfo* const selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);

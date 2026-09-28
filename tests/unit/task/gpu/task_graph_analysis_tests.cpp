@@ -309,6 +309,99 @@ TEST(GpuTaskGraphAnalysis, DeduplicatesHazardReasonsAndPreservesExplicitRawEdgeP
 }
 
 
+TEST(GpuTaskGraphAnalysis, EmptySchedulingReachabilityAvoidsStorageAndResetsAcrossDependencyGraphs){
+    constexpr usize s_TaskCount = 65u;
+    TestArena testArena;
+    Core::Alloc::ScratchArena analysisScratchArena(s_AnalysisScratchArena);
+    Core::Alloc::ScratchArena reachabilityScratchArena(Name("tests/task/gpu/edgefree_reachability"));
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskId tasks[s_TaskCount] = {};
+    for(usize taskIndex = 0u; taskIndex < s_TaskCount; ++taskIndex){
+        tasks[taskIndex] = AddTask(graph, taskIndex);
+        ASSERT_TRUE(tasks[taskIndex].valid());
+    }
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    const Graphics::GpuTaskGraphCompiler compiler;
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_TRUE(compiler.analyze(declarations, analysis, analysisScratchArena));
+        ASSERT_TRUE(analysis.schedulingEdges().empty());
+    }
+
+    Graphics::GpuTaskGraphCompilerDetail::GpuTaskSchedulingReachability reachability(reachabilityScratchArena);
+    EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[s_TaskCount - 1u]));
+    EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[s_TaskCount - 1u]));
+    const ArenaMemoryStats before = reachabilityScratchArena.memoryStats();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
+    }
+    const ArenaMemoryStats after = reachabilityScratchArena.memoryStats();
+    EXPECT_EQ(after.allocationCount, before.allocationCount);
+    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
+    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
+    EXPECT_EQ(after.reservedBytes, before.reservedBytes);
+    EXPECT_EQ(after.usedBytes, before.usedBytes);
+    EXPECT_EQ(after.peakUsedBytes, before.peakUsedBytes);
+
+    for(const Graphics::GpuTaskId& source : tasks){
+        for(const Graphics::GpuTaskId& destination : tasks){
+            EXPECT_FALSE(reachability.reaches(source, destination));
+            EXPECT_EQ(reachability.transitivelyIndependent(source, destination), source != destination);
+        }
+    }
+    const Graphics::GpuTaskId invalidTasks[] = {
+        {},
+        { .generation = tasks[0u].generation + 1u, .index = tasks[0u].index },
+        { .generation = tasks[0u].generation, .index = static_cast<u32>(s_TaskCount) },
+    };
+    for(const Graphics::GpuTaskId& invalid : invalidTasks){
+        EXPECT_FALSE(reachability.reaches(tasks[0u], invalid));
+        EXPECT_FALSE(reachability.reaches(invalid, tasks[0u]));
+        EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], invalid));
+        EXPECT_FALSE(reachability.transitivelyIndependent(invalid, tasks[0u]));
+    }
+
+    Graphics::GpuTaskGraph dependentGraph(testArena.arena);
+    const Graphics::GpuTaskId producer = AddTask(dependentGraph, 0u);
+    const Graphics::GpuTaskId consumer = AddTask(dependentGraph, 1u, &producer, 1u);
+    const Graphics::GpuTaskId independent = AddTask(dependentGraph, 2u);
+    ASSERT_TRUE(producer.valid());
+    ASSERT_TRUE(consumer.valid());
+    ASSERT_TRUE(independent.valid());
+    Graphics::GpuTaskGraphAnalysis dependentAnalysis(testArena.arena);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(dependentGraph);
+
+        ASSERT_TRUE(compiler.analyze(declarations, dependentAnalysis, analysisScratchArena));
+        ASSERT_FALSE(dependentAnalysis.schedulingEdges().empty());
+        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, dependentAnalysis, reachability));
+    }
+    EXPECT_TRUE(reachability.reaches(producer, consumer));
+    EXPECT_FALSE(reachability.reaches(consumer, producer));
+    EXPECT_FALSE(reachability.transitivelyIndependent(producer, consumer));
+    EXPECT_TRUE(reachability.transitivelyIndependent(producer, independent));
+    EXPECT_GT(reachabilityScratchArena.memoryStats().allocationCount, after.allocationCount);
+    EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[s_TaskCount - 1u]));
+    EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[s_TaskCount - 1u]));
+
+    const ArenaMemoryStats beforeReuse = reachabilityScratchArena.memoryStats();
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+
+        ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildGpuTaskSchedulingReachability(declarations, analysis, reachability));
+    }
+    EXPECT_EQ(reachabilityScratchArena.memoryStats().allocationCount, beforeReuse.allocationCount);
+    EXPECT_FALSE(reachability.reaches(tasks[0u], tasks[s_TaskCount - 1u]));
+    EXPECT_TRUE(reachability.transitivelyIndependent(tasks[0u], tasks[s_TaskCount - 1u]));
+    EXPECT_FALSE(reachability.transitivelyIndependent(tasks[0u], tasks[0u]));
+    EXPECT_FALSE(reachability.reaches(producer, consumer));
+    EXPECT_FALSE(reachability.transitivelyIndependent(producer, independent));
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 

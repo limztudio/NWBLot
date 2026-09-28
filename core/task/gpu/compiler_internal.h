@@ -210,6 +210,8 @@ struct GpuTaskQueueScoringData{
     Vector<u64, Alloc::ScratchArena> taskCosts;
     Vector<usize, Alloc::ScratchArena> ownershipEdgeOffsets;
     Vector<const GpuTaskDependencyEdge*, Alloc::ScratchArena> ownershipEdges;
+    Vector<GpuTaskQueueLoad, Alloc::ScratchArena> assignedQueueLoads;
+    u64 totalAssignedCost = 0u;
     const GpuTaskQueueLoad* queueLoads = nullptr;
     usize queueLoadCount = 0u;
 
@@ -221,6 +223,17 @@ struct GpuTaskQueueScoringData{
         const GpuTaskGraphQueueAssignmentOptions& options,
         Alloc::ScratchArena& scratchArena
     );
+
+    void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuTaskGraphQueueTopology& topology);
+    void moveAssignedTask(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
+    [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
+};
+
+struct GpuTaskQueueScoreExclusions{
+    usize assignmentOffset = 0u;
+    usize assignmentCount = 0u;
+    u64 totalCost = 0u;
+    u64 candidateQueueCost = 0u;
 };
 
 [[nodiscard]] GpuQueueAssignmentScore BuildQueueAssignmentScore(
@@ -233,8 +246,7 @@ struct GpuTaskQueueScoringData{
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate,
-    usize ignoredAssignmentOffset = 0u,
-    usize ignoredAssignmentCount = 0u
+    const GpuTaskQueueScoreExclusions& exclusions = {}
 )noexcept;
 
 struct GpuTaskQueuePlacementGroup{

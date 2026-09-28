@@ -142,6 +142,199 @@ TEST(GpuTaskGraph, KeepsTinyComputeBetweenGraphicsDependenciesLocal){
     ExpectComputeStagePlacement(Graphics::GpuTaskCostHint::Tiny, true, 0u, Graphics::CommandQueue::Graphics);
 }
 
+TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGroup){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    const Graphics::GpuTaskId graphics = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_diagnostics_graphics"),
+        "Automatic Diagnostics Graphics",
+        GraphicsCommands(),
+        scheduling
+    );
+    ASSERT_TRUE(graphics.valid());
+    const Graphics::GpuTaskId firstCompute = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_diagnostics_first_compute"),
+        "Automatic Diagnostics First Compute",
+        ComputeCommands(),
+        scheduling
+    );
+    ASSERT_TRUE(firstCompute.valid());
+    scheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskId secondCompute = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_diagnostics_second_compute"),
+        "Automatic Diagnostics Second Compute",
+        ComputeCommands(),
+        scheduling
+    );
+    ASSERT_TRUE(secondCompute.valid());
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(analysis.schedulingEdges().empty());
+
+    const Graphics::GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue();
+    const Graphics::GpuPhysicalQueueInfo queueOrders[][2u] = {
+        { graphicsQueue, computeQueue },
+        { computeQueue, graphicsQueue },
+    };
+    const Graphics::GpuTaskQueueLoad queueLoad{ .queue = graphicsQueue.id, .estimatedCost = 13u };
+    Graphics::GpuTaskGraphQueueAssignmentOptions options;
+    options.queueLoads = &queueLoad;
+    options.queueLoadCount = 1u;
+    const Graphics::GpuTaskId tasks[] = { graphics, firstCompute, secondCompute };
+    for(const auto& queues : queueOrders){
+        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
+        for(const Graphics::GpuTaskId task : tasks){
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+            ASSERT_NE(assignment, nullptr);
+            const bool requiresGraphics = task == graphics;
+            const Graphics::GpuPhysicalQueueInfo& expectedQueue = requiresGraphics ? graphicsQueue : computeQueue;
+            EXPECT_EQ(assignment->initialQueue, expectedQueue.id);
+            EXPECT_EQ(assignment->queue, expectedQueue.id);
+            EXPECT_EQ(assignment->queueClass, expectedQueue.queueClass);
+            EXPECT_EQ(
+                assignment->reason,
+                requiresGraphics
+                    ? Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics
+                    : Graphics::GpuTaskQueueAssignmentReason::Scored
+            );
+            EXPECT_EQ(assignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
+            EXPECT_EQ(assignment->score.overlap, requiresGraphics ? 16 : 8);
+            EXPECT_EQ(assignment->score.queueLoad, requiresGraphics ? 13 : 8);
+            EXPECT_EQ(assignment->score.incomingCrossings, 0);
+            EXPECT_EQ(assignment->score.outgoingCrossings, 0);
+            EXPECT_EQ(assignment->score.ownershipTransfers, 0);
+            EXPECT_EQ(assignment->score.total(), requiresGraphics ? 3 : 0);
+        }
+    }
+}
+
+
+TEST(GpuTaskGraph, ExtendsMergedGroupAfterLegalityWitnessFallsBackToGraphics){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    const Graphics::GpuTaskId first = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_witness_compute"),
+        "Automatic Witness Compute",
+        ComputeCommands(),
+        scheduling
+    );
+    ASSERT_TRUE(first.valid());
+    scheduling.mergeWithPrevious = true;
+    const Graphics::GpuTaskCommandRequirements primaryGraphicsCommands{
+        .requiredCapabilities = Graphics::GpuQueueCapability::Graphics,
+        .requiresPrimaryGraphicsQueue = true,
+    };
+    const Graphics::GpuTaskId graphics = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_witness_graphics"),
+        "Automatic Witness Graphics",
+        primaryGraphicsCommands,
+        scheduling,
+        {},
+        &first,
+        1u
+    );
+    ASSERT_TRUE(graphics.valid());
+    const Graphics::GpuTaskId last = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_witness_final_compute"),
+        "Automatic Witness Final Compute",
+        ComputeCommands(),
+        scheduling,
+        {},
+        &graphics,
+        1u
+    );
+    ASSERT_TRUE(last.valid());
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    const Graphics::GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue(7u);
+    const Graphics::GpuPhysicalQueueInfo computeQueue = DedicatedComputeQueue(0u);
+    const Graphics::GpuPhysicalQueueInfo queueOrders[][2u] = {
+        { computeQueue, graphicsQueue },
+        { graphicsQueue, computeQueue },
+    };
+    const Graphics::GpuTaskId tasks[] = { first, graphics, last };
+    for(const auto& queues : queueOrders){
+        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+        ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+        for(const Graphics::GpuTaskId task : tasks){
+            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
+            ASSERT_NE(assignment, nullptr);
+            EXPECT_EQ(assignment->queue, graphicsQueue.id);
+            EXPECT_EQ(assignment->initialQueue, graphicsQueue.id);
+            EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
+            EXPECT_EQ(assignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
+            EXPECT_EQ(assignment->score.queueLoad, 16);
+            EXPECT_EQ(assignment->score.overlap, 0);
+            EXPECT_EQ(assignment->score.incomingCrossings, 0);
+            EXPECT_EQ(assignment->score.outgoingCrossings, 0);
+        }
+    }
+}
+
+TEST(GpuTaskGraph, SplitsMergedGroupForDisjointExternalQueueContracts){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Graphics::GpuTaskCostHint::Large;
+    Graphics::GpuTaskCommandRequirements commands = ComputeCommands();
+    commands.externalQueue = queues[1u].id;
+    const Graphics::GpuTaskId first = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_witness_external_compute"),
+        "Automatic Witness External Compute",
+        commands,
+        scheduling
+    );
+    ASSERT_TRUE(first.valid());
+    scheduling.mergeWithPrevious = true;
+    commands.externalQueue = queues[0u].id;
+    const Graphics::GpuTaskId second = AddTaskWithCommands(
+        graph,
+        Name("tests/task_graph/automatic_witness_external_graphics"),
+        "Automatic Witness External Graphics",
+        commands,
+        scheduling,
+        {},
+        &first,
+        1u
+    );
+    ASSERT_TRUE(second.valid());
+    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
+    const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
+    const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
+    ASSERT_NE(firstAssignment, nullptr);
+    ASSERT_NE(secondAssignment, nullptr);
+    EXPECT_EQ(firstAssignment->queue, queues[1u].id);
+    EXPECT_EQ(secondAssignment->queue, queues[0u].id);
+    EXPECT_EQ(firstAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
+    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
+    EXPECT_EQ(firstAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(secondAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
+    EXPECT_EQ(firstAssignment->score.outgoingCrossings, 1);
+    EXPECT_EQ(secondAssignment->score.incomingCrossings, 1);
+    EXPECT_EQ(firstAssignment->score.overlap, 0);
+    EXPECT_EQ(secondAssignment->score.overlap, 0);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

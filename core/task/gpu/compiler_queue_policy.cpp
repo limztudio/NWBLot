@@ -93,27 +93,19 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 // A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
     const ResourceQueueSharing::Mask sharing,
-    const GpuTaskGraphQueueTopology& topology
-)noexcept{
+    const GpuTaskGraphQueueTopology& topology)noexcept{
     if(sharing == ResourceQueueSharing::Exclusive)
         return false;
 
-    usize familyCount = 0u;
+    const GpuPhysicalQueueInfo* firstSelectedQueue = nullptr;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(!ResourceQueueSharing::IncludesQueueClass(sharing, queue.queueClass))
             continue;
 
-        bool familyAlreadyIncluded = false;
-        for(usize previousIndex = 0u; previousIndex < queueIndex; ++previousIndex){
-            const GpuPhysicalQueueInfo& previous = topology.queues[previousIndex];
-            familyAlreadyIncluded = ResourceQueueSharing::IncludesQueueClass(sharing, previous.queueClass)
-                && previous.familyIndex == queue.familyIndex
-            ;
-            if(familyAlreadyIncluded)
-                break;
-        }
-        if(!familyAlreadyIncluded && ++familyCount >= 2u)
+        if(!firstSelectedQueue)
+            firstSelectedQueue = &queue;
+        else if(queue.familyIndex != firstSelectedQueue->familyIndex)
             return true;
     }
     return false;

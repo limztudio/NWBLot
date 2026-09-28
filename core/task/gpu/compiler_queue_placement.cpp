@@ -278,6 +278,7 @@ namespace GpuTaskGraphCompilerDetail{
 
     outGroups.clear();
     outGroups.reserve(graph.taskCount());
+    const GpuPhysicalQueueInfo* legalityWitness = nullptr;
     for(usize assignmentIndex = 0u; assignmentIndex < analysis.topologicalOrder().size(); ++assignmentIndex){
         const GpuTaskId taskID = analysis.topologicalOrder()[assignmentIndex];
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
@@ -288,7 +289,8 @@ namespace GpuTaskGraphCompilerDetail{
             .requiredQueue = requiredQueues[taskID.index],
             .overrideQueue = overrideQueues[taskID.index],
         };
-        if(!FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton))
+        const GpuPhysicalQueueInfo* const singletonQueue = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, singleton);
+        if(!singletonQueue)
             return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, taskID);
 
         if(assignmentIndex != 0u && RequestsCompatiblePrecedingMerge(
@@ -299,21 +301,35 @@ namespace GpuTaskGraphCompilerDetail{
             ++combined.assignmentCount;
             combined.requiredCapabilities |= singleton.requiredCapabilities;
             combined.overrideQueue = {};
-            if(
-                AccumulateRequiredQueue(singleton.requiredQueue, combined.requiredQueue)
-                && FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)
-            ){
+            const GpuPhysicalQueueInfo* combinedWitness = nullptr;
+            if(AccumulateRequiredQueue(singleton.requiredQueue, combined.requiredQueue)){
+                NWB_ASSERT(legalityWitness);
+                // The witness already admits preceding members; only the appended task can invalidate it.
+                if(
+                    (!combined.requiredQueue.valid() || combined.requiredQueue == legalityWitness->id)
+                    && IsLegalQueueAssignmentCandidate(graph, topology, task, *legalityWitness)
+                )
+                    combinedWitness = legalityWitness;
+                else
+                    combinedWitness = FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined);
+            }
+            if(combinedWitness){
                 combined.overrideQueue = outGroups.back().overrideQueue;
                 if(
                     !AccumulateRequiredQueue(singleton.overrideQueue, combined.overrideQueue)
-                    || !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)
+                    || (
+                        combined.overrideQueue.valid()
+                        && !FindBestLegalQueuePlacementGroupCandidate(graph, analysis, topology, combined)
+                    )
                 )
                     return fail(GpuTaskGraphQueueAssignmentStatus::InvalidQueueOverride, taskID);
                 outGroups.back() = combined;
+                legalityWitness = combinedWitness;
                 continue;
             }
         }
         outGroups.push_back(singleton);
+        legalityWitness = singletonQueue;
     }
     return true;
 }
@@ -329,6 +345,23 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskQueuePlacementGroup& group,
     const GpuPhysicalQueueInfo& candidate)noexcept{
+    GpuTaskQueueScoreExclusions exclusions{
+        .assignmentOffset = group.assignmentOffset,
+        .assignmentCount = group.assignmentCount,
+        .totalCost = 0u,
+        .candidateQueueCost = 0u,
+    };
+    bool allTasksAllowOverlap = true;
+    for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
+        const GpuTaskQueueAssignment& assignment = assignments[group.assignmentOffset + taskOffset];
+        const u64 cost = scoringData.taskCosts[assignment.task.index];
+        exclusions.totalCost += cost;
+        if(assignment.queue == candidate.id)
+            exclusions.candidateQueueCost += cost;
+        const GpuTaskSchedulingHint& scheduling = graph.taskAt(assignment.task.index).scheduling;
+        allTasksAllowOverlap = allTasksAllowOverlap && scheduling.overlapPreferred && !scheduling.avoidQueueCrossing;
+    }
+
     GpuQueueAssignmentScore score;
     for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
         const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
@@ -342,8 +375,7 @@ namespace GpuTaskGraphCompilerDetail{
             scoringData,
             graph.taskAt(taskID.index),
             candidate,
-            group.assignmentOffset,
-            group.assignmentCount
+            exclusions
         ), score);
     }
     if(group.assignmentCount == 1u)
@@ -352,27 +384,30 @@ namespace GpuTaskGraphCompilerDetail{
     // A shared packet can overlap another task only when every member is independent of that task.
     // Per-member sums would reward work that waits at the same packet's entrance for a different member.
     u64 overlap = 0u;
-    for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
-        if(
-            assignmentIndex >= group.assignmentOffset
-            && assignmentIndex - group.assignmentOffset < group.assignmentCount
-        )
-            continue;
-        const GpuTaskQueueAssignment& other = assignments[assignmentIndex];
-        if(other.queue == candidate.id)
-            continue;
-        bool independent = true;
-        for(usize taskOffset = 0u; taskOffset < group.assignmentCount && independent; ++taskOffset){
-            const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
-            const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
-            independent = task.scheduling.overlapPreferred
-                && !task.scheduling.avoidQueueCrossing
-                && schedulingReachability.transitivelyIndependent(taskID, other.task)
-            ;
-        }
-        if(independent){
-            const u64 cost = scoringData.taskCosts[other.task.index];
-            overlap = overlap > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : overlap + cost;
+    if(allTasksAllowOverlap && analysis.schedulingEdges().empty()){
+        const u64 assignedQueueCost = scoringData.assignedQueueLoad(candidate.id);
+        NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
+        overlap = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
+    }
+    else if(allTasksAllowOverlap){
+        for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
+            if(
+                assignmentIndex >= group.assignmentOffset
+                && assignmentIndex - group.assignmentOffset < group.assignmentCount
+            )
+                continue;
+            const GpuTaskQueueAssignment& other = assignments[assignmentIndex];
+            if(other.queue == candidate.id)
+                continue;
+            bool independent = true;
+            for(usize taskOffset = 0u; taskOffset < group.assignmentCount && independent; ++taskOffset){
+                const GpuTaskId taskID = analysis.topologicalOrder()[group.assignmentOffset + taskOffset];
+                independent = schedulingReachability.transitivelyIndependent(taskID, other.task);
+            }
+            if(independent){
+                const u64 cost = scoringData.taskCosts[other.task.index];
+                overlap = overlap > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : overlap + cost;
+            }
         }
     }
     score.overlap = overlap > static_cast<u64>(Limit<i32>::s_Max)

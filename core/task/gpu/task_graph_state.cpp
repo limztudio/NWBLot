@@ -701,7 +701,7 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
         return false;
 
     const auto validStateSource = [deviceGeneration](const CommandListResourceStateHandoff* const states){
-        // Invalid declarations intentionally remain a record-time failure so legacy callers retain their existing diagnostic. A valid snapshot, however, must never cross a native Device lifetime.
+        // Recording validates snapshot contents; valid snapshots must belong to the active native device lifetime.
         return !states || !states->valid() || states->validForDeviceGeneration(deviceGeneration);
     };
 
@@ -718,7 +718,6 @@ bool GpuTaskGraph::validForDeviceGeneration(const u16 deviceGeneration)const noe
             (resource.texture != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.buffer != nullptr && resource.deviceGeneration != deviceGeneration)
             || (resource.accelStruct != nullptr && resource.deviceGeneration != deviceGeneration)
-            || !validStateSource(resource.initialOwnerStateSource)
             || (resource.directConsumerQueue.valid() && resource.directConsumerQueue.deviceGeneration != deviceGeneration)
         )
             return false;

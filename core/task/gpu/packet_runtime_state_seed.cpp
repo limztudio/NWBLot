@@ -167,27 +167,15 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
 
     const auto appendInitialOwnerStateSource = [&](const GpuCompiledBarrier& barrier){
         const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-        const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
-        if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
+        const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
+        if(!source)
             return false;
-        const CommandListResourceStateHandoff* const sourceStates = multiSource
-            ? multiSource->stateSource
-            : resource.initialOwnerStateSource
-        ;
+        const CommandListResourceStateHandoff* const sourceStates = source->stateSource;
         if(
             !sourceStates
             || !sourceStates->validForDeviceGeneration(planAccess.deviceGeneration())
-            || (
-                multiSource
-                    ? (
-                        multiSource->sourceQueue != barrier.sourceQueue
-                        || multiSource->destinationQueue != barrier.destinationQueue
-                    )
-                    : (
-                        resource.initialOwnerQueue != barrier.sourceQueue
-                        || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
-                    )
-            )
+            || source->sourceQueue != barrier.sourceQueue
+            || source->destinationQueue != barrier.destinationQueue
         )
             return false;
 
@@ -277,12 +265,6 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
                     && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
                 )
             )
-                continue;
-            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
-            if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
-                return false;
-            if(!multiSource && !resource.initialOwnerCompletion.valid())
                 continue;
             if(!appendInitialOwnerStateSource(barrier))
                 return false;

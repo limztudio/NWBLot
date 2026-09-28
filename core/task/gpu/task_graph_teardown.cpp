@@ -162,11 +162,6 @@ void GpuTaskGraph::destroyTaskStateSnapshots()noexcept{
 
 void GpuTaskGraph::destroyResourceStateSnapshots()noexcept{
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
-    for(GpuGraphResourceNode& resource : m_resources){
-        if(resource.initialOwnerStateSource)
-            DestroyArenaObjectNoexcept(m_arena, resource.initialOwnerStateSource);
-        resource.initialOwnerStateSource = nullptr;
-    }
     for(GpuTaskGraphInitialOwnerHandoffSourceView& source : m_initialOwnerHandoffSources){
         if(source.stateSource)
             DestroyArenaObjectNoexcept(m_arena, source.stateSource);

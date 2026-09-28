@@ -61,7 +61,7 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     clearTexture.subresources = Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u);
     clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::Float;
     clearTexture.floatValue = Graphics::Color(0.25f, 0.5f, 0.75f, 1.f);
-    // This legacy record keeps descriptor fields verbatim; the byte stream canonicalizes them separately.
+    // The stream omits aspect flags ignored by native color-clear lowering.
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
     ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
@@ -69,27 +69,30 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
     EXPECT_EQ(capture.graphGeneration(), task.generation);
     EXPECT_EQ(capture.planGeneration(), packet.generation);
-    const Graphics::GpuCommandIrBuiltinTaskRecord* const copyRecord = capture.recordAt(0u);
-    ASSERT_NE(copyRecord, nullptr);
-    EXPECT_EQ(copyRecord->opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
-    EXPECT_EQ(copyRecord->task, task);
-    EXPECT_EQ(copyRecord->packet, packet);
-    EXPECT_EQ(copyRecord->queue, queue);
-    EXPECT_EQ(copyRecord->source, source);
-    EXPECT_EQ(copyRecord->destination, destination);
-    EXPECT_EQ(copyRecord->sourceOffsetBytes, 16u);
-    EXPECT_EQ(copyRecord->destinationOffsetBytes, 32u);
-    EXPECT_EQ(copyRecord->dataSizeBytes, 64u);
+    Graphics::GpuCommandIrStreamReader captureReader(capture.commandBytes());
+    Graphics::GpuCommandIrBuiltinTaskRecord copyRecord;
+    ASSERT_EQ(captureReader.next(copyRecord), Graphics::GpuCommandIrStreamReadStatus::Record);
+    EXPECT_EQ(copyRecord.opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
+    EXPECT_EQ(copyRecord.task, task);
+    EXPECT_EQ(copyRecord.packet, packet);
+    EXPECT_EQ(copyRecord.queue, queue);
+    EXPECT_EQ(copyRecord.source, source);
+    EXPECT_EQ(copyRecord.destination, destination);
+    EXPECT_EQ(copyRecord.sourceOffsetBytes, 16u);
+    EXPECT_EQ(copyRecord.destinationOffsetBytes, 32u);
+    EXPECT_EQ(copyRecord.dataSizeBytes, 64u);
 
-    const Graphics::GpuCommandIrBuiltinTaskRecord* const clearRecord = capture.recordAt(1u);
-    ASSERT_NE(clearRecord, nullptr);
-    EXPECT_EQ(clearRecord->opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(clearRecord->destination, destination);
-    EXPECT_EQ(clearRecord->destinationSubresources, clearTexture.subresources);
-    EXPECT_EQ(clearRecord->clearTextureValueType, clearTexture.valueType);
-    EXPECT_EQ(clearRecord->floatClearValue, clearTexture.floatValue);
-    EXPECT_TRUE(clearRecord->clearDepth);
-    EXPECT_TRUE(clearRecord->clearStencil);
+    Graphics::GpuCommandIrBuiltinTaskRecord clearRecord;
+    ASSERT_EQ(captureReader.next(clearRecord), Graphics::GpuCommandIrStreamReadStatus::Record);
+    EXPECT_EQ(clearRecord.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
+    EXPECT_EQ(clearRecord.destination, destination);
+    EXPECT_EQ(clearRecord.destinationSubresources, clearTexture.subresources);
+    EXPECT_EQ(clearRecord.clearTextureValueType, clearTexture.valueType);
+    EXPECT_EQ(clearRecord.floatClearValue, clearTexture.floatValue);
+    EXPECT_FALSE(clearRecord.clearDepth);
+    EXPECT_FALSE(clearRecord.clearStencil);
+    EXPECT_EQ(captureReader.next(clearRecord), Graphics::GpuCommandIrStreamReadStatus::End);
+    EXPECT_TRUE(captureReader.validation().valid());
 
     {
         const BinaryByteView capturedBytes = capture.commandBytes();
@@ -145,7 +148,6 @@ TEST(GpuCommandIrCapture, RetainsBuiltInRecordsForOneGraphAndPlanGeneration){
     EXPECT_EQ(capture.recordCount(), 0u);
     EXPECT_EQ(capture.graphGeneration(), 0u);
     EXPECT_EQ(capture.planGeneration(), 0u);
-    EXPECT_EQ(capture.recordAt(0u), nullptr);
     const BinaryByteView resetBytes = capture.commandBytes();
     usize resetCursor = 0u;
     Graphics::GpuCommandIrStreamHeader resetHeader;
@@ -179,7 +181,7 @@ TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){
     EXPECT_EQ(capture.recordingAttemptGeneration(), 42u);
 }
 
-TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanIdentityStreams){
+TEST(GpuCommandIrCapture, EncodesRectUIntTextureClearAndRejectsEarlierStreamVersions){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     Graphics::GpuClearTextureRectUIntTaskDesc clear;
@@ -196,13 +198,14 @@ TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanI
     ));
 
     ASSERT_EQ(capture.recordCount(), 1u);
-    const Graphics::GpuCommandIrBuiltinTaskRecord* const captured = capture.recordAt(0u);
-    ASSERT_NE(captured, nullptr);
-    EXPECT_EQ(captured->opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
-    EXPECT_EQ(captured->destination, s_CommandIrDestination);
-    EXPECT_EQ(captured->destinationSubresources, clear.subresources);
-    EXPECT_EQ(captured->clearRect, clear.rect);
-    EXPECT_EQ(captured->uintClearValue, clear.uintValue);
+    Graphics::GpuCommandIrStreamReader capturedReader(capture.commandBytes());
+    Graphics::GpuCommandIrBuiltinTaskRecord captured;
+    ASSERT_EQ(capturedReader.next(captured), Graphics::GpuCommandIrStreamReadStatus::Record);
+    EXPECT_EQ(captured.opcode, Graphics::GpuCommandIrOpcode::ClearTextureRectUInt);
+    EXPECT_EQ(captured.destination, s_CommandIrDestination);
+    EXPECT_EQ(captured.destinationSubresources, clear.subresources);
+    EXPECT_EQ(captured.clearRect, clear.rect);
+    EXPECT_EQ(captured.uintClearValue, clear.uintValue);
 
     const BinaryByteView bytes = capture.commandBytes();
     usize cursor = 0u;
@@ -250,7 +253,7 @@ TEST(GpuCommandIrCapture, EncodesVersionedRectUIntTextureClearAndRejectsPrePlanI
     WriteCommandIrPod(
         downgradedRectBytes,
         offsetof(Graphics::GpuCommandIrStreamHeader, version),
-        static_cast<u16>(Graphics::s_GpuCommandIrStreamFirstSupportedVersion - 1u)
+        static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion - 1u)
     );
     Graphics::GpuCommandIrStreamReader downgradedRectReader(BinaryByteView{
         downgradedRectBytes.data(),

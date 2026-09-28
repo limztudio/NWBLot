@@ -295,7 +295,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
         testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original
     ));
-    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
+    Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
     ASSERT_EQ(header.queueAssignmentCount, 0u);
     ASSERT_EQ(header.compiledTaskCount, 0u);
@@ -304,9 +304,9 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
     ASSERT_EQ(header.packetSubmissionStatisticsCount, 3u);
     const usize queueOffset = sizeof(header) + header.nodeCount * sizeof(Telemetry::EncodedFrameGraphNode)
-        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics)
     ;
-    const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6);
+    const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
     ASSERT_LE(packetOffset + 3u * sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
@@ -327,8 +327,8 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), s_ExpectedDualCount));
 
     malformed = original;
-    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 queue;
-    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 nextQueue;
+    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics queue;
+    Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics nextQueue;
     NWB_MEMCPY(&queue, sizeof(queue), original.data() + queueOffset, sizeof(queue));
     NWB_MEMCPY(&nextQueue, sizeof(nextQueue), original.data() + queueOffset + sizeof(queue), sizeof(nextQueue));
     NWB_MEMCPY(malformed.data() + queueOffset, malformed.size() - queueOffset, &nextQueue, sizeof(nextQueue));

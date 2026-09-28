@@ -323,12 +323,6 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
 
     const usize queueFamilyIndexCount = queueAdmission ? queueAdmission->queueFamilyIndexCount : 0u;
     const bool hasInitialOwnerHandoff =
-        desc.initialOwnerReleaseDestinationQueue.valid()
-        || desc.initialOwnerCompletion.valid()
-        || desc.initialOwnerMinimumCompletionToken.valid()
-        || desc.initialOwnerStateSource != nullptr
-    ;
-    const bool hasMultiInitialOwnerHandoff =
         desc.initialOwnerHandoffSources != nullptr
         || desc.initialOwnerHandoffSourceCount != 0u
     ;
@@ -374,15 +368,15 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             )
         )
         || (
-            hasMultiInitialOwnerHandoff
+            hasInitialOwnerHandoff
             && (
                 (
                     desc.type != GpuGraphResourceType::Texture
                     && desc.type != GpuGraphResourceType::Buffer
+                    && desc.type != GpuGraphResourceType::AccelStruct
                 )
                 || !desc.initialOwnerHandoffSources
                 || desc.initialOwnerHandoffSourceCount == 0u
-                || hasInitialOwnerHandoff
                 || desc.initialOwnerQueue.valid()
                 || desc.initialState == ResourceStates::Unknown
                 || desc.queueSharing != ResourceQueueSharing::Exclusive
@@ -396,29 +390,11 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
             && desc.type != GpuGraphResourceType::Buffer
             && desc.type != GpuGraphResourceType::AccelStruct
         )
-        || (
-            hasInitialOwnerHandoff
-            && (
-                !desc.initialOwnerQueue.valid()
-                || !desc.initialOwnerReleaseDestinationQueue.valid()
-                || desc.initialOwnerReleaseDestinationQueue == desc.initialOwnerQueue
-                || !desc.initialOwnerCompletion.valid()
-                || !validExternalCompletion(desc.initialOwnerCompletion)
-                || !desc.initialOwnerMinimumCompletionToken.valid()
-                || !desc.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
-                    desc.initialOwnerQueue.index,
-                    desc.initialOwnerQueue.deviceGeneration
-                )
-                || !desc.initialOwnerStateSource
-                || !desc.initialOwnerStateSource->valid()
-                || desc.initialState == ResourceStates::Unknown
-            )
-        )
         || m_resources.size() >= Limit<u32>::s_Max
     )
         return {};
 
-    if(hasMultiInitialOwnerHandoff){
+    if(hasInitialOwnerHandoff){
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
             const GpuGraphInitialOwnerHandoffSourceDesc& source = desc.initialOwnerHandoffSources[sourceIndex];
             if(
@@ -427,6 +403,13 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                     && !source.range.textureSubresources.hasExtent()
                 )
                 || (desc.type == GpuGraphResourceType::Buffer && !source.range.bufferRange.hasExtent())
+                || (
+                    desc.type == GpuGraphResourceType::AccelStruct
+                    && (
+                        source.range.textureSubresources != s_AllSubresources
+                        || source.range.bufferRange != s_EntireBuffer
+                    )
+                )
                 || !source.sourceQueue.valid()
                 || !source.destinationQueue.valid()
                 || !source.completion.valid()
@@ -454,7 +437,8 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                     return {};
                 const bool overlaps = desc.type == GpuGraphResourceType::Texture
                     ? source.range.textureSubresources.overlaps(previousSource.range.textureSubresources)
-                    : source.range.bufferRange.overlaps(previousSource.range.bufferRange)
+                    : desc.type == GpuGraphResourceType::AccelStruct
+                        || source.range.bufferRange.overlaps(previousSource.range.bufferRange)
                 ;
                 if(overlaps)
                     return {};
@@ -462,20 +446,10 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
         }
     }
 
-    // Initial-owner imports freeze the valid producer snapshot while the resource is declared, so later recording
-    // never depends on producer-owned storage or a state source that could not become usable after publication.
-    GlobalUniquePtr<CommandListResourceStateHandoff> initialOwnerStateSnapshot;
-    if(desc.initialOwnerStateSource){
-        initialOwnerStateSnapshot = MakeGlobalUnique<CommandListResourceStateHandoff>(m_arena, m_arena);
-        if(!initialOwnerStateSnapshot)
-            return {};
-        if(!initialOwnerStateSnapshot->copyFrom(*desc.initialOwnerStateSource))
-            return {};
-    }
-
+    // Freeze producer snapshots at declaration so recording never depends on producer-owned storage.
     const usize initialOwnerHandoffSourceOffset = m_initialOwnerHandoffSources.size();
     Optional<GraphicsVector<GlobalUniquePtr<CommandListResourceStateHandoff>>> initialOwnerHandoffStateSnapshots;
-    if(hasMultiInitialOwnerHandoff){
+    if(hasInitialOwnerHandoff){
         auto& snapshots = initialOwnerHandoffStateSnapshots.emplace(m_arena);
         snapshots.reserve(desc.initialOwnerHandoffSourceCount);
         for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
@@ -546,12 +520,8 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     resource.externalFinalState = desc.externalFinalState;
     resource.externalFinalReleaseDestinationQueue = desc.externalFinalReleaseDestinationQueue;
     resource.initialOwnerQueue = desc.initialOwnerQueue;
-    resource.initialOwnerReleaseDestinationQueue = desc.initialOwnerReleaseDestinationQueue;
-    resource.initialOwnerCompletion = desc.initialOwnerCompletion;
-    resource.initialOwnerMinimumCompletionToken = desc.initialOwnerMinimumCompletionToken;
     resource.initialAvailabilityCompletion = desc.initialAvailabilityCompletion;
     resource.directConsumerQueue = desc.directConsumerQueue;
-    resource.initialOwnerStateSource = initialOwnerStateSnapshot.get();
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
     resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);
     resource.queueSharing = desc.queueSharing;
@@ -587,7 +557,6 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
                 return {};
         }
     }
-    initialOwnerStateSnapshot.release();
     if(initialOwnerHandoffStateSnapshots){
         for(GlobalUniquePtr<CommandListResourceStateHandoff>& snapshot : *initialOwnerHandoffStateSnapshots)
             snapshot.release();

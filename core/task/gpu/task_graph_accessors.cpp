@@ -96,10 +96,6 @@ GpuTaskGraphResourceView GpuTaskGraph::resourceAt(const usize index)const{
         .externalFinalState = resource.externalFinalState,
         .externalFinalReleaseDestinationQueue = resource.externalFinalReleaseDestinationQueue,
         .initialOwnerQueue = resource.initialOwnerQueue,
-        .initialOwnerReleaseDestinationQueue = resource.initialOwnerReleaseDestinationQueue,
-        .initialOwnerCompletion = resource.initialOwnerCompletion,
-        .initialOwnerMinimumCompletionToken = resource.initialOwnerMinimumCompletionToken,
-        .initialOwnerStateSource = resource.initialOwnerStateSource,
         .initialOwnerHandoffSources = resource.initialOwnerHandoffSourceCount != 0u
             ? m_initialOwnerHandoffSources.data() + resource.initialOwnerHandoffSourceOffset
             : nullptr,

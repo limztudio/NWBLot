@@ -47,8 +47,6 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
     const GpuSubmissionPacketRange& range,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
     const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
     const usize taskTimingTicketCount,
     GpuGraphSubmissionTransaction& transaction,
@@ -99,16 +97,9 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             artifactOperation
         )
         || !transaction.validFor(planAccess)
+        || !GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(declarationAccess, planAccess, range)
         || (taskTimingTicketCount != 0u && !taskTimingTickets)
         || (taskSubmissionHookCount != 0u && !taskSubmissionHooks)
-        || !GpuPacketRuntimeDetail::ValidateExternalCompletionBindings(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            externalCompletionTokens,
-            externalCompletionTokenCount
-        )
         || !__hidden_gpu_packet_runtime_submission_tasks::ValidateTaskAcceptedCallbacks(
             declarationAccess,
             planAccess,
@@ -272,8 +263,6 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
             recordedGraph,
             artifactOperation,
             packet,
-            externalCompletionTokens,
-            externalCompletionTokenCount,
             transaction,
             scratchArena,
             resolvedTimingTickets.data(),

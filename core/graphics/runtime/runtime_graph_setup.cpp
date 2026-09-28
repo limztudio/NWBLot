@@ -377,7 +377,7 @@ GpuTaskSchedulingHint SetupUploadGraphScheduling(
 }
 
 ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask declaredInitialState)noexcept{
-    // Unknown is a valid legacy descriptor state. The graph still needs a concrete post-write state
+    // Uploads with an Unknown descriptor state publish the concrete CopyDest post-write state.
     return declaredInitialState == ResourceStates::Unknown
         ? ResourceStates::CopyDest
         : declaredInitialState

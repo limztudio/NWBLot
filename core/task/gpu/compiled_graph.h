@@ -29,7 +29,6 @@ class GpuNativePacketRecorder;
 class GpuRecordedGraph;
 class GpuTaskScheduler;
 class GpuTaskGraphExternalResourceHandoffSnapshot;
-struct GpuTaskGraphExternalCompletionToken;
 struct GpuTaskGraphRuntimeStatistics;
 
 
@@ -326,8 +325,7 @@ struct GpuTaskGraphCompileStatistics{
     usize packetizationDecisionCounts[s_PacketizationDecisionCount] = {};
     // Sanitized caller-measured graph declaration/build wall time. totalSeconds covers the core compiler only.
     f64 declarationSeconds = 0.0;
-    // analysisSeconds remains the backward-compatible umbrella duration. The detail buckets measure disjoint named
-    // analysis passes, but unclassified scaffolding and timing overhead mean they need not sum to analysisSeconds.
+    // Total analysis wall time includes the named passes below plus scaffolding and timing overhead.
     f64 analysisSeconds = 0.0;
     f64 validationSeconds = 0.0;
     f64 dependencyAnalysisSeconds = 0.0;
@@ -406,7 +404,6 @@ class GpuCompiledGraph final : NoCopy{
     friend class GpuTaskGraphQueueAssignmentTelemetryTracker;
     friend class GpuTaskScheduler;
     friend class GpuTaskGraphExternalResourceHandoffSnapshot;
-    friend struct GpuTaskGraphExternalCompletionToken;
 
 private:
     static constexpr u32 s_PlanAccessWriterBit = 1u << 31u;

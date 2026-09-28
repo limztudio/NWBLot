@@ -145,10 +145,7 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
         fail(GpuCommandIrStreamValidationError::InvalidMagic, 0u, Limit<u64>::s_Max);
         return;
     }
-    if(
-        prefix.version < s_GpuCommandIrStreamFirstSupportedVersion
-        || prefix.version > s_GpuCommandIrStreamVersion
-    ){
+    if(prefix.version != s_GpuCommandIrStreamVersion){
         fail(GpuCommandIrStreamValidationError::UnsupportedVersion, 0u, Limit<u64>::s_Max);
         return;
     }
@@ -198,7 +195,6 @@ GpuCommandIrStreamReader::GpuCommandIrStreamReader(const BinaryByteView bytes)no
 
     m_cursor = cursor;
     m_payloadEnd = m_bytes.size();
-    m_streamVersion = header.version;
     m_graphGeneration = header.graphGeneration;
     m_planGeneration = header.planGeneration;
     m_recordCount = header.recordCount;
@@ -256,10 +252,6 @@ GpuCommandIrStreamReadStatus::Enum GpuCommandIrStreamReader::next(
         expectedByteSize = sizeof(GpuCommandIrClearTextureRecord);
         break;
     case GpuCommandIrWireOpcode::ClearTextureRectUInt:
-        if(m_streamVersion < 2u){
-            fail(GpuCommandIrStreamValidationError::UnsupportedOpcode, recordOffset, m_nextRecordIndex);
-            return GpuCommandIrStreamReadStatus::Error;
-        }
         expectedByteSize = sizeof(GpuCommandIrClearTextureRectUIntRecord);
         break;
     default:

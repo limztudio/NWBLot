@@ -381,10 +381,6 @@ TEST(EcsGraphics, FrameGraphRegistryRecordsExactPacketSubmissionStatistics){
         event->payload.size(),
         payload
     ));
-    EXPECT_EQ(
-        payload.wireVersion,
-        NWB::Core::Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion
-    );
     EXPECT_TRUE(payload.packetSubmissionStatisticsPresent);
     ASSERT_EQ(payload.packetSubmissionStatistics.size(), 1u);
     EXPECT_EQ(payload.packetSubmissionStatistics[0u].ownerNodeIndex, 0u);

@@ -5,7 +5,6 @@
 #include "telemetry_test_helpers.h"
 #include <gtest/gtest.h>
 #include "frame_graph_test_helpers.h"
-#include "frame_graph_wire_test_helpers.h"
 #include <logger/telemetry/ingest.h>
 
 
@@ -568,7 +567,7 @@ TEST(Telemetry, TelemetryReportPreservesExactPacketSubmissionStatistics){
     EXPECT_TRUE(ContainsText(dot, "runtime_packet_submission_count=3"));
 }
 
-TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromLegacyUnknown){
+TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsentStatistics){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
@@ -603,120 +602,60 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromLegac
     EXPECT_TRUE(ContainsText(exactJson, "\"packetSubmissions\": []"));
     EXPECT_TRUE(ContainsText(exactDot, "runtime_packet_submission_count=0"));
 
-    Telemetry::Recorder legacyRecorder(testArena.arena);
-    legacyRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(Telemetry::RecordFrameGraph(legacyRecorder, 59u, nodes, edges, 19u));
-    Log::TelemetryReport legacyReport(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, legacyRecorder.view(), legacyReport));
-    const AStringView legacyJson(legacyReport.json.data(), legacyReport.json.size());
-    const AStringView legacyDot(legacyReport.graph.data(), legacyReport.graph.size());
-    EXPECT_TRUE(ContainsText(legacyJson, "\"packetSubmissions\": null"));
-    EXPECT_TRUE(ContainsText(legacyDot, "runtime_packet_submission_count=\"unknown\""));
+    Telemetry::Recorder absentRecorder(testArena.arena);
+    absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, 59u, nodes, edges, 19u));
+    Log::TelemetryReport absentReport(testArena.arena);
+    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, absentRecorder.view(), absentReport));
+    const AStringView absentJson(absentReport.json.data(), absentReport.json.size());
+    const AStringView absentDot(absentReport.graph.data(), absentReport.graph.size());
+    EXPECT_TRUE(ContainsText(absentJson, "\"packetSubmissions\": null"));
+    EXPECT_TRUE(ContainsText(absentDot, "runtime_packet_submission_count=\"unknown\""));
 }
 
-TEST(Telemetry, TelemetryReportMarksV4RecoverySubmissionCountUnknown){
+TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
-
-    Telemetry::TelemetryBytes currentPayload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, currentPayload));
-    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
-    ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(
-        currentPayload,
-        Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion,
-        legacyPayload
-    ));
+    BuildTestFrameGraph(testArena.arena, nodes, edges);
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, payload));
 
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(recorder.recordBinary(
-        Telemetry::EventKind::FrameGraphFrame,
-        55u,
-        legacyPayload.data(),
-        legacyPayload.size(),
-        15u
-    ));
+    ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 55u, nodes, edges, 15u));
+
+    const u16 unsupportedVersions[] = {
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u,
+        static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u),
+        Limit<u16>::s_Max,
+    };
+    Telemetry::EncodedFrameGraphPayloadHeader header;
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    for(const u16 version : unsupportedVersions){
+        SCOPED_TRACE(version);
+        header.version = version;
+        NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+        ASSERT_TRUE(recorder.recordBinary(
+            Telemetry::EventKind::FrameGraphFrame,
+            55u,
+            payload.data(),
+            payload.size(),
+            15u
+        ));
+    }
 
     Log::TelemetryReport report(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-    const AStringView json(report.json.data(), report.json.size());
-    EXPECT_TRUE(ContainsText(
-        json,
-        "\"resourceVersionCount\": null, \"resourceVersionEdgeCount\": null"
-    ));
-    EXPECT_TRUE(ContainsText(
-        json,
-        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null, "
-        "\"submissionSeconds\": 0.021}"
-    ));
-    EXPECT_TRUE(ContainsText(json, "\"physicalQueues\": null"));
-    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
-
-    const AStringView dot(report.graph.data(), report.graph.size());
-    EXPECT_TRUE(ContainsText(dot, "runtime_physical_queue_count=\"unknown\""));
+    EXPECT_EQ(report.summary.eventCount, LengthOf(unsupportedVersions) + 1u);
+    EXPECT_EQ(report.summary.parseFailureCount, LengthOf(unsupportedVersions));
+    EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
+    EXPECT_EQ(report.summary.frameGraphNodeCount, nodes.size());
+    EXPECT_EQ(report.summary.frameGraphEdgeCount, edges.size());
+    EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
 }
 
-TEST(Telemetry, TelemetryReportMarksV5RecoverySubmissionCountsUnknown){
-    TestArena testArena;
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    BuildTestRuntimeFrameGraph(testArena.arena, nodes, edges);
-    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
-    BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
-
-    Telemetry::TelemetryBytes currentPayload(testArena.arena);
-    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
-        testArena.arena,
-        56u,
-        nodes,
-        edges,
-        records,
-        currentPayload
-    ));
-    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
-    ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(
-        currentPayload,
-        Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion,
-        legacyPayload
-    ));
-
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
-    ASSERT_TRUE(recorder.recordBinary(
-        Telemetry::EventKind::FrameGraphFrame,
-        56u,
-        legacyPayload.data(),
-        legacyPayload.size(),
-        16u
-    ));
-
-    Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-    const AStringView json(report.json.data(), report.json.size());
-    const usize firstPassOffset = json.find("\"label\": \"GBuffer Pass\"");
-    const usize resourceOffset = json.find("\"label\": \"Albedo Texture\"");
-    ASSERT_NE(firstPassOffset, AStringView::npos);
-    ASSERT_NE(resourceOffset, AStringView::npos);
-    const AStringView firstPass = json.substr(firstPassOffset, resourceOffset - firstPassOffset);
-    EXPECT_TRUE(ContainsText(
-        firstPass,
-        "\"acceptedFrontierSubmissionCount\": 28, \"recoverySubmissionCount\": null"
-    ));
-    EXPECT_TRUE(ContainsText(
-        firstPass,
-        "\"acceptedFrontierSubmissionCount\": 18, \"recoverySubmissionCount\": null"
-    ));
-    EXPECT_TRUE(ContainsText(
-        firstPass,
-        "\"acceptedFrontierSubmissionCount\": 10, \"recoverySubmissionCount\": null"
-    ));
-    EXPECT_TRUE(ContainsText(firstPass, "\"physicalQueues\": [{"));
-    EXPECT_FALSE(ContainsText(json, "\"recoverySubmissionCount\": 0"));
-}
-
-TEST(Telemetry, TelemetryReportMarksLegacyRuntimeStatisticsAbsent){
+TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
     recorder.setCaptureOptions(Telemetry::CaptureOptions::All());

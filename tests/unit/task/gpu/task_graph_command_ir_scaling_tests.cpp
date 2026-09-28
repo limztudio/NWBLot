@@ -63,14 +63,12 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
     Graphics::GpuCommandIrBuiltinTaskRecord decoded;
     for(usize index = 0u; index < count; ++index){
         ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
-        const auto* inspected = capture.recordAt(index);
-        ASSERT_NE(inspected, nullptr);
-        EXPECT_EQ(decoded.task, inspected->task);
+        EXPECT_EQ(decoded.task.generation, s_CommandIrTask.generation);
+        EXPECT_EQ(decoded.packet.generation, s_CommandIrPacket.generation);
         EXPECT_EQ(decoded.task.index, index);
         EXPECT_EQ(decoded.packet.index, index / 64u);
         EXPECT_EQ(decoded.queue, s_CommandIrQueue);
         EXPECT_EQ(decoded.destination, s_CommandIrDestination);
-        EXPECT_EQ(decoded.opcode, inspected->opcode);
         if(index % 2u == 0u){
             EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
             EXPECT_EQ(decoded.source, s_CommandIrSource);
@@ -85,7 +83,6 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
     }
     EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(reader.validation().valid());
-    EXPECT_EQ(capture.recordAt(count), nullptr);
 }
 
 void BenchmarkCapture(const usize count){

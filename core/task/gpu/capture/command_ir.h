@@ -21,7 +21,6 @@ NWB_CORE_BEGIN
 
 // Command capture is opt-in; native recording is the default.
 namespace GpuCommandIrOpcode{
-    // Original in-memory capture enum; keep width and ordinals stable.
     static constexpr u8 kGpuCommandIrOpcodeCopyBufferBase = 0u;
     enum Enum : u8{
         CopyBuffer = kGpuCommandIrOpcodeCopyBufferBase,
@@ -61,7 +60,6 @@ namespace GpuCommandIrWireOpcode{
 
 // Same-host tooling format; magic/version reject incompatible layouts.
 inline constexpr u32 s_GpuCommandIrStreamMagic = 0x4E574349u; // NWCI
-inline constexpr u16 s_GpuCommandIrStreamFirstSupportedVersion = 3u;
 inline constexpr u16 s_GpuCommandIrStreamVersion = 3u;
 
 #pragma pack(push, 1)
@@ -71,7 +69,7 @@ struct GpuCommandIrStreamHeaderPrefix{
     u16 reserved = 0u;
 };
 
-// v3 separates graph handles from packet handles; reader rejects v1/v2.
+// Graph and packet handles use distinct generations.
 struct GpuCommandIrStreamHeader{
     u32 magic = s_GpuCommandIrStreamMagic;
     u16 version = s_GpuCommandIrStreamVersion;
@@ -84,11 +82,11 @@ struct GpuCommandIrStreamHeader{
 
 struct GpuCommandIrHeader{
     GpuCommandIrWireOpcode::Enum opcode = GpuCommandIrWireOpcode::CopyBuffer;
-    // Total record bytes including this header. Every v1 opcode has one fixed-size payload.
+    // Total record bytes including this header. Each opcode has one fixed-size payload.
     u16 byteSize = 0u;
 };
 
-// v3 records target the header generations; queue generation stays command-local.
+// Records target the header generations; queue generation stays command-local.
 struct GpuCommandIrRecordContext{
     u32 taskIndex = Limit<u32>::s_Max;
     u32 packetIndex = Limit<u32>::s_Max;
@@ -192,7 +190,6 @@ struct GpuCommandIrClearTextureRecord{
     u8 reserved = 0u;
 };
 
-// v2 adds a typed record; preserves v1 layouts for older tooling.
 struct GpuCommandIrClearTextureRectUIntRecord{
     GpuCommandIrHeader header;
     GpuCommandIrRecordContext context;
@@ -339,7 +336,6 @@ private:
     GpuCommandIrStreamValidationResult m_validation;
     usize m_cursor = 0u;
     usize m_payloadEnd = 0u;
-    u16 m_streamVersion = 0u;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;
     u64 m_recordCount = 0u;
@@ -350,7 +346,7 @@ private:
 [[nodiscard]] GpuCommandIrStreamValidationResult ValidateGpuCommandIrStream(BinaryByteView bytes)noexcept;
 
 
-// Replay is opt-in; v1 streams hold task bodies only, lowered into fresh packets.
+// Replay is opt-in; streams hold task bodies lowered into fresh packets.
 namespace GpuCommandIrReplayError{
     enum Enum : u8{
         None,
@@ -437,7 +433,7 @@ struct GpuCommandIrReplayResult{
 class GpuCommandIrCapture final : NoCopy{
 public:
     explicit GpuCommandIrCapture(GraphicsArena& arena)
-        : m_records(arena)
+        : m_recordEndOffsets(arena)
         , m_commandBytes(arena)
     {
         m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
@@ -448,14 +444,13 @@ public:
 public:
     void reset()noexcept;
 
-    [[nodiscard]] usize recordCount()const noexcept{ return m_records.size(); }
+    [[nodiscard]] usize recordCount()const noexcept{ return m_recordEndOffsets.size(); }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
     [[nodiscard]] u64 recordingAttemptGeneration()const noexcept{ return m_recordingAttemptGeneration; }
     // A non-empty capture belongs to exactly one native recording attempt, even when the graph and compiler plan
     // remain unchanged across a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
-    [[nodiscard]] const GpuCommandIrBuiltinTaskRecord* recordAt(usize index)const noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const noexcept{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
     }
@@ -508,12 +503,11 @@ public:
 private:
     [[nodiscard]] bool append(const GpuCommandIrBuiltinTaskRecord& record);
     [[nodiscard]] bool appendCommandBytes(const GpuCommandIrBuiltinTaskRecord& record);
-    [[nodiscard]] usize byteOffsetAfterRecordCount(usize recordCount)const noexcept;
     void writeStreamHeader()noexcept;
 
 
 private:
-    GraphicsVector<GpuCommandIrBuiltinTaskRecord> m_records;
+    GraphicsVector<usize> m_recordEndOffsets;
     GraphicsBytes m_commandBytes;
     u64 m_graphGeneration = 0u;
     u64 m_planGeneration = 0u;

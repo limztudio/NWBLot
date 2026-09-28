@@ -390,7 +390,7 @@ void AppendTimedGraphDot(
             node.runtimeStatistics,
             physicalQueueRuntimeStatisticsCount,
             packetSubmissionStatisticsCount,
-            graph.physicalQueueRuntimeStatisticsPresent && physicalQueueRuntimeStatisticsCount != 0u,
+            physicalQueueRuntimeStatisticsCount != 0u,
             graph.packetSubmissionStatisticsPresent
         );
         out += "];\n";

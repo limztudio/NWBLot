@@ -184,7 +184,7 @@ static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum
 
 
 void GpuCommandIrCapture::reset()noexcept{
-    static_assert(noexcept(m_records.clear()));
+    static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     NWB_FATAL_ASSERT_MSG(
         m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader),
@@ -194,7 +194,7 @@ void GpuCommandIrCapture::reset()noexcept{
         TerminateInvariant();
 
     // Shrinking resize keeps capacity without allocating.
-    m_records.clear();
+    m_recordEndOffsets.clear();
     m_commandBytes.resize(sizeof(GpuCommandIrStreamHeader));
     m_graphGeneration = 0u;
     m_planGeneration = 0u;
@@ -205,35 +205,27 @@ void GpuCommandIrCapture::reset()noexcept{
 bool GpuCommandIrCapture::beginRecordingAttempt(const u64 recordingAttemptGeneration)noexcept{
     if(recordingAttemptGeneration == 0u)
         return false;
-    if(!m_records.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
+    if(!m_recordEndOffsets.empty() && m_recordingAttemptGeneration != recordingAttemptGeneration)
         return false;
     m_recordingAttemptGeneration = recordingAttemptGeneration;
     return true;
 }
 
-const GpuCommandIrBuiltinTaskRecord* GpuCommandIrCapture::recordAt(const usize index)const noexcept{
-    return index < m_records.size() ? &m_records[index] : nullptr;
-}
-
 void GpuCommandIrCapture::rollback(const usize recordCount)noexcept{
-    if(recordCount > m_records.size())
+    if(recordCount > m_recordEndOffsets.size())
         return;
 
-    const usize byteOffset = byteOffsetAfterRecordCount(recordCount);
-    if(byteOffset == Limit<usize>::s_Max){
-        NWB_ASSERT_MSG(false, NWB_TEXT("Command IR capture stream lost a record boundary"));
-        return;
-    }
-
-    static_assert(IsNothrowDestructible_V<GpuCommandIrBuiltinTaskRecord>);
+    const usize byteOffset = recordCount == 0u ? sizeof(GpuCommandIrStreamHeader) : m_recordEndOffsets[recordCount - 1u];
+    static_assert(IsNothrowDestructible_V<usize>);
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
     // Both resizes only shrink, so they cannot allocate.
-    m_records.resize(recordCount);
+    m_recordEndOffsets.resize(recordCount);
     m_commandBytes.resize(byteOffset);
-    m_graphGeneration = m_records.empty() ? 0u : m_records[0u].task.generation;
-    m_planGeneration = m_records.empty() ? 0u : m_records[0u].packet.generation;
-    if(m_records.empty())
+    if(recordCount == 0u){
+        m_graphGeneration = 0u;
+        m_planGeneration = 0u;
         m_recordingAttemptGeneration = 0u;
+    }
     writeStreamHeader();
 }
 
@@ -343,8 +335,6 @@ bool GpuCommandIrCapture::captureClearTextureRectUInt(
 }
 
 bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
-    static_assert(IsTriviallyCopyable_V<GpuCommandIrBuiltinTaskRecord>, "Command IR inspection records must stay trivially copyable");
-
     if(!GpuCommandIrDetail::ValidateBuiltinRecord(record))
         return false;
 
@@ -353,16 +343,16 @@ bool GpuCommandIrCapture::append(const GpuCommandIrBuiltinTaskRecord& record){
     if(m_planGeneration != 0u && m_planGeneration != record.packet.generation)
         return false;
 
-    const usize nextRecordCount = m_records.size() + 1u;
-    if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_records, nextRecordCount))
+    const usize nextRecordCount = m_recordEndOffsets.size() + 1u;
+    if(nextRecordCount == 0u || !BinaryDetail::CanStoreValueCount(m_recordEndOffsets, nextRecordCount))
         return false;
 
     // Reserve first so failure leaves both sequences unchanged.
-    ContainerDetail::ReserveGrowingCapacity(m_records, nextRecordCount);
+    ContainerDetail::ReserveGrowingCapacity(m_recordEndOffsets, nextRecordCount);
 
     if(!appendCommandBytes(record))
         return false;
-    m_records.push_back(record);
+    m_recordEndOffsets.push_back(m_commandBytes.size());
 
     if(m_graphGeneration == 0u)
         m_graphGeneration = record.task.generation;
@@ -445,32 +435,12 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
     }
 }
 
-usize GpuCommandIrCapture::byteOffsetAfterRecordCount(const usize recordCount)const noexcept{
-    if(recordCount > m_records.size() || m_commandBytes.size() < sizeof(GpuCommandIrStreamHeader))
-        return Limit<usize>::s_Max;
-
-    const BinaryByteView bytes = commandBytes();
-    usize cursor = sizeof(GpuCommandIrStreamHeader);
-    for(usize recordIndex = 0u; recordIndex < recordCount; ++recordIndex){
-        const usize recordOffset = cursor;
-        GpuCommandIrHeader header;
-        if(
-            !ReadPOD(bytes, cursor, header)
-            || header.byteSize < sizeof(header)
-            || header.byteSize > bytes.size() - recordOffset
-        )
-            return Limit<usize>::s_Max;
-        cursor = recordOffset + header.byteSize;
-    }
-    return cursor;
-}
-
 void GpuCommandIrCapture::writeStreamHeader()noexcept{
     NWB_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
     GpuCommandIrStreamHeader header;
     header.graphGeneration = m_graphGeneration;
     header.planGeneration = m_planGeneration;
-    header.recordCount = static_cast<u64>(m_records.size());
+    header.recordCount = static_cast<u64>(m_recordEndOffsets.size());
     header.payloadBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
     NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
 }

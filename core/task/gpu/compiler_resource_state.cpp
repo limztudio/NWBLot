@@ -244,7 +244,6 @@ namespace GpuTaskGraphCompilerDetail{
                 for(const TrackedResourceStateFragment& fragment : stateFragments){
                     const TrackedCompiledResourceState* const previousState = fragment.state;
                     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
-                    bool usesInitialOwnerOnlyHandoff = false;
                     GpuCompiledBarrierType::Enum initialOwnerAcquireType = GpuCompiledBarrierType::kCount;
                     if(!previousState){
                         if(resource.initialAvailabilityCompletion.valid()){
@@ -252,14 +251,6 @@ namespace GpuTaskGraphCompilerDetail{
                                 .completion = resource.initialAvailabilityCompletion,
                                 .consumer = taskID,
                             });
-                        }
-                        if(
-                            resource.initialOwnerReleaseDestinationQueue.valid()
-                            && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-                        ){
-                            // The descriptor's release destination stays authoritative. Resolve ownership only for
-                            // the exact first-use fragment so an earlier local task use cannot broaden the source.
-                            return false;
                         }
                         if(resource.initialOwnerHandoffSourceCount != 0u){
                             initialOwnerHandoffSource = FindInitialOwnerHandoffSource(
@@ -281,32 +272,13 @@ namespace GpuTaskGraphCompilerDetail{
                         else if(
                             resource.initialOwnerQueue.valid()
                             && resource.initialOwnerQueue != compiledTask->queue
-                        ){
-                            if(
-                                !resource.initialOwnerReleaseDestinationQueue.valid()
-                                || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-                                || !resource.initialOwnerCompletion.valid()
-                                || !resource.initialOwnerStateSource
-                            ){
-                                // Owner-only imports retain the original exact-queue restriction. A different first
-                                // consumer needs all three explicit pieces of an external handoff: fixed destination,
-                                // completion, and exported native state source.
-                                return false;
-                            }
-                            initialOwnerAcquireType = OwnershipAcquireBarrierType(resource.type);
-                            if(initialOwnerAcquireType >= GpuCompiledBarrierType::kCount)
-                                return false;
-                            usesInitialOwnerOnlyHandoff = true;
-                            initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
-                                .completion = resource.initialOwnerCompletion,
-                                .consumer = taskID,
-                            });
-                        }
+                        )
+                            return false;
                     }
                     const ResourceStates::Mask before = previousState ? previousState->state : resource.initialState;
                     const bool hasInitialOwnerStateSeed =
                         !previousState
-                        && (initialOwnerHandoffSource != nullptr || usesInitialOwnerOnlyHandoff)
+                        && initialOwnerHandoffSource != nullptr
                     ;
                     // An initial-owner handoff opens the packet with its immutable producer snapshot, which
                     // materializes the authoritative native starting state. A known graph initial state still
@@ -344,31 +316,6 @@ namespace GpuTaskGraphCompilerDetail{
                             .before = before,
                             .after = before,
                             .sourceQueue = initialOwnerHandoffSource->sourceQueue,
-                            .destinationQueue = compiledTask->queue,
-                            .type = initialOwnerAcquireType,
-                            .isInitialOwnerHandoff = true,
-                        });
-                    }
-                    else if(!previousState && usesInitialOwnerOnlyHandoff){
-                        // This marker imports the descriptor-owned snapshot before normal graph state fragments,
-                        // allowing CommandList::open to emit the paired acquire only for the uncovered range.
-                        if(!AppendCompiledOwnershipTransfer(
-                            plan,
-                            resource,
-                            fragment.range,
-                            GpuTaskId{},
-                            taskID,
-                            resource.initialOwnerQueue,
-                            compiledTask->queue,
-                            GpuOwnershipTransferRoute::ExternalImport
-                        ))
-                            return false;
-                        compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
-                            .resource = use.resource,
-                            .range = fragment.range,
-                            .before = before,
-                            .after = before,
-                            .sourceQueue = resource.initialOwnerQueue,
                             .destinationQueue = compiledTask->queue,
                             .type = initialOwnerAcquireType,
                             .isInitialOwnerHandoff = true,
@@ -514,7 +461,6 @@ namespace GpuTaskGraphCompilerDetail{
             }
 
             NWB_ASSERT(resource.type == GpuGraphResourceType::AccelStruct);
-            NWB_ASSERT(resource.initialOwnerHandoffSourceCount == 0u);
             const usize previousStateIndex = resourceHistory.last(use.resource);
             const TrackedCompiledResourceState* previousState = previousStateIndex != Limit<usize>::s_Max
                 ? &trackedResourceStates[previousStateIndex] : nullptr;
@@ -526,19 +472,17 @@ namespace GpuTaskGraphCompilerDetail{
                     .consumer = taskID,
                 });
             }
-            // An initial-owner handoff opens the packet with its immutable producer snapshot, which materializes
-            // the authoritative native starting state. A known graph initial state still needs an explicit marker
-            // after the acquire: it can differ from that snapshot and can be a no-op transition whose declared
-            // state must survive into the packet snapshot.
-            const bool hasInitialOwnerStateSeed =
-                !previousState
-                && resource.initialOwnerReleaseDestinationQueue.valid()
-                && resource.initialOwnerStateSource != nullptr
-            ;
-            const bool materializesGraphInitialState =
-                !previousState
-                && resource.initialState != ResourceStates::Unknown
-            ;
+            const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSource = nullptr;
+            if(!previousState && resource.initialOwnerHandoffSourceCount != 0u){
+                initialOwnerHandoffSource = FindInitialOwnerHandoffSource(graph, resource, plannedRange, compiledTask->queue);
+                if(!initialOwnerHandoffSource)
+                    return false;
+            }
+            else if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue)
+                return false;
+
+            const bool hasInitialOwnerStateSeed = initialOwnerHandoffSource != nullptr;
+            const bool materializesGraphInitialState = !previousState && resource.initialState != ResourceStates::Unknown;
             const bool requiresExplicitInitialStateSource =
                 !previousState
                 && !hasInitialOwnerStateSeed
@@ -546,56 +490,30 @@ namespace GpuTaskGraphCompilerDetail{
                 && resource.initialState == ResourceStates::Unknown
                 && IsReadAccess(use.access)
             ;
-            if(
-                !previousState
-                && resource.initialOwnerReleaseDestinationQueue.valid()
-                && resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-            ){
-                // A producer that already released ownership has relinquished it even when the source happens to
-                // be this task's broad queue class. Its fixed release destination remains authoritative.
-                return false;
-            }
-            if(!previousState && resource.initialOwnerQueue.valid() && resource.initialOwnerQueue != compiledTask->queue){
-                if(
-                    !resource.initialOwnerReleaseDestinationQueue.valid()
-                    || resource.initialOwnerReleaseDestinationQueue != compiledTask->queue
-                    || !resource.initialOwnerCompletion.valid()
-                    || !resource.initialOwnerStateSource
-                ){
-                    // Owner-only imports retain the original exact-queue restriction. A different first consumer
-                    // needs all three explicit pieces of an external handoff: fixed destination, completion, and
-                    // exported native state source.
-                    return false;
-                }
-                const GpuCompiledBarrierType::Enum acquireType = OwnershipAcquireBarrierType(resource.type);
-                if(acquireType >= GpuCompiledBarrierType::kCount)
-                    return false;
-                // The recorder imports the descriptor-owned state snapshot before prologue lowering. That emits
-                // the native paired acquire (if families differ); this immutable marker also proves the snapshot
-                // and the external completion belong to this first range consumer.
+            if(initialOwnerHandoffSource){
                 if(!AppendCompiledOwnershipTransfer(
                     plan,
                     resource,
-                    use.range,
+                    plannedRange,
                     GpuTaskId{},
                     taskID,
-                    resource.initialOwnerQueue,
+                    initialOwnerHandoffSource->sourceQueue,
                     compiledTask->queue,
                     GpuOwnershipTransferRoute::ExternalImport
                 ))
                     return false;
                 compiledPlan.prologueBarriers.push_back(GpuCompiledBarrier{
                     .resource = use.resource,
-                    .range = use.range,
+                    .range = plannedRange,
                     .before = before,
                     .after = before,
-                    .sourceQueue = resource.initialOwnerQueue,
+                    .sourceQueue = initialOwnerHandoffSource->sourceQueue,
                     .destinationQueue = compiledTask->queue,
-                    .type = acquireType,
+                    .type = GpuCompiledBarrierType::AccelStructOwnershipAcquire,
                     .isInitialOwnerHandoff = true,
                 });
                 initialOwnershipDependencies.push_back(GpuTaskExternalDependencyEdge{
-                    .completion = resource.initialOwnerCompletion,
+                    .completion = initialOwnerHandoffSource->completion,
                     .consumer = taskID,
                 });
             }

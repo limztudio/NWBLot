@@ -395,10 +395,6 @@ const tchar* GraphicsRuntime::getRendererString()const{
     return m_backend->getRendererString();
 }
 
-GraphicsAPI::Enum GraphicsRuntime::getGraphicsAPI()const{
-    return GraphicsBackend::s_Api;
-}
-
 void GraphicsRuntime::reportLiveObjects()const{
     m_backend->reportLiveObjects();
 }

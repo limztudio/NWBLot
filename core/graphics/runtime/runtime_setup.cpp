@@ -225,7 +225,7 @@ bool ValidateBufferSetupUpload(const GraphicsRuntime::BufferSetupDesc& desc){
         );
         return false;
     }
-    // Both the legacy CommandList staging path and the graph-owned upload task lower to VkBufferCopy. The API
+    // CommandList staging and graph-owned upload tasks both lower to VkBufferCopy. The API
     // cannot truthfully report a successful upload for a region Vulkan rejects, so fail before creating either
     // a native command list or a graph packet.
     if((desc.destOffsetBytes & (sizeof(u32) - 1u)) != 0u || (desc.dataSize & (sizeof(u32) - 1u)) != 0u){

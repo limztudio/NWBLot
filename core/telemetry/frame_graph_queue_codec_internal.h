@@ -7,8 +7,6 @@
 
 #include "frame_graph.h"
 
-#include <global/binary.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -25,20 +23,7 @@ namespace FrameGraphQueueCodecDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_LegacyQueueAssignmentRecordBytes = 56u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 [[nodiscard]] EncodedFrameGraphQueueAssignment EncodeQueueAssignment(u32 nodeIndex, const FrameGraphQueueAssignment& assignment)noexcept;
-
-[[nodiscard]] bool ReadQueueAssignment(
-    const BinaryByteView& encoded,
-    usize& cursor,
-    u16 version,
-    EncodedFrameGraphQueueAssignment& outAssignment
-)noexcept;
 
 [[nodiscard]] bool DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded, FrameGraphQueueAssignment& outAssignment)noexcept;
 

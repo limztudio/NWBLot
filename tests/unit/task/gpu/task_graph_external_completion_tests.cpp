@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <core/task/gpu/packet_runtime_internal.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,6 +30,97 @@ namespace __hidden_task_graph_external_completion_tests{
 
 using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
+
+
+TEST(GpuTaskGraph, RejectsSubmissionRangeWithMissingLatePacketCompletionToken){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Name completionIdentity("tests/task_graph/missing_late_packet_completion");
+    const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(completionIdentity)
+            .setMarkerLabel("Late Packet Completion")
+    );
+    ASSERT_TRUE(completion.valid());
+    const Graphics::GpuTaskId first = AddTask(graph, Name("tests/task_graph/token_preflight_first"), "Token Preflight First");
+    ASSERT_TRUE(first.valid());
+    Graphics::GpuTaskSchedulingHint scheduling;
+    scheduling.forceSubmissionBoundary = true;
+    scheduling.allowPacketMerge = false;
+    const Graphics::GpuTaskId second = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/task_graph/token_preflight_second"))
+            .setMarkerLabel("Token Preflight Second")
+            .setScheduling(scheduling)
+            .setDependencies(&first, 1u)
+            .setExternalDependencies(&completion, 1u)
+    );
+    ASSERT_TRUE(second.valid());
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
+    const Graphics::GpuTaskGraphQueueTopology topology{
+        .queues = queues,
+        .queueCount = LengthOf(queues),
+    };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        ASSERT_EQ(views.compiled.packetCount(), 2u);
+        const Graphics::GpuSubmissionPacketRange firstRange = views.compiled.packetRangeForTasks(first, first);
+        const Graphics::GpuSubmissionPacketRange secondRange = views.compiled.packetRangeForTasks(second, second);
+        EXPECT_EQ(views.declarations.externalCompletionToken(completion), nullptr);
+        EXPECT_TRUE(Graphics::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(
+            views.declarations,
+            views.compiled,
+            firstRange
+        ));
+        EXPECT_FALSE(Graphics::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(
+            views.declarations,
+            views.compiled,
+            secondRange
+        ));
+        EXPECT_FALSE(Graphics::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(
+            views.declarations,
+            views.compiled,
+            views.compiled.allPacketRange()
+        ));
+    }
+
+    const Graphics::QueueSubmissionToken token{
+        .value = 17u,
+        .physicalQueueIndex = queues[0u].id.index,
+        .deviceGeneration = queues[0u].id.deviceGeneration,
+        .queue = queues[0u].queueClass,
+    };
+    EXPECT_EQ(graph.importExternalCompletion(
+        Graphics::GpuExternalCompletionDesc{}
+            .setIdentity(completionIdentity)
+            .setMarkerLabel("Bound Late Packet Completion")
+            .setToken(token)
+    ), completion);
+    {
+        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+        const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
+        EXPECT_FALSE(Graphics::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(
+            declarations,
+            compiledPlan,
+            compiledPlan.allPacketRange()
+        ));
+    }
+    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+    {
+        const GpuTaskGraphReadViews views(graph, compiledGraph);
+        ASSERT_TRUE(views.valid());
+        EXPECT_TRUE(Graphics::GpuPacketRuntimeDetail::ValidateExternalDependencyTokens(
+            views.declarations,
+            views.compiled,
+            views.compiled.allPacketRange()
+        ));
+    }
+}
 
 
 TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
@@ -211,31 +304,6 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         invalidTopologyCompiledGraph
     ));
 
-    const Graphics::GpuTaskGraphExternalCompletionToken storedCompletionFallback{
-        .completion = completion,
-        .token = token,
-    };
-    const Graphics::GpuTaskGraphExternalCompletionToken metadataCompletionFallback{
-        .completion = metadataCompletion,
-        .token = token,
-    };
-    {
-        const GpuTaskGraphReadViews views(graph, compiledGraph);
-        ASSERT_TRUE(views.valid());
-        EXPECT_FALSE(storedCompletionFallback.validFallbackFor(
-            graph,
-            views.declarations,
-            compiledGraph,
-            views.compiled
-        ));
-        EXPECT_TRUE(metadataCompletionFallback.validFallbackFor(
-            graph,
-            views.declarations,
-            compiledGraph,
-            views.compiled
-        ));
-    }
-
     u64 metadataFirstRevision = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -311,18 +379,15 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     {
         const GpuTaskGraphReadViews views(graph, compiledGraph);
         ASSERT_TRUE(views.valid());
-        EXPECT_FALSE(storedCompletionFallback.validFallbackFor(
-            graph,
-            views.declarations,
-            compiledGraph,
-            views.compiled
-        ));
-        EXPECT_FALSE(metadataCompletionFallback.validFallbackFor(
-            graph,
-            views.declarations,
-            compiledGraph,
-            views.compiled
-        ));
+        EXPECT_TRUE(views.compiled.validFor(views.declarations));
+        const Graphics::QueueSubmissionToken* const storedToken = views.declarations.externalCompletionToken(completion);
+        const Graphics::QueueSubmissionToken* const upgradedToken = views.declarations.externalCompletionToken(metadataCompletion);
+        ASSERT_NE(storedToken, nullptr);
+        ASSERT_NE(upgradedToken, nullptr);
+        EXPECT_EQ(storedToken->value, token.value);
+        EXPECT_EQ(upgradedToken->value, token.value);
+        EXPECT_TRUE(storedToken->matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration));
+        EXPECT_TRUE(upgradedToken->matchesPhysicalQueue(token.physicalQueueIndex, token.deviceGeneration));
     }
 
     graph.reset();

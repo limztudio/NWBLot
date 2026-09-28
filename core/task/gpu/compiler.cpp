@@ -265,6 +265,7 @@ bool GpuTaskGraphCompiler::compile(
                 (
                     resource.type != GpuGraphResourceType::Texture
                     && resource.type != GpuGraphResourceType::Buffer
+                    && resource.type != GpuGraphResourceType::AccelStruct
                 )
                 || !resource.initialOwnerHandoffSources
                 || ResourceUsesConcurrentQueueSharing(resource, topology)
@@ -310,36 +311,11 @@ bool GpuTaskGraphCompiler::compile(
         }
         if(!resource.initialOwnerQueue.valid())
             continue;
-        const bool hasInitialOwnerHandoff = resource.initialOwnerReleaseDestinationQueue.valid();
-        const GpuPhysicalQueueInfo* const initialOwnerQueueInfo = FindCompiledQueueInfo(
-            compiledPlan,
-            resource.initialOwnerQueue
-        );
         if(
             ResourceUsesConcurrentQueueSharing(resource, topology)
-            || !initialOwnerQueueInfo
-            || (
-                hasInitialOwnerHandoff
-                && (
-                    !FindCompiledQueueInfo(compiledPlan, resource.initialOwnerReleaseDestinationQueue)
-                    || !graph.validExternalCompletion(resource.initialOwnerCompletion)
-                    || !resource.initialOwnerMinimumCompletionToken.valid()
-                    || resource.initialOwnerMinimumCompletionToken.queue != initialOwnerQueueInfo->queueClass
-                    || !resource.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
-                        resource.initialOwnerQueue.index,
-                        resource.initialOwnerQueue.deviceGeneration
-                    )
-                    || !resource.initialOwnerStateSource
-                    || !appendInitialOwnershipCompletionRequirement(
-                        resource.initialOwnerCompletion,
-                        resource.initialOwnerQueue,
-                        resource.initialOwnerMinimumCompletionToken.value
-                    )
-                )
-            )
-        ){
+            || !FindCompiledQueueInfo(compiledPlan, resource.initialOwnerQueue)
+        )
             return false;
-        }
     }
     for(usize completionIndex = 0u; completionIndex < graph.externalCompletionCount(); ++completionIndex){
         const InitialOwnershipCompletionRequirement& requirement =

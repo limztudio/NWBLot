@@ -171,8 +171,7 @@ bool GpuTaskScheduler::submitGraph(
         }
         exceptionScope.setFailedPacket(normalRange.first);
         if(
-            (desc.externalCompletionTokenCount != 0u && !desc.externalCompletionTokens)
-            || (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
+            (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)
             || (desc.taskAcceptedCallbackCount != 0u && !desc.taskAcceptedCallbacks)
             || (desc.taskSubmissionHookCount != 0u && !desc.taskSubmissionHooks)
             || !__hidden_gpu_packet_runtime_execution::ValidateNormalGraphTaskRecordedCallbacks(
@@ -250,8 +249,6 @@ bool GpuTaskScheduler::submitGraph(
         compiledGraph,
         recordedGraph,
         normalRange,
-        desc.externalCompletionTokens,
-        desc.externalCompletionTokenCount,
         desc.taskTimingTickets,
         desc.taskTimingTicketCount,
         transaction,
@@ -571,8 +568,6 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
         compiledGraph,
         recordedGraph,
         planAccess.packetRangeForTasks(task, task),
-        nullptr,
-        0u,
         nullptr,
         0u,
         transaction,

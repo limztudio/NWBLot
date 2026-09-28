@@ -29,7 +29,7 @@ namespace __hidden_gpu_task_graph_imports{
     const GpuTaskGraphResourceView& resource,
     const GpuGraphResourceDesc& desc
 )noexcept{
-    // Re-importing a multi-producer source through the ordinary typed-import overload could silently exchange one
+    // Re-importing an ownership source through the ordinary typed-import overload could silently exchange one
     // of its immutable ownership snapshots. Require callers to reuse its graph resource ID instead.
     if(
         resource.initialOwnerHandoffSourceCount != 0u
@@ -37,27 +37,12 @@ namespace __hidden_gpu_task_graph_imports{
         || desc.initialOwnerHandoffSourceCount != 0u
     )
         return false;
-    const bool initialOwnerStateEquivalent =
-        (!resource.initialOwnerStateSource && !desc.initialOwnerStateSource)
-        || (
-            resource.initialOwnerStateSource
-            && desc.initialOwnerStateSource
-            && resource.initialOwnerStateSource->equivalentTo(*desc.initialOwnerStateSource)
-        )
-    ;
     return resource.identity == desc.identity
         && resource.type == desc.type
         && resource.initialState == desc.initialState
         && resource.externalFinalState == desc.externalFinalState
         && resource.externalFinalReleaseDestinationQueue == desc.externalFinalReleaseDestinationQueue
         && resource.initialOwnerQueue == desc.initialOwnerQueue
-        && resource.initialOwnerReleaseDestinationQueue == desc.initialOwnerReleaseDestinationQueue
-        && resource.initialOwnerCompletion == desc.initialOwnerCompletion
-        && resource.initialOwnerMinimumCompletionToken.queue == desc.initialOwnerMinimumCompletionToken.queue
-        && resource.initialOwnerMinimumCompletionToken.value == desc.initialOwnerMinimumCompletionToken.value
-        && resource.initialOwnerMinimumCompletionToken.physicalQueueIndex == desc.initialOwnerMinimumCompletionToken.physicalQueueIndex
-        && resource.initialOwnerMinimumCompletionToken.deviceGeneration == desc.initialOwnerMinimumCompletionToken.deviceGeneration
-        && initialOwnerStateEquivalent
         && resource.queueSharing == desc.queueSharing
         && resource.initialAvailabilityCompletion == desc.initialAvailabilityCompletion
         && resource.directConsumerQueue == desc.directConsumerQueue

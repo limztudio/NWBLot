@@ -34,8 +34,7 @@ namespace __hidden_gpu_packet_runtime_submission{
     const GpuCompiledGraph::ReadView& planAccess,
     const GpuSubmissionPacketId& packetID,
     const GpuExternalCompletionId& completion,
-    const QueueSubmissionToken& token
-){
+    const QueueSubmissionToken& token){
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())
         return false;
@@ -60,42 +59,24 @@ namespace __hidden_gpu_packet_runtime_submission{
                 return false;
 
             const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const multiSource = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
-            if(resource.initialOwnerHandoffSourceCount != 0u && !multiSource)
+            const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
+            if(!source)
                 return false;
-            if(multiSource && multiSource->completion != completion)
-                continue;
-            if(!multiSource && resource.initialOwnerCompletion != completion)
+            if(source->completion != completion)
                 continue;
             const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
             if(
                 !sourceQueue
-                || (
-                    multiSource
-                        ? (
-                            multiSource->sourceQueue != barrier.sourceQueue
-                            || multiSource->destinationQueue != barrier.destinationQueue
-                            || !multiSource->minimumCompletionToken.valid()
-                            || !multiSource->minimumCompletionToken.matchesPhysicalQueue(
-                                barrier.sourceQueue.index,
-                                barrier.sourceQueue.deviceGeneration
-                            )
-                            || token.value < multiSource->minimumCompletionToken.value
-                            || !multiSource->stateSource
-                            || !multiSource->stateSource->validForDeviceGeneration(planAccess.deviceGeneration())
-                        )
-                        : (
-                            resource.initialOwnerQueue != barrier.sourceQueue
-                            || resource.initialOwnerReleaseDestinationQueue != barrier.destinationQueue
-                            || !resource.initialOwnerMinimumCompletionToken.valid()
-                            || resource.initialOwnerMinimumCompletionToken.queue != sourceQueue->queueClass
-                            || !resource.initialOwnerMinimumCompletionToken.matchesPhysicalQueue(
-                                barrier.sourceQueue.index,
-                                barrier.sourceQueue.deviceGeneration
-                            )
-                            || token.value < resource.initialOwnerMinimumCompletionToken.value
-                        )
+                || source->sourceQueue != barrier.sourceQueue
+                || source->destinationQueue != barrier.destinationQueue
+                || !source->minimumCompletionToken.valid()
+                || !source->minimumCompletionToken.matchesPhysicalQueue(
+                    barrier.sourceQueue.index,
+                    barrier.sourceQueue.deviceGeneration
                 )
+                || token.value < source->minimumCompletionToken.value
+                || !source->stateSource
+                || !source->stateSource->validForDeviceGeneration(planAccess.deviceGeneration())
                 || token.queue != sourceQueue->queueClass
                 || !token.matchesPhysicalQueue(barrier.sourceQueue.index, barrier.sourceQueue.deviceGeneration)
             )
@@ -219,8 +200,6 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const GpuRecordedGraph& recordedGraph,
     const GpuRecordedGraph::ArtifactOperation& artifactAccess,
     const GpuSubmissionPacketId& packetID,
-    const GpuTaskGraphExternalCompletionToken* const externalCompletionTokens,
-    const usize externalCompletionTokenCount,
     GpuGraphSubmissionTransaction& transaction,
     Alloc::ScratchArena& scratchArena,
     GpuTimingSubmissionTicket* const* const timingTickets,
@@ -252,14 +231,6 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
             artifactAccess
         )
         || !transaction.validFor(planAccess)
-        || !GpuPacketRuntimeDetail::ValidateExternalCompletionBindings(
-            graph,
-            declarationAccess,
-            compiledGraph,
-            planAccess,
-            externalCompletionTokens,
-            externalCompletionTokenCount
-        )
         || (timingTicketCount != 0u && !timingTickets)
         || (preSubmitHook && !preSubmitHook->valid())
     )
@@ -343,16 +314,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const GpuExternalCompletionId* const externalDependencies = packetView.externalDependencies;
     for(u32 dependencyIndex = 0u; dependencyIndex < packet.externalDependencyCount; ++dependencyIndex){
         const GpuExternalCompletionId completion = externalDependencies[dependencyIndex];
-        const QueueSubmissionToken* token = declarationAccess.externalCompletionToken(completion);
-        if(!token){
-            for(usize tokenIndex = 0u; tokenIndex < externalCompletionTokenCount; ++tokenIndex){
-                const GpuTaskGraphExternalCompletionToken& binding = externalCompletionTokens[tokenIndex];
-                if(binding.completion == completion){
-                    token = &binding.token;
-                    break;
-                }
-            }
-        }
+        const QueueSubmissionToken* const token = declarationAccess.externalCompletionToken(completion);
         if(!token)
             return false;
         const GpuPhysicalQueueInfo* const externalQueue = device().getPhysicalQueueInfo(GpuPhysicalQueueId{

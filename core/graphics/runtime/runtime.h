@@ -59,7 +59,7 @@ public:
         // See BufferSetupDesc::queue for the native consumer readiness contract.
         // A non-retained Unknown initial state publishes CopyDest; a retained upload requires a concrete initial state.
         CommandQueue::Enum queue = CommandQueue::kCount;
-        // Automatic preserves the legacy one-plane behavior for color, depth-only, and stencil-only formats.
+        // Automatic selects one aspect for color, depth-only, and stencil-only formats.
         // D24S8/D32S8 require the caller to select one concrete aspect because Vulkan copies their depth and
         // stencil planes from independently laid out CPU payloads.
         TextureUploadAspect::Enum aspect = TextureUploadAspect::Automatic;
@@ -244,8 +244,6 @@ public:
     }
 
     [[nodiscard]] const tchar* getRendererString()const;
-    // Compatibility query: the renderer is Vulkan-only and this always returns GraphicsAPI::VULKAN.
-    [[nodiscard]] GraphicsAPI::Enum getGraphicsAPI()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
     // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
@@ -280,7 +278,7 @@ public:
     [[nodiscard]] TextureHandle setupTexture(const TextureSetupDesc& desc)const;
     [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     // Compiles, records, and submits an isolated graph synchronously. This is the graph-owned escape hatch for a
-    // compatibility caller that has no renderer-owned frame graph but can still provide immutable task inputs.
+    // standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
     [[nodiscard]] bool submitStandaloneTaskGraph(
         void* userData,
         StandaloneTaskGraphDeclaration declareTask,

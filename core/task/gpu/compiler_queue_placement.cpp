@@ -38,13 +38,8 @@ using namespace GpuTaskGraphCompilerDetail;
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     GpuPhysicalQueueId& inOutQueue)noexcept{
-    if(resource.initialOwnerHandoffSourceCount == 0u){
-        const GpuPhysicalQueueId destination = resource.initialOwnerReleaseDestinationQueue.valid()
-            ? resource.initialOwnerReleaseDestinationQueue
-            : resource.initialOwnerQueue
-        ;
-        return AccumulateExactQueueConstraint(destination, inOutQueue);
-    }
+    if(resource.initialOwnerHandoffSourceCount == 0u)
+        return AccumulateExactQueueConstraint(resource.initialOwnerQueue, inOutQueue);
 
     const GpuTaskGraphInitialOwnerHandoffSourceView* selectedSource = nullptr;
     for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
@@ -77,7 +72,6 @@ using namespace GpuTaskGraphCompilerDetail;
             const GpuTaskGraphResourceView resource = graph.resourceAt(task.resourceUses[useIndex].resource.index);
             if(
                 resource.initialOwnerQueue.valid()
-                || resource.initialOwnerReleaseDestinationQueue.valid()
                 || resource.initialOwnerHandoffSourceCount != 0u
             )
                 ++ownedResourceUseCount;
@@ -105,7 +99,6 @@ using namespace GpuTaskGraphCompilerDetail;
                 || use.requiredState == ResourceStates::Unknown
                 || (
                     !resource.initialOwnerQueue.valid()
-                    && !resource.initialOwnerReleaseDestinationQueue.valid()
                     && resource.initialOwnerHandoffSourceCount == 0u
                 )
             )

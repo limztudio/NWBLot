@@ -667,7 +667,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
     if(!timingResolved)
         NWB_LOGGER_ERROR(NWB_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
 
-    // Native acceptance remains hidden while synchronous typed and compatibility observers publish.
+    // Native acceptance remains hidden while synchronous task and semantic observers publish.
     // If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
     graph.notifyPacketSubmissionAccepted(compiledGraph, planAccess, packetID, token, lease);
     for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){

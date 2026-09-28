@@ -24,7 +24,7 @@ class CommandListResourceStateHandoff;
 struct GpuTaskRecordContext;
 
 // Declaration-owned external state snapshot, captured at accept and filtered through declared resources pre-record.
-// Producer may release after creation; migration path until all producers are in-graph packets.
+// Producer storage may retire after the declaration captures its immutable snapshot.
 struct GpuTaskExternalStateSource{
     const CommandListResourceStateHandoff* states = nullptr;
     // This predicate is evaluated after queue assignment and never constrains routing. kCount keeps the snapshot
@@ -140,7 +140,7 @@ struct GpuTaskTimingMetadata{
 }
 
 // Immutable external ownership source per imported range (later graphs consume disjoint terminal exports per owner).
-// Each gives releasing/first-consumer queues + completion + release snapshot. AS uses whole-allocation fields.
+// Each source supplies the releasing and first-consumer queues, completion, and release snapshot; acceleration structures use one whole-allocation source.
 struct GpuGraphInitialOwnerHandoffSourceDesc{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -167,22 +167,11 @@ struct GpuGraphResourceDesc{
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     // Optional pre-first-use owner; exact first-packet matches need no extra sync.
     GpuPhysicalQueueId initialOwnerQueue;
-    // Non-first-packet start needs an external producer's ownership release to this exact queue + exported snapshot
-    // and completion; captured at declaration, attached to the first consumer packet.
-    GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
-    GpuExternalCompletionId initialOwnerCompletion;
-    // NOTE: pointer kept with 8-byte group; the token below pairs with the completion above.
-    const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
-    // The bound completion may advance on the same source queue, but it must never precede this release token.
-    // This makes the legacy whole-resource handoff as race-safe as the range multi-source form above.
-    QueueSubmissionToken initialOwnerMinimumCompletionToken;
-    // Texture/buffer multi-producer companion to the single-owner fields above. Sources must be non-overlapping and
-    // must not be mixed with those legacy fields; the graph copies every state source at declaration time.
+    // Sources cover disjoint imported ranges and are copied into graph-owned immutable storage at declaration.
     const GpuGraphInitialOwnerHandoffSourceDesc* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    // Appended so positional aggregate initializers retain their existing field layout. Prefer setInitialState()
-    // whenever Unknown is intended as an explicit physical initial state rather than an unspecified default.
+    // setInitialState() distinguishes explicit Unknown from an unspecified default inherited from the native descriptor.
     bool hasExplicitInitialState = false;
     // Pure availability is independent of queue-family ownership and native state. The compiler attaches this
     // completion to every first consumer range and lets packet submission elide same-queue waits normally.
@@ -197,10 +186,6 @@ struct GpuGraphResourceDesc{
     constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
     constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value){ externalFinalReleaseDestinationQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialOwnerReleaseDestinationQueue(const GpuPhysicalQueueId value){ initialOwnerReleaseDestinationQueue = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialOwnerCompletion(const GpuExternalCompletionId value){ initialOwnerCompletion = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialOwnerMinimumCompletionToken(const QueueSubmissionToken& value){ initialOwnerMinimumCompletionToken = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialOwnerStateSource(const CommandListResourceStateHandoff* const value){ initialOwnerStateSource = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(
         const GpuGraphInitialOwnerHandoffSourceDesc* const values,
         const usize count
@@ -257,8 +242,7 @@ struct GpuGraphPipelineDesc{
 };
 
 // Prior-frame and other out-of-graph completions may retain the authoritative accepted native token directly in
-// graph-owned storage. An empty token preserves metadata-only declaration for compatibility callers that bind the
-// completion immediately before submission.
+// graph-owned storage. Executable graphs require an authoritative token; empty tokens are for graph analysis only.
 struct GpuExternalCompletionDesc{
     Name identity = NAME_NONE;
     AStringView markerLabel;

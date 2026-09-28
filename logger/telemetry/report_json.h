@@ -51,8 +51,7 @@ void AppendFrameGraphCompiledTaskJson(
 );
 void AppendFrameGraphCompileRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics,
-    const bool resourceVersionStatisticsPresent
+    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics
 );
 void AppendFrameGraphRecordingRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
@@ -60,27 +59,23 @@ void AppendFrameGraphRecordingRuntimeStatisticsJson(
 );
 void AppendFrameGraphSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
-    const bool recoverySubmissionCountPresent
+    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics
 );
 void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics,
-    const bool resourceVersionStatisticsPresent
+    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics
 );
 void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics
+    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics
 );
 void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics,
-    const bool recoverySubmissionCountPresent
+    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics
 );
 void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics,
-    const bool recoverySubmissionCountPresent
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics
 );
 void AppendFrameGraphPacketSubmissionStatisticsJson(
     AString<TelemetryArena>& out,
@@ -93,9 +88,7 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     const FrameGraphOwnerStatisticsRange& ownerRange,
     const bool physicalQueueRuntimeStatisticsPresent,
-    const bool packetSubmissionStatisticsPresent,
-    const bool recoverySubmissionCountPresent,
-    const bool resourceVersionStatisticsPresent
+    const bool packetSubmissionStatisticsPresent
 );
 void AppendFrameGraphJson(
     const FrameGraphReportRecord& record,

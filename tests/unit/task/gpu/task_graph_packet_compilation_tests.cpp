@@ -142,10 +142,18 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
 TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo producerQueue = DedicatedComputeQueue();
+    const Graphics::QueueSubmissionToken completionToken{
+        .value = 41u,
+        .physicalQueueIndex = producerQueue.id.index,
+        .deviceGeneration = producerQueue.id.deviceGeneration,
+        .queue = producerQueue.queueClass,
+    };
     const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
         Graphics::GpuExternalCompletionDesc{}
             .setIdentity(Name("tests/task_graph/packet_external"))
             .setMarkerLabel("External Completion")
+            .setToken(completionToken)
     );
     ASSERT_TRUE(completion.valid());
     Graphics::GpuTaskDesc firstDesc;
@@ -386,34 +394,11 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         EXPECT_TRUE(recoveryPacketView.plan->joinsAcceptedQueueFrontier);
         EXPECT_TRUE(recoveryPacketView.plan->isRecoverySubmission);
 
-        const Graphics::GpuPhysicalQueueId firstQueue = compiledPlan.packet(firstPacket).plan->queue;
-        const Graphics::QueueSubmissionToken firstToken{
-            .value = 41u,
-            .physicalQueueIndex = firstQueue.index,
-            .deviceGeneration = firstQueue.deviceGeneration,
-            .queue = Graphics::CommandQueue::Compute,
-            };
-        const Graphics::GpuTaskGraphExternalCompletionToken externalCompletionToken{
-            .completion = completion,
-            .token = firstToken,
-        };
-        EXPECT_TRUE(externalCompletionToken.validFor(compiledGraph, compiledPlan));
-        const Graphics::GpuTaskGraphExternalCompletionToken otherQueueCompletionToken{
-            .completion = completion,
-            .token = Graphics::QueueSubmissionToken{
-                .value = 40u,
-                .physicalQueueIndex = 3u,
-                .deviceGeneration = compiledPlan.deviceGeneration(),
-                .queue = Graphics::CommandQueue::Transfer,
-            },
-        };
-        EXPECT_TRUE(otherQueueCompletionToken.validFor(compiledGraph, compiledPlan));
-        Graphics::GpuTaskGraphExternalCompletionToken staleExternalCompletionToken = externalCompletionToken;
-        staleExternalCompletionToken.token.deviceGeneration = firstQueue.deviceGeneration == Limit<u16>::s_Max
-            ? 1u
-            : static_cast<u16>(firstQueue.deviceGeneration + 1u)
-        ;
-        EXPECT_FALSE(staleExternalCompletionToken.validFor(compiledGraph, compiledPlan));
+        const Graphics::QueueSubmissionToken* const storedToken = declarations.externalCompletionToken(completion);
+        ASSERT_NE(storedToken, nullptr);
+        EXPECT_EQ(storedToken->value, completionToken.value);
+        EXPECT_EQ(storedToken->queue, completionToken.queue);
+        EXPECT_TRUE(storedToken->matchesPhysicalQueue(producerQueue.id.index, producerQueue.id.deviceGeneration));
     }
 
     compiledGraph.reset();

@@ -419,26 +419,6 @@ private:
 };
 
 
-struct GpuTaskGraphExternalCompletionToken{
-    GpuExternalCompletionId completion;
-    // The token must retain the exact physical queue and device-generation identity returned by native submission.
-    // Graph waits reject broad CommandQueue-only completions so a stale timeline value cannot alias a recreated device or a future same-class queue.
-    QueueSubmissionToken token;
-
-    [[nodiscard]] bool validFor(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess
-    )const noexcept;
-    // Compatibility bindings are valid only for metadata-only nodes. A graph-owned completion deliberately rejects a second runtime token
-    // one semantic edge can never acquire two competing native timeline identities.
-    [[nodiscard]] bool validFallbackFor(
-        const GpuTaskGraph& graph,
-        const GpuTaskGraph::DeclarationReadView& declarationAccess,
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess
-    )const noexcept;
-};
-
 // Timing ticket bound to semantic work (scheduler resolves to packet at admission). Same-packet aliases coalesce; one ticket never spans packets. Graph may own an automatic ticket.
 struct GpuTaskGraphTaskTimingTicket{
     GpuTaskId task;
@@ -452,7 +432,7 @@ struct GpuTaskGraphTaskSubmissionHook{
 };
 
 
-// Semantic compatibility binding for one declared task. The scheduler invokes every matching binding in compiled task order even if an earlier callback returned false. The aggregate false result stops later range traversal only after the accepted token/frontier publishes.
+// Semantic acceptance observer for one declared task. The scheduler invokes every matching binding in compiled task order even if an earlier callback returned false. The aggregate false result stops later range traversal only after the accepted token/frontier publishes.
 // Callbacks run while the transaction submission gate is held and must not reenter or synchronously wait for work that needs the same gate.
 struct GpuTaskGraphTaskAcceptedCallback{
     GpuTaskId task;
@@ -518,8 +498,6 @@ struct GpuTaskGraphNormalExecutionDesc{
     // A null scheduler preserves serial compile-order recording. A supplied scheduler enables the recorder's per-packet ready-frontier policy; packets without declaration opt-in still record serially.
     CpuTaskScheduler* readyFrontierScheduler = nullptr;
     GpuCommandIrCapture* commandIrCapture = nullptr;
-    const GpuTaskGraphExternalCompletionToken* externalCompletionTokens = nullptr;
-    usize externalCompletionTokenCount = 0u;
     const GpuTaskGraphTaskTimingTicket* taskTimingTickets = nullptr;
     usize taskTimingTicketCount = 0u;
     const GpuTaskGraphTaskAcceptedCallback* taskAcceptedCallbacks = nullptr;
@@ -999,7 +977,7 @@ private:
     mutable AtomicFlag m_submissionExceptionClosing;
     u64 m_exceptionClosingRecordingAttemptGeneration = 0u;
     GpuGraphSubmissionBinding m_exceptionClosingBinding;
-    // Native submission returns before timing, graph payload, compatibility callback, and token/frontier resolution.
+    // Native submission returns before timing, graph payload, task acceptance callback, and token/frontier resolution.
     // Keep that indivisible publication tail serialized while native queue work remains free to overlap.
     mutable Futex m_resolutionMutex;
     mutable Futex m_mutex;

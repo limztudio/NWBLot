@@ -60,7 +60,7 @@ struct GpuTaskGraphTaskView{
     bool hasAcceptedPayload = false;
 };
 
-// Immutable view of an externally released texture range; sources copied at declare time, so producers may retire early while readers stay immutable.
+// Immutable view of an externally released resource range, copied at declaration so producer storage may retire.
 struct GpuTaskGraphInitialOwnerHandoffSourceView{
     GpuTaskResourceRange range;
     GpuPhysicalQueueId sourceQueue;
@@ -78,12 +78,7 @@ struct GpuTaskGraphResourceView{
     ResourceStates::Mask externalFinalState = ResourceStates::Unknown;
     GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
     GpuPhysicalQueueId initialOwnerQueue;
-    GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
-    GpuExternalCompletionId initialOwnerCompletion;
-    QueueSubmissionToken initialOwnerMinimumCompletionToken;
-    // For imported exclusive-owner handoffs this is a graph-owned immutable snapshot, captured at declaration.
-    const CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
-    // Texture-only multi-producer ownership handoff sources. A first graph use must be fully covered by exactly one source that names its selected physical consumer queue; broad or ambiguous uses fail compilation.
+    // Each first-use range must be covered by one source naming its exact physical consumer queue.
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
     usize initialOwnerHandoffSourceCount = 0u;
     GpuExternalCompletionId initialAvailabilityCompletion;
@@ -668,10 +663,6 @@ private:
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
-        // The graph retains its own immutable copy for late recording. Repeated typed imports compare this owned value, never the producer allocation address, so retired snapshot storage cannot alias through ABA reuse.
-        CommandListResourceStateHandoff* initialOwnerStateSource = nullptr;
-        GpuExternalCompletionId initialOwnerCompletion;
-        QueueSubmissionToken initialOwnerMinimumCompletionToken;
         GpuExternalCompletionId initialAvailabilityCompletion;
         GpuPhysicalQueueId directConsumerQueue;
         ResourceStates::Mask initialState = ResourceStates::Unknown;
@@ -689,7 +680,6 @@ private:
         bool hasQueueAdmission = false;
         GpuPhysicalQueueId externalFinalReleaseDestinationQueue;
         GpuPhysicalQueueId initialOwnerQueue;
-        GpuPhysicalQueueId initialOwnerReleaseDestinationQueue;
     };
 
     struct ResourcePointerKey{

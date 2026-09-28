@@ -128,8 +128,7 @@ TEST(GpuCommandIrStreamReader, DecodesCanonicalColorAndSingleAspectClearRecords)
     Graphics::GpuClearTextureTaskDesc clearTexture;
     clearTexture.destination = s_CommandIrDestination;
     clearTexture.subresources = Graphics::TextureSubresourceSet(1u, s_ExpectedDualCount, 3u, 4u);
-    // The legacy capture record keeps these descriptor values, while the POD stream must canonicalize them away for
-    // color clears because native color-clear lowering ignores depth/stencil aspect selection.
+    // The stream omits depth/stencil aspect flags ignored by native color-clear lowering.
     clearTexture.clearDepth = true;
     clearTexture.clearStencil = true;
     clearTexture.valueType = Graphics::GpuClearTextureTaskValueType::Float;
@@ -216,8 +215,20 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, magic), 0u);
     }, Graphics::GpuCommandIrStreamValidationError::InvalidMagic);
+    for(u16 version = 0u; version < Graphics::s_GpuCommandIrStreamVersion; ++version){
+        expectHeaderError([version](Graphics::GraphicsBytes& bytes){
+            WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), version);
+        }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
+    }
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
-        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), static_cast<u16>(99u));
+        WriteCommandIrPod(
+            bytes,
+            offsetof(Graphics::GpuCommandIrStreamHeader, version),
+            static_cast<u16>(Graphics::s_GpuCommandIrStreamVersion + 1u)
+        );
+    }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
+    expectHeaderError([](Graphics::GraphicsBytes& bytes){
+        WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, version), Limit<u16>::s_Max);
     }, Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion);
     expectHeaderError([](Graphics::GraphicsBytes& bytes){
         WriteCommandIrPod(bytes, offsetof(Graphics::GpuCommandIrStreamHeader, reserved), static_cast<u16>(1u));

@@ -510,23 +510,23 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
     if(dataSizeBytes == 0)
         return;
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("copy buffer")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_CopyBufferOperation))
         return;
     const BufferDesc& destDesc = dest.m_creationDesc;
     const BufferDesc& srcDesc = src.m_creationDesc;
 
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("destination range is outside the buffer"));
         return;
     }
 
     if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source range is outside the buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source range is outside the buffer"));
         return;
     }
 
     if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("copy buffer"), NWB_TEXT("source and destination ranges overlap in the same buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source and destination ranges overlap in the same buffer"));
         return;
     }
     if(
@@ -535,7 +535,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         && dest.m_buffer == src.m_buffer
     ){
         rejectCommandRecording(
-            NWB_TEXT("copy buffer"),
+            s_CopyBufferOperation,
             NWB_TEXT("distinct buffer objects alias the same native buffer")
         );
         return;
@@ -554,14 +554,14 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
         ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
         : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
     ;
-    if(!validateBufferForGpuState(&src, sourceState, NWB_TEXT("copy buffer"), sourceUsage))
+    if(!validateBufferForGpuState(&src, sourceState, s_CopyBufferOperation, sourceUsage))
         return;
     if(
         &dest != &src
         && !validateBufferForGpuState(
             &dest,
             destinationState,
-            NWB_TEXT("copy buffer"),
+            s_CopyBufferOperation,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT
         )
     )
@@ -597,16 +597,16 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     // authoritative. Keep the direct lowerer from silently reintroducing per-command state tracking.
     if(dataSizeBytes == 0u)
         return false;
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("direct command-IR copy buffer")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, s_DirectCommandIrCopyBufferOperation))
         return false;
     const BufferDesc& destDesc = dest.m_creationDesc;
     const BufferDesc& srcDesc = src.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, NWB_TEXT("destination range is outside the buffer"));
         return false;
     }
     if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(NWB_TEXT("direct command-IR copy buffer"), NWB_TEXT("source range is outside the buffer"));
+        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, NWB_TEXT("source range is outside the buffer"));
         return false;
     }
     if(
@@ -614,7 +614,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)
     ){
         rejectCommandRecording(
-            NWB_TEXT("direct command-IR copy buffer"),
+            s_DirectCommandIrCopyBufferOperation,
             NWB_TEXT("source and destination ranges overlap in the same buffer")
         );
         return false;
@@ -625,7 +625,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         && dest.m_buffer == src.m_buffer
     ){
         rejectCommandRecording(
-            NWB_TEXT("direct command-IR copy buffer"),
+            s_DirectCommandIrCopyBufferOperation,
             NWB_TEXT("distinct buffer objects alias the same native buffer")
         );
         return false;
@@ -644,7 +644,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         !validateBufferForGpuState(
             &src,
             sourceState,
-            NWB_TEXT("direct command-IR copy buffer"),
+            s_DirectCommandIrCopyBufferOperation,
             sameNativeBuffer
                 ? VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT
                 : VK_BUFFER_USAGE_TRANSFER_SRC_BIT
@@ -656,7 +656,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
         && !validateBufferForGpuState(
             &dest,
             destinationState,
-            NWB_TEXT("direct command-IR copy buffer"),
+            s_DirectCommandIrCopyBufferOperation,
             VK_BUFFER_USAGE_TRANSFER_DST_BIT
         )
     )

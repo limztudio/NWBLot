@@ -52,7 +52,7 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
     if(!m_shaderSystem.loadShader(
         m_rayTracingState.m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
-        AStringView("NWB_BINDLESS_TLAS=1"),
+        Core::ShaderArchive::s_BindlessTlasVariant,
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
@@ -109,7 +109,7 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
     if(!m_shaderSystem.loadShader(
         m_rayTracingState.m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
-        AStringView("NWB_BINDLESS_TLAS=1"),
+        Core::ShaderArchive::s_BindlessTlasVariant,
         Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){

@@ -63,7 +63,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     if(args.width == 0u || args.height == 0u || args.depth == 0u)
         return;
 
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, NWB_TEXT("dispatch rays")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_DispatchRaysOperation))
         return;
 
     if(
@@ -76,7 +76,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !m_context.deviceDispatch.vkCmdTraceRaysKHR
     ){
         rejectCommandRecording(
-            NWB_TEXT("dispatch rays"),
+            s_DispatchRaysOperation,
             NWB_TEXT("ray-tracing dispatch is unavailable on this device generation")
         );
         return;
@@ -84,11 +84,11 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
     if(!shaderTable){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("no shader table is bound"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("no shader table is bound"));
         return;
     }
     if(&shaderTable->m_context != &m_context || &shaderTable->m_device != &m_device){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("shader table belongs to another device generation"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table belongs to another device generation"));
         return;
     }
 
@@ -104,7 +104,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || pipeline->m_pipeline == VK_NULL_HANDLE
         || pipeline->m_pipelineLayout == VK_NULL_HANDLE
     ){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("shader table pipeline is foreign or not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is foreign or not ready"));
         return;
     }
 
@@ -115,7 +115,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         dispatchLimits.maxAxisSizes[axis] = m_context.physicalDeviceProperties.limits.maxComputeWorkGroupSize[axis];
     }
     if(!VulkanDetail::ValidateRayDispatchDimensions(args, dispatchLimits)){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("dispatch dimensions exceed device limits"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("dispatch dimensions exceed device limits"));
         return;
     }
 
@@ -127,9 +127,9 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         handleSize,
         handleSizeAligned,
         baseAlignment,
-        NWB_TEXT("dispatch rays")
+        s_DispatchRaysOperation
     )){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("shader group handle layout is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader group handle layout is invalid"));
         return;
     }
     const u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
@@ -142,7 +142,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || maxShaderGroupStride == 0u
         || handleSizeAligned > maxShaderGroupStride
     ){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("shader table stride is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table stride is invalid"));
         return;
     }
 
@@ -218,7 +218,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !buildRegion(snapshot.hit, false, hitRegion)
         || !buildRegion(snapshot.callable, false, callableRegion)
     ){
-        rejectCommandRecording(NWB_TEXT("dispatch rays"), NWB_TEXT("shader table regions are incoherent or not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table regions are incoherent or not ready"));
         return;
     }
 

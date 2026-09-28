@@ -27,7 +27,15 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Command List
+// Command operation labels shared by command-list recording paths.
+inline constexpr tchar s_CloseCommandListOperation[] = NWB_TEXT("close command list");
+inline constexpr tchar s_OwnershipReleaseBarriersOperation[] = NWB_TEXT("append ownership-release barriers");
+inline constexpr tchar s_DispatchRaysOperation[] = NWB_TEXT("dispatch rays");
+inline constexpr tchar s_CopyBufferOperation[] = NWB_TEXT("copy buffer");
+inline constexpr tchar s_ClearTextureBoxOperation[] = NWB_TEXT("clear texture box");
+inline constexpr tchar s_ReleaseTextureOwnershipOperation[] = NWB_TEXT("release texture ownership");
+inline constexpr tchar s_SetPushConstantsOperation[] = NWB_TEXT("set push constants");
+inline constexpr tchar s_DirectCommandIrCopyBufferOperation[] = NWB_TEXT("direct command-IR copy buffer");
 
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{

@@ -26,11 +26,11 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     if(byteSize == 0)
         return;
     if(!VulkanDetail::AreAllPointersValid(data)){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("data is null"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
         return;
     }
     if(byteSize > UINT32_MAX){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size exceeds uint32 range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
         return;
     }
 
@@ -39,7 +39,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         pushConstantByteSize,
         m_context.physicalDeviceProperties.limits.maxPushConstantsSize
     )){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("byte size is unaligned or exceeds the device limit"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
         return;
     }
 
@@ -81,21 +81,21 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
         rejectCommandRecording(
-            NWB_TEXT("set push constants"),
+            s_SetPushConstantsOperation,
             NWB_TEXT("exactly one active valid pipeline layout is required")
         );
         return;
     }
-    if(!recordAndValidateCommandCapability(requiredCapabilities, NWB_TEXT("set push constants")))
+    if(!recordAndValidateCommandCapability(requiredCapabilities, s_SetPushConstantsOperation))
         return;
 
     if(pipelinePushConstantByteSize == 0){
-        rejectCommandRecording(NWB_TEXT("set push constants"), NWB_TEXT("active pipeline layout has no push constant range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
         rejectCommandRecording(
-            NWB_TEXT("set push constants"),
+            s_SetPushConstantsOperation,
             NWB_TEXT("byte size exceeds the active pipeline push constant range")
         );
         return;

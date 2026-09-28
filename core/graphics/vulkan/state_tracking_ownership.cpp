@@ -134,24 +134,24 @@ void CommandList::releaseTextureOwnership(
 ){
     if(!textureResource)
         return;
-    if(!validateCommandRecordingScope(NWB_TEXT("release texture ownership")))
+    if(!validateCommandRecordingScope(s_ReleaseTextureOwnershipOperation))
         return;
 
     Texture& texture = *textureResource;
     if(!isTextureReadyForCommandQueue(&texture)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
         rejectCommandRecording(
-            NWB_TEXT("release texture ownership"),
+            s_ReleaseTextureOwnershipOperation,
             NWB_TEXT("permanently tracked textures cannot transfer ownership")
         );
         return;
     }
     if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
         rejectCommandRecording(
-            NWB_TEXT("release texture ownership"),
+            s_ReleaseTextureOwnershipOperation,
             NWB_TEXT("concurrently shared textures do not have exclusive ownership")
         );
         return;
@@ -163,14 +163,14 @@ void CommandList::releaseTextureOwnership(
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(
-            NWB_TEXT("release texture ownership"),
+            s_ReleaseTextureOwnershipOperation,
             NWB_TEXT("subresource range is empty or outside the texture")
         );
         return;
     }
 
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("destination queue is unavailable"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("destination queue is unavailable"));
         return;
     }
 
@@ -183,14 +183,14 @@ void CommandList::releaseTextureOwnership(
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
             if(state == ResourceStates::Unknown){
-                rejectCommandRecording(NWB_TEXT("release texture ownership"), NWB_TEXT("final resource state is unknown"));
+                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("final resource state is unknown"));
                 return;
             }
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
             const auto existing = m_textureOwnershipReleaseDestinations.find(key);
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
                 rejectCommandRecording(
-                    NWB_TEXT("release texture ownership"),
+                    s_ReleaseTextureOwnershipOperation,
                     NWB_TEXT("subresource already targets a conflicting destination queue")
                 );
                 return;

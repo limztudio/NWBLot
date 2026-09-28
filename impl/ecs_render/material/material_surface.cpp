@@ -143,7 +143,7 @@ template<typename AssetT, typename ResourceT, typename CacheT, typename LoadFn, 
     SamplerGpuResource* const samplerResource = FindOrCreateCachedAsset<Sampler, SamplerGpuResource>(
         resources.samplerAssetCache,
         samplerAsset,
-        MakeNotNull("sampler"),
+        MakeNotNull(Sampler::s_AssetTypeText.data()),
         [&](SamplerGpuResource& outResource, const Core::Assets::AssetRef<Sampler>& assetRef, const Name& assetPath){
             return SamplerAssetLoader::Load(
                 outResource,

@@ -84,7 +84,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         if(state.m_pipelines[i])
             continue;
         if(!m_shaderSystem.loadShader(
-            state.m_shaders[i], shaderNames[i], AStringView("NWB_BINDLESS_TLAS=1"), Core::ShaderType::Compute,
+            state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_BindlessTlasVariant, Core::ShaderType::Compute,
             "ECSRender_HardwareTransparentShadow"
         )){
             state.m_pipelineFailed = true;

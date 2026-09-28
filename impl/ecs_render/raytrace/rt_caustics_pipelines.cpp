@@ -336,9 +336,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_shaderSystem.loadShader(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, AStringView("NWB_BINDLESS_TLAS=1"), Core::ShaderType::RayGeneration, "ECSRender_CausticHwRaygen")
-        || !m_shaderSystem.loadShader(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, AStringView("NWB_BINDLESS_TLAS=1"), Core::ShaderType::Miss, "ECSRender_CausticHwMiss")
-        || !m_shaderSystem.loadShader(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, AStringView("NWB_BINDLESS_TLAS=1"), Core::ShaderType::ClosestHit, "ECSRender_CausticHwClosestHit")
+        !m_shaderSystem.loadShader(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, Core::ShaderArchive::s_BindlessTlasVariant, Core::ShaderType::RayGeneration, "ECSRender_CausticHwRaygen")
+        || !m_shaderSystem.loadShader(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_BindlessTlasVariant, Core::ShaderType::Miss, "ECSRender_CausticHwMiss")
+        || !m_shaderSystem.loadShader(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_BindlessTlasVariant, Core::ShaderType::ClosestHit, "ECSRender_CausticHwClosestHit")
     ){
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;

@@ -433,7 +433,7 @@ bool TextureAssetLoader::Load(
     const NotNull<const tchar*> ownerName
 ){
     const NotNull<const tchar*> owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, MakeNotNull("texture")))
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, MakeNotNull(Texture::s_AssetTypeText.data())))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();
@@ -443,7 +443,7 @@ bool TextureAssetLoader::Load(
         textureVirtualPath,
         loadedAsset,
         owner,
-        MakeNotNull("texture")
+        MakeNotNull(Texture::s_AssetTypeText.data())
     );
     if(!loadedTexture)
         return false;

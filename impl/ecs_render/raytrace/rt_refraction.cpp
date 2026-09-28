@@ -71,7 +71,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
         if(!m_shaderSystem.loadShader(
             shader,
             hardware ? AssetsGraphicsRefraction::s_HwResolveShaderName : AssetsGraphicsRefraction::s_ScreenResolveShaderName,
-            hardware ? AStringView("NWB_BINDLESS_TLAS=1") : Core::ShaderArchive::s_DefaultVariant,
+            hardware ? Core::ShaderArchive::s_BindlessTlasVariant : Core::ShaderArchive::s_DefaultVariant,
             Core::ShaderType::Compute,
             hardware ? "ECSRender_RefractionHw" : "ECSRender_RefractionScreen"
         )){

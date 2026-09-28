@@ -12,6 +12,12 @@
 
 namespace __hidden_light_space{
 static constexpr StringView s_DefaultLightVariant = "default";
+static constexpr StringView s_LightSpaceNoCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0";
+static constexpr StringView s_LightSpaceNoCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1";
+static constexpr StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0";
+static constexpr StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
+static constexpr StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
+static constexpr StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
 };
 
 
@@ -63,15 +69,15 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute };
     const AStringView variants[] = { ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant, ::__hidden_light_space::s_DefaultLightVariant,
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1"),
-        AStringView("NWB_LIGHT_SPACE_CSG_SHADE=0"), AStringView("NWB_LIGHT_SPACE_CSG_SHADE=1"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0"),
-        AStringView("NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1"), ::__hidden_light_space::s_DefaultLightVariant };
+        ::__hidden_light_space::s_LightSpaceNoCsgOccluder0,
+        ::__hidden_light_space::s_LightSpaceNoCsgOccluder1,
+        ::__hidden_light_space::s_LightSpaceNoCsgOccluder0,
+        ::__hidden_light_space::s_LightSpaceNoCsgOccluder1,
+        ::__hidden_light_space::s_LightSpaceCsgShade0, ::__hidden_light_space::s_LightSpaceCsgShade1,
+        ::__hidden_light_space::s_LightSpaceCsgOccluder0,
+        ::__hidden_light_space::s_LightSpaceCsgOccluder1,
+        ::__hidden_light_space::s_LightSpaceCsgOccluder0,
+        ::__hidden_light_space::s_LightSpaceCsgOccluder1, ::__hidden_light_space::s_DefaultLightVariant };
     for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
         if(!csg && index >= 8u && index <= 12u)
             continue;

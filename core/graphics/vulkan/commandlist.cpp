@@ -391,7 +391,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
             )
         ){
             rejectCommandRecording(
-                NWB_TEXT("close command list"),
+                s_CloseCommandListOperation,
                 NWB_TEXT("task-graph recorder retains exclusive publication ownership")
             );
         }
@@ -424,7 +424,7 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
         return;
     }
 
-    if(!validateCommandRecordingScope(NWB_TEXT("close command list"))){
+    if(!validateCommandRecordingScope(s_CloseCommandListOperation)){
         discardInvalidCommandBuffer();
         return;
     }
@@ -437,7 +437,7 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
         && (!m_textureOwnershipReleaseDestinations.empty() || !m_bufferOwnershipReleaseDestinations.empty())
     ){
         rejectCommandRecording(
-            NWB_TEXT("close command list"),
+            s_CloseCommandListOperation,
             NWB_TEXT("ownership release requires a final resource-state handoff")
         );
         discardInvalidCommandBuffer();
@@ -474,7 +474,7 @@ void CommandList::closeInternal(CommandListResourceStateHandoff* finalStates){
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to end command buffer recording: {}"), ResultToString(res));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to end command buffer recording"));
-        rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("native command buffer could not be ended"));
+        rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("native command buffer could not be ended"));
         discardInvalidCommandBuffer();
         return;
     }
@@ -617,14 +617,14 @@ bool CommandList::isBufferReadyForCommandQueue(
 bool CommandList::validateTrackedTexturesReadyForClose(){
     for(Texture* const texture : m_currentCmdBuf->m_resourceReferences.m_textures){
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_textureStates.begin(); it != m_stateTracker.m_textureStates.end(); ++it){
         Texture* const texture = it->first.texture;
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("tracked texture is not ready for this exact command queue"));
             return false;
         }
     }
@@ -635,7 +635,7 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
     ){
         Texture* const texture = it.value().texture.get();
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent texture is not ready for this exact command queue"));
             return false;
         }
     }
@@ -646,14 +646,14 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
     ){
         Texture* const texture = it->first.texture;
         if(!isTextureReadyForCommandQueue(texture)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released texture is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("released texture is not ready for this exact command queue"));
             return false;
         }
     }
     for(GpuDescriptorHeap* const heap : m_currentCmdBuf->m_referencedDescriptorHeaps){
         if(!heap || !heap->retainedResourcesReadyForQueue(m_creationDesc.physicalQueue)){
             rejectCommandRecording(
-                NWB_TEXT("close command list"),
+                s_CloseCommandListOperation,
                 NWB_TEXT("descriptor heap contains a resource unavailable to this exact command queue")
             );
             return false;
@@ -666,14 +666,14 @@ bool CommandList::validateTrackedTexturesReadyForClose(){
 bool CommandList::validateTrackedBuffersReadyForClose(){
     for(Buffer* const buffer : m_currentCmdBuf->m_resourceReferences.m_buffers){
         if(!isBufferReadyForCommandQueue(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("referenced buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("referenced buffer is not ready for this exact command queue"));
             return false;
         }
     }
     for(auto it = m_stateTracker.m_bufferStates.begin(); it != m_stateTracker.m_bufferStates.end(); ++it){
         Buffer* const buffer = it->first;
         if(!isBufferReadyForCommandQueue(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("tracked buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("tracked buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -684,7 +684,7 @@ bool CommandList::validateTrackedBuffersReadyForClose(){
     ){
         Buffer* const buffer = it.value().buffer.get();
         if(!isBufferReadyForCommandQueue(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("permanent buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("permanent buffer is not ready for this exact command queue"));
             return false;
         }
     }
@@ -695,7 +695,7 @@ bool CommandList::validateTrackedBuffersReadyForClose(){
     ){
         Buffer* const buffer = it->first;
         if(!isBufferReadyForCommandQueue(buffer)){
-            rejectCommandRecording(NWB_TEXT("close command list"), NWB_TEXT("released buffer is not ready for this exact command queue"));
+            rejectCommandRecording(s_CloseCommandListOperation, NWB_TEXT("released buffer is not ready for this exact command queue"));
             return false;
         }
     }

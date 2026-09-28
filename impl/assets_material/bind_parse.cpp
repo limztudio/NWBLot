@@ -145,11 +145,11 @@ bool ParseMaterialBindResourceFieldTypeText(
     MaterialLayoutFieldType::Enum& outFieldType
 ){
     outFieldType = MaterialLayoutFieldType::None;
-    if(typeText == AStringView("texture2d")){
+    if(typeText == s_BindFieldTypeTexture2D){
         outFieldType = MaterialLayoutFieldType::SampledImage2D;
         return true;
     }
-    if(typeText == AStringView("sampler")){
+    if(typeText == s_BindFieldTypeSampler){
         outFieldType = MaterialLayoutFieldType::Sampler;
         return true;
     }

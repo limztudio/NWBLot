@@ -416,7 +416,7 @@ bool PublishStagedVolume(const StagedDirectoryPaths& stagedPaths, const Path& ou
 
 bool RemoveVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
     if(!::ValidVolumeName(volumeName)){
-        FilesystemVolumeDetail::LogFailure(volumeName, "remove", "invalid volume name");
+        FilesystemVolumeDetail::LogFailure(volumeName, FilesystemVolumeDetail::s_VolumeOpRemove, "invalid volume name");
         return false;
     }
 

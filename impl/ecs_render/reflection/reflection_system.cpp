@@ -534,15 +534,15 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
         && (!preparePipeline(
             m_resources.hardwarePipeline, m_hardwareShader,
             Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionOpticalHardware"), true, m_bindingLayout,
-            AStringView("NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=1")
+            s_ReflectionHwOpticalVariant
         ) || !preparePipeline(
             m_plainHardwarePipeline, m_plainHardwareShader,
             Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionHardware"), true, m_bindingLayout,
-            AStringView("NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=0")
+            s_ReflectionHwPlainVariant
         ) || !preparePipeline(
             m_unspecifiedHardwarePipeline, m_unspecifiedHardwareShader,
             Name("engine/graphics/reflection/resolve_hw_cs"), Name("ECSRender_ReflectionUnspecifiedOpticalHardware"), true, m_bindingLayout,
-            AStringView("NWB_BINDLESS_TLAS=1;NWB_REFLECTION_OPTICAL_TRANSPORT=2")
+            s_ReflectionHwUnspecifiedVariant
         ))
     )
         return false;

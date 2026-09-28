@@ -77,7 +77,7 @@ bool SamplerAssetLoader::Load(
     const NotNull<const tchar*> ownerName
 ){
     const NotNull<const tchar*> owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, MakeNotNull("sampler")))
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, MakeNotNull(Sampler::s_AssetTypeText.data())))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
@@ -87,7 +87,7 @@ bool SamplerAssetLoader::Load(
         samplerVirtualPath,
         loadedAsset,
         owner,
-        MakeNotNull("sampler")
+        MakeNotNull(Sampler::s_AssetTypeText.data())
     );
     if(!loadedSampler)
         return false;

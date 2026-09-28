@@ -298,7 +298,7 @@ void CommandList::clearColorTextureBox(
     if(VulkanTextureDetail::TextureClearBoxEmpty(box))
         return;
     static_cast<void>(valueName);
-    constexpr const tchar* s_OperationName = NWB_TEXT("clear texture box");
+    constexpr const tchar* s_OperationName = s_ClearTextureBoxOperation;
     if(&texture.m_context != &m_context || texture.m_image == VK_NULL_HANDLE){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture must be a live resource owned by this device"));
         return;
@@ -397,7 +397,7 @@ void CommandList::clearColorTextureBox(
     ;
     if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
         rejectCommandRecording(
-            NWB_TEXT("clear texture box"),
+            s_ClearTextureBoxOperation,
             NWB_TEXT("bounded texture box clears do not support the texture format")
         );
         return;
@@ -430,7 +430,7 @@ void CommandList::clearColorTextureBox(
             texture.m_formatLayout
         )){
             rejectCommandRecording(
-                NWB_TEXT("clear texture box"),
+                s_ClearTextureBoxOperation,
                 NWB_TEXT("bounded block-compressed clear edges must be block-aligned except at texture edges")
             );
             return;
@@ -442,12 +442,12 @@ void CommandList::clearColorTextureBox(
         const u64 clearBlockCountX = DivideUp(clearWidth, blockWidth);
         const u64 clearBlockCountY = DivideUp(clearHeight, blockHeight);
         if(clearBlockCountX > Limit<u64>::s_Max / clearBlockCountY){
-            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("clear byte size overflows"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
             return;
         }
         const u64 clearSliceBlockCount = clearBlockCountX * clearBlockCountY;
         if(clearDepth > 1ull && clearSliceBlockCount > Limit<u64>::s_Max / clearDepth){
-            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("clear byte size overflows"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("clear byte size overflows"));
             return;
         }
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
@@ -458,7 +458,7 @@ void CommandList::clearColorTextureBox(
             mipPlan.uploadLayout
         )){
             rejectCommandRecording(
-                NWB_TEXT("clear texture box"),
+                s_ClearTextureBoxOperation,
                 NWB_TEXT("clear upload layout is not addressable")
             );
             return;
@@ -513,7 +513,7 @@ void CommandList::clearColorTextureBox(
             stagingBytes,
             mipPlan.uploadLayout.stagingAlignment
         )){
-            rejectCommandRecording(NWB_TEXT("clear texture box"), NWB_TEXT("staging allocation failed"));
+            rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("staging allocation failed"));
             return;
         }
         if(
@@ -526,7 +526,7 @@ void CommandList::clearColorTextureBox(
                 > stagingBuffer->m_creationDesc.byteSize - stagingOffset
         ){
             rejectCommandRecording(
-                NWB_TEXT("clear texture box"),
+                s_ClearTextureBoxOperation,
                 NWB_TEXT("staging allocation returned an invalid range")
             );
             return;

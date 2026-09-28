@@ -79,19 +79,19 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     if(byteCount == 0 || destinationOffset == sourceOffset)
         return true;
     if(m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "segment size is zero");
         return false;
     }
 
     u64 sourceEndOffset = 0;
     if(!FilesystemVolumeDetail::AddNoOverflow(sourceOffset, byteCount, sourceEndOffset)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "source range overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "source range overflow");
         return false;
     }
 
     u64 capacityBytes = 0;
     if(!computeLogicalCapacityLocked(capacityBytes)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "capacity overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "capacity overflow");
         return false;
     }
     if(sourceEndOffset > capacityBytes){
@@ -106,17 +106,17 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
 
     u64 destinationEndOffset = 0;
     if(!FilesystemVolumeDetail::AddNoOverflow(destinationOffset, byteCount, destinationEndOffset)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "destination range overflow");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "destination range overflow");
         return false;
     }
     if(!ensureCapacityLocked(destinationEndOffset)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "failed to ensure destination capacity");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "failed to ensure destination capacity");
         return false;
     }
 
     const u64 moveChunkBytes = Min(FilesystemVolumeDetail::s_VolumeMoveChunkBytes, m_segmentSize);
     if(moveChunkBytes == 0 || moveChunkBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "moveBytes", "invalid move chunk size");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "invalid move chunk size");
         return false;
     }
 
@@ -167,11 +167,11 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     ErrorCode errorCode;
 
     if(!m_writable || m_segmentSize == 0){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "trimSegments", "filesystem is not writable or segment size is zero");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "filesystem is not writable or segment size is zero");
         return false;
     }
     if(m_segmentPaths.empty()){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "trimSegments", "no segments are mounted");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "no segments are mounted");
         return false;
     }
 
@@ -180,11 +180,11 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     if(requiredSegments == 0)
         requiredSegments = 1;
     if(requiredSegments > static_cast<u64>(m_segmentPaths.size())){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "trimSegments", "required segment count exceeds mounted segment count");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "required segment count exceeds mounted segment count");
         return false;
     }
     if(requiredSegments > static_cast<u64>(Limit<usize>::s_Max)){
-        FilesystemVolumeDetail::LogFailure(m_volumeName, "trimSegments", "required segment count exceeds usize range");
+        FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, "required segment count exceeds usize range");
         return false;
     }
 
@@ -192,10 +192,10 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
         const Path removePath = m_segmentPaths.back();
         if(!RemoveFile(removePath, errorCode)){
             if(errorCode){
-                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "trimSegments:remove", removePath, errorCode);
+                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsRemove, removePath, errorCode);
             }
             else{
-                FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, "trimSegments:remove", removePath, "segment was not present");
+                FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsRemove, removePath, "segment was not present");
             }
             return false;
         }
@@ -209,14 +209,14 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
     const Path& lastSegmentPath = m_segmentPaths.back();
     const u64 currentLastSegmentBytes = FileSize(lastSegmentPath, errorCode);
     if(errorCode){
-        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "trimSegments:file_size", lastSegmentPath, errorCode);
+        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsFileSize, lastSegmentPath, errorCode);
         return false;
     }
     if(currentLastSegmentBytes == requiredLastSegmentBytes)
         return true;
 
     if(!ResizeFile(lastSegmentPath, requiredLastSegmentBytes, errorCode)){
-        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, "trimSegments:resize", lastSegmentPath, errorCode);
+        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsResize, lastSegmentPath, errorCode);
         return false;
     }
 

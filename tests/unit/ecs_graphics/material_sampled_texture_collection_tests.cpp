@@ -407,7 +407,7 @@ TEST(MaterialSampledTextureCollection, SeededDuplicatesRemainOrderedAndEmptyOrRe
     output.reserve(8u);
     const auto empty = scratch.memoryStats();
     {
-        ShadowMaterialSampledTextureCollector unused(output, scratch);
+        ShadowMaterialSampledTextureCollector emptyCollector(output, scratch);
     }
     EXPECT_EQ(scratch.memoryStats().allocationCount, empty.allocationCount);
     output.push_back(context.textures[s_ThirdElementIndex]);

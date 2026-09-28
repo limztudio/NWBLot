@@ -299,55 +299,14 @@ bool BackendContext::present(bool& outPresentationAccepted){
             return false;
         }
 
-        CommandListParameters commandListParams;
-        commandListParams.setPhysicalQueue(primaryGraphicsQueue);
-        CommandListHandle compatibilityCommandList = m_rhiDevice->createCommandList(commandListParams);
-        if(!compatibilityCommandList){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate the compatibility presentation command list."));
+        // Swap-chain-lifetime list created with swap-chain resources; reopen it here instead of creating per frame.
+        if(!ensureCompatibilityPresentCommandList(primaryGraphicsQueue)){
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to acquire the compatibility presentation command list."));
             return false;
         }
-
-        compatibilityCommandList->open();
-        if(
-            !compatibilityCommandList->hasCommandBuffer()
-            || !compatibilityCommandList->isRecording()
-            || compatibilityCommandList->commandRecordingFailed()
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the compatibility presentation command list."));
+        if(!recordCompatibilityPresentTransition(transitionPolicy, swapChainImage.rhiHandle.get()))
             return false;
-        }
-
-        if(transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::PreservePresent){
-            compatibilityCommandList->beginTrackingTextureState(
-                swapChainImage.rhiHandle.get(),
-                s_AllSubresources,
-                ResourceStates::Present
-            );
-        }
-        compatibilityCommandList->setTextureState(
-            swapChainImage.rhiHandle.get(),
-            s_AllSubresources,
-            ResourceStates::Present
-        );
-        compatibilityCommandList->commitBarriers();
-        if(
-            !compatibilityCommandList->hasCommandBuffer()
-            || !compatibilityCommandList->isRecording()
-            || compatibilityCommandList->commandRecordingFailed()
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the compatibility presentation transition."));
-            return false;
-        }
-
-        compatibilityCommandList->close();
-        if(
-            !compatibilityCommandList->hasCommandBuffer()
-            || compatibilityCommandList->isRecording()
-            || compatibilityCommandList->commandRecordingFailed()
-        ){
-            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the compatibility presentation command list."));
-            return false;
-        }
+        CommandList* const compatibilityCommandList = m_compatibilityPresentCommandList.get();
 
         const QueueSubmissionPreSubmitHook presentationSignalHook = claimFramePresentationSignal();
         if(!presentationSignalHook.valid()){
@@ -361,7 +320,7 @@ bool BackendContext::present(bool& outPresentationAccepted){
 
         QueueSubmissionDesc submitDesc;
         submitDesc.setPreSubmitHook(presentationSignalHook);
-        CommandList* const compatibilityCommandLists[] = { compatibilityCommandList.get() };
+        CommandList* const compatibilityCommandLists[] = { compatibilityCommandList };
         const QueueSubmissionToken fallbackToken = m_rhiDevice->executeCommandListsInternal(
             compatibilityCommandLists,
             LengthOf(compatibilityCommandLists),
@@ -497,6 +456,79 @@ bool BackendContext::present(bool& outPresentationAccepted){
     }
     m_framesInFlight.push(query);
 
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool BackendContext::ensureCompatibilityPresentCommandList(const GpuPhysicalQueueId& executionQueue){
+    if(!m_rhiDevice || !executionQueue.valid())
+        return false;
+    if(m_compatibilityPresentCommandList && m_compatibilityPresentQueue == executionQueue)
+        return true;
+    resetCompatibilityPresentCommandList();
+    CommandListParameters commandListParams;
+    commandListParams.setPhysicalQueue(executionQueue);
+    m_compatibilityPresentCommandList = m_rhiDevice->createCommandList(commandListParams);
+    if(!m_compatibilityPresentCommandList)
+        return false;
+    m_compatibilityPresentQueue = executionQueue;
+    return true;
+}
+
+void BackendContext::resetCompatibilityPresentCommandList()noexcept{
+    m_compatibilityPresentCommandList.reset();
+    m_compatibilityPresentQueue = {};
+}
+
+bool BackendContext::recordCompatibilityPresentTransition(
+    const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy,
+    Texture* backbufferTexture
+){
+    CommandList* const compatibilityCommandList = m_compatibilityPresentCommandList.get();
+    if(!compatibilityCommandList || !backbufferTexture)
+        return false;
+    compatibilityCommandList->open();
+    if(
+        !compatibilityCommandList->hasCommandBuffer()
+        || !compatibilityCommandList->isRecording()
+        || compatibilityCommandList->commandRecordingFailed()
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to open the compatibility presentation command list."));
+        return false;
+    }
+    if(transitionPolicy == VulkanDetail::CompatibilityPresentTransitionPolicy::PreservePresent){
+        compatibilityCommandList->beginTrackingTextureState(
+            backbufferTexture,
+            s_AllSubresources,
+            ResourceStates::Present
+        );
+    }
+    compatibilityCommandList->setTextureState(
+        backbufferTexture,
+        s_AllSubresources,
+        ResourceStates::Present
+    );
+    compatibilityCommandList->commitBarriers();
+    if(
+        !compatibilityCommandList->hasCommandBuffer()
+        || !compatibilityCommandList->isRecording()
+        || compatibilityCommandList->commandRecordingFailed()
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to record the compatibility presentation transition."));
+        return false;
+    }
+    compatibilityCommandList->close();
+    if(
+        !compatibilityCommandList->hasCommandBuffer()
+        || compatibilityCommandList->isRecording()
+        || compatibilityCommandList->commandRecordingFailed()
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to close the compatibility presentation command list."));
+        return false;
+    }
     return true;
 }
 

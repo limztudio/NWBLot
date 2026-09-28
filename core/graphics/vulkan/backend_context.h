@@ -213,6 +213,12 @@ private:
     [[nodiscard]] bool prepareAcquireSyncSlot(AcquireSyncSlot& slot);
     [[nodiscard]] bool waitAcquireSyncSlotsForLifecycle();
     [[nodiscard]] bool createFrameSyncQueries();
+    [[nodiscard]] bool ensureCompatibilityPresentCommandList(const GpuPhysicalQueueId& executionQueue);
+    void resetCompatibilityPresentCommandList()noexcept;
+    [[nodiscard]] bool recordCompatibilityPresentTransition(
+        const VulkanDetail::CompatibilityPresentTransitionPolicy::Enum transitionPolicy,
+        Texture* backbufferTexture
+    );
     [[nodiscard]] static bool PrepareFramePresentationSignal(
         void* context,
         u64 identity,
@@ -302,6 +308,10 @@ private:
 
     AcquireSyncSlotVector m_acquireSyncSlots;
     SemaphoreVector m_presentSemaphores;
+    // Swap-chain-lifetime compatibility transition list. Created once with swap-chain resources and
+    // reopened per use; present() never creates a command list so the frame path stays allocation-free.
+    CommandListHandle m_compatibilityPresentCommandList;
+    GpuPhysicalQueueId m_compatibilityPresentQueue;
 
     VkSemaphore m_framePresentationSemaphore = VK_NULL_HANDLE;
     GpuPhysicalQueueId m_framePresentationQueue;

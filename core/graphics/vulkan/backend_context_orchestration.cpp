@@ -334,6 +334,21 @@ bool BackendContext::createSwapChainResources(){
         return false;
     }
 
+    // Compatibility fallback list is swap-chain lifetime state; create it here so present() only reopens it.
+    resetCompatibilityPresentCommandList();
+    {
+        const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
+        if(!primaryGraphicsQueue.valid() || !ensureCompatibilityPresentCommandList(primaryGraphicsQueue)){
+            clearSemaphores(m_presentSemaphores);
+            clearAcquireSyncSlots();
+            resetCompatibilityPresentCommandList();
+            if(!destroySwapChainAfterCreateFailure())
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to destroy swapchain after compatibility-list creation failure."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create the compatibility presentation command list."));
+            return false;
+        }
+    }
+
     m_swapChainIndex = Limit<u32>::s_Max;
     m_acquireSyncSlotIndex = 0u;
     m_activeAcquireSyncSlotIndex = Limit<u32>::s_Max;

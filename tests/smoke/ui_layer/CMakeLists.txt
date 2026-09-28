@@ -27,6 +27,7 @@ nwb_target_link_libraries_whole_archive(nwb_ui_layer_smoke
     nwb_assets_texture
     nwb_assets_ui_skin
     nwb_assets_font
+    nwb_assets_font_atlas
     nwb_assets_sampler
 )
 target_link_libraries(nwb_ui_layer_smoke PRIVATE nwb_common nwb_alloc nwb_loader nwb_ecs_ui nwb_ui_widgets)

@@ -38,6 +38,7 @@ private:
     Impl::Ui::Label m_korean;
     Impl::Ui::Label m_clipped;
     Impl::Ui::SharedGlyphPage m_coverage;
+    Impl::Ui::SharedSdfAtlasPage m_sdf;
 };
 
 using SharedUiTextSmokeSamples = RefCountPtr<

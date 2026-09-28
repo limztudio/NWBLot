@@ -139,8 +139,25 @@ public:
         );
         m_hbFace = hb_face_create(m_blob, source.font.faceIndex());
         m_ready = hb_face_get_glyph_count(m_hbFace) != 0u && hb_face_get_upem(m_hbFace) != 0u;
-        if(!m_ready)
+        if(!m_ready){
             NWB_LOGGER_ERROR(NWB_TEXT("UI HarfBuzz font face initialization failed"));
+            return;
+        }
+        if(source.atlas){
+            const FontAtlasPayload& payload = source.atlas->payload();
+            if(
+                source.atlas->validatePayload() && payload.font == m_identity
+                && ValidateFontAtlasSourceMatch(payload, source.font)
+                && payload.faceIndex == source.font.faceIndex() && payload.unitsPerEm == hb_face_get_upem(m_hbFace)
+                && payload.sourceGlyphCount == hb_face_get_glyph_count(m_hbFace)
+            ){
+                m_bakedAtlas = CreateBakedFontAtlas(arena, *source.atlas, m_generation);
+                if(!m_bakedAtlas)
+                    NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas could not be installed; using native coverage"));
+            }
+            else
+                NWB_LOGGER_WARNING(NWB_TEXT("UI baked font atlas does not match the shaping font; using native coverage"));
+        }
     }
     ~FontFaceState(){
         if(m_hbFace)
@@ -158,6 +175,7 @@ private:
     Core::Assets::AssetRef<Font> m_identity;
     u64 m_generation;
     PaintVector<u8> m_bytes;
+    SharedBakedFontAtlas m_bakedAtlas;
     FT_MemoryRec_ m_memory{};
     FT_Library m_library = nullptr;
     FT_Face m_face = nullptr;
@@ -181,6 +199,8 @@ bool FontFace::valid()const{ return m_state->m_ready; }
 const Core::Assets::AssetRef<Font>& FontFace::identity()const{ return m_state->m_identity; }
 
 u64 FontFace::generation()const{ return m_state->m_generation; }
+
+const SharedBakedFontAtlas& FontFace::bakedAtlas()const{ return m_state->m_bakedAtlas; }
 
 bool FontFace::metrics(f32 fontSize, FontMetrics& output)const{
     if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / 64.0f || fontSize > 2048.0f)

@@ -30,51 +30,7 @@ static bool SamePage(const GlyphPageBinding& first, const GlyphPageBinding& seco
 
 
 bool PaintBuilder::prepareGlyphPages(const SharedGlyphPage* const pages, const usize count){
-    NWB_ASSERT(m_recording);
-    if(count > s_PaintMaxGlyphPages || (count != 0u && !pages))
-        return false;
-    usize added = 0u;
-    for(usize candidate = 0u; candidate < count; ++candidate){
-        if(!pages[candidate])
-            return false;
-        const GlyphPageBinding& binding = pages[candidate]->binding();
-        bool found = false;
-        for(const SharedGlyphPage& existing : m_snapshot.m_glyphPages){
-            if(__hidden_ui_glyph_paint::SamePage(binding, existing->binding())){
-                if(binding.width != existing->binding().width || binding.height != existing->binding().height)
-                    return false;
-                found = true;
-                break;
-            }
-        }
-        for(usize previous = 0u; previous < candidate; ++previous){
-            if(__hidden_ui_glyph_paint::SamePage(binding, pages[previous]->binding())){
-                if(binding.width != pages[previous]->binding().width || binding.height != pages[previous]->binding().height)
-                    return false;
-                found = true;
-                break;
-            }
-        }
-        if(!found)
-            ++added;
-    }
-    if(added > s_PaintMaxGlyphPages - m_snapshot.m_glyphPages.size())
-        return false;
-    m_snapshot.m_glyphPages.reserve(m_snapshot.m_glyphPages.size() + added);
-    for(usize candidate = 0u; candidate < count; ++candidate){
-        SharedGlyphPage* existing = nullptr;
-        for(SharedGlyphPage& bound : m_snapshot.m_glyphPages){
-            if(__hidden_ui_glyph_paint::SamePage(bound->binding(), pages[candidate]->binding())){
-                existing = &bound;
-                break;
-            }
-        }
-        if(!existing)
-            m_snapshot.m_glyphPages.push_back(pages[candidate]);
-        else if((*existing)->binding().generation < pages[candidate]->binding().generation)
-            *existing = pages[candidate];
-    }
-    return true;
+    return prepareImages(pages, count, nullptr, 0u);
 }
 
 bool PaintBuilder::drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint){

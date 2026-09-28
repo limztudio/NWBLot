@@ -47,6 +47,33 @@ static constexpr u64 s_CoverageAtlasIdentity = 0x5549534D4F4B45u;
     return Impl::Ui::CreateGlyphPage(arena, binding, Move(pixels));
 }
 
+[[nodiscard]] static Impl::Ui::SharedSdfAtlasPage MakeSdfPage(Core::Alloc::GlobalArena& arena){
+    const Impl::Ui::SdfAtlasPageBinding binding{
+        .font = Core::Assets::AssetRef<Impl::Font>("engine/ui/fonts/default/latin"),
+        .fontSha256 = {},
+        .pixelsSha256 = {},
+        .fontGeneration = 1u,
+        .atlasIdentity = s_CoverageAtlasIdentity,
+        .generation = 1u,
+        .index = 0u,
+        .width = 12u,
+        .height = 4u,
+        .spreadPixels = 8u
+    };
+    Impl::Ui::SdfAtlasPage::Pixels pixels(arena);
+    pixels.resize(12u * 4u * 4u);
+    for(u32 y = 0u; y < binding.height; ++y){
+        for(u32 x = 0u; x < binding.width; ++x){
+            const usize offset = (y * binding.width + x) * 4u;
+            pixels[offset] = 0u;
+            pixels[offset + 1u] = 128u;
+            pixels[offset + 2u] = 255u;
+            pixels[offset + 3u] = x < 4u ? 0u : (x < 8u ? 128u : 255u);
+        }
+    }
+    return Impl::Ui::CreateSdfAtlasPage(arena, binding, Move(pixels));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -62,6 +89,7 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
     , m_korean(arena)
     , m_clipped(arena)
     , m_coverage(__hidden_ui_text_smoke::MakeCoveragePage(arena))
+    , m_sdf(__hidden_ui_text_smoke::MakeSdfPage(arena))
 {
     const bool configured = m_latin.setText({ .text = "office ffi e\xCC\x81", .fontSize = 22.0f })
         == Impl::Ui::TextLayoutStatus::Success
@@ -72,7 +100,7 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
             .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'),
             .language = "ko"
         }) == Impl::Ui::TextLayoutStatus::Success;
-    NWB_FATAL_ASSERT_MSG(configured && m_coverage, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
+    NWB_FATAL_ASSERT_MSG(configured && m_coverage && m_sdf, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
 }
 
 bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
@@ -96,6 +124,12 @@ bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){
         const Impl::Ui::Rect rectangle{ width * (0.64f + static_cast<f32>(i) * 0.08f), height * 0.84f, width * 0.05f, height * 0.06f };
         const Impl::Ui::Rect uv{ static_cast<f32>(i) / 3.0f, 0.0f, 1.0f / 3.0f, 1.0f };
         if(!paint.drawGlyph(m_coverage, rectangle, uv, tint))
+            return false;
+    }
+    for(u32 channel = 0u; channel < 4u; ++channel){
+        const Impl::Ui::Rect rectangle{ width * (0.64f + static_cast<f32>(channel) * 0.08f), height * 0.94f,
+            width * 0.05f, height * 0.045f };
+        if(!paint.drawSdfGlyph(m_sdf, channel, rectangle, { 0.f, 0.f, 1.f, 1.f }, { 0.2f, 1.f, 0.4f, 0.5f }))
             return false;
     }
     return true;

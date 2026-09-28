@@ -1,16 +1,17 @@
 # CPU text foundation
 
 `nwb_ui_text` owns font versions, shaping, multiline label layout, cluster hit testing,
-and the current grayscale coverage atlas. It depends publicly on `nwb_ui` and privately
-on the pinned FreeType and HarfBuzz targets. Its public headers contain no native font,
-graphics, ECS, ImGui, clipboard, or IME types.
+and native grayscale coverage plus optional baked SDF atlas images. It depends publicly
+on `nwb_ui` and `nwb_assets_font_atlas`, and privately on the pinned FreeType and HarfBuzz
+targets. Its public headers contain no native font, graphics, ECS, ImGui, clipboard,
+or IME types.
 
 Construct `TextService` with the UI owner's `Core::Alloc::GlobalArena`. That arena must
 outlive the service, every returned layout, every published glyph page, and submitted
 paint snapshots. Call `setFonts()` on the owning UI thread with an ordered primary and
-fallback list of matching loaded `Font` assets, typed `AssetRef<Font>` identities, and
-nonzero source generations. The service copies font bytes before native faces borrow
-them. FreeType allocations use the supplied arena; native font and shaping owners use
+fallback list of matching loaded `Font` assets, typed `AssetRef<Font>` identities,
+nonzero source generations, and optional `FontAtlas` pointers. The service copies font
+bytes before native faces borrow them. FreeType allocations use the supplied arena; native font and shaping owners use
 RAII. Layout glyphs retain strong references to the exact CPU font versions needed for
 later rasterization. An asset reference alone does not retain loaded font data.
 
@@ -72,7 +73,33 @@ These APIs expose shaped cluster edges. They do not implement UAX #29 grapheme-b
 editing, intra-ligature caret positions, or complete visual selection/navigation.
 Those policies require a separate editing increment.
 
-## Current coverage painting
+## Glyph image selection and painting
+
+Each installed `FontSource` may supply a matching `FontAtlas`. Installation verifies
+the typed font identity, exact source SHA-256, face index, units per em, glyph count,
+and complete original positioning-table bytes. It copies rendering records and RGBA
+images into a strong immutable `BakedFontAtlas` version. Missing or mismatched optional
+atlases leave that same face available through native coverage.
+
+The baker packs four independent scalar SDF pages into R/G/B/A. Each drawable shaped
+glyph selects its actual face's group and channel; padded plane bounds combine with
+HarfBuzz's baseline position and offsets. Neither atlas inspection advances nor
+exported `kern`/GPOS/GDEF bytes are applied again after shaping.
+
+SDF is selected when physical font size is within 0.5..1.5 times its bake ppem. The
+shipped 32-ppem atlases therefore serve 16..48 physical pixels per em. Outside the
+interval, native coverage uses the already selected shaping face. Zoom and DPI can
+change the image source without changing logical layout. The interval passed 36
+comparisons of Latin A/o/e and Korean Hangul against supersampled native coverage;
+other fonts require their own visual qualification. Scalar SDF does not guarantee
+arbitrary magnification or recover details missing from its bake.
+
+Layouts retain their exact source font and baked image versions. Paint snapshots pin
+immutable RGBA pages after source asset release or font replacement. Warm SDF painting
+and supported DPI changes reuse the same pages; native coverage maintains a separate
+raster cache. Both image kinds are admitted atomically before quads are emitted.
+
+## Native coverage fallback
 
 `TextService::paint()` reads the builder's saved display metrics. It rasterizes at
 `ceil(fontSize * max(pixelScaleX, pixelScaleY))`, with hinting disabled, while layout
@@ -104,8 +131,8 @@ loaded:
 Core::Alloc::GlobalArena uiArena(Name("runtime/ui"));
 Ui::TextService text(uiArena);
 const Ui::FontSource fonts[]{
-    { latinRef, latinFont, latinGeneration },
-    { koreanRef, koreanFont, koreanGeneration },
+    { latinRef, latinFont, latinGeneration, &latinAtlas },
+    { koreanRef, koreanFont, koreanGeneration, &koreanAtlas },
 };
 if(!text.setFonts(fonts, 2u))
     return false;
@@ -126,10 +153,9 @@ Ui::DrawSnapshot snapshot = paint.freeze();
 // The owner keeps uiArena alive until every submitted consumer of snapshot completes.
 ```
 
-The proposed next rendering increment is described in the
-[offline font-atlas plan](../../../docs/font_atlas_plan.md): a baker that packs
-independent scalar SDF pages into RGBA channels and writes glyph/atlas metrics plus
-kerning to `.nwb`. That authored representation will replace or complement runtime
-coverage rasterization. HarfBuzz shaping and byte-cluster layout remain necessary for
-ligatures, combining marks, Korean shaping, and other script behavior beyond pair
-kerning. This module currently renders coverage, not signed distance fields.
+The [offline font-atlas contract](../../../docs/font_atlas_plan.md) and
+[utility README](../../../utilities/font_atlas/README.md) describe generation,
+lossless payloads, positioning-table export, qualified scale, and GPU ownership.
+`UiFontBinding` in the ECS adapter selects typed font/atlas references explicitly;
+the text service itself consumes already loaded CPU assets and owns no loader,
+clipboard, or IME service.

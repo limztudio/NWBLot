@@ -35,6 +35,12 @@ bool GpuRasterTask::record(
         if(context.declarations.textureForResource(payload.glyphPages[index]) != frame->m_glyphPages[index]->m_texture.get())
             return false;
     }
+    if(payload.sdfPages.size() != frame->m_sdfPages.size())
+        return false;
+    for(usize index = 0u; index < payload.sdfPages.size(); ++index){
+        if(context.declarations.textureForResource(payload.sdfPages[index]) != frame->m_sdfPages[index]->m_texture.get())
+            return false;
+    }
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const DisplayMetrics& display = frame->m_snapshot.displayMetrics();
     GpuPaintPushConstants push;
@@ -74,6 +80,15 @@ bool GpuRasterTask::record(
             if(draw.glyphPageIndex >= frame->m_glyphPages.size())
                 return false;
             push.textureSlot = frame->m_glyphPages[draw.glyphPageIndex]->m_sampledImage.slot();
+        }
+        else if(draw.material == PaintMaterial::SdfGlyph){
+            if(draw.sdfPageIndex >= frame->m_sdfPages.size())
+                return false;
+            const auto& page = frame->m_sdfPages[draw.sdfPageIndex];
+            push.textureSlot = page->m_sampledImage.slot();
+            push.sdfChannel = draw.sdfChannel;
+            push.sdfSpreadPixels = page->m_page->binding().spreadPixels;
+            push.sdfDistanceEncoding = page->m_page->binding().distanceEncoding;
         }
         commands.setPushConstants(&push, sizeof(push));
         Core::DrawArguments arguments;

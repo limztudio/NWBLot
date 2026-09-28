@@ -39,6 +39,7 @@ private:
     TextLayoutBuilder m_layoutBuilder;
     NotNullUniquePtr<GlyphAtlas, ArenaDeleter<GlyphAtlas, Core::Alloc::GlobalArena>> m_atlas;
     PaintVector<SharedGlyphPage> m_pages;
+    PaintVector<SharedSdfAtlasPage> m_sdfPages;
     u64 m_identity = 0u;
     u64 m_generation = 0u;
 };

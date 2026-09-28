@@ -44,6 +44,12 @@ PROBES = (
     Probe("glyph half coverage half tint opacity", 0.745, 0.865,
         linear_to_srgb_bytes((128 / 255 * 0.5, 128 / 255 * 0.1, 128 / 255 * 0.3))),
     Probe("glyph full coverage half tint opacity", 0.825, 0.865, linear_to_srgb_bytes((0.5, 0.1, 0.3))),
+    Probe("SDF R exterior", 0.665, 0.96, (0, 0, 0), 2),
+    Probe("SDF G zero distance half tint opacity", 0.745, 0.96, linear_to_srgb_bytes((0.05, 0.25, 0.10))),
+    Probe("SDF B interior", 0.825, 0.96, linear_to_srgb_bytes((0.10, 0.50, 0.20))),
+    Probe("SDF A exterior", 0.886, 0.96, (0, 0, 0), 2),
+    Probe("SDF A zero distance half tint opacity", 0.905, 0.96, linear_to_srgb_bytes((0.05, 0.25, 0.10))),
+    Probe("SDF A interior", 0.924, 0.96, linear_to_srgb_bytes((0.10, 0.50, 0.20))),
 )
 
 

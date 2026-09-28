@@ -6,6 +6,7 @@
 
 
 #include "types.h"
+#include "baked_atlas.h"
 
 #include <impl/assets_font/asset.h>
 
@@ -23,6 +24,7 @@ struct FontSource{
     Core::Assets::AssetRef<Font> identity;
     const Font& font;
     u64 generation = 0u;
+    const FontAtlas* atlas = nullptr;
 };
 
 struct RawShapedGlyph{
@@ -63,6 +65,7 @@ public:
     [[nodiscard]] bool valid()const;
     [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const;
     [[nodiscard]] u64 generation()const;
+    [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const;
     [[nodiscard]] bool metrics(f32 fontSize, FontMetrics& output)const;
     [[nodiscard]] bool shape(
         const ShapeRequest& request,

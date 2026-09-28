@@ -4,8 +4,8 @@ file(READ "${CMAKE_CURRENT_LIST_DIR}/include/freetype/config/ftoption.h" _nwb_ft
 foreach(_nwb_ft_disabled_option USE_LZW USE_ZLIB USE_BZIP2 USE_PNG USE_HARFBUZZ USE_HARFBUZZ_DYNAMIC USE_BROTLI)
     string(REGEX REPLACE "#define FT_CONFIG_OPTION_${_nwb_ft_disabled_option}([ \t]*[\r\n])" "#undef FT_CONFIG_OPTION_${_nwb_ft_disabled_option}\\1" _nwb_ft_options "${_nwb_ft_options}")
 endforeach()
-file(WRITE "${_nwb_ft_config_dir}/ftoption.h" "${_nwb_ft_options}")
-file(WRITE "${_nwb_ft_config_dir}/ftmodule.h"
+file(CONFIGURE OUTPUT "${_nwb_ft_config_dir}/ftoption.h" CONTENT "${_nwb_ft_options}" @ONLY)
+string(CONCAT _nwb_ft_modules
     "FT_USE_MODULE(FT_Module_Class, autofit_module_class)\n"
     "FT_USE_MODULE(FT_Driver_ClassRec, tt_driver_class)\n"
     "FT_USE_MODULE(FT_Driver_ClassRec, cff_driver_class)\n"
@@ -15,7 +15,10 @@ file(WRITE "${_nwb_ft_config_dir}/ftmodule.h"
     "FT_USE_MODULE(FT_Module_Class, sfnt_module_class)\n"
     "FT_USE_MODULE(FT_Renderer_Class, ft_smooth_renderer_class)\n"
     "FT_USE_MODULE(FT_Renderer_Class, ft_raster1_renderer_class)\n"
+    "FT_USE_MODULE(FT_Renderer_Class, ft_sdf_renderer_class)\n"
+    "FT_USE_MODULE(FT_Renderer_Class, ft_bitmap_sdf_renderer_class)\n"
 )
+file(CONFIGURE OUTPUT "${_nwb_ft_config_dir}/ftmodule.h" CONTENT "${_nwb_ft_modules}" @ONLY)
 
 add_library(nwb_vendor_freetype STATIC
     src/autofit/autofit.c
@@ -36,6 +39,7 @@ add_library(nwb_vendor_freetype STATIC
     src/raster/raster.c
     src/sfnt/sfnt.c
     src/smooth/smooth.c
+    src/sdf/sdf.c
     src/truetype/truetype.c
 )
 add_library(nwb::freetype ALIAS nwb_vendor_freetype)

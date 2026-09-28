@@ -1,0 +1,94 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "baked_atlas.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_ui_baked_font_atlas{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+static Atomic<u64> s_NextIdentity{ 1u };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 NewIdentity(){
+    const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
+    NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("Baked font atlas identity overflow"));
+    return identity;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration)
+    : m_glyphs(arena)
+    , m_pages(arena)
+{
+    const FontAtlasPayload& payload = atlas.payload();
+    m_unitsPerEm = payload.unitsPerEm;
+    m_bakePpem = payload.bakePpem;
+    m_glyphs.assign(payload.glyphs.begin(), payload.glyphs.end());
+    m_pages.reserve(payload.groups.size());
+    const u64 identity = __hidden_ui_baked_font_atlas::NewIdentity();
+    for(u32 group = 0u; group < payload.groups.size(); ++group){
+        SharedSdfAtlasPage page = CreateSdfAtlasPage(arena, atlas, fontGeneration, identity, group);
+        if(!page)
+            return;
+        m_pages.push_back(Move(page));
+    }
+    m_ready = true;
+}
+
+const FontAtlasGlyph* BakedFontAtlas::glyph(u32 glyphId)const{
+    return glyphId < m_glyphs.size() ? &m_glyphs[glyphId] : nullptr;
+}
+
+const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
+    NWB_FATAL_ASSERT(group < m_pages.size());
+    return m_pages[group];
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+SharedBakedFontAtlas CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas& atlas, u64 fontGeneration){
+    SharedBakedFontAtlas result(
+        NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration),
+        ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena),
+        AdoptRef
+    );
+    return result->valid() ? result : SharedBakedFontAtlas{};
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

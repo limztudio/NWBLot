@@ -320,12 +320,20 @@ bool GpuRendererState::prepare(const Core::AcquiredPresentationFrame& acquired){
         m_declaredGraph = nullptr;
         return true;
     }
+    // Retire all completed owners before cache eviction or descriptor allocation can need their heap slots.
     for(auto& slot : m_slots){
-        if(slot.inFlight && !slot.inFlight->complete(device))
+        if(slot.inFlight && slot.inFlight->complete(device))
+            slot.inFlight.reset();
+    }
+    trimImageCache(m_pending->m_snapshot);
+    for(auto& slot : m_slots){
+        if(slot.inFlight)
             continue;
-        if(!prepareGlyphPages(*m_pending) || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired))
+        if(
+            !prepareGlyphPages(*m_pending) || !prepareSdfPages(*m_pending)
+            || !prepareBuffers(slot, m_pending->m_snapshot) || !prepareOutputPipeline(acquired)
+        )
             return false;
-        slot.inFlight.reset();
         m_pending->m_target = slot.target;
         m_pending->m_resources = m_resources;
         m_pending->m_vertices = slot.vertices;

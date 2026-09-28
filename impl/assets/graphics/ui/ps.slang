@@ -4,6 +4,7 @@
 
 #include "push_constants.slangi"
 #include "glyph_coverage.slangi"
+#include "glyph_sdf.slangi"
 #include "../bindless/bindless_heap.slangi"
 
 
@@ -35,6 +36,12 @@ NwbUiPixelOutput main(NwbUiPixelInput input){
     const float4 sampled = texture.SampleLevel(sampler, input.uv, 0.0);
     if(g_NwbUiPushConstants.material == NWB_UI_MATERIAL_GLYPH){
         output.color = nwbUiGlyphCoverageColor(input.color, sampled.r);
+        return output;
+    }
+    if(g_NwbUiPushConstants.material == NWB_UI_MATERIAL_SDF_GLYPH){
+        const float encoded = nwbUiSdfChannel(sampled, g_NwbUiPushConstants.sdfChannel);
+        const float distance = nwbUiSdfDistance(encoded, g_NwbUiPushConstants.sdfSpreadPixels);
+        output.color = nwbUiGlyphCoverageColor(input.color, nwbUiSdfCoverage(distance, fwidth(distance)));
         return output;
     }
     // The skin sRGB view decodes RGB while alpha stays linear.

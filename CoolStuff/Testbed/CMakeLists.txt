@@ -21,6 +21,7 @@ nwb_target_link_libraries_whole_archive(testbed
     nwb_assets_texture
     nwb_assets_ui_skin
     nwb_assets_font
+    nwb_assets_font_atlas
     nwb_assets_sampler
 )
 target_link_libraries(testbed PRIVATE

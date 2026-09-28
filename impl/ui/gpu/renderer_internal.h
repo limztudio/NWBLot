@@ -6,6 +6,7 @@
 
 
 #include "renderer.h"
+#include "renderer_sdf_resources.h"
 
 #include <impl/assets/graphics/ui/output_push_constants.h>
 #include <impl/assets/graphics/ui/push_constants.h>
@@ -50,7 +51,11 @@ static_assert(offsetof(GpuPaintPushConstants, translate) == NWB_UI_PUSH_CONSTANT
 static_assert(offsetof(GpuPaintPushConstants, textureSlot) == NWB_UI_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET);
 static_assert(offsetof(GpuPaintPushConstants, samplerSlot) == NWB_UI_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET);
 static_assert(offsetof(GpuPaintPushConstants, material) == NWB_UI_PUSH_CONSTANTS_MATERIAL_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfChannel) == NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfSpreadPixels) == NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, sdfDistanceEncoding) == NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET);
 static_assert(offsetof(GpuPaintPushConstants, reserved) == NWB_UI_PUSH_CONSTANTS_RESERVED_BYTE_OFFSET);
+static_assert(offsetof(GpuPaintPushConstants, reserved1) == NWB_UI_PUSH_CONSTANTS_RESERVED1_BYTE_OFFSET);
 static_assert(sizeof(GpuOutputPushConstants) == NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE);
 static_assert(offsetof(GpuOutputPushConstants, textureSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET);
 static_assert(offsetof(GpuOutputPushConstants, samplerSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET);
@@ -59,10 +64,14 @@ static_assert(offsetof(GpuOutputPushConstants, reserved) == NWB_UI_OUTPUT_PUSH_C
 static_assert(static_cast<u32>(PaintMaterial::Solid) == NWB_UI_MATERIAL_SOLID);
 static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
 static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);
+static_assert(static_cast<u32>(PaintMaterial::SdfGlyph) == NWB_UI_MATERIAL_SDF_GLYPH);
+static_assert(s_SdfDistanceEncodingFreeTypeU8 == NWB_UI_SDF_DISTANCE_ENCODING_FREETYPE_U8);
 
-inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxGlyphPages;
+inline constexpr usize s_GpuMaxGlyphPages = s_PaintMaxImages;
+inline constexpr usize s_GpuMaxSdfPages = s_PaintMaxImages;
 using GpuRasterResourceUses = FixedVector<Core::GpuTaskResourceUse, s_GpuMaxGlyphPages + 4u>;
 using GpuGlyphGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxGlyphPages>;
+using GpuSdfGraphResources = FixedVector<Core::GpuGraphResourceId, s_GpuMaxSdfPages>;
 
 
 template<typename T>
@@ -139,6 +148,7 @@ struct GpuFrameData : NoCopy{
     DrawSnapshot m_snapshot;
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphPages;
+    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfPages;
     GpuVersion<GpuTargetVersion> m_target;
     GpuVersion<GpuSharedResources> m_resources;
     Core::BufferHandle m_vertices;
@@ -176,6 +186,7 @@ struct GpuRasterTask{
         Core::GpuGraphResourceId color;
         Core::GpuGraphResourceId skin;
         GpuGlyphGraphResources glyphPages;
+        GpuSdfGraphResources sdfPages;
     };
     [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
     static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
@@ -210,9 +221,10 @@ struct GpuRendererState final : NoCopy{
         const Core::AcquiredPresentationFrame& first,
         const Core::AcquiredPresentationFrame& second
     );
+    [[nodiscard]] static bool validateGlyphPages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool validateSdfPages(const DrawSnapshot& snapshot);
     [[nodiscard]] bool createResources();
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
-    [[nodiscard]] static bool validateGlyphPages(const DrawSnapshot& snapshot);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
     [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
     [[nodiscard]] bool declareGlyphPages(
@@ -221,6 +233,15 @@ struct GpuRendererState final : NoCopy{
         GpuGlyphGraphResources& resources,
         GpuRasterResourceUses& uses
     );
+    [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
+    [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
+    [[nodiscard]] bool declareSdfPages(
+        Core::GpuTaskGraph& graph,
+        const GpuFrame& frame,
+        GpuSdfGraphResources& resources,
+        GpuRasterResourceUses& uses
+    );
+    void trimImageCache(const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
@@ -234,6 +255,7 @@ struct GpuRendererState final : NoCopy{
     GpuVersion<GpuSharedResources> m_resources;
     GpuVersion<GpuSkinVersion> m_skin;
     Vector<GpuVersion<GpuGlyphVersion>, Core::Alloc::GlobalArena> m_glyphCache;
+    Vector<GpuVersion<GpuSdfAtlasVersion>, Core::Alloc::GlobalArena> m_sdfCache;
     Array<GpuFrameSlot, 3u> m_slots;
     GpuFrame m_pending;
     Core::AcquiredPresentationFrame m_lastAcceptedAcquired;

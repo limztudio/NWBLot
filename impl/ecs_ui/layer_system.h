@@ -27,11 +27,17 @@ namespace UiLayerPresentation{
 };
 
 
+struct UiFontBinding{
+    Core::Assets::AssetRef<Font> font;
+    Core::Assets::AssetRef<FontAtlas> atlas;
+};
+
+
 // ECS owns callback execution; the independent GPU renderer receives only frozen paint snapshots.
 class UiLayerSystem final : public Core::ECS::ISystem, public Core::IRenderPass{
 public:
     using ShaderPathResolveCallback = Function<bool(const Name&, AStringView, const Name&, Name&)>;
-    using FontReferences = Vector<Core::Assets::AssetRef<Font>, Core::Alloc::GlobalArena>;
+    using FontReferences = Vector<UiFontBinding, Core::Alloc::GlobalArena>;
 
 
 public:

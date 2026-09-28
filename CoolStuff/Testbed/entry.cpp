@@ -28,6 +28,8 @@ static constexpr tchar s_DestroyRequiresIdleOrLoss[] = NWB_TEXT("Project-world d
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin_atlas"};
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean_atlas"};
 };
 
 
@@ -102,7 +104,8 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.shaderPathResolver
     );
     const Impl::UiLayerSystem::FontReferences fonts{
-        { __hidden_testbed_entry::s_DefaultLatin, __hidden_testbed_entry::s_DefaultKorean }, context.objectArena
+        { { __hidden_testbed_entry::s_DefaultLatin, __hidden_testbed_entry::s_DefaultLatinAtlas },
+            { __hidden_testbed_entry::s_DefaultKorean, __hidden_testbed_entry::s_DefaultKoreanAtlas } }, context.objectArena
     };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,

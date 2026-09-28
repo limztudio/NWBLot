@@ -7,6 +7,7 @@
 
 #include "global.h"
 #include "text/glyph_page.h"
+#include "text/sdf_page.h"
 
 #include <impl/assets_ui_skin/asset.h>
 
@@ -61,7 +62,7 @@ struct DisplayMetrics{
 };
 
 namespace PaintMaterial{
-    enum Enum : u8{ Solid, Skin, Glyph };
+    enum Enum : u8{ Solid, Skin, Glyph, SdfGlyph };
 };
 
 struct DrawCommand{
@@ -70,6 +71,8 @@ struct DrawCommand{
     Rect clip;
     PaintMaterial::Enum material = PaintMaterial::Solid;
     u32 glyphPageIndex = Limit<u32>::s_Max;
+    u32 sdfPageIndex = Limit<u32>::s_Max;
+    u32 sdfChannel = 0u;
 };
 
 // Typed references identify assets; this copy captures atlas metadata, not loaded/GPU resource ownership.
@@ -81,6 +84,8 @@ struct SkinBinding{
     u32 atlasHeight = 0u;
     f32 referenceDensity = 1.0f;
 };
+
+inline constexpr usize s_PaintMaxImages = s_PaintMaxGlyphPages;
 
 template<typename T>
 using PaintVector = Vector<T, Core::Alloc::GlobalArena>;
@@ -113,6 +118,7 @@ public:
     [[nodiscard]] const PaintVector<u32>& indices()const{ return m_indices; }
     [[nodiscard]] const PaintVector<DrawCommand>& commands()const{ return m_commands; }
     [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const{ return m_glyphPages; }
+    [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const{ return m_sdfPages; }
 
 
 private:
@@ -123,6 +129,7 @@ private:
     PaintVector<u32> m_indices;
     PaintVector<DrawCommand> m_commands;
     PaintVector<SharedGlyphPage> m_glyphPages;
+    PaintVector<SharedSdfAtlasPage> m_sdfPages;
 };
 
 
@@ -151,12 +158,23 @@ public:
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
     [[nodiscard]] bool prepareGlyphPages(const SharedGlyphPage* pages, usize count);
     [[nodiscard]] bool drawGlyph(const SharedGlyphPage& page, const Rect& rectangle, const Rect& uv, const Color& tint = {});
+    [[nodiscard]] bool prepareSdfPages(const SharedSdfAtlasPage* pages, usize count);
+    [[nodiscard]] bool prepareImages(
+        const SharedGlyphPage* glyphPages, usize glyphCount,
+        const SharedSdfAtlasPage* sdfPages, usize sdfCount
+    );
+    [[nodiscard]] bool drawSdfGlyph(
+        const SharedSdfAtlasPage& page, u32 channel, const Rect& rectangle, const Rect& uv, const Color& tint = {}
+    );
     [[nodiscard]] DrawSnapshot freeze();
     [[nodiscard]] const DisplayMetrics& displayMetrics()const{ return m_snapshot.displayMetrics(); }
 
 
 private:
-    void emitQuad(const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material, u32 glyphPageIndex = Limit<u32>::s_Max);
+    void emitQuad(
+        const Rect& rectangle, const Rect& uv, const Color& color, PaintMaterial::Enum material,
+        u32 glyphPageIndex = Limit<u32>::s_Max, u32 sdfPageIndex = Limit<u32>::s_Max, u32 sdfChannel = 0u
+    );
     void emitNineSlice(const UiSkinRegion& region, const Rect& rectangle, const Color& tint);
 
 

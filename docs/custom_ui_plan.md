@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. The font/text foundation is described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
+Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. Font/text foundation commit `1f55b1616` is pushed. The offline SDF increment is implemented and described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
 
 Implemented in the first increment:
 
@@ -56,7 +56,7 @@ Validation for the OS increment:
 - Actual Linux x86_64 target syntax checks pass for 14 production and five test translation units: 19 with Wayland/primary selection, 19 with Wayland without primary selection, and 16 with X11 only, for 54 successful checks. The disposable harness uses genuine libc/libstdc++/Linux/X11/Wayland headers and generated protocol headers. Saved source/header hashes match the final files; command lines, package/source hashes, and logs are retained under `__artifacts/custom_ui/linux_sysroot/`. This does not qualify Linux ARM64 or linking.
 - Linux-only pipe and X11 tests are provided for execution on Linux. This Windows host has no installed WSL, container runtime, or Linux compositor, so live X11/Wayland clipboard behavior and Linux linking remain unqualified.
 
-The next toolkit increment should add font/text resources, stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
+The next toolkit increment should add stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
 
 Build an engine-owned UI toolkit under `impl/ui/`, keep `impl/ecs_ui/` as the ECS/runtime adapter, and render UI into a transparent texture through the existing GPU task graph. Join that texture with the scene in the final output pass, after scene display mapping and before output encoding. IME, clipboard/native selection exchange, and other window-system services belong to a separate OS feature layer that `ecs_ui` borrows. Controls use a customizable skin texture plus atlas information authored in an `.nwb` file; the engine ships one default texture/atlas pair. Remove ImGui once current application behavior is covered; continue the larger widget library independently.
 
@@ -78,7 +78,25 @@ Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 - All 22 affected font/text/paint/ECS/GPU production translation units and four new test translation units pass actual Linux x86_64 syntax checks with genuine native headers and the Linux sysroot. This host has no Linux runtime; this is not a Linux link or native-execution claim.
 - The known unrelated stale surfel normal source-text expectation recorded above is unchanged; this increment runs the affected ECS composition/glyph checks rather than asserting that the whole ECS suite passes.
 
-The current text renderer uses native grayscale coverage. The user's proposed offline RGBA SDF baker is adopted as the next font-rendering design in [font_atlas_plan.md](font_atlas_plan.md). That utility and `FontAtlas` format are explicitly unimplemented. It will pack four scalar distance pages into RGBA, emit lossless atlas payloads and `.nwb` metadata including scoped kerning, and retain HarfBuzz shaping. The existing native coverage path supplies a foundation and fallback; it does not claim distance-field zoom behavior.
+Implemented in the offline SDF increment:
+
+- `utilities/font_atlas/`: a portable offline C++ utility and repository launcher, with separate source admission, SDF rendering, deterministic shelf packing, positioning-table export, and atomic package publication. The exact pinned FreeType SDF modules are restored.
+- `impl/assets_font_atlas/`: typed `FontAtlas` assets, strict readable `.nwb` schema, raw linear RGBA payloads, content hashes, bounded shared validation, explicit little-endian binary codec, normal cooker registration, and exact source-font matching. Four independent scalar distance pages use R/G/B/A; alpha is another distance page.
+- Kerning metadata preserves the original `kern`, `GPOS`, and `GDEF` table bytes, including class matrices, script/feature scope, and lookup order without quadratic pair expansion. HarfBuzz still shapes the original source font; exported data is never applied a second time.
+- `impl/ui/text/baked_atlas.*`, `sdf_page.*`, and `service_paint.cpp`: copied immutable atlas versions, actual shaped-face/glyph lookup, padded geometry, mixed SDF/native coverage painting, and snapshot lifetime after asset release or replacement. Optional unavailable/mismatched atlases retain the same face's native coverage path.
+- `impl/ui/paint_images.cpp`, `paint_sdf.cpp`, and `gpu/renderer_sdf_resources.*` / `renderer_image_cache.cpp`: atomic mixed-image admission, channel-aware adjacent batching, linear RGBA uploads, descriptors prepared before draw recording, accepted upload readiness retained across descriptor retries, exact graph imports, shared bounded-cache capacity, completed-frame retirement before descriptor allocation, and resources retained through the final consumer.
+- Engine-default Latin and Korean atlas assets are generated at 32 ppem/spread 8 and selected explicitly by Testbed and the UI-only smoke. They contain 3,748 and 24,964 glyph records respectively, with 8 MiB and 64 MiB of raw image payloads. Source font bytes/licences remain available.
+
+The qualified policy uses SDF at 0.5..1.5 times the bake ppem in physical pixels, with native coverage outside it. For the default 32-ppem atlases, that is 16..48 physical pixels per em. Thirty-six Latin A/o/e and Korean Hangul comparisons against supersampled native rendering have maximum edge displacement one pixel and maximum mean coverage error 0.0068433573. Larger candidate magnifications failed the one-pixel edge gate at sharp corners, so this increment does not claim arbitrary zoom quality. The implemented format, utility, and runtime contract are documented in [font_atlas_plan.md](font_atlas_plan.md).
+
+Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
+
+- Production libraries, utility, asset builder, both sample applications, and affected test targets build. The regular pipeline cooks 136 Testbed assets; the engine-only smoke pipeline cooks 119 assets, including both atlases and the updated shader.
+- All 42 UI tests, 12 atlas asset tests, six bake tests, eight source-font asset tests, and 12 affected composition/glyph/color/shader checks pass. Ten real CLI integration cases cover reproducibility, complete font generation, exact positioning bytes, malformed inputs, capacity/overwrite failures, and preservation of previous output. The separate quality test passes 36 comparisons and verifies attachment of both default atlases; all 46 existing repository launcher tests also pass.
+- Both GPU-validation UI backbuffer/resize smoke tests pass 75 numeric probes over three captures, plus twelve text checks for ink, clipping, and antialiased edges. Maximum observed channel error is two byte values. A visually inspected Testbed capture passes after resizing to 901 x 607.
+- All 55 unique affected production and test translation units pass Linux x86_64 syntax checks using actual Linux headers. Command lines, logs, and final source hashes are retained under `__artifacts/custom_ui/linux_sysroot/`. Native Linux linking, baking equivalence, and GPU execution remain unqualified on this Windows host.
+
+This completes the additional font-image path in M2. Interactive controls, OS IME, native Linux execution, live HDR qualification, and ImGui retirement retain their separate milestone gates.
 
 ## 1. Starting point and scope
 

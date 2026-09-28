@@ -1,0 +1,33 @@
+font_atlas asset;
+
+asset.schema_version = 1;
+asset.font = "project/fonts/body";
+asset.font_sha256 = "b11e3eb59a3df2abc24d0d51a08c17b88e12b07433bed80f61fcdad7c3a6734d";
+asset.face_index = 0;
+asset.units_per_em = 1000;
+asset.source_glyph_count = 5;
+asset.glyph_policy = "all";
+asset.bake_ppem = 64;
+asset.sdf_renderer = "bitmap";
+asset.spread_pixels = 8;
+asset.distance_encoding = "freetype_sdf_u8_v1";
+asset.guard_texels = 1;
+asset.payload_format = "rgba8_linear";
+asset.mip_count = 1;
+asset.ascender_units = 800.0;
+asset.descender_units = -200.0;
+asset.line_gap_units = 0.0;
+asset.groups = [
+    {"extent": [8, 8], "data": "pattern.rgba", "byte_count": 256, "sha256": "40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880"}
+];
+asset.glyphs = [
+    {"glyph_id": 0, "drawable": 1, "advance_units": 400.0, "group": 0, "channel": 0, "rect": [1, 1, 4, 4], "plane_bounds_units": [-10.0, -50.0, 52.5, 12.5]},
+    {"glyph_id": 1, "drawable": 1, "advance_units": 401.0, "group": 0, "channel": 1, "rect": [1, 1, 4, 4], "plane_bounds_units": [-10.0, -50.0, 52.5, 12.5]},
+    {"glyph_id": 2, "drawable": 1, "advance_units": 402.0, "group": 0, "channel": 2, "rect": [1, 1, 4, 4], "plane_bounds_units": [-10.0, -50.0, 52.5, 12.5]},
+    {"glyph_id": 3, "drawable": 1, "advance_units": 403.0, "group": 0, "channel": 3, "rect": [1, 1, 4, 4], "plane_bounds_units": [-10.0, -50.0, 52.5, 12.5]},
+    {"glyph_id": 4, "drawable": 0, "advance_units": 404.0}
+];
+asset.kerning_mode = "opentype_tables";
+asset.positioning_tables = [
+    {"tag": "kern", "data": "pairs.kern", "byte_count": 24, "sha256": "d63d9fa222b933a4a55356983bcba01a6bfab2cf4ba51edc04aeec95e41a1c41"}
+];

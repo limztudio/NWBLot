@@ -79,9 +79,10 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     FixedVector<Core::GpuTaskId, 3u> dependencies;
     GpuRasterResourceUses uses;
     GpuGlyphGraphResources glyphPages;
+    GpuSdfGraphResources sdfPages;
     uses.push_back({ color, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write });
     uses.push_back({ skin, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
-    if(!declareGlyphPages(graph, frame, glyphPages, uses))
+    if(!declareGlyphPages(graph, frame, glyphPages, uses) || !declareSdfPages(graph, frame, sdfPages, uses))
         return false;
     if(!frame->m_snapshot.vertices().empty()){
         const Core::GpuGraphResourceId vertices = graph.importBuffer(
@@ -150,7 +151,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuRasterTask::Payload{ frame, color, skin, Move(glyphPages) }
+        GpuRasterTask::Payload{ frame, color, skin, Move(glyphPages), Move(sdfPages) }
     );
     if(!raster.valid())
         return false;

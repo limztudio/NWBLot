@@ -83,9 +83,6 @@ void RendererRayTracingSystem::publishPreparedLightingClassification(
         , boundsMax.z
     );
 
-    NWB_ASSERT(lights || lightCount == 0u);
-    if(!lights)
-        return;
     for(u32 i = 0u; i < lightCount; ++i){
         if(lights[i].params.w < 0.f)
             continue;

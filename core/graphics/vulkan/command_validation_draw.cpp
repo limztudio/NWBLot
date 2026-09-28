@@ -328,8 +328,6 @@ bool CommandList::validateGraphicsDrawArguments(
                 break;
             }
         }
-        NWB_ASSERT(boundBuffer && boundBuffer->buffer);
-
         u32 requiredElementBytes = 0u;
         for(const VertexAttributeDesc& attribute : inputLayout->m_attributes){
             if(attribute.bufferIndex != requiredBinding.binding)

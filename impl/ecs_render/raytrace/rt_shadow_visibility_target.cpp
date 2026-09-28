@@ -400,7 +400,6 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             false
         );
         if(splitSoftTransparentFold){
-            NWB_ASSERT(opaqueFrameIndex);
             if(opaqueFrameIndex)
                 *opaqueFrameIndex = frameIndex;
         }

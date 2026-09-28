@@ -119,8 +119,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // Invalid receiver: pass through the current sample and reset history.
         if(!valid){
             g_NwbShadowMergeHistoryOut[uint3(h, slot)] = float4(cur, 1.0);
-            const float lumaCur0 = nwbLuminance(cur);
-            g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(lumaCur0, lumaCur0 * lumaCur0, 0.0, 0.0);
+            // Visibility luma stays in (0, 1), so half math is sufficient here; widen only at the float4 moments store.
+            const half lumaCur0 = nwbLuminance(currentVisibilitySample);
+            g_NwbShadowMergeMomentsOut[uint3(h, slot)] = float4(float(lumaCur0), float(lumaCur0) * float(lumaCur0), 0.0, 0.0);
             continue;
         }
 

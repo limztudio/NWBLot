@@ -79,13 +79,14 @@ half3 nwbReflectionEnvironment(const float3 direction){
 }
 
 void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radiance, const float source){
-    const float4 output = float4(float3(max(radiance, half3(0.0h))), source);
+    // Radiance clamp plus the source tag fit half; widen only at the float4 store.
+    const half4 output = half4(max(radiance, half3(0.0h)), half(source));
     // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring
     // storage-image nonuniform indexing beyond the existing device contract.
     if(glass)
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = output;
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = float4(output);
     else
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.opaqueOutputSlot)[pixel] = output;
+        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.opaqueOutputSlot)[pixel] = float4(output);
 }
 
 bool nwbReflectionFeedbackWriting(){

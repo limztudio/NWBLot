@@ -161,7 +161,8 @@ NwbOpticalTraceResult nwbOpticalTrace(
             return result;
 
         if(optical.mode == NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED){
-            const float coverage = float(hit.surface.renderCoverage);
+            // Backdrop coverage is a (0, 1) bounded factor, so half math is sufficient here.
+            const half coverage = hit.surface.renderCoverage;
             if(!isfinite(coverage)){
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
                 return result;

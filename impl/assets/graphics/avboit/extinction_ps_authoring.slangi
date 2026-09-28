@@ -31,8 +31,9 @@ void main(NwbAvboitMaterialAlphaPixelInput input){
         discard;
 
     const uint2 lowPixel = nwbAvboitLowPixelFromLowFragCoord(input.position.xy);
-    const float extinction = nwbAvboitExtinctionFromAlpha(alpha);
-    nwbAvboitSplatExtinctionFromDepth(lowPixel, input.position.z, extinction);
+    // Extinction is -log(1-alpha) for accepted alpha in (0, 1); half range covers it, widen only at the float splat call.
+    const half extinction = half(nwbAvboitExtinctionFromAlpha(alpha));
+    nwbAvboitSplatExtinctionFromDepth(lowPixel, input.position.z, float(extinction));
 }
 
 

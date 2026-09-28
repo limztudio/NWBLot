@@ -201,10 +201,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             const uint neighborIndex = uint(neighborTilePixel.y) * tileWidth + uint(neighborTilePixel.x);
             const float neighborDepth = g_NwbReflectionSpatialPositionDepth[neighborIndex].w;
             const half4 neighborSpecularH = g_NwbReflectionSpatialSpecular[neighborIndex];
-            const float4 neighborSpecular = float4(neighborSpecularH);
+            // RGBA16F specular cache is already native-half; widen only at the float isfinite check below.
+            const half4 neighborSpecular = neighborSpecularH;
             if(
-                !isfinite(neighborDepth) || neighborDepth < 0.0 || neighborDepth >= 1.0 || !all(isfinite(neighborSpecular))
-                || neighborSpecular.a <= 0.0 || !any(neighborSpecular.rgb > 0.0)
+                !isfinite(neighborDepth) || neighborDepth < 0.0 || neighborDepth >= 1.0 || !all(isfinite(float4(neighborSpecular)))
+                || neighborSpecular.a <= half(0.0h) || !any(neighborSpecular.rgb > half3(0.0h))
             )
                 continue;
             const half roughnessDifference = half(abs(neighborSpecular.a - roughness));

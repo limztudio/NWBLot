@@ -7,6 +7,8 @@
 
 #include "task_desc.h"
 
+#include <core/alloc/scratch.h>
+
 #include <global/sync.h>
 
 
@@ -527,6 +529,7 @@ public:
 private:
     void clearAttemptBindingWithinLock()noexcept;
     void resetPlanStorageWithinPlanWriteScope()noexcept;
+    void buildPlanStatistics(const GpuTaskGraphDeclarationReadView& graph, Alloc::ScratchArena& scratchArena);
 
 
 public:
@@ -654,6 +657,7 @@ private:
     GraphicsVector<GpuCompiledExternalResourceExport> m_externalResourceExports;
     GraphicsVector<GpuCompiledExternalResourceExportSource> m_externalResourceExportSources;
     GraphicsVector<GpuPhysicalQueueInfo> m_queueTopology;
+    GraphicsVector<GpuTaskGraphPhysicalQueueCompileStatistics> m_physicalQueueCompileStatistics;
     GpuCompiledPresentEndpoint m_presentEndpoint;
     GpuSubmissionPacketRange m_packetTimingEnvelopeRange;
     GpuTaskGraphCompileStatistics m_compileStatistics;

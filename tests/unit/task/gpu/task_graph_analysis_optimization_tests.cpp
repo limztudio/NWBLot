@@ -233,6 +233,57 @@ static void BenchmarkDistinctVersions(const usize versionCount){
     testing::Test::RecordProperty("version_count", static_cast<i32>(versionCount));
 }
 
+static void BenchmarkResourceVersionBindings(const usize versionCount){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/analysis_optimization/binding_buffer"),
+        "Version Binding Buffer"
+    );
+    ASSERT_TRUE(buffer.valid());
+    const Graphics::GpuTaskResourceRange range{ .bufferRange = Graphics::BufferRange(0u, 64u) };
+    Core::Alloc::ScratchArena declarationScratch(Name("tests/analysis_optimization/binding_declarations"));
+    Vector<Graphics::GpuTaskResourceVersionUse, Core::Alloc::ScratchArena> versionUses(declarationScratch);
+    versionUses.reserve(versionCount);
+    for(usize index = 0u; index < versionCount; ++index){
+        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
+            Graphics::GpuGraphResourceVersionDesc{}
+                .setResource(buffer)
+                .setRange(range)
+                .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
+        );
+        ASSERT_TRUE(version.valid());
+        versionUses.push_back(Graphics::GpuTaskResourceVersionUse{
+            .version = version,
+            .role = Graphics::GpuTaskResourceVersionRole::Consume,
+        });
+    }
+    const Graphics::GpuTaskResourceUse physicalUse{
+        .resource = buffer,
+        .range = range,
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
+    const Graphics::GpuTaskId task = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/analysis_optimization/binding_task"))
+            .setMarkerLabel("Version Binding Task")
+            .setResourceUses(&physicalUse, 1u)
+            .setResourceVersionUses(versionUses.data(), versionUses.size()),
+        commands
+    );
+    ASSERT_TRUE(task.valid());
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/binding_scratch"));
+    MeasureAnalysis(graph, analysis, scratchArena);
+    ASSERT_EQ(analysis.topologicalOrder().size(), 1u);
+    EXPECT_EQ(analysis.topologicalOrder()[0u], task);
+    EXPECT_TRUE(analysis.edges().empty());
+    testing::Test::RecordProperty("binding_count", static_cast<i32>(versionCount));
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -508,6 +559,72 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         for(usize index = 0u; index < LengthOf(tasks); ++index)
             EXPECT_EQ(analysis.topologicalOrder()[index], tasks[index]);
     }
+}
+
+TEST(GpuTaskGraphAnalysis, ReportsEarlierUncoveredVersionUseBeforeLaterDuplicate){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
+        graph,
+        Name("tests/analysis_optimization/binding_failure_buffer"),
+        "Version Binding Failure Buffer"
+    );
+    ASSERT_TRUE(buffer.valid());
+    Graphics::GpuTaskResourceVersionUse versionUses[10u];
+    for(usize index = 0u; index + 1u < LengthOf(versionUses); ++index){
+        const Graphics::GpuTaskResourceRange range{ .bufferRange = Graphics::BufferRange(index == 0u ? 128u : 0u, 64u) };
+        const Graphics::GpuGraphResourceVersionId version = graph.declareResourceVersion(
+            Graphics::GpuGraphResourceVersionDesc{}
+                .setResource(buffer)
+                .setRange(range)
+                .setOrigin(Graphics::GpuGraphResourceVersionOrigin::ImportedRoot)
+        );
+        ASSERT_TRUE(version.valid());
+        versionUses[index] = Graphics::GpuTaskResourceVersionUse{
+            .version = version,
+            .role = Graphics::GpuTaskResourceVersionRole::Consume,
+        };
+    }
+    versionUses[LengthOf(versionUses) - 1u] = versionUses[1u];
+    const Graphics::GpuTaskResourceUse physicalUse{
+        .resource = buffer,
+        .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(0u, 64u) },
+        .requiredState = Graphics::ResourceStates::ShaderResource,
+        .access = Graphics::GpuTaskResourceAccess::Read,
+    };
+    const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Compute };
+    const Graphics::GpuTaskId task = graph.addTask(
+        Graphics::GpuTaskDesc{}
+            .setIdentity(Name("tests/analysis_optimization/binding_failure_task"))
+            .setMarkerLabel("Version Binding Failure Task")
+            .setResourceUses(&physicalUse, 1u)
+            .setResourceVersionUses(versionUses, LengthOf(versionUses)),
+        commands
+    );
+    ASSERT_TRUE(task.valid());
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    EXPECT_FALSE(Analyze(graph, analysis));
+    EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
+    EXPECT_EQ(analysis.diagnostic().task, task);
+    EXPECT_FALSE(analysis.diagnostic().relatedTask.valid());
+    EXPECT_EQ(analysis.diagnostic().resource, buffer);
+    EXPECT_EQ(analysis.diagnostic().resourceVersion, versionUses[0u].version);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark1Use){
+    BenchmarkResourceVersionBindings(1u);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark8Uses){
+    BenchmarkResourceVersionBindings(8u);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark1024Uses){
+    BenchmarkResourceVersionBindings(1024u);
+}
+
+TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionBindingBenchmark4096Uses){
+    BenchmarkResourceVersionBindings(4096u);
 }
 
 TEST(GpuTaskGraphAnalysis, DISABLED_ResourceVersionImportedRootBenchmark4096Tasks){

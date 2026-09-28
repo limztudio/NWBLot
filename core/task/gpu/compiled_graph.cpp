@@ -127,6 +127,7 @@ void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
     static_assert(noexcept(m_externalResourceExports.clear()));
     static_assert(noexcept(m_externalResourceExportSources.clear()));
     static_assert(noexcept(m_queueTopology.clear()));
+    static_assert(noexcept(m_physicalQueueCompileStatistics.clear()));
 
     m_tasks.clear();
     m_compiledTaskIndexByTask.clear();
@@ -141,6 +142,7 @@ void GpuCompiledGraph::resetPlanStorageWithinPlanWriteScope()noexcept{
     m_externalResourceExports.clear();
     m_externalResourceExportSources.clear();
     m_queueTopology.clear();
+    m_physicalQueueCompileStatistics.clear();
     m_presentEndpoint = {};
     m_packetTimingEnvelopeRange = {};
     m_generation = 0u;
@@ -171,6 +173,7 @@ GpuCompiledGraph::GpuCompiledGraph(GraphicsArena& arena)
     , m_externalResourceExports(arena)
     , m_externalResourceExportSources(arena)
     , m_queueTopology(arena)
+    , m_physicalQueueCompileStatistics(arena)
     , m_objectIdentity(__hidden_gpu_compiled_graph::AllocateObjectIdentity())
 {}
 
@@ -438,154 +441,15 @@ const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourc
 }
 
 GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(
-    const GpuPhysicalQueueId& queue
-)const noexcept{
-    if(!valid())
+    const GpuPhysicalQueueId& queue)const noexcept{
+    if(!valid() || !queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return {};
 
-    const GpuPhysicalQueueInfo* const queueInfo = this->queueInfo(queue);
-    if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount)
-        return {};
-
-    GpuTaskGraphPhysicalQueueCompileStatistics statistics{
-        .graphGeneration = m_generation,
-        .planGeneration = m_planGeneration,
-        .queue = queue,
-        .queueClass = queueInfo->queueClass,
-        .deviceGeneration = m_deviceGeneration,
-    };
-    const auto countOwnershipBarriers = [&statistics](
-        const GraphicsVector<GpuCompiledBarrier>& barriers,
-        const u32 barrierOffset,
-        const u32 barrierCount
-    ){
-        if(
-            barrierCount == 0u
-            || barrierOffset > barriers.size()
-            || barrierCount > barriers.size() - barrierOffset
-        )
-            return;
-
-        const GpuCompiledBarrier* const taskBarriers = barriers.data() + barrierOffset;
-        for(u32 barrierIndex = 0u; barrierIndex < barrierCount; ++barrierIndex){
-            switch(taskBarriers[barrierIndex].type){
-            case GpuCompiledBarrierType::TextureOwnershipRelease:
-            case GpuCompiledBarrierType::BufferOwnershipRelease:
-            case GpuCompiledBarrierType::AccelStructOwnershipRelease:
-                ++statistics.ownershipReleaseBarrierCount;
-                break;
-            case GpuCompiledBarrierType::TextureOwnershipAcquire:
-            case GpuCompiledBarrierType::BufferOwnershipAcquire:
-            case GpuCompiledBarrierType::AccelStructOwnershipAcquire:
-                ++statistics.ownershipAcquireBarrierCount;
-                break;
-            default:
-                break;
-            }
-        }
-    };
-    for(const GpuCompiledTask& task : m_tasks){
-        if(task.queue != queue)
-            continue;
-
-        ++statistics.taskCount;
-        statistics.prologueBarrierCount += task.prologueBarrierCount;
-        statistics.epilogueBarrierCount += task.epilogueBarrierCount;
-        countOwnershipBarriers(m_prologueBarriers, task.prologueBarrierOffset, task.prologueBarrierCount);
-        countOwnershipBarriers(m_epilogueBarriers, task.epilogueBarrierOffset, task.epilogueBarrierCount);
+    for(const GpuTaskGraphPhysicalQueueCompileStatistics& statistics : m_physicalQueueCompileStatistics){
+        if(statistics.queue == queue)
+            return statistics.queueClass < CommandQueue::kCount ? statistics : GpuTaskGraphPhysicalQueueCompileStatistics{};
     }
-    for(const GpuSubmissionPacket& packet : m_packets){
-        if(packet.queue != queue)
-            continue;
-
-        ++statistics.packetCount;
-        if(packet.taskCount > 1u)
-            statistics.mergedTaskCount += packet.taskCount - 1u;
-    }
-    const auto sameTransferSignature = [](const GpuCompiledOwnershipTransfer& lhs, const GpuCompiledOwnershipTransfer& rhs){
-        return lhs.resource == rhs.resource
-            && lhs.route == rhs.route
-            && lhs.sourceTask == rhs.sourceTask
-            && lhs.destinationTask == rhs.destinationTask
-            && lhs.sourceQueue == rhs.sourceQueue
-            && lhs.destinationQueue == rhs.destinationQueue
-        ;
-    };
-    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
-        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
-        if(transfer.sourceQueue == queue)
-            ++statistics.outgoingLogicalOwnershipTransferCount;
-        if(transfer.destinationQueue == queue)
-            ++statistics.incomingLogicalOwnershipTransferCount;
-
-        bool signatureAlreadyCounted = false;
-        bool hasEarlierDistinctSignature = false;
-        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
-            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
-            if(sameTransferSignature(transfer, previous)){
-                signatureAlreadyCounted = true;
-                break;
-            }
-            if(previous.resource == transfer.resource)
-                hasEarlierDistinctSignature = true;
-        }
-        if(signatureAlreadyCounted)
-            continue;
-
-        if(transfer.sourceQueue == queue){
-            ++statistics.outgoingLogicalOwnershipTransferSignatureCount;
-            if(hasEarlierDistinctSignature)
-                ++statistics.outgoingRepeatedOwnershipTransferSignatureCount;
-        }
-        if(transfer.destinationQueue == queue){
-            ++statistics.incomingLogicalOwnershipTransferSignatureCount;
-            if(hasEarlierDistinctSignature)
-                ++statistics.incomingRepeatedOwnershipTransferSignatureCount;
-        }
-    }
-    for(usize transferIndex = 0u; transferIndex < m_ownershipTransfers.size(); ++transferIndex){
-        const GpuCompiledOwnershipTransfer& transfer = m_ownershipTransfers[transferIndex];
-        if(
-            !transfer.concurrentSharingCouldAvoid
-            || (transfer.sourceQueue != queue && transfer.destinationQueue != queue)
-        )
-            continue;
-
-        bool resourceAlreadyCounted = false;
-        for(usize previousIndex = 0u; previousIndex < transferIndex; ++previousIndex){
-            const GpuCompiledOwnershipTransfer& previous = m_ownershipTransfers[previousIndex];
-            if(
-                previous.resource == transfer.resource
-                && previous.concurrentSharingCouldAvoid
-                && (previous.sourceQueue == queue || previous.destinationQueue == queue)
-            ){
-                resourceAlreadyCounted = true;
-                break;
-            }
-        }
-        if(resourceAlreadyCounted)
-            continue;
-
-        usize distinctSignatureCount = 0u;
-        for(usize candidateIndex = 0u; candidateIndex < m_ownershipTransfers.size(); ++candidateIndex){
-            const GpuCompiledOwnershipTransfer& candidate = m_ownershipTransfers[candidateIndex];
-            if(candidate.resource != transfer.resource || !candidate.concurrentSharingCouldAvoid)
-                continue;
-
-            bool signatureAlreadyCounted = false;
-            for(usize previousIndex = 0u; previousIndex < candidateIndex; ++previousIndex){
-                if(sameTransferSignature(candidate, m_ownershipTransfers[previousIndex])){
-                    signatureAlreadyCounted = true;
-                    break;
-                }
-            }
-            if(!signatureAlreadyCounted)
-                ++distinctSignatureCount;
-        }
-        if(distinctSignatureCount > 1u)
-            ++statistics.concurrentSharingAdviceResourceCount;
-    }
-    return statistics;
+    return {};
 }
 
 const GpuPhysicalQueueInfo* GpuCompiledGraph::queueInfo(const GpuPhysicalQueueId& queue)const noexcept{

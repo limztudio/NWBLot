@@ -275,19 +275,52 @@ namespace GpuTaskGraphCompilerDetail{
     return true;
 }
 
-void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
+[[nodiscard]] bool AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan){
     // Consumers are visited after their producer, so ownership releases are discovered late. Group them only after
     // planning completes to keep every task's epilogue span contiguous in the immutable compiled graph.
-    for(GpuCompiledTask& compiledTask : plan.compiledPlan.tasks){
-        compiledTask.epilogueBarrierOffset = static_cast<u32>(plan.compiledPlan.epilogueBarriers.size());
-        for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
-            if(pending.task == compiledTask.task)
-                plan.compiledPlan.epilogueBarriers.push_back(pending.barrier);
+    GpuTaskGraphCompiledPlanStorage& compiledPlan = plan.compiledPlan;
+    constexpr usize s_BarrierMax = static_cast<usize>(Limit<u32>::s_Max);
+    if(
+        compiledPlan.epilogueBarriers.size() > s_BarrierMax
+        || plan.pendingEpilogueBarriers.size() > s_BarrierMax - compiledPlan.epilogueBarriers.size()
+    )
+        return false;
+    if(plan.pendingEpilogueBarriers.empty()){
+        const u32 barrierOffset = static_cast<u32>(compiledPlan.epilogueBarriers.size());
+        for(GpuCompiledTask& compiledTask : compiledPlan.tasks){
+            compiledTask.epilogueBarrierOffset = barrierOffset;
+            compiledTask.epilogueBarrierCount = 0u;
         }
-        compiledTask.epilogueBarrierCount = static_cast<u32>(plan.compiledPlan.epilogueBarriers.size())
-            - compiledTask.epilogueBarrierOffset
-        ;
+        return true;
     }
+
+    for(GpuCompiledTask& compiledTask : compiledPlan.tasks)
+        compiledTask.epilogueBarrierCount = 0u;
+    for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
+        GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
+        if(compiledTask)
+            ++compiledTask->epilogueBarrierCount;
+    }
+
+    usize barrierCount = compiledPlan.epilogueBarriers.size();
+    for(GpuCompiledTask& compiledTask : compiledPlan.tasks){
+        compiledTask.epilogueBarrierOffset = static_cast<u32>(barrierCount);
+        barrierCount += compiledTask.epilogueBarrierCount;
+        compiledTask.epilogueBarrierCount = 0u;
+    }
+    compiledPlan.epilogueBarriers.resize(barrierCount);
+
+    // Reuse each task's count as its fill cursor. Traversing discovery order keeps exports before their paired
+    // ownership releases without allocating a separate grouping table.
+    for(const PendingCompiledEpilogueBarrier& pending : plan.pendingEpilogueBarriers){
+        GpuCompiledTask* const compiledTask = FindCompiledTask(compiledPlan, pending.task);
+        if(!compiledTask)
+            continue;
+        const usize barrierIndex = static_cast<usize>(compiledTask->epilogueBarrierOffset) + compiledTask->epilogueBarrierCount;
+        compiledPlan.epilogueBarriers[barrierIndex] = pending.barrier;
+        ++compiledTask->epilogueBarrierCount;
+    }
+    return true;
 }
 
 

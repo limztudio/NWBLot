@@ -354,38 +354,53 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         EXPECT_EQ(analysis.diagnostic().resourceVersion, staleVersion);
     }
 
-    {
+    const usize duplicateBindingCounts[] = { 2u, 10u };
+    for(const usize bindingCount : duplicateBindingCounts){
+        SCOPED_TRACE(bindingCount);
         TestArena testArena;
         Graphics::GpuTaskGraph graph(testArena.arena);
         const Graphics::GpuGraphResourceId resource = AddBuffer(
             graph,
             Name("tests/task_graph_resource_version/duplicate_binding_resource")
         );
-        const Graphics::GpuGraphResourceVersionId version = AddVersion(
-            graph,
-            resource,
-            Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
-        );
+        ASSERT_TRUE(resource.valid());
+        Graphics::GpuTaskResourceVersionUse versionUses[10u];
+        ASSERT_LE(bindingCount, LengthOf(versionUses));
+        for(usize index = 0u; index + 1u < bindingCount; ++index){
+            const Graphics::GpuGraphResourceVersionId version = AddVersion(
+                graph,
+                resource,
+                Graphics::GpuGraphResourceVersionOrigin::ImportedRoot
+            );
+            ASSERT_TRUE(version.valid());
+            versionUses[index] = VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume);
+        }
+        versionUses[bindingCount - 1u] = versionUses[0u];
         const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
             resource,
             BufferRange(0u, 64u),
             Graphics::ResourceStates::ShaderResource,
             Graphics::GpuTaskResourceAccess::Read
         );
-        const Graphics::GpuTaskResourceVersionUse versionUses[] = {
-            VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume),
-            VersionUse(version, Graphics::GpuTaskResourceVersionRole::Consume),
-        };
+        if(bindingCount == LengthOf(versionUses)){
+            const Graphics::GpuTaskId precedingTask = AddTask(
+                graph,
+                Name("tests/task_graph_resource_version/valid_bindings_before_duplicate"),
+                &resourceUse,
+                1u,
+                versionUses,
+                bindingCount - 1u
+            );
+            ASSERT_TRUE(precedingTask.valid());
+        }
         const Graphics::GpuTaskId task = AddTask(
             graph,
             Name("tests/task_graph_resource_version/duplicate_binding_task"),
             &resourceUse,
             1u,
             versionUses,
-            LengthOf(versionUses)
+            bindingCount
         );
-        ASSERT_TRUE(resource.valid());
-        ASSERT_TRUE(version.valid());
         ASSERT_TRUE(task.valid());
 
         Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
@@ -393,7 +408,7 @@ TEST(GpuTaskGraphResourceVersion, RejectsStaleRoleAccessAndRangeVersionUses){
         EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse);
         EXPECT_EQ(analysis.diagnostic().task, task);
         EXPECT_EQ(analysis.diagnostic().resource, resource);
-        EXPECT_EQ(analysis.diagnostic().resourceVersion, version);
+        EXPECT_EQ(analysis.diagnostic().resourceVersion, versionUses[0u].version);
     }
 
     ExpectInvalidBoundUse(

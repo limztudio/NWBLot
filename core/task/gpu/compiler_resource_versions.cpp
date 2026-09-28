@@ -332,6 +332,7 @@ bool BuildResourceVersionDependencyEdges(
         return false;
     };
 
+    bool hasTaskProducedVersions = false;
     for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
         const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
         if(!graph.validResource(version.resource) || version.origin >= GpuGraphResourceVersionOrigin::kCount){
@@ -355,9 +356,12 @@ bool BuildResourceVersionDependencyEdges(
                 version.id
             );
         }
+        hasTaskProducedVersions = hasTaskProducedVersions || version.origin == GpuGraphResourceVersionOrigin::TaskProduced;
     }
 
-    Vector<GpuTaskId, Alloc::ScratchArena> producers(graph.resourceVersionCount(), scratchArena);
+    constexpr usize s_LinearDuplicateCheckUseLimit = 8u;
+    Vector<GpuTaskId, Alloc::ScratchArena> producers(hasTaskProducedVersions ? graph.resourceVersionCount() : 0u, scratchArena);
+    Optional<Vector<u32, Alloc::ScratchArena>> lastVersionUseTasks;
     usize resourceVersionUseCount = 0u;
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
         const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
@@ -386,8 +390,11 @@ bool BuildResourceVersionDependencyEdges(
                 );
             }
 
-            for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
-                if(task.resourceVersionUses[previousUseIndex].version == use.version){
+            if(task.resourceVersionUseCount > s_LinearDuplicateCheckUseLimit){
+                if(!lastVersionUseTasks.has_value())
+                    lastVersionUseTasks.emplace(graph.resourceVersionCount(), Limit<u32>::s_Max, scratchArena);
+                u32& lastUseTask = (*lastVersionUseTasks)[use.version.index];
+                if(lastUseTask == task.id.index){
                     return fail(
                         GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
                         task.id,
@@ -395,6 +402,20 @@ bool BuildResourceVersionDependencyEdges(
                         version.resource,
                         use.version
                     );
+                }
+                lastUseTask = task.id.index;
+            }
+            else{
+                for(usize previousUseIndex = 0u; previousUseIndex < useIndex; ++previousUseIndex){
+                    if(task.resourceVersionUses[previousUseIndex].version == use.version){
+                        return fail(
+                            GpuTaskGraphAnalysisStatus::InvalidResourceVersionUse,
+                            task.id,
+                            {},
+                            version.resource,
+                            use.version
+                        );
+                    }
                 }
             }
             if(!HasCoveringPhysicalUse(graph, task, version, use.role)){
@@ -430,16 +451,18 @@ bool BuildResourceVersionDependencyEdges(
         }
     }
 
-    for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
-        const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
-        if(version.origin == GpuGraphResourceVersionOrigin::TaskProduced && !producers[versionIndex].valid()){
-            return fail(
-                GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer,
-                {},
-                {},
-                version.resource,
-                version.id
-            );
+    if(hasTaskProducedVersions){
+        for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex){
+            const GpuTaskGraphResourceVersionView version = graph.resourceVersionAt(versionIndex);
+            if(version.origin == GpuGraphResourceVersionOrigin::TaskProduced && !producers[versionIndex].valid()){
+                return fail(
+                    GpuTaskGraphAnalysisStatus::MissingResourceVersionProducer,
+                    {},
+                    {},
+                    version.resource,
+                    version.id
+                );
+            }
         }
     }
     if(graph.resourceVersionCount() == 0u)

@@ -516,7 +516,7 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] bool PlanTaskResourceStates(GpuTaskGraphResourceStatePlan& plan);
 [[nodiscard]] bool PlanExternalResourceExports(GpuTaskGraphResourceStatePlan& plan);
-void AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan);
+[[nodiscard]] bool AppendPendingEpilogueBarriers(GpuTaskGraphResourceStatePlan& plan);
 
 [[nodiscard]] bool PlanPacketDependencies(
     const GpuTaskGraph::DeclarationReadView& graph,

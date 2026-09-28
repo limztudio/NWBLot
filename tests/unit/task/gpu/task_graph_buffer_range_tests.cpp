@@ -4,6 +4,8 @@
 
 #include "task_graph_test_utils.h"
 
+#include <global/timer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -79,6 +81,84 @@ using TaskGraphTestUtils::TestArena;
             return &barriers[index];
     }
     return nullptr;
+}
+
+
+static void BenchmarkPendingEpilogueGrouping(const usize taskCount){
+    constexpr usize s_Repetitions = 8u;
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Core::Alloc::ScratchArena inputScratchArena(Name("tests/buffer_range/epilogue_inputs"));
+    Vector<Graphics::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(inputScratchArena);
+    Vector<Graphics::GpuTaskId, Core::Alloc::ScratchArena> tasks(inputScratchArena);
+    resources.reserve(taskCount);
+    tasks.reserve(taskCount);
+    for(usize index = 0u; index < taskCount; ++index){
+        char text[32u];
+        const Graphics::GpuGraphResourceId resource = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(DeriveName(Name("tests/buffer_range/epilogue_buffer"), FormatDecimal(index, text)))
+                .setMarkerLabel("Epilogue Grouping Buffer")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+        );
+        ASSERT_TRUE(resource.valid());
+        resources.push_back(resource);
+    }
+    for(usize index = 0u; index < taskCount; ++index){
+        char text[32u];
+        const usize resourceIndex = taskCount - index - 1u;
+        const Graphics::GpuTaskResourceUse use = BufferUse(
+            resources[resourceIndex], resourceIndex * 16u, 16u, Graphics::ResourceStates::CopyDest
+        );
+        const Graphics::GpuTaskId task = AddRangeTask(
+            graph, DeriveName(Name("tests/buffer_range/epilogue_writer"), FormatDecimal(index, text)), &use, 1u
+        );
+        ASSERT_TRUE(task.valid());
+        tasks.push_back(task);
+    }
+    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    const Graphics::GpuTaskGraphCompiler compiler;
+    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
+    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
+    Graphics::GpuTaskGraphCompileOptions options;
+    options.allowMetadataOnlyTasks = true;
+    ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
+    f64 resourceStatePlanningSeconds = 0.0;
+    const Timer begin = TimerNow();
+    for(usize repetition = 0u; repetition < s_Repetitions; ++repetition){
+        ASSERT_TRUE(compiler.compile(declarations, analysis, topology, assignments, compiledGraph, scratchArena, options));
+        const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
+        resourceStatePlanningSeconds += plan.compileStatistics().resourceStatePlanningSeconds;
+    }
+    const u64 elapsedNanoseconds = DurationInNS<u64>(TimerNow(), begin);
+    const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
+    for(usize index = 0u; index < tasks.size(); ++index){
+        const Graphics::GpuCompiledTaskView view = plan.findTask(tasks[index]);
+        ASSERT_TRUE(view.valid());
+        ASSERT_EQ(view.plan->epilogueBarrierCount, 1u);
+        EXPECT_EQ(view.plan->epilogueBarrierOffset, index);
+        EXPECT_EQ(view.epilogueBarriers[0u].resource, resources[taskCount - index - 1u]);
+        EXPECT_EQ(view.epilogueBarriers[0u].range.bufferRange, Graphics::BufferRange((taskCount - index - 1u) * 16u, 16u));
+        EXPECT_EQ(view.epilogueBarriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
+    }
+    char text[32u];
+    const AStringView elapsed = FormatDecimal(elapsedNanoseconds, text);
+    text[elapsed.size()] = '\0';
+    testing::Test::RecordProperty("elapsed_ns", text);
+    const u64 planningNanoseconds = static_cast<u64>(resourceStatePlanningSeconds * 1'000'000'000.0);
+    const AStringView planningElapsed = FormatDecimal(planningNanoseconds, text);
+    text[planningElapsed.size()] = '\0';
+    testing::Test::RecordProperty("resource_state_planning_ns", text);
+    testing::Test::RecordProperty("repetitions", static_cast<i32>(s_Repetitions));
+    testing::Test::RecordProperty("task_count", static_cast<i32>(taskCount));
+    testing::Test::RecordProperty("pending_epilogue_count", static_cast<i32>(taskCount));
+    testing::Test::RecordProperty("scratch_peak_bytes", static_cast<i32>(scratchArena.memoryStats().peakUsedBytes));
 }
 
 
@@ -407,6 +487,97 @@ TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingByt
         ASSERT_EQ(taskView.plan->prologueBarrierCount, 1u);
         EXPECT_EQ(taskView.prologueBarriers[0u].range.bufferRange, Graphics::BufferRange(32u, 32u));
     }
+}
+
+
+TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrder){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue() };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Name identities[] = { Name("tests/buffer_range/grouped_a"), Name("tests/buffer_range/grouped_b") };
+    const Graphics::BufferRange ranges[] = { { 16u, 32u }, { 64u, 16u } };
+    Array<Graphics::GpuGraphResourceId, s_ExpectedDualCount> resources{};
+    Array<Graphics::GpuTaskId, s_ExpectedDualCount> writers{};
+    Array<Graphics::GpuTaskId, s_ExpectedDualCount> consumers{};
+    for(usize index = 0u; index < resources.size(); ++index){
+        resources[index] = graph.importResource(
+            Graphics::GpuGraphResourceDesc{}
+                .setIdentity(identities[index])
+                .setMarkerLabel("Grouped Epilogue Buffer")
+                .setType(Graphics::GpuGraphResourceType::Buffer)
+                .setInitialState(Graphics::ResourceStates::Common)
+                .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
+                .setExternalFinalReleaseDestinationQueue(queues[s_ThirdElementIndex].id)
+        );
+        ASSERT_TRUE(resources[index].valid());
+    }
+    for(usize offset = 0u; offset < resources.size(); ++offset){
+        const usize index = resources.size() - offset - 1u;
+        const Graphics::GpuTaskResourceUse use = BufferUse(
+            resources[index], ranges[index].byteOffset, ranges[index].byteSize, Graphics::ResourceStates::CopyDest
+        );
+        writers[index] = AddRangeTask(graph, DeriveName(identities[index], AStringView("writer")), &use, 1u);
+        ASSERT_TRUE(writers[index].valid());
+    }
+    for(usize index = 0u; index < resources.size(); ++index){
+        const Graphics::GpuTaskResourceUse use = BufferUse(
+            resources[index], ranges[index].byteOffset, ranges[index].byteSize,
+            Graphics::ResourceStates::ShaderResource, Graphics::GpuTaskResourceAccess::Read
+        );
+        consumers[index] = AddRangeTask(graph, DeriveName(identities[index], AStringView("consumer")), &use, 1u, true);
+        ASSERT_TRUE(consumers[index].valid());
+    }
+    const Graphics::GpuTaskId empty = graph.addTask(Graphics::GpuTaskDesc{}
+        .setIdentity(Name("tests/buffer_range/grouped_empty"))
+        .setMarkerLabel("No Epilogue Task")
+    );
+    ASSERT_TRUE(empty.valid());
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
+    const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
+    for(usize index = 0u; index < resources.size(); ++index){
+        SCOPED_TRACE(index);
+        const Graphics::GpuCompiledTaskView writer = plan.findTask(writers[index]);
+        ASSERT_TRUE(writer.valid());
+        ASSERT_EQ(writer.plan->epilogueBarrierCount, 1u);
+        EXPECT_EQ(writer.plan->epilogueBarrierOffset, resources.size() - index - 1u);
+        EXPECT_EQ(writer.epilogueBarriers[0u].resource, resources[index]);
+        EXPECT_EQ(writer.epilogueBarriers[0u].range.bufferRange, ranges[index]);
+        EXPECT_EQ(writer.epilogueBarriers[0u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
+        EXPECT_EQ(writer.epilogueBarriers[0u].sourceQueue, queues[0u].id);
+        EXPECT_EQ(writer.epilogueBarriers[0u].destinationQueue, queues[1u].id);
+        const Graphics::GpuCompiledTaskView consumer = plan.findTask(consumers[index]);
+        ASSERT_TRUE(consumer.valid());
+        ASSERT_EQ(consumer.plan->epilogueBarrierCount, s_ExpectedDualCount);
+        EXPECT_EQ(consumer.plan->epilogueBarrierOffset, s_ExpectedDualCount + index * s_ExpectedDualCount);
+        EXPECT_EQ(consumer.epilogueBarriers[0u].type, Graphics::GpuCompiledBarrierType::BufferStateExport);
+        EXPECT_EQ(consumer.epilogueBarriers[1u].type, Graphics::GpuCompiledBarrierType::BufferOwnershipRelease);
+        for(usize barrierIndex = 0u; barrierIndex < s_ExpectedDualCount; ++barrierIndex){
+            const Graphics::GpuCompiledBarrier& barrier = consumer.epilogueBarriers[barrierIndex];
+            EXPECT_EQ(barrier.resource, resources[index]);
+            EXPECT_EQ(barrier.range.bufferRange, ranges[index]);
+            EXPECT_EQ(barrier.before, Graphics::ResourceStates::ShaderResource);
+            EXPECT_EQ(barrier.after, Graphics::ResourceStates::ShaderResource);
+            EXPECT_EQ(barrier.sourceQueue, queues[1u].id);
+            EXPECT_EQ(barrier.destinationQueue, queues[barrierIndex == 0u ? 1u : s_ThirdElementIndex].id);
+        }
+    }
+    const Graphics::GpuCompiledTaskView emptyView = plan.findTask(empty);
+    ASSERT_TRUE(emptyView.valid());
+    EXPECT_EQ(emptyView.plan->epilogueBarrierOffset, 6u);
+    EXPECT_EQ(emptyView.plan->epilogueBarrierCount, 0u);
+    EXPECT_EQ(emptyView.epilogueBarriers, nullptr);
+}
+
+TEST(GpuTaskGraphBufferRange, DISABLED_PendingEpilogueGroupingBenchmark1024Tasks){
+    BenchmarkPendingEpilogueGrouping(1024u);
+}
+
+TEST(GpuTaskGraphBufferRange, DISABLED_PendingEpilogueGroupingBenchmark4096Tasks){
+    BenchmarkPendingEpilogueGrouping(4096u);
 }
 
 

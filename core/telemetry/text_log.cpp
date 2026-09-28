@@ -72,13 +72,14 @@ bool BuildTextLogPayload(
 
     // Preserve views into the previous payload before a header write or vector growth can invalidate them.
     // Ordinary logger input is external, so it converts directly into the reusable destination allocation.
-    TString<TelemetryArena> aliasedMessage(arena);
+    Optional<TString<TelemetryArena>> aliasedMessage;
     if(!message.empty() && outPayload.data()){
         const usize sourceAddress = reinterpret_cast<usize>(message.data());
         const usize payloadAddress = reinterpret_cast<usize>(outPayload.data());
         if(sourceAddress >= payloadAddress && sourceAddress - payloadAddress < outPayload.capacity()){
-            aliasedMessage.assign(message.data(), message.size());
-            message = TStringView(aliasedMessage.data(), aliasedMessage.size());
+            TString<TelemetryArena>& alias = aliasedMessage.emplace(arena);
+            alias.assign(message.data(), message.size());
+            message = TStringView(alias.data(), alias.size());
         }
     }
 

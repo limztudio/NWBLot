@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <impl/ecs_render/graph/frame_graph_software_bvh_build_state.h>
+#include "frame_graph_software_bvh_build_state.h"
 
 #include <impl/ecs_render/mesh/mesh_system.h>
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -13,6 +13,14 @@
 
 
 NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+FrameGraphSoftwareBvhBuildStateResult::FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena)
+    : buildStateResources(scratchArena)
+{}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,7 +40,8 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
     Core::Alloc::ScratchArena& scratchArena,
     FrameGraphSoftwareBvhBuildStateResult& outResult
 ){
-    outResult = FrameGraphSoftwareBvhBuildStateResult{};
+    outResult.buildStateResources.clear();
+    outResult.declared = false;
     using namespace RendererTaskGraphDetail;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };

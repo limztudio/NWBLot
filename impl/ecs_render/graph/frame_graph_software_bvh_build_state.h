@@ -35,6 +35,8 @@ struct FrameGraphSoftwareBvhBuildStateInputs{
 struct FrameGraphSoftwareBvhBuildStateResult{
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> buildStateResources;
     bool declared = false;
+
+    explicit FrameGraphSoftwareBvhBuildStateResult(Core::Alloc::ScratchArena& scratchArena);
 };
 
 

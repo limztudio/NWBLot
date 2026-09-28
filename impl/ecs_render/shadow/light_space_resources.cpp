@@ -10,7 +10,16 @@
 #include <core/graphics/vulkan/backend.h>
 #include <global/scope_exit.h>
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_light_space{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 static constexpr StringView s_DefaultLightVariant = "default";
 static constexpr StringView s_LightSpaceNoCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=0";
 static constexpr StringView s_LightSpaceNoCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=0;NWB_LIGHT_SPACE_OCCLUDER=1";
@@ -18,6 +27,11 @@ static constexpr StringView s_LightSpaceCsgShade0 = "NWB_LIGHT_SPACE_CSG_SHADE=0
 static constexpr StringView s_LightSpaceCsgShade1 = "NWB_LIGHT_SPACE_CSG_SHADE=1";
 static constexpr StringView s_LightSpaceCsgOccluder0 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=0";
 static constexpr StringView s_LightSpaceCsgOccluder1 = "NWB_LIGHT_SPACE_CSG_ENABLED=1;NWB_LIGHT_SPACE_OCCLUDER=1";
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
 
 

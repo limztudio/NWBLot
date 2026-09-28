@@ -1,5 +1,6 @@
 add_subdirectory(assets_shader)
 add_subdirectory(assets_texture)
+add_subdirectory(assets_ui_skin)
 add_subdirectory(assets_sampler)
 add_subdirectory(assets_csg)
 add_subdirectory(assets_material)
@@ -14,5 +15,6 @@ add_subdirectory(ecs_mesh)
 add_subdirectory(ecs_model)
 add_subdirectory(ecs_render)
 add_subdirectory(ecs_model_renderer)
+add_subdirectory(ui)
 add_subdirectory(ecs_ui)
 

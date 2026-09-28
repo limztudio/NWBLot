@@ -54,7 +54,7 @@ void UiSystem::update(Core::ECS::World& world, const f32 delta){
 
     beginFrame(delta);
 
-    UiDrawContext context{ m_world, Core::ECS::ENTITY_ID_INVALID, m_deltaSeconds };
+    UiDrawContext context{ m_world, m_clipboard, Core::ECS::ENTITY_ID_INVALID, m_deltaSeconds };
     m_world.view<UiComponent>().each(
         [&context](const Core::ECS::EntityID entity, UiComponent& component){
             if(!component.visible || !component.draw)

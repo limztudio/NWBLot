@@ -20,6 +20,7 @@ target_link_libraries(nwb_ecs_ui PUBLIC
     nwb_ecs
     nwb_graphics
     nwb_input
+    nwb_os
     nwb::imgui
 )
 target_link_libraries(nwb_ecs_ui PRIVATE nwb_assets_shader_loader)

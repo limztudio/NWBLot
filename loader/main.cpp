@@ -392,6 +392,7 @@ static int RunProjectRuntime(
             NWB::ProjectRuntimeContext context = {
                 frame.graphics(),
                 frame.input(),
+                frame.clipboard(),
                 frame.projectObjectArena(),
                 frame.cpuTasks(),
                 frame.gpuTasks(),

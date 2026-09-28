@@ -206,6 +206,7 @@ UiSystem::UiSystem(
     Core::ECS::World& world,
     Core::GraphicsRuntime& graphics,
     Core::InputDispatcher& input,
+    Core::IClipboardService& clipboard,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver
 )
@@ -215,6 +216,7 @@ UiSystem::UiSystem(
     , m_world(world)
     , m_graphics(graphics)
     , m_input(input)
+    , m_clipboard(clipboard)
     , m_assetManager(assetManager)
     , m_shaderPathResolver(Move(shaderPathResolver))
     , m_textures(arena)

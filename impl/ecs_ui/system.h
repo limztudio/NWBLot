@@ -79,6 +79,7 @@ public:
         Core::ECS::World& world,
         Core::GraphicsRuntime& graphics,
         Core::InputDispatcher& input,
+        Core::IClipboardService& clipboard,
         Core::Assets::AssetManager& assetManager,
         ShaderPathResolveCallback shaderPathResolver
     );
@@ -261,6 +262,7 @@ private:
     Core::ECS::World& m_world;
     Core::GraphicsRuntime& m_graphics;
     Core::InputDispatcher& m_input;
+    Core::IClipboardService& m_clipboard;
     Core::Assets::AssetManager& m_assetManager;
     ShaderPathResolveCallback m_shaderPathResolver;
 

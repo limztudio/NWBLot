@@ -77,24 +77,32 @@ Frame::~Frame()noexcept(false){
     // Teardown can invoke throwing callbacks; during unwind quiesce only, keep the original exception.
     if(UncaughtExceptionCount() > 0){
         m_cpuTasks.drain();
+        m_clipboard.reset();
         cleanupPlatform();
         return;
     }
 
     ScopeExit drainOnFailure([this]()noexcept{
         m_cpuTasks.drain();
+        m_clipboard.reset();
         cleanupPlatform();
     });
 
     m_cpuTasks.wait();
     cleanup();
     m_cpuTasks.drain();
+    m_clipboard.reset();
     cleanupPlatform();
     drainOnFailure.release();
 }
 
 
 bool Frame::startup(){
+#if defined(NWB_PLATFORM_WINDOWS)
+    m_clipboard = CreateClipboardService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
+#else
+    m_clipboard = CreateClipboardService(m_projectObjectArena, nullptr);
+#endif
     if(!m_graphics.init(data<Common::FrameData>())){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
@@ -164,6 +172,10 @@ bool Frame::update(f32 delta){
 bool Frame::updateFrame(f32 delta){
     ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
 
+    if(!clipboard().pump()){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: clipboard service could not pump on the event thread"));
+        return false;
+    }
     m_cpuTasks.pumpMainThread();
     Perf::TimingSink& cpuTiming = m_perfSession.cpuTimingSink();
     f64 projectUpdateSeconds = 0.0;
@@ -216,6 +228,11 @@ bool Frame::updateFrame(f32 delta){
 }
 bool Frame::render(){
     return true;
+}
+
+IClipboardService& Frame::clipboard(){
+    NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
+    return *m_clipboard;
 }
 
 NotNull<const tchar*> Frame::windowTitleOrDefault()const{

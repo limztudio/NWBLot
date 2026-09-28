@@ -94,6 +94,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         *world,
         context.graphics,
         context.input,
+        context.clipboard,
         context.assetManager,
         context.shaderPathResolver
     );

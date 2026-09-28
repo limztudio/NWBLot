@@ -10,6 +10,7 @@
 #include <core/task/gpu/scheduler.h>
 #include <core/common/module.h>
 #include <core/input/module.h>
+#include <core/os/clipboard.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/session.h>
 #include <core/telemetry/codec.h>
@@ -84,6 +85,10 @@ public:
 
     // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
     void setPerfCapture(const Perf::CaptureOptions& options);
+
+    // Available after startup; the native window and its OS service outlive project borrowers.
+    [[nodiscard]] IClipboardService& clipboard();
+
     // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const{ return m_perfSession; }
 
@@ -115,6 +120,7 @@ private:
     InputDispatcher m_input;
 
     Alloc::GlobalArena m_projectObjectArena;
+    GlobalUniquePtr<IClipboardService> m_clipboard;
     Perf::Session m_perfSession;
     Telemetry::CaptureSession m_telemetrySession;
     Telemetry::FrameGraphRegistry m_frameGraphRegistry;

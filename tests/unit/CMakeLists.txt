@@ -8,9 +8,11 @@ add_subdirectory(math)
 add_subdirectory(mesh)
 add_subdirectory(metascript)
 add_subdirectory(model)
+add_subdirectory(os)
 add_subdirectory(scene)
 add_subdirectory(task)
 add_subdirectory(telemetry)
+add_subdirectory(ui)
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
     add_test(

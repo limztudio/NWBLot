@@ -6,6 +6,7 @@
 
 
 #include <impl/global.h>
+#include <impl/ui/paint.h>
 
 #include <core/ecs/entity_id.h>
 #include <core/os/clipboard.h>
@@ -49,6 +50,23 @@ using UiDrawCallback = Function<void(UiDrawContext&)>;
 
 struct UiComponent{
     UiDrawCallback draw;
+    bool visible = true;
+};
+
+
+struct UiPaintContext{
+    Core::ECS::World& world;
+    Core::IClipboardService& clipboard;
+    Ui::PaintBuilder& paint;
+    const Ui::DisplayMetrics& display;
+    Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
+    f32 deltaSeconds = 0.0f;
+};
+
+using UiPaintCallback = Function<void(UiPaintContext&)>;
+
+struct UiPaintComponent{
+    UiPaintCallback paint;
     bool visible = true;
 };
 

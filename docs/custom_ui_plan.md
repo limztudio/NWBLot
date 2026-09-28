@@ -1,17 +1,17 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. The architecture and milestones below describe the full migration; the first foundation increment is described here separately.
+Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88` is pushed. The architecture and milestones below describe the full migration; the implementation increments are described separately.
 
 Implemented in the first increment:
 
 - `impl/assets_ui_skin/`: typed skin/texture identities, named sprite and nine-slice regions, logical metrics, versioned binary codec, atomic loading, MetaScript cook entry, and runtime/cook registration. Concrete schema version 1 is documented in `impl/assets_ui_skin/README.md`.
-- `impl/assets/ui/skins/default/`: a generated 256 x 256 atlas with 41 named regions, source artwork, atlas `.nwb`, and the normal converted texture `.nwb`/`.tex` pair. `utilities/ui_skin/generate_default.py` reproduces the artwork and atlas metadata.
+- `impl/assets/ui/skins/default/`: a generated 256 x 256 atlas with 41 named regions, atlas `.nwb`, and the normal converted texture `.nwb`/`.tex` pair. `utilities/ui_skin/generate_default.py` reproduces the artwork and atlas metadata. The intermediate `source.png` is omitted from the repository and runtime assets.
 - `impl/ui/`: arena-owned CPU paint builder, nested rectangular clipping with UV trimming, sprite/nine-slice geometry, adjacent batching in painter order, and move-only immutable snapshots with frame/display/skin generation metadata.
 - `core/os/`: queued clipboard requests/completions with copied UTF-8 text, capability reporting, cancellation, and service/request generation checks. Windows has a native `CF_UNICODETEXT` backend; other platforms and primary selection explicitly report unsupported capabilities.
 - `core/frame/`, `loader/`, and `impl/ecs_ui/`: Frame owns/pumps the clipboard service on the event thread and passes a required borrowed reference through the project context to ECS UI callbacks. Native window lifetime encloses service lifetime; project borrowers are destroyed first.
 - Deterministic CPU, clipboard protocol, and skin cook/load tests, including the real engine-default atlas and texture. Schema version 1 limits skins to 4096 regions and rejects larger counts before allocation or copying.
 
-This increment is part of M1. GPU layer composition, font/text layout, widget identity/layout/input, IME, and the requested edit box/combo/list remain subsequent milestones. Existing ImGui rendering remains active. `AssetRef<T>` identifies an asset; it does not retain a loaded version or GPU resource. CPU snapshots copy the needed atlas metadata, and the future GPU adapter must retain actual resolved resource versions through completion.
+This foundation increment is part of M1. GPU composition is implemented in the following increment; font/text layout, widget identity/layout/input, IME, and the requested edit box/combo/list remain subsequent work. Existing ImGui rendering remains active. `AssetRef<T>` identifies an asset; it does not retain a loaded version or GPU resource. CPU snapshots copy the needed atlas metadata, and the GPU adapter retains concrete resolved resource versions through completion.
 
 Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 
@@ -21,7 +21,27 @@ Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 - The existing window-capture smoke launched Testbed successfully and captured a 1280 x 900 scene with its existing ImGui overlay. This validates startup/rendering after OS borrowing integration; it is not evidence of the future custom GPU renderer or IME behavior.
 - Modified/new authored sources passed CRLF, banner/separator, exact source EOF, and whitespace checks.
 
-The next implementation increment should resolve/pin the selected skin texture, consume `DrawSnapshot` through `impl/ui/gpu/`, and establish the generic pre-output layer/final-compositor join. Widget state/layout and text work can then build on that paint contract in their own `impl/ui/` domains.
+Implemented in the GPU increment:
+
+- `impl/ui/gpu/`: separate resource, graph declaration, raster, and standalone presentation sources. The renderer pins concrete skin textures, geometry, render targets, samplers, pipelines, and descriptor allocations through accepted GPU completion. Three target/buffer slots bound admission; rejected submissions retain immutable CPU data and every accepted prefix token.
+- `core/task/gpu/output_layer_contributor.h`: a generic `interface` contract for independent layer production and final-consumer acceptance. UI uploads, transparent clear, and raster produce a full-output-size `RGBA16_FLOAT` premultiplied linear layer without a scene dependency. The final scene compositor consumes its explicit resource version.
+- `impl/assets/graphics/ui/` and the existing final compositor: skin raster shaders, standalone output, SDR composition after scene display mapping, and HDR composition in linear nits before one PQ encoding. UI paper white is 203 nits and remains independent of scene exposure.
+- `impl/ecs_ui/layer_system*`: a main-thread ECS adapter with an explicit scene/standalone presentation choice and borrowed OS service reference. The renderer receives frozen paint data instead of live ECS callbacks.
+- Testbed shows a separate default-skin preview. Existing ImGui labels/window are in `ui_controls.cpp`; skin preview painting is in `ui_skin_preview.cpp`. The preview exercises appearances and clipping; interactive controls and fonts are still toolkit work.
+- `tests/smoke/ui_layer/`: a UI-only executable, engine-only asset cook, completed-backbuffer readback, resize capture, and numeric SDR pixel acceptance. It exercises two empty startup snapshots, solid and skin painting, transparency, nested clips, and cleared margins without a scene renderer or ImGui system.
+
+This implements the geometry and composition path in M2. Text/font output and the full milestone exit gates remain open. `ui.raster` and `ui.output` have task timing; existing `render.frame` measures scene begin through final presentation and excludes independent UI work before scene begin. Native UI draw recording does not yet have a complete command-IR replay adapter. The current void render-pass API cannot abort an acquired standalone frame after rejection; the ECS adapter requests device recreation on that failure.
+
+Validation for the GPU increment on Windows ARM64 / Clang, `opt` configuration:
+
+- Production libraries, Testbed, the UI-only executable, and the affected unit targets build. The regular pipeline cooks/gathers 132 Testbed assets and the engine-only smoke pipeline cooks/gathers 115 assets after removing `source.png`.
+- All 319 GPU task tests and eight related composition/color/timing checks pass. The original five paint, ten clipboard, and nine skin tests also pass after the shared clipboard queue extension.
+- `nwb_ui_layer_framebuffer_smoke` captures a completed 960 x 540 acquired backbuffer and passes 16 numeric pixel probes. `nwb_ui_layer_resize_smoke` captures 960 x 540 and 800 x 600 and passes 32 probes. Both request GPU validation and reject warnings, errors, assertions, and abnormal shutdown. Maximum observed channel error is two byte values across these captures.
+- A GPU-validation Testbed capture succeeds at 1280 x 900 and after an odd 901 x 607 resize. The custom skin panel and existing scene/ImGui UI are visible, with no rejected log messages.
+- The complete ECS graphics suite reports 476 of 477 checks passing. `EcsGraphics.SurfelGbufferNormalsSharePackedDecodeContract` has stale source-text expectations for the existing half-precision normal decoder; the test and its four shader inputs are identical in pulled main `ea95ffb16`, foundation `81481aa88`, and this work. It is left unchanged. There are also 61 pre-existing disabled checks.
+- Live captures exercise SDR. HDR composition is covered by tests of the actual shared shader equations; this host has not qualified live HDR presentation.
+
+The next toolkit increment should add font/text resources, stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
 
 Build an engine-owned UI toolkit under `impl/ui/`, keep `impl/ecs_ui/` as the ECS/runtime adapter, and render UI into a transparent texture through the existing GPU task graph. Join that texture with the scene in the final output pass, after scene display mapping and before output encoding. IME, clipboard/native selection exchange, and other window-system services belong to a separate OS feature layer that `ecs_ui` borrows. Controls use a customizable skin texture plus atlas information authored in an `.nwb` file; the engine ships one default texture/atlas pair. Remove ImGui once current application behavior is covered; continue the larger widget library independently.
 
@@ -51,8 +71,8 @@ core/
     clipboard.h               clipboard/native selection exchange
     window_services.h         cursor, native capture, focus notifications
     win32/                    native implementations
-    linux_x11/                native implementations
-    linux_wayland/            native implementations
+    linux/x11/                native X11 implementations
+    linux/wayland/            native Wayland implementations
   frame/                      native window/event-loop owner; hosts OS services
 impl/
   ui/                         nwb_ui: CPU toolkit, no ECS or GPU dependency
@@ -254,7 +274,7 @@ Offscreen composition adds memory traffic and is not automatically faster than t
 
 ## 9. ImGui removal checklist
 
-1. Replace the `ImGui` calls in `CoolStuff/Testbed/runtime.cpp` and update callback wiring to pass the custom context explicitly.
+1. Replace the `ImGui` calls in `CoolStuff/Testbed/ui_controls.cpp` and update callback wiring to pass the custom context explicitly.
 2. Remove ImGui context/input/frame/draw/texture types from `impl/ecs_ui/`, including `system.h`, `system.cpp`, `system_frame.cpp`, `input_events.cpp`, graphics/texture helpers, task payloads, and legacy presentation. Move reusable GPU mechanics into `impl/ui/gpu/`; retire callback-specific machinery when no caller needs it.
 3. Replace `impl/assets/graphics/imgui/` shaders, binding headers, names, and `.nwb` metadata with engine-owned UI assets; update asset references and recook the actual runtime volumes.
 4. Remove `nwb::imgui` from `impl/ecs_ui/CMakeLists.txt`, `add_subdirectory(imgui)` and `nwb_vendor_imgui` runtime-list registration from `3rd_parties/CMakeLists.txt`, then remove `3rd_parties/imgui/`. Any separately retained font/edit utility must be an explicit independently owned dependency, not an include into the deleted vendor tree.

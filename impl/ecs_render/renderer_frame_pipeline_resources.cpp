@@ -9,6 +9,7 @@
 
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/gpu_timing.h>
+#include <core/task/gpu/output_layer_contributor.h>
 
 #include <global/termination.h>
 
@@ -167,6 +168,7 @@ void RendererFramePipeline::invalidateResources(){
     m_deferredFrameRecoveryArmed = false;
     m_deferredFrameRecoveryRetiresTiming = false;
     m_preparedTaskGraphPresentationContributor = nullptr;
+    m_preparedTaskGraphOutputLayerContributor = nullptr;
     m_deferredPresentationOverlayRequired = false;
     resetDeferredTaskGraphRuntime();
     resetInvalidatedResourceStateHandoffs();
@@ -443,6 +445,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     m_preparedRefractionActive = false;
     m_preparedRefractionResources = RayTracingRefractionGraphResources{};
     m_preparedTaskGraphPresentationContributor = nullptr;
+    m_preparedTaskGraphOutputLayerContributor = nullptr;
 
     if(!framebuffer)
         return false;
@@ -564,6 +567,17 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
         m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
         m_preparedRefractionResources.usesHardwareTrace = false;
         m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    }
+
+    if(Core::IGpuTaskGraphOutputLayerContributor* const contributor = m_graphics.taskGraphOutputLayerContributor()){
+        if(contributor->prepareTaskGraphOutputLayer(presentationFrame))
+            m_preparedTaskGraphOutputLayerContributor = contributor;
+        else if(m_graphics.isDeviceRecreationRequested()){
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("RendererSystem: output layer requested recreation during preparation"));
+            return false;
+        }
+        else
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer preparation failed; rendering scene output without its layer"));
     }
 
     if(Core::IGpuTaskGraphPresentationContributor* const contributor = m_graphics.taskGraphPresentationContributor()){

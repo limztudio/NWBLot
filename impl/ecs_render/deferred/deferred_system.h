@@ -161,7 +161,8 @@ public:
     [[nodiscard]] bool renderDeferredPresent(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        const Core::AcquiredPresentationFrame& presentationFrame
+        const Core::AcquiredPresentationFrame& presentationFrame,
+        Core::GpuDescriptorHandle outputLayerImage
     );
 
 

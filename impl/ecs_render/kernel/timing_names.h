@@ -34,7 +34,8 @@ namespace RendererGpuTimingScope{
 inline constexpr Core::GpuTimingScopeDefinition s_MeshDispatch("render.mesh_dispatch");
 inline constexpr Core::GpuTimingScopeDefinition s_Raster("render.raster");
 inline constexpr Core::GpuTimingScopeDefinition s_Frame("render.frame");
-// Dedicated-queue envelopes; render.frame stays the end-to-end critical path.
+// render.frame spans scene begin through final presentation. Independent UI work before scene begin is excluded.
+// Dedicated-queue envelopes remain separate; a whole-frame prelude would be needed to cover both roots.
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncPrefix("render.async_prefix");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncShadow("render.async_shadow");
 inline constexpr Core::GpuTimingScopeDefinition s_AsyncSurfelGi("render.async_surfel_gi");

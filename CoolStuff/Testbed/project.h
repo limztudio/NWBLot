@@ -7,6 +7,8 @@
 
 #include <loader/project_entry.h>
 
+#include <impl/ecs_ui/components.h>
+
 #include <core/ecs/module.h>
 #include <core/input/module.h>
 
@@ -22,6 +24,7 @@ private:
 
 private:
     void drawUiControls();
+    void drawCustomUiControls(NWB::Impl::UiPaintContext& context);
     [[nodiscard]] bool createDefaultScene();
     void registerInputHandler();
     void unregisterInputHandler();

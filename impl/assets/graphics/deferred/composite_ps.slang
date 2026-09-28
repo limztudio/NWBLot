@@ -17,6 +17,7 @@ struct NwbDeferredCompositePushConstants{
     uint toneMap;
     float exposure;
     float shoulder;
+    uint outputLayerSlot;
 };
 
 [[vk::push_constant]]
@@ -55,11 +56,16 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
         : saturate(exposedColor)
     ;
 
+    // The optional layer is display-linear premultiplied Rec.709; it joins after scene mapping and before encoding.
+    float4 outputLayer = float4(0.0);
+    if(g_NwbDeferredCompositePushConstants.outputLayerSlot != 0xffffffffu)
+        outputLayer = NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.outputLayerSlot).Sample(sampler, input.uv);
+
     NwbDeferredCompositePixelOutput output;
-    // HDR10 PQ needs FP32 precision, so widen only for the encode and narrow back to the half presentation color.
+    // HDR10 blends in absolute linear nits and encodes PQ once; SDR uses the attachment's sRGB conversion once.
     const half3 presentationColor = g_NwbDeferredCompositePushConstants.presentationMode == NWB_DEFERRED_PRESENTATION_HDR10
-        ? half3(nwbHdr10EncodeScene(float3(exposedColor)))
-        : sdrColor
+        ? half3(nwbHdr10EncodeSceneWithUi(float3(exposedColor), outputLayer.rgb, outputLayer.a))
+        : half3(nwbOutputLayerOver(float3(sdrColor), outputLayer.rgb, outputLayer.a))
     ;
     output.color = half4(presentationColor, half(1.0h));
     return output;

@@ -14,6 +14,9 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ui_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/ui_presentation_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system.h"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_system_frame.cpp"
 )
 target_link_libraries(nwb_ecs_ui PUBLIC
     nwb_assets
@@ -21,6 +24,7 @@ target_link_libraries(nwb_ecs_ui PUBLIC
     nwb_graphics
     nwb_input
     nwb_os
+    nwb_ui_gpu
     nwb::imgui
 )
 target_link_libraries(nwb_ecs_ui PRIVATE nwb_assets_shader_loader)

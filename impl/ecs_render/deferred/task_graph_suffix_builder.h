@@ -15,6 +15,7 @@
 #include <core/graphics/rhi/presentation.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/output_layer_contributor.h>
 #include <core/task/gpu/task_graph.h>
 
 
@@ -75,7 +76,8 @@ public:
         Core::GpuTaskGraph& graph,
         RendererDeferredSystem& deferredSystem,
         Core::GraphicsRuntime& graphics,
-        Core::IGpuTaskGraphPresentationContributor* presentationContributor
+        Core::IGpuTaskGraphPresentationContributor* presentationContributor,
+        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
     );
 
 
@@ -98,6 +100,7 @@ private:
     RendererDeferredSystem& m_deferredSystem;
     Core::GraphicsRuntime& m_graphics;
     Core::IGpuTaskGraphPresentationContributor* m_presentationContributor;
+    Core::IGpuTaskGraphOutputLayerContributor* m_outputLayerContributor;
 };
 
 

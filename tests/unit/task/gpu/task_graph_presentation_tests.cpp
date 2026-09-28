@@ -207,6 +207,154 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     EXPECT_TRUE(foundPresentExport);
 }
 
+TEST(GpuTaskGraph, IndependentOutputLayerJoinsProducedVersionAtSceneAndStandalonePresentation){
+    for(const bool hasScene : { false, true }){
+        for(const bool hasDedicatedCompute : { false, true }){
+            TestArena testArena;
+            Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
+            Core::CpuTaskScheduler cpuScheduler(0u);
+            Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
+            Graphics::GraphicsBackend::VulkanAllocator allocator(context);
+            Graphics::GpuTaskGraph graph(testArena.arena);
+            const Graphics::GpuGraphResourceId backbuffer = AddPresentationTexture(
+                testArena, context, allocator, graph,
+                Name("tests/task_graph/layer_backbuffer"), "Output Layer Back Buffer", Graphics::ResourceStates::Unknown
+            );
+            const Graphics::GpuGraphResourceId layerColor = AddTextureMetadata(
+                graph, Name("tests/task_graph/layer_color"), "Output Layer Color", Graphics::ResourceStates::Unknown
+            );
+            const Graphics::GpuGraphResourceId sceneColor = AddTextureMetadata(
+                graph, Name("tests/task_graph/layer_scene"), "Output Layer Scene", Graphics::ResourceStates::Unknown
+            );
+            ASSERT_TRUE(backbuffer.valid());
+            ASSERT_TRUE(layerColor.valid());
+            ASSERT_TRUE(sceneColor.valid());
+            const Graphics::GpuGraphResourceVersionId layerVersion = graph.declareResourceVersion(
+                Graphics::GpuGraphResourceVersionDesc{}
+                    .setResource(layerColor)
+                    .setOrigin(Graphics::GpuGraphResourceVersionOrigin::TaskProduced)
+            );
+            ASSERT_TRUE(layerVersion.valid());
+            Graphics::GpuTaskSchedulingHint scheduling;
+            scheduling.forceSubmissionBoundary = true;
+            scheduling.allowPacketMerge = false;
+            const Graphics::GpuTaskResourceUse layerWrite{
+                .resource = layerColor,
+                .range = {},
+                .requiredState = Graphics::ResourceStates::RenderTarget,
+                .access = Graphics::GpuTaskResourceAccess::Write,
+            };
+            const Graphics::GpuTaskResourceVersionUse layerProduce{
+                .version = layerVersion,
+                .role = Graphics::GpuTaskResourceVersionRole::Produce,
+            };
+            Graphics::GpuTaskDesc layerDesc;
+            layerDesc
+                .setIdentity(Name("tests/task_graph/independent_layer"))
+                .setMarkerLabel("Independent Output Layer")
+                .setScheduling(scheduling)
+                .setResourceUses(&layerWrite, 1u)
+                .setResourceVersionUses(&layerProduce, 1u)
+            ;
+            const Graphics::GpuTaskId layer = graph.addTask(layerDesc, GraphicsCommands());
+            ASSERT_TRUE(layer.valid());
+            Graphics::GpuTaskId scene;
+            if(hasScene){
+                const Graphics::GpuTaskResourceUse sceneWrite{
+                    .resource = sceneColor,
+                    .range = {},
+                    .requiredState = Graphics::ResourceStates::UnorderedAccess,
+                    .access = Graphics::GpuTaskResourceAccess::Write,
+                };
+                Graphics::GpuTaskDesc sceneDesc;
+                sceneDesc
+                    .setIdentity(Name("tests/task_graph/independent_scene"))
+                    .setMarkerLabel("Independent Scene")
+                    .setScheduling(scheduling)
+                    .setResourceUses(&sceneWrite, 1u)
+                ;
+                scene = graph.addTask(sceneDesc, ComputeCommands());
+                ASSERT_TRUE(scene.valid());
+            }
+            const Graphics::GpuTaskResourceUse presentUses[] = {
+                {
+                    .resource = backbuffer,
+                    .range = {},
+                    .requiredState = Graphics::ResourceStates::RenderTarget,
+                    .access = Graphics::GpuTaskResourceAccess::Write,
+                },
+                {
+                    .resource = layerColor,
+                    .range = {},
+                    .requiredState = Graphics::ResourceStates::ShaderResource,
+                    .access = Graphics::GpuTaskResourceAccess::Read,
+                },
+                {
+                    .resource = sceneColor,
+                    .range = {},
+                    .requiredState = Graphics::ResourceStates::ShaderResource,
+                    .access = Graphics::GpuTaskResourceAccess::Read,
+                },
+            };
+            const Graphics::GpuTaskResourceVersionUse layerConsume{
+                .version = layerVersion,
+                .role = Graphics::GpuTaskResourceVersionRole::Consume,
+            };
+            // The layer dependency comes from its explicit produced version, even without an explicit task edge.
+            Graphics::GpuTaskDesc presentDesc;
+            presentDesc
+                .setIdentity(Name("tests/task_graph/layer_final_join"))
+                .setMarkerLabel("Output Layer Final Join")
+                .setScheduling(scheduling)
+                .setDependencies(&scene, hasScene ? 1u : 0u)
+                .setResourceUses(presentUses, hasScene ? 3u : 2u)
+                .setResourceVersionUses(&layerConsume, 1u)
+            ;
+            const Graphics::GpuTaskId present = graph.addTask(presentDesc, GraphicsCommands());
+            ASSERT_TRUE(present.valid());
+            ASSERT_TRUE(graph.declarePresentEndpoint({ .producer = present, .backBuffer = backbuffer }));
+            const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+            const Graphics::GpuPhysicalQueueTopology topology{
+                .queues = queues,
+                .queueCount = hasDedicatedCompute ? 2u : 1u,
+            };
+            Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+            Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
+            Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
+            ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
+            EXPECT_TRUE(analysis.hasInferredEdge(layer, present));
+            EXPECT_FALSE(analysis.hasExplicitEdge(layer, present));
+            if(hasScene){
+                EXPECT_TRUE(analysis.hasExplicitEdge(scene, present));
+                EXPECT_FALSE(analysis.hasExplicitEdge(scene, layer));
+                EXPECT_FALSE(analysis.hasInferredEdge(scene, layer));
+                EXPECT_FALSE(analysis.hasExplicitEdge(layer, scene));
+                EXPECT_FALSE(analysis.hasInferredEdge(layer, scene));
+            }
+            const Tests::GpuTaskGraphReadViews reads(graph, compiledGraph);
+            ASSERT_TRUE(reads.valid());
+            EXPECT_EQ(reads.declarations.taskAt(layer.index).dependencyCount, 0u);
+            EXPECT_EQ(reads.declarations.taskAt(layer.index).externalDependencyCount, 0u);
+            const Graphics::GpuCompiledPresentEndpoint* const endpoint = reads.compiled.presentEndpoint();
+            ASSERT_NE(endpoint, nullptr);
+            EXPECT_EQ(endpoint->producer, present);
+            EXPECT_EQ(endpoint->queue, queues[0u].id);
+            const Graphics::GpuCompiledTaskView finalTask = reads.compiled.findTask(present);
+            ASSERT_NE(finalTask.plan, nullptr);
+            bool layerTransitionFound = false;
+            for(u32 index = 0u; index < finalTask.plan->prologueBarrierCount; ++index){
+                const Graphics::GpuCompiledBarrier& barrier = finalTask.prologueBarriers[index];
+                layerTransitionFound = layerTransitionFound || (
+                    barrier.resource == layerColor
+                    && barrier.before == Graphics::ResourceStates::RenderTarget
+                    && barrier.after == Graphics::ResourceStates::ShaderResource
+                );
+            }
+            EXPECT_TRUE(layerTransitionFound);
+        }
+    }
+}
+
 TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     TestArena testArena;
     Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);

@@ -4,6 +4,7 @@
 
 #include "runtime_internal.h"
 
+#include <core/common/log.h>
 #include <core/graphics/backend_selection.h>
 #include <core/task/gpu/compiler.h>
 #include <core/task/gpu/scheduler.h>
@@ -392,7 +393,8 @@ bool SubmitGraphOwnedStandaloneTask(
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
-    CpuTaskScheduler* const readyFrontierScheduler
+    CpuTaskScheduler* const readyFrontierScheduler,
+    GpuTimingRecorder* const timingRecorder
 ){
     outSubmissionToken = {};
     if(!declareTask)
@@ -423,8 +425,15 @@ bool SubmitGraphOwnedStandaloneTask(
         recordedGraph,
         transaction,
         scratchArena
-    ))
+    )){
+        const auto& analysisDiagnostic = analysis.diagnostic();
+        const auto& queueDiagnostic = assignments.diagnostic();
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
+            , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
+            , analysisDiagnostic.resourceVersion.index, static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
+        );
         return false;
+    }
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
@@ -471,7 +480,7 @@ bool SubmitGraphOwnedStandaloneTask(
         recordedGraph,
         normalExecution,
         transaction,
-        nullptr,
+        timingRecorder,
         scratchArena
     );
     if(!graphAccepted){
@@ -481,7 +490,7 @@ bool SubmitGraphOwnedStandaloneTask(
             recordedGraph,
             recoveryTask,
             transaction,
-            nullptr,
+            timingRecorder,
             scratchArena
         );
         const bool discarded = transaction.discardUnaccepted(
@@ -590,7 +599,8 @@ bool GraphicsRuntime::submitStandaloneTaskGraph(
     void* const userData,
     const StandaloneTaskGraphDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
-    const GpuPhysicalQueueId requiredTerminalQueue
+    const GpuPhysicalQueueId requiredTerminalQueue,
+    GpuTimingRecorder* const timingRecorder
 )const{
     outSubmissionToken = {};
     if(!declareTask)
@@ -603,7 +613,8 @@ bool GraphicsRuntime::submitStandaloneTaskGraph(
         declareTask,
         outSubmissionToken,
         requiredTerminalQueue,
-        &m_cpuScheduler
+        &m_cpuScheduler,
+        timingRecorder
     );
 }
 

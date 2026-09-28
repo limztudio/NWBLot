@@ -10,6 +10,7 @@
 #include <core/graphics/gpu_timing.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/task/gpu/task_graph.h>
+#include <core/task/gpu/output_layer_contributor.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -44,6 +45,8 @@ struct DeferredPresentGraphTask{
         DeferredFrameTargets* targets = nullptr;
         Core::AcquiredPresentationFrame presentationFrame;
         Core::GpuGraphResourceId backBuffer;
+        Core::GpuTaskGraphOutputLayer outputLayer;
+        Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor = nullptr;
         Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
         Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
@@ -54,6 +57,7 @@ struct DeferredPresentGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
+    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
 };
 
 

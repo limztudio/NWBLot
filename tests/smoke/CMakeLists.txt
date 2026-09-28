@@ -1392,3 +1392,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     unset(_nwb_skinning_culling_model_nwb)
     include("${CMAKE_CURRENT_LIST_DIR}/software_raytracing_smokes.cmake")
 endif()
+
+if(TARGET nwb_loader AND TARGET nwb_ecs_ui AND TARGET nwb_asset_builder AND Python3_Interpreter_FOUND)
+    add_subdirectory(ui_layer)
+endif()

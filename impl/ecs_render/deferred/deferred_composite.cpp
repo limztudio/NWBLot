@@ -53,8 +53,9 @@ struct PresentPushConstants{
     u32 toneMap = NWB_DEFERRED_TONE_MAP_REINHARD;
     f32 exposure = 1.f;
     f32 shoulder = s_CompositeDefaultShoulder;
+    u32 outputLayerSlot = Core::GpuDescriptorHandle::s_Invalid;
 };
-static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 5u);
+static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 6u);
 
 
 struct DeferredCompositeGraphTask{
@@ -271,7 +272,8 @@ bool RendererDeferredSystem::renderDeferredComposite(
 bool RendererDeferredSystem::renderDeferredPresent(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const Core::AcquiredPresentationFrame& presentationFrame
+    const Core::AcquiredPresentationFrame& presentationFrame,
+    const Core::GpuDescriptorHandle outputLayerImage
 ){
     NWB_ASSERT(presentationFrame.valid());
     NWB_ASSERT(m_deferredState.m_presentPipeline);
@@ -321,6 +323,7 @@ bool RendererDeferredSystem::renderDeferredPresent(
         .toneMap = m_deferredState.m_presentationSettings.toneMap,
         .exposure = m_deferredState.m_presentationSettings.exposure,
         .shoulder = m_deferredState.m_presentationSettings.shoulder,
+        .outputLayerSlot = outputLayerImage.valid() ? outputLayerImage.slot() : Core::GpuDescriptorHandle::s_Invalid,
     };
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
 

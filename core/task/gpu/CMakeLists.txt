@@ -56,6 +56,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/persistent_state.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/persistent_state.h"
     "${CMAKE_CURRENT_LIST_DIR}/presentation_contributor.h"
+    "${CMAKE_CURRENT_LIST_DIR}/output_layer_contributor.h"
     "${CMAKE_CURRENT_LIST_DIR}/queue_assignment_telemetry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/queue_assignment_telemetry.h"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler.cpp"

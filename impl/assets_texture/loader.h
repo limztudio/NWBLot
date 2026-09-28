@@ -27,6 +27,8 @@ struct TextureGpuResource final : NoCopy{
     Core::TextureHandle texture;
     Core::GpuDescriptorHandle sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::Format::Enum format = Core::Format::UNKNOWN;
+    // Authoritative completion of the static upload, imported by later graph consumers.
+    Core::QueueSubmissionToken readinessToken;
 
     [[nodiscard]] bool valid()const{
         return texture != nullptr && sampledImageHeapHandle.valid() && format != Core::Format::UNKNOWN;

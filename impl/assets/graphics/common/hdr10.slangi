@@ -89,7 +89,7 @@ float3 nwbHdr10SrgbToLinear(float3 value){
     );
 }
 
-float3 nwbHdr10EncodeScene(float3 linearRec709){
+float3 nwbHdr10SceneToNits(float3 linearRec709){
     // The linear renderer may contain highlights above one. Map its reference white to 203 nits and use a smooth
     // shoulder toward the declared 1,000-nit mastering peak, preserving highlight ordering until presentation.
     const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(max(linearRec709, float3(0.0))), float3(0.0));
@@ -97,12 +97,37 @@ float3 nwbHdr10EncodeScene(float3 linearRec709){
     const float3 compressedNits = NWB_HDR10_MASTERING_PEAK_NITS * referenceWhiteNits / (
         referenceWhiteNits + (NWB_HDR10_MASTERING_PEAK_NITS - NWB_HDR10_SCENE_REFERENCE_WHITE_NITS)
     );
-    return nwbHdr10PqEncodeNits(compressedNits);
+    return compressedNits;
+}
+
+float3 nwbHdr10UiLinearToNits(float3 linearRec709){
+    const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(max(linearRec709, float3(0.0))), float3(0.0));
+    return linearRec2020 * NWB_HDR10_UI_PAPER_WHITE_NITS;
+}
+
+float3 nwbHdr10EncodeScene(float3 linearRec709){
+    return nwbHdr10PqEncodeNits(nwbHdr10SceneToNits(linearRec709));
+}
+
+float3 nwbHdr10EncodeUiLinear(float3 linearRec709){
+    return nwbHdr10PqEncodeNits(nwbHdr10UiLinearToNits(linearRec709));
 }
 
 float3 nwbHdr10EncodeUiSrgb(float3 srgbRec709){
-    const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(nwbHdr10SrgbToLinear(srgbRec709)), float3(0.0));
-    return nwbHdr10PqEncodeNits(linearRec2020 * NWB_HDR10_UI_PAPER_WHITE_NITS);
+    return nwbHdr10EncodeUiLinear(nwbHdr10SrgbToLinear(srgbRec709));
+}
+
+// Both inputs are already display-linear; premultiplied UI is never exposed or scene-tone-mapped.
+float3 nwbOutputLayerOver(float3 background, float3 premultipliedForeground, float alpha){
+    return premultipliedForeground + background * (1.0 - saturate(alpha));
+}
+
+float3 nwbHdr10EncodeSceneWithUi(float3 sceneLinearRec709, float3 uiPremultipliedLinearRec709, float uiAlpha){
+    return nwbHdr10PqEncodeNits(nwbOutputLayerOver(
+        nwbHdr10SceneToNits(sceneLinearRec709),
+        nwbHdr10UiLinearToNits(uiPremultipliedLinearRec709),
+        uiAlpha
+    ));
 }
 
 

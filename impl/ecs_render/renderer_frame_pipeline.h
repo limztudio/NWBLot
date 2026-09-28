@@ -33,6 +33,7 @@
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/persistent_state.h>
 #include <core/task/gpu/presentation_contributor.h>
+#include <core/task/gpu/output_layer_contributor.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <impl/assets/graphics/mesh/binding_slots.h>
@@ -564,6 +565,7 @@ private:
     bool m_deferredLightingTaskGraphScheduled = false;
     bool m_deferredPresentationOverlayRequired = false;
     Core::IGpuTaskGraphPresentationContributor* m_preparedTaskGraphPresentationContributor = nullptr;
+    Core::IGpuTaskGraphOutputLayerContributor* m_preparedTaskGraphOutputLayerContributor = nullptr;
 
 private:
     RendererMeshState m_meshState;

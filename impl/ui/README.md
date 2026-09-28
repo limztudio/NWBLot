@@ -14,7 +14,7 @@ Positions, dimensions, and clip rectangles use logical units with a top-left ori
 clip is the logical display extent. `pushClip()` intersects its rectangle with the current clip;
 every push must have a matching `popClip()` before `freeze()`. A pop at the initial clip returns
 `false`. Geometry is trimmed to the current clip and UVs are interpolated to match. The snapshot
-also records each command's logical clip and the display's pixel scales; a future renderer applies
+also records each command's logical clip and the display's pixel scales; the GPU renderer applies
 those scales when converting positions and scissors to framebuffer pixels.
 
 This example belongs in the owning UI caller after loading `skin` and `skinRef`:
@@ -50,7 +50,7 @@ The painter does not enforce the region's content padding or minimum size; layou
 
 Input `Color` values are linear RGB with finite straight alpha in `[0, 1]`. Emitted vertex RGB is
 multiplied by alpha. Skin artwork and its color-space/coverage interpretation come from the typed
-texture asset; a future shader must combine texture coverage and tint consistently with this
+texture asset; the skin shader combines texture coverage and tint consistently with this
 premultiplied vertex contract.
 
 `freeze()` moves the geometry, indices, ordered commands, display metrics, frame generation, and
@@ -60,11 +60,12 @@ snapshot. Only adjacent draws with identical material and clip merge; painter or
 
 The saved `AssetRef<UiSkin>` and `AssetRef<Texture>` identify assets. They do not retain loaded asset
 objects or resolved GPU resources. The explicit skin generation identifies the metadata revision;
-the future GPU layer must retain the matching resolved texture revision, descriptors, and upload
+the GPU layer retains the matching resolved texture revision, descriptors, and upload
 storage until GPU completion.
 
-This foundation has no widget state, layout engine, text/font shaping, or GPU implementation yet.
-Control behavior and layout will extend `impl/ui/`; GPU uploads, resource retention, and offscreen
-rendering belong in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
+This CPU foundation has no widget state, layout engine, or text/font shaping yet.
+Control behavior and layout will extend `impl/ui/`; `nwb_ui_gpu` owns GPU uploads, resource retention,
+and offscreen rendering in `impl/ui/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
 `core/os/` owns native IME and clipboard behavior, `impl/assets_ui_skin/` owns skin validation/cooking,
-and `impl/ecs_render/` will own final composition with the scene.
+and `impl/ecs_render/` owns final composition with the scene. The GPU module consumes frozen snapshots
+without invoking callbacks or accessing live ECS data.

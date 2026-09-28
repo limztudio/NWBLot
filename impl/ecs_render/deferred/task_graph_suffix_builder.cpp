@@ -26,12 +26,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GpuTaskGraph& graph,
     RendererDeferredSystem& deferredSystem,
     Core::GraphicsRuntime& graphics,
-    Core::IGpuTaskGraphPresentationContributor* presentationContributor
+    Core::IGpuTaskGraphPresentationContributor* presentationContributor,
+    Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor
 )
     : m_graph(graph)
     , m_deferredSystem(deferredSystem)
     , m_graphics(graphics)
-    , m_presentationContributor(presentationContributor){
+    , m_presentationContributor(presentationContributor)
+    , m_outputLayerContributor(outputLayerContributor){
 }
 
 [[nodiscard]] bool DeferredGraphSuffixBuilder::declare(
@@ -63,6 +65,47 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         || !inputs.presentationFrame->valid()
     )
         return false;
+
+    Core::GpuTaskGraphOutputLayer outputLayer;
+    if(m_outputLayerContributor && !m_outputLayerContributor->declareTaskGraphOutputLayer(m_graph, outputLayer)){
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer did not declare its graph work"));
+        return false;
+    }
+    {
+        const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);
+        const bool hasColor = outputLayer.color.valid();
+        if(
+            !declarations.valid()
+            || (outputLayer.readyTask.valid() != (outputLayer.frameGeneration != 0u))
+            || (outputLayer.readyTask.valid() && !declarations.validTask(outputLayer.readyTask))
+            || (hasColor && !outputLayer.readyTask.valid())
+            || hasColor != outputLayer.colorVersion.valid()
+            || hasColor != outputLayer.sampledImage.valid()
+        )
+            return false;
+        if(hasColor){
+            if(!declarations.validResource(outputLayer.color) || !declarations.validResourceVersion(outputLayer.colorVersion))
+                return false;
+            const Core::GpuTaskGraphResourceVersionView version = declarations.resourceVersionAt(outputLayer.colorVersion.index);
+            const Core::Texture* const texture = declarations.textureForResource(outputLayer.color);
+            if(!texture || version.resource != outputLayer.color || version.origin != Core::GpuGraphResourceVersionOrigin::TaskProduced)
+                return false;
+            const Core::TextureDesc& desc = texture->getDescription();
+            const Core::TextureDesc& outputDesc = inputs.presentationFrame->backBuffer.texture->getDescription();
+            if(
+                outputLayer.sampledImage.descriptorClass() != Core::GpuDescriptorClass::SampledImage
+                || desc.width != outputDesc.width
+                || desc.height != outputDesc.height
+                || desc.dimension != Core::TextureDimension::Texture2D
+                || desc.format != Core::Format::RGBA16_FLOAT
+                || desc.sampleCount != 1u
+                || desc.mipLevels != 1u
+                || desc.arraySize != 1u
+                || !version.range.textureSubresources.isEntireTexture(desc)
+            )
+                return false;
+        }
+    }
 
     const auto importFirstWriteTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         Core::GpuGraphResourceDesc desc = TextureResourceDesc(identity, label);
@@ -163,7 +206,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         return false;
     }
 
-    const Core::GpuTaskResourceUse presentResourceUses[] = {
+    Core::GpuTaskResourceUse presentResourceUses[4u] = {
         ReadUse(compositeColor),
         ReadUse(compositeBindlessSlots, Core::ResourceStates::ConstantBuffer),
         WriteTextureUse(
@@ -172,23 +215,33 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             Core::ResourceStates::RenderTarget
         ),
     };
+    usize presentResourceUseCount = 3u;
+    const Core::GpuTaskResourceVersionUse outputLayerVersionUse{
+        .version = outputLayer.colorVersion,
+        .role = Core::GpuTaskResourceVersionRole::Consume,
+    };
+    if(outputLayer.color.valid())
+        presentResourceUses[presentResourceUseCount++] = ReadUse(outputLayer.color);
+
     Core::GpuTaskSchedulingHint presentScheduling;
     presentScheduling.cost = Core::GpuTaskCostHint::Medium;
     presentScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
-    const Core::GpuTaskId presentDependencies[] = {
-        outResult.compositeTask,
-        inputs.surfelGiTask,
-    };
-    const usize presentDependencyCount = inputs.useLaggedLightingHistory ? LengthOf(presentDependencies) : 1u;
+    Core::GpuTaskId presentDependencies[3u] = { outResult.compositeTask };
+    usize presentDependencyCount = 1u;
+    if(inputs.useLaggedLightingHistory)
+        presentDependencies[presentDependencyCount++] = inputs.surfelGiTask;
+    if(outputLayer.readyTask.valid())
+        presentDependencies[presentDependencyCount++] = outputLayer.readyTask;
     Core::GpuTaskDesc presentDesc;
     presentDesc
         .setIdentity(Name("render.deferred_present"))
         .setMarkerLabel("Deferred Present")
         .setScheduling(presentScheduling)
         .setDependencies(presentDependencies, presentDependencyCount)
-        .setResourceUses(presentResourceUses, LengthOf(presentResourceUses))
+        .setResourceUses(presentResourceUses, presentResourceUseCount)
+        .setResourceVersionUses(&outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u)
     ;
     outResult.presentTask = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
@@ -198,6 +251,8 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             .targets = &targets,
             .presentationFrame = presentationFrame,
             .backBuffer = backbuffer,
+            .outputLayer = outputLayer,
+            .outputLayerContributor = m_outputLayerContributor,
             .asyncFinalTiming = &asyncFinalTiming,
             .timingTicket = &presentTimingTicket,
             .shadowVisibilityTask = &shadowVisibilityTask,

@@ -2,6 +2,8 @@ nwb_declare_executable(testbed)
 target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/entry.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_controls.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/project.h"
 )
 set_target_properties(testbed PROPERTIES

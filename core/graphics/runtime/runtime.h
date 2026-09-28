@@ -20,7 +20,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IGpuTaskGraphPresentationContributor;
+interface IGpuTaskGraphPresentationContributor;
+interface IGpuTaskGraphOutputLayerContributor;
 class GpuTaskScheduler;
 class GpuTaskGraph;
 struct GpuTaskId;
@@ -243,6 +244,18 @@ public:
         return m_taskGraphPresentationContributor;
     }
 
+    // Pre-output layers declare independent producers and join only at final display composition.
+    void setTaskGraphOutputLayerContributor(IGpuTaskGraphOutputLayerContributor* contributor)noexcept{
+        m_taskGraphOutputLayerContributor = contributor;
+    }
+    void clearTaskGraphOutputLayerContributor(const IGpuTaskGraphOutputLayerContributor& contributor)noexcept{
+        if(m_taskGraphOutputLayerContributor == &contributor)
+            m_taskGraphOutputLayerContributor = nullptr;
+    }
+    [[nodiscard]] IGpuTaskGraphOutputLayerContributor* taskGraphOutputLayerContributor()const noexcept{
+        return m_taskGraphOutputLayerContributor;
+    }
+
     [[nodiscard]] const tchar* getRendererString()const;
     [[nodiscard]] f64 getPreviousFrameTimestamp()const{ return DurationInSeconds<f64>(m_previousFrameTimestamp); }
     [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
@@ -283,7 +296,8 @@ public:
         void* userData,
         StandaloneTaskGraphDeclaration declareTask,
         QueueSubmissionToken& outSubmissionToken,
-        GpuPhysicalQueueId requiredTerminalQueue = {}
+        GpuPhysicalQueueId requiredTerminalQueue = {},
+        GpuTimingRecorder* timingRecorder = nullptr
     )const;
     [[nodiscard]] MeshResource setupMesh(const MeshSetupDesc& desc)const;
 
@@ -370,6 +384,7 @@ private:
     List<IRenderPass*, Alloc::GlobalArena> m_renderPasses;
     // Non-owning: the contributing system unregisters before its lifetime ends.
     IGpuTaskGraphPresentationContributor* m_taskGraphPresentationContributor = nullptr;
+    IGpuTaskGraphOutputLayerContributor* m_taskGraphOutputLayerContributor = nullptr;
     Timer m_previousFrameTimestamp = {};
     f32 m_dpiScaleFactorX = 1.f;
     f32 m_dpiScaleFactorY = 1.f;

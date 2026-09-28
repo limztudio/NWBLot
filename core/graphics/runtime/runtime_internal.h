@@ -73,7 +73,8 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outSubmissionToken,
     GpuPhysicalQueueId requiredTerminalQueue = {},
-    CpuTaskScheduler* readyFrontierScheduler = nullptr
+    CpuTaskScheduler* readyFrontierScheduler = nullptr,
+    GpuTimingRecorder* timingRecorder = nullptr
 );
 [[nodiscard]] bool SubmitGraphOwnedSetupUpload(
     const GraphicsRuntime& graphics,

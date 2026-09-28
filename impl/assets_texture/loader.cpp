@@ -421,6 +421,7 @@ bool TextureAssetLoader::Create(
     outResource.texture = Move(texture);
     outResource.sampledImageHeapHandle = sampledImageHandle;
     outResource.format = format;
+    outResource.readinessToken = uploadToken;
     return true;
 }
 
@@ -461,6 +462,7 @@ void TextureAssetLoader::Release(TextureGpuResource& inOutResource, Core::Graphi
 
     inOutResource.texture.reset();
     inOutResource.format = Core::Format::UNKNOWN;
+    inOutResource.readinessToken = {};
 }
 
 

@@ -72,13 +72,20 @@ namespace RendererTaskGraphDetail{
     const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
         commandList,
         *payload.targets,
-        payload.presentationFrame
+        payload.presentationFrame,
+        payload.outputLayer.sampledImage
     );
     if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
         payload.asyncFinalTiming->value().finishTiming(commandList);
         payload.asyncFinalTiming->reset();
     }
     return presentRecorded;
+}
+
+
+void DeferredPresentGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    if(payload.outputLayerContributor && payload.outputLayer.frameGeneration != 0u && token.valid())
+        payload.outputLayerContributor->acceptTaskGraphOutputLayer(payload.outputLayer.frameGeneration, token);
 }
 
 

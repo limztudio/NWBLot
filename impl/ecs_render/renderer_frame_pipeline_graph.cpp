@@ -1470,7 +1470,8 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredLightingTaskGraph,
         m_deferredSystem,
         m_graphics,
-        m_preparedTaskGraphPresentationContributor
+        m_preparedTaskGraphPresentationContributor,
+        m_preparedTaskGraphOutputLayerContributor
     );
     DeferredGraphSuffixResult suffixResult;
     if(!suffixBuilder.declare(

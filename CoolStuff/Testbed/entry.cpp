@@ -25,6 +25,7 @@ static constexpr tchar s_WindowTitle[] = NWB_TEXT("NWB Testbed");
 static constexpr tchar s_WorldAllocFailed[] = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
 static constexpr tchar s_ResolverNull[] = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
 static constexpr tchar s_DestroyRequiresIdleOrLoss[] = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
 };
 
 
@@ -98,8 +99,18 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.assetManager,
         context.shaderPathResolver
     );
+    auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
+        *world,
+        context.graphics,
+        context.clipboard,
+        context.assetManager,
+        context.shaderPathResolver,
+        __hidden_testbed_entry::s_DefaultUiSkin,
+        NWB::Impl::UiLayerPresentation::Scene
+    );
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
+    context.graphics.addRenderPassToBack(uiLayerSystem);
     context.graphics.addRenderPassToBack(uiSystem);
     context.frameGraphRegistry.registerContributor(rendererSystem);
 
@@ -124,9 +135,14 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     NWB_ASSERT(uiSystemPtr);
     NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
 
+    auto* uiLayerSystemPtr = world->getSystem<NWB::Impl::UiLayerSystem>();
+    NWB_ASSERT(uiLayerSystemPtr);
+    NWB::Impl::UiLayerSystem& uiLayerSystem = *uiLayerSystemPtr;
+
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
     context.graphics.removeRenderPass(meshSkinningSystem);
     context.graphics.removeRenderPass(rendererSystem);
+    context.graphics.removeRenderPass(uiLayerSystem);
     context.graphics.removeRenderPass(uiSystem);
 
     context.graphics.waitTasks();

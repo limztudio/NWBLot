@@ -1,0 +1,5 @@
+shader asset;
+
+asset.stage = "vs";
+asset.target_profile = "spirv_1_5";
+asset.entry_point = "main";

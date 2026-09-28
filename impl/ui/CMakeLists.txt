@@ -6,3 +6,5 @@ target_sources(nwb_ui PRIVATE
 )
 target_link_libraries(nwb_ui PUBLIC nwb_assets_ui_skin)
 
+add_subdirectory(gpu)
+

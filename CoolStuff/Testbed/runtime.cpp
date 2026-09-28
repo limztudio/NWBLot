@@ -17,8 +17,6 @@
 #include <impl/ecs_render/module.h>
 #include <impl/ecs_ui/module.h>
 
-#include <imgui.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -54,18 +52,12 @@ static constexpr Float4 s_PointLightPosition = Float4(1.5f, 1.6f, 1.5f);
 static constexpr Float4 s_PointLightColor = Float4(0.6f, 0.74f, 1.0f);
 static constexpr f32 s_PointLightIntensity = 2.0f;
 static constexpr f32 s_PointLightRange = 16.0f; // larger range = gentler distance falloff so it stays comparable to the directional across the scene
-static constexpr Float2U s_UiInitialPosition = Float2U(18.0f, 18.0f);
-static constexpr f32 s_UiInitialWidth = 360.0f;
-static constexpr f32 s_UiInitialHeightAuto = 0.0f;
 static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"};
 static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
 static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
 static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
 static constexpr tchar s_DefaultSceneDescription[] = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
 static constexpr tchar s_InitWorldFailedText[] = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
-static constexpr char s_UiWindowTitle[] = "NWB Testbed";
-static constexpr char s_UiRendererLine[] = "Renderer: mesh shader path with compute emulation fallback";
-static constexpr char s_UiCharacterLine[] = "Character: female model";
 static constexpr tchar s_CharacterInvalidText[] = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
 static constexpr tchar s_StartupSceneText[] = NWB_TEXT("ProjectTestbed: startup scene created ({})");
 static constexpr tchar s_ShutdownText[] = NWB_TEXT("ProjectTestbed: shutdown");
@@ -267,20 +259,6 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
     return MakeNotNullUnique(Move(world));
 }
 
-void ProjectTestbed::drawUiControls(){
-    ImGui::SetNextWindowPos(ImVec2(__hidden_runtime::s_UiInitialPosition.x, __hidden_runtime::s_UiInitialPosition.y), ImGuiCond_FirstUseEver);
-    ImGui::SetNextWindowSize(ImVec2(__hidden_runtime::s_UiInitialWidth, __hidden_runtime::s_UiInitialHeightAuto), ImGuiCond_FirstUseEver);
-    if(!ImGui::Begin(__hidden_runtime::s_UiWindowTitle)){
-        ImGui::End();
-        return;
-    }
-
-    ImGui::TextUnformatted(__hidden_runtime::s_UiRendererLine);
-    ImGui::Separator();
-    ImGui::TextUnformatted(__hidden_runtime::s_UiCharacterLine);
-    ImGui::End();
-}
-
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(createInitialWorldOrDie(context))
@@ -353,6 +331,10 @@ bool ProjectTestbed::createDefaultScene(){
     ui.draw = [this](NWB::Impl::UiDrawContext& context){
         static_cast<void>(context);
         drawUiControls();
+    };
+    auto& customUi = uiEntity.addComponent<NWB::Impl::UiPaintComponent>();
+    customUi.paint = [this](NWB::Impl::UiPaintContext& context){
+        drawCustomUiControls(context);
     };
 
     NWB_LOGGER_ESSENTIAL_INFO(

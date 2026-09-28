@@ -110,7 +110,6 @@ void ExpectComputeStagePlacement(
     ASSERT_NE(stageAssignment, nullptr);
     EXPECT_EQ(stageAssignment->queueClass, expectedQueueClass);
     EXPECT_EQ(stageAssignment->queue, queues[expectedQueueClass == Graphics::CommandQueue::Compute ? 1u : 0u].id);
-    EXPECT_EQ(stageAssignment->score.preference, 0);
     EXPECT_EQ(stageAssignment->score.ownershipTransfers, 0);
     EXPECT_EQ(stageAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
     const bool routedCompute = expectedQueueClass == Graphics::CommandQueue::Compute;
@@ -120,8 +119,8 @@ void ExpectComputeStagePlacement(
     EXPECT_EQ(
         stageAssignment->reason,
         stageCost == Graphics::GpuTaskCostHint::Tiny
-            ? Graphics::GpuTaskQueueAssignmentReason::ConservativeAny
-            : Graphics::GpuTaskQueueAssignmentReason::ScoredAny
+            ? Graphics::GpuTaskQueueAssignmentReason::Conservative
+            : Graphics::GpuTaskQueueAssignmentReason::Scored
     );
 }
 

@@ -81,15 +81,15 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
         packetSubmissionStatistics,
         payload
     ));
-    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_EQ(header.runtimeStatisticsCount, 1u);
     EXPECT_EQ(header.physicalQueueRuntimeStatisticsCount, s_ExpectedDualCount);
     EXPECT_EQ(header.packetSubmissionStatisticsCount, 3u);
     EXPECT_EQ(header.packetSubmissionStatisticsPresent, 1u);
 
-    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
         + sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
         + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * s_ExpectedDualCount
@@ -120,7 +120,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8RoundTripAndWireOrderIsSta
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
     ASSERT_EQ(parsed.packetSubmissionStatistics.size(), 3u);
     EXPECT_EQ(parsed.packetSubmissionStatistics[0u].packetIndex, 0u);
@@ -188,13 +188,13 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8PreservesExactEmptyAndAbse
     ));
     Telemetry::FrameGraphPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_TRUE(parsed.packetSubmissionStatisticsPresent);
     EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 919u, nodes, edges, payload));
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+    EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_FALSE(parsed.packetSubmissionStatisticsPresent);
     EXPECT_TRUE(parsed.packetSubmissionStatistics.empty());
 }
@@ -327,7 +327,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         packetSubmissionStatistics,
         payload
     ));
-    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+    const usize packetSubmissionStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
         + sizeof(Telemetry::EncodedFrameGraphNode)
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatisticsV8)
         + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6) * s_ExpectedDualCount
@@ -409,7 +409,7 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         packetSubmissionStatistics,
         payload
     ));
-    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.packetSubmissionStatisticsCount;
     NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));

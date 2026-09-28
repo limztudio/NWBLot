@@ -48,7 +48,7 @@ DowngradeFrameGraphPhysicalQueueRuntimeStatisticsV6(
     const Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6& statistics
 );
 
-bool ConvertFrameGraphPayloadV8ToLegacy(
+bool ConvertFrameGraphPayloadV9ToLegacy(
     const Telemetry::TelemetryBytes& source,
     const u16 legacyVersion,
     Telemetry::TelemetryBytes& outPayload

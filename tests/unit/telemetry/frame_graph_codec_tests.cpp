@@ -5,6 +5,7 @@
 #include "telemetry_test_helpers.h"
 #include <gtest/gtest.h>
 #include "frame_graph_test_helpers.h"
+#include "frame_graph_wire_test_helpers.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -83,7 +84,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
 
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 906u, nodes, edges, payload));
-    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
             + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
@@ -91,9 +92,9 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
             + sizeof("Albedo Texture")
             + sizeof("Lighting Pass"));
 
-    Telemetry::EncodedFrameGraphPayloadHeaderV2 header;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphQueueAssignmentPayloadVersion);
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_EQ(header.queueAssignmentCount, s_ExpectedDualCount);
 
     Telemetry::FrameGraphPayload parsed(testArena.arena);
@@ -109,16 +110,15 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_EQ(changed.previousAcceptedQueue.index, s_ExpectedDualCount);
     EXPECT_EQ(changed.previousAcceptedQueue.deviceGeneration, 17u);
     EXPECT_EQ(changed.queueClass, Telemetry::FrameGraphQueueClass::Compute);
-    EXPECT_EQ(changed.reason, Telemetry::FrameGraphQueueAssignmentReason::Fallback);
+    EXPECT_EQ(changed.reason, Telemetry::FrameGraphQueueAssignmentReason::Scored);
     EXPECT_EQ(changed.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::All);
     EXPECT_TRUE(changed.dedicated);
-    EXPECT_EQ(changed.score.preference, 11);
     EXPECT_EQ(changed.score.overlap, 7);
     EXPECT_EQ(changed.score.queueLoad, 3);
     EXPECT_EQ(changed.score.incomingCrossings, 2);
     EXPECT_EQ(changed.score.outgoingCrossings, 1);
     EXPECT_EQ(changed.score.ownershipTransfers, 4);
-    EXPECT_EQ(changed.score.total, 8);
+    EXPECT_EQ(changed.score.total, -3);
     EXPECT_EQ(changed.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
 
     EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
@@ -129,11 +129,170 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRoundTrip){
     EXPECT_FALSE(notAccepted.acceptedQueue.valid());
     EXPECT_EQ(notAccepted.previousAcceptedQueue.index, s_ExpectedDualCount);
     EXPECT_EQ(notAccepted.queueClass, Telemetry::FrameGraphQueueClass::Transfer);
-    EXPECT_EQ(notAccepted.reason, Telemetry::FrameGraphQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(notAccepted.reason, Telemetry::FrameGraphQueueAssignmentReason::Scored);
     EXPECT_EQ(notAccepted.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback);
     EXPECT_FALSE(notAccepted.dedicated);
-    EXPECT_EQ(notAccepted.score.total, 1);
+    EXPECT_EQ(notAccepted.score.total, -4);
     EXPECT_EQ(notAccepted.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted);
+}
+
+TEST(Telemetry, FrameGraphLegacyQueueAssignmentsPreserveRoutesAndActiveScores){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+
+    Telemetry::TelemetryBytes currentPayload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 906u, nodes, edges, currentPayload));
+    Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+    ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(
+        currentPayload,
+        Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion,
+        legacyPayload
+    ));
+    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+        + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+    ;
+    constexpr usize s_LegacyAssignmentBytes = 56u;
+    constexpr usize s_LegacyPreferenceOffset = 20u;
+    constexpr usize s_LegacyTotalOffset = 44u;
+    constexpr usize s_LegacyReasonOffset = 49u;
+    const i32 firstPreference = 11;
+    const i32 firstTotal = 8;
+    const i32 secondPreference = 5;
+    const i32 secondTotal = 1;
+    const auto writeLegacyScore = [&](const usize recordOffset, const i32 preference, const i32 total){
+        NWB_MEMCPY(
+            legacyPayload.data() + recordOffset + s_LegacyPreferenceOffset,
+            legacyPayload.size() - recordOffset - s_LegacyPreferenceOffset,
+            &preference,
+            sizeof(preference)
+        );
+        NWB_MEMCPY(
+            legacyPayload.data() + recordOffset + s_LegacyTotalOffset,
+            legacyPayload.size() - recordOffset - s_LegacyTotalOffset,
+            &total,
+            sizeof(total)
+        );
+    };
+    writeLegacyScore(assignmentOffset, firstPreference, firstTotal);
+    writeLegacyScore(assignmentOffset + s_LegacyAssignmentBytes, secondPreference, secondTotal);
+
+    for(u8 reason = 1u; reason <= 9u; ++reason){
+        legacyPayload[assignmentOffset + s_LegacyReasonOffset] = reason;
+        Telemetry::FrameGraphPayload parsed(testArena.arena);
+        ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, legacyPayload.data(), legacyPayload.size(), parsed));
+        EXPECT_EQ(parsed.wireVersion, Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion);
+        const Telemetry::FrameGraphQueueAssignment& changed = parsed.nodes[0u].queueAssignment;
+        EXPECT_EQ(changed.initialQueue, nodes[0u].queueAssignment.initialQueue);
+        EXPECT_EQ(changed.plannedQueue, nodes[0u].queueAssignment.plannedQueue);
+        EXPECT_EQ(changed.acceptedQueue, nodes[0u].queueAssignment.acceptedQueue);
+        EXPECT_EQ(changed.previousAcceptedQueue, nodes[0u].queueAssignment.previousAcceptedQueue);
+        EXPECT_EQ(changed.queueClass, Telemetry::FrameGraphQueueClass::Compute);
+        EXPECT_EQ(changed.modifiers, Telemetry::FrameGraphQueueAssignmentModifier::All);
+        EXPECT_EQ(changed.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::Changed);
+        EXPECT_TRUE(changed.dedicated);
+        EXPECT_EQ(changed.score.overlap, 7);
+        EXPECT_EQ(changed.score.queueLoad, 3);
+        EXPECT_EQ(changed.score.incomingCrossings, 2);
+        EXPECT_EQ(changed.score.outgoingCrossings, 1);
+        EXPECT_EQ(changed.score.ownershipTransfers, 4);
+        EXPECT_EQ(changed.score.total, -3);
+        const Telemetry::FrameGraphQueueAssignmentReason::Enum expectedReason = reason == 1u
+            ? Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics
+            : (reason == 6u ? Telemetry::FrameGraphQueueAssignmentReason::Conservative : Telemetry::FrameGraphQueueAssignmentReason::Scored)
+        ;
+        EXPECT_EQ(changed.reason, expectedReason);
+        EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].queueAssignment.plannedQueue, nodes[s_ThirdElementIndex].queueAssignment.plannedQueue);
+        EXPECT_EQ(parsed.nodes[s_ThirdElementIndex].queueAssignment.score.total, -4);
+    }
+
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    legacyPayload[assignmentOffset + s_LegacyReasonOffset] = 10u;
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, legacyPayload.data(), legacyPayload.size(), parsed));
+    legacyPayload[assignmentOffset + s_LegacyReasonOffset] = 9u;
+    writeLegacyScore(assignmentOffset, firstPreference, firstTotal + 1);
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, legacyPayload.data(), legacyPayload.size(), parsed));
+}
+
+TEST(Telemetry, FrameGraphLegacyV2AssignmentsAndV3CompiledTasksDecode){
+    TestArena testArena;
+    const u16 versions[] = {
+        Telemetry::s_FrameGraphQueueAssignmentPayloadVersion,
+        Telemetry::s_FrameGraphCompiledTaskPayloadVersion,
+    };
+    for(const u16 version : versions){
+        SCOPED_TRACE(version);
+        const bool hasCompiledTasks = version == Telemetry::s_FrameGraphCompiledTaskPayloadVersion;
+        Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+        Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+        if(hasCompiledTasks)
+            BuildTestCompiledFrameGraph(testArena.arena, nodes, edges);
+        else
+            BuildTestAssignedFrameGraph(testArena.arena, nodes, edges);
+
+        Telemetry::TelemetryBytes currentPayload(testArena.arena);
+        ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 906u, nodes, edges, currentPayload));
+        Telemetry::TelemetryBytes legacyPayload(testArena.arena);
+        if(hasCompiledTasks){
+            EXPECT_FALSE(ConvertFrameGraphPayloadV9ToLegacy(
+                currentPayload,
+                Telemetry::s_FrameGraphQueueAssignmentPayloadVersion,
+                legacyPayload
+            ));
+        }
+        ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(currentPayload, version, legacyPayload));
+        const usize headerBytes = hasCompiledTasks
+            ? sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+            : sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
+        ;
+        constexpr usize s_LegacyAssignmentBytes = 56u;
+        EXPECT_EQ(legacyPayload.size(), headerBytes
+            + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
+            + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
+            + s_LegacyAssignmentBytes * s_ExpectedDualCount
+            + (hasCompiledTasks ? sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount : 0u)
+            + sizeof("GBuffer Pass") + sizeof("Albedo Texture") + sizeof("Lighting Pass")
+        );
+
+        Telemetry::FrameGraphPayload parsed(testArena.arena);
+        ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, legacyPayload.data(), legacyPayload.size(), parsed));
+        EXPECT_EQ(parsed.wireVersion, version);
+        EXPECT_EQ(parsed.frameIndex, 906u);
+        ASSERT_EQ(parsed.nodes.size(), nodes.size());
+        EXPECT_EQ(parsed.edges.size(), edges.size());
+        EXPECT_FALSE(parsed.nodes[1u].queueAssignment.present);
+        const u32 taskIndices[] = { 0u, s_ThirdElementIndex };
+        for(const u32 taskIndex : taskIndices){
+            const Telemetry::FrameGraphQueueAssignment& assignment = parsed.nodes[taskIndex].queueAssignment;
+            const Telemetry::FrameGraphQueueAssignment& expected = nodes[taskIndex].queueAssignment;
+            EXPECT_TRUE(assignment.present);
+            EXPECT_EQ(assignment.initialQueue, expected.initialQueue);
+            EXPECT_EQ(assignment.plannedQueue, expected.plannedQueue);
+            EXPECT_EQ(assignment.acceptedQueue, expected.acceptedQueue);
+            EXPECT_EQ(assignment.previousAcceptedQueue, expected.previousAcceptedQueue);
+            EXPECT_EQ(assignment.queueClass, expected.queueClass);
+            EXPECT_EQ(assignment.reason, expected.reason);
+            EXPECT_EQ(assignment.modifiers, expected.modifiers);
+            EXPECT_EQ(assignment.acceptance, expected.acceptance);
+            EXPECT_EQ(assignment.dedicated, expected.dedicated);
+            EXPECT_EQ(assignment.score.overlap, expected.score.overlap);
+            EXPECT_EQ(assignment.score.queueLoad, expected.score.queueLoad);
+            EXPECT_EQ(assignment.score.incomingCrossings, expected.score.incomingCrossings);
+            EXPECT_EQ(assignment.score.outgoingCrossings, expected.score.outgoingCrossings);
+            EXPECT_EQ(assignment.score.ownershipTransfers, expected.score.ownershipTransfers);
+            EXPECT_EQ(assignment.score.total, expected.score.total);
+            const Telemetry::FrameGraphCompiledTask& compiled = parsed.nodes[taskIndex].compiledTask;
+            const Telemetry::FrameGraphCompiledTask& expectedCompiled = nodes[taskIndex].compiledTask;
+            EXPECT_EQ(compiled.present, hasCompiledTasks);
+            if(hasCompiledTasks){
+                EXPECT_EQ(compiled.planGeneration, expectedCompiled.planGeneration);
+                EXPECT_EQ(compiled.packetIndex, expectedCompiled.packetIndex);
+                EXPECT_EQ(compiled.packetizationDecision, expectedCompiled.packetizationDecision);
+            }
+        }
+    }
 }
 
 TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
@@ -144,7 +303,7 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
 
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 907u, nodes, edges, payload));
-    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+    EXPECT_EQ(payload.size(), sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
             + (sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size())
             + (sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size())
             + (sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount)
@@ -153,9 +312,9 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRoundTrip){
             + sizeof("Albedo Texture")
             + sizeof("Lighting Pass"));
 
-    Telemetry::EncodedFrameGraphPayloadHeaderV3 header;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
-    EXPECT_EQ(header.version, Telemetry::s_FrameGraphCompiledTaskPayloadVersion);
+    EXPECT_EQ(header.version, Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion);
     EXPECT_EQ(header.queueAssignmentCount, s_ExpectedDualCount);
     EXPECT_EQ(header.compiledTaskCount, s_ExpectedDualCount);
 
@@ -205,7 +364,7 @@ TEST(Telemetry, FrameGraphQueueAssignmentPayloadRejectsMalformedRecords){
 
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 908u, nodes, edges, payload));
-    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV2)
+    const usize assignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
     ;
@@ -287,7 +446,7 @@ TEST(Telemetry, FrameGraphCompiledTaskPayloadRejectsMalformedRecords){
 
     Telemetry::TelemetryBytes payload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 909u, nodes, edges, payload));
-    const usize compiledTaskOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV3)
+    const usize compiledTaskOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
         + sizeof(Telemetry::EncodedFrameGraphNode) * nodes.size()
         + sizeof(Telemetry::EncodedFrameGraphEdge) * edges.size()
         + sizeof(Telemetry::EncodedFrameGraphQueueAssignment) * s_ExpectedDualCount

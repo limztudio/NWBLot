@@ -139,9 +139,9 @@ bool GpuTaskGraphCompiler::assignQueues(
                 .queue = selectedQueue->id,
                 .score = {},
                 .queueClass = selectedQueue->queueClass,
-                .reason = RequiresGraphics(group.requiredCapabilities)
+                .reason = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics)
                     ? GpuTaskQueueAssignmentReason::RequiredGraphics
-                    : GpuTaskQueueAssignmentReason::ScoredAny,
+                    : GpuTaskQueueAssignmentReason::Scored,
                 .dedicated = selectedQueue->dedicated,
                 .modifiers = group.overrideQueue.valid()
                     ? GpuTaskQueueAssignmentModifier::QueueOverride
@@ -209,7 +209,7 @@ bool GpuTaskGraphCompiler::assignQueues(
         for(const Candidate& candidate : candidates){
             if(!candidate.queue)
                 continue;
-            bool better = IsBetterAnyQueueAssignmentCandidate(
+            bool better = IsBetterAutomaticQueueAssignmentCandidate(
                 candidate.score,
                 *candidate.queue,
                 selectedScore,
@@ -237,11 +237,11 @@ bool GpuTaskGraphCompiler::assignQueues(
         }
         NWB_ASSERT(selectedQueue);
         scoredQueues[groupIndex] = selectedQueue->id;
-        scoredReasons[groupIndex] = RequiresGraphics(group.requiredCapabilities)
+        scoredReasons[groupIndex] = HasCapabilities(group.requiredCapabilities, GpuQueueCapability::Graphics)
             ? GpuTaskQueueAssignmentReason::RequiredGraphics
             : conservative
-                ? GpuTaskQueueAssignmentReason::ConservativeAny
-                : GpuTaskQueueAssignmentReason::ScoredAny
+                ? GpuTaskQueueAssignmentReason::Conservative
+                : GpuTaskQueueAssignmentReason::Scored
         ;
     }
     for(usize groupIndex = 0u; groupIndex < groups.size(); ++groupIndex){
@@ -303,7 +303,7 @@ bool GpuTaskGraphCompiler::assignQueues(
                     selectedQueue = leastLoadedQueue;
                     assignment.modifiers |= GpuTaskQueueAssignmentModifier::SameClassLoadBalance;
                     if(task.scheduling.preferNonPrimarySameClassQueue)
-                        assignment.modifiers |= GpuTaskQueueAssignmentModifier::NonPrimaryPreference;
+                        assignment.modifiers |= GpuTaskQueueAssignmentModifier::NonPrimaryRouting;
                 }
             }
         }

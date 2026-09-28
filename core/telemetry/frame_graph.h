@@ -25,7 +25,8 @@ inline constexpr u16 s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion = 
 inline constexpr u16 s_FrameGraphRecoverySubmissionCountPayloadVersion = 6u;
 inline constexpr u16 s_FrameGraphPacketSubmissionStatisticsPayloadVersion = 7u;
 inline constexpr u16 s_FrameGraphResourceVersionStatisticsPayloadVersion = 8u;
-inline constexpr u16 s_FrameGraphPayloadVersion = s_FrameGraphResourceVersionStatisticsPayloadVersion;
+inline constexpr u16 s_FrameGraphAutomaticQueueAssignmentPayloadVersion = 9u;
+inline constexpr u16 s_FrameGraphPayloadVersion = s_FrameGraphAutomaticQueueAssignmentPayloadVersion;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
 namespace FrameGraphNodeKind{
@@ -61,18 +62,12 @@ namespace FrameGraphQueueClass{
 
 namespace FrameGraphQueueAssignmentReason{
     static constexpr u8 kFrameGraphQueueAssignmentReasonUnknownBase = 0u;
-    static constexpr u8 kFrameGraphQueueAssignmentReasonCountValue = 10u;
+    static constexpr u8 kFrameGraphQueueAssignmentReasonCountValue = 4u;
     enum Enum : u8{
         Unknown = kFrameGraphQueueAssignmentReasonUnknownBase,
         RequiredGraphics,
-        PreferredQueue,
-        DedicatedCompute,
-        DedicatedTransfer,
-        Fallback,
-        ConservativeAny,
-        SameClassRouting,
-        CompilerOverride,
-        ScoredAny,
+        Conservative,
+        Scored,
 
         kCount = kFrameGraphQueueAssignmentReasonCountValue,
     };
@@ -84,7 +79,7 @@ namespace FrameGraphQueueAssignmentModifier{
         None = kFrameGraphQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
-        NonPrimaryPreference = 1u << 2u,
+        NonPrimaryRouting = 1u << 2u,
         DebugTimingOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,
@@ -92,7 +87,7 @@ namespace FrameGraphQueueAssignmentModifier{
 
         All = DirectDependencyAffinity
             | SameClassLoadBalance
-            | NonPrimaryPreference
+            | NonPrimaryRouting
             | DebugTimingOverride
             | TimingCalibration
             | TimingFeedback
@@ -150,7 +145,6 @@ inline constexpr bool operator!=(const FrameGraphPhysicalQueueId& lhs, const Fra
 }
 
 struct FrameGraphQueueAssignmentScore{
-    i32 preference = 0;
     i32 overlap = 0;
     i32 queueLoad = 0;
     i32 incomingCrossings = 0;
@@ -378,7 +372,7 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsRecord{
     FrameGraphPhysicalQueueRuntimeStatistics statistics;
 };
 
-// Exact native-submission telemetry for one compiler-generated packet. V7 payloads and V8 payloads whose table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
+// Exact native-submission telemetry for one compiler-generated packet. V7 payloads and V8/V9 payloads whose table is marked present contain every native submission for every runtime-statistics owner, including an exact empty table when no owner submitted native work.
 // Packet generation is the immutable plan generation. Wait counts exclude backend-internal waits outside the graph.
 struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 packetGeneration = 0u;
@@ -504,6 +498,23 @@ struct EncodedFrameGraphPayloadHeaderV8{
     u8 reservedTail[3u] = {};
 };
 
+struct EncodedFrameGraphPayloadHeaderV9{
+    u32 magic = s_FrameGraphPayloadMagic;
+    u16 version = s_FrameGraphAutomaticQueueAssignmentPayloadVersion;
+    u16 reserved = 0u;
+    u64 frameIndex = 0u;
+    u32 nodeCount = 0u;
+    u32 edgeCount = 0u;
+    u32 stringTableBytes = 0u;
+    u32 queueAssignmentCount = 0u;
+    u32 compiledTaskCount = 0u;
+    u32 runtimeStatisticsCount = 0u;
+    u32 physicalQueueRuntimeStatisticsCount = 0u;
+    u32 packetSubmissionStatisticsCount = 0u;
+    u8 packetSubmissionStatisticsPresent = 0u;
+    u8 reservedTail[3u] = {};
+};
+
 struct EncodedFrameGraphNode{
     NameHash nameHash = {};
     u32 labelOffset = 0u;
@@ -531,7 +542,6 @@ struct EncodedFrameGraphQueueAssignment{
     EncodedFrameGraphPhysicalQueueId plannedQueue;
     EncodedFrameGraphPhysicalQueueId acceptedQueue;
     EncodedFrameGraphPhysicalQueueId previousAcceptedQueue;
-    i32 scorePreference = 0;
     i32 scoreOverlap = 0;
     i32 scoreQueueLoad = 0;
     i32 scoreIncomingCrossings = 0;
@@ -1184,6 +1194,28 @@ static_assert(
     && offsetof(EncodedFrameGraphPayloadHeaderV8, reservedTail) == s_EncodedFrameGraphPayloadHeaderV8ReservedTailOffset,
     "EncodedFrameGraphPayloadHeaderV8 field order drifted"
 );
+static constexpr usize s_EncodedFrameGraphPayloadHeaderV9ByteSize = 52u;
+static_assert(sizeof(EncodedFrameGraphPayloadHeaderV9) == s_EncodedFrameGraphPayloadHeaderV9ByteSize, "EncodedFrameGraphPayloadHeaderV9 wire layout drifted");
+static_assert(alignof(EncodedFrameGraphPayloadHeaderV9) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPayloadHeaderV9 must stay packed");
+static_assert(IsStandardLayout_V<EncodedFrameGraphPayloadHeaderV9>, "EncodedFrameGraphPayloadHeaderV9 must stay binary-serializable");
+static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPayloadHeaderV9>, "EncodedFrameGraphPayloadHeaderV9 must stay binary-serializable");
+static_assert(
+    offsetof(EncodedFrameGraphPayloadHeaderV9, magic) == s_EncodedFrameGraphPayloadHeaderV8MagicOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, version) == s_EncodedFrameGraphPayloadHeaderV8VersionOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, reserved) == s_EncodedFrameGraphPayloadHeaderV8ReservedOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, frameIndex) == s_EncodedFrameGraphPayloadHeaderV8FrameIndexOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, nodeCount) == s_EncodedFrameGraphPayloadHeaderV8NodeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, edgeCount) == s_EncodedFrameGraphPayloadHeaderV8EdgeCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, stringTableBytes) == s_EncodedFrameGraphPayloadHeaderV8StringTableBytesOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, queueAssignmentCount) == s_EncodedFrameGraphPayloadHeaderV8QueueAssignmentCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, compiledTaskCount) == s_EncodedFrameGraphPayloadHeaderV8CompiledTaskCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, runtimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8RuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, physicalQueueRuntimeStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8PhysicalQueueRuntimeStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, packetSubmissionStatisticsCount) == s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsCountOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, packetSubmissionStatisticsPresent) == s_EncodedFrameGraphPayloadHeaderV8PacketSubmissionStatisticsPresentOffset
+    && offsetof(EncodedFrameGraphPayloadHeaderV9, reservedTail) == s_EncodedFrameGraphPayloadHeaderV8ReservedTailOffset,
+    "EncodedFrameGraphPayloadHeaderV9 field order drifted"
+);
 static constexpr usize s_EncodedFrameGraphNodeByteSize = 72u;
 static_assert(sizeof(EncodedFrameGraphNode) == s_EncodedFrameGraphNodeByteSize, "EncodedFrameGraphNode wire layout drifted");
 static_assert(alignof(EncodedFrameGraphNode) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphNode must stay packed");
@@ -1199,7 +1231,7 @@ static_assert(sizeof(EncodedFrameGraphPhysicalQueueId) == s_EncodedFrameGraphPhy
 static_assert(alignof(EncodedFrameGraphPhysicalQueueId) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphPhysicalQueueId must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphPhysicalQueueId>, "EncodedFrameGraphPhysicalQueueId must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<EncodedFrameGraphPhysicalQueueId>, "EncodedFrameGraphPhysicalQueueId must stay binary-serializable");
-static constexpr usize s_EncodedFrameGraphQueueAssignmentByteSize = 56u;
+static constexpr usize s_EncodedFrameGraphQueueAssignmentByteSize = 52u;
 static_assert(sizeof(EncodedFrameGraphQueueAssignment) == s_EncodedFrameGraphQueueAssignmentByteSize, "EncodedFrameGraphQueueAssignment wire layout drifted");
 static_assert(alignof(EncodedFrameGraphQueueAssignment) == s_FrameGraphPackedAlignBytes, "EncodedFrameGraphQueueAssignment must stay packed");
 static_assert(IsStandardLayout_V<EncodedFrameGraphQueueAssignment>, "EncodedFrameGraphQueueAssignment must stay binary-serializable");

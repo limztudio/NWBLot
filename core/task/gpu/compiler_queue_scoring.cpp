@@ -131,11 +131,7 @@ bool IsLegalQueueAssignmentCandidate(
             ;
     }
     if(requiresPrimaryGraphicsQueue){
-        const GpuPhysicalQueueInfo* const primaryGraphics = FindBestCompatibleQueue(
-            topology,
-            GpuQueueCapability::Graphics,
-            CommandQueue::Graphics
-        );
+        const GpuPhysicalQueueInfo* const primaryGraphics = FindDefaultGraphicsQueue(topology);
         if(!primaryGraphics || primaryGraphics->id != candidate.id)
             return false;
     }
@@ -230,7 +226,6 @@ bool BuildGpuTaskSchedulingReachability(
     outReachability.m_valid = true;
     return true;
 }
-
 
 
 const GpuTaskQueueAssignment* FindQueueAssignment(
@@ -466,7 +461,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
 }
 
 
-bool IsBetterAnyQueueAssignmentCandidate(
+bool IsBetterAutomaticQueueAssignmentCandidate(
     const GpuQueueAssignmentScore& candidateScore,
     const GpuPhysicalQueueInfo& candidate,
     const GpuQueueAssignmentScore& currentScore,

@@ -20,7 +20,6 @@ NWB_CORE_BEGIN
 // Queue routing remains a compiler policy choice.  This diagnostic keeps the scoring terms independently visible so
 // timing feedback can be inspected without becoming part of graph correctness or synchronization planning.
 struct GpuQueueAssignmentScore{
-    i32 preference = 0;
     i32 overlap = 0;
     i32 queueLoad = 0;
     i32 incomingCrossings = 0;

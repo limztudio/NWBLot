@@ -663,7 +663,7 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         .setByteSize(static_cast<u64>(sizeof(NwbCausticEmissionTargetGpu) * capacity))
         .setStructStride(sizeof(NwbCausticEmissionTargetGpu))
         .setDebugName(Name("caustic_emission_targets"))
-        // Graphics upload and async photon reads share this immutable per-frame input.
+        // The upload and asynchronous photon reads share this immutable per-frame input.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .enableAutomaticStateTracking(Core::ResourceStates::Common)
     ;

@@ -99,8 +99,7 @@ namespace GpuTaskGraphTelemetryEdgeFlag{
     };
 };
 
-// Queue-assignment information reuses the existing frame-graph node flags. Keeping it in the node payload avoids
-// changing the telemetry wire schema while still making compiler decisions visible.
+// Queue-assignment summary flags supplement the detailed frame-graph assignment payload.
 namespace GpuTaskGraphTelemetryNodeFlag{
     static constexpr u8 kGpuTaskGraphTelemetryNodeFlagNoneBase = 0u;
     enum Mask : u8{
@@ -108,8 +107,6 @@ namespace GpuTaskGraphTelemetryNodeFlag{
         AssignedGraphicsQueue = 1u << 0u,
         AssignedComputeQueue = 1u << 1u,
         AssignedDedicatedQueue = 1u << 2u,
-        QueueAssignmentFallback = 1u << 3u,
-        QueueAssignmentCompilerOverride = 1u << 4u,
         AssignedTransferQueue = 1u << 5u,
         QueueAssignmentSameClassRouting = 1u << 6u,
         QueueAssignmentTimingRouting = 1u << 7u,

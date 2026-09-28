@@ -39,6 +39,10 @@ inline constexpr u8 s_ValidQueueCapabilityMask =
 // Compilers are short-lived value objects, so packet identity must be allocated process-wide. The graph generation remains the identity of declared task/resource handles
 static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 [[nodiscard]] u64 AllocateCompiledPlanGeneration()noexcept{
     u64 nextGeneration = s_NextCompiledPlanGeneration.load(MemoryOrder::relaxed);
     for(;;){
@@ -204,17 +208,13 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return true;
 }
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindBestCompatibleQueue(
-    const GpuTaskGraphQueueTopology& topology,
-    const GpuQueueCapability::Mask requiredCapabilities,
-    const CommandQueue::Enum requiredClass
-)noexcept{
+[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuTaskGraphQueueTopology& topology)noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(
-            (requiredClass != CommandQueue::kCount && queue.queueClass != requiredClass)
-            || !HasCapabilities(queue.capabilities, requiredCapabilities)
+            queue.queueClass != CommandQueue::Graphics
+            || !HasCapabilities(queue.capabilities, GpuQueueCapability::Graphics)
             || !IsBetterQueue(queue, result)
         )
             continue;
@@ -222,11 +222,6 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     }
     return result;
 }
-
-[[nodiscard]] bool RequiresGraphics(const GpuQueueCapability::Mask requiredCapabilities)noexcept{
-    return HasCapabilities(requiredCapabilities, GpuQueueCapability::Graphics);
-}
-
 
 
 [[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept{

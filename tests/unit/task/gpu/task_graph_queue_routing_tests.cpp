@@ -366,7 +366,7 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
         firstComputeAuxiliary,
         secondComputeAuxiliary,
         thirdComputeAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::ScoredAny
+        Graphics::GpuTaskQueueAssignmentReason::Scored
     );
 
     Graphics::GpuPhysicalQueueInfo firstTransferAuxiliary = DedicatedTransferQueue(3u);
@@ -381,7 +381,7 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
         firstTransferAuxiliary,
         secondTransferAuxiliary,
         thirdTransferAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::ScoredAny
+        Graphics::GpuTaskQueueAssignmentReason::Scored
     );
 }
 
@@ -446,9 +446,9 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
     ASSERT_NE(uploadAssignment, nullptr);
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(uploadAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
     EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
-    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference);
+    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryRouting);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
     const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(upload);
@@ -538,7 +538,7 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
     ASSERT_NE(bridgeAssignment, nullptr);
     EXPECT_EQ(firstAssignment->queue, auxiliaryGraphicsQueue.id);
     EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ConservativeAny);
+    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Conservative);
     EXPECT_TRUE(secondAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
     EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
 
@@ -998,7 +998,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
         EXPECT_EQ(
             consumerAssignment->reason,
-            Graphics::GpuTaskQueueAssignmentReason::ScoredAny
+            Graphics::GpuTaskQueueAssignmentReason::Scored
         );
         EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
         EXPECT_EQ(compiledProducer->queue, primaryQueue.id);

@@ -4,6 +4,8 @@
 
 #include "frame_graph.h"
 
+#include "frame_graph_queue_codec_internal.h"
+
 #include <core/alloc/scratch.h>
 #include <global/algorithm.h>
 #include <global/binary.h>
@@ -108,63 +110,6 @@ inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStati
         .index = queue.index,
         .deviceGeneration = queue.deviceGeneration,
     };
-}
-
-[[nodiscard]] static EncodedFrameGraphQueueAssignment EncodeQueueAssignment(
-    const u32 nodeIndex,
-    const FrameGraphQueueAssignment& assignment
-)noexcept{
-    EncodedFrameGraphQueueAssignment encoded;
-    encoded.nodeIndex = nodeIndex;
-    encoded.initialQueue = EncodeQueue(assignment.initialQueue);
-    encoded.plannedQueue = EncodeQueue(assignment.plannedQueue);
-    encoded.acceptedQueue = EncodeQueue(assignment.acceptedQueue);
-    encoded.previousAcceptedQueue = EncodeQueue(assignment.previousAcceptedQueue);
-    encoded.scorePreference = assignment.score.preference;
-    encoded.scoreOverlap = assignment.score.overlap;
-    encoded.scoreQueueLoad = assignment.score.queueLoad;
-    encoded.scoreIncomingCrossings = assignment.score.incomingCrossings;
-    encoded.scoreOutgoingCrossings = assignment.score.outgoingCrossings;
-    encoded.scoreOwnershipTransfers = assignment.score.ownershipTransfers;
-    encoded.scoreTotal = assignment.score.total;
-    encoded.queueClass = assignment.queueClass;
-    encoded.reason = assignment.reason;
-    encoded.modifiers = assignment.modifiers;
-    encoded.acceptance = assignment.acceptance;
-    encoded.dedicated = assignment.dedicated ? 1u : 0u;
-    return encoded;
-}
-
-[[nodiscard]] static bool DecodeQueueAssignment(
-    const EncodedFrameGraphQueueAssignment& encoded,
-    FrameGraphQueueAssignment& outAssignment
-)noexcept{
-    if(
-        encoded.dedicated > 1u
-        || encoded.reserved[0u] != 0u
-        || encoded.reserved[1u] != 0u
-        || encoded.reserved[2u] != 0u
-    )
-        return false;
-
-    outAssignment.initialQueue = DecodeQueue(encoded.initialQueue);
-    outAssignment.plannedQueue = DecodeQueue(encoded.plannedQueue);
-    outAssignment.acceptedQueue = DecodeQueue(encoded.acceptedQueue);
-    outAssignment.previousAcceptedQueue = DecodeQueue(encoded.previousAcceptedQueue);
-    outAssignment.score.preference = encoded.scorePreference;
-    outAssignment.score.overlap = encoded.scoreOverlap;
-    outAssignment.score.queueLoad = encoded.scoreQueueLoad;
-    outAssignment.score.incomingCrossings = encoded.scoreIncomingCrossings;
-    outAssignment.score.outgoingCrossings = encoded.scoreOutgoingCrossings;
-    outAssignment.score.ownershipTransfers = encoded.scoreOwnershipTransfers;
-    outAssignment.score.total = encoded.scoreTotal;
-    outAssignment.queueClass = static_cast<FrameGraphQueueClass::Enum>(encoded.queueClass);
-    outAssignment.reason = static_cast<FrameGraphQueueAssignmentReason::Enum>(encoded.reason);
-    outAssignment.modifiers = static_cast<FrameGraphQueueAssignmentModifier::Mask>(encoded.modifiers);
-    outAssignment.acceptance = static_cast<FrameGraphQueueAssignmentAcceptance::Enum>(encoded.acceptance);
-    outAssignment.dedicated = encoded.dedicated != 0u;
-    outAssignment.present = true;
-    return IsValidFrameGraphQueueAssignment(outAssignment);
 }
 
 [[nodiscard]] static EncodedFrameGraphCompiledTask EncodeCompiledTask(
@@ -1272,21 +1217,14 @@ bool BuildFrameGraphPayloadImpl(
             return false;
     }
 
-    const bool hasQueueAssignments = queueAssignmentCount != 0u;
-    const bool hasCompiledTasks = compiledTaskCount != 0u;
-    const bool hasRuntimeStatistics = runtimeStatisticsCount != 0u;
-    const bool hasCurrentStatisticsPayload = hasRuntimeStatistics || hasPacketSubmissionStatistics;
-    usize payloadBytes = hasCurrentStatisticsPayload
-        ? sizeof(EncodedFrameGraphPayloadHeaderV8)
-        : (
-            hasCompiledTasks
-            ? sizeof(EncodedFrameGraphPayloadHeaderV3)
-            : (
-                hasQueueAssignments
-                ? sizeof(EncodedFrameGraphPayloadHeaderV2)
-                : sizeof(EncodedFrameGraphPayloadHeader)
-            )
-        )
+    const bool hasExtendedPayload = queueAssignmentCount != 0u
+        || compiledTaskCount != 0u
+        || runtimeStatisticsCount != 0u
+        || hasPacketSubmissionStatistics
+    ;
+    usize payloadBytes = hasExtendedPayload
+        ? sizeof(EncodedFrameGraphPayloadHeaderV9)
+        : sizeof(EncodedFrameGraphPayloadHeader)
     ;
     if(
         !AddBinaryRepeatedReserveBytes(payloadBytes, nodes.size(), sizeof(EncodedFrameGraphNode))
@@ -1339,8 +1277,8 @@ bool BuildFrameGraphPayloadImpl(
     }
 
     outPayload.reserve(payloadBytes);
-    if(hasCurrentStatisticsPayload){
-        EncodedFrameGraphPayloadHeaderV8 header;
+    if(hasExtendedPayload){
+        EncodedFrameGraphPayloadHeaderV9 header;
         header.frameIndex = frameIndex;
         header.nodeCount = static_cast<u32>(nodes.size());
         header.edgeCount = static_cast<u32>(edges.size());
@@ -1355,25 +1293,6 @@ bool BuildFrameGraphPayloadImpl(
             orderedPacketSubmissionStatistics.size()
         );
         header.packetSubmissionStatisticsPresent = hasPacketSubmissionStatistics ? 1u : 0u;
-        AppendPOD(outPayload, header);
-    }
-    else if(hasCompiledTasks){
-        EncodedFrameGraphPayloadHeaderV3 header;
-        header.frameIndex = frameIndex;
-        header.nodeCount = static_cast<u32>(nodes.size());
-        header.edgeCount = static_cast<u32>(edges.size());
-        header.stringTableBytes = static_cast<u32>(stringTable.size());
-        header.queueAssignmentCount = static_cast<u32>(queueAssignmentCount);
-        header.compiledTaskCount = static_cast<u32>(compiledTaskCount);
-        AppendPOD(outPayload, header);
-    }
-    else if(hasQueueAssignments){
-        EncodedFrameGraphPayloadHeaderV2 header;
-        header.frameIndex = frameIndex;
-        header.nodeCount = static_cast<u32>(nodes.size());
-        header.edgeCount = static_cast<u32>(edges.size());
-        header.stringTableBytes = static_cast<u32>(stringTable.size());
-        header.queueAssignmentCount = static_cast<u32>(queueAssignmentCount);
         AppendPOD(outPayload, header);
     }
     else{
@@ -1398,7 +1317,7 @@ bool BuildFrameGraphPayloadImpl(
         if(nodes[nodeIndex].queueAssignment.present)
             AppendPOD(
                 outPayload,
-                __hidden_telemetry_frame_graph::EncodeQueueAssignment(nodeIndex, nodes[nodeIndex].queueAssignment)
+                FrameGraphQueueCodecDetail::EncodeQueueAssignment(nodeIndex, nodes[nodeIndex].queueAssignment)
             );
     }
     for(u32 nodeIndex = 0u; nodeIndex < static_cast<u32>(nodes.size()); ++nodeIndex){
@@ -1469,6 +1388,7 @@ bool ParseFrameGraphPayload(
     u32 physicalQueueRuntimeStatisticsCount = 0u;
     u32 packetSubmissionStatisticsCount = 0u;
     bool packetSubmissionStatisticsPresent = false;
+    usize queueAssignmentRecordBytes = FrameGraphQueueCodecDetail::s_LegacyQueueAssignmentRecordBytes;
     usize runtimeStatisticsRecordBytes = sizeof(EncodedFrameGraphRuntimeStatistics);
     usize physicalQueueRuntimeStatisticsRecordBytes = sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatistics);
     switch(legacyHeader.version){
@@ -1583,7 +1503,8 @@ bool ParseFrameGraphPayload(
         packetSubmissionStatisticsPresent = true;
         break;
     }
-    case s_FrameGraphResourceVersionStatisticsPayloadVersion: {
+    case s_FrameGraphResourceVersionStatisticsPayloadVersion:
+    case s_FrameGraphAutomaticQueueAssignmentPayloadVersion: {
         cursor = 0u;
         EncodedFrameGraphPayloadHeaderV8 header;
         if(!ReadPOD(encoded, cursor, header))
@@ -1610,6 +1531,8 @@ bool ParseFrameGraphPayload(
         runtimeStatisticsRecordBytes = sizeof(EncodedFrameGraphRuntimeStatisticsV8);
         physicalQueueRuntimeStatisticsRecordBytes = sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6);
         packetSubmissionStatisticsPresent = header.packetSubmissionStatisticsPresent != 0u;
+        if(legacyHeader.version == s_FrameGraphAutomaticQueueAssignmentPayloadVersion)
+            queueAssignmentRecordBytes = sizeof(EncodedFrameGraphQueueAssignment);
         break;
     }
     default:
@@ -1627,7 +1550,7 @@ bool ParseFrameGraphPayload(
             && physicalQueueRuntimeStatisticsCount != 0u
         )
         || (
-            legacyHeader.version == s_FrameGraphResourceVersionStatisticsPayloadVersion
+            legacyHeader.version >= s_FrameGraphResourceVersionStatisticsPayloadVersion
             && physicalQueueRuntimeStatisticsCount != 0u
         )
     ;
@@ -1646,7 +1569,7 @@ bool ParseFrameGraphPayload(
         || !AddBinaryRepeatedReserveBytes(
             expectedBytes,
             queueAssignmentCount,
-            sizeof(EncodedFrameGraphQueueAssignment)
+            queueAssignmentRecordBytes
         )
         || !AddBinaryRepeatedReserveBytes(
             expectedBytes,
@@ -1685,7 +1608,7 @@ bool ParseFrameGraphPayload(
     if(!AddBinaryRepeatedReserveBytes(
         compiledTaskOffset,
         queueAssignmentCount,
-        sizeof(EncodedFrameGraphQueueAssignment)
+        queueAssignmentRecordBytes
     ))
         return false;
 
@@ -1767,13 +1690,13 @@ bool ParseFrameGraphPayload(
     u32 previousNodeIndex = 0u;
     for(u32 assignmentIndex = 0u; assignmentIndex < queueAssignmentCount; ++assignmentIndex){
         EncodedFrameGraphQueueAssignment encodedAssignment;
-        if(!ReadPOD(encoded, cursor, encodedAssignment))
+        if(!FrameGraphQueueCodecDetail::ReadQueueAssignment(encoded, cursor, legacyHeader.version, encodedAssignment))
             return false;
         if(
             encodedAssignment.nodeIndex >= legacyHeader.nodeCount
             || (assignmentIndex != 0u && encodedAssignment.nodeIndex <= previousNodeIndex)
             || outPayload.nodes[encodedAssignment.nodeIndex].kind != FrameGraphNodeKind::Pass
-            || !__hidden_telemetry_frame_graph::DecodeQueueAssignment(
+            || !FrameGraphQueueCodecDetail::DecodeQueueAssignment(
                 encodedAssignment,
                 outPayload.nodes[encodedAssignment.nodeIndex].queueAssignment
             )
@@ -1804,7 +1727,7 @@ bool ParseFrameGraphPayload(
     for(u32 statisticsIndex = 0u; statisticsIndex < runtimeStatisticsCount; ++statisticsIndex){
         u32 nodeIndex = Limit<u32>::s_Max;
         FrameGraphRuntimeStatistics statistics;
-        if(legacyHeader.version == s_FrameGraphResourceVersionStatisticsPayloadVersion){
+        if(legacyHeader.version >= s_FrameGraphResourceVersionStatisticsPayloadVersion){
             EncodedFrameGraphRuntimeStatisticsV8 encodedStatistics;
             if(!ReadPOD(encoded, cursor, encodedStatistics))
                 return false;
@@ -1849,7 +1772,7 @@ bool ParseFrameGraphPayload(
         if(
             legacyHeader.version == s_FrameGraphRecoverySubmissionCountPayloadVersion
             || legacyHeader.version == s_FrameGraphPacketSubmissionStatisticsPayloadVersion
-            || legacyHeader.version == s_FrameGraphResourceVersionStatisticsPayloadVersion
+            || legacyHeader.version >= s_FrameGraphResourceVersionStatisticsPayloadVersion
         ){
             EncodedFrameGraphPhysicalQueueRuntimeStatisticsV6 encodedStatistics;
             if(!ReadPOD(encoded, cursor, encodedStatistics))

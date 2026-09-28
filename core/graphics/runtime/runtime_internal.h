@@ -26,6 +26,12 @@ namespace GraphicsModuleDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+inline constexpr usize s_SetupUploadLargeMinimumBytes = 1024u * 1024u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct SetupUploadSameClassRouting{
     GpuPhysicalQueueId primaryQueue;
     bool enabled = false;
@@ -38,20 +44,20 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 
 [[nodiscard]] SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     GraphicsBackend::Device& device,
-    CommandQueue::Enum uploadQueue,
+    CommandQueue::Enum consumerQueue,
     usize uploadBytes
 )noexcept;
-[[nodiscard]] ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
+[[nodiscard]] ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(
     ResourceQueueSharing::Mask requestedSharing,
-    CommandQueue::Enum uploadQueue,
+    CommandQueue::Enum consumerQueue,
     bool crossFamilySameClassRouting = false
 )noexcept;
-[[nodiscard]] CommandQueue::Enum ResolveSetupUploadQueue(
+[[nodiscard]] CommandQueue::Enum ResolveSetupUploadConsumerQueue(
     GraphicsBackend::Device& device,
-    CommandQueue::Enum requestedQueue,
+    CommandQueue::Enum requestedConsumerQueue,
     usize uploadBytes,
     bool hasKnownFinalState,
-    bool requiresGraphicsQueue = false
+    bool requiresGraphicsConsumerQueue = false
 )noexcept;
 [[nodiscard]] GpuTaskSchedulingHint SetupUploadGraphScheduling(
     usize byteCount,
@@ -73,7 +79,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     ResourceQueueSharing::Mask queueSharing,
-    CommandQueue::Enum uploadQueue,
+    CommandQueue::Enum consumerQueue,
     void* userData,
     GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outUploadToken,

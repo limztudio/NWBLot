@@ -16,7 +16,6 @@
 #include <global/timer.h>
 
 #include <impl/ecs_render/shared/task_graph_draw_snapshots.h>
-#include <impl/ecs_render/kernel/task_graph_queue_lookup.h>
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
 #include <impl/ecs_render/kernel/task_graph_clear_timing.h>
 #include <impl/ecs_render/deferred/task_graph_prefix_tasks.h>

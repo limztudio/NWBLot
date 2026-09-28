@@ -71,7 +71,6 @@ TEST(GpuTaskGraph, ChoosesEveryTaskQueueFromItsCommandContract){
         }
         ASSERT_NE(selectedQueue, nullptr);
         EXPECT_EQ(selectedQueue->capabilities & commands[taskIndex].requiredCapabilities, commands[taskIndex].requiredCapabilities);
-        EXPECT_EQ(assignment->score.preference, 0);
     }
     EXPECT_EQ(assignments.find(tasks[0u])->queueClass, Graphics::CommandQueue::Graphics);
 }
@@ -110,7 +109,7 @@ TEST(GpuTaskGraph, AutomaticallyRunsComputeOnGraphicsWhenNoComputeQueueExists){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, queue.id);
-    EXPECT_EQ(assignments.find(task)->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(assignments.find(task)->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
 }
 
 TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingAutomaticWorkOnGraphics){
@@ -130,7 +129,6 @@ TEST(GpuTaskGraph, RetainsTinyAndNonOverlappingAutomaticWorkOnGraphics){
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
         ASSERT_NE(assignments.find(task), nullptr);
         EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
-        EXPECT_EQ(assignments.find(task)->score.preference, 0);
     };
     runCase(true);
     runCase(false);
@@ -353,7 +351,7 @@ TEST(GpuTaskGraph, ChoosesComputePlacementFromOverlapAndExternalQueueLoad){
     const Graphics::GpuTaskQueueAssignment* const loadedAssignment = loadedAssignments.find(computeTask);
     ASSERT_NE(loadedAssignment, nullptr);
     EXPECT_EQ(loadedAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(loadedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(loadedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
     EXPECT_EQ(loadedAssignment->score.queueLoad, 8);
 }
 
@@ -420,7 +418,7 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     EXPECT_EQ(firstAssignment->queue, DedicatedComputeQueue().id);
     EXPECT_EQ(secondAssignment->queue, firstAssignment->queue);
     EXPECT_NE(firstAssignment->queue, auxiliaryGraphics.id);
-    EXPECT_EQ(firstAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::ScoredAny);
+    EXPECT_EQ(firstAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
     EXPECT_EQ(firstAssignment->initialQueue, firstAssignment->queue);
     EXPECT_EQ(firstAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
     EXPECT_EQ(firstAssignment->score.overlap, 8);

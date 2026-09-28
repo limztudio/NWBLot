@@ -25,12 +25,14 @@ namespace __hidden_graphics_texture_upload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
-
 inline constexpr Name s_UploadTextureBatchResourceIdentity("graphics.upload_texture_batch.resource");
 inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_texture_batch.upload");
 
-[[nodiscard]] static bool TextureUploadRequiresGraphicsQueue(const TextureDesc& textureDesc)noexcept{
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static bool TextureUploadRequiresGraphicsConsumerQueue(const TextureDesc& textureDesc)noexcept{
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
     return formatInfo.hasDepth || formatInfo.hasStencil;
 }
@@ -116,13 +118,12 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
     return true;
 }
 
-[[nodiscard]] static CommandQueue::Enum ResolveTextureUploadBatchQueue(
+[[nodiscard]] static CommandQueue::Enum ResolveTextureUploadBatchConsumerQueue(
     GraphicsBackend::Device& device,
-    const CommandQueue::Enum requestedQueue,
+    const CommandQueue::Enum requestedConsumerQueue,
     const usize uploadBytes,
-    const TextureDesc& textureDesc
-)noexcept{
-    if(TextureUploadRequiresGraphicsQueue(textureDesc))
+    const TextureDesc& textureDesc)noexcept{
+    if(TextureUploadRequiresGraphicsConsumerQueue(textureDesc))
         return CommandQueue::Graphics;
 
     const auto canUse = [&](const CommandQueue::Enum queue){
@@ -130,7 +131,7 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
             || (device.getQueue(queue) && ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, queue))
         ;
     };
-    const auto transferPreferred = [&](){
+    const auto availableConsumerQueue = [&](){
         if(canUse(CommandQueue::Transfer))
             return CommandQueue::Transfer;
         if(canUse(CommandQueue::Compute))
@@ -138,14 +139,14 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         return CommandQueue::Graphics;
     };
 
-    switch(requestedQueue){
+    switch(requestedConsumerQueue){
     case CommandQueue::kCount:
-        return uploadBytes < s_TransferPreferredUploadMinimumBytes
+        return uploadBytes < GraphicsModuleDetail::s_SetupUploadLargeMinimumBytes
             ? CommandQueue::Graphics
-            : transferPreferred()
+            : availableConsumerQueue()
         ;
     case CommandQueue::Transfer:
-        return transferPreferred();
+        return availableConsumerQueue();
     case CommandQueue::Compute:
         return canUse(CommandQueue::Compute)
             ? CommandQueue::Compute
@@ -258,21 +259,21 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         ? desc.physicalInitialState
         : textureDesc.initialState
     ;
-    const CommandQueue::Enum uploadQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchQueue(
+    const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(
         device,
         desc.queue,
         totalByteCount,
         textureDesc
     );
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, uploadQueue, totalByteCount)
+        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, totalByteCount)
     ;
     // Existing batch destinations cannot be recreated with a wider sharing contract. A cross-family producer is
     // therefore valid only when the texture was already created for that broad queue class; same-family offload
     // retains ordinary exclusive sharing.
     if(
         sameClassRouting.crossesQueueFamily
-        && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, uploadQueue)
+        && !ResourceQueueSharing::IncludesQueueClass(textureDesc.queueSharing, consumerQueue)
     )
         sameClassRouting = {};
     QueueSubmissionToken uploadToken;
@@ -282,13 +283,13 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         .graphInitialState = graphInitialState,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
-        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
         m_allocator.getObjectArena(),
         textureDesc.queueSharing,
-        uploadQueue,
+        consumerQueue,
         &submissionData,
         &__hidden_graphics_texture_upload::DeclareTextureUploadBatch,
         uploadToken,

@@ -55,14 +55,8 @@ namespace GpuTaskQueueAssignmentReason{
     enum Enum : u8{
         Unknown,
         RequiredGraphics,
-        PreferredQueue,
-        DedicatedCompute,
-        DedicatedTransfer,
-        Fallback,
-        ConservativeAny,
-        SameClassRouting,
-        CompilerOverride,
-        ScoredAny,
+        Conservative,
+        Scored,
 
         kCount,
     };
@@ -74,7 +68,7 @@ namespace GpuTaskQueueAssignmentModifier{
         None = kGpuTaskQueueAssignmentModifierNoneBase,
         DirectDependencyAffinity = 1u << 0u,
         SameClassLoadBalance = 1u << 1u,
-        NonPrimaryPreference = 1u << 2u,
+        NonPrimaryRouting = 1u << 2u,
         DebugTimingOverride = 1u << 3u,
         TimingCalibration = 1u << 4u,
         TimingFeedback = 1u << 5u,

@@ -58,7 +58,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     avboitComputeScheduling.allowPacketMerge = true;
     avboitComputeScheduling.mergeWithPrevious = true;
     avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
+    // Keep each effect in one recording packet while the compiler chooses its queue.
     RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
     RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
@@ -139,7 +139,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     avboitComputeScheduling.allowPacketMerge = true;
     avboitComputeScheduling.mergeWithPrevious = true;
     avboitComputeScheduling.allowMergeAcrossConsumerFrontier = true;
-    // Depth Warp and Integration prefer Compute; preserve affinity after Graphics collapse.
+    // Keep each effect in one recording packet while the compiler chooses its queue.
     RendererTaskGraphDetail::EnableSameFamilyComputeEffectRouting(avboitComputeScheduling);
     RendererTaskGraphDetail::EnableCrossFamilyComputeEffectRouting(avboitComputeScheduling);
     // Accepted samples use the queue class and exact transport chosen by this compile.
@@ -148,7 +148,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     const Core::GpuTaskTimingMetadata avboitComputeStageTiming =
         AvboitComputeStageTimingMetadata(*inputs.targets)
     ;
-    // Integration is a Compute-preferred successor; compiler owns queue and state lowering.
+    // Integration retains packet affinity; the compiler lowers its queue and resource states.
     const Core::GpuTaskResourceUse integrationResourceUses[] = {
         ReadUse(inputs.extinction),
         ReadUse(inputs.control),

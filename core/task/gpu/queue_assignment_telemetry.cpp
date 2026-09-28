@@ -29,7 +29,6 @@ namespace __hidden_queue_assignment_telemetry{
     return lhs.task == rhs.task
         && lhs.initialQueue == rhs.initialQueue
         && lhs.queue == rhs.queue
-        && lhs.score.preference == rhs.score.preference
         && lhs.score.overlap == rhs.score.overlap
         && lhs.score.queueLoad == rhs.score.queueLoad
         && lhs.score.incomingCrossings == rhs.score.incomingCrossings

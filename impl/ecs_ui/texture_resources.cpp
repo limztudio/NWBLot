@@ -191,7 +191,7 @@ bool UiSystem::createOrRefreshTexture(ImTextureData& textureData){
             .setFormat(Core::Format::RGBA8_UNORM)
             .setInitialState(Core::ResourceStates::ShaderResource)
             .setKeepInitialState(true)
-            // Texture updates may prefer Transfer/Compute; keep families concurrent from creation.
+            // Texture updates can run on Transfer or Compute queues; admit those families at creation.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAsyncComputeAndTransfer)
             .setName(__hidden_ui::UiTextureName(static_cast<usize>(textureData.UniqueID)))
         ;

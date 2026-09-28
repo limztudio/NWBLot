@@ -35,7 +35,8 @@ struct PushConstants{
 static_assert(sizeof(PushConstants) == NWB_SCENE_BVH_REFIT_PUSH_BYTES);
 
 struct RefitTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
+    // The captured scene snapshot belongs to the primary Graphics writer timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute, true };
 
     struct Payload{
         SoftwareSceneRefitHandle snapshot;

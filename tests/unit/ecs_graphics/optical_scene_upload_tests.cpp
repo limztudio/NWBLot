@@ -3,7 +3,14 @@
 
 
 #include <impl/ecs_render/raytrace/task_graph_optical_scene_upload.h>
+#include <impl/ecs_render/raytrace/task_graph_optical_bounds_finalize.h>
 #include <impl/ecs_render/components.h>
+
+#include <core/graphics/runtime/runtime.h>
+#include <core/graphics/rhi/queue_sharing.h>
+#include <core/perf/timing.h>
+#include <core/task/gpu/compiler_internal.h>
+#include <core/task/gpu/scheduler.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
@@ -35,6 +42,9 @@ struct UploadContext{
     Core::Alloc::ScratchArena scratch{ Name("tests/optical_upload/gather") };
     Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
     Core::CpuTaskScheduler cpuScheduler{ 0u };
+    Core::GpuTaskScheduler gpuTasks;
+    Core::Perf::TimingRecorder timing{ testArena.arena };
+    Core::GraphicsRuntime graphics{ graphicsAllocator, cpuScheduler, gpuTasks, timing };
     Core::GraphicsBackend::VulkanContext context;
     Core::GraphicsBackend::VulkanAllocator allocator;
     Core::BufferHandle buffer;
@@ -48,9 +58,12 @@ struct UploadContext{
         , control(CreateRayTracingOpticalUploadControl(testArena.arena, buffer, {0u, deviceGeneration}))
     {}
 
-    [[nodiscard]] Core::BufferHandle makeBuffer(const Name identity, const bool initialStateKnown = true){
+    [[nodiscard]] Core::BufferHandle makeBuffer(
+        const Name identity,
+        const bool initialStateKnown = true,
+        const Core::ResourceStates::Mask initialState = Core::ResourceStates::Common){
         Core::BufferDesc desc;
-        desc.setByteSize(256u).setCanHaveRawViews(true).setDebugName(identity).enableAutomaticStateTracking(Core::ResourceStates::Common);
+        desc.setByteSize(256u).setCanHaveRawViews(true).setCanHaveUAVs(true).setDebugName(identity).enableAutomaticStateTracking(initialState);
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(testArena.arena, context, allocator, desc, initialStateKnown);
         return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
     }
@@ -317,6 +330,7 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     EXPECT_TRUE(task.hasRecordPayload);
     EXPECT_TRUE(task.hasAcceptedPayload);
     EXPECT_EQ(task.commands.requiredCapabilities, Core::GpuQueueCapability::Transfer);
+    EXPECT_TRUE(task.commands.requiresPrimaryGraphicsQueue);
     EXPECT_FALSE(task.scheduling.allowSameClassQueueRouting);
     ASSERT_EQ(task.resourceUseCount, s_ExpectedDualCount);
     for(usize index = 0u; index < task.resourceUseCount; ++index){
@@ -335,6 +349,86 @@ TEST(OpticalSceneUpload, GraphMissOwnsOneBlobAndAnAcceptedUploadWithExactWriteSt
     ASSERT_NE(bytes, nullptr);
     ASSERT_EQ(byteSize, upload->bytes.size());
     EXPECT_EQ(NWB_MEMCMP(bytes, upload->bytes.data(), byteSize), 0);
+}
+
+TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphics){
+    UploadContext context;
+    const auto upload = context.makeUpload(1u);
+    auto resources = context.snapshot(upload);
+    resources.uploadBuffer = context.buffer;
+    resources.finalize = RayTracingOpticalBoundsFinalizeHandle(
+        NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(context.testArena.arena, context.testArena.arena, context.graphics),
+        ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&context.testArena.arena), AdoptRef
+    );
+    resources.finalize->inputBuffer = context.makeBuffer(Name("tests/optical_finalize/inputs"));
+    resources.finalize->outputBuffer = context.makeBuffer(Name("tests/optical_finalize/output"));
+    resources.finalize->inputs.resize(1u);
+    resources.finalize->boundsBuffers.resize(1u);
+    resources.finalize->boundsBuffers[0u] = context.makeBuffer(
+        Name("tests/optical_finalize/bounds"), true, Core::ResourceStates::ShaderResource
+    );
+    resources.finalize->queue = { .index = 0u, .deviceGeneration = 1u };
+    const Core::GpuGraphResourceId source = context.graph.importBuffer(
+        context.buffer,
+        Core::GpuGraphResourceDesc{}
+            .setIdentity(Name("tests/optical_finalize/source"))
+            .setMarkerLabel("Optical Finalize Source")
+            .setType(Core::GpuGraphResourceType::Buffer)
+            .setInitialState(Core::ResourceStates::Common)
+            .setExternalFinalState(Core::ResourceStates::Common)
+    );
+    ASSERT_TRUE(source.valid());
+    const auto result = DeclareRayTracingOpticalBoundsFinalize(context.graph, resources, source, context.scratch);
+    ASSERT_TRUE(result.valid());
+    const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
+    ASSERT_TRUE(view.valid());
+    ASSERT_EQ(view.taskCount(), 1u);
+    const auto task = view.taskAt(result.uploadTask.index);
+    EXPECT_EQ(task.identity, Name("render.raytrace.optical_bounds_finalize"));
+    EXPECT_EQ(task.commands.requiredCapabilities, Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer);
+
+    const Core::GpuPhysicalQueueInfo computeQueue{
+        .familyIndex = 0u,
+        .queueIndex = 1u,
+        .id = { .index = 1u, .deviceGeneration = 1u },
+        .queueClass = Core::CommandQueue::Compute,
+        .capabilities = Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
+    };
+    const Core::GpuPhysicalQueueInfo primaryGraphicsQueue{
+        .familyIndex = 0u,
+        .queueIndex = 0u,
+        .id = resources.finalize->queue,
+        .queueClass = Core::CommandQueue::Graphics,
+        .capabilities = Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
+    };
+    // Both candidates admit every import; only the finalize task's retained writer timeline forbids Compute.
+    for(usize resourceIndex = 0u; resourceIndex < view.resourceCount(); ++resourceIndex){
+        const auto resource = view.resourceAt(resourceIndex);
+        ASSERT_TRUE(resource.hasQueueAdmission);
+        ASSERT_FALSE(resource.initialOwnerQueue.valid());
+        ASSERT_FALSE(resource.directConsumerQueue.valid());
+        ASSERT_TRUE(Core::ResourceQueueAdmissionAdmitsQueue(resource.queueAdmission, computeQueue));
+        ASSERT_TRUE(Core::ResourceQueueAdmissionAdmitsQueue(resource.queueAdmission, primaryGraphicsQueue));
+    }
+    Core::GpuTaskGraphAnalysis analysis(context.testArena.arena);
+    Core::GpuTaskGraphQueueAssignments assignments(context.testArena.arena);
+    Core::GpuCompiledGraph compiled(context.testArena.arena);
+    const Core::GpuTaskGraphCompiler compiler;
+    const Core::GpuTaskGraphQueueTopology computeOnlyTopology{ .queues = &computeQueue, .queueCount = 1u };
+    EXPECT_FALSE(compiler.compile(view, analysis, computeOnlyTopology, assignments, compiled, context.scratch));
+    ASSERT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::Success);
+    EXPECT_EQ(assignments.diagnostic().status, Core::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
+    EXPECT_EQ(assignments.diagnostic().task, result.uploadTask);
+
+    const Core::GpuPhysicalQueueInfo queues[] = { computeQueue, primaryGraphicsQueue };
+    const Core::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    ASSERT_TRUE(compiler.compile(view, analysis, topology, assignments, compiled, context.scratch))
+        << "analysis=" << static_cast<u32>(analysis.diagnostic().status)
+        << ", queue=" << static_cast<u32>(assignments.diagnostic().status);
+    const Core::GpuTaskQueueAssignment* const assignment = assignments.find(result.uploadTask);
+    ASSERT_NE(assignment, nullptr);
+    EXPECT_EQ(assignment->queue, primaryGraphicsQueue.id);
+    EXPECT_EQ(assignment->queueClass, Core::CommandQueue::Graphics);
 }
 
 TEST(OpticalSceneUpload, AcceptedGraphHitKeepsExactProducerAvailabilityWithoutUploadWork){

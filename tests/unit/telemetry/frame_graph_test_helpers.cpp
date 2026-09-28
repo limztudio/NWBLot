@@ -70,16 +70,15 @@ Telemetry::FrameGraphQueueAssignment MakeChangedFrameGraphQueueAssignment(){
     assignment.acceptedQueue = assignment.plannedQueue;
     assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
     assignment.score = {
-        .preference = 11,
         .overlap = 7,
         .queueLoad = 3,
         .incomingCrossings = 2,
         .outgoingCrossings = 1,
         .ownershipTransfers = 4,
-        .total = 8,
+        .total = -3,
     };
     assignment.queueClass = Telemetry::FrameGraphQueueClass::Compute;
-    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Fallback;
+    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
     assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::All;
     assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::Changed;
     assignment.dedicated = true;
@@ -93,16 +92,15 @@ Telemetry::FrameGraphQueueAssignment MakeNotAcceptedFrameGraphQueueAssignment(){
     assignment.plannedQueue = { .index = 5u, .deviceGeneration = 17u };
     assignment.previousAcceptedQueue = { .index = 2u, .deviceGeneration = 17u };
     assignment.score = {
-        .preference = 5,
         .overlap = 6,
         .queueLoad = 1,
         .incomingCrossings = 2,
         .outgoingCrossings = 3,
         .ownershipTransfers = 4,
-        .total = 1,
+        .total = -4,
     };
     assignment.queueClass = Telemetry::FrameGraphQueueClass::Transfer;
-    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::ScoredAny;
+    assignment.reason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
     assignment.modifiers = Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
     assignment.acceptance = Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted;
     assignment.present = true;

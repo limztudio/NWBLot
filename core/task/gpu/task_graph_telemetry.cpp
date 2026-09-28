@@ -51,29 +51,11 @@ namespace __hidden_task_graph_telemetry{
     case GpuTaskQueueAssignmentReason::RequiredGraphics:
         outReason = Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics;
         return true;
-    case GpuTaskQueueAssignmentReason::PreferredQueue:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::PreferredQueue;
+    case GpuTaskQueueAssignmentReason::Conservative:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::Conservative;
         return true;
-    case GpuTaskQueueAssignmentReason::DedicatedCompute:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute;
-        return true;
-    case GpuTaskQueueAssignmentReason::DedicatedTransfer:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer;
-        return true;
-    case GpuTaskQueueAssignmentReason::Fallback:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::Fallback;
-        return true;
-    case GpuTaskQueueAssignmentReason::ConservativeAny:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::ConservativeAny;
-        return true;
-    case GpuTaskQueueAssignmentReason::SameClassRouting:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::SameClassRouting;
-        return true;
-    case GpuTaskQueueAssignmentReason::CompilerOverride:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride;
-        return true;
-    case GpuTaskQueueAssignmentReason::ScoredAny:
-        outReason = Telemetry::FrameGraphQueueAssignmentReason::ScoredAny;
+    case GpuTaskQueueAssignmentReason::Scored:
+        outReason = Telemetry::FrameGraphQueueAssignmentReason::Scored;
         return true;
     default:
         return false;
@@ -86,7 +68,7 @@ namespace __hidden_task_graph_telemetry{
 )noexcept{
     constexpr u8 s_KnownModifiers = GpuTaskQueueAssignmentModifier::DirectDependencyAffinity
         | GpuTaskQueueAssignmentModifier::SameClassLoadBalance
-        | GpuTaskQueueAssignmentModifier::NonPrimaryPreference
+        | GpuTaskQueueAssignmentModifier::NonPrimaryRouting
         | GpuTaskQueueAssignmentModifier::DebugTimingOverride
         | GpuTaskQueueAssignmentModifier::TimingCalibration
         | GpuTaskQueueAssignmentModifier::TimingFeedback
@@ -100,8 +82,8 @@ namespace __hidden_task_graph_telemetry{
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::DirectDependencyAffinity;
     if(modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
-    if(modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
-        translated |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryPreference;
+    if(modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
+        translated |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryRouting;
     if(modifiers & GpuTaskQueueAssignmentModifier::DebugTimingOverride)
         translated |= Telemetry::FrameGraphQueueAssignmentModifier::DebugTimingOverride;
     if(modifiers & GpuTaskQueueAssignmentModifier::TimingCalibration)
@@ -194,7 +176,6 @@ namespace __hidden_task_graph_telemetry{
         .deviceGeneration = assignment.queue.deviceGeneration,
     };
     outAssignment.score = {
-        .preference = assignment.score.preference,
         .overlap = assignment.score.overlap,
         .queueLoad = assignment.score.queueLoad,
         .incomingCrossings = assignment.score.incomingCrossings,
@@ -363,14 +344,10 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
             }
             if(assignment->dedicated)
                 flags |= GpuTaskGraphTelemetryNodeFlag::AssignedDedicatedQueue;
-            if(assignment->reason == GpuTaskQueueAssignmentReason::Fallback)
-                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentFallback;
-            if(assignment->reason == GpuTaskQueueAssignmentReason::CompilerOverride)
-                flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentCompilerOverride;
             if(
                 (assignment->modifiers & GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
                 || (assignment->modifiers & GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
-                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
+                || (assignment->modifiers & GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
                 || assignment->initialQueue != assignment->queue
             )
                 flags |= GpuTaskGraphTelemetryNodeFlag::QueueAssignmentSameClassRouting;

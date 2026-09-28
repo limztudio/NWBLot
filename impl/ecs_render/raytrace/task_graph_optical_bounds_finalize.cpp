@@ -39,7 +39,8 @@ struct PushConstants{
 static_assert(sizeof(PushConstants) == NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES);
 
 struct FinalizeTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer };
+    // Retained optical bounds are rewritten on the primary Graphics writer timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
 
     struct Payload{
         Core::BufferHandle source;

@@ -25,16 +25,16 @@ namespace __hidden_graphics_graph_setup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Until per-upload timing exists, keep small setup copies on Graphics. Large payloads migrate to Transfer first
-constexpr usize s_TransferPreferredUploadMinimumBytes = 1024u * 1024u;
-
 inline constexpr Name s_StandaloneTaskGraphRecoveryIdentity("graphics.standalone_task_graph.recovery");
 inline constexpr Name s_SetupUploadReadinessBridgeIdentity("graphics.setup_upload.readiness_bridge");
 inline constexpr Name s_FrameTimingResetIdentity("graphics.frame_timing.reset");
 inline constexpr Name s_StandaloneTaskGraphScratchArena("graphics.standalone_task_graph_scratch");
 
 
-[[nodiscard]] static CommandQueue::Enum ResolveTransferPreferredQueue(GraphicsBackend::Device& device)noexcept{
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static CommandQueue::Enum ResolveAvailableSetupConsumerQueue(GraphicsBackend::Device& device)noexcept{
     if(device.getQueue(CommandQueue::Transfer))
         return CommandQueue::Transfer;
     if(device.getQueue(CommandQueue::Compute))
@@ -112,7 +112,7 @@ struct StandaloneTaskGraphRecoveryTask{
     GpuTaskGraph& graph,
     GraphicsBackend::Device& device,
     const ResourceQueueSharing::Mask queueSharing,
-    const CommandQueue::Enum uploadQueue,
+    const CommandQueue::Enum directConsumerQueue,
     const GpuTaskId uploadTask){
     if(!uploadTask.valid())
         return {};
@@ -144,7 +144,7 @@ struct StandaloneTaskGraphRecoveryTask{
     };
     for(const CommandQueue::Enum consumerQueue : consumerQueues){
         if(
-            consumerQueue == uploadQueue
+            consumerQueue == directConsumerQueue
             || !ResourceQueueSharing::IncludesQueueClass(queueSharing, consumerQueue)
             || !device.getQueue(consumerQueue)
         )
@@ -153,7 +153,7 @@ struct StandaloneTaskGraphRecoveryTask{
             return {};
     }
     // The returned resource is ready on its direct consumer timeline even when the scheduler offloads its producer.
-    if(!device.getQueue(uploadQueue) || !appendBridge(uploadQueue))
+    if(!device.getQueue(directConsumerQueue) || !appendBridge(directConsumerQueue))
         return {};
     return terminalTask;
 }
@@ -164,7 +164,7 @@ struct SetupUploadSubmissionData{
     void* userData = nullptr;
     GraphicsModuleDetail::GraphTaskDeclaration declareTask = nullptr;
     ResourceQueueSharing::Mask queueSharing = ResourceQueueSharing::Exclusive;
-    CommandQueue::Enum uploadQueue = CommandQueue::Graphics;
+    CommandQueue::Enum consumerQueue = CommandQueue::Graphics;
 };
 
 [[nodiscard]] static GpuTaskId DeclareSetupUploadGraph(void* const userData, GpuTaskGraph& graph){
@@ -177,7 +177,7 @@ struct SetupUploadSubmissionData{
         graph,
         submissionData.device,
         submissionData.queueSharing,
-        submissionData.uploadQueue,
+        submissionData.consumerQueue,
         uploadTask
     );
 }
@@ -267,14 +267,13 @@ namespace GraphicsModuleDetail{
 
 SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     GraphicsBackend::Device& device,
-    const CommandQueue::Enum uploadQueue,
-    const usize uploadBytes
-)noexcept{
+    const CommandQueue::Enum consumerQueue,
+    const usize uploadBytes)noexcept{
     SetupUploadSameClassRouting result;
-    if(uploadBytes < __hidden_graphics_graph_setup::s_TransferPreferredUploadMinimumBytes)
+    if(uploadBytes < s_SetupUploadLargeMinimumBytes)
         return result;
 
-    result.primaryQueue = device.getPrimaryPhysicalQueue(uploadQueue);
+    result.primaryQueue = device.getPrimaryPhysicalQueue(consumerQueue);
     const GpuPhysicalQueueInfo* const primaryInfo = device.getPhysicalQueueInfo(result.primaryQueue);
     if(!primaryInfo)
         return result;
@@ -286,7 +285,7 @@ SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
         if(
             candidate.id == result.primaryQueue
-            || candidate.queueClass != uploadQueue
+            || candidate.queueClass != consumerQueue
             || (static_cast<u8>(candidate.capabilities) & requiredCapabilities) != requiredCapabilities
             || (alternateInfo && candidate.id.index >= alternateInfo->id.index)
         )
@@ -301,22 +300,21 @@ SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     return result;
 }
 
-ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
+ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(
     const ResourceQueueSharing::Mask requestedSharing,
-    const CommandQueue::Enum uploadQueue,
-    const bool crossFamilySameClassRouting
-)noexcept{
+    const CommandQueue::Enum consumerQueue,
+    const bool crossFamilySameClassRouting)noexcept{
     if(crossFamilySameClassRouting){
         const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
-            ? ResourceQueueSharing::ForQueueClass(uploadQueue)
+            ? ResourceQueueSharing::ForQueueClass(consumerQueue)
             : requestedSharing
         ;
         return static_cast<ResourceQueueSharing::Mask>(
-            static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(uploadQueue))
+            static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue))
         );
     }
 
-    if(uploadQueue == CommandQueue::Graphics)
+    if(consumerQueue == CommandQueue::Graphics)
         return requestedSharing;
 
     const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
@@ -324,28 +322,27 @@ ResourceQueueSharing::Mask ResolveSetupUploadQueueSharing(
         : requestedSharing
     ;
     return static_cast<ResourceQueueSharing::Mask>(
-        static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(uploadQueue))
+        static_cast<u8>(baseSharing) | static_cast<u8>(ResourceQueueSharing::ForQueueClass(consumerQueue))
     );
 }
 
-CommandQueue::Enum ResolveSetupUploadQueue(
+CommandQueue::Enum ResolveSetupUploadConsumerQueue(
     GraphicsBackend::Device& device,
-    const CommandQueue::Enum requestedQueue,
+    const CommandQueue::Enum requestedConsumerQueue,
     const usize uploadBytes,
     const bool hasKnownFinalState,
-    const bool requiresGraphicsQueue
-)noexcept{
-    if(requiresGraphicsQueue)
+    const bool requiresGraphicsConsumerQueue)noexcept{
+    if(requiresGraphicsConsumerQueue)
         return CommandQueue::Graphics;
 
-    switch(requestedQueue){
+    switch(requestedConsumerQueue){
     case CommandQueue::kCount:
-        if(uploadBytes < __hidden_graphics_graph_setup::s_TransferPreferredUploadMinimumBytes || !hasKnownFinalState)
+        if(uploadBytes < s_SetupUploadLargeMinimumBytes || !hasKnownFinalState)
             return CommandQueue::Graphics;
-        return __hidden_graphics_graph_setup::ResolveTransferPreferredQueue(device);
+        return __hidden_graphics_graph_setup::ResolveAvailableSetupConsumerQueue(device);
     case CommandQueue::Transfer:
         return hasKnownFinalState
-            ? __hidden_graphics_graph_setup::ResolveTransferPreferredQueue(device)
+            ? __hidden_graphics_graph_setup::ResolveAvailableSetupConsumerQueue(device)
             : CommandQueue::Graphics
         ;
     case CommandQueue::Compute:
@@ -364,10 +361,9 @@ CommandQueue::Enum ResolveSetupUploadQueue(
 GpuTaskSchedulingHint SetupUploadGraphScheduling(
     const usize byteCount,
     const bool sameClassRouting,
-    const bool crossFamilySameClassRouting
-)noexcept{
+    const bool crossFamilySameClassRouting)noexcept{
     GpuTaskSchedulingHint scheduling;
-    scheduling.cost = byteCount >= __hidden_graphics_graph_setup::s_TransferPreferredUploadMinimumBytes
+    scheduling.cost = byteCount >= s_SetupUploadLargeMinimumBytes
         ? GpuTaskCostHint::Large
         : GpuTaskCostHint::Tiny
     ;
@@ -516,12 +512,11 @@ bool SubmitGraphOwnedSetupUpload(
     const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     const ResourceQueueSharing::Mask queueSharing,
-    const CommandQueue::Enum uploadQueue,
+    const CommandQueue::Enum consumerQueue,
     void* const userData,
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outUploadToken,
-    const GpuPhysicalQueueId requiredTerminalQueue
-){
+    const GpuPhysicalQueueId requiredTerminalQueue){
     outUploadToken = {};
     if(!declareTask)
         return false;
@@ -532,7 +527,7 @@ bool SubmitGraphOwnedSetupUpload(
         .userData = userData,
         .declareTask = declareTask,
         .queueSharing = queueSharing,
-        .uploadQueue = uploadQueue,
+        .consumerQueue = consumerQueue,
     };
     QueueSubmissionToken terminalToken;
     if(!SubmitGraphOwnedStandaloneTask(

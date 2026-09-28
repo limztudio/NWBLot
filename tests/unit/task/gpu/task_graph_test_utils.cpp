@@ -433,8 +433,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::DirectDependencyAffinity;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryPreference)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryPreference;
+    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
+        expected |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryRouting;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DebugTimingOverride)
         expected |= Telemetry::FrameGraphQueueAssignmentModifier::DebugTimingOverride;
     if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration)
@@ -459,7 +459,6 @@ void ExpectPlannedQueueAssignmentTelemetry(
     EXPECT_EQ(telemetry.plannedQueue.deviceGeneration, source.queue.deviceGeneration);
     EXPECT_FALSE(telemetry.acceptedQueue.valid());
     EXPECT_FALSE(telemetry.previousAcceptedQueue.valid());
-    EXPECT_EQ(telemetry.score.preference, source.score.preference);
     EXPECT_EQ(telemetry.score.overlap, source.score.overlap);
     EXPECT_EQ(telemetry.score.queueLoad, source.score.queueLoad);
     EXPECT_EQ(telemetry.score.incomingCrossings, source.score.incomingCrossings);

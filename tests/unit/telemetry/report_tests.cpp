@@ -269,6 +269,8 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
     ASSERT_LT(unassignedJsonOffset, rejectedJsonOffset);
     ASSERT_LT(rejectedJsonOffset, jsonEdgesOffset);
 
+    EXPECT_FALSE(ContainsText(json, "preference"));
+
     const AStringView changedJson = json.substr(changedJsonOffset, unassignedJsonOffset - changedJsonOffset);
     const AStringView unassignedJson = json.substr(unassignedJsonOffset, rejectedJsonOffset - unassignedJsonOffset);
     const AStringView rejectedJson = json.substr(rejectedJsonOffset, jsonEdgesOffset - rejectedJsonOffset);
@@ -278,9 +280,9 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "\"plannedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
         "\"acceptedQueue\": {\"index\": 3, \"deviceGeneration\": 17}, "
         "\"previousAcceptedQueue\": {\"index\": 2, \"deviceGeneration\": 17}, \"queueClass\": \"compute\", "
-        "\"reason\": \"fallback\", \"modifierMask\": 127, \"acceptance\": \"changed\", \"dedicated\": true, "
-        "\"score\": {\"preference\": 11, \"overlap\": 7, \"queueLoad\": 3, \"incomingCrossings\": 2, "
-        "\"outgoingCrossings\": 1, \"ownershipTransfers\": 4, \"total\": 8}}"
+        "\"reason\": \"scored\", \"modifierMask\": 127, \"acceptance\": \"changed\", \"dedicated\": true, "
+        "\"score\": {\"overlap\": 7, \"queueLoad\": 3, \"incomingCrossings\": 2, "
+        "\"outgoingCrossings\": 1, \"ownershipTransfers\": 4, \"total\": -3}}"
     ));
     EXPECT_TRUE(ContainsText(unassignedJson, "\"queueAssignment\": null"));
     EXPECT_TRUE(ContainsText(
@@ -298,10 +300,10 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         rejectedJson,
         "\"queueAssignment\": {\"initialQueue\": {\"index\": 4, \"deviceGeneration\": 17}, "
         "\"plannedQueue\": {\"index\": 5, \"deviceGeneration\": 17}, \"acceptedQueue\": null, "
-        "\"previousAcceptedQueue\": null, \"queueClass\": \"transfer\", \"reason\": \"scoredAny\", "
+        "\"previousAcceptedQueue\": null, \"queueClass\": \"transfer\", \"reason\": \"scored\", "
         "\"modifierMask\": 32, \"acceptance\": \"notAccepted\", \"dedicated\": false, "
-        "\"score\": {\"preference\": 5, \"overlap\": 6, \"queueLoad\": 1, \"incomingCrossings\": 2, "
-        "\"outgoingCrossings\": 3, \"ownershipTransfers\": 4, \"total\": 1}}"
+        "\"score\": {\"overlap\": 6, \"queueLoad\": 1, \"incomingCrossings\": 2, "
+        "\"outgoingCrossings\": 3, \"ownershipTransfers\": 4, \"total\": -4}}"
     ));
     EXPECT_TRUE(ContainsText(
         changedJson,
@@ -373,6 +375,8 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
     ASSERT_LT(unassignedDotOffset, rejectedDotOffset);
     ASSERT_LT(rejectedDotOffset, dotEdgesOffset);
 
+    EXPECT_FALSE(ContainsText(dot, "queue_score_preference"));
+
     const AStringView changedDot = dot.substr(changedDotOffset, unassignedDotOffset - changedDotOffset);
     const AStringView unassignedDot = dot.substr(unassignedDotOffset, rejectedDotOffset - unassignedDotOffset);
     const AStringView rejectedDot = dot.substr(rejectedDotOffset, dotEdgesOffset - rejectedDotOffset);
@@ -381,10 +385,10 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "queue_assignment=\"present\", queue_initial_index=1, queue_initial_device_generation=17, "
         "queue_planned_index=3, queue_planned_device_generation=17, queue_accepted_index=3, "
         "queue_accepted_device_generation=17, queue_previous_accepted_index=2, "
-        "queue_previous_accepted_device_generation=17, queue_class=\"compute\", queue_reason=\"fallback\", "
-        "queue_modifier_mask=127, queue_acceptance=\"changed\", queue_dedicated=true, queue_score_preference=11, "
+        "queue_previous_accepted_device_generation=17, queue_class=\"compute\", queue_reason=\"scored\", "
+        "queue_modifier_mask=127, queue_acceptance=\"changed\", queue_dedicated=true, "
         "queue_score_overlap=7, queue_score_queue_load=3, queue_score_incoming_crossings=2, "
-        "queue_score_outgoing_crossings=1, queue_score_ownership_transfers=4, queue_score_total=8"
+        "queue_score_outgoing_crossings=1, queue_score_ownership_transfers=4, queue_score_total=-3"
     ));
     EXPECT_TRUE(ContainsText(unassignedDot, "queue_assignment=\"none\""));
     EXPECT_TRUE(ContainsText(
@@ -403,10 +407,10 @@ TEST(Telemetry, TelemetryReportPreservesExactQueueAssignments){
         "queue_assignment=\"present\", queue_initial_index=4, queue_initial_device_generation=17, "
         "queue_planned_index=5, queue_planned_device_generation=17, queue_accepted_index=\"none\", "
         "queue_accepted_device_generation=\"none\", queue_previous_accepted_index=\"none\", "
-        "queue_previous_accepted_device_generation=\"none\", queue_class=\"transfer\", queue_reason=\"scoredAny\", "
-        "queue_modifier_mask=32, queue_acceptance=\"notAccepted\", queue_dedicated=false, queue_score_preference=5, "
+        "queue_previous_accepted_device_generation=\"none\", queue_class=\"transfer\", queue_reason=\"scored\", "
+        "queue_modifier_mask=32, queue_acceptance=\"notAccepted\", queue_dedicated=false, "
         "queue_score_overlap=6, queue_score_queue_load=1, queue_score_incoming_crossings=2, "
-        "queue_score_outgoing_crossings=3, queue_score_ownership_transfers=4, queue_score_total=1"
+        "queue_score_outgoing_crossings=3, queue_score_ownership_transfers=4, queue_score_total=-4"
     ));
     EXPECT_TRUE(ContainsText(
         changedDot,
@@ -619,7 +623,7 @@ TEST(Telemetry, TelemetryReportMarksV4RecoverySubmissionCountUnknown){
     Telemetry::TelemetryBytes currentPayload(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, currentPayload));
     Telemetry::TelemetryBytes legacyPayload(testArena.arena);
-    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+    ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(
         currentPayload,
         Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion,
         legacyPayload
@@ -672,7 +676,7 @@ TEST(Telemetry, TelemetryReportMarksV5RecoverySubmissionCountsUnknown){
         currentPayload
     ));
     Telemetry::TelemetryBytes legacyPayload(testArena.arena);
-    ASSERT_TRUE(ConvertFrameGraphPayloadV8ToLegacy(
+    ASSERT_TRUE(ConvertFrameGraphPayloadV9ToLegacy(
         currentPayload,
         Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion,
         legacyPayload

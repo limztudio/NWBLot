@@ -320,7 +320,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
         .setInitialState(Core::ResourceStates::ShaderResource)
         .setKeepInitialState(true)
         // Material surface hooks can run in the optional AsyncCompute trace/GI packets as well as Graphics.
-        // The fixture is immutable after its Graphics upload, so concurrent sharing avoids a permanent ownership handoff for this common sampled input.
+        // The fixture is immutable after setup readiness, so concurrent sharing avoids a permanent ownership handoff for this common sampled input.
         .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
         .setName(Name(MaterialResourceFixture::s_CheckerRgba8))
     ;

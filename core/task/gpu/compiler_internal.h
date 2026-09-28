@@ -151,13 +151,8 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] bool IsValidQueueTopology(const GpuTaskGraphQueueTopology& topology)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindBestCompatibleQueue(
-    const GpuTaskGraphQueueTopology& topology,
-    GpuQueueCapability::Mask requiredCapabilities,
-    CommandQueue::Enum requiredClass = CommandQueue::kCount
-)noexcept;
+[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuTaskGraphQueueTopology& topology)noexcept;
 
-[[nodiscard]] bool RequiresGraphics(GpuQueueCapability::Mask requiredCapabilities)noexcept;
 [[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept;
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
@@ -360,7 +355,7 @@ struct GpuTaskQueuePlacementGroup{
     const u64 frameIndex
 )noexcept;
 
-[[nodiscard]] bool IsBetterAnyQueueAssignmentCandidate(
+[[nodiscard]] bool IsBetterAutomaticQueueAssignmentCandidate(
     const GpuQueueAssignmentScore& candidateScore,
     const GpuPhysicalQueueInfo& candidate,
     const GpuQueueAssignmentScore& currentScore,

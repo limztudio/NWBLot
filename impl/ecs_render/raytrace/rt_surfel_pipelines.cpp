@@ -404,7 +404,7 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
         cbDesc
             .setByteSize(sizeof(NwbSurfelConstantsGpu))
             .setIsConstantBuffer(true)
-            // Graphics upload and async consume share this selector.
+            // The upload and asynchronous consumers share this selector.
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
             .setDebugName(Name("surfel_constants"))
             .enableAutomaticStateTracking(Core::ResourceStates::Common)

@@ -169,22 +169,10 @@ usize GraphTimingKeyHasher::operator()(const GraphTimingKey& key)const noexcept{
     switch(reason){
     case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
         return "requiredGraphics";
-    case Telemetry::FrameGraphQueueAssignmentReason::PreferredQueue:
-        return "preferredQueue";
-    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedCompute:
-        return "dedicatedCompute";
-    case Telemetry::FrameGraphQueueAssignmentReason::DedicatedTransfer:
-        return "dedicatedTransfer";
-    case Telemetry::FrameGraphQueueAssignmentReason::Fallback:
-        return "fallback";
-    case Telemetry::FrameGraphQueueAssignmentReason::ConservativeAny:
-        return "conservativeAny";
-    case Telemetry::FrameGraphQueueAssignmentReason::SameClassRouting:
-        return "sameClassRouting";
-    case Telemetry::FrameGraphQueueAssignmentReason::CompilerOverride:
-        return "compilerOverride";
-    case Telemetry::FrameGraphQueueAssignmentReason::ScoredAny:
-        return "scoredAny";
+    case Telemetry::FrameGraphQueueAssignmentReason::Conservative:
+        return "conservative";
+    case Telemetry::FrameGraphQueueAssignmentReason::Scored:
+        return "scored";
     case Telemetry::FrameGraphQueueAssignmentReason::Unknown:
     default:
         return ::__hidden_telemetry_report::s_UnknownReportField.data();
@@ -285,9 +273,8 @@ void AppendFrameGraphQueueAssignmentDot(
     StringAppendFormat(out, ", queue_dedicated={}", assignment.dedicated ? "true" : "false");
     StringAppendFormat(
         out,
-        ", queue_score_preference={}, queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "
+        ", queue_score_overlap={}, queue_score_queue_load={}, queue_score_incoming_crossings={}, "
         "queue_score_outgoing_crossings={}, queue_score_ownership_transfers={}, queue_score_total={}",
-        assignment.score.preference,
         assignment.score.overlap,
         assignment.score.queueLoad,
         assignment.score.incomingCrossings,

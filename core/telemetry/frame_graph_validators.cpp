@@ -25,8 +25,7 @@ namespace __hidden_frame_graph_validators{
 
 
 [[nodiscard]] static i32 QueueAssignmentScoreTotal(const FrameGraphQueueAssignmentScore& score)noexcept{
-    const i64 total = static_cast<i64>(score.preference)
-        + static_cast<i64>(score.overlap)
+    const i64 total = static_cast<i64>(score.overlap)
         - static_cast<i64>(score.queueLoad)
         - static_cast<i64>(score.incomingCrossings)
         - static_cast<i64>(score.outgoingCrossings)
@@ -91,14 +90,8 @@ bool IsValidFrameGraphQueueClass(const FrameGraphQueueClass::Enum queueClass)noe
 bool IsValidFrameGraphQueueAssignmentReason(const FrameGraphQueueAssignmentReason::Enum reason)noexcept{
     switch(reason){
     case FrameGraphQueueAssignmentReason::RequiredGraphics:
-    case FrameGraphQueueAssignmentReason::PreferredQueue:
-    case FrameGraphQueueAssignmentReason::DedicatedCompute:
-    case FrameGraphQueueAssignmentReason::DedicatedTransfer:
-    case FrameGraphQueueAssignmentReason::Fallback:
-    case FrameGraphQueueAssignmentReason::ConservativeAny:
-    case FrameGraphQueueAssignmentReason::SameClassRouting:
-    case FrameGraphQueueAssignmentReason::CompilerOverride:
-    case FrameGraphQueueAssignmentReason::ScoredAny:
+    case FrameGraphQueueAssignmentReason::Conservative:
+    case FrameGraphQueueAssignmentReason::Scored:
         return true;
     default:
         return false;

@@ -295,7 +295,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
         testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original
     ));
-    Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 header;
     NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
     ASSERT_EQ(header.queueAssignmentCount, 0u);
     ASSERT_EQ(header.compiledTaskCount, 0u);

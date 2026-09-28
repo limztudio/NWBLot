@@ -36,11 +36,13 @@ public:
     struct BufferSetupDesc{
         BufferDesc bufferDesc;
         const void* data = nullptr;
+        // Upload sizes and destination offsets must be four-byte aligned.
         usize dataSize = 0;
         u64 destOffsetBytes = 0;
-        // kCount = automatic route (Transfer > Compute > Graphics); concrete queue preserves caller preference.
-        // 4-byte aligned offsets/sizes. Written after submit + readiness bridges; async callers retain storage.
+        // Written after producer submission and consumer readiness bridges; asynchronous callers retain token storage.
         QueueSubmissionToken* acceptedToken = nullptr;
+        // Direct native consumer timeline; kCount resolves from payload size, final state, and available queues.
+        // The scheduler independently places the producer and submits readiness bridges for consumers.
         CommandQueue::Enum queue = CommandQueue::kCount;
     };
 
@@ -54,8 +56,8 @@ public:
         QueueSubmissionToken* acceptedToken = nullptr;
         u32 arraySlice = 0;
         u32 mipLevel = 0;
-        // See BufferSetupDesc::queue. A non-retained Unknown initial state publishes CopyDest; a retained upload
-        // requires a concrete initial state and is rejected otherwise.
+        // See BufferSetupDesc::queue for the native consumer readiness contract.
+        // A non-retained Unknown initial state publishes CopyDest; a retained upload requires a concrete initial state.
         CommandQueue::Enum queue = CommandQueue::kCount;
         // Automatic preserves the legacy one-plane behavior for color, depth-only, and stencil-only formats.
         // D24S8/D32S8 require the caller to select one concrete aspect because Vulkan copies their depth and
@@ -86,6 +88,7 @@ public:
         ResourceStates::Mask finalState = ResourceStates::Unknown;
         ResourceStates::Mask physicalInitialState = ResourceStates::Unknown;
         QueueSubmissionToken* acceptedToken = nullptr;
+        // See BufferSetupDesc::queue; the resolved native consumer must be admitted by the destination sharing contract.
         CommandQueue::Enum queue = CommandQueue::kCount;
         bool hasPhysicalInitialState = false;
     };
@@ -99,7 +102,7 @@ public:
         Name indexBufferName;
         u32 vertexStride = 0;
         bool use32BitIndices = true;
-        // Forwarded to the constituent buffer setups. kCount enables the automatic upload transport policy.
+        // Forwarded to the constituent buffer setups' native consumer readiness contracts.
         CommandQueue::Enum queue = CommandQueue::kCount;
     };
 

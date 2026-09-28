@@ -27,7 +27,8 @@ namespace __hidden_task_graph_optical_scene_upload{
 
 
 struct OpticalUploadTask{
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer };
+    // Accepted optical residency belongs to the primary Graphics writer timeline.
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Transfer, true };
 
     struct Payload{
         Core::BufferHandle destination;

@@ -91,8 +91,7 @@ usize GpuTaskTimingHistoryDetail::AssignmentHash::operator()(const GpuTaskTiming
 
 
 i32 GpuQueueAssignmentScore::total()const noexcept{
-    const i64 score = static_cast<i64>(preference)
-        + static_cast<i64>(overlap)
+    const i64 score = static_cast<i64>(overlap)
         - static_cast<i64>(queueLoad)
         - static_cast<i64>(incomingCrossings)
         - static_cast<i64>(outgoingCrossings)

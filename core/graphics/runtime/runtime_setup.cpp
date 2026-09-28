@@ -342,19 +342,19 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
     if(!desc.data || desc.dataSize == 0)
         return device.createBuffer(desc.bufferDesc);
 
-    const CommandQueue::Enum uploadQueue = GraphicsModuleDetail::ResolveSetupUploadQueue(
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(
         device,
         desc.queue,
         desc.dataSize,
         desc.bufferDesc.initialState != ResourceStates::Unknown
     );
     const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.dataSize)
+        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.dataSize)
     ;
     BufferDesc uploadDesc = desc.bufferDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadQueueSharing(
+    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(
         uploadDesc.queueSharing,
-        uploadQueue,
+        consumerQueue,
         sameClassRouting.crossesQueueFamily
     );
     BufferHandle buffer = device.createBuffer(uploadDesc);
@@ -370,13 +370,13 @@ BufferHandle GraphicsRuntime::setupBuffer(const BufferSetupDesc& desc)const{
         .uploadDesc = uploadDesc,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
-        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
-        uploadQueue,
+        consumerQueue,
         &submissionData,
         &__hidden_graphics_setup::DeclareBufferSetupUpload,
         uploadToken,
@@ -412,21 +412,21 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
-    const bool requiresGraphicsQueue = formatInfo.hasDepth || formatInfo.hasStencil;
-    const CommandQueue::Enum uploadQueue = GraphicsModuleDetail::ResolveSetupUploadQueue(
+    const bool requiresGraphicsConsumerQueue = formatInfo.hasDepth || formatInfo.hasStencil;
+    const CommandQueue::Enum consumerQueue = GraphicsModuleDetail::ResolveSetupUploadConsumerQueue(
         device,
         desc.queue,
         desc.uploadDataSize,
         desc.textureDesc.initialState != ResourceStates::Unknown,
-        requiresGraphicsQueue
+        requiresGraphicsConsumerQueue
     );
     const GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, uploadQueue, desc.uploadDataSize)
+        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, desc.uploadDataSize)
     ;
     TextureDesc uploadDesc = desc.textureDesc;
-    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadQueueSharing(
+    uploadDesc.queueSharing = GraphicsModuleDetail::ResolveSetupUploadConsumerSharing(
         uploadDesc.queueSharing,
-        uploadQueue,
+        consumerQueue,
         sameClassRouting.crossesQueueFamily
     );
     TextureHandle texture = device.createTexture(uploadDesc);
@@ -442,13 +442,13 @@ TextureHandle GraphicsRuntime::setupTexture(const TextureSetupDesc& desc)const{
         .uploadDesc = uploadDesc,
         .sameClassRouting = sameClassRouting,
         .uploadToken = uploadToken,
-        .directConsumerQueue = device.getPrimaryPhysicalQueue(uploadQueue),
+        .directConsumerQueue = device.getPrimaryPhysicalQueue(consumerQueue),
     };
     const bool submitted = GraphicsModuleDetail::SubmitGraphOwnedSetupUpload(
         *this,
         m_allocator.getObjectArena(),
         uploadDesc.queueSharing,
-        uploadQueue,
+        consumerQueue,
         &submissionData,
         &__hidden_graphics_setup::DeclareTextureSetupUpload,
         uploadToken,

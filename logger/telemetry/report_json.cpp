@@ -101,9 +101,8 @@ void AppendFrameGraphQueueAssignmentJson(
     StringAppendFormat(out, ", \"dedicated\": {}", assignment.dedicated ? "true" : "false");
     StringAppendFormat(
         out,
-        ", \"score\": {{\"preference\": {}, \"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
+        ", \"score\": {{\"overlap\": {}, \"queueLoad\": {}, \"incomingCrossings\": {}, "
         "\"outgoingCrossings\": {}, \"ownershipTransfers\": {}, \"total\": {}}}}}",
-        assignment.score.preference,
         assignment.score.overlap,
         assignment.score.queueLoad,
         assignment.score.incomingCrossings,

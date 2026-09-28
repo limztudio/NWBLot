@@ -250,27 +250,41 @@ DowngradeFrameGraphPhysicalQueueRuntimeStatisticsV6(
     };
 }
 
-bool ConvertFrameGraphPayloadV8ToLegacy(
+bool ConvertFrameGraphPayloadV9ToLegacy(
     const Telemetry::TelemetryBytes& source,
     const u16 legacyVersion,
-    Telemetry::TelemetryBytes& outPayload
-){
+    Telemetry::TelemetryBytes& outPayload){
     if(
-        source.size() < sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        source.size() < sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
         || (
-            legacyVersion != Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
+            legacyVersion != Telemetry::s_FrameGraphQueueAssignmentPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphCompiledTaskPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
             && legacyVersion != Telemetry::s_FrameGraphPhysicalQueueRuntimeStatisticsPayloadVersion
             && legacyVersion != Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion
             && legacyVersion != Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion
+            && legacyVersion != Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
         )
     )
         return false;
 
-    Telemetry::EncodedFrameGraphPayloadHeaderV8 sourceHeader;
+    Telemetry::EncodedFrameGraphPayloadHeaderV9 sourceHeader;
     NWB_MEMCPY(&sourceHeader, sizeof(sourceHeader), source.data(), sizeof(sourceHeader));
     if(
-        sourceHeader.version != Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion
+        sourceHeader.version != Telemetry::s_FrameGraphAutomaticQueueAssignmentPayloadVersion
         || sourceHeader.packetSubmissionStatisticsCount != 0u
+        || (
+            legacyVersion < Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
+            && (
+                sourceHeader.runtimeStatisticsCount != 0u
+                || sourceHeader.physicalQueueRuntimeStatisticsCount != 0u
+                || sourceHeader.packetSubmissionStatisticsPresent != 0u
+            )
+        )
+        || (
+            legacyVersion == Telemetry::s_FrameGraphQueueAssignmentPayloadVersion
+            && sourceHeader.compiledTaskCount != 0u
+        )
         || (
             legacyVersion == Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion
             && sourceHeader.physicalQueueRuntimeStatisticsCount != 0u
@@ -278,29 +292,25 @@ bool ConvertFrameGraphPayloadV8ToLegacy(
     )
         return false;
 
-    usize runtimeStatisticsOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8);
+    usize queueAssignmentOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9);
     if(
-        !AddBinaryRepeatedReserveBytes(
-            runtimeStatisticsOffset,
-            sourceHeader.nodeCount,
-            sizeof(Telemetry::EncodedFrameGraphNode)
-        )
-        || !AddBinaryRepeatedReserveBytes(
-            runtimeStatisticsOffset,
-            sourceHeader.edgeCount,
-            sizeof(Telemetry::EncodedFrameGraphEdge)
-        )
-        || !AddBinaryRepeatedReserveBytes(
-            runtimeStatisticsOffset,
-            sourceHeader.queueAssignmentCount,
-            sizeof(Telemetry::EncodedFrameGraphQueueAssignment)
-        )
-        || !AddBinaryRepeatedReserveBytes(
-            runtimeStatisticsOffset,
-            sourceHeader.compiledTaskCount,
-            sizeof(Telemetry::EncodedFrameGraphCompiledTask)
-        )
+        !AddBinaryRepeatedReserveBytes(queueAssignmentOffset, sourceHeader.nodeCount, sizeof(Telemetry::EncodedFrameGraphNode))
+        || !AddBinaryRepeatedReserveBytes(queueAssignmentOffset, sourceHeader.edgeCount, sizeof(Telemetry::EncodedFrameGraphEdge))
     )
+        return false;
+    usize compiledTaskOffset = queueAssignmentOffset;
+    if(!AddBinaryRepeatedReserveBytes(
+        compiledTaskOffset,
+        sourceHeader.queueAssignmentCount,
+        sizeof(Telemetry::EncodedFrameGraphQueueAssignment)
+    ))
+        return false;
+    usize runtimeStatisticsOffset = compiledTaskOffset;
+    if(!AddBinaryRepeatedReserveBytes(
+        runtimeStatisticsOffset,
+        sourceHeader.compiledTaskCount,
+        sizeof(Telemetry::EncodedFrameGraphCompiledTask)
+    ))
         return false;
 
     usize physicalQueueRuntimeStatisticsOffset = runtimeStatisticsOffset;
@@ -325,8 +335,27 @@ bool ConvertFrameGraphPayloadV8ToLegacy(
         return false;
 
     outPayload.clear();
-    outPayload.reserve(source.size());
-    if(legacyVersion == Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion){
+    outPayload.reserve(source.size() + sourceHeader.queueAssignmentCount * sizeof(i32));
+    if(legacyVersion == Telemetry::s_FrameGraphQueueAssignmentPayloadVersion){
+        Telemetry::EncodedFrameGraphPayloadHeaderV2 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        AppendPOD(outPayload, header);
+    }
+    else if(legacyVersion == Telemetry::s_FrameGraphCompiledTaskPayloadVersion){
+        Telemetry::EncodedFrameGraphPayloadHeaderV3 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        AppendPOD(outPayload, header);
+    }
+    else if(legacyVersion == Telemetry::s_FrameGraphRuntimeStatisticsPayloadVersion){
         Telemetry::EncodedFrameGraphPayloadHeaderV4 header;
         header.frameIndex = sourceHeader.frameIndex;
         header.nodeCount = sourceHeader.nodeCount;
@@ -361,7 +390,7 @@ bool ConvertFrameGraphPayloadV8ToLegacy(
         header.physicalQueueRuntimeStatisticsCount = sourceHeader.physicalQueueRuntimeStatisticsCount;
         AppendPOD(outPayload, header);
     }
-    else{
+    else if(legacyVersion == Telemetry::s_FrameGraphPacketSubmissionStatisticsPayloadVersion){
         Telemetry::EncodedFrameGraphPayloadHeaderV7 header;
         header.frameIndex = sourceHeader.frameIndex;
         header.nodeCount = sourceHeader.nodeCount;
@@ -374,10 +403,55 @@ bool ConvertFrameGraphPayloadV8ToLegacy(
         header.packetSubmissionStatisticsCount = 0u;
         AppendPOD(outPayload, header);
     }
+    else{
+        Telemetry::EncodedFrameGraphPayloadHeaderV8 header;
+        header.frameIndex = sourceHeader.frameIndex;
+        header.nodeCount = sourceHeader.nodeCount;
+        header.edgeCount = sourceHeader.edgeCount;
+        header.stringTableBytes = sourceHeader.stringTableBytes;
+        header.queueAssignmentCount = sourceHeader.queueAssignmentCount;
+        header.compiledTaskCount = sourceHeader.compiledTaskCount;
+        header.runtimeStatisticsCount = sourceHeader.runtimeStatisticsCount;
+        header.physicalQueueRuntimeStatisticsCount = sourceHeader.physicalQueueRuntimeStatisticsCount;
+        header.packetSubmissionStatisticsPresent = sourceHeader.packetSubmissionStatisticsPresent;
+        AppendPOD(outPayload, header);
+    }
     BinaryDetail::AppendBytesNoReserveUnchecked(
         outPayload,
-        source.data() + sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8),
-        runtimeStatisticsOffset - sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV8)
+        source.data() + sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9),
+        queueAssignmentOffset - sizeof(Telemetry::EncodedFrameGraphPayloadHeaderV9)
+    );
+
+    for(u32 assignmentIndex = 0u; assignmentIndex < sourceHeader.queueAssignmentCount; ++assignmentIndex){
+        Telemetry::EncodedFrameGraphQueueAssignment assignment;
+        const usize assignmentOffset = queueAssignmentOffset + assignmentIndex * sizeof(assignment);
+        NWB_MEMCPY(&assignment, sizeof(assignment), source.data() + assignmentOffset, sizeof(assignment));
+        switch(static_cast<Telemetry::FrameGraphQueueAssignmentReason::Enum>(assignment.reason)){
+        case Telemetry::FrameGraphQueueAssignmentReason::RequiredGraphics:
+            assignment.reason = 1u;
+            break;
+        case Telemetry::FrameGraphQueueAssignmentReason::Conservative:
+            assignment.reason = 6u;
+            break;
+        case Telemetry::FrameGraphQueueAssignmentReason::Scored:
+            assignment.reason = 9u;
+            break;
+        default:
+            return false;
+        }
+        const usize scoreOffset = offsetof(Telemetry::EncodedFrameGraphQueueAssignment, scoreOverlap);
+        BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, &assignment, scoreOffset);
+        AppendPOD(outPayload, i32(0));
+        BinaryDetail::AppendBytesNoReserveUnchecked(
+            outPayload,
+            reinterpret_cast<const u8*>(&assignment) + scoreOffset,
+            sizeof(assignment) - scoreOffset
+        );
+    }
+    BinaryDetail::AppendBytesNoReserveUnchecked(
+        outPayload,
+        source.data() + compiledTaskOffset,
+        runtimeStatisticsOffset - compiledTaskOffset
     );
 
     for(u32 statisticsIndex = 0u; statisticsIndex < sourceHeader.runtimeStatisticsCount; ++statisticsIndex){
@@ -394,7 +468,9 @@ bool ConvertFrameGraphPayloadV8ToLegacy(
         const Telemetry::EncodedFrameGraphRuntimeStatisticsV6 legacyStatistics =
             DowngradeFrameGraphRuntimeStatisticsV8(statistics)
         ;
-        if(legacyVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion)
+        if(legacyVersion == Telemetry::s_FrameGraphResourceVersionStatisticsPayloadVersion)
+            AppendPOD(outPayload, statistics);
+        else if(legacyVersion >= Telemetry::s_FrameGraphRecoverySubmissionCountPayloadVersion)
             AppendPOD(outPayload, legacyStatistics);
         else
             AppendPOD(outPayload, DowngradeFrameGraphRuntimeStatisticsV6(legacyStatistics));

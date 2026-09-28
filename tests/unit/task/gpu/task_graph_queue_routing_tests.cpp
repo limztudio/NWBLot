@@ -96,7 +96,7 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
         GraphicsQueue(),
         secondaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -200,7 +200,7 @@ TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){
         GraphicsQueue(),
         secondaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -279,7 +279,7 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
         secondAuxiliary,
         thirdAuxiliary,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -333,7 +333,7 @@ TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
             secondAuxiliary,
             thirdAuxiliary,
         };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
         };
@@ -428,7 +428,7 @@ TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -519,7 +519,7 @@ TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -604,7 +604,7 @@ TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOr
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -669,7 +669,7 @@ TEST(GpuTaskGraph, RetainsSameFamilyRoutingWithoutCrossFamilyOptIn){
         GraphicsQueue(),
         secondaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -747,7 +747,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
         GraphicsQueue(),
         secondaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -879,7 +879,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -975,7 +975,7 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_TRUE(consumer.valid());
 
         const Graphics::GpuPhysicalQueueInfo queues[] = { primaryQueue, auxiliaryQueue };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
         };
@@ -1059,7 +1059,7 @@ TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };

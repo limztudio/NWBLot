@@ -22,80 +22,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_gpu_packet_runtime_submission{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Ordinary external completions may originate on any current-device queue. A completion paired with an imported ownership acquire is narrower: it must prove the exact physical source queue that released the resource, or the consumer could wait an unrelated timeline and race the Vulkan acquire.
-[[nodiscard]] bool ValidateInitialOwnershipCompletion(
-    const GpuTaskGraph::DeclarationReadView& declarationAccess,
-    const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packetID,
-    const GpuExternalCompletionId& completion,
-    const QueueSubmissionToken& token){
-    const GpuCompiledPacketView packetView = planAccess.packet(packetID);
-    if(!packetView.valid())
-        return false;
-    const GpuSubmissionPacket& packet = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
-
-    for(u32 taskIndex = 0u; taskIndex < packet.taskCount; ++taskIndex){
-        const GpuCompiledTaskView compiledTaskView = planAccess.findTask(tasks[taskIndex]);
-        if(!compiledTaskView.valid())
-            return false;
-        const GpuCompiledTask& compiledTask = *compiledTaskView.plan;
-        const GpuCompiledBarrier* const barriers = compiledTaskView.prologueBarriers;
-        for(u32 barrierIndex = 0u; barrierIndex < compiledTask.prologueBarrierCount; ++barrierIndex){
-            const GpuCompiledBarrier& barrier = barriers[barrierIndex];
-            if(!barrier.isInitialOwnerHandoff)
-                continue;
-            if(
-                barrier.type != GpuCompiledBarrierType::TextureOwnershipAcquire
-                && barrier.type != GpuCompiledBarrierType::BufferOwnershipAcquire
-                && barrier.type != GpuCompiledBarrierType::AccelStructOwnershipAcquire
-            )
-                return false;
-
-            const GpuTaskGraphResourceView resource = declarationAccess.resourceAt(barrier.resource.index);
-            const GpuTaskGraphInitialOwnerHandoffSourceView* const source = GpuPacketRuntimeDetail::FindInitialOwnerHandoffSource(resource, barrier);
-            if(!source)
-                return false;
-            if(source->completion != completion)
-                continue;
-            const GpuPhysicalQueueInfo* const sourceQueue = planAccess.queueInfo(barrier.sourceQueue);
-            if(
-                !sourceQueue
-                || source->sourceQueue != barrier.sourceQueue
-                || source->destinationQueue != barrier.destinationQueue
-                || !source->minimumCompletionToken.valid()
-                || !source->minimumCompletionToken.matchesPhysicalQueue(
-                    barrier.sourceQueue.index,
-                    barrier.sourceQueue.deviceGeneration
-                )
-                || token.value < source->minimumCompletionToken.value
-                || !source->stateSource
-                || !source->stateSource->validForDeviceGeneration(planAccess.deviceGeneration())
-                || token.queue != sourceQueue->queueClass
-                || !token.matchesPhysicalQueue(barrier.sourceQueue.index, barrier.sourceQueue.deviceGeneration)
-            )
-                return false;
-        }
-    }
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GpuTaskScheduler::PreparedTimingTicketsUnwindScope final : NoCopy{
 private:
     enum class Mode : u8{
@@ -206,8 +132,7 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     const usize timingTicketCount,
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
-    const usize taskAcceptedCallbackCount
-)const{
+    const usize taskAcceptedCallbackCount)const{
     if(
         !planAccess.validFor(compiledGraph)
         || !artifactAccess.validFor(recordedGraph)
@@ -321,20 +246,16 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
             .index = token->physicalQueueIndex,
             .deviceGeneration = token->deviceGeneration,
         });
-        if(
-            !externalQueue
-            || externalQueue->queueClass != token->queue
-            || !__hidden_gpu_packet_runtime_submission::ValidateInitialOwnershipCompletion(
-                declarationAccess,
-                planAccess,
-                packetID,
-                completion,
-                *token
-            )
-        )
+        if(!externalQueue || externalQueue->queueClass != token->queue)
             return false;
         waitTokens.push_back(*token);
     }
+
+    if(
+        packet.externalDependencyCount != 0u
+        && !GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarationAccess, planAccess, packetID)
+    )
+        return false;
 
     if(
         packet.joinsAcceptedQueueFrontier
@@ -377,30 +298,13 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
 
     GpuGraphSubmissionTransaction::NativeSubmissionInfo nativeSubmissionInfo;
     nativeSubmissionInfo.commandListCount = recordedPacket->commandListCount;
-    nativeSubmissionInfo.plannedWaitTokenCount = waitTokens.size();
-    for(usize waitIndex = 0u; waitIndex < waitTokens.size(); ++waitIndex){
-        const QueueSubmissionToken& waitToken = waitTokens[waitIndex];
-        if(waitToken.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)){
-            ++nativeSubmissionInfo.sameQueueWaitElisionCount;
-            continue;
-        }
-
-        bool merged = false;
-        for(usize priorWaitIndex = 0u; priorWaitIndex < waitIndex; ++priorWaitIndex){
-            const QueueSubmissionToken& priorWaitToken = waitTokens[priorWaitIndex];
-            if(
-                waitToken.physicalQueueIndex == priorWaitToken.physicalQueueIndex
-                && waitToken.deviceGeneration == priorWaitToken.deviceGeneration
-            ){
-                merged = true;
-                break;
-            }
-        }
-        if(merged)
-            ++nativeSubmissionInfo.mergedTimelineWaitCount;
-        else
-            ++nativeSubmissionInfo.timelineWaitCount;
-    }
+    const GpuPacketRuntimeDetail::PacketWaitStatistics waitStatistics = GpuPacketRuntimeDetail::CountPacketWaitStatistics(
+        packet.queue, waitTokens.data(), waitTokens.size(), scratchArena
+    );
+    nativeSubmissionInfo.plannedWaitTokenCount = waitStatistics.plannedWaitTokenCount;
+    nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
+    nativeSubmissionInfo.timelineWaitCount = waitStatistics.timelineWaitCount;
+    nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
     GpuTaskGraph::PacketSubmissionLease submissionLease;

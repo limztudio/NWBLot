@@ -97,6 +97,7 @@
 12. `Core::GpuTaskScheduler` belongs to `core/task/gpu/scheduler.h` and coordinates GPU graph recording, submission, and recovery. `GraphicsRuntime` remains the broader device/resource/presentation owner; graph compilation and command recording retain their distinct types.
 13. GPU task implementations supply command capabilities through `GpuTaskCommandRequirements`; the compiler chooses the physical queue from capabilities, resource ownership, sharing, and scheduling cost. External ownership handoffs use `GpuGraphInitialOwnerHandoffSourceDesc` arrays, including one whole-allocation source for acceleration structures. Executed external dependencies require their authoritative native token in the graph declaration before submission.
 14. Frame-graph telemetry accepts only `s_FrameGraphPayloadVersion` (currently 9), and command capture accepts only `s_GpuCommandIrStreamVersion` (currently 3). Keep one current wire layout without old-version conversion paths or compatibility aliases. Command capture stores its byte stream and record boundaries; inspection uses the stream reader.
+15. GPU queue balancing uses the already assigned prefix of task costs; graph scoring uses the complete current assignment. Keep those caches separate. Resource-version lifetime queries use only the frozen semantic graph and imported-root lifetime edges; produced-version lifetime edges must not feed back into that graph and invent ordering intent. Compiled task indices and packet task IDs share execution order, independent of declaration order.
 
 ## Project Bootstrap Invariants
 

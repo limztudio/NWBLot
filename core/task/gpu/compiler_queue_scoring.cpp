@@ -22,6 +22,7 @@ namespace GpuTaskGraphCompilerDetail{
 
 GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena& scratchArena)
     : m_words(scratchArena)
+    , m_topologicalRanks(scratchArena)
 {}
 
 bool GpuTaskSchedulingReachability::reaches(
@@ -39,8 +40,11 @@ bool GpuTaskSchedulingReachability::reaches(
         || source.index >= m_taskCount
         || destination.index >= m_taskCount
         || source == destination
-        || m_words.empty()
     )
+        return false;
+    if(m_totalOrder)
+        return m_topologicalRanks[source.index] < m_topologicalRanks[destination.index];
+    if(m_words.empty())
         return false;
     const usize wordIndex = source.index * m_wordsPerRow + destination.index / s_BitsPerWord;
     const u64 mask = static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
@@ -63,6 +67,8 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
         || rhs.index >= m_taskCount
         || lhs == rhs
     )
+        return false;
+    if(m_totalOrder)
         return false;
     if(m_words.empty())
         return true;
@@ -91,7 +97,7 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
 
 
 const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueId& queueID
 )noexcept{
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
@@ -105,7 +111,7 @@ const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
 
 bool IsLegalQueueAssignmentCandidate(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept{
@@ -170,12 +176,16 @@ bool BuildGpuTaskSchedulingReachability(
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     outReachability.m_words.clear();
+    outReachability.m_topologicalRanks.clear();
+    outReachability.m_totalOrder = false;
     outReachability.m_graphGeneration = 0u;
     outReachability.m_taskCount = 0u;
     outReachability.m_wordsPerRow = 0u;
     outReachability.m_valid = false;
     const auto fail = [&outReachability](){
         outReachability.m_words.clear();
+        outReachability.m_topologicalRanks.clear();
+        outReachability.m_totalOrder = false;
         outReachability.m_graphGeneration = 0u;
         outReachability.m_taskCount = 0u;
         outReachability.m_wordsPerRow = 0u;
@@ -191,6 +201,34 @@ bool BuildGpuTaskSchedulingReachability(
     if(analysis.schedulingEdges().empty()){
         outReachability.m_graphGeneration = graph.generation();
         outReachability.m_taskCount = taskCount;
+        outReachability.m_valid = true;
+        return true;
+    }
+    bool totalOrder = taskCount > 1u && analysis.topologicalOrder().size() == taskCount;
+    for(usize orderIndex = 0u; orderIndex < taskCount && totalOrder; ++orderIndex){
+        const GpuTaskId source = analysis.topologicalOrder()[orderIndex];
+        if(!source.valid() || source.generation != graph.generation() || source.index >= taskCount)
+            return fail();
+        const bool finalTask = orderIndex + 1u == taskCount;
+        bool reachesNext = finalTask;
+        const GpuTaskGraphSchedulingTaskIndexView consumers = analysis.schedulingConsumers(source);
+        for(usize consumerOffset = 0u; consumerOffset < consumers.taskCount; ++consumerOffset){
+            const u32 consumerIndex = consumers[consumerOffset];
+            if(consumerIndex >= taskCount || consumerIndex == source.index)
+                return fail();
+            if(!finalTask && consumerIndex == analysis.topologicalOrder()[orderIndex + 1u].index)
+                reachesNext = true;
+        }
+        totalOrder = reachesNext;
+    }
+    if(totalOrder){
+        // Direct edges between adjacent topological tasks prove all pairs ordered, so overlap cannot exist.
+        outReachability.m_topologicalRanks.resize(taskCount);
+        for(usize orderIndex = 0u; orderIndex < taskCount; ++orderIndex)
+            outReachability.m_topologicalRanks[analysis.topologicalOrder()[orderIndex].index] = static_cast<u32>(orderIndex);
+        outReachability.m_graphGeneration = graph.generation();
+        outReachability.m_taskCount = taskCount;
+        outReachability.m_totalOrder = true;
         outReachability.m_valid = true;
         return true;
     }
@@ -331,7 +369,7 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
 
 void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GpuTaskGraphQueueTopology& topology){
+    const GpuPhysicalQueueTopology& topology){
     assignedQueueLoads.resize(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex)
         assignedQueueLoads[queueIndex] = { .queue = topology.queues[queueIndex].id, .estimatedCost = 0u };
@@ -384,7 +422,7 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
@@ -406,7 +444,12 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
         queueLoad -= ownCost;
 
     u64 overlap = 0u;
-    if(ignoredAssignmentCount <= 1u && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing){
+    if(
+        ignoredAssignmentCount <= 1u
+        && task.scheduling.overlapPreferred
+        && !task.scheduling.avoidQueueCrossing
+        && schedulingReachability.mayContainIndependentTasks()
+    ){
         u64 otherQueueCost = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
         if(ownAssignment && ownAssignment->queue != candidate.id)
             otherQueueCost -= ownCost;

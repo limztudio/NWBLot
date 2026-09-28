@@ -41,6 +41,7 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/packet_recording_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_recording_helpers.h"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_state_seed.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_submission.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_exception_closing.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_transaction_binding.cpp"

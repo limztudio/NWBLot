@@ -160,10 +160,10 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     const GpuTaskGraphDeclarationReadView& graph,
     const GpuCompiledGraph::ReadView& compiledGraph,
     const GpuSubmissionPacketId packet,
+    const GpuCompiledPacketView& packetView,
     const GpuPhysicalQueueInfo& queue,
     u32& inOutPreviousTaskOrder,
-    bool& inOutHasPreviousTask
-)noexcept{
+    bool& inOutHasPreviousTask)noexcept{
     if(record.packet != packet)
         return GpuCommandIrReplayError::RecordPacketMismatch;
     if(record.queue != queue.id)
@@ -180,21 +180,21 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     )
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 
-    const GpuCompiledPacketView packetView = compiledGraph.packet(packet);
     if(!packetView.valid() || packetView.plan->taskCount == 0u)
         return GpuCommandIrReplayError::CompiledTaskMismatch;
 
-    u32 taskOrder = Limit<u32>::s_Max;
-    for(u32 taskIndex = 0u; taskIndex < packetView.plan->taskCount; ++taskIndex){
-        if(packetView.tasks[taskIndex] == record.task){
-            taskOrder = taskIndex;
-            break;
+    const u32 searchBegin = inOutHasPreviousTask ? inOutPreviousTaskOrder : 0u;
+    u32 taskOrder = searchBegin;
+    while(taskOrder < packetView.plan->taskCount && packetView.tasks[taskOrder] != record.task)
+        ++taskOrder;
+    if(taskOrder == packetView.plan->taskCount){
+        // Only a rejected backward record needs the earlier prefix to preserve its specific diagnostic.
+        for(u32 taskIndex = 0u; taskIndex < searchBegin; ++taskIndex){
+            if(packetView.tasks[taskIndex] == record.task)
+                return GpuCommandIrReplayError::TaskOrderMismatch;
         }
-    }
-    if(taskOrder == Limit<u32>::s_Max)
         return GpuCommandIrReplayError::CompiledTaskMismatch;
-    if(inOutHasPreviousTask && taskOrder < inOutPreviousTaskOrder)
-        return GpuCommandIrReplayError::TaskOrderMismatch;
+    }
 
     inOutPreviousTaskOrder = taskOrder;
     inOutHasPreviousTask = true;
@@ -652,6 +652,7 @@ GpuCommandIrReplayResult PreflightGpuCommandIrPacket(
             graph,
             compiledGraph,
             packet,
+            packetView,
             *queue,
             previousTaskOrder,
             hasPreviousTask

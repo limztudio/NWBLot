@@ -416,7 +416,7 @@ TEST(GpuTaskGraph, PlansCompositeUavDependencies){
 TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExports){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -559,7 +559,7 @@ TEST(GpuTaskGraph, TracksFinalOverlappingIntraTaskTextureStateForConsumersAndExp
 TEST(GpuTaskGraph, PlansGraphInitialStateForUncoveredLaterTextureSubresourcesWithinTask){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -779,7 +779,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -881,7 +881,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         GraphicsQueue(),
         sameFamilyComputeQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+    const Graphics::GpuPhysicalQueueTopology sameFamilyTopology{
         .queues = sameFamilyQueues,
         .queueCount = LengthOf(sameFamilyQueues),
     };

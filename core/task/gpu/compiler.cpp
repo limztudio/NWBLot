@@ -67,7 +67,7 @@ struct InitialOwnershipCompletionRequirement{
 bool GpuTaskGraphCompiler::compile(
     const GpuTaskGraph::DeclarationReadView& graph,
     GpuTaskGraphAnalysis& outAnalysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
     GpuCompiledGraph& outCompiledGraph,
     Alloc::ScratchArena& scratchArena,

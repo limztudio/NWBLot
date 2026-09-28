@@ -358,7 +358,7 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
 
     const auto expectCompileRejected = [&](const Graphics::GpuTaskGraph& graph, const Graphics::GpuPhysicalQueueInfo& queue){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
             };
@@ -374,7 +374,7 @@ TEST(GpuTaskGraph, TextureClearDerivesCommandRequirementsFromItsBackendOperation
         const Graphics::CommandQueue::Enum expectedQueue
     ){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
             };
@@ -561,7 +561,7 @@ TEST(GpuTaskGraph, DepthTextureUploadsAndMultisampleCopiesPromoteExactQueueCapab
         const bool expected
     ){
         const Graphics::GpuPhysicalQueueInfo queues[] = { queue };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
             };

@@ -18,10 +18,6 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The graph consumes the Device's immutable physical registry. Keep the existing name as a source-compatible
-// graph-facing alias while making the queue metadata itself part of the RHI command contract.
-using GpuTaskGraphQueueTopology = GpuPhysicalQueueTopology;
-
 namespace GpuTaskCostHint{
     enum Enum : u8{
         Tiny,

@@ -552,7 +552,7 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame
         ),
         .dedicated = false,
     };
-    const NWB::Core::GpuTaskGraphQueueTopology topology{
+    const NWB::Core::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

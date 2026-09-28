@@ -108,14 +108,14 @@ struct GpuTaskQueueAssignment{
     GpuTaskQueueAssignmentModifier::Mask modifiers = GpuTaskQueueAssignmentModifier::None;
 };
 
-// Migration starts with explicitly requested compatible merges.
+// Explicit compatible merges are available under each packetization policy.
 // Frontier-safe packetization preserves those requests unless a task already in the preceding packet enables a consumer on another physical queue
 namespace GpuTaskGraphPacketizationPolicy{
     enum Enum : u8{
         ExplicitMerge,
         FrontierSafe,
         // Opt-in compiler scoring merges a cheap immediate same-queue successor only when the preceding packet has no cross-queue consumer frontier.
-        // Existing renderer paths retain ExplicitMerge until each packet boundary has its own acceptance/timing proof.
+        // Scored successors must share the preceding packet's nonempty merge domain.
         FrontierScored,
 
         kCount,

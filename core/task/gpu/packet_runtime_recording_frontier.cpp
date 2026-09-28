@@ -253,8 +253,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     GpuRecordedGraph& outRecordedGraph,
     CpuTaskScheduler& cpuScheduler,
     GpuSubmissionPacketId* const outFailedPacket,
-    GpuCommandIrCapture* const commandIrCapture
-)const{
+    GpuCommandIrCapture* const commandIrCapture)const{
     using RecordingEntry = __hidden_gpu_packet_runtime_recording_frontier::PacketRecordingFrontierEntry;
 
     if(outFailedPacket)
@@ -280,9 +279,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     Vector<u32, Alloc::ScratchArena> parallelPacketIndices(scratchArena);
     Vector<u8, Alloc::ScratchArena> parallelResults(scratchArena);
     Vector<GpuTaskGraph::PacketRecordingAbort, Alloc::ScratchArena> parallelAborts(scratchArena);
-    parallelPacketIndices.reserve(range.packetCount);
-    parallelResults.reserve(range.packetCount);
-    parallelAborts.reserve(range.packetCount);
+    usize parallelPacketCount = 0u;
+    const bool usesParallelRecording = !commandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= 2u;
     bool recordingFrontiersAreMonotonic = true;
     {
         GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
@@ -346,6 +344,13 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 .frontier = effectiveFrontier,
                 .allowsParallelRecording = allowsParallelRecording,
             });
+            if(allowsParallelRecording)
+                ++parallelPacketCount;
+        }
+        if(usesParallelRecording){
+            parallelPacketIndices.reserve(parallelPacketCount);
+            parallelResults.reserve(parallelPacketCount);
+            parallelAborts.reserve(parallelPacketCount);
         }
         if(!prepareRecordingAttempt(
             graph,
@@ -391,11 +396,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     };
 
     // Command-IR records form one linear graph-generation artifact. Keeping capture serial preserves its existing record order and rollback contract. This path records directly after the shared prepare step so the enclosing ready-frontier operation owns exactly one elapsed span rather than nesting compile-order telemetry.
-    if(
-        commandIrCapture
-        || !cpuScheduler.isParallelEnabled()
-        || range.packetCount < 2u
-    ){
+    if(!usesParallelRecording){
         if(!recordPreparedPacketRangeInCompileOrder(
             graph,
             compiledGraph,

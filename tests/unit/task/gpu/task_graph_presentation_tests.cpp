@@ -122,7 +122,7 @@ TEST(GpuTaskGraph, CompilesPresentationEndpointAfterTerminalFinalizer){
     ASSERT_TRUE(lateTail.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -245,7 +245,7 @@ TEST(GpuTaskGraph, AcceptsPresentationEndpointFromPresentAcquisitionState){
     }));
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -270,7 +270,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointContracts){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -605,7 +605,7 @@ TEST(GpuTaskGraph, RejectsInvalidPresentationEndpointTextureContracts){
     Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
     Graphics::GraphicsBackend::VulkanAllocator allocator(context);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -950,7 +950,7 @@ TEST(GpuTaskGraph, AutomaticallyCoLocatesPresentationEndpointUsersOnPrimaryGraph
         GraphicsQueue(),
         secondaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -1159,7 +1159,7 @@ TEST(GpuTaskGraph, RoutesGraphOwnedSetupUploadsThroughTerminalPresentationSpan){
         GraphicsQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };

@@ -140,7 +140,7 @@ void ExpectCompiledHandoff(RefitContext& context, const SoftwareSceneRefitGraphT
             Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
         ),
     };
-    const Core::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Core::GpuTaskGraphAnalysis analysis(context.testArena.arena);
     Core::GpuTaskGraphQueueAssignments assignments(context.testArena.arena);
     Core::GpuCompiledGraph compiled(context.testArena.arena);

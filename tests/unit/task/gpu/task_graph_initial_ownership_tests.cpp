@@ -37,7 +37,7 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -422,7 +422,7 @@ TEST(GpuTaskGraph, RejectsInvalidInitialOwnerStateSourceWithBoundCompletionToken
 
 TEST(GpuTaskGraph, CompilesWholeAccelStructInitialOwnerHandoffFromImmutableSnapshot){
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     const Graphics::QueueSubmissionToken completionToken{
         .value = 7u,
         .physicalQueueIndex = queues[0u].id.index,

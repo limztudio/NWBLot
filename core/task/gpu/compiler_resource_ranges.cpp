@@ -375,6 +375,32 @@ static void AppendResourceStateFragmentsInStateOrder(
     if(!history.validFor(trackedStates) || !history.validResource(resource.id))
         return false;
 
+    const usize newestStateIndex = history.last(resource.id);
+    if(
+        requestedRanges.size() == 1u
+        && newestStateIndex != Limit<usize>::s_Max
+        && RangeContains(resource, trackedStates[newestStateIndex].range, requestedRanges.front())
+    ){
+        ResourceRangeBounds requestedBounds;
+        ResourceRangeBounds stateBounds;
+        if(
+            !ResourceRangeBoundsFrom(resource.type, requestedRanges.front(), requestedBounds)
+            || !ResourceRangeBoundsFrom(resource.type, trackedStates[newestStateIndex].range, stateBounds)
+        )
+            return false;
+        GpuTaskResourceRange fragmentRange;
+        if(!ResourceRangeBoundsTo(resource.type, requestedBounds, fragmentRange))
+            return false;
+        outFragments.clear();
+        outFragments.reserve(1u);
+        outFragments.push_back(TrackedResourceStateFragment{
+            .range = fragmentRange,
+            .state = &trackedStates[newestStateIndex],
+            .stateIndex = newestStateIndex,
+        });
+        return true;
+    }
+
     Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> discovered(scratchArena);

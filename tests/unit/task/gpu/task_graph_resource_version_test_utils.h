@@ -184,7 +184,7 @@ struct VersionConsumerUses{
 [[nodiscard]] inline bool Assign(
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 ){
@@ -201,7 +201,7 @@ struct VersionConsumerUses{
     Graphics::GpuCompiledGraph& compiledGraph
 ){
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

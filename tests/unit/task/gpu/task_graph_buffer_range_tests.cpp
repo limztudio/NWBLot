@@ -106,7 +106,7 @@ TEST(GpuTaskGraphBufferRange, IndependentIntervalsKeepSeparateInitialStates){
     ASSERT_TRUE(tail.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -144,7 +144,7 @@ TEST(GpuTaskGraphBufferRange, WideConsumerCollectsOlderPrefixAndTailAfterPartial
     ASSERT_TRUE(reader.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -202,7 +202,7 @@ TEST(GpuTaskGraphBufferRange, SameTaskOverlappingDeclarationsSeedOnlyNewBytes){
     ASSERT_TRUE(reader.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -235,7 +235,7 @@ TEST(GpuTaskGraphBufferRange, ExportsEveryTerminalIntervalIncludingSymbolicTail)
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue(), DedicatedTransferQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     const Graphics::GpuGraphResourceId buffer = graph.importResource(
         Graphics::GpuGraphResourceDesc{}
             .setIdentity(Name("tests/buffer_range/export"))
@@ -297,7 +297,7 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
         graph,
         Name("tests/buffer_range/cross_queue"),
@@ -397,7 +397,7 @@ TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingByt
             continue;
         }
         const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
         ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));

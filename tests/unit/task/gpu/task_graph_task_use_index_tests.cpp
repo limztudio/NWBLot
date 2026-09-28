@@ -320,7 +320,7 @@ TEST(GpuTaskUseIndex, CompiledResourceSetExpansionPreservesEveryInitialByteRange
     const auto task = graph.addTask(desc, Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Graphics });
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
@@ -367,7 +367,7 @@ TEST(GpuTaskUseIndex, RepeatedAccelerationStructureUsesKeepOneInitialTransitionA
     const auto task = AddTask(graph, Name("tests/task_use/acceleration_task"), "Repeated Acceleration Task", nullptr, 0u, uses, LengthOf(uses));
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);

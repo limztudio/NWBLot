@@ -1070,8 +1070,7 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const GpuCompiledGraph::ReadView& planAccess,
     const Vector<u32, Alloc::ScratchArena>& packetIndices,
     Alloc::ScratchArena& scratchArena,
-    const ArtifactOperation& artifactAccess
-){
+    const ArtifactOperation& artifactAccess){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
     const bool artifactAccessValid = planAccess.validFor(compiledGraph)
         && artifactAccess.exclusiveFor(*this)
@@ -1081,6 +1080,8 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     NWB_FATAL_ASSERT_MSG(artifactAccessValid, "Packet overlap caching requires its exact valid artifact writer");
     if(!artifactAccessValid)
         TerminateInvariant();
+    if(packetIndices.size() < 2u)
+        return;
     ArtifactStorage& storage = *m_activeStorage;
 
     Vector<IntervalEntry, Alloc::ScratchArena> intervalEntries(scratchArena);

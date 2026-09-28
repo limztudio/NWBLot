@@ -225,7 +225,7 @@ bool GpuTaskScheduler::compileGraph(
     Alloc::ScratchArena& scratchArena,
     const GpuTaskGraphCompileOptions& compileOptions
 )const{
-    const GpuTaskGraphQueueTopology topology = device().getPhysicalQueueTopology();
+    const GpuPhysicalQueueTopology topology = device().getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u)
         return false;
 

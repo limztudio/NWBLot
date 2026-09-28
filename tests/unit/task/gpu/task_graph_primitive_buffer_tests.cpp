@@ -504,7 +504,7 @@ TEST(GpuTaskGraph, CopyBufferRegionsDeclareExactIntervalsAndReplayOnlyCoveredByt
     );
     ASSERT_TRUE(task.valid());
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testArena.arena);

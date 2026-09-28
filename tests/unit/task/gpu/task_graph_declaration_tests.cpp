@@ -161,7 +161,7 @@ TEST(GpuTaskGraph, RejectsReentrantTelemetryReadsDuringDeclarationMutationWithou
     ASSERT_TRUE(existingTask.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -380,7 +380,7 @@ TEST(GpuTaskGraph, DeclarationStorageMutationsInvalidateCompilerSnapshots){
     ).valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -548,7 +548,7 @@ TEST(GpuTaskGraph, FailedAndIdempotentDeclarationsPreserveCompilerSnapshots){
     ).valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -597,7 +597,7 @@ TEST(GpuTaskGraph, ExternalFinalResourceDeclarationInvalidatesPriorCompiledPlan)
     ).valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

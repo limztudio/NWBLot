@@ -62,7 +62,7 @@ const GpuTaskQueueAssignment* GpuTaskGraphQueueAssignments::find(const GpuTaskId
 bool GpuTaskGraphCompiler::assignQueues(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     GpuTaskGraphQueueAssignments& outAssignments,
     Alloc::ScratchArena& scratchArena,
     const GpuTaskGraphQueueAssignmentOptions& options
@@ -281,58 +281,77 @@ bool GpuTaskGraphCompiler::assignQueues(
     }
 
     // Optional physical balancing applies to independent singleton placements. It cannot separate an explicit merge chain.
+    bool needsSameClassBalancing = false;
     for(const GpuTaskQueuePlacementGroup& group : groups){
         if(group.assignmentCount != 1u || group.initialOwnershipQueue.valid() || group.diagnosticOverrideQueue.valid())
             continue;
-        const usize assignmentIndex = group.assignmentOffset;
-        GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[assignmentIndex];
-        const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
-        const GpuPhysicalQueueInfo* selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
-        NWB_ASSERT(selectedQueue);
+        const GpuTaskGraphTaskView task = graph.taskAt(outAssignments.m_assignments[group.assignmentOffset].task.index);
         if(task.scheduling.allowSameClassQueueRouting && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing){
-            const GpuPhysicalQueueInfo* const dependencyQueue = task.scheduling.preserveSameClassQueueWithDirectDependency
-                ? FindDirectDependencySameClassQueue(
-                    graph,
-                    analysis,
-                    task,
-                    outAssignments.m_assignments,
-                    outAssignments.m_assignmentIndicesByTask,
-                    topology,
-                    *selectedQueue,
-                    assignmentIndex,
-                    task.scheduling.allowCrossFamilySameClassQueueRouting
-                )
-                : nullptr
-            ;
-            if(dependencyQueue){
-                if(dependencyQueue->id != selectedQueue->id){
-                    selectedQueue = dependencyQueue;
-                    assignment.modifiers |= GpuTaskQueueAssignmentModifier::DirectDependencyAffinity;
+            needsSameClassBalancing = true;
+            break;
+        }
+    }
+    if(needsSameClassBalancing){
+        Vector<u64, Alloc::ScratchArena> prefixQueueCosts(topology.queueCount, 0u, scratchArena);
+        for(const GpuTaskQueuePlacementGroup& group : groups){
+            const usize assignmentIndex = group.assignmentOffset;
+            GpuTaskQueueAssignment& assignment = outAssignments.m_assignments[assignmentIndex];
+            const GpuPhysicalQueueInfo* selectedQueue = FindPhysicalQueueInfo(topology, assignment.queue);
+            NWB_ASSERT(selectedQueue);
+            if(group.assignmentCount == 1u && !group.initialOwnershipQueue.valid() && !group.diagnosticOverrideQueue.valid()){
+                const GpuTaskGraphTaskView task = graph.taskAt(assignment.task.index);
+                if(task.scheduling.allowSameClassQueueRouting && task.scheduling.overlapPreferred && !task.scheduling.avoidQueueCrossing){
+                    const GpuPhysicalQueueInfo* const dependencyQueue = task.scheduling.preserveSameClassQueueWithDirectDependency
+                        ? FindDirectDependencySameClassQueue(
+                            graph,
+                            analysis,
+                            task,
+                            outAssignments.m_assignments,
+                            outAssignments.m_assignmentIndicesByTask,
+                            topology,
+                            *selectedQueue,
+                            assignmentIndex,
+                            task.scheduling.allowCrossFamilySameClassQueueRouting
+                        )
+                        : nullptr
+                    ;
+                    if(dependencyQueue){
+                        if(dependencyQueue->id != selectedQueue->id){
+                            selectedQueue = dependencyQueue;
+                            assignment.modifiers |= GpuTaskQueueAssignmentModifier::DirectDependencyAffinity;
+                        }
+                    }
+                    else if(const GpuPhysicalQueueInfo* const leastLoadedQueue = FindLeastLoadedSameClassQueue(
+                        graph,
+                        prefixQueueCosts,
+                        scoringData,
+                        topology,
+                        task,
+                        *selectedQueue,
+                        task.scheduling.allowCrossFamilySameClassQueueRouting,
+                        task.scheduling.preferNonPrimarySameClassQueue
+                    )){
+                        if(leastLoadedQueue->id != selectedQueue->id){
+                            selectedQueue = leastLoadedQueue;
+                            assignment.modifiers |= GpuTaskQueueAssignmentModifier::SameClassLoadBalance;
+                            if(task.scheduling.preferNonPrimarySameClassQueue)
+                                assignment.modifiers |= GpuTaskQueueAssignmentModifier::NonPrimaryRouting;
+                        }
+                    }
                 }
+                assignment.queue = selectedQueue->id;
+                assignment.queueClass = selectedQueue->queueClass;
+                assignment.dedicated = selectedQueue->dedicated;
+                assignment.initialQueue = selectedQueue->id;
             }
-            else if(const GpuPhysicalQueueInfo* const leastLoadedQueue = FindLeastLoadedSameClassQueue(
-                graph,
-                outAssignments.m_assignments,
-                scoringData,
-                topology,
-                task,
-                *selectedQueue,
-                assignmentIndex,
-                task.scheduling.allowCrossFamilySameClassQueueRouting,
-                task.scheduling.preferNonPrimarySameClassQueue
-            )){
-                if(leastLoadedQueue->id != selectedQueue->id){
-                    selectedQueue = leastLoadedQueue;
-                    assignment.modifiers |= GpuTaskQueueAssignmentModifier::SameClassLoadBalance;
-                    if(task.scheduling.preferNonPrimarySameClassQueue)
-                        assignment.modifiers |= GpuTaskQueueAssignmentModifier::NonPrimaryRouting;
-                }
+            // Fixed and merged groups contribute the same prefix cost as routed singletons.
+            u64& prefixQueueCost = prefixQueueCosts[static_cast<usize>(selectedQueue - topology.queues)];
+            for(usize taskOffset = 0u; taskOffset < group.assignmentCount; ++taskOffset){
+                const GpuTaskId task = outAssignments.m_assignments[group.assignmentOffset + taskOffset].task;
+                const u64 cost = scoringData.taskCosts[task.index];
+                prefixQueueCost = prefixQueueCost > Limit<u64>::s_Max - cost ? Limit<u64>::s_Max : prefixQueueCost + cost;
             }
         }
-        assignment.queue = selectedQueue->id;
-        assignment.queueClass = selectedQueue->queueClass;
-        assignment.dedicated = selectedQueue->dedicated;
-        assignment.initialQueue = selectedQueue->id;
     }
 
     const bool hasUsableTimingFeedback = HasUsableTimingFeedback(options, topology.queues[0u].id.deviceGeneration);

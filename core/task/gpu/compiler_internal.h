@@ -32,7 +32,7 @@ public:
     [[nodiscard]] bool assignQueues(
         const GpuTaskGraph::DeclarationReadView& graph,
         const GpuTaskGraphAnalysis& analysis,
-        const GpuTaskGraphQueueTopology& topology,
+        const GpuPhysicalQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
         Alloc::ScratchArena& scratchArena,
         const GpuTaskGraphQueueAssignmentOptions& options = {}
@@ -43,7 +43,7 @@ public:
     [[nodiscard]] bool compile(
         const GpuTaskGraph::DeclarationReadView& graph,
         GpuTaskGraphAnalysis& outAnalysis,
-        const GpuTaskGraphQueueTopology& topology,
+        const GpuPhysicalQueueTopology& topology,
         GpuTaskGraphQueueAssignments& outAssignments,
         GpuCompiledGraph& outCompiledGraph,
         Alloc::ScratchArena& scratchArena,
@@ -95,7 +95,7 @@ struct PendingCompiledEpilogueBarrier{
 
 struct GpuTaskGraphResourceStatePlan{
     const GpuTaskGraph::DeclarationReadView& graph;
-    const GpuTaskGraphQueueTopology& topology;
+    const GpuPhysicalQueueTopology& topology;
     const GraphicsVector<GpuTaskId>& topologicalOrder;
     GpuTaskGraphCompiledPlanStorage& compiledPlan;
     Alloc::ScratchArena& scratchArena;
@@ -133,38 +133,38 @@ struct GpuTaskGraphResourceStatePlan{
 
 [[nodiscard]] bool ResourceSharingAdmitsQueue(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& queue
 )noexcept;
 
 [[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology
+    const GpuPhysicalQueueTopology& topology
 )noexcept;
 
 [[nodiscard]] bool ResourceSharesQueuePairConcurrently(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& sourceQueue,
     const GpuPhysicalQueueInfo& destinationQueue
 )noexcept;
 
-[[nodiscard]] bool IsValidQueueTopology(const GpuTaskGraphQueueTopology& topology)noexcept;
+[[nodiscard]] bool IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept;
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuTaskGraphQueueTopology& topology)noexcept;
+[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuPhysicalQueueTopology& topology)noexcept;
 
 [[nodiscard]] bool IsValidCommandRequirements(const GpuTaskCommandRequirements& commands)noexcept;
 [[nodiscard]] bool IsValidSchedulingHint(const GpuTaskSchedulingHint& hint)noexcept;
 [[nodiscard]] u64 QueueCostWeight(GpuTaskCostHint::Enum cost)noexcept;
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindPhysicalQueueInfo(
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueId& queue
 )noexcept;
 
 [[nodiscard]] bool IsLegalQueueAssignmentCandidate(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate
 )noexcept;
@@ -184,12 +184,15 @@ public:
 public:
     [[nodiscard]] bool reaches(const GpuTaskId& source, const GpuTaskId& destination)const noexcept;
     [[nodiscard]] bool transitivelyIndependent(const GpuTaskId& lhs, const GpuTaskId& rhs)const noexcept;
+    [[nodiscard]] bool mayContainIndependentTasks()const noexcept{ return !m_totalOrder; }
 
 private:
     Vector<u64, Alloc::ScratchArena> m_words;
+    Vector<u32, Alloc::ScratchArena> m_topologicalRanks;
     u64 m_graphGeneration = 0u;
     usize m_taskCount = 0u;
     usize m_wordsPerRow = 0u;
+    bool m_totalOrder = false;
     bool m_valid = false;
 };
 
@@ -224,7 +227,7 @@ struct GpuTaskQueueScoringData{
         Alloc::ScratchArena& scratchArena
     );
 
-    void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuTaskGraphQueueTopology& topology);
+    void rebuildAssignmentLoads(const GraphicsVector<GpuTaskQueueAssignment>& assignments, const GpuPhysicalQueueTopology& topology);
     void updateAssignmentLoads(const GpuTaskId& task, const GpuPhysicalQueueId& previousQueue, const GpuPhysicalQueueId& selectedQueue)noexcept;
     [[nodiscard]] u64 assignedQueueLoad(const GpuPhysicalQueueId& queue)const noexcept;
 };
@@ -241,7 +244,7 @@ struct GpuTaskQueueScoreExclusions{
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
@@ -260,7 +263,7 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] bool BuildQueuePlacementGroups(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
     GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
@@ -270,7 +273,7 @@ struct GpuTaskQueuePlacementGroup{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
     CommandQueue::Enum requiredClass = CommandQueue::kCount
 )noexcept;
@@ -280,7 +283,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskQueuePlacementGroup& group,
@@ -291,7 +294,7 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] bool IsLegalTimingFeedbackRoute(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
     const GpuPhysicalQueueInfo& candidate
@@ -309,12 +312,11 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindLeastLoadedSameClassQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GraphicsVector<GpuTaskQueueAssignment>& assignments,
+    const Vector<u64, Alloc::ScratchArena>& prefixQueueCosts,
     const GpuTaskQueueScoringData& scoringData,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& baseQueue,
-    const usize assignedPrefixCount,
     const bool allowCrossFamilyRouting,
     const bool preferNonPrimaryQueue
 )noexcept;
@@ -325,7 +327,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphTaskView& task,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& baseQueue,
     const usize assignedPrefixCount,
     const bool allowCrossFamilyRouting
@@ -333,7 +335,7 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackIncumbent(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& staticQueue,
     const GpuTaskTimingAssignmentKey& key,
@@ -345,7 +347,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
@@ -358,7 +360,7 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] const GpuPhysicalQueueInfo* FindTimingFeedbackCalibrationQueue(
     const GpuTaskGraph::DeclarationReadView& graph,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& incumbent,
     const GpuTaskTimingAssignmentKey& key,

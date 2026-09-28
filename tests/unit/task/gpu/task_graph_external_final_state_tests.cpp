@@ -95,7 +95,7 @@ TEST(GpuTaskGraph, ExportsRequiredImportedResourceFinalStates){
     ASSERT_TRUE(task.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -143,7 +143,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -278,7 +278,7 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     Graphics::GpuPhysicalQueueInfo sameFamilyQueues[] = { queues[0u], queues[1u] };
     sameFamilyQueues[1u].familyIndex = sameFamilyQueues[0u].familyIndex;
     sameFamilyQueues[1u].queueIndex = 1u;
-    const Graphics::GpuTaskGraphQueueTopology sameFamilyTopology{
+    const Graphics::GpuPhysicalQueueTopology sameFamilyTopology{
         .queues = sameFamilyQueues,
         .queueCount = LengthOf(sameFamilyQueues),
     };
@@ -298,7 +298,7 @@ TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -369,7 +369,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -771,7 +771,7 @@ TEST(GpuTaskGraph, ElidesSamePacketReleaseOnlyExternalFinalizationSelfDependency
     ASSERT_TRUE(pair.earlierReader.valid());
     ASSERT_TRUE(pair.finalizingReader.valid());
 
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -921,7 +921,7 @@ TEST(GpuTaskGraph, OrdersIndependentTerminalFinalizationDependenciesNearestFirst
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -1072,7 +1072,7 @@ TEST(GpuTaskGraph, ExportsTextureTerminalFragmentsAfterPartialWholeResourceOverw
         DedicatedComputeQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -1297,7 +1297,7 @@ TEST(GpuTaskGraph, RejectsUnpublishableExternalFinalStateContracts){
     ).valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

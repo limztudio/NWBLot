@@ -86,7 +86,7 @@ TEST(GpuTaskQueueScoring, CachedLoadsAndScoresMatchIndependentReferenceAfterMove
             { .familyIndex = 2u, .id = { .index = 311u, .deviceGeneration = 23u }, .queueClass = Graphics::CommandQueue::Transfer, .capabilities = Graphics::GpuQueueCapability::Transfer },
             { .familyIndex = 3u, .id = { .index = 1024u, .deviceGeneration = 23u }, .queueClass = Graphics::CommandQueue::Transfer, .capabilities = Graphics::GpuQueueCapability::Transfer },
         };
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
         const Graphics::GpuTaskQueueLoad externalLoads[] = {
             { .queue = queues[1u].id, .estimatedCost = 13u },
             { .queue = queues[2u].id, .estimatedCost = Limit<u64>::s_Max },

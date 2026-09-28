@@ -49,7 +49,7 @@ TEST(GpuTaskGraph, RecreatesPacketRecordingStateAfterRecompile){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -189,7 +189,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
     ASSERT_TRUE(task.valid());
 
     const Graphics::GpuPhysicalQueueInfo graphicsOnly[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology firstTopology{
+    const Graphics::GpuPhysicalQueueTopology firstTopology{
         .queues = graphicsOnly,
         .queueCount = LengthOf(graphicsOnly),
     };
@@ -197,7 +197,7 @@ TEST(GpuTaskGraph, InvalidatesPacketRuntimeAndCaptureForSameGraphRecompile){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology secondTopology{
+    const Graphics::GpuPhysicalQueueTopology secondTopology{
         .queues = graphicsAndCompute,
         .queueCount = LengthOf(graphicsAndCompute),
     };
@@ -279,7 +279,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupRejectsOutOfRangeStaleAndUncompiledHandles)
     ASSERT_TRUE(first.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -409,7 +409,7 @@ TEST(GpuTaskGraph, CompiledTaskLookupScalesAcrossDenseTaskIds){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -505,7 +505,7 @@ TEST(GpuTaskGraph, RejectsAcceptedQueueFrontierTasksWithPrerequisites){
             "Frontier Stale Assignment Source"
         ).valid());
         const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = &queue,
             .queueCount = 1u,
         };
@@ -761,7 +761,7 @@ TEST(GpuTaskGraph, CompilesOnlyIndependentAcceptedQueueFrontierTasks){
     ASSERT_TRUE(consumer.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

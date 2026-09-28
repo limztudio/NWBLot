@@ -73,7 +73,7 @@ using TaskGraphResourceVersionTestUtils::GraphicsQueue;
     const Graphics::GpuTaskGraphCompileOptions& options = {}
 ){
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     return TaskGraphTestUtils::Compile(graph, analysis, topology, assignments, compiledGraph, options);
 }
 

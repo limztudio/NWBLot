@@ -8,6 +8,8 @@
 
 #include <core/telemetry/frame_graph_contributor.h>
 
+#include <global/hash_utils.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -23,6 +25,22 @@ namespace __hidden_task_graph_telemetry{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+struct DependencyPairHasher{
+    [[nodiscard]] usize operator()(const u64 pairKey)const noexcept{
+        usize hash = Hasher<u32>{}(static_cast<u32>(pairKey >> 32u));
+        HashCombine(hash, static_cast<u32>(pairKey));
+        return hash;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] static u64 DependencyPairKey(const GpuTaskDependencyEdge& edge)noexcept{
+    return (static_cast<u64>(edge.producer.index) << 32u) | edge.consumer.index;
+}
 
 [[nodiscard]] static bool TranslateQueueClass(
     const CommandQueue::Enum queueClass,
@@ -375,20 +393,32 @@ bool GpuTaskGraphDeclarationReadView::appendFrameGraphTelemetry(
     }
     for(const GpuTaskExternalDependencyEdge& edge : analysis.externalDependencies())
         builder.addEdge(completionNodes[edge.completion.index], taskNodes[edge.consumer.index], Telemetry::FrameGraphEdgeKind::DependsOn);
+    HashMap<u64, u8, __hidden_task_graph_telemetry::DependencyPairHasher, EqualTo<u64>, Alloc::ScratchArena> inferredFlags(
+        0u,
+        __hidden_task_graph_telemetry::DependencyPairHasher{},
+        EqualTo<u64>{},
+        scratchArena
+    );
+    inferredFlags.reserve(Min(analysis.edges().size(), analysis.inferredEdges().size()));
+    for(const GpuTaskDependencyEdge& edge : analysis.inferredEdges()){
+        u8 flags = GpuTaskGraphTelemetryEdgeFlag::InferredDependency;
+        if(edge.hazard == GpuTaskHazardType::VersionDependency)
+            flags |= GpuTaskGraphTelemetryEdgeFlag::VersionDependency;
+        else if(edge.hazard == GpuTaskHazardType::VersionLifetime)
+            flags |= GpuTaskGraphTelemetryEdgeFlag::VersionLifetime;
+        auto [annotation, inserted] = inferredFlags.try_emplace(__hidden_task_graph_telemetry::DependencyPairKey(edge), flags);
+        if(!inserted)
+            annotation.value() |= flags;
+    }
     for(const GpuTaskDependencyEdge& edge : analysis.edges()){
-        u8 flags = GpuTaskGraphTelemetryEdgeFlag::None;
-        if(analysis.hasExplicitEdge(edge.producer, edge.consumer))
-            flags |= GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency;
-        if(analysis.hasInferredEdge(edge.producer, edge.consumer))
-            flags |= GpuTaskGraphTelemetryEdgeFlag::InferredDependency;
-        for(const GpuTaskDependencyEdge& inferredEdge : analysis.inferredEdges()){
-            if(inferredEdge.producer != edge.producer || inferredEdge.consumer != edge.consumer)
-                continue;
-            if(inferredEdge.hazard == GpuTaskHazardType::VersionDependency)
-                flags |= GpuTaskGraphTelemetryEdgeFlag::VersionDependency;
-            else if(inferredEdge.hazard == GpuTaskHazardType::VersionLifetime)
-                flags |= GpuTaskGraphTelemetryEdgeFlag::VersionLifetime;
-        }
+        // Analysis keeps one raw edge per pair and gives explicit dependencies precedence over inferred hazards.
+        u8 flags = edge.hazard == GpuTaskHazardType::Explicit
+            ? GpuTaskGraphTelemetryEdgeFlag::ExplicitDependency
+            : GpuTaskGraphTelemetryEdgeFlag::None
+        ;
+        const auto annotation = inferredFlags.find(__hidden_task_graph_telemetry::DependencyPairKey(edge));
+        if(annotation != inferredFlags.end())
+            flags |= annotation->second;
         builder.addEdge(
             taskNodes[edge.producer.index],
             taskNodes[edge.consumer.index],

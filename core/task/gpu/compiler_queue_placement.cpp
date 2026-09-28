@@ -199,7 +199,7 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] const GpuPhysicalQueueInfo* FindBestLegalQueuePlacementGroupCandidate(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
     const CommandQueue::Enum requiredClass)noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
@@ -228,7 +228,7 @@ namespace GpuTaskGraphCompilerDetail{
 [[nodiscard]] bool BuildQueuePlacementGroups(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
     GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
@@ -333,7 +333,7 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
     const GraphicsVector<u32>& assignmentIndicesByTask,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskQueuePlacementGroup& group,
@@ -382,7 +382,7 @@ namespace GpuTaskGraphCompilerDetail{
         NWB_ASSERT(assignedQueueCost >= exclusions.candidateQueueCost);
         overlap = scoringData.totalAssignedCost - assignedQueueCost - (exclusions.totalCost - exclusions.candidateQueueCost);
     }
-    else if(allTasksAllowOverlap){
+    else if(allTasksAllowOverlap && schedulingReachability.mayContainIndependentTasks()){
         for(usize assignmentIndex = 0u; assignmentIndex < assignments.size(); ++assignmentIndex){
             if(
                 assignmentIndex >= group.assignmentOffset

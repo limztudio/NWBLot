@@ -94,7 +94,7 @@ struct ShadowPacketPlan{
                 Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer
             ),
         };
-        const Core::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+        const Core::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Core::GpuTaskGraphAnalysis analysis(testArena.arena);
         Core::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         Core::Alloc::ScratchArena scratchArena(Name("tests/shadow_packet/scratch"));

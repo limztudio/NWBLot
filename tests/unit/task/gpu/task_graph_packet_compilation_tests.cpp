@@ -99,7 +99,7 @@ TEST(GpuTaskGraph, DeduplicatesMergedPacketExternalDependenciesInTaskOrder){
     ASSERT_TRUE(second.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -228,7 +228,7 @@ TEST(GpuTaskGraph, CompilesOneTaskPacketsWithDependenciesAndLifecycleBoundaries)
         DedicatedComputeQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -508,7 +508,7 @@ TEST(GpuTaskGraph, PlansSchedulingPacketDependenciesInStableIncomingOrder){
     ASSERT_TRUE(consumer.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -671,7 +671,7 @@ TEST(GpuTaskGraph, MergesExplicitCompatibleSuccessorIntoOnePacket){
     ASSERT_TRUE(finalSuffix.valid());
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -807,7 +807,7 @@ TEST(GpuTaskGraph, MergesGraphicsComputeUavProducerIntoGraphicsVertexBufferConsu
     EXPECT_EQ(analysis.topologicalOrder()[1u], raster);
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

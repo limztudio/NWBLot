@@ -651,10 +651,12 @@ bool GpuTaskGraphCompiler::analyze(
             const GpuTaskId consumer = outAnalysis.m_topologicalOrder[orderIndex - 1u];
             if(!reachesProducer[consumer.index])
                 continue;
-            for(const GpuTaskDependencyEdge& edge : outAnalysis.m_edges){
-                if(edge.consumer == consumer)
-                    reachesProducer[edge.producer.index] = 1u;
-            }
+            for(
+                usize edgeIndex = outAnalysis.m_schedulingIncomingOffsets[consumer.index];
+                edgeIndex < outAnalysis.m_schedulingIncomingOffsets[consumer.index + 1u];
+                ++edgeIndex
+            )
+                reachesProducer[outAnalysis.m_schedulingIncomingProducers[edgeIndex]] = 1u;
         }
 
         bool hasBackBufferWriter = false;

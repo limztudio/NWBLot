@@ -446,7 +446,7 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -1144,13 +1144,13 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
 
     Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();
     sourceQueue.id.deviceGeneration = s_SourceDeviceGeneration;
-    const Graphics::GpuTaskGraphQueueTopology sourceTopology{
+    const Graphics::GpuPhysicalQueueTopology sourceTopology{
         .queues = &sourceQueue,
         .queueCount = 1u,
     };
     Graphics::GpuPhysicalQueueInfo targetQueue = GraphicsQueue();
     targetQueue.id.deviceGeneration = s_TargetDeviceGeneration;
-    const Graphics::GpuTaskGraphQueueTopology targetTopology{
+    const Graphics::GpuPhysicalQueueTopology targetTopology{
         .queues = &targetQueue,
         .queueCount = 1u,
     };

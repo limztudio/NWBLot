@@ -75,7 +75,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] static bool LogicalSharingIncludesQueueFamily(
     const ResourceQueueSharing::Mask sharing,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const u32 familyIndex
 )noexcept{
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
@@ -93,7 +93,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 // A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
     const ResourceQueueSharing::Mask sharing,
-    const GpuTaskGraphQueueTopology& topology)noexcept{
+    const GpuPhysicalQueueTopology& topology)noexcept{
     if(sharing == ResourceQueueSharing::Exclusive)
         return false;
 
@@ -113,7 +113,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] bool ResourceSharingAdmitsQueue(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& queue
 )noexcept{
     if(resource.hasQueueAdmission){
@@ -128,7 +128,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] bool ResourceUsesConcurrentQueueSharing(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology
+    const GpuPhysicalQueueTopology& topology
 )noexcept{
     if(resource.hasQueueAdmission)
         return resource.queueAdmission.usesConcurrentSharing;
@@ -137,7 +137,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 
 [[nodiscard]] bool ResourceSharesQueuePairConcurrently(
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskGraphQueueTopology& topology,
+    const GpuPhysicalQueueTopology& topology,
     const GpuPhysicalQueueInfo& sourceQueue,
     const GpuPhysicalQueueInfo& destinationQueue
 )noexcept{
@@ -148,7 +148,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     ;
 }
 
-[[nodiscard]] bool IsValidQueueTopology(const GpuTaskGraphQueueTopology& topology)noexcept{
+[[nodiscard]] bool IsValidQueueTopology(const GpuPhysicalQueueTopology& topology)noexcept{
     if(!topology.queues || topology.queueCount == 0u)
         return false;
 
@@ -200,7 +200,7 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
     return true;
 }
 
-[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuTaskGraphQueueTopology& topology)noexcept{
+[[nodiscard]] const GpuPhysicalQueueInfo* FindDefaultGraphicsQueue(const GpuPhysicalQueueTopology& topology)noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];

@@ -161,7 +161,7 @@ struct ImportedTexturePair{
 [[nodiscard]] bool Assign(
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options = {}
 );
@@ -169,7 +169,7 @@ struct ImportedTexturePair{
 [[nodiscard]] bool Compile(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options = {}
@@ -179,7 +179,7 @@ struct ImportedTexturePair{
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options = {}
@@ -187,7 +187,7 @@ struct ImportedTexturePair{
 
 struct SingleQueueCompile{
     Graphics::GpuPhysicalQueueInfo singleQueue;
-    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuPhysicalQueueTopology topology;
     Graphics::GpuTaskGraphAnalysis analysis;
     Graphics::GpuTaskGraphQueueAssignments assignments;
     Graphics::GpuCompiledGraph compiledGraph;
@@ -206,7 +206,7 @@ struct TwoQueueCompile{
     Graphics::GpuPhysicalQueueInfo graphicsQueue;
     Graphics::GpuPhysicalQueueInfo computeQueue;
     Graphics::GpuPhysicalQueueInfo queueStorage[2u];
-    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuPhysicalQueueTopology topology;
     Graphics::GpuTaskGraphAnalysis analysis;
     Graphics::GpuTaskGraphQueueAssignments assignments;
     Graphics::GpuCompiledGraph compiledGraph;
@@ -226,7 +226,7 @@ struct ThreeQueueCompile{
     Graphics::GpuPhysicalQueueInfo computeQueue;
     Graphics::GpuPhysicalQueueInfo transferQueue;
     Graphics::GpuPhysicalQueueInfo queueStorage[3u];
-    Graphics::GpuTaskGraphQueueTopology topology;
+    Graphics::GpuPhysicalQueueTopology topology;
     Graphics::GpuTaskGraphAnalysis analysis;
     Graphics::GpuTaskGraphQueueAssignments assignments;
     Graphics::GpuCompiledGraph compiledGraph;

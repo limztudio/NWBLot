@@ -86,7 +86,7 @@ void ExpectComputeStagePlacement(
     }
 
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     const Graphics::GpuTaskQueueLoad queueLoad{ .queue = queues[1u].id, .estimatedCost = computeQueueLoad };
     Graphics::GpuTaskGraphQueueAssignmentOptions options;
     if(computeQueueLoad != 0u){
@@ -188,7 +188,7 @@ TEST(GpuTaskGraph, PreservesDiagnosticsForSingleLegalClassAndIndependentMergeGro
     options.queueLoadCount = 1u;
     const Graphics::GpuTaskId tasks[] = { graphics, firstCompute, secondCompute };
     for(const auto& queues : queueOrders){
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
         for(const Graphics::GpuTaskId task : tasks){
@@ -267,7 +267,7 @@ TEST(GpuTaskGraph, ExtendsMergedGroupAfterLegalityWitnessFallsBackToGraphics){
     };
     const Graphics::GpuTaskId tasks[] = { first, graphics, last };
     for(const auto& queues : queueOrders){
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
         Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
         ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
         for(const Graphics::GpuTaskId task : tasks){
@@ -314,7 +314,7 @@ TEST(GpuTaskGraph, SplitsMergedGroupForDisjointExternalQueueContracts){
         1u
     );
     ASSERT_TRUE(second.valid());
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));

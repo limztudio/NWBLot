@@ -104,7 +104,7 @@ struct TextureClearTestContext{
 [[nodiscard]] bool Compile(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
     Core::Alloc::ScratchArena& scratchArena
@@ -159,7 +159,7 @@ TEST(GpuTextureClearContract, PreservesIndependentShaderClearAndHookCapabilityAl
     };
     const bool expected[] = { true, false, true };
     for(usize queueIndex = 0u; queueIndex < LengthOf(queues); ++queueIndex){
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queues[queueIndex], .queueCount = 1u };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queues[queueIndex], .queueCount = 1u };
         Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);
@@ -216,7 +216,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
 
     {
         const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::DedicatedTransferQueue();
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);
@@ -225,7 +225,7 @@ TEST(GpuTaskGraph, TextureClearNormalizesPartialRegionsAndPreservesGraphicsAlter
     }
     {
         const Graphics::GpuPhysicalQueueInfo queue = TaskGraphTestUtils::DedicatedComputeQueue();
-        const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+        const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
         Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
         Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
         Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);
@@ -328,7 +328,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     }
 
     const Graphics::GpuPhysicalQueueInfo graphicsQueue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology graphicsTopology{
+    const Graphics::GpuPhysicalQueueTopology graphicsTopology{
         .queues = &graphicsQueue,
         .queueCount = 1u,
     };
@@ -444,7 +444,7 @@ TEST(GpuCommandIrReplay, TextureClearRequiresDeclaredAndPhysicalQueueCapabilitie
     }
 
     const Graphics::GpuPhysicalQueueInfo computeQueue = TaskGraphTestUtils::DedicatedComputeQueue();
-    const Graphics::GpuTaskGraphQueueTopology computeTopology{
+    const Graphics::GpuPhysicalQueueTopology computeTopology{
         .queues = &computeQueue,
         .queueCount = 1u,
     };
@@ -598,7 +598,7 @@ TEST(GpuTextureClearContract, RejectsUnsupportedStagedFormatsAtDeclarationAndRep
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{ .queues = &queue, .queueCount = 1u };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
     Graphics::GpuTaskGraphAnalysis analysis(testContext.testArena.arena);
     Graphics::GpuTaskGraphQueueAssignments assignments(testContext.testArena.arena);
     Graphics::GpuCompiledGraph compiledGraph(testContext.testArena.arena);

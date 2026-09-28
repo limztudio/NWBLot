@@ -269,7 +269,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 [[nodiscard]] bool Assign(
     const Graphics::GpuTaskGraph& graph,
     const Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     const Graphics::GpuTaskGraphQueueAssignmentOptions& options){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
@@ -281,7 +281,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 [[nodiscard]] bool Compile(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options){
@@ -298,7 +298,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
 [[nodiscard]] bool CompileWithSeparatedCommandQueues(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    const Graphics::GpuTaskGraphQueueTopology& topology,
+    const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
     const Graphics::GpuTaskGraphCompileOptions& options){

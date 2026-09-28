@@ -84,7 +84,7 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     ASSERT_TRUE(task.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -297,7 +297,7 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

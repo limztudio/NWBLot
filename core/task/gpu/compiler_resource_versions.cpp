@@ -196,93 +196,101 @@ namespace __hidden_gpu_task_resource_versions{
     return false;
 }
 
-[[nodiscard]] static bool TaskConsumesVersion(
-    const GpuTaskGraphTaskView& task,
-    const GpuGraphResourceVersionId version
-)noexcept{
-    for(usize useIndex = 0u; useIndex < task.resourceVersionUseCount; ++useIndex){
-        const GpuTaskResourceVersionUse& use = task.resourceVersionUses[useIndex];
-        if(use.version == version && use.role == GpuTaskResourceVersionRole::Consume)
-            return true;
-    }
-    return false;
-}
 
-[[nodiscard]] static bool BuildDependencyReachability(
-    const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges,
-    const usize taskCount,
-    Vector<u64, Alloc::ScratchArena>& outReachability,
-    usize& outWordCount,
-    Alloc::ScratchArena& scratchArena
-){
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    outWordCount = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
-    if(outWordCount != 0u && taskCount > Limit<usize>::s_Max / outWordCount)
-        return false;
 
-    outReachability.clear();
-    outReachability.resize(taskCount * outWordCount, 0u);
-    if(taskCount == 0u)
+class FrozenResourceVersionReachability final : NoCopy{
+private:
+    static constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
+
+
+public:
+    explicit FrozenResourceVersionReachability(Alloc::ScratchArena& scratchArena)
+        : m_incomingOffsets(scratchArena)
+        , m_incomingProducers(scratchArena)
+        , m_rowIndices(scratchArena)
+        , m_rows(scratchArena)
+        , m_pending(scratchArena)
+        , m_scratchArena(scratchArena)
+    {}
+
+
+public:
+    [[nodiscard]] bool build(
+        const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges,
+        const usize taskCount,
+        const usize maximumRowCount){
+        m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
+        if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
+            return false;
+
+        m_incomingOffsets.clear();
+        m_incomingOffsets.resize(taskCount + 1u, 0u);
+        for(const GpuTaskDependencyEdge& edge : edges)
+            ++m_incomingOffsets[edge.consumer.index + 1u];
+        for(usize taskIndex = 1u; taskIndex <= taskCount; ++taskIndex)
+            m_incomingOffsets[taskIndex] += m_incomingOffsets[taskIndex - 1u];
+
+        Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, m_scratchArena);
+        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
+            writeOffsets[taskIndex] = m_incomingOffsets[taskIndex];
+        m_incomingProducers.resize(edges.size());
+        for(const GpuTaskDependencyEdge& edge : edges)
+            m_incomingProducers[writeOffsets[edge.consumer.index]++] = edge.producer.index;
+
+        m_rowIndices.clear();
+        m_rowIndices.resize(taskCount, Limit<usize>::s_Max);
+        m_rows.clear();
+        m_rows.reserve(Min(taskCount, maximumRowCount));
+        m_pending.clear();
+        m_pending.reserve(taskCount);
         return true;
-
-    Vector<usize, Alloc::ScratchArena> outgoingOffsets(taskCount + 1u, scratchArena);
-    for(usize taskIndex = 0u; taskIndex <= taskCount; ++taskIndex)
-        outgoingOffsets[taskIndex] = 0u;
-    for(const GpuTaskDependencyEdge& edge : edges)
-        ++outgoingOffsets[edge.producer.index + 1u];
-    for(usize taskIndex = 1u; taskIndex <= taskCount; ++taskIndex)
-        outgoingOffsets[taskIndex] += outgoingOffsets[taskIndex - 1u];
-
-    Vector<usize, Alloc::ScratchArena> writeOffsets(taskCount, scratchArena);
-    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex)
-        writeOffsets[taskIndex] = outgoingOffsets[taskIndex];
-
-    Vector<usize, Alloc::ScratchArena> outgoingTasks(edges.size(), scratchArena);
-    for(const GpuTaskDependencyEdge& edge : edges)
-        outgoingTasks[writeOffsets[edge.producer.index]++] = edge.consumer.index;
-
-    Vector<usize, Alloc::ScratchArena> pending(scratchArena);
-    pending.reserve(taskCount);
-    for(usize sourceIndex = 0u; sourceIndex < taskCount; ++sourceIndex){
-        const usize rowOffset = sourceIndex * outWordCount;
-        const usize sourceWord = rowOffset + sourceIndex / s_BitsPerWord;
-        outReachability[sourceWord] |= static_cast<u64>(1u) << (sourceIndex % s_BitsPerWord);
-        pending.clear();
-        pending.push_back(sourceIndex);
-
-        for(usize pendingIndex = 0u; pendingIndex < pending.size(); ++pendingIndex){
-            const usize producerIndex = pending[pendingIndex];
-            for(
-                usize edgeIndex = outgoingOffsets[producerIndex];
-                edgeIndex < outgoingOffsets[producerIndex + 1u];
-                ++edgeIndex
-            ){
-                const usize consumerIndex = outgoingTasks[edgeIndex];
-                const usize consumerWord = rowOffset + consumerIndex / s_BitsPerWord;
-                const u64 consumerMask = static_cast<u64>(1u) << (consumerIndex % s_BitsPerWord);
-                if((outReachability[consumerWord] & consumerMask) != 0u)
-                    continue;
-                outReachability[consumerWord] |= consumerMask;
-                pending.push_back(consumerIndex);
-            }
-        }
     }
-    return true;
-}
 
-[[nodiscard]] static bool IsDependencyReachable(
-    const Vector<u64, Alloc::ScratchArena>& reachability,
-    const usize wordCount,
-    const GpuTaskId source,
-    const GpuTaskId destination
-)noexcept{
-    constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
+    [[nodiscard]] bool reaches(const GpuTaskId source, const GpuTaskId destination){
+        usize& rowIndex = m_rowIndices[destination.index];
+        if(rowIndex == Limit<usize>::s_Max){
+            const usize newRowIndex = m_rows.size();
+            m_rows.emplace_back(m_scratchArena);
+            Vector<u64, Alloc::ScratchArena>& row = m_rows.back();
+            row.resize(m_wordsPerRow, 0u);
+            row[destination.index / s_BitsPerWord] |= static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
+            m_pending.clear();
+            m_pending.push_back(destination.index);
+            for(usize pendingIndex = 0u; pendingIndex < m_pending.size(); ++pendingIndex){
+                const u32 consumerIndex = m_pending[pendingIndex];
+                for(
+                    usize edgeIndex = m_incomingOffsets[consumerIndex];
+                    edgeIndex < m_incomingOffsets[consumerIndex + 1u];
+                    ++edgeIndex
+                ){
+                    const u32 producerIndex = m_incomingProducers[edgeIndex];
+                    const usize producerWord = producerIndex / s_BitsPerWord;
+                    const u64 producerMask = static_cast<u64>(1u) << (producerIndex % s_BitsPerWord);
+                    if((row[producerWord] & producerMask) != 0u)
+                        continue;
+                    row[producerWord] |= producerMask;
+                    m_pending.push_back(producerIndex);
+                }
+            }
+            rowIndex = newRowIndex;
+        }
+        const Vector<u64, Alloc::ScratchArena>& row = m_rows[rowIndex];
+        const u64 mask = static_cast<u64>(1u) << (source.index % s_BitsPerWord);
+        return (row[source.index / s_BitsPerWord] & mask) != 0u;
+    }
 
-    const usize wordIndex = source.index * wordCount + destination.index / s_BitsPerWord;
-    const u64 mask = static_cast<u64>(1u) << (destination.index % s_BitsPerWord);
-    return (reachability[wordIndex] & mask) != 0u;
-}
+
+private:
+    Vector<usize, Alloc::ScratchArena> m_incomingOffsets;
+    Vector<u32, Alloc::ScratchArena> m_incomingProducers;
+    Vector<usize, Alloc::ScratchArena> m_rowIndices;
+    Vector<Vector<u64, Alloc::ScratchArena>, Alloc::ScratchArena> m_rows;
+    Vector<u32, Alloc::ScratchArena> m_pending;
+    Alloc::ScratchArena& m_scratchArena;
+    usize m_wordsPerRow = 0u;
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -304,8 +312,7 @@ bool BuildResourceVersionDependencyEdges(
     const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
     GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
-    Alloc::ScratchArena& scratchArena
-){
+    Alloc::ScratchArena& scratchArena){
     using namespace __hidden_gpu_task_resource_versions;
 
     outEdges.clear();
@@ -484,8 +491,65 @@ bool BuildResourceVersionDependencyEdges(
     for(const GpuTaskDependencyEdge& edge : outEdges)
         semanticEdges.push_back(edge);
 
-    Vector<GpuTaskId, Alloc::ScratchArena> consumers(scratchArena);
-    consumers.reserve(graph.taskCount());
+    // Retain consumer task order and distinct writer task order without rediscovering them for every version.
+    Vector<usize, Alloc::ScratchArena> consumerOffsets(graph.resourceVersionCount() + 1u, 0u, scratchArena);
+    Vector<usize, Alloc::ScratchArena> writerOffsets(graph.resourceCount() + 1u, 0u, scratchArena);
+    Vector<u32, Alloc::ScratchArena> lastWriterTasks(graph.resourceCount(), Limit<u32>::s_Max, scratchArena);
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        for(usize useIndex = 0u; useIndex < task.resourceVersionUseCount; ++useIndex){
+            const GpuTaskResourceVersionUse& use = task.resourceVersionUses[useIndex];
+            if(use.role == GpuTaskResourceVersionRole::Consume)
+                ++consumerOffsets[use.version.index + 1u];
+        }
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+            if(
+                !IsWriteAccess(use.access)
+                || !graph.validResource(use.resource)
+                || lastWriterTasks[use.resource.index] == task.id.index
+            )
+                continue;
+            lastWriterTasks[use.resource.index] = task.id.index;
+            ++writerOffsets[use.resource.index + 1u];
+        }
+    }
+    for(usize versionIndex = 1u; versionIndex <= graph.resourceVersionCount(); ++versionIndex)
+        consumerOffsets[versionIndex] += consumerOffsets[versionIndex - 1u];
+    for(usize resourceIndex = 1u; resourceIndex <= graph.resourceCount(); ++resourceIndex)
+        writerOffsets[resourceIndex] += writerOffsets[resourceIndex - 1u];
+
+    Vector<GpuTaskId, Alloc::ScratchArena> consumerTasks(consumerOffsets.back(), scratchArena);
+    Vector<GpuTaskId, Alloc::ScratchArena> writerTasks(writerOffsets.back(), scratchArena);
+    Vector<usize, Alloc::ScratchArena> writeOffsets(Max(graph.resourceVersionCount(), graph.resourceCount()), scratchArena);
+    for(usize versionIndex = 0u; versionIndex < graph.resourceVersionCount(); ++versionIndex)
+        writeOffsets[versionIndex] = consumerOffsets[versionIndex];
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        for(usize useIndex = 0u; useIndex < task.resourceVersionUseCount; ++useIndex){
+            const GpuTaskResourceVersionUse& use = task.resourceVersionUses[useIndex];
+            if(use.role == GpuTaskResourceVersionRole::Consume)
+                consumerTasks[writeOffsets[use.version.index]++] = task.id;
+        }
+    }
+    for(usize resourceIndex = 0u; resourceIndex < graph.resourceCount(); ++resourceIndex){
+        writeOffsets[resourceIndex] = writerOffsets[resourceIndex];
+        lastWriterTasks[resourceIndex] = Limit<u32>::s_Max;
+    }
+    for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
+        const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
+        for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
+            const GpuTaskResourceUse& use = task.resourceUses[useIndex];
+            if(
+                !IsWriteAccess(use.access)
+                || !graph.validResource(use.resource)
+                || lastWriterTasks[use.resource.index] == task.id.index
+            )
+                continue;
+            lastWriterTasks[use.resource.index] = task.id.index;
+            writerTasks[writeOffsets[use.resource.index]++] = task.id;
+        }
+    }
 
     // Imported roots precede every graph task, so their consumers must finish before any other overlapping writer.
     // These constraints are unconditional and participate in produced-version reachability regardless of version
@@ -495,21 +559,22 @@ bool BuildResourceVersionDependencyEdges(
         if(version.origin != GpuGraphResourceVersionOrigin::ImportedRoot)
             continue;
 
-        consumers.clear();
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-            if(TaskConsumesVersion(task, version.id))
-                consumers.push_back(task.id);
-        }
-        if(consumers.empty())
+        const usize consumerBegin = consumerOffsets[versionIndex];
+        const usize consumerEnd = consumerOffsets[versionIndex + 1u];
+        if(consumerBegin == consumerEnd)
             continue;
 
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView writer = graph.taskAt(taskIndex);
+        for(
+            usize writerIndex = writerOffsets[version.resource.index];
+            writerIndex < writerOffsets[version.resource.index + 1u];
+            ++writerIndex
+        ){
+            const GpuTaskGraphTaskView writer = graph.taskAt(writerTasks[writerIndex].index);
             if(!HasOverlappingPhysicalWrite(graph, writer, version))
                 continue;
 
-            for(const GpuTaskId consumer : consumers){
+            for(usize consumerIndex = consumerBegin; consumerIndex < consumerEnd; ++consumerIndex){
+                const GpuTaskId consumer = consumerTasks[consumerIndex];
                 if(consumer == writer.id)
                     continue;
                 const GpuTaskDependencyEdge edge{
@@ -525,16 +590,8 @@ bool BuildResourceVersionDependencyEdges(
         }
     }
 
-    Vector<u64, Alloc::ScratchArena> semanticReachability(scratchArena);
-    usize semanticReachabilityWordCount = 0u;
-    if(!BuildDependencyReachability(
-        semanticEdges,
-        graph.taskCount(),
-        semanticReachability,
-        semanticReachabilityWordCount,
-        scratchArena
-    ))
-        return fail(GpuTaskGraphAnalysisStatus::InvalidTask, {}, {}, {}, {});
+    FrozenResourceVersionReachability semanticReachability(scratchArena);
+    bool semanticReachabilityBuilt = false;
 
     // Overlapping pre-producer writers need a proven semantic/imported order; else consumers precede the writer.
     // Never feed these constraints back: declaration order must not imply intent.
@@ -543,30 +600,29 @@ bool BuildResourceVersionDependencyEdges(
         if(version.origin != GpuGraphResourceVersionOrigin::TaskProduced)
             continue;
 
-        consumers.clear();
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView task = graph.taskAt(taskIndex);
-            if(TaskConsumesVersion(task, version.id))
-                consumers.push_back(task.id);
-        }
-        if(consumers.empty())
+        const usize consumerBegin = consumerOffsets[versionIndex];
+        const usize consumerEnd = consumerOffsets[versionIndex + 1u];
+        if(consumerBegin == consumerEnd)
             continue;
 
-        for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
-            const GpuTaskGraphTaskView writer = graph.taskAt(taskIndex);
-            if(
-                writer.id == producers[versionIndex]
-                || !HasOverlappingPhysicalWrite(graph, writer, version)
-                || IsDependencyReachable(
-                    semanticReachability,
-                    semanticReachabilityWordCount,
-                    writer.id,
-                    producers[versionIndex]
-                )
-            )
+        for(
+            usize writerIndex = writerOffsets[version.resource.index];
+            writerIndex < writerOffsets[version.resource.index + 1u];
+            ++writerIndex
+        ){
+            const GpuTaskGraphTaskView writer = graph.taskAt(writerTasks[writerIndex].index);
+            if(writer.id == producers[versionIndex] || !HasOverlappingPhysicalWrite(graph, writer, version))
+                continue;
+            if(!semanticReachabilityBuilt){
+                if(!semanticReachability.build(semanticEdges, graph.taskCount(), graph.resourceVersionCount()))
+                    return fail(GpuTaskGraphAnalysisStatus::InvalidTask, {}, {}, {}, {});
+                semanticReachabilityBuilt = true;
+            }
+            if(semanticReachability.reaches(writer.id, producers[versionIndex]))
                 continue;
 
-            for(const GpuTaskId consumer : consumers){
+            for(usize consumerIndex = consumerBegin; consumerIndex < consumerEnd; ++consumerIndex){
+                const GpuTaskId consumer = consumerTasks[consumerIndex];
                 if(consumer == writer.id)
                     continue;
                 outEdges.push_back(GpuTaskDependencyEdge{

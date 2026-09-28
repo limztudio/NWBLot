@@ -133,6 +133,32 @@ namespace GpuPacketRuntimeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct PacketWaitStatistics{
+    usize plannedWaitTokenCount = 0u;
+    usize sameQueueWaitElisionCount = 0u;
+    usize timelineWaitCount = 0u;
+    usize mergedTimelineWaitCount = 0u;
+};
+
+[[nodiscard]] PacketWaitStatistics CountPacketWaitStatistics(
+    GpuPhysicalQueueId queue,
+    const QueueSubmissionToken* waitTokens,
+    usize waitTokenCount,
+    Alloc::ScratchArena& scratchArena
+);
+[[nodiscard]] bool ValidateInitialOwnershipCompletionToken(
+    const GpuTaskGraphInitialOwnerHandoffSourceView& source,
+    const GpuCompiledBarrier& barrier,
+    const GpuPhysicalQueueInfo& sourceQueue,
+    const QueueSubmissionToken& token,
+    u16 deviceGeneration
+)noexcept;
+[[nodiscard]] bool ValidateInitialOwnershipCompletions(
+    const GpuTaskGraph::DeclarationReadView& declarationAccess,
+    const GpuCompiledGraph::ReadView& planAccess,
+    const GpuSubmissionPacketId& packetID
+);
+
 // Reject missing declaration tokens across the entire range before any native packet can be accepted.
 [[nodiscard]] bool ValidateExternalDependencyTokens(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,

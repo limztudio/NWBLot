@@ -348,15 +348,12 @@ bool GpuCompiledGraph::taskPrecedesInSamePacket(
     )
         return false;
 
-    bool foundFirst = false;
-    for(u32 taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
-        const GpuTaskId task = m_packetTasks[packetPlan.taskOffset + taskIndex];
-        if(task == first)
-            foundFirst = true;
-        else if(task == second)
-            return foundFirst;
-    }
-    return false;
+    // Packetization appends compiled tasks and packet task IDs together in execution order.
+    const u32 firstTaskIndex = m_compiledTaskIndexByTask[first.index];
+    const u32 secondTaskIndex = m_compiledTaskIndexByTask[second.index];
+    NWB_ASSERT(m_packetTasks[firstTaskIndex] == first);
+    NWB_ASSERT(m_packetTasks[secondTaskIndex] == second);
+    return firstTaskIndex < secondTaskIndex;
 }
 
 bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
@@ -377,21 +374,16 @@ bool GpuCompiledGraph::tasksFormContiguousPacketSequence(
     )
         return false;
 
-    for(u32 firstTaskIndex = 0u;
-        static_cast<usize>(firstTaskIndex) + taskCount <= packetPlan.taskCount;
-        ++firstTaskIndex
-    ){
-        bool matches = true;
-        for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
-            if(m_packetTasks[packetPlan.taskOffset + firstTaskIndex + taskIndex] == tasks[taskIndex])
-                continue;
-            matches = false;
-            break;
-        }
-        if(matches)
-            return true;
+    const usize firstTaskIndex = m_compiledTaskIndexByTask[tasks[0u].index];
+    const usize packetEnd = static_cast<usize>(packetPlan.taskOffset) + packetPlan.taskCount;
+    if(firstTaskIndex < packetPlan.taskOffset || firstTaskIndex >= packetEnd || taskCount > packetEnd - firstTaskIndex)
+        return false;
+
+    for(usize taskIndex = 0u; taskIndex < taskCount; ++taskIndex){
+        if(m_packetTasks[firstTaskIndex + taskIndex] != tasks[taskIndex])
+            return false;
     }
-    return false;
+    return true;
 }
 
 bool GpuCompiledGraph::taskJoinsAcceptedQueueFrontier(const GpuTaskId& task)const noexcept{

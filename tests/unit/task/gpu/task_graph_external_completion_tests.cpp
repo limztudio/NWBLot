@@ -61,7 +61,7 @@ TEST(GpuTaskGraph, RejectsSubmissionRangeWithMissingLatePacketCompletionToken){
     );
     ASSERT_TRUE(second.valid());
     const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue() };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -249,7 +249,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         DedicatedComputeQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -271,7 +271,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology missingProducerTopology{
+    const Graphics::GpuPhysicalQueueTopology missingProducerTopology{
         .queues = missingProducerQueues,
         .queueCount = LengthOf(missingProducerQueues),
     };
@@ -296,7 +296,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         Graphics::GpuQueueCapability::Compute,
         Graphics::GpuQueueCapability::Transfer
     );
-    const Graphics::GpuTaskGraphQueueTopology wrongProducerClassTopology{
+    const Graphics::GpuPhysicalQueueTopology wrongProducerClassTopology{
         .queues = wrongProducerClassQueues,
         .queueCount = LengthOf(wrongProducerClassQueues),
     };
@@ -371,7 +371,7 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
     };
     for(Graphics::GpuPhysicalQueueInfo& staleQueue : staleTopologyQueues)
         ++staleQueue.id.deviceGeneration;
-    const Graphics::GpuTaskGraphQueueTopology staleTopology{
+    const Graphics::GpuPhysicalQueueTopology staleTopology{
         .queues = staleTopologyQueues,
         .queueCount = LengthOf(staleTopologyQueues),
     };

@@ -414,14 +414,14 @@ TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphi
     Core::GpuTaskGraphQueueAssignments assignments(context.testArena.arena);
     Core::GpuCompiledGraph compiled(context.testArena.arena);
     const Core::GpuTaskGraphCompiler compiler;
-    const Core::GpuTaskGraphQueueTopology computeOnlyTopology{ .queues = &computeQueue, .queueCount = 1u };
+    const Core::GpuPhysicalQueueTopology computeOnlyTopology{ .queues = &computeQueue, .queueCount = 1u };
     EXPECT_FALSE(compiler.compile(view, analysis, computeOnlyTopology, assignments, compiled, context.scratch));
     ASSERT_EQ(analysis.diagnostic().status, Core::GpuTaskGraphAnalysisStatus::Success);
     EXPECT_EQ(assignments.diagnostic().status, Core::GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue);
     EXPECT_EQ(assignments.diagnostic().task, result.uploadTask);
 
     const Core::GpuPhysicalQueueInfo queues[] = { computeQueue, primaryGraphicsQueue };
-    const Core::GpuTaskGraphQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    const Core::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     ASSERT_TRUE(compiler.compile(view, analysis, topology, assignments, compiled, context.scratch))
         << "analysis=" << static_cast<u32>(analysis.diagnostic().status)
         << ", queue=" << static_cast<u32>(assignments.diagnostic().status);

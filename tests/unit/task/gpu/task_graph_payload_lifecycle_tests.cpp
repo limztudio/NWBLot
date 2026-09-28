@@ -59,7 +59,7 @@ TEST(GpuTaskGraph, RejectsNonRecordableTasksDuringNativeCompilation){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -130,7 +130,7 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -188,7 +188,7 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
     }
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -205,7 +205,7 @@ TEST(GpuTaskGraph, RegistersNoexceptTypedRecordAndDiscardPayloadLifecycle){
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
     TestArena testArena;
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };

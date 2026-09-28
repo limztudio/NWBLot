@@ -51,7 +51,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         GraphicsQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -191,7 +191,7 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
 
         ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
     }
-    const Graphics::GpuTaskGraphQueueTopology invalidTopology{};
+    const Graphics::GpuPhysicalQueueTopology invalidTopology{};
     EXPECT_FALSE(CompileWithSeparatedCommandQueues(graph, analysis, invalidTopology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
@@ -273,7 +273,7 @@ TEST(GpuTaskGraph, ReportsOwnershipRangesWithoutReleaseAcquireDuplicates){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -422,7 +422,7 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -575,7 +575,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
 
     {
         const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = &queue,
             .queueCount = 1u,
         };
@@ -605,7 +605,7 @@ TEST(GpuTaskGraph, OmitsOwnershipTelemetryForSameFamilyAndSamePhysicalRoutes){
             GraphicsQueue(),
             sameFamilyTransferQueue,
         };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
         };
@@ -662,7 +662,7 @@ TEST(GpuTaskGraph, LogicalSharingRequiresTwoSelectedFamiliesAcrossEveryMaskAndTo
                 Graphics::GpuPhysicalQueueInfo orderedQueues[LengthOf(queues)];
                 for(usize queueIndex = 0u; queueIndex < LengthOf(queues); ++queueIndex)
                     orderedQueues[queueIndex] = queues[reversed ? LengthOf(queues) - 1u - queueIndex : queueIndex];
-                const Graphics::GpuTaskGraphQueueTopology topology{ .queues = orderedQueues, .queueCount = LengthOf(orderedQueues) };
+                const Graphics::GpuPhysicalQueueTopology topology{ .queues = orderedQueues, .queueCount = LengthOf(orderedQueues) };
                 ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::IsValidQueueTopology(topology));
                 Graphics::GpuTaskGraphResourceView resource{};
                 resource.type = Graphics::GpuGraphResourceType::Buffer;
@@ -693,7 +693,7 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
         DedicatedComputeQueue(),
         transferOnComputeFamily,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -739,7 +739,7 @@ TEST(GpuTaskGraph, RejectsDedicatedTransferUseOutsideConcurrentSharingContract){
         DedicatedComputeQueue(),
         DedicatedTransferQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };

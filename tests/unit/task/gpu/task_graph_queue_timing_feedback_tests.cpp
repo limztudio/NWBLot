@@ -67,7 +67,7 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -187,7 +187,7 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -387,7 +387,7 @@ TEST(GpuTaskGraph, RoutesOptInTimingFeedbackAcrossGraphicsAndComputeClasses){
             GraphicsQueue(),
             DedicatedComputeQueue(),
         };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
         };
@@ -520,7 +520,7 @@ TEST(GpuTaskGraph, CrossClassTimingCalibrationPreservesStaticBaselineAndHonorsHy
         GraphicsQueue(),
         DedicatedComputeQueue(),
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -632,7 +632,7 @@ TEST(GpuTaskGraph, IgnoresTimingFeedbackWithoutAnyEnabledRoute){
     ASSERT_TRUE(task.valid());
 
     const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = &queue,
         .queueCount = 1u,
     };
@@ -707,7 +707,7 @@ TEST(GpuTaskGraph, RejectsCrossClassTimingRoutesWithoutEveryRequiredOptIn){
             GraphicsQueue(),
             DedicatedComputeQueue(),
         };
-        const Graphics::GpuTaskGraphQueueTopology topology{
+        const Graphics::GpuPhysicalQueueTopology topology{
             .queues = queues,
             .queueCount = LengthOf(queues),
         };
@@ -849,7 +849,7 @@ TEST(GpuTaskGraph, QueueTimingScoreUsesOnlyReducedIncomingDependencies){
         firstAuxiliaryQueue,
         secondAuxiliaryQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -960,7 +960,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesDiagnostic
         firstAuxiliaryGraphicsQueue,
         secondAuxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };
@@ -1062,7 +1062,7 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesDiagnostic
         GraphicsQueue(),
         crossFamilyGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology crossFamilyTopology{
+    const Graphics::GpuPhysicalQueueTopology crossFamilyTopology{
         .queues = crossFamilyQueues,
         .queueCount = LengthOf(crossFamilyQueues),
     };
@@ -1183,7 +1183,7 @@ TEST(GpuTaskGraph, RoutesOptedInCrossFamilyTimingFeedbackWithExclusiveOwnershipH
         GraphicsQueue(),
         auxiliaryGraphicsQueue,
     };
-    const Graphics::GpuTaskGraphQueueTopology topology{
+    const Graphics::GpuPhysicalQueueTopology topology{
         .queues = queues,
         .queueCount = LengthOf(queues),
     };

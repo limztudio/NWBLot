@@ -42,12 +42,25 @@ void InputDispatcher::setMousePositionScale(f32 x, f32 y){
     m_mousePositionScaleY = y != 0.f ? y : 1.f;
 }
 
+void InputDispatcher::windowFocusUpdate(const bool focused){
+    if(m_windowFocused == focused)
+        return;
+    m_windowFocused = focused;
+
+    dispatchToHandlers([focused](IInputEventHandler& handler){
+        handler.windowFocusUpdate(focused);
+        return false;
+    });
+}
+
 void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods){
     if(key == Key::Unknown)
         return;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
-        return handler.keyboardUpdate(key, scancode, action, mods);
+        const bool consumed = handler.keyboardUpdate(key, scancode, action, mods);
+        // Releases reach every owner so a changed UI focus cannot leave scene input held.
+        return action != InputAction::Release && consumed;
     });
 }
 
@@ -71,7 +84,8 @@ void InputDispatcher::mouseButtonUpdate(i32 button, i32 action, i32 mods){
         return;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
-        return handler.mouseButtonUpdate(button, action, mods);
+        const bool consumed = handler.mouseButtonUpdate(button, action, mods);
+        return action != InputAction::Release && consumed;
     });
 }
 

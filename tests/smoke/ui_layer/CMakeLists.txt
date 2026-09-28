@@ -15,6 +15,8 @@ target_sources(nwb_ui_layer_smoke PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/paint_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/text_samples.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/text_samples.h"
+    "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/interactive_scene.h"
     "${CMAKE_CURRENT_LIST_DIR}/../framebuffer_capture.cpp"
 )
 set_target_properties(nwb_ui_layer_smoke PROPERTIES
@@ -79,8 +81,23 @@ foreach(_nwb_ui_smoke_mode IN ITEMS framebuffer resize)
         SKIP_RETURN_CODE 77
         TIMEOUT 150
         LABELS "ui;standalone_gpu"
+        ENVIRONMENT "NWB_UI_LAYER_INTERACTIVE=0"
     )
 endforeach()
+
+add_test(NAME nwb_ui_layer_interaction_smoke
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/interaction_smoke.py"
+        --executable "$<TARGET_FILE:nwb_ui_layer_smoke>"
+        --working-directory "${_nwb_ui_smoke_runtime_root}"
+        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/ui_layer_interaction"
+        ${_nwb_ui_smoke_logserver_args}
+)
+set_tests_properties(nwb_ui_layer_interaction_smoke PROPERTIES
+    RESOURCE_LOCK nwb_display
+    SKIP_RETURN_CODE 77
+    TIMEOUT 150
+    LABELS "ui;standalone_gpu;native_input"
+)
 
 unset(_nwb_ui_smoke_runtime_root)
 unset(_nwb_ui_smoke_logserver_args)

@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "ui_widget_gallery.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ui/widgets/label.h>
 
@@ -29,6 +31,7 @@ private:
     NWB::Impl::Ui::Label m_edit;
     NWB::Impl::Ui::Label m_caption;
     NWB::Impl::Ui::Label m_korean;
+    TestbedUiWidgetGallery m_widgets;
 };
 
 

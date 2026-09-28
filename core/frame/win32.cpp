@@ -367,7 +367,10 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 uMsg,
                 wParam,
                 [](){},
-                [&](const bool isActive){ frame->data<Common::WinFrame>().setActive(isActive); },
+                [&](const bool isActive){
+                    frame->data<Common::WinFrame>().setActive(isActive);
+                    frame->input().windowFocusUpdate(isActive);
+                },
                 lifecycleResult
             )
         )

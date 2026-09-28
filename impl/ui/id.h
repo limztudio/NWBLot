@@ -1,0 +1,49 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "global.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct WidgetId{
+    u64 value = 0u;
+
+    [[nodiscard]] bool valid()const{ return value != 0u; }
+};
+
+// Root identity comes from the host; include its lifetime generation rather than iteration order or an address.
+struct WidgetRoot{
+    u64 value = 0u;
+    u64 generation = 1u;
+};
+
+[[nodiscard]] inline bool operator==(const WidgetId& lhs, const WidgetId& rhs){ return lhs.value == rhs.value; }
+[[nodiscard]] inline bool operator!=(const WidgetId& lhs, const WidgetId& rhs){ return lhs.value != rhs.value; }
+[[nodiscard]] inline bool operator==(const WidgetRoot& lhs, const WidgetRoot& rhs){
+    return lhs.value == rhs.value && lhs.generation == rhs.generation;
+}
+
+[[nodiscard]] WidgetId MakeRootId(const WidgetRoot& root);
+[[nodiscard]] WidgetId MakeWidgetId(WidgetId parent, AStringView stableKey);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -7,6 +7,7 @@
 
 #include <impl/global.h>
 #include <impl/ui/paint.h>
+#include <impl/ui/builder.h>
 #include <impl/ui/text/service.h>
 
 #include <core/ecs/entity_id.h>
@@ -61,6 +62,7 @@ struct UiPaintContext{
     Ui::PaintBuilder& paint;
     Ui::TextService& text;
     const Ui::DisplayMetrics& display;
+    Ui::Builder& ui;
     Core::ECS::EntityID entity = Core::ECS::ENTITY_ID_INVALID;
     f32 deltaSeconds = 0.0f;
 };
@@ -70,6 +72,7 @@ using UiPaintCallback = Function<void(UiPaintContext&)>;
 struct UiPaintComponent{
     UiPaintCallback paint;
     bool visible = true;
+    i32 order = 0;
 };
 
 

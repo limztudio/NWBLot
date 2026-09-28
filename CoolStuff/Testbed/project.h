@@ -50,6 +50,7 @@ public:
     virtual bool onUpdate(f32 delta)override;
 
 public:
+    virtual void windowFocusUpdate(bool focused)override;
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;

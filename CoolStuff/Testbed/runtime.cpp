@@ -84,17 +84,17 @@ static constexpr char s_InitWorldFailedNarrow[] = "ProjectTestbed initialization
 }
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
-    auto* uiSystemPtr = world.getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystemPtr);
-    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
-    return uiSystem.wantsKeyboardCapture();
+    if(const auto* customUi = world.getSystem<NWB::Impl::UiLayerSystem>())
+        return customUi->wantsKeyboard();
+    const auto* legacyUi = world.getSystem<NWB::Impl::UiSystem>();
+    return legacyUi && legacyUi->wantsKeyboardCapture();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
-    auto* uiSystemPtr = world.getSystem<NWB::Impl::UiSystem>();
-    NWB_ASSERT(uiSystemPtr);
-    NWB::Impl::UiSystem& uiSystem = *uiSystemPtr;
-    return uiSystem.wantsMouseCapture();
+    if(const auto* customUi = world.getSystem<NWB::Impl::UiLayerSystem>())
+        return customUi->wantsPointer();
+    const auto* legacyUi = world.getSystem<NWB::Impl::UiSystem>();
+    return legacyUi && legacyUi->wantsMouseCapture();
 }
 
 static void ResolveFlyCameraAnglesFromRotation(
@@ -364,7 +364,7 @@ void ProjectTestbed::registerInputHandler(){
     if(m_inputRegistered)
         return;
 
-    m_context.input.addHandlerToBack(*this);
+    m_context.input.addHandlerToFront(*this);
     m_inputRegistered = true;
 }
 
@@ -403,10 +403,15 @@ bool ProjectTestbed::keyPressed(const i32 key)const{
 }
 
 void ProjectTestbed::updateMainCamera(const f32 delta){
-    const f32 mouseDeltaX = m_pendingMouseDeltaX;
-    const f32 mouseDeltaY = m_pendingMouseDeltaY;
+    const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
+    const f32 mouseDeltaX = pointerCaptured ? 0.0f : m_pendingMouseDeltaX;
+    const f32 mouseDeltaY = pointerCaptured ? 0.0f : m_pendingMouseDeltaY;
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
+    if(pointerCaptured){
+        m_mouseLookActive = false;
+        m_mousePositionValid = false;
+    }
 
     const bool keyboardCaptured = __hidden_runtime::UiWantsKeyboardCapture(*m_world);
     const f32 rightAxis = keyboardCaptured
@@ -434,6 +439,11 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
         mouseDeltaY,
         delta
     );
+}
+
+void ProjectTestbed::windowFocusUpdate(const bool focused){
+    if(!focused)
+        clearInputState();
 }
 
 bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){

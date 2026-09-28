@@ -7,6 +7,8 @@ target_sources(nwb_ecs_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/system_legacy_presentation.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/system_frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/input_events.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/legacy_input.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/layer_input.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/graphics_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_resources.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_descriptor_heap.cpp"
@@ -27,6 +29,7 @@ target_link_libraries(nwb_ecs_ui PUBLIC
     nwb_os
     nwb_ui_gpu
     nwb_ui_text
+    nwb_ui_widgets
     nwb::imgui
 )
 target_link_libraries(nwb_ecs_ui PRIVATE nwb_assets_shader_loader)

@@ -5,6 +5,8 @@ target_sources(testbed PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ui_controls.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ui_skin_preview.h"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_widget_gallery.h"
+    "${CMAKE_CURRENT_LIST_DIR}/ui_widget_gallery.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/project.h"
 )
 set_target_properties(testbed PROPERTIES

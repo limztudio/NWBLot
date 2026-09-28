@@ -110,12 +110,14 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
         context.graphics,
+        context.input,
         context.clipboard,
         context.assetManager,
         context.shaderPathResolver,
         __hidden_testbed_entry::s_DefaultUiSkin,
         fonts,
-        NWB::Impl::UiLayerPresentation::Scene
+        NWB::Impl::UiLayerPresentation::Scene,
+        &uiSystem
     );
     context.graphics.addRenderPassToBack(meshSkinningSystem);
     context.graphics.addRenderPassToBack(rendererSystem);
@@ -161,6 +163,7 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
         __hidden_testbed_entry::s_DestroyRequiresIdleOrLoss
     );
 
+    uiLayerSystem.detachLegacyInput();
     world->clear();
     world.reset();
 }

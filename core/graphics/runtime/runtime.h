@@ -262,6 +262,8 @@ public:
     // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
     // Preserved across resize, destroy/init and device recreation; this is not a monitor scan-out completion count.
     [[nodiscard]] u64 getSuccessfulPresentationCount()const noexcept{ return m_successfulPresentationCount; }
+    // Last actual native present attempt, matched by the complete acquisition identity rather than a later frame.
+    [[nodiscard]] const PresentationReceipt& lastPresentationReceipt()const noexcept{ return m_lastPresentationReceipt; }
     [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
     [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
     [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
@@ -401,6 +403,7 @@ private:
 
     Vector<FramebufferHandle, Alloc::GlobalArena> m_swapChainFramebuffers;
     AcquiredPresentationFrame m_acquiredPresentationFrame;
+    PresentationReceipt m_lastPresentationReceipt;
 
     GraphicsTString m_windowTitle;
     PointerScaleChangedCallback m_pointerScaleChangedCallback = nullptr;

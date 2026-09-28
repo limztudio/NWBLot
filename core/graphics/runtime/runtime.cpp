@@ -188,6 +188,7 @@ GraphicsRuntime::~GraphicsRuntime()noexcept(false){
 }
 
 bool GraphicsRuntime::init(const Common::FrameData& data){
+    m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = false;
     m_hasPresentedFrame = false;
@@ -233,6 +234,7 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
 }
 
 bool GraphicsRuntime::createHeadlessDevice(){
+    m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
     m_deviceCreationParams.headlessDevice = true;
     m_hasPresentedFrame = false;
@@ -313,6 +315,7 @@ bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisibl
 }
 
 bool GraphicsRuntime::destroy(){
+    m_lastPresentationReceipt.reset();
     waitTasks();
 
     SwapChainTransitionTicket transitionTicket;
@@ -731,6 +734,7 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
                     presentBegin = TimerNow();
                 bool presentationAccepted = false;
                 const bool presented = m_backend->present(presentationAccepted);
+                m_lastPresentationReceipt.record(m_acquiredPresentationFrame.backBuffer, presentationAccepted);
                 if(presentationAccepted)
                     ++m_successfulPresentationCount;
                 if(phaseTiming)

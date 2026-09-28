@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. Font/text foundation commit `1f55b1616` is pushed. The offline SDF increment is implemented and described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
+Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88`, GPU composition commit `37a37a0f6`, and Linux OS commit `b93bace2d` are pushed. Font/text foundation commit `1f55b1616` is pushed. The offline SDF increment is pushed as `4cd702d2b`. The interactive foundation follows after merging `main` through `99ff9fea4` and is described below. The architecture and milestones describe the full migration; individual increments do not imply full widget or ImGui-retirement completion.
 
 Implemented in the first increment:
 
@@ -11,7 +11,7 @@ Implemented in the first increment:
 - `core/frame/`, `loader/`, and `impl/ecs_ui/`: Frame owns/pumps the clipboard service on the event thread and passes a required borrowed reference through the project context to ECS UI callbacks. Native window lifetime encloses service lifetime; project borrowers are destroyed first.
 - Deterministic CPU, clipboard protocol, and skin cook/load tests, including the real engine-default atlas and texture. Schema version 1 limits skins to 4096 regions and rejects larger counts before allocation or copying.
 
-This foundation increment is part of M1. GPU composition is implemented in the following increment; font/text layout, widget identity/layout/input, IME, and the requested edit box/combo/list remain subsequent work. Existing ImGui rendering remains active. `AssetRef<T>` identifies an asset; it does not retain a loaded version or GPU resource. CPU snapshots copy the needed atlas metadata, and the GPU adapter retains concrete resolved resource versions through completion.
+This foundation increment is part of M1. GPU composition, font/text, and initial widget identity/layout/input are implemented in the following increments; IME and the requested edit box/combo/list remain subsequent work. Existing ImGui rendering remains active. `AssetRef<T>` identifies an asset; it does not retain a loaded version or GPU resource. CPU snapshots copy the needed atlas metadata, and the GPU adapter retains concrete resolved resource versions through completion.
 
 Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 
@@ -56,7 +56,7 @@ Validation for the OS increment:
 - Actual Linux x86_64 target syntax checks pass for 14 production and five test translation units: 19 with Wayland/primary selection, 19 with Wayland without primary selection, and 16 with X11 only, for 54 successful checks. The disposable harness uses genuine libc/libstdc++/Linux/X11/Wayland headers and generated protocol headers. Saved source/header hashes match the final files; command lines, package/source hashes, and logs are retained under `__artifacts/custom_ui/linux_sysroot/`. This does not qualify Linux ARM64 or linking.
 - Linux-only pipe and X11 tests are provided for execution on Linux. This Windows host has no installed WSL, container runtime, or Linux compositor, so live X11/Wayland clipboard behavior and Linux linking remain unqualified.
 
-The next toolkit increment should add stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
+The interactive toolkit increment below adds stable IDs/state, layout, focus/hit testing and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
 
 Build an engine-owned UI toolkit under `impl/ui/`, keep `impl/ecs_ui/` as the ECS/runtime adapter, and render UI into a transparent texture through the existing GPU task graph. Join that texture with the scene in the final output pass, after scene display mapping and before output encoding. IME, clipboard/native selection exchange, and other window-system services belong to a separate OS feature layer that `ecs_ui` borrows. Controls use a customizable skin texture plus atlas information authored in an `.nwb` file; the engine ships one default texture/atlas pair. Remove ImGui once current application behavior is covered; continue the larger widget library independently.
 
@@ -97,6 +97,47 @@ Validation for this increment on Windows ARM64 / Clang, `opt` configuration:
 - All 55 unique affected production and test translation units pass Linux x86_64 syntax checks using actual Linux headers. Command lines, logs, and final source hashes are retained under `__artifacts/custom_ui/linux_sysroot/`. Native Linux linking, baking equivalence, and GPU execution remain unqualified on this Windows host.
 
 This completes the additional font-image path in M2. Interactive controls, OS IME, native Linux execution, live HDR qualification, and ImGui retirement retain their separate milestone gates.
+
+## Interactive foundation increment
+
+Merged `main` through `99ff9fea4`, preserving its struct-padding changes. The CPU toolkit now has scoped
+stable widget/root IDs, typed retained declaration lifetimes, bounded row/column/overlay measure and
+arrange, fixed/content/weighted-stretch sizing, ancestor clipping, committed-layout hit testing, pointer
+ownership/capture, Tab/Shift+Tab focus traversal and initial Enter/Space activation. Panels, labels, buttons
+and controlled checkboxes use semantic skin parts; state-family padding/minimum sizes avoid hover/press
+layout shifts. Each concern has a separate source domain. Frozen GPU paint still owns values/resources,
+with no widget callbacks, host model pointers or ECS/native dependencies.
+
+The ECS adapter scopes by full generational EntityID and sorts visible roots by explicit order then ID.
+It validates root lifetime while GPU work is pending, consumes queued lifetime-stamped actions once, and
+publishes candidate input geometry only when matching final GPU output and the exact native presentation
+receipt are accepted. Rejected/unknown later acquisitions cannot publish the candidate; matching rejection
+clears it before rebuilding. Native acceptance is a queueing boundary, not monitor scan-out completion.
+
+Win32, X11 and Wayland forward actual native focus changes. Focus broadcasts and key/button releases visit
+all current handlers, including mutation-safe dispatch. The custom adapter handles first-click ownership,
+keeps held pointer/key sequences with their owner through release, and delegates the legacy overlay through
+one prioritized route. Legacy hit regions are copied from completed visible windows and use logical DPI
+coordinates. The Testbed camera remains behind UI input and clears held state on focus loss.
+
+Testbed includes an interactive skinned gallery while retaining existing ImGui controls. The UI-only fixture
+adds native first-click, keyboard repeat/navigation, checkbox/disabled, drag-out/release, focus-loss and resize
+coverage using displayed model markers and exact action logs. CPU regression coverage extends retained
+identity, layout geometry, router state and builder/skin behavior.
+
+Validation for the interactive increment on Windows ARM64 / Clang, `opt` configuration:
+
+- The UI/input/graphics-presentation/GPU-task/OS CTest suites pass: 94 UI, seven input, 51 presentation, 319 enabled GPU-task, and 21 OS checks (492 enabled checks total; 90 GPU-task checks remain disabled).
+- All four GPU-validation smoke tests pass: completed framebuffer, resize, native control interaction, and the scene/Testbed capture. The interaction fixture passes all 14 displayed-state gates and nine exact action-log checks. The 1280 x 900 Testbed capture was visually inspected and shows the interactive custom panel alongside the existing ImGui overlay.
+- Linux x86_64 syntax checks pass for 92 distinct production/test translation units using genuine native headers. All 92 per-TU and 200 source/header SHA256 observations remain stable during the run. This host does not qualify Linux linking or native X11/Wayland execution; the two existing Wayland listener-tail initializer warnings remain.
+- Authored source checks cover CRLF, UTF-8 without BOM, project banners/separators, exact EOF, definition order, domain separation, and whitespace. Newly authored source files stay below 500 lines.
+
+The Windows input harness uses posted native messages and a real Shift modifier, without physical pointer-grab qualification. Native pointer-leave/capture-loss notifications and exact character/IME event provenance remain follow-up OS/input contracts.
+
+This completes the initial interactive foundation portion of M1 and begins basic controls from M4.
+ImGui dependency removal still needs movable/window/separator parity and Testbed migration in M3.
+IME for Win32/Linux, edit boxes, combo boxes, popups/modals, virtualized lists, selection, docking, broader
+Unicode editing and native Linux/HDR runtime qualification retain their later milestone gates.
 
 ## 1. Starting point and scope
 

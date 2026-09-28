@@ -73,6 +73,19 @@ class UiSystem final
 public:
     using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
 
+
+private:
+    struct LegacyInputRegion{
+        Ui::Rect bounds;
+        Ui::Rect hole;
+    };
+    using LegacyInputRegionVector = Vector<LegacyInputRegion, Core::Alloc::GlobalArena>;
+
+
+private:
+    static constexpr usize s_MaxLegacyInputRegions = 256u;
+
+
 public:
     UiSystem(
         Core::Alloc::GlobalArena& arena,
@@ -108,13 +121,29 @@ public:
     )override;
 
 public:
+    virtual void windowFocusUpdate(bool focused)override;
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
     virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;
     virtual bool mouseScrollUpdate(f64 xoffset, f64 yoffset)override;
 
+
 public:
+    // Delegated ownership is already resolved; these commands only deliver native events to ImGui.
+    void deliverKeyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
+    void deliverKeyboardCharInput(u32 unicode, i32 mods);
+    void deliverMousePosUpdate(f64 xpos, f64 ypos);
+    void deliverMouseButtonUpdate(i32 button, i32 action, i32 mods);
+    void deliverMouseScrollUpdate(f64 xoffset, f64 yoffset);
+
+
+public:
+    // The custom adapter becomes the only dispatcher owner while legacy input is delegated.
+    void setInputDelegated(bool delegated);
+    [[nodiscard]] bool hitTestUi(f64 logicalX, f64 logicalY)const noexcept;
+    void cancelInputFocus();
+
     [[nodiscard]] bool wantsKeyboardCapture()const noexcept{ return m_wantsKeyboardCapture; }
     [[nodiscard]] bool wantsMouseCapture()const noexcept{ return m_wantsMouseCapture; }
     [[nodiscard]] bool wantsTextInput()const noexcept{ return m_wantsTextInput; }
@@ -182,6 +211,7 @@ private:
     void setCurrentContext()const;
     void beginFrame(f32 delta);
     void finishFrame();
+    void captureInputRegions();
     [[nodiscard]] bool prepareFrameResources(const Core::AcquiredPresentationFrame& frame, bool graphOwnsUploads);
     [[nodiscard]] bool submitStandaloneTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
     [[nodiscard]] bool submitStandaloneLegacyTaskGraphPresentation(const Core::AcquiredPresentationFrame& frame);
@@ -283,6 +313,7 @@ private:
     UiTextureUploadVector m_taskGraphVertexUpload;
     UiTextureUploadVector m_taskGraphIndexUpload;
     TaskGraphDrawCommandVector m_taskGraphDrawCommands;
+    LegacyInputRegionVector m_legacyInputRegions;
     TaskGraphDrawSnapshot m_taskGraphDrawSnapshot;
     Core::AcquiredPresentationFrame m_taskGraphPresentationFrame;
     usize m_vertexBufferCapacity = 0;
@@ -290,6 +321,7 @@ private:
     u64 m_taskGraphPresentationGraphGeneration = 0u;
     u64 m_frameGeneration = 0u;
     bool m_inputRegistered = false;
+    bool m_legacyInputOverflow = false;
     bool m_frameStarted = false;
     bool m_frameFinished = false;
     // Rejected graphs retain live arrays until a later frame rebuilds their snapshot.

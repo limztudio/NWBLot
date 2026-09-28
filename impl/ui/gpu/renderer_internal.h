@@ -263,6 +263,7 @@ struct GpuRendererState final : NoCopy{
     const Core::GpuTaskGraph* m_declaredGraph = nullptr;
     Core::GpuTaskGraphOutputLayer m_declaredLayer;
     u64 m_graphGeneration = 0u;
+    u64 m_lastAcceptedGeneration = 0u;
     u32 m_width = 0u;
     u32 m_height = 0u;
     bool m_claimed = false;

@@ -51,6 +51,7 @@ bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){
         return false;
     }
 
+    m_lastPresentationReceipt.reset();
     m_acquiredPresentationFrame = {};
     invalidateRenderPassResources();
     m_swapChainFramebuffers.clear();

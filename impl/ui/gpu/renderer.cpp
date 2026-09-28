@@ -200,6 +200,7 @@ void GpuRenderer::invalidateResources(){
     m_state->m_declaredLayer = {};
     m_state->m_readyToDeclare = false;
     m_state->m_lastAcceptedAcquired = {};
+    m_state->m_lastAcceptedGeneration = 0u;
     m_state->m_presentationContributor = nullptr;
 }
 
@@ -269,6 +270,14 @@ bool GpuRenderer::hasPendingFrame()const{
     return m_state->m_pending != nullptr;
 }
 
+u64 GpuRenderer::lastAcceptedGeneration()const{
+    return m_state->m_lastAcceptedGeneration;
+}
+
+Core::PresentationReceiptStatus::Enum GpuRenderer::lastAcceptedPresentationStatus()const{
+    return m_state->m_graphics.lastPresentationReceipt().status(m_state->m_lastAcceptedAcquired.backBuffer);
+}
+
 bool GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame){
     return m_state->prepare(frame);
 }
@@ -283,6 +292,7 @@ void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Co
     NWB_FATAL_ASSERT(submissionToken.valid() && submissionToken.hasPhysicalQueueIdentity());
     m_state->m_pending->m_finalConsumer = submissionToken;
     m_state->m_lastAcceptedAcquired = m_state->m_pending->m_acquired;
+    m_state->m_lastAcceptedGeneration = frameGeneration;
     m_state->m_pending.reset();
     m_state->m_claimed = false;
     m_state->m_declaredGraph = nullptr;

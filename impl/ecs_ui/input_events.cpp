@@ -5,6 +5,7 @@
 #include "system.h"
 
 #include <core/input/module.h>
+#include <core/graphics/runtime/runtime.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -110,6 +111,38 @@ static void AddModifierEvents(ImGuiIO& io, const i32 mods){
 
 
 bool UiSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+    deliverKeyboardUpdate(key, scancode, action, mods);
+    return ImGui::GetIO().WantCaptureKeyboard;
+}
+
+bool UiSystem::keyboardCharInput(const u32 unicode, const i32 mods){
+    deliverKeyboardCharInput(unicode, mods);
+    const ImGuiIO& io = ImGui::GetIO();
+    return io.WantTextInput || io.WantCaptureKeyboard;
+}
+
+bool UiSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
+    deliverMousePosUpdate(xpos, ypos);
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
+bool UiSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+    deliverMouseButtonUpdate(button, action, mods);
+    if(button < 0 || button >= ImGuiMouseButton_COUNT)
+        return false;
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
+bool UiSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
+    deliverMouseScrollUpdate(xoffset, yoffset);
+    return ImGui::GetIO().WantCaptureMouse;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void UiSystem::deliverKeyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     setCurrentContext();
 
@@ -119,46 +152,43 @@ bool UiSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 actio
     const ImGuiKey imguiKey = __hidden_ui::MapKey(key);
     if(imguiKey != ImGuiKey_None)
         io.AddKeyEvent(imguiKey, action != Core::InputAction::Release);
-
-    return io.WantCaptureKeyboard;
 }
 
-bool UiSystem::keyboardCharInput(const u32 unicode, const i32 mods){
+void UiSystem::deliverKeyboardCharInput(const u32 unicode, const i32 mods){
     static_cast<void>(mods);
     setCurrentContext();
 
     ImGuiIO& io = ImGui::GetIO();
     if(unicode > 0u)
         io.AddInputCharacter(unicode);
-    return io.WantTextInput || io.WantCaptureKeyboard;
 }
 
-bool UiSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
+void UiSystem::deliverMousePosUpdate(const f64 xpos, const f64 ypos){
     setCurrentContext();
 
     ImGuiIO& io = ImGui::GetIO();
-    io.AddMousePosEvent(static_cast<f32>(xpos), static_cast<f32>(ypos));
-    return io.WantCaptureMouse;
+    f32 scaleX = 1.0f;
+    f32 scaleY = 1.0f;
+    m_graphics.getDPIScaleInfo(scaleX, scaleY);
+    io.AddMousePosEvent(static_cast<f32>(xpos) * scaleX, static_cast<f32>(ypos) * scaleY);
 }
 
-bool UiSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+void UiSystem::deliverMouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
     static_cast<void>(mods);
     setCurrentContext();
 
     if(button < 0 || button >= ImGuiMouseButton_COUNT)
-        return false;
+        return;
 
     ImGuiIO& io = ImGui::GetIO();
     io.AddMouseButtonEvent(button, action != Core::InputAction::Release);
-    return io.WantCaptureMouse;
 }
 
-bool UiSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
+void UiSystem::deliverMouseScrollUpdate(const f64 xoffset, const f64 yoffset){
     setCurrentContext();
 
     ImGuiIO& io = ImGui::GetIO();
     io.AddMouseWheelEvent(static_cast<f32>(xoffset), static_cast<f32>(yoffset));
-    return io.WantCaptureMouse;
 }
 
 

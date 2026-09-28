@@ -420,6 +420,7 @@ static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
         return;
     context.keyboardFocused = false;
     context.inputSerial = 0u;
+    context.frame->input().windowFocusUpdate(false);
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         AttachWaylandClipboardSeat(*clipboard, nullptr, 0u);
     DestroyKeyboard(context);
@@ -681,6 +682,7 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     if(IClipboardService* const clipboard = context.frame->tryClipboard())
         SetWaylandClipboardKeyboardFocus(*clipboard, true);
     context.frame->data<Common::LinuxFrame>().setActive(true);
+    context.frame->input().windowFocusUpdate(true);
 }
 
 static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_surface* surface){
@@ -695,6 +697,7 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
         SetWaylandClipboardKeyboardFocus(*clipboard, false);
     context.frame->data<Common::LinuxFrame>().setActive(false);
     StopKeyRepeat(context);
+    context.frame->input().windowFocusUpdate(false);
 }
 
 static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 time, u32 key, u32 state){
@@ -849,6 +852,7 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
             SetWaylandClipboardKeyboardFocus(*clipboard, false);
         DestroyKeyboard(context);
         context.frame->data<Common::LinuxFrame>().setActive(false);
+        context.frame->input().windowFocusUpdate(false);
     }
 }
 

@@ -41,6 +41,52 @@ struct AcquiredPresentationFrame{
     [[nodiscard]] bool valid()const noexcept{ return backBuffer.valid() && framebuffer; }
 };
 
+namespace PresentationReceiptStatus{
+    enum Enum : u8{ Pending, Accepted, Rejected };
+};
+
+// Main-thread observation of one native present attempt. The receipt retains identity, never image resources.
+struct PresentationReceipt{
+    QueueSubmissionToken availabilityCompletion;
+    ResourceStates::Mask nativeInitialState = ResourceStates::Unknown;
+    u32 index = Limit<u32>::s_Max;
+    bool accepted = false;
+
+    [[nodiscard]] bool valid()const noexcept{
+        return
+            availabilityCompletion.valid() && availabilityCompletion.hasPhysicalQueueIdentity()
+            && index != Limit<u32>::s_Max
+            && (nativeInitialState == ResourceStates::Unknown || nativeInitialState == ResourceStates::Present)
+        ;
+    }
+
+    void record(const AcquiredBackBuffer& acquired, const bool presentationAccepted)noexcept{
+        availabilityCompletion = acquired.availabilityCompletion;
+        nativeInitialState = acquired.nativeInitialState;
+        index = acquired.index;
+        accepted = presentationAccepted;
+        if(!valid())
+            reset();
+    }
+
+    // Pending means no exact attempt is known, including invalid or different acquisition identities.
+    [[nodiscard]] PresentationReceiptStatus::Enum status(const AcquiredBackBuffer& acquired)const noexcept{
+        const QueueSubmissionToken& token = acquired.availabilityCompletion;
+        if(!valid() || !token.valid() || !token.hasPhysicalQueueIdentity())
+            return PresentationReceiptStatus::Pending;
+        if(
+            availabilityCompletion.value != token.value || availabilityCompletion.queue != token.queue
+            || availabilityCompletion.physicalQueueIndex != token.physicalQueueIndex
+            || availabilityCompletion.deviceGeneration != token.deviceGeneration
+            || index != acquired.index || nativeInitialState != acquired.nativeInitialState
+        )
+            return PresentationReceiptStatus::Pending;
+        return accepted ? PresentationReceiptStatus::Accepted : PresentationReceiptStatus::Rejected;
+    }
+
+    void reset()noexcept{ *this = {}; }
+};
+
 namespace BeginFrameStatus{
     enum Enum : u8{
         Acquired,

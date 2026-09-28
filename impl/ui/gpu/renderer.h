@@ -47,6 +47,8 @@ public:
     // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
     [[nodiscard]] bool submit(DrawSnapshot&& snapshot);
     [[nodiscard]] bool hasPendingFrame()const;
+    [[nodiscard]] u64 lastAcceptedGeneration()const;
+    [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const;
     [[nodiscard]] bool renderStandalone(const Core::AcquiredPresentationFrame& frame);
 
 

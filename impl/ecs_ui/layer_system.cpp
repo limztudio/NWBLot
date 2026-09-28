@@ -3,6 +3,7 @@
 
 
 #include "layer_system.h"
+#include "system.h"
 
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
@@ -23,16 +24,19 @@ UiLayerSystem::UiLayerSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::GraphicsRuntime& graphics,
+    Core::InputDispatcher& input,
     Core::IClipboardService& clipboard,
     Core::Assets::AssetManager& assetManager,
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
     const FontReferences& fonts,
-    const UiLayerPresentation::Enum presentation)
+    const UiLayerPresentation::Enum presentation,
+    UiSystem* legacyInput)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
     , m_world(world)
     , m_graphics(graphics)
+    , m_input(input)
     , m_clipboard(clipboard)
     , m_assetManager(assetManager)
     , m_skinRef(skin)
@@ -40,14 +44,25 @@ UiLayerSystem::UiLayerSystem(
     , m_fontRefs(fonts, arena)
     , m_paint(arena)
     , m_text(arena)
+    , m_context(arena)
+    , m_ui(arena, m_context, m_paint, m_text)
+    , m_liveRoots(arena)
+    , m_rootIdentities(arena)
     , m_renderer(arena, graphics, assetManager, Move(shaderPathResolver))
+    , m_legacyInput(legacyInput)
 {
-    readAccess<UiPaintComponent>();
+    writeAccess<UiPaintComponent>();
+    m_liveRoots.reserve(Ui::s_InputMaxTargets);
+    m_rootIdentities.reserve(Ui::s_InputMaxTargets);
+    if(m_legacyInput)
+        m_legacyInput->setInputDelegated(true);
+    m_input.addHandlerToBack(*this);
     if(m_presentation == UiLayerPresentation::Scene)
         m_graphics.setTaskGraphOutputLayerContributor(&m_renderer);
 }
 
 UiLayerSystem::~UiLayerSystem(){
+    m_input.removeHandler(*this);
     m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
 }
 
@@ -86,6 +101,10 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
 
 void UiLayerSystem::invalidateResources(){
     m_resourcesReady = false;
+    m_context.abandonFrame();
+    m_ui.reset();
+    m_pressedButtons = 0u;
+    m_pointerOwner = 0u;
     m_renderer.invalidateResources();
 }
 
@@ -111,6 +130,8 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    m_context.abandonFrame();
+    m_ui.reset();
     m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
 }
 

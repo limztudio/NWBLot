@@ -1,0 +1,83 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "router.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void InputRouter::routeKeyboard(const InputEvent& event, InputRoutingResult& result){
+    const u8 keyMask = static_cast<u8>(1u << (static_cast<u8>(event.key) - 1u));
+    if(event.type == InputEventType::KeyUp){
+        result.keyboardConsumed |= (m_consumedKeys & keyMask) != 0u;
+        m_pressedKeys &= static_cast<u8>(~keyMask);
+        m_consumedKeys &= static_cast<u8>(~keyMask);
+        return;
+    }
+    const bool alreadyPressed = (m_pressedKeys & keyMask) != 0u;
+    m_pressedKeys |= keyMask;
+    bool consumed = (m_consumedKeys & keyMask) != 0u;
+    if(event.key == InputKey::Tab)
+        consumed |= moveFocus(event.shift);
+    else if(event.key == InputKey::Escape){
+        consumed |= m_focus.valid() || m_capture.valid() || m_pointerSequenceConsumed;
+        m_focus = {};
+        m_capture = {};
+        m_focusDeclaration = 0u;
+        m_captureDeclaration = 0u;
+    }
+    else{
+        const HitTarget* focused = findTarget(m_focus, m_focusDeclaration);
+        consumed |= focused != nullptr;
+        if(focused != nullptr && focused->activatable && !event.repeat && !alreadyPressed)
+            appendActivation(*focused, InputActionSource::Keyboard, result);
+    }
+    if(consumed){
+        m_consumedKeys |= keyMask;
+        result.keyboardConsumed = true;
+    }
+}
+
+bool InputRouter::moveFocus(const bool reverse){
+    if(m_targets.empty())
+        return false;
+    usize current = m_targets.size();
+    for(usize index = 0u; index < m_targets.size(); ++index){
+        if(m_targets[index].id == m_focus){
+            current = index;
+            break;
+        }
+    }
+    usize candidate = current;
+    for(usize visited = 0u; visited < m_targets.size(); ++visited){
+        if(reverse)
+            candidate = candidate == 0u || candidate == m_targets.size() ? m_targets.size() - 1u : candidate - 1u;
+        else
+            candidate = candidate >= m_targets.size() - 1u ? 0u : candidate + 1u;
+        const HitTarget& target = m_targets[candidate];
+        if(target.focusable && isInteractive(target)){
+            m_focus = target.id;
+            m_focusDeclaration = target.declarationGeneration;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_UI_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

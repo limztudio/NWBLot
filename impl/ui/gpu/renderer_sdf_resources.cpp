@@ -147,9 +147,9 @@ GpuVersion<GpuSdfAtlasVersion> GpuRendererState::prepareSdfPage(const SharedSdfA
         .destination = version->m_texture,
         .regions = &region,
         .regionCount = 1u,
+        .acceptedToken = &version->m_readinessToken,
         .finalState = Core::ResourceStates::ShaderResource,
         .physicalInitialState = Core::ResourceStates::Unknown,
-        .acceptedToken = &version->m_readinessToken,
         .hasPhysicalInitialState = true,
     }))
         return {};

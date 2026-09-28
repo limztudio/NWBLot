@@ -3,6 +3,7 @@
 
 
 #include "world.h"
+#include "interactive_scene.h"
 #include "paint_scene.h"
 #include "text_samples.h"
 
@@ -60,6 +61,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     auto& layer = world->addSystem<Impl::UiLayerSystem>(
         *world,
         context.graphics,
+        context.input,
         context.clipboard,
         context.assetManager,
         context.shaderPathResolver,
@@ -69,17 +71,25 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     );
     auto entity = world->createEntity();
     auto& paint = entity.addComponent<Impl::UiPaintComponent>();
-    paint.paint = [textSamples = CreateUiTextSmokeSamples(context.objectArena), paintFrame = 0u](Impl::UiPaintContext& paintContext)mutable{
-        if(paintFrame < 3u){
-            ++paintFrame;
-            if(paintFrame <= 2u)
-                return;
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
-        }
-        PaintUiLayerSmokeScene(paintContext);
-        if(!textSamples->paint(paintContext))
-            NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
-    };
+    if(IsUiLayerInteractionSmokeEnabled()){
+        paint.paint = [scene = CreateUiInteractiveSmokeScene(context.objectArena)](Impl::UiPaintContext& paintContext){
+            if(!scene->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: interactive UI paint failed"));
+        };
+    }
+    else{
+        paint.paint = [textSamples = CreateUiTextSmokeSamples(context.objectArena), paintFrame = 0u](Impl::UiPaintContext& paintContext)mutable{
+            if(paintFrame < 3u){
+                ++paintFrame;
+                if(paintFrame <= 2u)
+                    return;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: deterministic solid, skin, alpha and nested clip geometry submitted"));
+            }
+            PaintUiLayerSmokeScene(paintContext);
+            if(!textSamples->paint(paintContext))
+                NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: text or glyph coverage painting failed"));
+        };
+    }
 
     context.graphics.addRenderPassToBack(layer);
     outWorld = Move(world);

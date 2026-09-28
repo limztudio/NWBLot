@@ -1,0 +1,267 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "layer_system.h"
+#include "system.h"
+
+#include <core/ecs/world.h>
+#include <core/common/log.h>
+
+#include <global/simplemath.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace __hidden_layer_input{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+inline constexpr u8 s_Scene = 0u;
+inline constexpr u8 s_Custom = 1u;
+inline constexpr u8 s_Legacy = 2u;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+Ui::InputKey::Enum TranslateKey(const i32 key){
+    switch(key){
+    case Core::Key::Tab: return Ui::InputKey::Tab;
+    case Core::Key::Enter:
+    case Core::Key::KeypadEnter: return Ui::InputKey::Enter;
+    case Core::Key::Space: return Ui::InputKey::Space;
+    case Core::Key::Escape: return Ui::InputKey::Escape;
+    default: return Ui::InputKey::None;
+    }
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+    synchronizeNativeInput();
+    const Ui::InputKey::Enum translated = __hidden_layer_input::TranslateKey(key);
+    const usize slot = key >= -1 && key < 511 ? static_cast<usize>(key + 1) : m_nativeKeyOwners.size();
+    const u8 storedOwner = slot < m_nativeKeyOwners.size() ? m_nativeKeyOwners[slot] : 0u;
+    const bool held = storedOwner != 0u;
+    const u8 previousOwner = held ? static_cast<u8>(storedOwner - 1u) : __hidden_layer_input::s_Scene;
+    const bool customOwned = held ? previousOwner == __hidden_layer_input::s_Custom : m_context.input().ownsKey(translated);
+    const bool legacyOwned = held ? previousOwner == __hidden_layer_input::s_Legacy
+        : m_legacyKeyboardOwned && !m_context.input().focus().valid();
+    bool releaseRouter = true;
+    if(translated == Ui::InputKey::Enter && action == Core::InputAction::Release){
+        const i32 otherKey = key == Core::Key::Enter ? Core::Key::KeypadEnter : Core::Key::Enter;
+        const u8 otherOwner = m_nativeKeyOwners[static_cast<usize>(otherKey + 1)];
+        releaseRouter = otherOwner == 0u || otherOwner == __hidden_layer_input::s_Legacy + 1u;
+    }
+    if(
+        translated != Ui::InputKey::None
+        && (action == Core::InputAction::Release ? releaseRouter : customOwned || (!held && !legacyOwned))
+    ){
+        Ui::InputEvent event;
+        event.type = action == Core::InputAction::Release ? Ui::InputEventType::KeyUp : Ui::InputEventType::KeyDown;
+        event.key = translated;
+        event.shift = (mods & Core::InputModifier::Shift) != 0;
+        event.repeat = action == Core::InputAction::Repeat || held;
+        routeInput(event);
+    }
+    const u8 owner = held ? previousOwner : m_context.input().focus().valid() || m_context.input().ownsKey(translated)
+        ? __hidden_layer_input::s_Custom : legacyOwned ? __hidden_layer_input::s_Legacy : __hidden_layer_input::s_Scene;
+    if(slot < m_nativeKeyOwners.size())
+        m_nativeKeyOwners[slot] = action == Core::InputAction::Release ? 0u : static_cast<u8>(owner + 1u);
+    if(action != Core::InputAction::Release)
+        m_blockNativeChars = owner == __hidden_layer_input::s_Custom;
+    if(owner == __hidden_layer_input::s_Legacy && m_legacyInput){
+        m_legacyInput->deliverKeyboardUpdate(key, scancode, action, mods);
+        return true;
+    }
+    if(m_context.input().focus().valid() && m_legacyInput){
+        m_legacyInput->cancelInputFocus();
+        m_legacyKeyboardOwned = false;
+    }
+    return owner == __hidden_layer_input::s_Custom;
+}
+
+bool UiLayerSystem::keyboardCharInput(const u32 unicode, const i32 mods){
+    synchronizeNativeInput();
+    if(m_blockNativeChars || m_context.input().focus().valid())
+        return true;
+    const auto& input = m_context.input();
+    if(
+        (unicode == 32u && input.ownsKey(Ui::InputKey::Space))
+        || ((unicode == 10u || unicode == 13u) && input.ownsKey(Ui::InputKey::Enter))
+        || (unicode == 9u && input.ownsKey(Ui::InputKey::Tab))
+        || (unicode == 27u && input.ownsKey(Ui::InputKey::Escape))
+    )
+        return true;
+    if(m_legacyInput && m_legacyKeyboardOwned){
+        m_legacyInput->deliverKeyboardCharInput(unicode, mods);
+        return true;
+    }
+    return false;
+}
+
+bool UiLayerSystem::mousePosUpdate(const f64 xpos, const f64 ypos){
+    if(!IsFinite(xpos) || !IsFinite(ypos) || Abs(xpos) > Limit<f32>::s_Max || Abs(ypos) > Limit<f32>::s_Max)
+        return false;
+    synchronizeNativeInput();
+    m_pointer = { static_cast<f32>(xpos), static_cast<f32>(ypos) };
+    const bool legacy = m_pressedButtons != 0u ? m_pointerOwner == __hidden_layer_input::s_Legacy : legacyHit();
+    const bool scene = m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene;
+    if(legacy || scene){
+        Ui::InputEvent leave;
+        leave.type = Ui::InputEventType::PointerLeave;
+        routeInput(leave);
+        if(m_legacyInput){
+            m_legacyInput->deliverMousePosUpdate(legacy ? xpos : -1.0e20, legacy ? ypos : -1.0e20);
+        }
+        return legacy;
+    }
+    Ui::InputEvent event;
+    event.type = Ui::InputEventType::PointerMove;
+    event.position = m_pointer;
+    routeInput(event);
+    const bool consumed = m_context.input().wantsPointer() || (m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Custom);
+    if(m_legacyInput)
+        m_legacyInput->deliverMousePosUpdate(consumed ? -1.0e20 : xpos, consumed ? -1.0e20 : ypos);
+    return consumed;
+}
+
+bool UiLayerSystem::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+    if(button < Core::MouseButton::Left || button > Core::MouseButton::Button8)
+        return false;
+    synchronizeNativeInput();
+    const u32 bit = 1u << static_cast<u32>(button);
+    if(action != Core::InputAction::Release && m_pressedButtons == 0u){
+        m_pointerOwner = legacyHit() ? __hidden_layer_input::s_Legacy
+            : m_context.input().wouldConsumePointer(m_pointer) ? __hidden_layer_input::s_Custom : __hidden_layer_input::s_Scene;
+        if(m_pointerOwner != __hidden_layer_input::s_Custom)
+            m_context.input().clearFocus();
+        if(m_pointerOwner == __hidden_layer_input::s_Legacy){
+            m_legacyKeyboardOwned = true;
+            m_legacyInput->windowFocusUpdate(m_input.windowFocused());
+        }
+        else{
+            m_legacyKeyboardOwned = false;
+            if(m_legacyInput)
+                m_legacyInput->cancelInputFocus();
+        }
+    }
+    if(action != Core::InputAction::Release)
+        m_pressedButtons |= bit;
+    const u8 owner = m_pointerOwner;
+    if(owner == __hidden_layer_input::s_Legacy && m_legacyInput){
+        m_legacyInput->deliverMousePosUpdate(m_pointer.x, m_pointer.y);
+        m_legacyInput->deliverMouseButtonUpdate(button, action, mods);
+    }
+    else if(owner == __hidden_layer_input::s_Custom && button == Core::MouseButton::Left){
+        Ui::InputEvent event;
+        event.type = action == Core::InputAction::Release ? Ui::InputEventType::PrimaryUp : Ui::InputEventType::PrimaryDown;
+        event.position = m_pointer;
+        routeInput(event);
+    }
+    if(action == Core::InputAction::Release){
+        m_pressedButtons &= ~bit;
+        if(m_pressedButtons == 0u){
+            m_pointerOwner = __hidden_layer_input::s_Scene;
+            Ui::InputEvent event;
+            event.type = legacyHit() ? Ui::InputEventType::PointerLeave : Ui::InputEventType::PointerMove;
+            event.position = m_pointer;
+            routeInput(event);
+        }
+    }
+    return owner != __hidden_layer_input::s_Scene;
+}
+
+bool UiLayerSystem::mouseScrollUpdate(const f64 xoffset, const f64 yoffset){
+    synchronizeNativeInput();
+    if(m_pressedButtons != 0u && m_pointerOwner == __hidden_layer_input::s_Scene)
+        return false;
+    const bool legacy = m_pressedButtons != 0u ? m_pointerOwner == __hidden_layer_input::s_Legacy : legacyHit();
+    if(legacy && m_legacyInput){
+        m_legacyInput->deliverMouseScrollUpdate(xoffset, yoffset);
+        return true;
+    }
+    return m_pointerOwner == __hidden_layer_input::s_Custom || m_context.input().wouldConsumePointer(m_pointer);
+}
+
+void UiLayerSystem::windowFocusUpdate(const bool focused){
+    if(!focused){
+        Ui::InputEvent event;
+        event.type = Ui::InputEventType::FocusLost;
+        routeInput(event);
+        m_pressedButtons = 0u;
+        m_pointerOwner = __hidden_layer_input::s_Scene;
+        m_legacyKeyboardOwned = false;
+        m_blockNativeChars = false;
+        m_nativeKeyOwners.fill(0u);
+    }
+    if(m_legacyInput)
+        m_legacyInput->windowFocusUpdate(focused);
+}
+
+bool UiLayerSystem::wantsKeyboard()const{
+    return m_resourcesReady && (m_context.input().focus().valid() || m_legacyKeyboardOwned);
+}
+
+bool UiLayerSystem::wantsPointer()const{
+    if(m_pressedButtons != 0u)
+        return m_pointerOwner != __hidden_layer_input::s_Scene;
+    return m_resourcesReady && (m_context.input().hover().valid() || legacyHit());
+}
+
+void UiLayerSystem::detachLegacyInput(){
+    if(m_legacyInput){
+        m_legacyInput->setInputDelegated(false);
+        m_legacyInput = nullptr;
+    }
+}
+
+void UiLayerSystem::routeInput(const Ui::InputEvent& event){
+    if(!m_context.input().queue(event)){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
+        m_context.resetInput();
+        return;
+    }
+    const Ui::InputRoutingResult result = m_context.input().process();
+    if(result.activationOverflow)
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
+}
+
+bool UiLayerSystem::legacyHit()const{
+    return m_legacyInput && m_legacyInput->hitTestUi(m_pointer.x, m_pointer.y);
+}
+
+
+void UiLayerSystem::synchronizeNativeInput(){
+    // Native dispatch occurs outside world system execution; use its joined boundary before reading host roots.
+    m_world.taskScope().wait();
+    synchronizeInput();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_IMPL_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

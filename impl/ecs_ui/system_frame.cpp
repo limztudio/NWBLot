@@ -125,6 +125,7 @@ void UiSystem::finishFrame(){
     m_wantsMouseCapture = io.WantCaptureMouse;
     m_wantsTextInput = io.WantTextInput;
     m_frameFinished = true;
+    captureInputRegions();
 }
 
 

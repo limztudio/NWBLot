@@ -225,8 +225,10 @@ UiSystem::UiSystem(
     , m_taskGraphVertexUpload(arena)
     , m_taskGraphIndexUpload(arena)
     , m_taskGraphDrawCommands(arena)
+    , m_legacyInputRegions(arena)
 {
     readAccess<UiComponent>();
+    m_legacyInputRegions.reserve(s_MaxLegacyInputRegions);
 
     IMGUI_CHECKVERSION();
     m_imguiContext = ImGui::CreateContext();
@@ -282,6 +284,8 @@ bool UiSystem::validateResources(const u32 width, const u32 height, const u32 sa
 }
 
 void UiSystem::invalidateResources(){
+    m_legacyInputRegions.clear();
+    m_legacyInputOverflow = false;
     if(m_imguiContext){
         setCurrentContext();
 #if defined(IMGUI_HAS_TEXTURES)

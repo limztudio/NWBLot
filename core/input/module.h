@@ -204,12 +204,13 @@ namespace Key{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IInputEventHandler{
+interface IInputEventHandler{
 public:
     virtual ~IInputEventHandler() = default;
 
 
 public:
+    virtual void windowFocusUpdate(bool){}
     virtual bool keyboardUpdate(i32, i32, i32, i32){ return false; }
     virtual bool keyboardCharInput(u32, i32){ return false; }
     virtual bool mousePosUpdate(f64, f64){ return false; }
@@ -249,6 +250,10 @@ public:
 
     void setMousePositionScale(f32 x, f32 y);
 
+    [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
+    // Focus is window lifecycle state; every current handler observes each transition.
+    void windowFocusUpdate(bool focused);
+
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);
@@ -285,6 +290,7 @@ private:
     HandlerMutationVector m_pendingHandlerMutations;
     usize m_pendingHandlerRemovalCount = 0;
     u32 m_dispatchDepth = 0;
+    bool m_windowFocused = true;
     f32 m_mousePositionScaleX = 1.f;
     f32 m_mousePositionScaleY = 1.f;
 };

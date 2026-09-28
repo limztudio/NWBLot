@@ -114,6 +114,7 @@ void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
         return;
     }
+    m_widgets.paint(context, x, y + 228.0f);
     const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     if(
         !m_normal.paint(context.text, context.paint, { x + 20.0f, y + 17.0f }, textColor)

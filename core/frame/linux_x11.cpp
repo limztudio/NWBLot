@@ -216,11 +216,13 @@ static bool ProcessEvent(Frame& frame, const XEvent& event){
 
     case FocusIn:
         frameData.setActive(true);
+        frame.input().windowFocusUpdate(true);
         break;
 
     case FocusOut:
         frameData.setActive(false);
         ResetKeyStates();
+        frame.input().windowFocusUpdate(false);
         break;
 
     case KeyPress: {

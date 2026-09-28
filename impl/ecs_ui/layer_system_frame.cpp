@@ -22,25 +22,87 @@ NWB_IMPL_BEGIN
 
 void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
     static_cast<void>(world);
-    if(!m_resourcesReady || m_renderer.hasPendingFrame())
+    synchronizeInput();
+    if(!m_resourcesReady || m_renderer.hasPendingFrame() || m_context.ready())
         return;
     if(m_frameGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_frameGeneration;
     const UiSkin* skin = Core::Assets::CastAsset<UiSkin>(m_skinAsset.get());
     NWB_FATAL_ASSERT(skin);
+    if(!m_context.beginFrame(m_frameGeneration))
+        TerminateInvariant();
+    m_ui.reset();
+    m_ui.setSkin(*skin);
     m_paint.begin(m_display, m_frameGeneration, m_skinGeneration, m_skinRef, *skin);
     m_paint.reserve(256u);
     const f32 safeDelta = IsFinite(delta) && delta >= 0.0f ? delta : 0.0f;
-    UiPaintContext context{ m_world, m_clipboard, m_paint, m_text, m_display, Core::ECS::ENTITY_ID_INVALID, safeDelta };
-    m_world.view<UiPaintComponent>().each([&context](const Core::ECS::EntityID entity, UiPaintComponent& component){
-        if(component.visible && component.paint){
-            context.entity = entity;
-            component.paint(context);
-        }
-    });
-    if(!m_renderer.submit(m_paint.freeze()))
+    UiPaintContext context{ m_world, m_clipboard, m_paint, m_text, m_display, m_ui, Core::ECS::ENTITY_ID_INVALID, safeDelta };
+    for(const auto& root : m_liveRoots){
+        UiPaintComponent* component = m_world.tryGetComponent<UiPaintComponent>(root.entity);
+        if(!component || !component->visible || !component->paint)
+            continue;
+        if(!m_context.beginRoot({ root.entity.id, 1u }))
+            break;
+        context.entity = root.entity;
+        // Keep mutable callback state and its captures alive if it removes/replaces its own component.
+        UiPaintCallback callback = Move(component->paint);
+        callback(context);
+        UiPaintComponent* updated = m_world.tryGetComponent<UiPaintComponent>(root.entity);
+        if(updated && !updated->paint)
+            updated->paint = Move(callback);
+        if(!m_ui.balanced())
+            m_context.fail();
+        if(!m_context.endRoot())
+            break;
+    }
+    if(!m_context.finishFrame()){
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: rejected unbalanced or invalid UI declarations"));
+        m_context.abandonFrame();
+        m_ui.reset();
+        return;
+    }
+    if(!m_renderer.submit(m_paint.freeze())){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: GPU renderer rejected a new paint snapshot"));
+        m_context.abandonFrame();
+    }
+}
+
+bool UiLayerSystem::collectRoots(){
+    m_liveRoots.clear();
+    m_rootIdentities.clear();
+    bool overflow = false;
+    m_world.view<UiPaintComponent>().each([this, &overflow](const Core::ECS::EntityID entity, UiPaintComponent& component){
+        if(!component.visible || !component.paint)
+            return;
+        if(m_liveRoots.size() == Ui::s_InputMaxTargets){
+            overflow = true;
+            return;
+        }
+        m_liveRoots.push_back({ entity, component.order });
+        m_rootIdentities.push_back({ entity.id, 1u });
+    });
+    m_context.retainRoots(m_rootIdentities.data(), m_rootIdentities.size());
+    Sort(m_liveRoots.begin(), m_liveRoots.end(), [](const LiveRoot& lhs, const LiveRoot& rhs){
+        return lhs.order != rhs.order ? lhs.order < rhs.order : lhs.entity.id < rhs.entity.id;
+    });
+    return !overflow;
+}
+
+void UiLayerSystem::synchronizeInput(){
+    if(!collectRoots()){
+        m_context.resetInput();
+        return;
+    }
+    if(m_context.ready() && m_renderer.lastAcceptedGeneration() == m_context.readyGeneration()){
+        const auto status = m_renderer.lastAcceptedPresentationStatus();
+        if(status == Core::PresentationReceiptStatus::Accepted){
+            const bool committed = m_context.commitFrame(m_renderer.lastAcceptedGeneration());
+            NWB_FATAL_ASSERT(committed);
+        }
+        else if(status == Core::PresentationReceiptStatus::Rejected)
+            m_context.abandonFrame();
+    }
 }
 
 

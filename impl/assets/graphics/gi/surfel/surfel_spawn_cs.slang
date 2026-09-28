@@ -44,7 +44,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);
-    const float3 worldNormal = nwbSurfelDecodeGbufferNormal(rawNormal);
+    const float3 worldNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
 
     const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);

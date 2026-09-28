@@ -9,9 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "../common/math.slangi"
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,12 +20,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Converts finite positive flux to a saturating fixed-point deposit.
-uint nwbCausticFluxToFixedPoint(float fluxChannel){
-    if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
+// Converts finite positive flux to a saturating fixed-point deposit. Flux and bilinear weights are (0, +inf)
+// and (0, 1) bounded respectively, so half math suffices; widen only at the saturating fixed-point conversion.
+uint nwbCausticFluxToFixedPoint(half fluxChannel){
+    if(!isfinite(fluxChannel) || fluxChannel <= half(0.0h))
         return 0u;
-    const float scaled = fluxChannel * NWB_CAUSTIC_FIXED_POINT_SCALE;
-    return (uint)min(scaled, (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
+    const half scaled = fluxChannel * half(NWB_CAUSTIC_FIXED_POINT_SCALE);
+    return (uint)min(float(scaled), (float)NWB_CAUSTIC_FIXED_POINT_DEPOSIT_MAX);
 }
 
 

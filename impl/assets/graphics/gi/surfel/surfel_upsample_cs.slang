@@ -53,7 +53,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbSurfelUpsampleOutput[pixel] = float4(0.0, 0.0, 0.0, 0.0);   // background -> hemiAmbient in lighting
         return;
     }
-    const float3 centerNormal = nwbSurfelDecodeGbufferNormal(rawNormal);
+    const float3 centerNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
     const half3 centerWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(fullCoord).xyz);
     const float3 centerWorld = float3(centerWorldSample);
 
@@ -95,7 +95,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const float3 tapRawNormal = float3(tapRawNormalSample);
             if(dot(tapRawNormal, tapRawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
                 continue;   // tap's geometry is background
-            const float3 tapNormal = nwbSurfelDecodeGbufferNormal(tapRawNormal);
+            const float3 tapNormal = float3(nwbSurfelDecodeGbufferNormal(tapRawNormalSample));
             if(dot(tapNormal, centerNormal) < NWB_SURFEL_UPSAMPLE_NORMAL_GATE)
                 continue;   // different surface (crease) -> would leak GI across the edge
             const half3 tapWorldSample = half3(nwbSurfelUpsampleGbufferWorldPosition().Load(int3(tapFull, 0)).xyz);

@@ -43,7 +43,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);
-    const float3 normal = nwbSurfelDecodeGbufferNormal(rawNormal);
+    const float3 normal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
 
     float3 gi;
     half3 halfGi;

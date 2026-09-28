@@ -32,7 +32,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(texel.x >= g_NwbCausticAccumulatorDecayPushConstants.width || texel.y >= g_NwbCausticAccumulatorDecayPushConstants.height)
         return;
 
-    const float decayFactor = g_NwbCausticAccumulatorDecayPushConstants.decayFactor;
+    // Decay is a (0, 1) bounded EMA factor, so half math suffices; widen only at the float fixed-point multiply.
+    const half decayFactor = half(g_NwbCausticAccumulatorDecayPushConstants.decayFactor);
 
     // One layer per RGB flux channel. Multiply the fixed-point integer by decayFactor and write it back (truncation to
     // uint is the intended EMA quantization -- values below 1/decay eventually fall to 0, so a stale sparkle fades out).
@@ -40,7 +41,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(uint layer = 0u; layer < NWB_CAUSTIC_ACCUMULATOR_CHANNEL_COUNT; ++layer){
         const uint3 coord = uint3(texel, layer);
         const uint value = NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord];
-        NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (uint)((float)value * decayFactor);
+        NwbHeapStorageImage2DArrayUint(g_NwbCausticAccumulatorDecayPushConstants.accumulatorStorageSlot)[coord] = (uint)((float)value * float(decayFactor));
     }
 }
 

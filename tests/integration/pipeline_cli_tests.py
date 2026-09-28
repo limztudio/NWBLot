@@ -18,7 +18,6 @@ LIT_REPO_ROOT = "--repo-root"
 LIT_UTF_8 = "utf-8"
 LIT_NWBA = "*.nwba"
 LIT_VOL = "*.vol"
-LIT_FILTERING = "{filtering}"
 LIT_LINEAR = "linear"
 LIT_CLAMP = "clamp"
 LIT_N = "\n"
@@ -130,12 +129,12 @@ def write_sampler(path: pathlib.Path, filtering: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     metadata = (
         "sampler asset;\n"
-        f'asset.min_filter = LIT_FILTERING;\n'
-        f'asset.mag_filter = LIT_FILTERING;\n'
-        'asset.mip_filter = LIT_LINEAR;\n'
-        'asset.address_u = LIT_CLAMP;\n'
-        'asset.address_v = LIT_CLAMP;\n'
-        'asset.address_w = LIT_CLAMP;\n'
+        f'asset.min_filter = "{filtering}";\n'
+        f'asset.mag_filter = "{filtering}";\n'
+        f'asset.mip_filter = "{LIT_LINEAR}";\n'
+        f'asset.address_u = "{LIT_CLAMP}";\n'
+        f'asset.address_v = "{LIT_CLAMP}";\n'
+        f'asset.address_w = "{LIT_CLAMP}";\n'
         'asset.reduction = "standard";\n'
         "asset.max_anisotropy = 1.0;\n"
         "asset.mip_bias = 0.0;\n"

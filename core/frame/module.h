@@ -88,6 +88,8 @@ public:
 
     // Available after startup; the native window and its OS service outlive project borrowers.
     [[nodiscard]] IClipboardService& clipboard();
+    // Native startup/teardown callbacks may arrive while the platform service is not attached.
+    [[nodiscard]] inline IClipboardService* tryClipboard()noexcept{ return m_clipboard.get(); }
 
     // Read-only captured timing data; Session owns the per-scope stats.
     [[nodiscard]] inline const Perf::Session& perfSession()const{ return m_perfSession; }
@@ -104,6 +106,7 @@ public:
 
 
 private:
+    [[nodiscard]] GlobalUniquePtr<IClipboardService> createPlatformClipboardService();
     void setupPlatform(void* inst);
     void cleanupPlatform()noexcept;
     bool updateFrame(f32 delta);

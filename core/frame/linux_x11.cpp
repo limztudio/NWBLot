@@ -24,6 +24,7 @@
 #endif
 
 #include <core/common/log.h>
+#include <core/os/linux/x11/clipboard.h>
 
 #include <global/thread.h>
 
@@ -198,6 +199,8 @@ static void DispatchKeyEvent(Frame& frame, const XKeyEvent& keyEvent, i32 action
 
 static bool ProcessEvent(Frame& frame, const XEvent& event){
     auto& frameData = frame.data<Common::LinuxFrame>();
+    if(event.xany.window != GetX11Window(frameData))
+        return true;
 
     switch(event.type){
     case ClientMessage: {
@@ -464,6 +467,10 @@ bool RunX11Frame(Frame& frame){
         while(XPending(GetX11Display(frameData)) > 0){
             XEvent event = {};
             XNextEvent(GetX11Display(frameData), &event);
+            if(IClipboardService* const clipboard = frame.tryClipboard()){
+                if(DispatchX11ClipboardEvent(*clipboard, event))
+                    continue;
+            }
             if(!ProcessEvent(frame, event))
                 return true;
         }
@@ -494,6 +501,12 @@ bool RunX11Frame(Frame& frame){
     }
 
     return false;
+}
+
+GlobalUniquePtr<IClipboardService> CreateX11FrameClipboard(Frame& frame){
+    Display* const display = GetX11Display(frame.data<Common::LinuxFrame>());
+    NWB_FATAL_ASSERT(display);
+    return CreateX11ClipboardService(frame.projectObjectArena(), *display);
 }
 
 void CleanupX11Frame(Frame& frame)noexcept{

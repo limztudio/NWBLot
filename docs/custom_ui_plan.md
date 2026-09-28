@@ -1,6 +1,6 @@
 # Custom UI and offscreen composition plan
 
-Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88` is pushed. The architecture and milestones below describe the full migration; the implementation increments are described separately.
+Status: implementation started on `custom_ui` on 2026-09-29, after pulling `main` through `ea95ffb16`. Foundation commit `81481aa88` and GPU composition commit `37a37a0f6` are pushed. The architecture and milestones below describe the full migration; the implementation increments are described separately.
 
 Implemented in the first increment:
 
@@ -40,6 +40,21 @@ Validation for the GPU increment on Windows ARM64 / Clang, `opt` configuration:
 - A GPU-validation Testbed capture succeeds at 1280 x 900 and after an odd 901 x 607 resize. The custom skin panel and existing scene/ImGui UI are visible, with no rejected log messages.
 - The complete ECS graphics suite reports 476 of 477 checks passing. `EcsGraphics.SurfelGbufferNormalsSharePackedDecodeContract` has stale source-text expectations for the existing half-precision normal decoder; the test and its four shader inputs are identical in pulled main `ea95ffb16`, foundation `81481aa88`, and this work. It is left unchanged. There are also 61 pre-existing disabled checks.
 - Live captures exercise SDR. HDR composition is covered by tests of the actual shared shader equations; this host has not qualified live HDR presentation.
+
+Implemented in the Linux OS increment:
+
+- `core/os/clipboard_service*` and `clipboard_text*`: the shared queue now supports delayed native completion while preserving copied input, FIFO admission, bounded requests, cancellation, and stale-token rejection. UTF-8 validation, bounded chunk accumulation, and Latin-1 conversion belong to the OS domain. The existing Win32 backend keeps the same public interface and native `CF_UNICODETEXT` path.
+- `core/os/linux/x11/`: a native clipboard/primary-selection service borrowing Frame's display, with separate request windows, server timestamps, target negotiation, `MULTIPLE`, and bounded `INCR` transfers. Retained outgoing bytes survive selection loss; stale notifications cannot complete replacement requests or erase reacquired ownership. Foreign-window errors and event-mask restoration are handled in their own helper.
+- `core/os/linux/wayland/`: core data-device clipboard and optional primary-selection protocol support, separate offers/sources, bounded native pipe progress, and focus/serial eligibility. Same-seat manager changes preserve focus and require a fresh input serial; seat loss detaches the service before native seat destruction. Missing optional protocol support is reported through capabilities.
+- `core/os/linux/pipe_io*`: descriptor ownership, nonblocking local progress, copied outgoing text, UTF-8 validation at EOF, transfer budgets/deadlines, and thread-local handling of broken-pipe signals. The incoming pipe leaves the foreign source's write endpoint blocking.
+- `core/frame/`: platform factories use the existing Win32 window or active Linux display/seat. X11 clipboard events are dispatched before ordinary window input; helper-window destruction cannot close the application window. Wayland forwards actual key/button serials and focus/seat changes.
+- `tests/unit/os/`: five asynchronous queue cases, six Unicode/chunk/conversion cases, six Linux pipe cases, and isolated X11 integration cases. The X11 cases run only through an explicitly marked temporary Xvfb display. Backend ownership, capability limits, and Linux test commands are documented in `core/os/README.md`.
+
+Validation for the OS increment:
+
+- The final Windows ARM64 / Clang `opt` build of `nwb_os_tests`, Testbed, and the UI-only executable passes. All 21 clipboard cases, five paint cases, nine skin cases, and 319 GPU task cases pass. Both GPU-validation UI pixel smoke tests also pass after the shared Frame/OS changes.
+- Actual Linux x86_64 target syntax checks pass for 14 production and five test translation units: 19 with Wayland/primary selection, 19 with Wayland without primary selection, and 16 with X11 only, for 54 successful checks. The disposable harness uses genuine libc/libstdc++/Linux/X11/Wayland headers and generated protocol headers. Saved source/header hashes match the final files; command lines, package/source hashes, and logs are retained under `__artifacts/custom_ui/linux_sysroot/`. This does not qualify Linux ARM64 or linking.
+- Linux-only pipe and X11 tests are provided for execution on Linux. This Windows host has no installed WSL, container runtime, or Linux compositor, so live X11/Wayland clipboard behavior and Linux linking remain unqualified.
 
 The next toolkit increment should add font/text resources, stable IDs and state, layout, focus/hit testing, and basic controls in their own `impl/ui/` domains. IME remains OS work for both Win32 and Linux, borrowed through the adapter. ImGui retirement waits for window/label/separator behavior and input parity in M3.
 

@@ -200,6 +200,20 @@ bool Frame::mainLoop(){
     return FrameDetail::RunBackendFrame(*this, data<Common::LinuxFrame>().backend());
 }
 
+GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
+    switch(data<Common::LinuxFrame>().backend()){
+    case Common::LinuxFrameBackend::X11:
+        return FrameDetail::CreateX11FrameClipboard(*this);
+#if defined(NWB_WITH_WAYLAND)
+    case Common::LinuxFrameBackend::Wayland:
+        return FrameDetail::CreateWaylandFrameClipboard(*this);
+#endif
+    case Common::LinuxFrameBackend::None:
+    default:
+        return {};
+    }
+}
+
 void Frame::setupPlatform(void* inst){
     static_cast<void>(inst);
 

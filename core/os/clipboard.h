@@ -94,12 +94,13 @@ public:
     [[nodiscard]] virtual ClipboardRequestResult requestWriteText(ClipboardChannel::Enum channel, AStringView text) = 0;
     [[nodiscard]] virtual ClipboardPollResult::Enum poll(ClipboardRequestToken token, ClipboardCompletion& completion) = 0;
     [[nodiscard]] virtual bool cancel(ClipboardRequestToken token) = 0;
-    // Executes already-admitted operations in order, without retries. Recursive pump calls return false.
+    // Starts admitted operations in order and advances native transfers without waiting for another client.
+    // A pending native operation preserves FIFO order; cancellation releases it. Recursive pumps return false.
     [[nodiscard]] virtual bool pump() = 0;
 };
 
 // The native window is borrowed until service destruction. Windows requires a live owner HWND for writes;
-// nullptr selects an explicitly unsupported service. Other platforms currently return that unsupported service.
+// nullptr selects an explicitly unsupported service. Linux native factories live in the X11/Wayland OS domains.
 [[nodiscard]] GlobalUniquePtr<IClipboardService> CreateClipboardService(Alloc::GlobalArena& arena, void* nativeWindowHandle);
 
 

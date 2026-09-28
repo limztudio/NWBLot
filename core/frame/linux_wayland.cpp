@@ -6,6 +6,7 @@
 #include "input_helpers.h"
 
 #include <core/common/log.h>
+#include <core/os/linux/wayland/clipboard.h>
 
 #include <global/thread.h>
 
@@ -23,10 +24,13 @@
 #include <poll.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#pragma push_macro("interface")
+#undef interface
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xdg-shell-client-protocol.h>
+#pragma pop_macro("interface")
 #include <cerrno>
 
 
@@ -89,6 +93,9 @@ struct WaylandContext{
 
     i32 bufferScale = 1;
     u32 seatVersion = 0;
+    u32 seatGlobalName = 0u;
+    u32 inputSerial = 0u;
+    bool keyboardFocused = false;
 
     i32 repeatRate = s_DefaultKeyRepeatRate;
     i32 repeatDelayMs = s_DefaultKeyRepeatDelayMs;
@@ -377,33 +384,54 @@ static const wl_output_listener s_OutputListener = {
     &OnOutputScale,
 };
 
-static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interface, u32 version){
+static void AttachSeatListener(WaylandContext& context);
+
+static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version){
     auto& context = *static_cast<WaylandContext*>(data);
 
-    if(NWB_STRCMP(interface, wl_compositor_interface.name) == 0){
+    if(NWB_STRCMP(interfaceName, wl_compositor_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandCompositorBindVersion ? version : s_WaylandCompositorBindVersion;
         context.compositor = static_cast<wl_compositor*>(wl_registry_bind(registry, name, &wl_compositor_interface, bindVersion));
     }
-    else if(NWB_STRCMP(interface, wl_output_interface.name) == 0 && !context.output){
+    else if(NWB_STRCMP(interfaceName, wl_output_interface.name) == 0 && !context.output){
         const u32 bindVersion = version < s_WaylandOutputBindVersion ? version : s_WaylandOutputBindVersion;
         context.output = static_cast<wl_output*>(wl_registry_bind(registry, name, &wl_output_interface, bindVersion));
         wl_output_add_listener(context.output, &s_OutputListener, &context);
     }
-    else if(NWB_STRCMP(interface, wl_seat_interface.name) == 0){
+    else if(NWB_STRCMP(interfaceName, wl_seat_interface.name) == 0 && !context.seat){
         const u32 bindVersion = version < s_WaylandSeatBindVersion ? version : s_WaylandSeatBindVersion;
         context.seat = static_cast<wl_seat*>(wl_registry_bind(registry, name, &wl_seat_interface, bindVersion));
         context.seatVersion = bindVersion;
+        context.seatGlobalName = name;
+        AttachSeatListener(context);
+        if(IClipboardService* const clipboard = context.frame->tryClipboard())
+            AttachWaylandClipboardSeat(*clipboard, context.seat, name);
     }
-    else if(NWB_STRCMP(interface, xdg_wm_base_interface.name) == 0){
+    else if(NWB_STRCMP(interfaceName, xdg_wm_base_interface.name) == 0){
         const u32 bindVersion = version < s_WaylandWmBaseBindVersion ? version : s_WaylandWmBaseBindVersion;
         context.wmBase = static_cast<xdg_wm_base*>(wl_registry_bind(registry, name, &xdg_wm_base_interface, bindVersion));
     }
 }
 
 static void OnRegistryGlobalRemove(void* data, wl_registry* registry, u32 name){
-    static_cast<void>(data);
     static_cast<void>(registry);
-    static_cast<void>(name);
+    auto& context = *static_cast<WaylandContext*>(data);
+    if(name != context.seatGlobalName)
+        return;
+    context.keyboardFocused = false;
+    context.inputSerial = 0u;
+    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        AttachWaylandClipboardSeat(*clipboard, nullptr, 0u);
+    DestroyKeyboard(context);
+    DestroyPointer(context);
+    if(context.seatVersion >= 5u)
+        wl_seat_release(context.seat);
+    else
+        wl_seat_destroy(context.seat);
+    context.seat = nullptr;
+    context.seatGlobalName = 0u;
+    context.seatVersion = 0u;
+    context.frame->data<Common::LinuxFrame>().setActive(false);
 }
 
 static void OnWmBasePing(void* data, xdg_wm_base* wmBase, u32 serial){
@@ -519,10 +547,12 @@ static void OnPointerMotion(void* data, wl_pointer* pointer, u32 time, wl_fixed_
 
 static void OnPointerButton(void* data, wl_pointer* pointer, u32 serial, u32 time, u32 button, u32 state){
     static_cast<void>(pointer);
-    static_cast<void>(serial);
     static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    context.inputSerial = serial;
+    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        ObserveWaylandClipboardInputSerial(*clipboard, serial);
     const i32 translatedButton = TranslatePointerButton(button);
     if(translatedButton != -1){
         context.frame->input().mouseButtonUpdate(
@@ -647,6 +677,9 @@ static void OnKeyboardEnter(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     static_cast<void>(keys);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    context.keyboardFocused = true;
+    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        SetWaylandClipboardKeyboardFocus(*clipboard, true);
     context.frame->data<Common::LinuxFrame>().setActive(true);
 }
 
@@ -656,16 +689,22 @@ static void OnKeyboardLeave(void* data, wl_keyboard* keyboard, u32 serial, wl_su
     static_cast<void>(surface);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    context.keyboardFocused = false;
+    context.inputSerial = 0u;
+    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        SetWaylandClipboardKeyboardFocus(*clipboard, false);
     context.frame->data<Common::LinuxFrame>().setActive(false);
     StopKeyRepeat(context);
 }
 
 static void OnKeyboardKey(void* data, wl_keyboard* keyboard, u32 serial, u32 time, u32 key, u32 state){
     static_cast<void>(keyboard);
-    static_cast<void>(serial);
     static_cast<void>(time);
 
     auto& context = *static_cast<WaylandContext*>(data);
+    context.inputSerial = serial;
+    if(IClipboardService* const clipboard = context.frame->tryClipboard())
+        ObserveWaylandClipboardInputSerial(*clipboard, serial);
     if(!context.xkbState)
         return;
 
@@ -752,6 +791,11 @@ static const wl_seat_listener s_SeatListener = {
     &OnSeatName,
 };
 
+static void AttachSeatListener(WaylandContext& context){
+    if(wl_seat_add_listener(context.seat, &s_SeatListener, &context) != 0)
+        NWB_FATAL_ASSERT(false);
+}
+
 static const wl_pointer_listener s_PointerListener = {
     &OnPointerEnter,
     &OnPointerLeave,
@@ -799,6 +843,10 @@ static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities){
         }
     }
     else{
+        context.keyboardFocused = false;
+        context.inputSerial = 0u;
+        if(IClipboardService* const clipboard = context.frame->tryClipboard())
+            SetWaylandClipboardKeyboardFocus(*clipboard, false);
         DestroyKeyboard(context);
         context.frame->data<Common::LinuxFrame>().setActive(false);
     }
@@ -952,9 +1000,6 @@ bool InitWaylandFrame(Frame& frame){
 
     xdg_wm_base_add_listener(context->wmBase, &s_WmBaseListener, context);
 
-    if(context->seat)
-        wl_seat_add_listener(context->seat, &s_SeatListener, context);
-
     context->surface = wl_compositor_create_surface(context->compositor);
     if(!context->surface){
         NWB_LOGGER_ERROR(NWB_TEXT("Frame Wayland surface creation failed"));
@@ -1015,6 +1060,19 @@ bool InitWaylandFrame(Frame& frame){
 
     context->visible = true;
     return true;
+}
+
+GlobalUniquePtr<IClipboardService> CreateWaylandFrameClipboard(Frame& frame){
+    WaylandContext* const context = GetWaylandContext(frame.data<Common::LinuxFrame>());
+    NWB_FATAL_ASSERT(context && context->display);
+    auto service = CreateWaylandClipboardService(frame.projectObjectArena(), *context->display);
+    if(service){
+        AttachWaylandClipboardSeat(*service, context->seat, context->seatGlobalName);
+        SetWaylandClipboardKeyboardFocus(*service, context->keyboardFocused);
+        if(context->inputSerial)
+            ObserveWaylandClipboardInputSerial(*service, context->inputSerial);
+    }
+    return service;
 }
 
 bool ShowWaylandFrame(Frame& frame){

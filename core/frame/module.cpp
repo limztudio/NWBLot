@@ -98,11 +98,11 @@ Frame::~Frame()noexcept(false){
 
 
 bool Frame::startup(){
-#if defined(NWB_PLATFORM_WINDOWS)
-    m_clipboard = CreateClipboardService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
-#else
-    m_clipboard = CreateClipboardService(m_projectObjectArena, nullptr);
-#endif
+    m_clipboard = createPlatformClipboardService();
+    if(!m_clipboard){
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: native clipboard initialization failed"));
+        return false;
+    }
     if(!m_graphics.init(data<Common::FrameData>())){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Frame: graphics initialization failed"));
         return false;

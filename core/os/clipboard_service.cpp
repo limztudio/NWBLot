@@ -3,6 +3,7 @@
 
 
 #include "clipboard_service.h"
+#include "clipboard_text.h"
 
 #include <global/atomic.h>
 #include <global/scope_exit.h>
@@ -50,6 +51,7 @@ QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
 {
     m_requests.reserve(s_ClipboardMaxOutstandingRequests);
 }
+
 QueuedClipboardService::~QueuedClipboardService(){
     NWB_ASSERT(isOwnerThread());
 }
@@ -87,9 +89,17 @@ bool QueuedClipboardService::cancel(const ClipboardRequestToken token){
     Request* const request = findRequest(token);
     if(!request)
         return false;
+    const bool cancelNative = request->started && !request->completed;
+    const bool wasExecuting = request->executing;
     request->token = {};
-    if(!request->executing)
-        request->text.clear();
+    request->executing = true;
+    ScopeExit restoreRequest([request, wasExecuting]()noexcept{
+        request->executing = wasExecuting;
+        if(!wasExecuting)
+            request->text.clear();
+    });
+    if(cancelNative)
+        cancelNativeRequest(token);
     return true;
 }
 
@@ -99,6 +109,7 @@ bool QueuedClipboardService::pump(){
     m_pumping = true;
     ScopeExit finishPump([this]()noexcept{ m_pumping = false; });
     const u64 generationLimit = m_nextGeneration;
+    pumpNativeRequests();
     for(;;){
         Request* next = nullptr;
         for(Request& request : m_requests){
@@ -112,21 +123,76 @@ bool QueuedClipboardService::pump(){
         }
         if(!next)
             return true;
+        if(next->started)
+            return true;
 
         const ClipboardCapabilities support = capabilities(next->channel);
         const bool supported = next->operation == ClipboardOperation::ReadText ? support.readText : support.writeText;
         next->executing = true;
         ScopeExit finishRequest([next]()noexcept{ next->executing = false; });
-        if(!supported)
-            next->status = ClipboardStatus::Unsupported;
-        else if(next->operation == ClipboardOperation::ReadText)
-            next->status = readNativeText(next->channel, next->text);
+        next->started = true;
+        const ClipboardRequestToken token = next->token;
+        if(!supported){
+            if(!completeNativeRequest(token, ClipboardStatus::Unsupported))
+                TerminateInvariant();
+        }
         else
-            next->status = writeNativeText(next->channel, next->text);
-        if(!next->token.valid() || next->operation == ClipboardOperation::WriteText || next->status != ClipboardStatus::Success)
+            startNativeRequest(token, next->operation, next->channel, next->text);
+        if(!next->token.valid())
             next->text.clear();
-        next->completed = next->token.valid();
     }
+}
+
+ClipboardStatus::Enum QueuedClipboardService::readNativeText(ClipboardChannel::Enum, AString<Alloc::GlobalArena>&){
+    return ClipboardStatus::Unsupported;
+}
+
+ClipboardStatus::Enum QueuedClipboardService::writeNativeText(ClipboardChannel::Enum, AStringView){
+    return ClipboardStatus::Unsupported;
+}
+
+void QueuedClipboardService::startNativeRequest(
+    const ClipboardRequestToken token,
+    const ClipboardOperation::Enum operation,
+    const ClipboardChannel::Enum channel,
+    const AStringView text){
+    Request* const request = findRequest(token);
+    if(!request)
+        return;
+    const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText
+        ? readNativeText(channel, request->text)
+        : writeNativeText(channel, text)
+    ;
+    if(findRequest(token) && !completeNativeRequest(token, status, request->text))
+        TerminateInvariant();
+}
+
+void QueuedClipboardService::cancelNativeRequest(ClipboardRequestToken){}
+
+void QueuedClipboardService::pumpNativeRequests(){}
+
+bool QueuedClipboardService::completeNativeRequest(
+    const ClipboardRequestToken token,
+    ClipboardStatus::Enum status,
+    const AStringView text){
+    if(!isOwnerThread())
+        return false;
+    Request* const request = findRequest(token);
+    if(!request || !request->started || request->completed)
+        return false;
+    if(status == ClipboardStatus::Success && request->operation == ClipboardOperation::ReadText)
+        status = ValidateClipboardUtf8Text(text);
+    if(status == ClipboardStatus::Success && request->operation == ClipboardOperation::ReadText){
+        if(text.empty())
+            request->text.clear();
+        else if(text.data() != request->text.data() || text.size() != request->text.size())
+            request->text.assign(text.data(), text.size());
+    }
+    else
+        request->text.clear();
+    request->status = status;
+    request->completed = true;
+    return true;
 }
 
 ClipboardRequestResult QueuedClipboardService::enqueue(
@@ -156,15 +222,13 @@ ClipboardRequestResult QueuedClipboardService::enqueue(
     available->operation = operation;
     available->channel = channel;
     available->completed = false;
+    available->started = false;
     available->status = ClipboardStatus::Unavailable;
     available->text.clear();
-    if(text.size() > s_ClipboardMaxTextBytes){
+    const ClipboardStatus::Enum textStatus = ValidateClipboardUtf8Text(text);
+    if(textStatus != ClipboardStatus::Success){
         available->completed = true;
-        available->status = ClipboardStatus::TooLarge;
-    }
-    else if(text.find('\0') != AStringView::npos){
-        available->completed = true;
-        available->status = ClipboardStatus::InvalidText;
+        available->status = textStatus;
     }
     else if(!text.empty())
         available->text.assign(text.data(), text.size());

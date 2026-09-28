@@ -632,6 +632,10 @@ bool Frame::mainLoop(){
     return loopResult || gracefulQuit;
 }
 
+GlobalUniquePtr<IClipboardService> Frame::createPlatformClipboardService(){
+    return CreateClipboardService(m_projectObjectArena, data<Common::WinFrame>().hwnd());
+}
+
 void Frame::setupPlatform(void* inst){
     FrameDetail::s_Frame = this;
     data<Common::WinFrame>().setActive(false);
